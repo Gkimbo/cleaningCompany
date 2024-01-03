@@ -1,12 +1,12 @@
 {
-    "name": "eco-score",
-    "version": "1.0.0",
-    "main": "node_modules/expo/AppEntry.js",
-    "scripts": {
-        "start": "concurrently \"cd client && npm start\" \"cd server && npm start\""
-    },
-    "dependencies": {
-        "concurrently": "^8.2.2",
-        "expo": "^49.0.16"
-    }
+	"name": "cleaningcompany",
+	"version": "1.0.0",
+	"main": "node_modules/expo/AppEntry.js",
+	"scripts": {
+		"start": "concurrently \"cd client && npm start\" \"cd server && npm start\""
+	},
+	"dependencies": {
+		"concurrently": "^8.2.2",
+		"expo": "^49.0.16"
+	}
 }

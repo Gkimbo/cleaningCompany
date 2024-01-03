@@ -1,6 +1,6 @@
 <div align="center">
 
-# Airbnb Sparkle ![NPM version](https://img.shields.io/badge/npm-v16.18.0-blue)
+# Airbnb Sparkle ![NPM version](https://img.shields.io/badge/npm-v18.17.0-blue)
 
 Airbnb Sparkle is your go-to cleaning service dedicated to making your short-term rental properties shine. Our website and app offer a hassle-free experience, allowing hosts to schedule cleanings, manage turnovers, and ensure a sparkling first impression for every guest.
 
