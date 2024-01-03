@@ -1,0 +1,26 @@
+{
+	"development": {
+		"username": "postgres",
+		"password": "password",
+		"database": "cleaning_company_development",
+		"host": "localhost",
+		"port": 5432,
+		"dialect": "postgres"
+	},
+	"test": {
+		"username": "postgres",
+		"password": "password",
+		"database": "cleaning_company_test",
+		"host": "localhost",
+		"port": 5432,
+		"dialect": "postgres"
+	},
+	"production": {
+		"username": "postgres",
+		"password": "password",
+		"database": "cleaning_company_production",
+		"host": "localhost",
+		"port": 5432,
+		"dialect": "postgres"
+	}
+}

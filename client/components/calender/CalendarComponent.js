@@ -14,8 +14,12 @@ const CalendarComponent = ({ onDatesSelected }) => {
 			// Date is already selected, unselect it
 			delete updatedDates[date.dateString];
 		} else {
-			// Date is not selected, add it to the selection
-			updatedDates[date.dateString] = { selected: true, color: "green" };
+			// Date is not selected, add it to the selection with a price
+			updatedDates[date.dateString] = {
+				selected: true,
+				color: "green",
+				price: 19.99, // Add your price here
+			};
 		}
 
 		setSelectedDates(updatedDates);
@@ -32,11 +36,24 @@ const CalendarComponent = ({ onDatesSelected }) => {
 		setCurrentMonth(new Date(date.year, date.month - 1));
 	};
 
+	// const renderDay = (date, item) => {
+	// 	console.log("DAY");
+	// 	return (
+	// 		<View>
+	// 			<Text>{date.day}</Text>
+	// 			{item && item.price && (
+	// 				<Text style={{ color: "green" }}> ${item.price.toFixed(2)}</Text>
+	// 			)}
+	// 		</View>
+	// 	);
+	// };
+
 	return (
 		<>
 			<View style={calenderStyles.container}>
 				<Text style={calenderStyles.title}>Select Dates</Text>
 				<Calendar
+					// renderDay={renderDay}
 					current={currentMonth.toISOString().split("T")[0]}
 					onDayPress={handleDateSelect}
 					markedDates={selectedDates}

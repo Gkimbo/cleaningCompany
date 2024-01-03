@@ -1,6 +1,6 @@
 import { Dimensions, StyleSheet } from "react-native";
+
 const { width } = Dimensions.get("window");
-const colors = ["red", "orange", "grey", "green"];
 
 const calenderStyles = StyleSheet.create({
 	container: {
@@ -16,7 +16,7 @@ const calenderStyles = StyleSheet.create({
 		alignItems: "center",
 	},
 	title: {
-		fontSize: 18,
+		fontSize: width > 400 ? 18 : 14,
 		fontWeight: "bold",
 		marginBottom: 10,
 	},
@@ -26,11 +26,11 @@ const calenderStyles = StyleSheet.create({
 		padding: 10,
 		backgroundColor: "lightgray",
 		borderRadius: 5,
-		marginLeft: "3%",
-		marginRight: "3%",
+		marginLeft: width > 400 ? "3%" : "1%",
+		marginRight: width > 400 ? "3%" : "1%",
 	},
 	selectedDatesText: {
-		fontSize: 16,
+		fontSize: width > 400 ? 16 : 12,
 	},
 });
 
