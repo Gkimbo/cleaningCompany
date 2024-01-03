@@ -9,6 +9,7 @@ const topBarStyles = StyleSheet.create({
 		left: 0,
 		right: 0,
 		height: 60,
+		width: width,
 		backgroundColor: "#3498db",
 		flexDirection: "row",
 		alignItems: "center",

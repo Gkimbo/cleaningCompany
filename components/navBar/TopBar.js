@@ -5,7 +5,7 @@ import topBarStyles from "../../services/styles/TopBarStyles";
 const TopBar = () => {
 	return (
 		<View style={topBarStyles.container}>
-			<Text style={topBarStyles.title}>My App</Text>
+			<Text style={topBarStyles.title}>Air BNB Cleaning Services</Text>
 			<Pressable
 				style={topBarStyles.button}
 				onPress={() => console.log("Button 1 pressed")}
