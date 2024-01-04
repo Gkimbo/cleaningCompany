@@ -5,12 +5,15 @@ const { width } = Dimensions.get("window");
 const calenderStyles = StyleSheet.create({
 	container: {
 		flex: 1,
+		alignSelf: "center",
 		padding: 16,
-		width: width,
+		width:
+			width > 1000 ? "50%" : width > 700 ? "80%" : width > 500 ? "90%" : "100%",
 	},
 	datesContainer: {
 		width: width,
-		marginTop: "30%",
+		marginTop:
+			width > 1000 ? "13%" : width > 700 ? "21%" : width > 500 ? "30%" : "38%",
 		marginBottom: "3%",
 		justifyContent: "center",
 		alignItems: "center",
