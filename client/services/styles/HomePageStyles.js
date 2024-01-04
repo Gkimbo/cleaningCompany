@@ -40,6 +40,17 @@ const homePageStyles = StyleSheet.create({
 		color: "white",
 		fontSize: 16,
 	},
+	homeTileContainer: {
+		marginBottom: 16,
+		padding: 16,
+		backgroundColor: "#f0f0f0",
+		borderRadius: 8,
+	},
+	homeTileTitle: {
+		fontSize: 18,
+		fontWeight: "bold",
+		marginBottom: 8,
+	},
 });
 
 export default homePageStyles;

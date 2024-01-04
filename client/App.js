@@ -10,7 +10,9 @@ import TopBar from "./components/navBar/TopBar";
 import SignIn from "./components/userAuthentication/SignIn";
 import SignUp from "./components/userAuthentication/SignUp";
 import CalendarComponent from "./components/calender/CalendarComponent";
+import HomeList from "./components/appointments/HomeList";
 import appStyles from "./services/styles/AppStyle";
+import AddHomeForm from "./components/addUserInformation/AddHomeForm";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -18,6 +20,7 @@ export default function App() {
 	const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
 	const [state, dispatch] = useReducer(reducer, {
 		currentUser: { token: null },
+		homes: [],
 	});
 	const onDatesSelected = (event) => {
 		event.preventDefault();
@@ -27,6 +30,7 @@ export default function App() {
 	const fetchCurrentUser = async () => {
 		try {
 			const user = await getCurrentUser();
+			console.log(user);
 			dispatch({ type: "CURRENT_USER", payload: user.token });
 			setLastLoginTimestamp(user.user.lastLogin);
 		} catch (err) {
@@ -68,6 +72,8 @@ export default function App() {
 							path="/sign-up"
 							element={<SignUp state={state} dispatch={dispatch} />}
 						/>
+						<Route path="/list-of-homes" element={<HomeList state={state} />} />
+						<Route path="/add-home" element={<AddHomeForm />} />
 					</Routes>
 				</SafeAreaView>
 			</NativeRouter>
