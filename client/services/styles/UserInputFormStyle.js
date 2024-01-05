@@ -1,6 +1,7 @@
 import { Dimensions, StyleSheet } from "react-native";
 
 const { height } = Dimensions.get("screen");
+const { width } = Dimensions.get("window");
 
 const widthScreen = height * 0.3;
 

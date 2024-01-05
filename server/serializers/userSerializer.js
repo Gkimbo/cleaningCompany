@@ -1,3 +1,4 @@
+const HomeSerializer = require("./homesSerializer");
 class UserSerializer {
 	static serializeOne(user) {
 		const allowedAttributes = ["id", "email", "username", "lastLogin"];

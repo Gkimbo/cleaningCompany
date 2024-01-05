@@ -1,6 +1,6 @@
 const axios = require("axios");
 const cheerio = require("cheerio");
-const getCarbonIntensity = require("./getLocationCarbonIntensity");
+
 const googleApiKey = process.env.GOOGLE_MAPS;
 
 class HomeClass {

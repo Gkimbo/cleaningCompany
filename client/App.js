@@ -16,7 +16,6 @@ import AddHomeForm from "./components/addUserInformation/AddHomeForm";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
-	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 	const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
 	const [state, dispatch] = useReducer(reducer, {
 		currentUser: { token: null },
@@ -59,7 +58,10 @@ export default function App() {
 				<SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
 					<TopBar dispatch={dispatch} state={state} />
 					<Routes>
-						<Route path="/" element={<HomePage />} />
+						<Route
+							path="/"
+							element={<HomePage dispatch={dispatch} state={state} />}
+						/>
 						<Route
 							path="/calender"
 							element={<CalendarComponent onDatesSelected={onDatesSelected} />}
