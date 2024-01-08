@@ -1,5 +1,5 @@
 import { Dimensions, StyleSheet } from "react-native";
-const { width } = Dimensions.get("window");
+const { width } = Dimensions.get("screen");
 const colors = ["red", "orange", "grey", "green"];
 
 const homePageStyles = StyleSheet.create({
@@ -39,6 +39,17 @@ const homePageStyles = StyleSheet.create({
 	logoutButtonText: {
 		color: "white",
 		fontSize: 16,
+	},
+	homeTileContainer: {
+		marginBottom: 16,
+		padding: 16,
+		backgroundColor: "#f0f0f0",
+		borderRadius: 8,
+	},
+	homeTileTitle: {
+		fontSize: 18,
+		fontWeight: "bold",
+		marginBottom: 8,
 	},
 });
 

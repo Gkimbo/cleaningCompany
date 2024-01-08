@@ -53,9 +53,12 @@ sessionRouter.post("/login", async (req, res) => {
 
 sessionRouter.get("/current", authenticateToken, async (req, res) => {
 	try {
-		const user = await User.findOne({ where: { id: req.userId } });
+		const user = await User.findOne({
+			where: { id: req.userId },
+		});
+		const serializedUser = UserSerializer.serializeOne(user);
 		const token = jwt.sign({ userId: user.id }, secretKey);
-		res.status(200).json({ user, token });
+		res.status(200).json({ user: serializedUser, token });
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: "Internal server error" });
