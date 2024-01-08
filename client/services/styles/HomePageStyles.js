@@ -103,6 +103,20 @@ const homePageStyles = StyleSheet.create({
 		height: "5%",
 		paddingLeft: "3%",
 	},
+
+	backButtonForm: {
+		backgroundColor: "#f9bc60",
+		padding: 10,
+		borderRadius: 10,
+		height: "50%",
+		justifyContent: "center",
+		alignItems: "center",
+	},
+	backButtonContainerForm: {
+		width: width < 400 ? "20%" : "15%",
+		height: "5%",
+		paddingLeft: "3%",
+	},
 });
 
 export default homePageStyles;

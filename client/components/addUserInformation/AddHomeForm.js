@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable, Dimensions } from "react-native";
 import { TextInput, RadioButton } from "react-native-paper";
 import RNPickerSelect from "react-native-picker-select";
 import { AuthContext } from "../../services/AuthContext";
@@ -7,6 +7,9 @@ import FetchData from "../../services/fetchRequests/fetchData";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
 import pickerSelectStyles from "../../services/styles/PickerSelectStyles";
 import { useNavigate } from "react-router-native";
+import homePageStyles from "../../services/styles/HomePageStyles";
+import topBarStyles from "../../services/styles/TopBarStyles";
+import Icon from "react-native-vector-icons/FontAwesome";
 
 const UserHomeInfoForm = () => {
 	const { user } = useContext(AuthContext);
@@ -31,7 +34,10 @@ const UserHomeInfoForm = () => {
 	const [recycle, setRecycle] = useState("no");
 	const [compost, setCompost] = useState("no");
 	const [error, setError] = useState(null);
+	const [formRedirect, setFormRedirect] = useState(false);
 	const [redirect, setRedirect] = useState(false);
+	const { width } = Dimensions.get("window");
+	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
 
 	const handleAddressChange = (text) => {
@@ -215,17 +221,25 @@ const UserHomeInfoForm = () => {
 				setError(response);
 			} else {
 				setError(null);
-				setRedirect(true);
+				setFormRedirect(true);
 			}
 		});
 	};
 
 	useEffect(() => {
-		if (redirect) {
+		if (formRedirect) {
 			navigate("/");
+			setFormRedirect(false);
+		}
+		if (redirect) {
+			navigate("/list-of-homes");
 			setRedirect(false);
 		}
-	}, [redirect]);
+	}, [formRedirect, redirect]);
+
+	const handlePress = () => {
+		setRedirect(true);
+	};
 
 	return (
 		<ScrollView
@@ -235,6 +249,18 @@ const UserHomeInfoForm = () => {
 				marginRight: 15,
 			}}
 		>
+			<View style={homePageStyles.backButtonContainerForm}>
+				<Pressable style={homePageStyles.backButtonForm} onPress={handlePress}>
+					<View
+						style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+					>
+						<Icon name="angle-left" size={iconSize} color="black" />
+						<View style={{ marginLeft: 15 }}>
+							<Text style={topBarStyles.buttonTextSchedule}>Back</Text>
+						</View>
+					</View>
+				</Pressable>
+			</View>
 			<form onSubmit={handleSubmit}>
 				<View>
 					<Text style={UserFormStyles.title}>Add a home</Text>
