@@ -12,8 +12,7 @@ const calenderStyles = StyleSheet.create({
 	},
 	datesContainer: {
 		width: width,
-		marginTop:
-			width > 1000 ? "13%" : width > 700 ? "21%" : width > 500 ? "30%" : "38%",
+		marginTop: width > 700 ? "0.5%" : "-10%",
 		marginBottom: "3%",
 		justifyContent: "center",
 		alignItems: "center",

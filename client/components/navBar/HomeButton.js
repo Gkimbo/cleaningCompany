@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Pressable } from "react-native";
+import { Pressable, Dimensions } from "react-native";
 import { useNavigate } from "react-router-native";
 
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -7,6 +7,8 @@ import Icon from "react-native-vector-icons/FontAwesome";
 const HomeButton = () => {
 	const [redirect, setRedirect] = useState(false);
 	const navigate = useNavigate();
+	const { width } = Dimensions.get("window");
+	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 
 	useEffect(() => {
 		if (redirect) {
@@ -21,7 +23,7 @@ const HomeButton = () => {
 
 	return (
 		<Pressable style={styles.button} onPress={handlePress}>
-			<Icon name="home" size={20} color="black" />
+			<Icon name="home" size={iconSize} color="black" />
 		</Pressable>
 	);
 };

@@ -9,7 +9,7 @@ class HomeSerializer {
 			"numBaths",
 			"sheetsProvided",
 			"towelsProvided",
-			"KeyPadCode",
+			"keyPadCode",
 			"keyLocation",
 			"recyclingLocation",
 			"compostLocation",
