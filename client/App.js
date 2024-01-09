@@ -22,10 +22,6 @@ export default function App() {
 		currentUser: { token: null },
 		homes: [],
 	});
-	const onDatesSelected = (event) => {
-		event.preventDefault();
-		console.log(event);
-	};
 
 	const fetchCurrentUser = async () => {
 		try {
@@ -62,10 +58,6 @@ export default function App() {
 						<Route
 							path="/"
 							element={<HomePage dispatch={dispatch} state={state} />}
-						/>
-						<Route
-							path="/calender"
-							element={<CalendarComponent onDatesSelected={onDatesSelected} />}
 						/>
 						<Route
 							path="/sign-in"

@@ -13,6 +13,10 @@ const DetailsComponent = ({ state }) => {
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
+	console.log(homeDetails);
+	const onDatesSelected = (datesOfCleaning) => {
+		console.log(datesOfCleaning);
+	};
 
 	const handlePress = () => {
 		setRedirect(true);
@@ -88,7 +92,11 @@ const DetailsComponent = ({ state }) => {
 					style={homePageStyles.homeTileContent}
 				>{`Trash Location: ${homeDetails.trashLocation}`}</Text>
 			</View>
-			<CalendarComponent />
+			<CalendarComponent
+				onDatesSelected={onDatesSelected}
+				numBeds={homeDetails.numBeds}
+				numBaths={homeDetails.numBaths}
+			/>
 		</View>
 	);
 };

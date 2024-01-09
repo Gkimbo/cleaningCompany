@@ -20,9 +20,8 @@ const HomeList = ({ state }) => {
 	};
 
 	const usersHomes = state.homes.map((home) => {
-		const tileStyle = { marginLeft: 16 };
 		return (
-			<View key={home.id} style={tileStyle}>
+			<View key={home.id}>
 				<HomeTile
 					id={home.id}
 					address={home.address}
