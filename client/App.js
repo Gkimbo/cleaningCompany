@@ -13,6 +13,7 @@ import CalendarComponent from "./components/calender/CalendarComponent";
 import HomeList from "./components/appointments/HomeList";
 import appStyles from "./services/styles/AppStyle";
 import AddHomeForm from "./components/addUserInformation/AddHomeForm";
+import DetailsComponent from "./components/appointments/DetailsComponent";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -21,10 +22,6 @@ export default function App() {
 		currentUser: { token: null },
 		homes: [],
 	});
-	const onDatesSelected = (event) => {
-		event.preventDefault();
-		console.log(event);
-	};
 
 	const fetchCurrentUser = async () => {
 		try {
@@ -63,10 +60,6 @@ export default function App() {
 							element={<HomePage dispatch={dispatch} state={state} />}
 						/>
 						<Route
-							path="/calender"
-							element={<CalendarComponent onDatesSelected={onDatesSelected} />}
-						/>
-						<Route
 							path="/sign-in"
 							element={<SignIn state={state} dispatch={dispatch} />}
 						/>
@@ -76,6 +69,10 @@ export default function App() {
 						/>
 						<Route path="/list-of-homes" element={<HomeList state={state} />} />
 						<Route path="/add-home" element={<AddHomeForm />} />
+						<Route
+							path="/details/:id"
+							element={<DetailsComponent state={state} />}
+						/>
 					</Routes>
 				</SafeAreaView>
 			</NativeRouter>

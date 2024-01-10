@@ -9,7 +9,7 @@ const topBarStyles = StyleSheet.create({
 		left: 0,
 		right: 0,
 		height: 60,
-		width: width,
+		width: "100%",
 		backgroundColor: "#3498db",
 		flexDirection: "row",
 		alignItems: "center",
@@ -18,8 +18,8 @@ const topBarStyles = StyleSheet.create({
 	},
 	title: {
 		color: "#fff",
-		fontSize: 20,
 		fontWeight: "bold",
+		fontSize: width < 400 ? 10 : width < 800 ? 15 : 20,
 	},
 	button: {
 		padding: 10,
@@ -29,7 +29,15 @@ const topBarStyles = StyleSheet.create({
 	},
 	buttonText: {
 		color: "#fff",
-		fontSize: 16,
+		fontSize: width < 400 ? 10 : width < 800 ? 13 : 16,
+	},
+	buttonTextSchedule: {
+		fontSize: width < 400 ? 10 : width < 800 ? 12 : 14,
+	},
+	signOutButton: {
+		backgroundColor: "#f9bc60",
+		padding: 10,
+		borderRadius: 50,
 	},
 });
 

@@ -1,9 +1,12 @@
 import React from "react";
-import { Pressable } from "react-native";
+import { Pressable, Dimensions } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import topBarStyles from "../../services/styles/TopBarStyles";
 
 const SignOutButton = ({ dispatch }) => {
+	const { width } = Dimensions.get("window");
+	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
 
 	const signOut = () => {
@@ -26,18 +29,10 @@ const SignOutButton = ({ dispatch }) => {
 	};
 
 	return (
-		<Pressable style={styles.button} onPress={signOut}>
-			<Icon name="sign-out" size={20} color="black" />
+		<Pressable style={topBarStyles.signOutButton} onPress={signOut}>
+			<Icon name="sign-out" size={iconSize} color="black" />
 		</Pressable>
 	);
-};
-
-const styles = {
-	button: {
-		backgroundColor: "#f9bc60",
-		padding: 10,
-		borderRadius: 50,
-	},
 };
 
 export default SignOutButton;

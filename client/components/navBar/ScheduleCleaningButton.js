@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Pressable, Text } from "react-native";
 import { useNavigate } from "react-router-native";
+import topBarStyles from "../../services/styles/TopBarStyles";
 
 const ScheduleCleaningButton = () => {
 	const [redirect, setRedirect] = useState(false);
@@ -19,7 +20,7 @@ const ScheduleCleaningButton = () => {
 
 	return (
 		<Pressable style={styles.button} onPress={handlePress}>
-			<Text>Book a Cleaning</Text>
+			<Text style={topBarStyles.buttonTextSchedule}>Book a Cleaning</Text>
 		</Pressable>
 	);
 };
