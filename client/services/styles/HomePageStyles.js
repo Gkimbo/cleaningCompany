@@ -8,7 +8,6 @@ const homePageStyles = StyleSheet.create({
 		flex: 1,
 		flexDirection: "row",
 		justifyContent: "center",
-		// alignItems: "center",
 		marginTop: 90,
 	},
 
@@ -70,7 +69,7 @@ const homePageStyles = StyleSheet.create({
 		padding: 10,
 		borderRadius: 10,
 		height: "7.5%",
-		width: width < 800 ? "30%" : "17%",
+		width: width < 850 ? "40%" : "17%",
 		alignItems: "center",
 	},
 	AddHomeButtonText: {
@@ -99,7 +98,7 @@ const homePageStyles = StyleSheet.create({
 		alignItems: "center",
 	},
 	backButtonContainer: {
-		width: width < 400 ? "20%" : "15%",
+		width: width < 450 ? "20%" : "15%",
 		height: "5%",
 		paddingLeft: "3%",
 	},
@@ -113,7 +112,7 @@ const homePageStyles = StyleSheet.create({
 		alignItems: "center",
 	},
 	backButtonContainerForm: {
-		width: width < 400 ? "20%" : "15%",
+		width: width < 450 ? "20%" : "15%",
 		height: "5%",
 		paddingLeft: "3%",
 	},

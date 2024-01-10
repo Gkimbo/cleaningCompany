@@ -13,7 +13,7 @@ const DetailsComponent = ({ state }) => {
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
-	console.log(homeDetails);
+
 	const onDatesSelected = (datesOfCleaning) => {
 		console.log(datesOfCleaning);
 	};
@@ -63,10 +63,10 @@ const DetailsComponent = ({ state }) => {
 					style={homePageStyles.homeTileContent}
 				>{`Beds: ${homeDetails.numBeds}, Baths: ${homeDetails.numBaths}`}</Text>
 				<Text style={homePageStyles.homeTileContent}>{`Sheets provided: ${
-					homeDetails.sheetsProvided ? "Yes" : "No"
+					homeDetails.sheetsProvided ? "Yes   + $25" : "No"
 				}`}</Text>
 				<Text style={homePageStyles.homeTileContent}>{`Towels provided: ${
-					homeDetails.towelsProvided ? "Yes" : "No"
+					homeDetails.towelsProvided ? "Yes   + $25" : "No"
 				}`}</Text>
 				{homeDetails.keyPadCode ? (
 					<Text

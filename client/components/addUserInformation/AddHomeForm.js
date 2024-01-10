@@ -1,11 +1,9 @@
 import React, { useState, useContext, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Dimensions } from "react-native";
+import { View, Text, Pressable, Dimensions } from "react-native";
 import { TextInput, RadioButton } from "react-native-paper";
-import RNPickerSelect from "react-native-picker-select";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
-import pickerSelectStyles from "../../services/styles/PickerSelectStyles";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import topBarStyles from "../../services/styles/TopBarStyles";
@@ -242,13 +240,7 @@ const UserHomeInfoForm = () => {
 	};
 
 	return (
-		<ScrollView
-			contentContainerStyle={{
-				marginTop: 85,
-				marginLeft: 15,
-				marginRight: 15,
-			}}
-		>
+		<View style={{ marginTop: 85, paddingLeft: "5%", paddingRight: "5%" }}>
 			<View style={homePageStyles.backButtonContainerForm}>
 				<Pressable style={homePageStyles.backButtonForm} onPress={handlePress}>
 					<View
@@ -269,97 +261,47 @@ const UserHomeInfoForm = () => {
 					<TextInput
 						value={`${userHomeInfo.home.address}`}
 						onChangeText={handleAddressChange}
-						placeholder="1500 nantucket road..."
-						style={{
-							...UserFormStyles.input,
-							borderWidth: 0,
-							backgroundColor: "#fff",
-						}}
+						style={UserFormStyles.input}
 					/>
 
 					<Text style={UserFormStyles.smallTitle}>City:</Text>
 					<TextInput
 						mode="outlined"
-						placeholder="Sandwich..."
 						value={userHomeInfo.home.city}
 						onChangeText={handleCityChange}
-						style={{
-							...UserFormStyles.input,
-							backgroundColor: "#fff",
-						}}
+						style={UserFormStyles.input}
 					/>
 					<Text style={UserFormStyles.smallTitle}>Zipcode:</Text>
 					<TextInput
 						mode="outlined"
-						placeholder="02531..."
 						value={userHomeInfo.home.zipcode}
 						onChangeText={handleZipCodeChange}
-						style={{
-							...UserFormStyles.input,
-							backgroundColor: "#fff",
-						}}
+						style={UserFormStyles.input}
 					/>
 
-					<Text style={UserFormStyles.smallTitle}>Number of Bedrooms:</Text>
-					<View
-						style={{
-							flexDirection: "row",
-							alignItems: "center",
-							borderWidth: 1,
-							borderColor: "#000",
-							borderRadius: 5,
-							backgroundColor: "#fff",
-							padding: 5,
-							marginBottom: 20,
-						}}
-					>
+					<Text style={UserFormStyles.smallTitle}>Number of Beds:</Text>
+					<View style={UserFormStyles.inputSurround}>
 						<TextInput
-							placeholder="1..."
 							value={userHomeInfo.home.numBeds}
 							onChangeText={handleNumBedsChange}
-							style={{
-								...UserFormStyles.input,
-								borderWidth: 0,
-								backgroundColor: "transparent",
-							}}
+							style={UserFormStyles.input}
 						/>
 						<Text style={{ paddingLeft: 10, color: "#000" }}>beds</Text>
 					</View>
 					<Text style={UserFormStyles.smallTitle}>Number of Bathrooms:</Text>
 
-					<View
-						style={{
-							flexDirection: "row",
-							alignItems: "center",
-							borderWidth: 1,
-							borderColor: "#000",
-							borderRadius: 5,
-							backgroundColor: "#fff",
-							padding: 5,
-							marginBottom: 20,
-						}}
-					>
+					<View style={UserFormStyles.inputSurround}>
 						<TextInput
-							placeholder="1..."
 							value={userHomeInfo.home.numBaths}
 							onChangeText={handleNumBathsChange}
-							style={{
-								...UserFormStyles.input,
-								borderWidth: 0,
-								backgroundColor: "transparent",
-							}}
+							style={UserFormStyles.input}
 						/>
 						<Text style={{ paddingLeft: 10, color: "#000" }}>baths</Text>
 					</View>
 					<Text style={UserFormStyles.smallTitle}>
 						Do you need us to bring sheets?
 					</Text>
-					<View
-						style={{
-							...UserFormStyles.radioButtonContainer,
-							backgroundColor: "#fff",
-						}}
-					>
+					<View style={UserFormStyles.radioButtonContainer}>
 						<View>
 							<RadioButton.Group
 								onValueChange={handleSheetsProvided}
@@ -380,12 +322,7 @@ const UserHomeInfoForm = () => {
 					<Text style={UserFormStyles.smallTitle}>
 						Do you need us to bring towels?
 					</Text>
-					<View
-						style={{
-							...UserFormStyles.radioButtonContainer,
-							backgroundColor: "#fff",
-						}}
-					>
+					<View style={UserFormStyles.radioButtonContainer}>
 						<View>
 							<RadioButton.Group
 								onValueChange={handleTowelsProvided}
@@ -406,12 +343,7 @@ const UserHomeInfoForm = () => {
 					<Text style={UserFormStyles.smallTitle}>
 						Does the unit use a code or a key to get in?
 					</Text>
-					<View
-						style={{
-							...UserFormStyles.radioButtonContainer,
-							backgroundColor: "#fff",
-						}}
-					>
+					<View style={UserFormStyles.radioButtonContainer}>
 						<View>
 							<RadioButton.Group onValueChange={handleKeyToggle} value={key}>
 								<RadioButton.Item label="Key" value="key" />
@@ -429,27 +361,11 @@ const UserHomeInfoForm = () => {
 								What is the code the cleaners can use to get into the unit?
 							</Text>
 
-							<View
-								style={{
-									flexDirection: "row",
-									alignItems: "center",
-									borderWidth: 1,
-									borderColor: "#000",
-									borderRadius: 5,
-									backgroundColor: "#fff",
-									padding: 5,
-									marginBottom: 20,
-								}}
-							>
+							<View style={UserFormStyles.inputSurround}>
 								<TextInput
-									placeholder="1234#..."
 									value={userHomeInfo.home.keyPadCode}
 									onChangeText={handleKeyPadCode}
-									style={{
-										...UserFormStyles.input,
-										borderWidth: 0,
-										backgroundColor: "transparent",
-									}}
+									style={UserFormStyles.input}
 								/>
 							</View>
 						</>
@@ -464,11 +380,7 @@ const UserHomeInfoForm = () => {
 								placeholder="Under the fake rock to the right of the back door..."
 								value={userHomeInfo.home.keyLocation}
 								onChangeText={handleKeyLocation}
-								style={{
-									...UserFormStyles.input,
-									borderWidth: 0,
-									backgroundColor: "#fff",
-								}}
+								style={UserFormStyles.input}
 							/>
 						</>
 					)}
@@ -480,22 +392,13 @@ const UserHomeInfoForm = () => {
 						placeholder="In the red bin to the right side of the house when you're facing the home..."
 						value={userHomeInfo.home.trashLocation}
 						onChangeText={handleTrashLocation}
-						style={{
-							...UserFormStyles.input,
-							borderWidth: 0,
-							backgroundColor: "#fff",
-						}}
+						style={UserFormStyles.input}
 					/>
 
 					<Text style={UserFormStyles.smallTitle}>
 						Does the unit have recycling??
 					</Text>
-					<View
-						style={{
-							...UserFormStyles.radioButtonContainer,
-							backgroundColor: "#fff",
-						}}
-					>
+					<View style={UserFormStyles.radioButtonContainer}>
 						<View>
 							<RadioButton.Group
 								onValueChange={handleRecyclingToggle}
@@ -523,11 +426,7 @@ const UserHomeInfoForm = () => {
 								placeholder="In the blue bin to the right side of the house when you're facing the home..."
 								value={userHomeInfo.home.recyclingLocation}
 								onChangeText={handleRecyclingLocation}
-								style={{
-									...UserFormStyles.input,
-									borderWidth: 0,
-									backgroundColor: "#fff",
-								}}
+								style={UserFormStyles.input}
 							/>
 						</>
 					)}
@@ -535,12 +434,7 @@ const UserHomeInfoForm = () => {
 					<Text style={UserFormStyles.smallTitle}>
 						Does the unit have composting?
 					</Text>
-					<View
-						style={{
-							...UserFormStyles.radioButtonContainer,
-							backgroundColor: "#fff",
-						}}
-					>
+					<View style={UserFormStyles.radioButtonContainer}>
 						<View>
 							<RadioButton.Group
 								onValueChange={handleCompostToggle}
@@ -567,27 +461,16 @@ const UserHomeInfoForm = () => {
 								placeholder="In the small green bin to the right side of the house when you're facing the home..."
 								value={userHomeInfo.home.compostLocation}
 								onChangeText={handleCompostLocation}
-								style={{
-									...UserFormStyles.input,
-									borderWidth: 0,
-									backgroundColor: "#fff",
-								}}
+								style={UserFormStyles.input}
 							/>
 						</>
 					)}
 					<Pressable onPress={handleSubmit}>
-						<Text
-							style={{
-								...UserFormStyles.button,
-								backgroundColor: "#f9bc60",
-							}}
-						>
-							Submit
-						</Text>
+						<Text style={UserFormStyles.button}>Submit</Text>
 					</Pressable>
 				</View>
 			</form>
-		</ScrollView>
+		</View>
 	);
 };
 

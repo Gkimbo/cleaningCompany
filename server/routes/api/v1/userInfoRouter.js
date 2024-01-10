@@ -86,42 +86,4 @@ userInfoRouter.delete("/home", async (req, res) => {
 	}
 });
 
-// userInfoRouter.patch("/basic", async (req, res) => {
-// 	const { token } = req.body.data.user;
-// 	const {
-// 		zipcode,
-// 		homeOwnership,
-// 		milesDriven,
-// 		milesDrivenUnit,
-// 		commute,
-// 		transportation,
-// 		daysCommute,
-// 		hasCar,
-// 	} = req.body.data;
-// 	try {
-// 		const decodedToken = jwt.verify(token, secretKey);
-// 		const userId = decodedToken.userId;
-// 		const user = await User.findOne({
-// 			where: { id: userId },
-// 		});
-// 		if (user) {
-// 			await UserInfo.updateUserInfo({
-// 				userId,
-// 				zipcode,
-// 				homeOwnership,
-// 				milesDriven,
-// 				milesDrivenUnit,
-// 				commute,
-// 				transportation,
-// 				daysCommute,
-// 				hasCar,
-// 			});
-// 		}
-// 		return res.status(201).json("User Information has been deleted!");
-// 	} catch (error) {
-// 		console.log(error);
-// 		return res.status(401).json({ error: "Invalid or expired token" });
-// 	}
-// });
-
 module.exports = userInfoRouter;
