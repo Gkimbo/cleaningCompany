@@ -59,7 +59,6 @@ const HomeList = ({ state, dispatch }) => {
 			style={{
 				...homePageStyles.container,
 				flexDirection: "column",
-				marginLeft: "7%",
 			}}
 		>
 			<View style={homePageStyles.backButtonContainerForm}>

@@ -95,8 +95,7 @@ const homePageStyles = StyleSheet.create({
 		fontSize: width < 400 ? 8 : width < 800 ? 12 : 14,
 	},
 	detailsContainer: {
-		marginTop:
-			width > 1000 ? "15" : width > 700 ? "20%" : width > 500 ? "25%" : "30%",
+		marginTop: 120,
 	},
 	homeDetailsContainer: {
 		alignSelf: "center",
@@ -134,7 +133,7 @@ const homePageStyles = StyleSheet.create({
 	backButtonContainerForm: {
 		width: width < 450 ? "20%" : "15%",
 		height: "5%",
-		paddingLeft: "3%",
+		marginLeft: "10%",
 	},
 	bookButton: {
 		alignSelf: "center",

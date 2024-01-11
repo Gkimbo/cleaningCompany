@@ -218,9 +218,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 		<View style={UserFormStyles.container}>
 			<View style={homePageStyles.backButtonContainerForm}>
 				<Pressable style={homePageStyles.backButtonForm} onPress={handlePress}>
-					<View
-						style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-					>
+					<View style={{ flexDirection: "row", alignItems: "center" }}>
 						<Icon name="angle-left" size={iconSize} color="black" />
 						<View style={{ marginLeft: 15 }}>
 							<Text style={topBarStyles.buttonTextSchedule}>Back</Text>
