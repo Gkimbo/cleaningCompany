@@ -7,7 +7,7 @@ const widthScreen = height * 0.3;
 
 const UserFormStyles = StyleSheet.create({
 	container: {
-		marginTop: 85,
+		marginTop: 140,
 		marginLeft: 15,
 		marginRight: 15,
 	},
@@ -25,9 +25,9 @@ const UserFormStyles = StyleSheet.create({
 		padding: 5,
 		marginBottom: 20,
 		marginLeft:
-			width > 1000 ? "30%" : width > 700 ? "20%" : width > 500 ? "10%" : "0.5%",
+			width > 1000 ? "25%" : width > 700 ? "20%" : width > 500 ? "10%" : "0.5%",
 		marginRight:
-			width > 1000 ? "30%" : width > 700 ? "20%" : width > 500 ? "10%" : "0.5%",
+			width > 1000 ? "25%" : width > 700 ? "20%" : width > 500 ? "10%" : "0.5%",
 	},
 	title: {
 		fontSize: width > 1000 ? 23 : width > 700 ? 22 : width > 500 ? 20 : 16,
@@ -43,6 +43,17 @@ const UserFormStyles = StyleSheet.create({
 			width > 1000 ? "20%" : width > 700 ? "15%" : width > 500 ? "10%" : "0.5%",
 		marginRight:
 			width > 1000 ? "20%" : width > 700 ? "15%" : width > 500 ? "10%" : "0.5%",
+	},
+
+	codeInput: {
+		alignSelf: "center",
+		marginBottom: 16,
+		borderWidth: 0,
+		backgroundColor: "#fff",
+		marginLeft: "19%",
+		marginRight: "19%",
+		width:
+			width > 1000 ? "20%" : width > 700 ? "30%" : width > 500 ? "40%" : "80%",
 	},
 	modeInput: {
 		marginBottom: 30,
@@ -74,6 +85,7 @@ const UserFormStyles = StyleSheet.create({
 		flex: 1,
 		marginLeft: 8,
 	},
+
 	button: {
 		alignSelf: "center",
 		textAlign: "center",
@@ -89,7 +101,7 @@ const UserFormStyles = StyleSheet.create({
 		color: "red",
 		fontSize: 15,
 		fontWeight: "bold",
-		marginTop: 5,
+		marginTop: 10,
 		marginBottom: 4,
 		textAlign: "center",
 	},

@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, Text, View, Animated } from "react-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
+import Icon from "react-native-vector-icons/FontAwesome";
 
 const EditHomeTile = ({
 	id,
@@ -19,10 +20,19 @@ const EditHomeTile = ({
 	deleteConfirmation,
 	handleDeletePress,
 	handleNoPress,
+	handleEdit,
 }) => {
 	return (
 		<View style={homePageStyles.homeTileContainer}>
-			<View style={{ flexDirection: "row", alignItems: "center" }}>
+			<View
+				style={{
+					flexDirection: "row",
+					alignItems: "center",
+					justifyContent: deleteConfirmation[id]
+						? "flex-start"
+						: "space-between",
+				}}
+			>
 				<Pressable
 					onPress={() => handleDeletePress(id)}
 					accessible={true}
@@ -85,6 +95,26 @@ const EditHomeTile = ({
 						</View>
 					</Pressable>
 				)}
+				{!deleteConfirmation[id] ? (
+					<Pressable
+						onPress={() => handleEdit(id)}
+						accessible={true}
+						accessibilityLabel="Edit Button"
+					>
+						<View
+							style={{
+								backgroundColor: "#3da9fc",
+								borderRadius: 20,
+								width: 30,
+								height: 30,
+								justifyContent: "center",
+								alignItems: "center",
+							}}
+						>
+							<Icon name="edit" size={20} color="white" />
+						</View>
+					</Pressable>
+				) : null}
 			</View>
 
 			<Text style={homePageStyles.homeTileTitle}>{address}</Text>
@@ -94,10 +124,14 @@ const EditHomeTile = ({
 			<Text
 				style={homePageStyles.homeTileContent}
 			>{`Beds: ${numBeds}, Baths: ${numBaths}`}</Text>
-			<Text style={homePageStyles.homeTileContent}>{`Sheets provided: ${
+			<Text
+				style={homePageStyles.homeTileContent}
+			>{`Sheets will be provided by the cleaner: ${
 				sheetsProvided ? "Yes" : "No"
 			}`}</Text>
-			<Text style={homePageStyles.homeTileContent}>{`Towels provided: ${
+			<Text
+				style={homePageStyles.homeTileContent}
+			>{`Towels will be provided by the cleaner: ${
 				towelsProvided ? "Yes" : "No"
 			}`}</Text>
 			{keyPadCode ? (

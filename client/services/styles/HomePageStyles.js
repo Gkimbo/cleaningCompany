@@ -7,9 +7,24 @@ const homePageStyles = StyleSheet.create({
 		flex: 1,
 		flexDirection: "row",
 		justifyContent: "center",
-		marginTop: 90,
+		marginTop: 120,
 	},
-
+	title: {
+		alignSelf: "center",
+		fontSize: width < 400 ? 15 : width < 800 ? 18 : 22,
+		fontWeight: "bold",
+		marginBottom: "5%",
+	},
+	smallTitle: {
+		alignSelf: "center",
+		fontSize: width < 400 ? 13 : width < 800 ? 16 : 19,
+		fontWeight: "bold",
+	},
+	information: {
+		alignSelf: "center",
+		fontSize: width < 400 ? 12 : width < 800 ? 15 : 18,
+		marginBottom: "5%",
+	},
 	buttonText: {
 		color: "white",
 		fontSize: 18,
@@ -61,13 +76,13 @@ const homePageStyles = StyleSheet.create({
 	},
 	homeTileContent: {
 		fontSize: width < 400 ? 10 : width < 800 ? 14 : 18,
+		marginTop: "1%",
 	},
 	AddHomeButton: {
 		alignSelf: "center",
 		backgroundColor: "#f9bc60",
-		padding: 10,
+		padding: "1%",
 		borderRadius: 10,
-		height: "7.5%",
 		width: width < 850 ? "40%" : "17%",
 		alignItems: "center",
 	},
@@ -75,7 +90,8 @@ const homePageStyles = StyleSheet.create({
 		fontSize: width < 400 ? 8 : width < 800 ? 12 : 14,
 	},
 	detailsContainer: {
-		marginTop: width < 400 ? "20%" : width < 800 ? "15%" : "8%",
+		marginTop:
+			width > 1000 ? "15" : width > 700 ? "20%" : width > 500 ? "25%" : "30%",
 	},
 	homeDetailsContainer: {
 		alignSelf: "center",
@@ -114,6 +130,13 @@ const homePageStyles = StyleSheet.create({
 		width: width < 450 ? "20%" : "15%",
 		height: "5%",
 		paddingLeft: "3%",
+	},
+	bookButton: {
+		alignSelf: "center",
+		borderRadius: 10,
+		backgroundColor: "#3da9fc",
+		padding: "2%",
+		marginTop: "2%",
 	},
 });
 

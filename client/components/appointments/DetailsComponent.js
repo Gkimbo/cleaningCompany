@@ -111,10 +111,14 @@ const DetailsComponent = ({ state, dispatch }) => {
 				<Text
 					style={homePageStyles.homeTileContent}
 				>{`Beds: ${homeDetails.numBeds}, Baths: ${homeDetails.numBaths}`}</Text>
-				<Text style={homePageStyles.homeTileContent}>{`Sheets provided: ${
+				<Text
+					style={homePageStyles.homeTileContent}
+				>{`Sheets will be provided by the cleaner: ${
 					homeDetails.sheetsProvided ? "Yes   + $25" : "No"
 				}`}</Text>
-				<Text style={homePageStyles.homeTileContent}>{`Towels provided: ${
+				<Text
+					style={homePageStyles.homeTileContent}
+				>{`Towels will be provided by the cleaner: ${
 					homeDetails.towelsProvided ? "Yes   + $25" : "No"
 				}`}</Text>
 				{homeDetails.keyPadCode ? (

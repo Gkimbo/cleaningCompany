@@ -33,10 +33,14 @@ const HomeTile = ({
 				<Text
 					style={homePageStyles.homeTileContent}
 				>{`Beds: ${numBeds}, Baths: ${numBaths}`}</Text>
-				<Text style={homePageStyles.homeTileContent}>{`Sheets provided: ${
+				<Text
+					style={homePageStyles.homeTileContent}
+				>{`Sheets will be provided by the cleaner: ${
 					sheetsProvided ? "Yes" : "No"
 				}`}</Text>
-				<Text style={homePageStyles.homeTileContent}>{`Towels provided: ${
+				<Text
+					style={homePageStyles.homeTileContent}
+				>{`Towels will be provided by the cleaner: ${
 					towelsProvided ? "Yes" : "No"
 				}`}</Text>
 				{keyPadCode ? (
@@ -62,6 +66,11 @@ const HomeTile = ({
 				<Text
 					style={homePageStyles.homeTileContent}
 				>{`Trash Location: ${trashLocation}`}</Text>
+				<View style={homePageStyles.bookButton}>
+					<Text style={homePageStyles.homeTileContent}>
+						Book a cleaning for this home
+					</Text>
+				</View>
 			</View>
 		</Pressable>
 	);

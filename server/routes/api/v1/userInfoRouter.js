@@ -83,6 +83,57 @@ userInfoRouter.post("/home", async (req, res) => {
 	}
 });
 
+userInfoRouter.patch("/home", async (req, res) => {
+	const {
+		id,
+		address,
+		city,
+		zipcode,
+		numBeds,
+		numBaths,
+		sheetsProvided,
+		towelsProvided,
+		keyPadCode,
+		keyLocation,
+		recyclingLocation,
+		compostLocation,
+		trashLocation,
+	} = req.body;
+
+	try {
+		const checkZipCode = await HomeClass.checkZipCodeExists(zipcode);
+		if (!checkZipCode) {
+			return res.status(400).json({ error: "Cannot find zipcode" });
+		}
+
+		const userInfo = await UserInfo.editHomeInDB({
+			id,
+			address,
+			city,
+			zipcode,
+			numBeds,
+			numBaths,
+			sheetsProvided,
+			towelsProvided,
+			keyPadCode,
+			keyLocation,
+			recyclingLocation,
+			compostLocation,
+			trashLocation,
+		});
+
+		return res.status(200).json({ user: userInfo });
+	} catch (error) {
+		console.error(error);
+
+		if (error.name === "TokenExpiredError") {
+			return res.status(401).json({ error: "Token has expired" });
+		}
+
+		return res.status(401).json({ error: "Invalid token" });
+	}
+});
+
 userInfoRouter.delete("/home", async (req, res) => {
 	const id = req.body.id;
 	try {
