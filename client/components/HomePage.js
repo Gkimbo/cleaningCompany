@@ -1,7 +1,8 @@
 import React, { useEffect } from "react";
-import { Text, View } from "react-native";
+import { Text, View, ImageBackground } from "react-native";
 import homePageStyles from "../services/styles/HomePageStyles";
 import FetchData from "../services/fetchRequests/fetchData";
+import image1 from "../services/photos/Best-Cleaning-Service.jpeg";
 
 const HomePage = ({ state, dispatch }) => {
 	const cleaningCompany = {
@@ -18,7 +19,7 @@ const HomePage = ({ state, dispatch }) => {
 
 		bookingInfo: {
 			description:
-				"Clients can easily schedule cleaning appointments up to two weeks in advance. We offer flexible options for one-bedroom, one-bathroom, and studio rentals at a base price of $100. Additional charges of $50 per bed and bath apply, accommodating various property sizes. Clients can opt to provide their own clean sheets and pillowcases or request our cleaning service to handle this for an additional $25 per cleaning. Appointments are available daily between 10 am and 4 pm.",
+				"Clients can easily schedule cleaning appointments up to one weeks in advance. We offer flexible options for one-bedroom, one-bathroom, and studio rentals at a base price of $100. Additional charges of $50 per bed and bath apply, accommodating various property sizes. Clients can opt to provide their own clean sheets and pillowcases or request our cleaning service to handle this for an additional $25 per cleaning. Appointments are available daily between 10 am and 4 pm.",
 		},
 
 		specialConsiderations: {
@@ -59,28 +60,41 @@ const HomePage = ({ state, dispatch }) => {
 			style={{
 				...homePageStyles.container,
 				flexDirection: "column",
-				justifyContent: "flex-start",
-				paddingLeft: "10%",
-				paddingRight: "10%",
+				marginTop: 105,
 			}}
 		>
-			<Text style={homePageStyles.title}>Welcome to Cleaning Services!</Text>
-			<Text style={homePageStyles.smallTitle}>About Our Service: </Text>
-			<Text style={homePageStyles.information}>
-				{cleaningCompany.aboutService.description}
-			</Text>
-			<Text style={homePageStyles.smallTitle}>Booking Information: </Text>
-			<Text style={homePageStyles.information}>
-				{cleaningCompany.bookingInfo.description}
-			</Text>
-			<Text style={homePageStyles.smallTitle}>Special Considerations:</Text>
-			<Text style={homePageStyles.information}>
-				{cleaningCompany.specialConsiderations.description}
-			</Text>
-			<Text style={homePageStyles.smallTitle}>Cancellation Policy: </Text>
-			<Text style={homePageStyles.information}>
-				{cleaningCompany.cancellationPolicy.description}
-			</Text>
+			<ImageBackground source={image1} style={homePageStyles.backgroundImage}>
+				<Text style={{ ...homePageStyles.title, marginTop: 20 }}>
+					Welcome to Cleaning Services!
+				</Text>
+			</ImageBackground>
+			<View
+				style={{
+					...homePageStyles.container,
+					flexDirection: "column",
+					justifyContent: "flex-start",
+					paddingLeft: "10%",
+					paddingRight: "10%",
+					marginTop: 20,
+				}}
+			>
+				<Text style={homePageStyles.smallTitle}>About Our Service: </Text>
+				<Text style={homePageStyles.information}>
+					{cleaningCompany.aboutService.description}
+				</Text>
+				<Text style={homePageStyles.smallTitle}>Booking Information: </Text>
+				<Text style={homePageStyles.information}>
+					{cleaningCompany.bookingInfo.description}
+				</Text>
+				<Text style={homePageStyles.smallTitle}>Special Considerations:</Text>
+				<Text style={homePageStyles.information}>
+					{cleaningCompany.specialConsiderations.description}
+				</Text>
+				<Text style={homePageStyles.smallTitle}>Cancellation Policy: </Text>
+				<Text style={homePageStyles.information}>
+					{cleaningCompany.cancellationPolicy.description}
+				</Text>
+			</View>
 		</View>
 	);
 };

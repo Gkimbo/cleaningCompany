@@ -25,6 +25,11 @@ const homePageStyles = StyleSheet.create({
 		fontSize: width < 400 ? 12 : width < 800 ? 15 : 18,
 		marginBottom: "5%",
 	},
+	backgroundImage: {
+		flex: 1,
+		height: "auto",
+		resizeMode: "cover",
+	},
 	buttonText: {
 		color: "white",
 		fontSize: 18,

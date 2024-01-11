@@ -7,7 +7,7 @@ const appStyles = StyleSheet.create({
 	},
 	container: {
 		flex: 1,
-		backgroundColor: "#abd1c6",
+		// backgroundColor: "#abd1c6",
 	},
 });
 
