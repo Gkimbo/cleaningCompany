@@ -5,17 +5,62 @@ import homePageStyles from "../../services/styles/HomePageStyles";
 import topBarStyles from "../../services/styles/TopBarStyles";
 import CalendarComponent from "../calender/CalendarComponent";
 import Icon from "react-native-vector-icons/FontAwesome";
+import Appointment from "../../services/fetchRequests/AppointmentClass";
 
-const DetailsComponent = ({ state }) => {
+const DetailsComponent = ({ state, dispatch }) => {
 	const { id } = useParams();
 	const [homeDetails, setHomeDetails] = useState(null);
+	const [appointments, setAppointments] = useState([]);
 	const [redirect, setRedirect] = useState(false);
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
 
-	const onDatesSelected = (datesOfCleaning) => {
-		console.log(datesOfCleaning);
+	const onAppointmentDelete = async (date) => {
+		try {
+			const homeId = homeDetails.id;
+			const arrayOfAppointments = await Appointment.getHomeAppointments(homeId);
+			const appointmentToDelete = arrayOfAppointments.appointments.find(
+				(appointment) => appointment.date === date.dateString
+			);
+
+			if (appointmentToDelete) {
+				const response = await Appointment.deleteAppointment(
+					appointmentToDelete.id
+				);
+				if (response.message === "Appointment Deleted") {
+					const updatedAppointments = appointments.filter(
+						(appointment) => appointment.date !== appointmentToDelete.date
+					);
+					setAppointments(updatedAppointments);
+					dispatch({
+						type: "USER_APPOINTMENTS",
+						payload: updatedAppointments,
+					});
+				} else {
+					console.error("Failed to delete appointment");
+				}
+			}
+		} catch (error) {
+			console.error("Error deleting appointment:", error);
+		}
+	};
+
+	const onDatesSelected = async (datesOfCleaning) => {
+		const infoObject = {
+			dateArray: datesOfCleaning,
+			homeId: homeDetails.id,
+			token: state.currentUser.token,
+		};
+		const response = await Appointment.addAppointmentToDb(infoObject);
+		if (response) {
+			const stateApp = datesOfCleaning.map((app) => {
+				return { ...app, homeId: homeDetails.id };
+			});
+
+			dispatch({ type: "ADD_DATES", payload: stateApp });
+			navigate("/list-of-homes");
+		}
 	};
 
 	const handlePress = () => {
@@ -26,11 +71,15 @@ const DetailsComponent = ({ state }) => {
 		const idNeeded = Number(id);
 		const foundHome = state.homes.find((home) => home.id === idNeeded);
 		setHomeDetails(foundHome);
+		const filteredAppointments = state.appointments.filter(
+			(appointment) => appointment.homeId === idNeeded
+		);
+		setAppointments(filteredAppointments);
 		if (redirect) {
 			navigate("/list-of-homes");
 			setRedirect(false);
 		}
-	}, [id, redirect]);
+	}, [id, redirect, state.appointments]);
 
 	if (!homeDetails) {
 		return (
@@ -96,6 +145,8 @@ const DetailsComponent = ({ state }) => {
 				onDatesSelected={onDatesSelected}
 				numBeds={homeDetails.numBeds}
 				numBaths={homeDetails.numBaths}
+				appointments={appointments}
+				onAppointmentDelete={onAppointmentDelete}
 			/>
 		</View>
 	);

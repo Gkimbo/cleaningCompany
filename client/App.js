@@ -14,6 +14,7 @@ import HomeList from "./components/appointments/HomeList";
 import appStyles from "./services/styles/AppStyle";
 import AddHomeForm from "./components/addUserInformation/AddHomeForm";
 import DetailsComponent from "./components/appointments/DetailsComponent";
+import EditHomeList from "./components/editHome/EditHomeList";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -26,7 +27,6 @@ export default function App() {
 	const fetchCurrentUser = async () => {
 		try {
 			const user = await getCurrentUser();
-			console.log(user);
 			dispatch({ type: "CURRENT_USER", payload: user.token });
 			setLastLoginTimestamp(user.user.lastLogin);
 		} catch (err) {
@@ -67,11 +67,18 @@ export default function App() {
 							path="/sign-up"
 							element={<SignUp state={state} dispatch={dispatch} />}
 						/>
-						<Route path="/list-of-homes" element={<HomeList state={state} />} />
+						<Route
+							path="/list-of-homes"
+							element={<HomeList state={state} dispatch={dispatch} />}
+						/>
 						<Route path="/add-home" element={<AddHomeForm />} />
 						<Route
 							path="/details/:id"
-							element={<DetailsComponent state={state} />}
+							element={<DetailsComponent state={state} dispatch={dispatch} />}
+						/>
+						<Route
+							path="/edit-home"
+							element={<EditHomeList state={state} dispatch={dispatch} />}
 						/>
 					</Routes>
 				</SafeAreaView>

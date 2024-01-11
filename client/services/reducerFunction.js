@@ -15,6 +15,16 @@ const reducer = (state, action) => {
 				...state,
 				homes: action.payload,
 			};
+		case "USER_APPOINTMENTS":
+			return {
+				...state,
+				appointments: action.payload,
+			};
+		case "ADD_DATES":
+			return {
+				...state,
+				appointments: [...state.appointments, ...action.payload],
+			};
 		case "DELETE_HOME":
 			return {
 				...state,

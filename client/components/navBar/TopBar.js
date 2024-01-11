@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-native";
 import HomeButton from "./HomeButton";
 import SignOutButton from "./SignoutButton";
 import ScheduleCleaningButton from "./ScheduleCleaningButton";
+import EditHomeButton from "./EditHomeButton";
 
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
@@ -36,6 +37,7 @@ const TopBar = ({ dispatch, state }) => {
 			{state.currentUser.token !== null ? (
 				<>
 					<ScheduleCleaningButton />
+					<EditHomeButton />
 					<SignOutButton dispatch={dispatch} />
 				</>
 			) : (

@@ -4,7 +4,13 @@ import { Calendar } from "react-native-calendars";
 import calenderStyles from "../../services/styles/CalenderSyles";
 import Icon from "react-native-vector-icons/FontAwesome";
 
-const CalendarComponent = ({ onDatesSelected, numBeds, numBaths }) => {
+const CalendarComponent = ({
+	onDatesSelected,
+	numBeds,
+	numBaths,
+	appointments,
+	onAppointmentDelete,
+}) => {
 	const [selectedDates, setSelectedDates] = useState({});
 	const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -56,11 +62,24 @@ const CalendarComponent = ({ onDatesSelected, numBeds, numBaths }) => {
 		return new Date(date.dateString) < currentDate;
 	};
 
-	const renderDay = ({ date, state }) => {
+	const isDateBooked = (date) => {
+		return appointments.some(
+			(appointment) => appointment.date === date.dateString
+		);
+	};
+
+	const handleRemoveBooking = (date) => {
+		const updatedDates = { ...selectedDates };
+		delete updatedDates[date.dateString];
+		setSelectedDates(updatedDates);
+		onAppointmentDelete(date);
+	};
+
+	const renderDay = ({ date }) => {
 		const selectedStyle = {
 			justifyContent: "center",
 			alignItems: "center",
-			backgroundColor: "#3498db",
+			backgroundColor: isDateBooked(date) ? "green" : "#3498db",
 			borderRadius: 50,
 			padding: 10,
 		};
@@ -87,8 +106,15 @@ const CalendarComponent = ({ onDatesSelected, numBeds, numBaths }) => {
 				{isDateDisabled(date) ? (
 					<View style={dayStyle}>
 						<Text>{date.day}</Text>
-						{/* <Text style={priceStyle}>${calculatePrice()}</Text> */}
 					</View>
+				) : isDateBooked(date) ? (
+					<Pressable
+						style={selectedStyle}
+						onPress={() => handleRemoveBooking(date)}
+					>
+						<Text>{date.day}</Text>
+						<Text style={selectedPriceStyle}>${calculatePrice()}</Text>
+					</Pressable>
 				) : selectedDates[date.dateString] ? (
 					<Pressable
 						style={selectedStyle}

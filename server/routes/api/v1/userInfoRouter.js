@@ -2,7 +2,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
-const { User, UserHomes } = require("../../../models");
+const { User, UserHomes, UserAppointments } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
 
@@ -14,9 +14,17 @@ userInfoRouter.get("/", async (req, res) => {
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
 		const userId = decodedToken.userId;
-		const user = await User.findOne({
-			where: { id: userId },
-			include: [{ model: UserHomes, as: "userHomes" }],
+		const user = await User.findByPk(userId, {
+			include: [
+				{
+					model: UserHomes,
+					as: "homes",
+				},
+				{
+					model: UserAppointments,
+					as: "appointments",
+				},
+			],
 		});
 		let serializedUser = UserSerializer.serializeOne(user.dataValues);
 		return res.status(200).json({ user: serializedUser });
@@ -78,6 +86,11 @@ userInfoRouter.post("/home", async (req, res) => {
 userInfoRouter.delete("/home", async (req, res) => {
 	const id = req.body.id;
 	try {
+		await UserAppointments.destroy({
+			where: {
+				homeId: id,
+			},
+		});
 		const deleteHome = await UserInfo.deleteHomeInfo(id);
 		return res.status(201).json({ message: "home deleted" });
 	} catch (error) {

@@ -19,6 +19,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
+		price: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+		},
 	});
 
 	// Define the one-to-many relationship with User

@@ -16,6 +16,7 @@ module.exports = {
 				references: {
 					model: "Users",
 					key: "id",
+					onDelete: "CASCADE",
 				},
 			},
 			homeId: {
@@ -27,6 +28,10 @@ module.exports = {
 				},
 			},
 			date: {
+				type: Sequelize.STRING,
+				allowNull: false,
+			},
+			price: {
 				type: Sequelize.STRING,
 				allowNull: false,
 			},

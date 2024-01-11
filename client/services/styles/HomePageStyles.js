@@ -1,7 +1,6 @@
 import { Dimensions, StyleSheet } from "react-native";
 const { width } = Dimensions.get("window");
 const colors = ["red", "orange", "grey", "green"];
-console.log(width);
 
 const homePageStyles = StyleSheet.create({
 	container: {
