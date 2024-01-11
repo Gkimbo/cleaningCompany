@@ -12,6 +12,10 @@ const HomePage = ({ state, dispatch }) => {
 						type: "USER_HOME",
 						payload: response.user.homes,
 					});
+					dispatch({
+						type: "USER_APPOINTMENTS",
+						payload: response.user.appointments,
+					});
 				}
 			);
 		}

@@ -10,6 +10,10 @@ const formStyles = StyleSheet.create({
 		marginRight: "auto",
 		marginTop: 15,
 	},
+	formSurround: {
+		paddingLeft: "40%",
+		paddingRight: "40%",
+	},
 	header: {
 		fontWeight: "bold",
 		fontSize: 20,

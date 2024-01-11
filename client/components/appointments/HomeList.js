@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import HomeTile from "../tiles/HomeTile";
 
-const HomeList = ({ state }) => {
+const HomeList = ({ state, dispatch }) => {
 	const [redirect, setRedirect] = useState(false);
 	const navigate = useNavigate();
 

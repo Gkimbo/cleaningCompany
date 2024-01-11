@@ -1,4 +1,5 @@
 const HomeSerializer = require("./homesSerializer");
+const AppointmentSerializer = require("./AppointmentSerializer");
 class UserSerializer {
 	static serializeOne(user) {
 		const allowedAttributes = ["id", "email", "username", "lastLogin"];
@@ -9,9 +10,16 @@ class UserSerializer {
 			serializedUser[attribute] = user[attribute];
 		}
 
-		if (user.userHomes) {
-			homes = HomeSerializer.serializeArray(user.userHomes);
+		if (user.homes) {
+			homes = HomeSerializer.serializeArray(user.homes);
 			serializedUser.homes = homes;
+		}
+
+		if (user.appointments) {
+			const appointments = AppointmentSerializer.serializeArray(
+				user.appointments
+			);
+			serializedUser.appointments = appointments;
 		}
 
 		return serializedUser;
