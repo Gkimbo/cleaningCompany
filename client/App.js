@@ -9,12 +9,13 @@ import HomePage from "./components/HomePage";
 import TopBar from "./components/navBar/TopBar";
 import SignIn from "./components/userAuthentication/SignIn";
 import SignUp from "./components/userAuthentication/SignUp";
-import CalendarComponent from "./components/calender/CalendarComponent";
 import HomeList from "./components/appointments/HomeList";
 import appStyles from "./services/styles/AppStyle";
 import AddHomeForm from "./components/addUserInformation/AddHomeForm";
 import DetailsComponent from "./components/appointments/DetailsComponent";
 import EditHomeList from "./components/editHome/EditHomeList";
+import EditHomeForm from "./components/editHome/EditHomeForm";
+import AppointmentList from "./components/appointments/AppointmentList";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -22,6 +23,7 @@ export default function App() {
 	const [state, dispatch] = useReducer(reducer, {
 		currentUser: { token: null },
 		homes: [],
+		appointments: [],
 	});
 
 	const fetchCurrentUser = async () => {
@@ -79,6 +81,14 @@ export default function App() {
 						<Route
 							path="/edit-home"
 							element={<EditHomeList state={state} dispatch={dispatch} />}
+						/>
+						<Route
+							path="/edit-home/:id"
+							element={<EditHomeForm state={state} dispatch={dispatch} />}
+						/>
+						<Route
+							path="/appointments"
+							element={<AppointmentList state={state} dispatch={dispatch} />}
 						/>
 					</Routes>
 				</SafeAreaView>

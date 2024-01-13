@@ -9,6 +9,8 @@ import Appointment from "../../services/fetchRequests/AppointmentClass";
 
 const DetailsComponent = ({ state, dispatch }) => {
 	const { id } = useParams();
+	const [confirmationModalVisible, setConfirmationModalVisible] =
+		useState(false);
 	const [homeDetails, setHomeDetails] = useState(null);
 	const [appointments, setAppointments] = useState([]);
 	const [redirect, setRedirect] = useState(false);
@@ -90,64 +92,87 @@ const DetailsComponent = ({ state, dispatch }) => {
 	}
 
 	return (
-		<View style={homePageStyles.detailsContainer}>
-			<View style={homePageStyles.backButtonContainer}>
-				<Pressable style={homePageStyles.backButton} onPress={handlePress}>
-					<View
-						style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-					>
-						<Icon name="angle-left" size={iconSize} color="black" />
-						<View style={{ marginLeft: 15 }}>
-							<Text style={topBarStyles.buttonTextSchedule}>Back</Text>
+		<View
+			style={{
+				backgroundColor: confirmationModalVisible ? "grey" : "transparent",
+			}}
+		>
+			<View style={homePageStyles.detailsContainer}>
+				<View style={homePageStyles.backButtonContainer}>
+					<Pressable style={homePageStyles.backButton} onPress={handlePress}>
+						<View
+							style={{
+								flexDirection: "row",
+								alignItems: "center",
+								padding: 10,
+							}}
+						>
+							<Icon name="angle-left" size={iconSize} color="black" />
+							<View style={{ marginLeft: 15 }}>
+								<Text style={topBarStyles.buttonTextSchedule}>Back</Text>
+							</View>
 						</View>
-					</View>
-				</Pressable>
+					</Pressable>
+				</View>
+				<View
+					style={{
+						...homePageStyles.homeDetailsContainer,
+						backgroundColor: confirmationModalVisible ? "grey" : "#f0f0f0",
+					}}
+				>
+					<Text style={homePageStyles.homeTileTitle}>
+						{homeDetails.address}
+					</Text>
+					<Text
+						style={homePageStyles.homeTileAddress}
+					>{`${homeDetails.city}, ${homeDetails.zipcode}`}</Text>
+					<Text
+						style={homePageStyles.homeTileContent}
+					>{`Beds: ${homeDetails.numBeds}, Baths: ${homeDetails.numBaths}`}</Text>
+					<Text
+						style={homePageStyles.homeTileContent}
+					>{`Sheets will be provided by the cleaner: ${
+						homeDetails.sheetsProvided ? "Yes   + $25" : "No"
+					}`}</Text>
+					<Text
+						style={homePageStyles.homeTileContent}
+					>{`Towels will be provided by the cleaner: ${
+						homeDetails.towelsProvided ? "Yes   + $25" : "No"
+					}`}</Text>
+					{homeDetails.keyPadCode ? (
+						<Text
+							style={homePageStyles.homeTileContent}
+						>{`Keypad Code: ${homeDetails.keyPadCode}`}</Text>
+					) : null}
+					{homeDetails.keyLocation ? (
+						<Text
+							style={homePageStyles.homeTileContent}
+						>{`Key Location: ${homeDetails.keyLocation}`}</Text>
+					) : null}
+					{homeDetails.recyclingLocation ? (
+						<Text
+							style={homePageStyles.homeTileContent}
+						>{`Recycling Location: ${homeDetails.recyclingLocation}`}</Text>
+					) : null}
+					{homeDetails.compostLocation ? (
+						<Text
+							style={homePageStyles.homeTileContent}
+						>{`Compost Location: ${homeDetails.compostLocation}`}</Text>
+					) : null}
+					<Text
+						style={homePageStyles.homeTileContent}
+					>{`Trash Location: ${homeDetails.trashLocation}`}</Text>
+				</View>
+				<CalendarComponent
+					onDatesSelected={onDatesSelected}
+					numBeds={homeDetails.numBeds}
+					numBaths={homeDetails.numBaths}
+					appointments={appointments}
+					onAppointmentDelete={onAppointmentDelete}
+					confirmationModalVisible={confirmationModalVisible}
+					setConfirmationModalVisible={setConfirmationModalVisible}
+				/>
 			</View>
-			<View style={homePageStyles.homeDetailsContainer}>
-				<Text style={homePageStyles.homeTileTitle}>{homeDetails.address}</Text>
-				<Text
-					style={homePageStyles.homeTileAddress}
-				>{`${homeDetails.city}, ${homeDetails.zipcode}`}</Text>
-				<Text
-					style={homePageStyles.homeTileContent}
-				>{`Beds: ${homeDetails.numBeds}, Baths: ${homeDetails.numBaths}`}</Text>
-				<Text style={homePageStyles.homeTileContent}>{`Sheets provided: ${
-					homeDetails.sheetsProvided ? "Yes   + $25" : "No"
-				}`}</Text>
-				<Text style={homePageStyles.homeTileContent}>{`Towels provided: ${
-					homeDetails.towelsProvided ? "Yes   + $25" : "No"
-				}`}</Text>
-				{homeDetails.keyPadCode ? (
-					<Text
-						style={homePageStyles.homeTileContent}
-					>{`Keypad Code: ${homeDetails.keyPadCode}`}</Text>
-				) : null}
-				{homeDetails.keyLocation ? (
-					<Text
-						style={homePageStyles.homeTileContent}
-					>{`Key Location: ${homeDetails.keyLocation}`}</Text>
-				) : null}
-				{homeDetails.recyclingLocation ? (
-					<Text
-						style={homePageStyles.homeTileContent}
-					>{`Recycling Location: ${homeDetails.recyclingLocation}`}</Text>
-				) : null}
-				{homeDetails.compostLocation ? (
-					<Text
-						style={homePageStyles.homeTileContent}
-					>{`Compost Location: ${homeDetails.compostLocation}`}</Text>
-				) : null}
-				<Text
-					style={homePageStyles.homeTileContent}
-				>{`Trash Location: ${homeDetails.trashLocation}`}</Text>
-			</View>
-			<CalendarComponent
-				onDatesSelected={onDatesSelected}
-				numBeds={homeDetails.numBeds}
-				numBaths={homeDetails.numBaths}
-				appointments={appointments}
-				onAppointmentDelete={onAppointmentDelete}
-			/>
 		</View>
 	);
 };

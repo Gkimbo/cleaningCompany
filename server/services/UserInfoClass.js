@@ -33,6 +33,47 @@ class UserInfoClass {
 		});
 	}
 
+	static async editHomeInDB({
+		id,
+		address,
+		city,
+		zipcode,
+		numBeds,
+		numBaths,
+		sheetsProvided,
+		towelsProvided,
+		keyPadCode,
+		keyLocation,
+		recyclingLocation,
+		compostLocation,
+		trashLocation,
+	}) {
+		const existingHome = await UserHomes.findOne({
+			where: { id },
+		});
+
+		if (!existingHome) {
+			return "Home not found for editing";
+		}
+
+		await existingHome.update({
+			address,
+			city,
+			zipcode,
+			numBeds,
+			numBaths,
+			sheetsProvided,
+			towelsProvided,
+			keyPadCode,
+			keyLocation,
+			recyclingLocation,
+			compostLocation,
+			trashLocation,
+		});
+
+		return existingHome;
+	}
+
 	static async deleteHomeInfo(id) {
 		try {
 			const deletedHomeInfo = await UserHomes.destroy({

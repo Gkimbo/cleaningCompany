@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, Button, Pressable } from "react-native";
+import { View, Text, Button, Pressable, Modal } from "react-native";
 import { Calendar } from "react-native-calendars";
 import calenderStyles from "../../services/styles/CalenderSyles";
 import Icon from "react-native-vector-icons/FontAwesome";
+import UserFormStyles from "../../services/styles/UserInputFormStyle";
 
 const CalendarComponent = ({
 	onDatesSelected,
@@ -10,9 +11,13 @@ const CalendarComponent = ({
 	numBaths,
 	appointments,
 	onAppointmentDelete,
+	confirmationModalVisible,
+	setConfirmationModalVisible,
 }) => {
 	const [selectedDates, setSelectedDates] = useState({});
 	const [currentMonth, setCurrentMonth] = useState(new Date());
+	const [dateToDelete, setDateToDelete] = useState(null);
+	const [error, setError] = useState(null);
 
 	const calculatePrice = () => {
 		if (Number(numBeds) === 1 && Number(numBaths) === 1) {
@@ -31,17 +36,28 @@ const CalendarComponent = ({
 	};
 
 	const handleDateSelect = (date) => {
-		const updatedDates = { ...selectedDates };
-		if (updatedDates[date.dateString]) {
-			delete updatedDates[date.dateString];
-		} else {
-			updatedDates[date.dateString] = {
-				selected: true,
-				price: calculatePrice(),
-			};
-		}
+		const currentDate = new Date();
+		const selectedDate = new Date(date.dateString);
 
-		setSelectedDates(updatedDates);
+		const isWithinWeek =
+			selectedDate.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000;
+
+		if (isWithinWeek) {
+			setError("Cannot book appointments within a week of the todays date.");
+		} else {
+			setError(null);
+			const updatedDates = { ...selectedDates };
+			if (updatedDates[date.dateString]) {
+				delete updatedDates[date.dateString];
+			} else {
+				updatedDates[date.dateString] = {
+					selected: true,
+					price: calculatePrice(),
+				};
+			}
+
+			setSelectedDates(updatedDates);
+		}
 	};
 
 	const handleSubmit = () => {
@@ -69,17 +85,42 @@ const CalendarComponent = ({
 	};
 
 	const handleRemoveBooking = (date) => {
-		const updatedDates = { ...selectedDates };
-		delete updatedDates[date.dateString];
-		setSelectedDates(updatedDates);
-		onAppointmentDelete(date);
+		const currentDate = new Date();
+		const selectedDate = new Date(date.dateString);
+
+		const isWithinWeek =
+			selectedDate.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000;
+
+		if (isWithinWeek) {
+			setDateToDelete(date);
+			setConfirmationModalVisible(true);
+		} else {
+			const updatedDates = { ...selectedDates };
+			delete updatedDates[date.dateString];
+			setSelectedDates(updatedDates);
+			onAppointmentDelete(date);
+		}
+	};
+
+	const handleConfirmation = (deleteAppointment) => {
+		setConfirmationModalVisible(false);
+		if (deleteAppointment) {
+			const updatedDates = { ...selectedDates };
+			delete updatedDates[dateToDelete.dateString];
+			setSelectedDates(updatedDates);
+			onAppointmentDelete(dateToDelete, true);
+		}
 	};
 
 	const renderDay = ({ date }) => {
 		const selectedStyle = {
 			justifyContent: "center",
 			alignItems: "center",
-			backgroundColor: isDateBooked(date) ? "green" : "#3498db",
+			backgroundColor: confirmationModalVisible
+				? "grey"
+				: isDateBooked(date)
+					? "green"
+					: "#3498db",
 			borderRadius: 50,
 			padding: 10,
 		};
@@ -88,7 +129,11 @@ const CalendarComponent = ({
 			justifyContent: "center",
 			alignItems: "center",
 			padding: 10,
-			opacity: isDateDisabled(date) ? 0.5 : 1,
+			opacity: confirmationModalVisible
+				? "grey"
+				: isDateDisabled(date)
+					? 0.5
+					: 1,
 		};
 
 		const selectedPriceStyle = {
@@ -132,10 +177,10 @@ const CalendarComponent = ({
 			</>
 		);
 	};
-
 	return (
 		<>
 			<View style={calenderStyles.container}>
+				{error && <Text style={UserFormStyles.error}>{error}</Text>}
 				<Text style={calenderStyles.title}>Select Dates</Text>
 				<Calendar
 					current={currentMonth.toISOString().split("T")[0]}
@@ -166,6 +211,33 @@ const CalendarComponent = ({
 					</View>
 				)}
 			</View>
+			<Modal
+				animationType="slide"
+				transparent={true}
+				visible={confirmationModalVisible}
+				onRequestClose={() => setConfirmationModalVisible(false)}
+			>
+				<View style={calenderStyles.modalContainer}>
+					<View style={calenderStyles.modalContent}>
+						<Text style={calenderStyles.modalText}>
+							Are you sure you want to delete this appointment? A $25
+							cancellation fee will be charged.
+						</Text>
+						<View style={calenderStyles.modalButtons}>
+							<Pressable onPress={() => handleConfirmation(true)}>
+								<View style={calenderStyles.deleteButton}>
+									<Text style={calenderStyles.buttonText}>Delete</Text>
+								</View>
+							</Pressable>
+							<Pressable onPress={() => handleConfirmation(false)}>
+								<View style={calenderStyles.keepButton}>
+									<Text style={calenderStyles.buttonText}>Keep</Text>
+								</View>
+							</Pressable>
+						</View>
+					</View>
+				</View>
+			</Modal>
 		</>
 	);
 };

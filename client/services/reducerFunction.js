@@ -30,6 +30,11 @@ const reducer = (state, action) => {
 				...state,
 				homes: state.homes.filter((home) => home.id !== action.payload),
 			};
+		case "UPDATE_HOME":
+			const updatedHomes = state.homes.map((home) =>
+				home.id === action.payload.id ? action.payload.updatedHome : home
+			);
+			return { ...state, homes: updatedHomes };
 		default:
 			throw new Error();
 	}

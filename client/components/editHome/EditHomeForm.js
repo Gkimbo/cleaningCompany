@@ -2,32 +2,32 @@ import React, { useState, useContext, useEffect } from "react";
 import { View, Text, Pressable, Dimensions } from "react-native";
 import { TextInput, RadioButton } from "react-native-paper";
 import { AuthContext } from "../../services/AuthContext";
+import { useParams, useNavigate } from "react-router-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
-import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import topBarStyles from "../../services/styles/TopBarStyles";
-import Icon from "react-native-vector-icons/FontAwesome";
 
-const UserHomeInfoForm = () => {
+const EditHomeForm = ({ state, dispatch }) => {
+	const { id } = useParams();
 	const { user } = useContext(AuthContext);
-	const [userHomeInfo, setUserHomeInfoForm] = useState({
-		user: user,
-		home: {
-			address: "",
-			city: "",
-			zipcode: "",
-			numBeds: "",
-			numBaths: "",
-			sheetsProvided: "no",
-			towelsProvided: "no",
-			keyPadCode: "",
-			keyLocation: "",
-			recyclingLocation: "",
-			compostLocation: "",
-			trashLocation: "",
-		},
+	const [homeDetails, setHomeDetails] = useState({
+		id: "",
+		address: "",
+		city: "",
+		zipcode: "",
+		numBeds: "",
+		numBaths: "",
+		sheetsProvided: "",
+		towelsProvided: "",
+		keyPadCode: "",
+		keyLocation: "",
+		recyclingLocation: "",
+		compostLocation: "",
+		trashLocation: "",
 	});
+
 	const [key, setKey] = useState("code");
 	const [recycle, setRecycle] = useState("no");
 	const [compost, setCompost] = useState("no");
@@ -39,22 +39,16 @@ const UserHomeInfoForm = () => {
 	const navigate = useNavigate();
 
 	const handleAddressChange = (text) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				address: text,
-			},
+			address: text,
 		}));
 	};
 
 	const handleCityChange = (text) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				city: text,
-			},
+			city: text,
 		}));
 	};
 
@@ -71,12 +65,9 @@ const UserHomeInfoForm = () => {
 		} else {
 			setError(null);
 		}
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				zipcode: text,
-			},
+			zipcode: text,
 		}));
 	};
 
@@ -91,12 +82,9 @@ const UserHomeInfoForm = () => {
 		} else {
 			setError(null);
 		}
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				numBeds: text,
-			},
+			numBeds: text,
 		}));
 	};
 
@@ -111,31 +99,22 @@ const UserHomeInfoForm = () => {
 		} else {
 			setError(null);
 		}
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				numBaths: text,
-			},
+			numBaths: text,
 		}));
 	};
 
 	const handleSheetsProvided = (unit) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				sheetsProvided: unit,
-			},
+			sheetsProvided: unit,
 		}));
 	};
 	const handleTowelsProvided = (unit) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				towelsProvided: unit,
-			},
+			towelsProvided: unit,
 		}));
 	};
 
@@ -162,88 +141,74 @@ const UserHomeInfoForm = () => {
 		} else {
 			setError(null);
 		}
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				keyPadCode: text,
-			},
+			keyPadCode: text,
 		}));
 	};
 
 	const handleKeyLocation = (unit) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				keyLocation: unit,
-			},
+			keyLocation: unit,
 		}));
 	};
 
 	const handleRecyclingLocation = (unit) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				recyclingLocation: unit,
-			},
+			recyclingLocation: unit,
 		}));
 	};
 
 	const handleCompostLocation = (unit) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				compostLocation: unit,
-			},
+			compostLocation: unit,
 		}));
 	};
 
 	const handleTrashLocation = (unit) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
-			home: {
-				...prevState.home,
-				trashLocation: unit,
-			},
+			trashLocation: unit,
 		}));
 	};
 
 	const handleSubmit = (event) => {
 		event.preventDefault();
-		if (!userHomeInfo.home.trashLocation) {
-			setError("Please provide trash location");
-			return;
-		}
-		if (!userHomeInfo.home.keyLocation && !userHomeInfo.home.keyPadCode) {
-			setError(
-				"Please provide instructions on how to get into the property with either a key or a code"
-			);
-			return;
-		}
 		setError(null);
-		FetchData.addHomeInfo(userHomeInfo).then((response) => {
+		FetchData.editHomeInfo(homeDetails, user).then((response) => {
 			if (response === "Cannot find zipcode") {
 				setError(response);
 			} else {
 				setError(null);
+				dispatch({
+					type: "UPDATE_HOME",
+					payload: {
+						id: homeDetails.id,
+						updatedHome: homeDetails,
+					},
+				});
 				setFormRedirect(true);
 			}
 		});
 	};
 
 	useEffect(() => {
+		const idNeeded = Number(id);
+		const foundHome = state.homes.find((home) => home.id === idNeeded);
+		setHomeDetails(foundHome);
+
 		if (formRedirect) {
-			navigate("/");
+			navigate("/edit-home");
 			setFormRedirect(false);
 		}
 		if (redirect) {
-			navigate("/list-of-homes");
+			navigate("/edit-home");
 			setRedirect(false);
 		}
-	}, [formRedirect, redirect]);
+	}, [formRedirect, redirect, id]);
 
 	const handlePress = () => {
 		setRedirect(true);
@@ -253,9 +218,7 @@ const UserHomeInfoForm = () => {
 		<View style={UserFormStyles.container}>
 			<View style={homePageStyles.backButtonContainerForm}>
 				<Pressable style={homePageStyles.backButtonForm} onPress={handlePress}>
-					<View
-						style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-					>
+					<View style={{ flexDirection: "row", alignItems: "center" }}>
 						<Icon name="angle-left" size={iconSize} color="black" />
 						<View style={{ marginLeft: 15 }}>
 							<Text style={topBarStyles.buttonTextSchedule}>Back</Text>
@@ -267,23 +230,25 @@ const UserHomeInfoForm = () => {
 				<View>
 					<Text style={UserFormStyles.title}>Add a home</Text>
 					<Text style={UserFormStyles.smallTitle}>Address:</Text>
+
 					<TextInput
 						mode="outlined"
-						value={`${userHomeInfo.home.address}`}
+						value={`${homeDetails.address}`}
 						onChangeText={handleAddressChange}
 						style={UserFormStyles.input}
 					/>
+
 					<Text style={UserFormStyles.smallTitle}>City:</Text>
 					<TextInput
 						mode="outlined"
-						value={userHomeInfo.home.city}
+						value={homeDetails.city}
 						onChangeText={handleCityChange}
 						style={UserFormStyles.input}
 					/>
 					<Text style={UserFormStyles.smallTitle}>Zipcode:</Text>
 					<TextInput
 						mode="outlined"
-						value={userHomeInfo.home.zipcode}
+						value={homeDetails.zipcode}
 						onChangeText={handleZipCodeChange}
 						style={UserFormStyles.input}
 					/>
@@ -291,35 +256,21 @@ const UserHomeInfoForm = () => {
 					<Text style={UserFormStyles.smallTitle}>Number of Beds:</Text>
 					<View style={UserFormStyles.inputSurround}>
 						<TextInput
-							value={userHomeInfo.home.numBeds}
+							value={homeDetails.numBeds}
 							onChangeText={handleNumBedsChange}
 							style={UserFormStyles.input}
 						/>
-						<Text
-							style={{
-								paddingLeft: 3,
-								color: "#000",
-							}}
-						>
-							beds
-						</Text>
+						<Text style={{ paddingLeft: 10, color: "#000" }}>beds</Text>
 					</View>
 					<Text style={UserFormStyles.smallTitle}>Number of Bathrooms:</Text>
 
 					<View style={UserFormStyles.inputSurround}>
 						<TextInput
-							value={userHomeInfo.home.numBaths}
+							value={homeDetails.numBaths}
 							onChangeText={handleNumBathsChange}
 							style={UserFormStyles.input}
 						/>
-						<Text
-							style={{
-								paddingLeft: 3,
-								color: "#000",
-							}}
-						>
-							baths
-						</Text>
+						<Text style={{ paddingLeft: 10, color: "#000" }}>baths</Text>
 					</View>
 					<Text style={UserFormStyles.smallTitle}>
 						Do you need us to bring sheets?
@@ -328,7 +279,7 @@ const UserHomeInfoForm = () => {
 						<View>
 							<RadioButton.Group
 								onValueChange={handleSheetsProvided}
-								value={userHomeInfo.home.sheetsProvided}
+								value={homeDetails.sheetsProvided}
 							>
 								<RadioButton.Item label="Yes" value="yes" />
 							</RadioButton.Group>
@@ -336,7 +287,7 @@ const UserHomeInfoForm = () => {
 						<View>
 							<RadioButton.Group
 								onValueChange={handleSheetsProvided}
-								value={userHomeInfo.home.sheetsProvided}
+								value={homeDetails.sheetsProvided}
 							>
 								<RadioButton.Item label="No" value="no" />
 							</RadioButton.Group>
@@ -349,7 +300,7 @@ const UserHomeInfoForm = () => {
 						<View>
 							<RadioButton.Group
 								onValueChange={handleTowelsProvided}
-								value={userHomeInfo.home.towelsProvided}
+								value={homeDetails.towelsProvided}
 							>
 								<RadioButton.Item label="Yes" value="yes" />
 							</RadioButton.Group>
@@ -357,7 +308,7 @@ const UserHomeInfoForm = () => {
 						<View>
 							<RadioButton.Group
 								onValueChange={handleTowelsProvided}
-								value={userHomeInfo.home.towelsProvided}
+								value={homeDetails.towelsProvided}
 							>
 								<RadioButton.Item label="No" value="no" />
 							</RadioButton.Group>
@@ -386,7 +337,7 @@ const UserHomeInfoForm = () => {
 
 							<TextInput
 								mode="outlined"
-								value={userHomeInfo.home.keyPadCode}
+								value={homeDetails.keyPadCode}
 								onChangeText={handleKeyPadCode}
 								style={UserFormStyles.codeInput}
 							/>
@@ -401,7 +352,7 @@ const UserHomeInfoForm = () => {
 							<TextInput
 								mode="outlined"
 								placeholder="Under the fake rock to the right of the back door..."
-								value={userHomeInfo.home.keyLocation}
+								value={homeDetails.keyLocation}
 								onChangeText={handleKeyLocation}
 								style={UserFormStyles.input}
 							/>
@@ -414,7 +365,7 @@ const UserHomeInfoForm = () => {
 					<TextInput
 						mode="outlined"
 						placeholder="In the red bin to the right side of the house when you're facing the home..."
-						value={userHomeInfo.home.trashLocation}
+						value={homeDetails.trashLocation}
 						onChangeText={handleTrashLocation}
 						style={UserFormStyles.input}
 					/>
@@ -449,7 +400,7 @@ const UserHomeInfoForm = () => {
 							<TextInput
 								mode="outlined"
 								placeholder="In the blue bin to the right side of the house when you're facing the home..."
-								value={userHomeInfo.home.recyclingLocation}
+								value={homeDetails.recyclingLocation}
 								onChangeText={handleRecyclingLocation}
 								style={UserFormStyles.input}
 							/>
@@ -485,7 +436,7 @@ const UserHomeInfoForm = () => {
 							<TextInput
 								mode="outlined"
 								placeholder="In the small green bin to the right side of the house when you're facing the home..."
-								value={userHomeInfo.home.compostLocation}
+								value={homeDetails.compostLocation}
 								onChangeText={handleCompostLocation}
 								style={UserFormStyles.input}
 							/>
@@ -496,9 +447,8 @@ const UserHomeInfoForm = () => {
 					</Pressable>
 				</View>
 			</form>
-			{error && <Text style={UserFormStyles.error}>{error}</Text>}
 		</View>
 	);
 };
 
-export default UserHomeInfoForm;
+export default EditHomeForm;

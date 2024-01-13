@@ -4,17 +4,33 @@ const colors = ["red", "orange", "grey", "green"];
 
 const topBarStyles = StyleSheet.create({
 	container: {
-		position: "absolute",
+		position: "fixed",
 		top: 0,
 		left: 0,
 		right: 0,
-		height: 60,
+		height: "10%",
+		width: "100%",
+		zIndex: 1,
+	},
+	containerTitleSection: {
+		backgroundColor: "grey",
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		padding: 10,
+		paddingLeft: "10%",
+	},
+	containerButtonSection: {
 		width: "100%",
 		backgroundColor: "#3498db",
 		flexDirection: "row",
 		alignItems: "center",
 		justifyContent: "space-between",
-		padding: 10,
+		paddingTop: 10,
+		paddingBottom: 10,
+		paddingLeft: "10%",
+		paddingRight: "10%",
+		elevation: 5,
 	},
 	title: {
 		color: "#fff",

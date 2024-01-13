@@ -6,6 +6,7 @@ import HomeButton from "./HomeButton";
 import SignOutButton from "./SignoutButton";
 import ScheduleCleaningButton from "./ScheduleCleaningButton";
 import EditHomeButton from "./EditHomeButton";
+import AppointmentsButton from "./AppointmentsButton";
 
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
@@ -32,24 +33,29 @@ const TopBar = ({ dispatch, state }) => {
 
 	return (
 		<View style={topBarStyles.container}>
-			<Text style={topBarStyles.title}>Air BNB Cleaning Services</Text>
-			<HomeButton />
-			{state.currentUser.token !== null ? (
-				<>
-					<ScheduleCleaningButton />
-					<EditHomeButton />
-					<SignOutButton dispatch={dispatch} />
-				</>
-			) : (
-				<>
-					<Pressable style={topBarStyles.button} onPress={handlePressSignIn}>
-						<Text style={topBarStyles.buttonText}>Sign In</Text>
-					</Pressable>
-					<Pressable style={topBarStyles.button} onPress={handlePressSignUp}>
-						<Text style={topBarStyles.buttonText}>Sign up</Text>
-					</Pressable>
-				</>
-			)}
+			<View style={topBarStyles.containerTitleSection}>
+				<Text style={topBarStyles.title}>Air BNB Cleaning Services</Text>
+				{state.currentUser.token !== null && <AppointmentsButton />}
+			</View>
+			<View style={topBarStyles.containerButtonSection}>
+				<HomeButton />
+				{state.currentUser.token !== null ? (
+					<>
+						<ScheduleCleaningButton />
+						<EditHomeButton />
+						<SignOutButton dispatch={dispatch} />
+					</>
+				) : (
+					<>
+						<Pressable style={topBarStyles.button} onPress={handlePressSignIn}>
+							<Text style={topBarStyles.buttonText}>Sign In</Text>
+						</Pressable>
+						<Pressable style={topBarStyles.button} onPress={handlePressSignUp}>
+							<Text style={topBarStyles.buttonText}>Sign up</Text>
+						</Pressable>
+					</>
+				)}
+			</View>
 		</View>
 	);
 };
