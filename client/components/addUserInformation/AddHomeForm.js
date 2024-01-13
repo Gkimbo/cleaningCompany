@@ -267,13 +267,12 @@ const UserHomeInfoForm = () => {
 				<View>
 					<Text style={UserFormStyles.title}>Add a home</Text>
 					<Text style={UserFormStyles.smallTitle}>Address:</Text>
-
 					<TextInput
+						mode="outlined"
 						value={`${userHomeInfo.home.address}`}
 						onChangeText={handleAddressChange}
 						style={UserFormStyles.input}
 					/>
-
 					<Text style={UserFormStyles.smallTitle}>City:</Text>
 					<TextInput
 						mode="outlined"
@@ -386,6 +385,7 @@ const UserHomeInfoForm = () => {
 							</Text>
 
 							<TextInput
+								mode="outlined"
 								value={userHomeInfo.home.keyPadCode}
 								onChangeText={handleKeyPadCode}
 								style={UserFormStyles.codeInput}
@@ -399,6 +399,7 @@ const UserHomeInfoForm = () => {
 							</Text>
 
 							<TextInput
+								mode="outlined"
 								placeholder="Under the fake rock to the right of the back door..."
 								value={userHomeInfo.home.keyLocation}
 								onChangeText={handleKeyLocation}
@@ -411,6 +412,7 @@ const UserHomeInfoForm = () => {
 						Where does the cleaner get rid of trash?
 					</Text>
 					<TextInput
+						mode="outlined"
 						placeholder="In the red bin to the right side of the house when you're facing the home..."
 						value={userHomeInfo.home.trashLocation}
 						onChangeText={handleTrashLocation}
@@ -445,6 +447,7 @@ const UserHomeInfoForm = () => {
 								Where does the cleaner get rid of recycling?
 							</Text>
 							<TextInput
+								mode="outlined"
 								placeholder="In the blue bin to the right side of the house when you're facing the home..."
 								value={userHomeInfo.home.recyclingLocation}
 								onChangeText={handleRecyclingLocation}
@@ -480,6 +483,7 @@ const UserHomeInfoForm = () => {
 								Where does the cleaner get rid of compost?
 							</Text>
 							<TextInput
+								mode="outlined"
 								placeholder="In the small green bin to the right side of the house when you're facing the home..."
 								value={userHomeInfo.home.compostLocation}
 								onChangeText={handleCompostLocation}

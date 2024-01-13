@@ -4,12 +4,13 @@ const colors = ["red", "orange", "grey", "green"];
 
 const topBarStyles = StyleSheet.create({
 	container: {
-		position: "absolute",
+		position: "fixed",
 		top: 0,
 		left: 0,
 		right: 0,
 		height: "10%",
 		width: "100%",
+		zIndex: 1,
 	},
 	containerTitleSection: {
 		backgroundColor: "grey",
@@ -29,6 +30,7 @@ const topBarStyles = StyleSheet.create({
 		paddingBottom: 10,
 		paddingLeft: "10%",
 		paddingRight: "10%",
+		elevation: 5,
 	},
 	title: {
 		color: "#fff",

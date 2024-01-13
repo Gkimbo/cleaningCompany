@@ -2,11 +2,13 @@ import React, { useState, useEffect } from "react";
 import { Pressable, View, Text, ScrollView, Dimensions } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
-import HomeTile from "../tiles/HomeTile";
+import HomeAppointmentTile from "../tiles/HomeAppointmentTile";
 import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../services/styles/TopBarStyles";
 
-const HomeList = ({ state, dispatch }) => {
+const AppointmentList = ({ state, dispatch }) => {
+	const [allHomes, setAllHomes] = useState([]);
+	const [allAppointments, setAllAppointments] = useState([]);
 	const [redirect, setRedirect] = useState(false);
 	const [backRedirect, setBackRedirect] = useState(false);
 	const { width } = Dimensions.get("window");
@@ -14,6 +16,8 @@ const HomeList = ({ state, dispatch }) => {
 	const navigate = useNavigate();
 
 	useEffect(() => {
+		setAllAppointments(state.appointments);
+		setAllHomes(state.homes);
 		if (redirect) {
 			navigate("/add-home");
 			setRedirect(false);
@@ -35,20 +39,12 @@ const HomeList = ({ state, dispatch }) => {
 	const usersHomes = state.homes.map((home) => {
 		return (
 			<View key={home.id}>
-				<HomeTile
+				<HomeAppointmentTile
 					id={home.id}
 					address={home.address}
 					city={home.city}
 					zipcode={home.zipcode}
-					numBeds={home.numBeds}
-					numBaths={home.numBaths}
-					sheetsProvided={home.sheetsProvided}
-					towelsProvided={home.towelsProvided}
-					keyPadCode={home.keyPadCode}
-					keyLocation={home.keyLocation}
-					recyclingLocation={home.recyclingLocation}
-					compostLocation={home.compostLocation}
-					trashLocation={home.trashLocation}
+					allAppointments={allAppointments}
 				/>
 			</View>
 		);
@@ -76,7 +72,7 @@ const HomeList = ({ state, dispatch }) => {
 					</View>
 				</Pressable>
 			</View>
-			<ScrollView>
+			<View>
 				{state.homes.length > 0 ? (
 					<>
 						{usersHomes}
@@ -94,9 +90,9 @@ const HomeList = ({ state, dispatch }) => {
 						<Text style={homePageStyles.AddHomeButtonText}>Add a Home</Text>
 					</Pressable>
 				)}
-			</ScrollView>
+			</View>
 		</View>
 	);
 };
 
-export default HomeList;
+export default AppointmentList;

@@ -232,6 +232,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 					<Text style={UserFormStyles.smallTitle}>Address:</Text>
 
 					<TextInput
+						mode="outlined"
 						value={`${homeDetails.address}`}
 						onChangeText={handleAddressChange}
 						style={UserFormStyles.input}
@@ -334,13 +335,12 @@ const EditHomeForm = ({ state, dispatch }) => {
 								What is the code the cleaners can use to get into the unit?
 							</Text>
 
-							<View style={UserFormStyles.inputSurround}>
-								<TextInput
-									value={homeDetails.keyPadCode}
-									onChangeText={handleKeyPadCode}
-									style={UserFormStyles.input}
-								/>
-							</View>
+							<TextInput
+								mode="outlined"
+								value={homeDetails.keyPadCode}
+								onChangeText={handleKeyPadCode}
+								style={UserFormStyles.codeInput}
+							/>
 						</>
 					) : (
 						<>
@@ -350,6 +350,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 							</Text>
 
 							<TextInput
+								mode="outlined"
 								placeholder="Under the fake rock to the right of the back door..."
 								value={homeDetails.keyLocation}
 								onChangeText={handleKeyLocation}
@@ -362,6 +363,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 						Where does the cleaner get rid of trash?
 					</Text>
 					<TextInput
+						mode="outlined"
 						placeholder="In the red bin to the right side of the house when you're facing the home..."
 						value={homeDetails.trashLocation}
 						onChangeText={handleTrashLocation}
@@ -396,6 +398,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 								Where does the cleaner get rid of recycling?
 							</Text>
 							<TextInput
+								mode="outlined"
 								placeholder="In the blue bin to the right side of the house when you're facing the home..."
 								value={homeDetails.recyclingLocation}
 								onChangeText={handleRecyclingLocation}
@@ -431,6 +434,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 								Where does the cleaner get rid of compost?
 							</Text>
 							<TextInput
+								mode="outlined"
 								placeholder="In the small green bin to the right side of the house when you're facing the home..."
 								value={homeDetails.compostLocation}
 								onChangeText={handleCompostLocation}

@@ -34,6 +34,43 @@ const calenderStyles = StyleSheet.create({
 	selectedDatesText: {
 		fontSize: width > 400 ? 16 : 12,
 	},
+	modalContainer: {
+		flex: 1,
+		justifyContent: "center",
+		alignItems: "center",
+		backgroundColor: "rgba(211, 211, 211, 0.7)",
+	},
+
+	modalContent: {
+		backgroundColor: "white",
+		padding: 20,
+		borderRadius: 10,
+		elevation: 5,
+		width: "80%", // Adjust the width as needed
+	},
+
+	modalText: {
+		fontSize: 16,
+		marginBottom: 20,
+		textAlign: "center",
+	},
+
+	modalButtons: {
+		flexDirection: "row",
+		justifyContent: "space-around",
+	},
+
+	deleteButton: {
+		backgroundColor: "red",
+		borderRadius: 10,
+		padding: 15,
+	},
+
+	keepButton: {
+		backgroundColor: "green",
+		borderRadius: 10,
+		padding: 15,
+	},
 });
 
 export default calenderStyles;

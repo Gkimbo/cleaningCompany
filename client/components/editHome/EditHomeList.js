@@ -126,7 +126,7 @@ const EditHomeList = ({ state, dispatch }) => {
 				flexDirection: "column",
 			}}
 		>
-			<View style={homePageStyles.backButtonContainerForm}>
+			<View style={homePageStyles.backButtonContainerList}>
 				<Pressable
 					style={homePageStyles.backButtonForm}
 					onPress={handleBackPress}

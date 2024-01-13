@@ -99,10 +99,10 @@ const UserFormStyles = StyleSheet.create({
 	},
 	error: {
 		color: "red",
-		fontSize: 15,
+		fontSize: width > 500 ? 15 : 10,
 		fontWeight: "bold",
 		marginTop: 10,
-		marginBottom: 4,
+		marginBottom: 10,
 		textAlign: "center",
 	},
 	radioButtonContainer: {
