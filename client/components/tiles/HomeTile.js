@@ -36,12 +36,12 @@ const HomeTile = ({
 				<Text
 					style={homePageStyles.homeTileContent}
 				>{`Sheets will be provided by the cleaner: ${
-					sheetsProvided ? "Yes" : "No"
+					sheetsProvided === "yes" ? "Yes" : "No"
 				}`}</Text>
 				<Text
 					style={homePageStyles.homeTileContent}
 				>{`Towels will be provided by the cleaner: ${
-					towelsProvided ? "Yes" : "No"
+					towelsProvided === "yes" ? "Yes" : "No"
 				}`}</Text>
 				{keyPadCode ? (
 					<Text

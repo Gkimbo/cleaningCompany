@@ -16,11 +16,23 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 		},
 		date: {
-			type: DataTypes.INTEGER,
+			type: DataTypes.STRING,
 			allowNull: false,
 		},
 		price: {
-			type: DataTypes.INTEGER,
+			type: DataTypes.STRING,
+			allowNull: false,
+		},
+		paid: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+		},
+		bringTowels: {
+			type: DataTypes.STRING,
+			allowNull: false,
+		},
+		bringSheets: {
+			type: DataTypes.STRING,
 			allowNull: false,
 		},
 	});

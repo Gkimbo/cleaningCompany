@@ -1,6 +1,11 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const { User, UserAppointments, UserHomes } = require("../../../models");
+const {
+	User,
+	UserAppointments,
+	UserHomes,
+	UserBills,
+} = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 
 const appointmentRouter = express.Router();
@@ -37,6 +42,9 @@ appointmentRouter.post("/", async (req, res) => {
 					homeId,
 					date: date.date,
 					price: date.price,
+					paid: date.paid,
+					bringTowels: date.bringTowels,
+					bringSheets: date.bringSheets,
 				});
 
 				return newAppointment;
@@ -52,10 +60,28 @@ appointmentRouter.post("/", async (req, res) => {
 
 appointmentRouter.delete("/:id", async (req, res) => {
 	const { id } = req.params;
+	const { fee, user } = req.body;
 	try {
+		const decodedToken = jwt.verify(user, secretKey);
+		const userId = decodedToken.userId;
+		const existingBill = await UserBills.findOne({
+			where: { userId },
+		});
+		const oldFee = existingBill.dataValues.cancellationFee;
+
+		const total =
+			existingBill.dataValues.cancellationFee +
+			existingBill.dataValues.appointmentDue;
+
+		const newFee = await existingBill.update({
+			cancellationFee: oldFee + fee,
+			totalDue: total + fee,
+		});
+
 		const deletedAppointmentInfo = await UserAppointments.destroy({
 			where: { id: id },
 		});
+
 		return res.status(201).json({ message: "Appointment Deleted" });
 	} catch (error) {
 		console.error(error);

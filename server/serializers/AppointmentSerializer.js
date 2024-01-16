@@ -1,6 +1,15 @@
 class AppointmentSerializer {
 	static serializeArray(appointmentArray) {
-		const allowedAttributes = ["id", "date", "price", "userId", "homeId"];
+		const allowedAttributes = [
+			"id",
+			"date",
+			"price",
+			"userId",
+			"homeId",
+			"paid",
+			"bringTowels",
+			"bringSheets",
+		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
 			for (const attribute of allowedAttributes) {

@@ -16,12 +16,14 @@ import DetailsComponent from "./components/appointments/DetailsComponent";
 import EditHomeList from "./components/editHome/EditHomeList";
 import EditHomeForm from "./components/editHome/EditHomeForm";
 import AppointmentList from "./components/appointments/AppointmentList";
+import Bill from "./components/payments/Bill";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
 	const [state, dispatch] = useReducer(reducer, {
 		currentUser: { token: null },
+		bill: 0,
 		homes: [],
 		appointments: [],
 	});
@@ -89,6 +91,10 @@ export default function App() {
 						<Route
 							path="/appointments"
 							element={<AppointmentList state={state} dispatch={dispatch} />}
+						/>
+						<Route
+							path="/bill"
+							element={<Bill state={state} dispatch={dispatch} />}
 						/>
 					</Routes>
 				</SafeAreaView>

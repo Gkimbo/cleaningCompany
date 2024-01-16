@@ -14,6 +14,7 @@ const DetailsComponent = ({ state, dispatch }) => {
 	const [homeDetails, setHomeDetails] = useState(null);
 	const [appointments, setAppointments] = useState([]);
 	const [redirect, setRedirect] = useState(false);
+	const [cancellationFee, setCancellationFee] = useState(null);
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
@@ -27,9 +28,20 @@ const DetailsComponent = ({ state, dispatch }) => {
 			);
 
 			if (appointmentToDelete) {
-				const response = await Appointment.deleteAppointment(
-					appointmentToDelete.id
-				);
+				let response;
+				if (cancellationFee) {
+					response = await Appointment.deleteAppointment(
+						appointmentToDelete.id,
+						cancellationFee,
+						state.currentUser
+					);
+				} else {
+					response = await Appointment.deleteAppointment(
+						appointmentToDelete.id,
+						0,
+						state.currentUser.token
+					);
+				}
 				if (response.message === "Appointment Deleted") {
 					const updatedAppointments = appointments.filter(
 						(appointment) => appointment.date !== appointmentToDelete.date
@@ -132,12 +144,16 @@ const DetailsComponent = ({ state, dispatch }) => {
 					<Text
 						style={homePageStyles.homeTileContent}
 					>{`Sheets will be provided by the cleaner: ${
-						homeDetails.sheetsProvided ? "Yes   + $25" : "No"
+						homeDetails.sheetsProvided === "yes"
+							? "Yes   + $25 has been applied to all appointments"
+							: "No"
 					}`}</Text>
 					<Text
 						style={homePageStyles.homeTileContent}
 					>{`Towels will be provided by the cleaner: ${
-						homeDetails.towelsProvided ? "Yes   + $25" : "No"
+						homeDetails.towelsProvided === "yes"
+							? "Yes   + $25 has been applied to all appointments"
+							: "No"
 					}`}</Text>
 					{homeDetails.keyPadCode ? (
 						<Text
@@ -171,6 +187,9 @@ const DetailsComponent = ({ state, dispatch }) => {
 					onAppointmentDelete={onAppointmentDelete}
 					confirmationModalVisible={confirmationModalVisible}
 					setConfirmationModalVisible={setConfirmationModalVisible}
+					sheets={homeDetails.sheetsProvided}
+					towels={homeDetails.towelsProvided}
+					setCancellationFee={setCancellationFee}
 				/>
 			</View>
 		</View>

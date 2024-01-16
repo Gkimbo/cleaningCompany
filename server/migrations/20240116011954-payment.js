@@ -3,7 +3,7 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
 	up: async (queryInterface, Sequelize) => {
-		await queryInterface.createTable("UserAppointments", {
+		await queryInterface.createTable("UserBills", {
 			id: {
 				type: Sequelize.INTEGER,
 				allowNull: false,
@@ -19,32 +19,16 @@ module.exports = {
 					onDelete: "CASCADE",
 				},
 			},
-			homeId: {
+			appointmentDue: {
 				type: Sequelize.INTEGER,
 				allowNull: false,
-				references: {
-					model: "UserHomes",
-					key: "id",
-				},
 			},
-			date: {
-				type: Sequelize.STRING,
+			cancellationFee: {
+				type: Sequelize.INTEGER,
 				allowNull: false,
 			},
-			price: {
-				type: Sequelize.STRING,
-				allowNull: false,
-			},
-			paid: {
-				type: Sequelize.BOOLEAN,
-				allowNull: false,
-			},
-			bringTowels: {
-				type: Sequelize.STRING,
-				allowNull: false,
-			},
-			bringSheets: {
-				type: Sequelize.STRING,
+			totalDue: {
+				type: Sequelize.INTEGER,
 				allowNull: false,
 			},
 			createdAt: {
@@ -61,6 +45,6 @@ module.exports = {
 	},
 
 	down: async (queryInterface, Sequelize) => {
-		await queryInterface.dropTable("UserAppointments");
+		await queryInterface.dropTable("UserBills");
 	},
 };
