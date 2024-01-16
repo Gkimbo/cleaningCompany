@@ -35,6 +35,18 @@ module.exports = {
 				type: Sequelize.STRING,
 				allowNull: false,
 			},
+			paid: {
+				type: Sequelize.BOOLEAN,
+				allowNull: false,
+			},
+			bringTowels: {
+				type: Sequelize.STRING,
+				allowNull: false,
+			},
+			bringSheets: {
+				type: Sequelize.STRING,
+				allowNull: false,
+			},
 			createdAt: {
 				type: Sequelize.DATE,
 				allowNull: false,

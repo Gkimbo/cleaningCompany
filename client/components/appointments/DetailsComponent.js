@@ -132,12 +132,16 @@ const DetailsComponent = ({ state, dispatch }) => {
 					<Text
 						style={homePageStyles.homeTileContent}
 					>{`Sheets will be provided by the cleaner: ${
-						homeDetails.sheetsProvided ? "Yes   + $25" : "No"
+						homeDetails.sheetsProvided === "yes"
+							? "Yes   + $25 has been applied to all appointments"
+							: "No"
 					}`}</Text>
 					<Text
 						style={homePageStyles.homeTileContent}
 					>{`Towels will be provided by the cleaner: ${
-						homeDetails.towelsProvided ? "Yes   + $25" : "No"
+						homeDetails.towelsProvided === "yes"
+							? "Yes   + $25 has been applied to all appointments"
+							: "No"
 					}`}</Text>
 					{homeDetails.keyPadCode ? (
 						<Text
@@ -171,6 +175,8 @@ const DetailsComponent = ({ state, dispatch }) => {
 					onAppointmentDelete={onAppointmentDelete}
 					confirmationModalVisible={confirmationModalVisible}
 					setConfirmationModalVisible={setConfirmationModalVisible}
+					sheets={homeDetails.sheetsProvided}
+					towels={homeDetails.towelsProvided}
 				/>
 			</View>
 		</View>

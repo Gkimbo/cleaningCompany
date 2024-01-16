@@ -57,7 +57,7 @@ const AppointmentList = ({ state, dispatch }) => {
 				flexDirection: "column",
 			}}
 		>
-			<View style={homePageStyles.backButtonContainerList}>
+			<View style={homePageStyles.backButtonAppointmentList}>
 				<Pressable
 					style={homePageStyles.backButtonForm}
 					onPress={handleBackPress}

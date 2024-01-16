@@ -7,6 +7,7 @@ import SignOutButton from "./SignoutButton";
 import ScheduleCleaningButton from "./ScheduleCleaningButton";
 import EditHomeButton from "./EditHomeButton";
 import AppointmentsButton from "./AppointmentsButton";
+import BillButton from "./BillButton";
 
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
@@ -35,7 +36,12 @@ const TopBar = ({ dispatch, state }) => {
 		<View style={topBarStyles.container}>
 			<View style={topBarStyles.containerTitleSection}>
 				<Text style={topBarStyles.title}>Air BNB Cleaning Services</Text>
-				{state.currentUser.token !== null && <AppointmentsButton />}
+				{state.currentUser.token !== null && (
+					<>
+						<AppointmentsButton />
+						<BillButton />
+					</>
+				)}
 			</View>
 			<View style={topBarStyles.containerButtonSection}>
 				<HomeButton />

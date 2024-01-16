@@ -37,6 +37,9 @@ appointmentRouter.post("/", async (req, res) => {
 					homeId,
 					date: date.date,
 					price: date.price,
+					paid: date.paid,
+					bringTowels: date.bringTowels,
+					bringSheets: date.bringSheets,
 				});
 
 				return newAppointment;

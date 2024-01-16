@@ -190,6 +190,11 @@ const homePageStyles = StyleSheet.create({
 		height: "7%",
 		marginLeft: "10%",
 	},
+	backButtonAppointmentList: {
+		width: width > 800 ? "10%" : width > 600 ? "15%" : "25%",
+		height: 20,
+		marginLeft: "10%",
+	},
 	bookButton: {
 		alignSelf: "center",
 		borderRadius: 10,

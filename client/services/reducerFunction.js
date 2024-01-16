@@ -35,6 +35,16 @@ const reducer = (state, action) => {
 				home.id === action.payload.id ? action.payload.updatedHome : home
 			);
 			return { ...state, homes: updatedHomes };
+		case "ADD_BILL":
+			return {
+				...state,
+				bill: state.bill + action.payload,
+			};
+		case "SUBTRACT_BILL":
+			return {
+				...state,
+				bill: state.bill - action.payload,
+			};
 		default:
 			throw new Error();
 	}

@@ -1,3 +1,6 @@
+//TO-DO: allow user to turn off and on towels and sheets from the booking page
+// Add 25$ fee for deleting appointment within a week and add to db
+
 import React, { useState } from "react";
 import { View, Text, Button, Pressable, Modal } from "react-native";
 import { Calendar } from "react-native-calendars";
@@ -13,6 +16,8 @@ const CalendarComponent = ({
 	onAppointmentDelete,
 	confirmationModalVisible,
 	setConfirmationModalVisible,
+	sheets,
+	towels,
 }) => {
 	const [selectedDates, setSelectedDates] = useState({});
 	const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -20,18 +25,29 @@ const CalendarComponent = ({
 	const [error, setError] = useState(null);
 
 	const calculatePrice = () => {
+		let price = 0;
+		if (sheets === "yes") {
+			price += 25;
+		}
+		if (towels === "yes") {
+			price += 25;
+		}
 		if (Number(numBeds) === 1 && Number(numBaths) === 1) {
-			return 100;
+			price += price + 100;
+			return price;
 		} else if (Number(numBeds) === 1) {
 			const baths = (Number(numBaths) - 1) * 50;
-			return baths + 100;
+			price += baths + 100;
+			return price;
 		} else if (Number(numBaths) === 1) {
 			const beds = (Number(numBeds) - 1) * 50;
-			return beds + 100;
+			price += beds + 100;
+			return price;
 		} else {
 			const beds = (Number(numBeds) - 1) * 50;
 			const baths = (Number(numBaths) - 1) * 50;
-			return beds + baths + 100;
+			price += beds + baths + 100;
+			return price;
 		}
 	};
 
@@ -63,7 +79,13 @@ const CalendarComponent = ({
 	const handleSubmit = () => {
 		const selectedDateArray = Object.keys(selectedDates).map((dateString) => {
 			const { price } = selectedDates[dateString];
-			return { date: dateString, price };
+			return {
+				date: dateString,
+				price,
+				paid: false,
+				bringTowels: towels,
+				bringSheets: sheets,
+			};
 		});
 
 		onDatesSelected(selectedDateArray);
@@ -82,6 +104,16 @@ const CalendarComponent = ({
 		return appointments.some(
 			(appointment) => appointment.date === date.dateString
 		);
+	};
+
+	const priceOfBooking = (date) => {
+		let price;
+		appointments.forEach((day) => {
+			if (day.date === date.dateString) {
+				price = day.price;
+			}
+		});
+		return price;
 	};
 
 	const handleRemoveBooking = (date) => {
@@ -105,6 +137,10 @@ const CalendarComponent = ({
 	const handleConfirmation = (deleteAppointment) => {
 		setConfirmationModalVisible(false);
 		if (deleteAppointment) {
+			// dispatch({
+			// 	type: "ADD_BILL",
+			// 	payload: 25,
+			// });
 			const updatedDates = { ...selectedDates };
 			delete updatedDates[dateToDelete.dateString];
 			setSelectedDates(updatedDates);
@@ -158,7 +194,7 @@ const CalendarComponent = ({
 						onPress={() => handleRemoveBooking(date)}
 					>
 						<Text>{date.day}</Text>
-						<Text style={selectedPriceStyle}>${calculatePrice()}</Text>
+						<Text style={selectedPriceStyle}>${priceOfBooking(date)}</Text>
 					</Pressable>
 				) : selectedDates[date.dateString] ? (
 					<Pressable
