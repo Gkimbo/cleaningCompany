@@ -2,7 +2,12 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
-const { User, UserHomes, UserAppointments } = require("../../../models");
+const {
+	User,
+	UserHomes,
+	UserAppointments,
+	UserBills,
+} = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
 
@@ -23,6 +28,10 @@ userInfoRouter.get("/", async (req, res) => {
 				{
 					model: UserAppointments,
 					as: "appointments",
+				},
+				{
+					model: UserBills,
+					as: "bills",
 				},
 			],
 		});

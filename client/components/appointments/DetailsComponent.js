@@ -14,6 +14,7 @@ const DetailsComponent = ({ state, dispatch }) => {
 	const [homeDetails, setHomeDetails] = useState(null);
 	const [appointments, setAppointments] = useState([]);
 	const [redirect, setRedirect] = useState(false);
+	const [cancellationFee, setCancellationFee] = useState(null);
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
@@ -27,9 +28,20 @@ const DetailsComponent = ({ state, dispatch }) => {
 			);
 
 			if (appointmentToDelete) {
-				const response = await Appointment.deleteAppointment(
-					appointmentToDelete.id
-				);
+				let response;
+				if (cancellationFee) {
+					response = await Appointment.deleteAppointment(
+						appointmentToDelete.id,
+						cancellationFee,
+						state.currentUser
+					);
+				} else {
+					response = await Appointment.deleteAppointment(
+						appointmentToDelete.id,
+						0,
+						state.currentUser.token
+					);
+				}
 				if (response.message === "Appointment Deleted") {
 					const updatedAppointments = appointments.filter(
 						(appointment) => appointment.date !== appointmentToDelete.date
@@ -177,6 +189,7 @@ const DetailsComponent = ({ state, dispatch }) => {
 					setConfirmationModalVisible={setConfirmationModalVisible}
 					sheets={homeDetails.sheetsProvided}
 					towels={homeDetails.towelsProvided}
+					setCancellationFee={setCancellationFee}
 				/>
 			</View>
 		</View>

@@ -1,7 +1,8 @@
 const express = require("express");
-const { User } = require("../../../models");
+const { User, UserBills } = require("../../../models");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
+
 const secretKey = process.env.SESSION_SECRET;
 
 const usersRouter = express.Router();
@@ -18,6 +19,12 @@ usersRouter.post("/", async (req, res) => {
 					username,
 					password,
 					email,
+				});
+				const newBill = await UserBills.create({
+					userId: newUser.dataValues.id,
+					appointmentDue: 0,
+					cancellationFee: 0,
+					totalDue: 0,
 				});
 				await newUser.update({ lastLogin: new Date() });
 				const serializedUser = UserSerializer.login(newUser.dataValues);

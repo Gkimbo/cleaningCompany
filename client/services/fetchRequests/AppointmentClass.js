@@ -26,9 +26,10 @@ class Appointment {
 		}
 	}
 
-	static async deleteAppointment(id) {
+	static async deleteAppointment(id, fee, user) {
 		try {
 			const response = await fetch(baseURL + `/api/v1/appointments/${id}`, {
+				body: JSON.stringify({ fee: fee, user: user }),
 				method: "delete",
 				headers: {
 					"Content-Type": "application/json",

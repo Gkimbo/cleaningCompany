@@ -18,6 +18,7 @@ const CalendarComponent = ({
 	setConfirmationModalVisible,
 	sheets,
 	towels,
+	setCancellationFee,
 }) => {
 	const [selectedDates, setSelectedDates] = useState({});
 	const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -143,6 +144,7 @@ const CalendarComponent = ({
 			// });
 			const updatedDates = { ...selectedDates };
 			delete updatedDates[dateToDelete.dateString];
+			setCancellationFee(25);
 			setSelectedDates(updatedDates);
 			onAppointmentDelete(dateToDelete, true);
 		}
