@@ -1,21 +1,38 @@
 import React, { useState, useEffect } from "react";
-import { Pressable, View, Text, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView, TextInput } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
-import HomeTile from "../tiles/HomeTile";
+import UserFormStyles from "../../services/styles/UserInputFormStyle";
 
 const Bill = ({ state, dispatch }) => {
 	const [redirect, setRedirect] = useState(false);
+	let appointmentOverdue = 0 + state.bill.cancellationFee;
+	const [amountToPay, setAmountToPay] = useState(appointmentOverdue);
+	const [error, setError] = useState(null);
 	const navigate = useNavigate();
-	let appointmentPrice = 0;
-	console.log(appointmentPrice);
 
-	console.log(state.appointments);
 	state.appointments.forEach((appt) => {
-		if (!appt.paid) {
-			appointmentPrice += Number(appt.price);
+		const appointmentDate = new Date(appt.date);
+		const today = new Date();
+
+		if (!appt.paid && appointmentDate <= today) {
+			appointmentOverdue += Number(appt.price);
 		}
 	});
+
+	const handleAmountToPay = (amount) => {
+		const regex = /^\d*(\.\d*)?(\s*)?$/;
+		if (!regex.test(amount)) {
+			setError("Amount can only be a number!");
+			return;
+		}
+		if (amount === "") {
+			setError("Amount cannot be blank!");
+		} else {
+			setError(null);
+		}
+		setAmountToPay(amount);
+	};
 
 	useEffect(() => {
 		if (redirect) {
@@ -28,7 +45,51 @@ const Bill = ({ state, dispatch }) => {
 		setRedirect(true);
 	};
 
-	return <View style={homePageStyles.container}>{appointmentPrice}</View>;
+	return (
+		<ScrollView contentContainerStyle={homePageStyles.container}>
+			<View style={homePageStyles.billContainer}>
+				<Text style={homePageStyles.sectionTitle}>Your Bill</Text>
+				<View style={homePageStyles.billDetails}>
+					<View style={homePageStyles.billRow}>
+						<Text style={homePageStyles.billLabel}>Total Due today:</Text>
+						<Text style={homePageStyles.billValue}>${appointmentOverdue}</Text>
+					</View>
+					<View style={homePageStyles.billDivider} />
+					<Text style={homePageStyles.billText}>
+						Appointment Due: ${state.bill.appointmentDue}
+					</Text>
+					<Text style={homePageStyles.billText}>
+						Cancellation Fee: ${state.bill.cancellationFee}
+					</Text>
+					<View style={homePageStyles.billDivider} />
+					<Text style={homePageStyles.billText}>
+						Total for all appointments: ${state.bill.totalDue}
+					</Text>
+				</View>
+				<form onSubmit={handlePress}>
+					<View style={{ flexDirection: "column" }}>
+						<Text style={UserFormStyles.smallTitle}>How much to pay:</Text>
+						<TextInput
+							mode="outlined"
+							value={amountToPay}
+							onChangeText={handleAmountToPay}
+							style={UserFormStyles.input}
+						/>
+						{error ?? (
+							<Text
+								style={{ alignSelf: "center", color: "red", marginBottom: 20 }}
+							>
+								{error}
+							</Text>
+						)}
+						<Pressable style={homePageStyles.button} onPress={handlePress}>
+							<Text style={homePageStyles.buttonText}>Pay Now</Text>
+						</Pressable>
+					</View>
+				</form>
+			</View>
+		</ScrollView>
+	);
 };
 
 export default Bill;

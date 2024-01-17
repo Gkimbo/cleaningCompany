@@ -35,12 +35,21 @@ const DetailsComponent = ({ state, dispatch }) => {
 						cancellationFee,
 						state.currentUser
 					);
+					dispatch({ type: "ADD_FEE", payload: cancellationFee });
+					dispatch({
+						type: "SUBTRACT_BILL",
+						payload: appointmentToDelete.price,
+					});
 				} else {
 					response = await Appointment.deleteAppointment(
 						appointmentToDelete.id,
 						0,
 						state.currentUser.token
 					);
+					dispatch({
+						type: "SUBTRACT_BILL",
+						payload: appointmentToDelete.price,
+					});
 				}
 				if (response.message === "Appointment Deleted") {
 					const updatedAppointments = appointments.filter(
@@ -71,7 +80,11 @@ const DetailsComponent = ({ state, dispatch }) => {
 			const stateApp = datesOfCleaning.map((app) => {
 				return { ...app, homeId: homeDetails.id };
 			});
-
+			let apptTotal = 0;
+			datesOfCleaning.forEach((date) => {
+				apptTotal += date.price;
+			});
+			dispatch({ type: "ADD_BILL", payload: apptTotal });
 			dispatch({ type: "ADD_DATES", payload: stateApp });
 			navigate("/list-of-homes");
 		}

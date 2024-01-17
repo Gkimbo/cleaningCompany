@@ -26,7 +26,6 @@ class UserSerializer {
 			const bill = BillSerializer.serializeArray(user.bills);
 			serializedUser.bill = bill;
 		}
-
 		return serializedUser;
 	}
 

@@ -8,7 +8,7 @@ class BillSerializer {
 			}
 			return newBill;
 		});
-		return serializedBill;
+		return serializedBill[0];
 	}
 }
 

@@ -77,6 +77,10 @@ const homePageStyles = StyleSheet.create({
 		fontSize: 18,
 		textAlign: "center",
 	},
+	buttonTextBill: {
+		fontSize: 18,
+		textAlign: "center",
+	},
 
 	topBarContainer: {
 		position: "absolute",
@@ -222,6 +226,58 @@ const homePageStyles = StyleSheet.create({
 	appointmentPrice: {
 		fontSize: 14,
 		color: "#555",
+	},
+	billContainer: {
+		backgroundColor: "#f9f9f9",
+		borderRadius: 12,
+		padding: 20,
+		marginBottom: 20,
+		marginTop: 20,
+		shadowColor: "#000",
+		shadowOffset: {
+			width: 2,
+			height: 3,
+		},
+		shadowOpacity: 0.3,
+		shadowRadius: 3.84,
+		elevation: 5,
+	},
+	sectionTitle: {
+		fontSize: 20,
+		fontWeight: "bold",
+		marginBottom: 16,
+	},
+	billDetails: {
+		marginBottom: 16,
+	},
+	billRow: {
+		flexDirection: "row",
+		justifyContent: "space-between",
+		alignItems: "center",
+		marginBottom: 8,
+	},
+	billLabel: {
+		fontSize: 16,
+		fontWeight: "bold",
+	},
+	billValue: {
+		fontSize: 16,
+		color: "#3498db",
+	},
+	billDivider: {
+		height: 1,
+		backgroundColor: "#ccc",
+		marginVertical: 8,
+	},
+	billText: {
+		fontSize: 16,
+		marginBottom: 8,
+	},
+	button: {
+		backgroundColor: "#3498db",
+		padding: 14,
+		borderRadius: 8,
+		alignItems: "center",
 	},
 });
 

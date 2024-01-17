@@ -30,10 +30,25 @@ appointmentRouter.get("/:homeId", async (req, res) => {
 
 appointmentRouter.post("/", async (req, res) => {
 	const { token, homeId, dateArray } = req.body;
-
+	let appointmentTotal = 0;
+	dateArray.forEach((date) => {
+		appointmentTotal += date.price;
+	});
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
 		const userId = decodedToken.userId;
+		const existingBill = await UserBills.findOne({
+			where: { userId },
+		});
+		const oldAppt = existingBill.dataValues.appointmentDue;
+		const total =
+			existingBill.dataValues.cancellationFee +
+			existingBill.dataValues.appointmentDue;
+
+		await existingBill.update({
+			appointmentDue: oldAppt + appointmentTotal,
+			totalDue: total + appointmentTotal,
+		});
 
 		const appointments = await Promise.all(
 			dateArray.map(async (date) => {
@@ -67,15 +82,22 @@ appointmentRouter.delete("/:id", async (req, res) => {
 		const existingBill = await UserBills.findOne({
 			where: { userId },
 		});
+
+		const appointmentToDelete = await UserAppointments.findOne({
+			where: { id: id },
+		});
+		const appointmentTotal = Number(appointmentToDelete.dataValues.price);
 		const oldFee = existingBill.dataValues.cancellationFee;
+		const oldAppt = existingBill.dataValues.appointmentDue;
 
 		const total =
 			existingBill.dataValues.cancellationFee +
 			existingBill.dataValues.appointmentDue;
 
-		const newFee = await existingBill.update({
+		await existingBill.update({
 			cancellationFee: oldFee + fee,
-			totalDue: total + fee,
+			appointmentDue: oldAppt - appointmentTotal,
+			totalDue: total + fee - appointmentTotal,
 		});
 
 		const deletedAppointmentInfo = await UserAppointments.destroy({
