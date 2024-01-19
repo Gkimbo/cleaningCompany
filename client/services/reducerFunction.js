@@ -35,15 +35,46 @@ const reducer = (state, action) => {
 				home.id === action.payload.id ? action.payload.updatedHome : home
 			);
 			return { ...state, homes: updatedHomes };
+		case "DB_BILL":
+			return {
+				...state,
+				bill: action.payload,
+			};
+		case "ADD_FEE":
+			return {
+				...state,
+				bill: {
+					...state.bill,
+					cancellationFee: state.bill.cancellationFee + action.payload,
+					totalDue: state.bill.totalDue + action.payload,
+				},
+			};
+		case "SUBTRACT_FEE":
+			return {
+				...state,
+				bill: {
+					...state.bill,
+					cancellationFee: state.bill.cancellationFee - action.payload,
+					totalDue: state.bill.totalDue - action.payload,
+				},
+			};
 		case "ADD_BILL":
 			return {
 				...state,
-				bill: state.bill + action.payload,
+				bill: {
+					...state.bill,
+					appointmentDue: state.bill.appointmentDue + action.payload,
+					totalDue: state.bill.totalDue + action.payload,
+				},
 			};
 		case "SUBTRACT_BILL":
 			return {
 				...state,
-				bill: state.bill - action.payload,
+				bill: {
+					...state.bill,
+					appointmentDue: state.bill.appointmentDue - action.payload,
+					totalDue: state.bill.totalDue - action.payload,
+				},
 			};
 		default:
 			throw new Error();

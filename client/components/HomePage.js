@@ -18,6 +18,7 @@ import Animated, {
 const HomePage = ({ state, dispatch }) => {
 	const scrollRef = useAnimatedRef();
 	const scrollOffSet = useScrollViewOffset(scrollRef);
+	console.log(state);
 
 	const imageAnimatedStyles = useAnimatedStyle(() => {
 		return {
@@ -47,6 +48,10 @@ const HomePage = ({ state, dispatch }) => {
 					dispatch({
 						type: "USER_APPOINTMENTS",
 						payload: response.user.appointments,
+					});
+					dispatch({
+						type: "DB_BILL",
+						payload: response.user.bill,
 					});
 				}
 			);
