@@ -3,7 +3,7 @@ import { Pressable, Text } from "react-native";
 import { useNavigate } from "react-router-native";
 import topBarStyles from "../../services/styles/TopBarStyles";
 
-const BillButton = () => {
+const BillButton = ({ closeModal }) => {
 	const [redirect, setRedirect] = useState(false);
 	const navigate = useNavigate();
 
@@ -15,6 +15,7 @@ const BillButton = () => {
 	}, [redirect]);
 
 	const handlePress = () => {
+		closeModal();
 		setRedirect(true);
 	};
 

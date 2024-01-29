@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, Dimensions } from "react-native";
+import { Pressable, Dimensions, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../services/styles/TopBarStyles";
@@ -31,7 +31,12 @@ const SignOutButton = ({ dispatch }) => {
 
 	return (
 		<Pressable style={topBarStyles.signOutButton} onPress={signOut}>
-			<Icon name="sign-out" size={iconSize} color="black" />
+			<View style={{ flexDirection: "row" }}>
+				<Text style={{ ...topBarStyles.buttonTextSchedule, marginRight: 10 }}>
+					Sign Out
+				</Text>
+				<Icon name="sign-out" size={iconSize} color="black" />
+			</View>
 		</Pressable>
 	);
 };
