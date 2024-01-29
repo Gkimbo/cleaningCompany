@@ -1,3 +1,4 @@
+require("dotenv").config();
 const bcrypt = require("bcrypt");
 const manager1Password = process.env.MANAGER1_PASSWORD;
 
@@ -5,7 +6,8 @@ module.exports = {
 	up: async (queryInterface, Sequelize) => {
 		const hashPassword = async (password) => {
 			const saltRounds = 10;
-			return await bcrypt.hash(password, saltRounds);
+			const passwordHash = await bcrypt.hash(password, saltRounds);
+			return passwordHash;
 		};
 
 		// Function to seed the manager account
@@ -30,6 +32,6 @@ module.exports = {
 
 	down: async (queryInterface, Sequelize) => {
 		// Remove the manager account
-		await queryInterface.bulkDelete("Users", { username: "manager" });
+		await queryInterface.bulkDelete("Users", { username: "manager1" });
 	},
 };

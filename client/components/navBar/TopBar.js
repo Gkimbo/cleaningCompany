@@ -8,7 +8,7 @@ import {
 	TouchableWithoutFeedback,
 } from "react-native";
 import { useNavigate } from "react-router-native";
-import { Feather } from "@expo/vector-icons"; // Import the Feather icon library
+import { Feather } from "@expo/vector-icons";
 
 import topBarStyles from "../../services/styles/TopBarStyles";
 import HomeButton from "./HomeButton";
