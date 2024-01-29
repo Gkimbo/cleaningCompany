@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, TextInput } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
+import PaymentClass from "../../services/fetchRequests/PaymentClass";
 
 const Bill = ({ state, dispatch }) => {
 	const [redirect, setRedirect] = useState(false);
@@ -41,8 +42,9 @@ const Bill = ({ state, dispatch }) => {
 		}
 	}, [redirect]);
 
-	const handlePress = () => {
-		setRedirect(true);
+	const handlePress = async () => {
+		await PaymentClass.addPayment(appointmentOverdue, state.currentUser);
+		// setRedirect(true);
 	};
 
 	return (
@@ -63,7 +65,7 @@ const Bill = ({ state, dispatch }) => {
 					</Text>
 					<View style={homePageStyles.billDivider} />
 					<Text style={homePageStyles.billText}>
-						Total for all appointments: ${state.bill.totalDue}
+						Total for all appointments (Not due today): ${state.bill.totalDue}
 					</Text>
 				</View>
 				<form onSubmit={handlePress}>
@@ -71,7 +73,7 @@ const Bill = ({ state, dispatch }) => {
 						<Text style={UserFormStyles.smallTitle}>How much to pay:</Text>
 						<TextInput
 							mode="outlined"
-							value={amountToPay}
+							value={appointmentOverdue}
 							onChangeText={handleAmountToPay}
 							style={UserFormStyles.input}
 						/>
