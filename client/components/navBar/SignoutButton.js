@@ -18,6 +18,7 @@ const SignOutButton = ({ dispatch }) => {
 				if (response.ok) {
 					localStorage.removeItem("token");
 					dispatch({ type: "CURRENT_USER", payload: null });
+					dispatch({ type: "USER_ACCOUNT", payload: null });
 					navigate("/");
 				} else {
 					console.error("Failed to log out");

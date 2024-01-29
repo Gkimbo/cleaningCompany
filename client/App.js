@@ -22,16 +22,22 @@ export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
 	const [state, dispatch] = useReducer(reducer, {
+		account: null,
 		currentUser: { token: null },
 		bill: 0,
 		homes: [],
 		appointments: [],
 	});
+	console.log(state);
 
 	const fetchCurrentUser = async () => {
 		try {
 			const user = await getCurrentUser();
+
 			dispatch({ type: "CURRENT_USER", payload: user.token });
+			if (user.user.username === "manager1") {
+				dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
+			}
 			setLastLoginTimestamp(user.user.lastLogin);
 		} catch (err) {
 			dispatch({ type: "CURRENT_USER", payload: null });

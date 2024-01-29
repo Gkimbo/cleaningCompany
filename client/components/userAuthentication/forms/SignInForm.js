@@ -45,6 +45,9 @@ const SignInForm = ({ state, dispatch }) => {
 			}
 			if (response.user) {
 				dispatch({ type: "CURRENT_USER", payload: response.token });
+				if (response.user.username === "manager1") {
+					dispatch({ type: "USER_ACCOUNT", payload: response.user.username });
+				}
 				login(response.token);
 				setRedirect(true);
 			}
