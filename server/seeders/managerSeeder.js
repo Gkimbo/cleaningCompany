@@ -1,4 +1,5 @@
 const bcrypt = require("bcrypt");
+const manager1Password = process.env.MANAGER1_PASSWORD;
 
 module.exports = {
 	up: async (queryInterface, Sequelize) => {
@@ -9,7 +10,7 @@ module.exports = {
 
 		// Function to seed the manager account
 		const managerSeeder = async () => {
-			const hashedPassword = await hashPassword("PassWordManager$$101");
+			const hashedPassword = await hashPassword(manager1Password);
 
 			// Insert a manager account into the Users table
 			await queryInterface.bulkInsert("Users", [
