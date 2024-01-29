@@ -68,6 +68,12 @@ Run migrations:
 npx sequelize-cli db:migrate
 ```
 
+Seed Manager:
+
+```
+sequelize db:seed --seed managerSeeder.js
+```
+
 Create a .env file in the server directory:
 
 ```bash
