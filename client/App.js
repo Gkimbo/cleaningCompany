@@ -18,10 +18,12 @@ import EditHomeForm from "./components/editHome/EditHomeForm";
 import AppointmentList from "./components/appointments/AppointmentList";
 import Bill from "./components/payments/Bill";
 import AddEmployee from "./components/admin/AddEmployee";
+import EditEmployeeForm from "./components/admin/forms/EditEmployeeForm";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
+	const [employeeList, setEmployeeList] = useState([]);
 	const [state, dispatch] = useReducer(reducer, {
 		account: null,
 		currentUser: { token: null },
@@ -105,7 +107,23 @@ export default function App() {
 						/>
 						<Route
 							path="/employees"
-							element={<AddEmployee state={state} dispatch={dispatch} />}
+							element={
+								<AddEmployee
+									state={state}
+									employeeList={employeeList}
+									setEmployeeList={setEmployeeList}
+								/>
+							}
+						/>
+						<Route
+							path="/employee-edit/:id"
+							element={
+								<EditEmployeeForm
+									state={state}
+									employeeList={employeeList}
+									setEmployeeList={setEmployeeList}
+								/>
+							}
 						/>
 					</Routes>
 				</SafeAreaView>

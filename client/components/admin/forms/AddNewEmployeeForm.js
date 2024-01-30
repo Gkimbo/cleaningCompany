@@ -7,7 +7,7 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 import formStyles from "../../../services/styles/FormStyle";
 import { AuthContext } from "../../../services/AuthContext";
 
-const AddEmployeeForm = ({ state, dispatch }) => {
+const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
 	const [userName, setUserName] = useState("");
 	const [password, setPassword] = useState("");
 	const [email, setEmail] = useState("");
@@ -23,23 +23,6 @@ const AddEmployeeForm = ({ state, dispatch }) => {
 
 		if (userName.length < 4 || userName.length > 12) {
 			validationErrors.push("Username must be between 4 and 12 characters.");
-		}
-
-		const uppercaseCount = (password.match(/[A-Z]/g) || []).length;
-		const lowercaseCount = (password.match(/[a-z]/g) || []).length;
-		const specialCharCount = (
-			password.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/g) || []
-		).length;
-
-		if (
-			password.length < 8 ||
-			uppercaseCount < 2 ||
-			lowercaseCount < 2 ||
-			specialCharCount < 2
-		) {
-			validationErrors.push(
-				"Password must be at least 8 characters long with 2 uppercase letters, 2 lowercase letters, and 2 special characters."
-			);
 		}
 
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -68,8 +51,8 @@ const AddEmployeeForm = ({ state, dispatch }) => {
 			) {
 				setErrors([response]);
 			} else {
-				dispatch({ type: "CURRENT_USER", payload: response.token });
-				login(response.token);
+				console.log(response.user);
+				setEmployeeList([...employeeList, response.user]);
 				setRedirect(true);
 			}
 		}
@@ -82,7 +65,7 @@ const AddEmployeeForm = ({ state, dispatch }) => {
 	}, [redirect]);
 
 	return (
-		<ScrollView contentContainerStyle={formStyles.container}>
+		<View style={formStyles.container}>
 			{errors.length > 0 && (
 				<View style={formStyles.errorContainer}>
 					{errors.map((error, index) => (
@@ -126,7 +109,7 @@ const AddEmployeeForm = ({ state, dispatch }) => {
 			<Pressable onPress={onSubmit}>
 				<Text style={formStyles.button}>Add new employee</Text>
 			</Pressable>
-		</ScrollView>
+		</View>
 	);
 };
 

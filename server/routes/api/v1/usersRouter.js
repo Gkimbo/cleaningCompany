@@ -2,6 +2,7 @@ const express = require("express");
 const { User, UserBills } = require("../../../models");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
+const UserInfo = require("../../../services/UserInfoClass");
 
 const secretKey = process.env.SESSION_SECRET;
 
@@ -63,9 +64,8 @@ usersRouter.post("/new-employee", async (req, res) => {
 					totalDue: 0,
 				});
 				await newUser.update({ lastLogin: new Date() });
-				const serializedUser = UserSerializer.login(newUser.dataValues);
-				const token = jwt.sign({ userId: serializedUser.id }, secretKey);
-				return res.status(201).json({ user: serializedUser, token: token });
+				const serializedUser = UserSerializer.serializeOne(newUser.dataValues);
+				return res.status(201).json({ user: serializedUser });
 			} else {
 				return res.status(410).json("Username already exists");
 			}
@@ -75,6 +75,52 @@ usersRouter.post("/new-employee", async (req, res) => {
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ error: "Failed to create employee account" });
+	}
+});
+
+usersRouter.get("/employees", async (req, res) => {
+	const token = req.headers.authorization.split(" ")[1];
+	try {
+		const decodedToken = jwt.verify(token, secretKey);
+		const userId = decodedToken.userId;
+
+		const users = await User.findAll({
+			where: {
+				type: "cleaner",
+			},
+		});
+
+		let serializedUsers = users.map((user) =>
+			UserSerializer.serializeOne(user.dataValues)
+		);
+		return res.status(200).json({ users: serializedUsers });
+	} catch (error) {
+		console.log(error);
+		return res.status(401).json({ error: "Invalid or expired token" });
+	}
+});
+
+usersRouter.patch("/employee", async (req, res) => {
+	const { id, username, password, email, type } = req.body;
+	console.log(req.body);
+	try {
+		const userInfo = await UserInfo.editEmployeeInDB({
+			id,
+			username,
+			password,
+			email,
+			type,
+		});
+
+		return res.status(200).json({ user: userInfo });
+	} catch (error) {
+		console.error(error);
+
+		if (error.name === "TokenExpiredError") {
+			return res.status(401).json({ error: "Token has expired" });
+		}
+
+		return res.status(401).json({ error: "Invalid token" });
 	}
 });
 
