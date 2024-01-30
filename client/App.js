@@ -17,6 +17,7 @@ import EditHomeList from "./components/editHome/EditHomeList";
 import EditHomeForm from "./components/editHome/EditHomeForm";
 import AppointmentList from "./components/appointments/AppointmentList";
 import Bill from "./components/payments/Bill";
+import AddEmployee from "./components/admin/AddEmployee";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -101,6 +102,10 @@ export default function App() {
 						<Route
 							path="/bill"
 							element={<Bill state={state} dispatch={dispatch} />}
+						/>
+						<Route
+							path="/employees"
+							element={<AddEmployee state={state} dispatch={dispatch} />}
 						/>
 					</Routes>
 				</SafeAreaView>
