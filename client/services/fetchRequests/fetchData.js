@@ -76,6 +76,66 @@ class FetchData {
 		}
 	}
 
+	static async makeNewEmployee(data) {
+		try {
+			const response = await fetch(baseURL + "/api/v1/users/new-employee", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					username: data.userName,
+					password: data.password,
+					email: data.email,
+					type: data.type,
+				}),
+			});
+			if (!response.ok) {
+				if (response.status === 409) {
+					return "An account already has this email";
+				} else if (response.status === 410) {
+					return "Username already exists";
+				} else {
+					throw new Error("Failed to create user");
+				}
+			}
+			const responseData = await response.json();
+			return responseData;
+		} catch (error) {
+			return error;
+		}
+	}
+	static async editEmployee(data) {
+		try {
+			const response = await fetch(baseURL + "/api/v1/users/employee", {
+				method: "PATCH",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					id: data.id,
+					username: data.userName,
+					password: data.password,
+					email: data.email,
+					type: data.type,
+				}),
+			});
+			if (!response.ok) {
+				if (response.status === 409) {
+					return "An account already has this email";
+				} else if (response.status === 410) {
+					return "Username already exists";
+				} else {
+					throw new Error("Failed to create user");
+				}
+			}
+			const responseData = await response.json();
+			return responseData;
+		} catch (error) {
+			return error;
+		}
+	}
+
 	static async updateTimestamp(data) {
 		try {
 			const response = await fetch(

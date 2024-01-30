@@ -1,4 +1,4 @@
-const { UserHomes } = require("../models");
+const { UserHomes, User } = require("../models");
 
 class UserInfoClass {
 	static async addHomeToDB({
@@ -84,6 +84,25 @@ class UserInfoClass {
 			console.error("Error deleting car info: ", error);
 			throw error;
 		}
+	}
+
+	static async editEmployeeInDB({ id, username, password, email, type }) {
+		const existingEmployee = await User.findOne({
+			where: { id },
+		});
+
+		if (!existingEmployee) {
+			return "Employee not found for editing";
+		}
+
+		await existingEmployee.update({
+			username,
+			password,
+			email,
+			type,
+		});
+
+		return existingEmployee;
 	}
 }
 

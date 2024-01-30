@@ -63,7 +63,11 @@ const AppointmentList = ({ state, dispatch }) => {
 					onPress={handleBackPress}
 				>
 					<View
-						style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+						style={{
+							flexDirection: "row",
+							alignItems: "center",
+							padding: 10,
+						}}
 					>
 						<Icon name="angle-left" size={iconSize} color="black" />
 						<View style={{ marginLeft: 15 }}>

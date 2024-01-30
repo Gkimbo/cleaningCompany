@@ -18,7 +18,6 @@ import Animated, {
 const HomePage = ({ state, dispatch }) => {
 	const scrollRef = useAnimatedRef();
 	const scrollOffSet = useScrollViewOffset(scrollRef);
-	console.log(state);
 
 	const imageAnimatedStyles = useAnimatedStyle(() => {
 		return {

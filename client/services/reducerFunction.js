@@ -10,6 +10,11 @@ const reducer = (state, action) => {
 				...state,
 				currentUser: { token: action.payload },
 			};
+		case "USER_ACCOUNT":
+			return {
+				...state,
+				account: action.payload,
+			};
 		case "USER_HOME":
 			return {
 				...state,

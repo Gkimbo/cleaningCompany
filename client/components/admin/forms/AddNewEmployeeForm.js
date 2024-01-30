@@ -1,54 +1,58 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Text, Pressable, View } from "react-native";
-import { TextInput } from "react-native-paper";
+import { ScrollView, Text, Pressable, View } from "react-native";
 import { useNavigate } from "react-router-native";
+import { TextInput } from "react-native-paper";
 
 import FetchData from "../../../services/fetchRequests/fetchData";
 import formStyles from "../../../services/styles/FormStyle";
 import { AuthContext } from "../../../services/AuthContext";
 
-const SignInForm = ({ state, dispatch }) => {
+const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
 	const [userName, setUserName] = useState("");
 	const [password, setPassword] = useState("");
+	const [email, setEmail] = useState("");
 	const [redirect, setRedirect] = useState(false);
-	const [errors, setErrors] = useState([]);
 	const [showPassword, setShowPassword] = useState(false);
+	const [errors, setErrors] = useState([]);
 	const navigate = useNavigate();
 	const { login } = useContext(AuthContext);
+	const type = "cleaner";
 
-	const validateForm = () => {
+	const validate = () => {
 		const validationErrors = [];
-		if (userName.length === 0) {
-			validationErrors.push("Please type in your User Name");
+
+		if (userName.length < 4 || userName.length > 12) {
+			validationErrors.push("Username must be between 4 and 12 characters.");
 		}
-		if (password.length === 0) {
-			validationErrors.push("Please type your password");
+
+		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+		if (!emailRegex.test(email)) {
+			validationErrors.push("Please enter a valid email address.");
 		}
+
 		setErrors(validationErrors);
 		return validationErrors.length === 0;
 	};
 
 	const onSubmit = async () => {
-		const isValid = validateForm();
-		if (isValid) {
-			const loginData = {
-				userName: userName,
-				password: password,
+		if (!validate()) {
+			return;
+		} else {
+			const data = {
+				userName,
+				password,
+				email,
+				type,
 			};
-
-			const response = await FetchData.login(loginData);
-			if (response === "That User Name does not exist, please sign up.") {
+			const response = await FetchData.makeNewEmployee(data);
+			if (
+				response === "An account already has this email" ||
+				response === "Username already exists"
+			) {
 				setErrors([response]);
-			}
-			if (response === "Invalid password") {
-				setErrors([response]);
-			}
-			if (response.user) {
-				dispatch({ type: "CURRENT_USER", payload: response.token });
-				if (response.user.username === "manager1") {
-					dispatch({ type: "USER_ACCOUNT", payload: response.user.username });
-				}
-				login(response.token);
+			} else {
+				console.log(response.user);
+				setEmployeeList([...employeeList, response.user]);
 				setRedirect(true);
 			}
 		}
@@ -56,12 +60,12 @@ const SignInForm = ({ state, dispatch }) => {
 
 	useEffect(() => {
 		if (redirect) {
-			navigate("/");
+			navigate("/employees");
 		}
 	}, [redirect]);
 
 	return (
-		<View>
+		<View style={formStyles.container}>
 			{errors.length > 0 && (
 				<View style={formStyles.errorContainer}>
 					{errors.map((error, index) => (
@@ -71,12 +75,13 @@ const SignInForm = ({ state, dispatch }) => {
 					))}
 				</View>
 			)}
+
 			<TextInput
 				mode="outlined"
-				value={userName}
-				onChangeText={setUserName}
 				placeholder="User Name"
 				style={formStyles.input}
+				value={userName}
+				onChangeText={setUserName}
 			/>
 			<TextInput
 				mode="outlined"
@@ -92,11 +97,20 @@ const SignInForm = ({ state, dispatch }) => {
 				}
 				style={formStyles.input}
 			/>
+			<TextInput
+				mode="outlined"
+				placeholder="Email"
+				style={formStyles.input}
+				value={email}
+				onChangeText={setEmail}
+				keyboardType="email-address"
+			/>
+
 			<Pressable onPress={onSubmit}>
-				<Text style={formStyles.button}>Sign In</Text>
+				<Text style={formStyles.button}>Add new employee</Text>
 			</Pressable>
 		</View>
 	);
 };
 
-export default SignInForm;
+export default AddEmployeeForm;
