@@ -41,38 +41,38 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 		navigate(`/employee-edit/${id}`);
 	};
 
-	const handleNoPress = (homeId) => {
+	const handleNoPress = (employeeId) => {
 		setDeleteConfirmation((prevConfirmations) => ({
-			[homeId]: !prevConfirmations[homeId],
+			[employeeId]: !prevConfirmations[employeeId],
 		}));
 	};
 
-	const onDeleteHome = async (id) => {
+	const onDeleteEmployee = async (id) => {
 		try {
-			const deleteHome = await FetchData.deleteHome(id);
-			if (deleteHome) {
-				dispatch({ type: "DELETE_HOME", payload: id });
-			}
+			const deleteEmployee = await FetchData.deleteEmployee(id);
+			// if (deleteEmployee) {
+			// 	dispatch({ type: "DELETE_EM", payload: id });
+			// }
 		} catch (error) {
 			console.error("Error deleting car:", error);
 		}
 	};
 
-	const handleDeletePress = (homeId) => {
+	const handleDeletePress = (employeeId) => {
 		setDeleteConfirmation((prevConfirmations) => ({
-			[homeId]: !prevConfirmations[homeId],
+			[employeeId]: !prevConfirmations[employeeId],
 		}));
-		if (deleteConfirmation[homeId]) {
+		if (deleteConfirmation[employeeId]) {
 			Animated.timing(deleteAnimation, {
 				toValue: 0,
 				duration: 300,
 				easing: Easing.linear,
 				useNativeDriver: false,
 			}).start(() => {
-				onDeleteHome(homeId);
+				onDeleteEmployee(employeeId);
 				setDeleteConfirmation((prevConfirmations) => ({
 					...prevConfirmations,
-					[homeId]: false,
+					[employeeId]: false,
 				}));
 			});
 		} else {

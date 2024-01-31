@@ -124,18 +124,21 @@ usersRouter.patch("/employee", async (req, res) => {
 	}
 });
 
-usersRouter.delete("/user", async (req, res) => {
-	const { userId } = req.body;
+usersRouter.delete("/employee", async (req, res) => {
+	const userId = req.body.id;
 	try {
-		// const decodedToken = jwt.verify(token, secretKey);
-		// const userId = decodedToken.userId;
+		await UserBills.destroy({
+			where: {
+				userId: userId,
+			},
+		});
+
 		await User.destroy({
 			where: {
 				id: userId,
 			},
 		});
-		const deleteHome = await UserInfo.deleteHomeInfo(id);
-		return res.status(201).json({ message: "home deleted" });
+		return res.status(201).json({ message: "Employee Deleted from DB" });
 	} catch (error) {
 		console.log(error);
 		return res.status(401).json({ error: "Invalid or expired token" });
