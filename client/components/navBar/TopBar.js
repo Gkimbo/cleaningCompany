@@ -18,6 +18,7 @@ import EditHomeButton from "./EditHomeButton";
 import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
 import ManageEmployees from "./ManageEmployeeButton";
+import SeeAllAppointments from "./SeeAllAppointmentsButton";
 
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
@@ -85,6 +86,8 @@ const TopBar = ({ dispatch, state }) => {
 											<>
 												<ManageEmployees closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
+												<SeeAllAppointments closeModal={closeModal} />
+												<View style={styles.buttonSeparator} />
 											</>
 										)}
 										{state.currentUser.token !== null && (
@@ -95,10 +98,9 @@ const TopBar = ({ dispatch, state }) => {
 															<AppointmentsButton closeModal={closeModal} />
 														) : null}
 														<View style={styles.buttonSeparator} />
+														<BillButton closeModal={closeModal} />
 													</>
 												) : null}
-
-												<BillButton closeModal={closeModal} />
 											</>
 										)}
 										<View style={styles.buttonSeparator} />

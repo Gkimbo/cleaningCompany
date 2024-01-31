@@ -52,6 +52,9 @@ const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
 				setErrors([response]);
 			} else {
 				setEmployeeList([...employeeList, response.user]);
+				setEmail("");
+				setPassword("");
+				setUserName("");
 				setRedirect(true);
 			}
 		}

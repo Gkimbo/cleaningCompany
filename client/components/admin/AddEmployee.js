@@ -70,6 +70,10 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 				useNativeDriver: false,
 			}).start(() => {
 				onDeleteEmployee(employeeId);
+				const updatedEmployeeList = employeeList.filter(
+					(existingEmployee) => existingEmployee.id !== Number(employeeId)
+				);
+				setEmployeeList(updatedEmployeeList);
 				setDeleteConfirmation((prevConfirmations) => ({
 					...prevConfirmations,
 					[employeeId]: false,
@@ -113,6 +117,7 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 			/>
 		);
 	});
+
 	return (
 		<View style={UserFormStyles.container}>
 			<View style={homePageStyles.backButtonContainerList}>
@@ -130,11 +135,11 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 					</View>
 				</Pressable>
 			</View>
-			{renderEmployeeList}
 			<AddEmployeeForm
 				employeeList={employeeList}
 				setEmployeeList={setEmployeeList}
 			/>
+			{renderEmployeeList}
 		</View>
 	);
 };
