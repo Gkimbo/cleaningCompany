@@ -31,7 +31,6 @@ export default function App() {
 		homes: [],
 		appointments: [],
 	});
-	console.log(state);
 
 	const fetchCurrentUser = async () => {
 		try {

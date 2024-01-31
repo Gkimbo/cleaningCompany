@@ -87,7 +87,7 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 
 	useEffect(() => {
 		fetchEmployees().then((response) => {
-			console.log("Triggered");
+			console.log("Employees fetched");
 		});
 		if (backRedirect) {
 			navigate("/");

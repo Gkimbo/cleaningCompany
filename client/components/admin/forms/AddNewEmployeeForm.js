@@ -51,7 +51,6 @@ const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
 			) {
 				setErrors([response]);
 			} else {
-				console.log(response.user);
 				setEmployeeList([...employeeList, response.user]);
 				setRedirect(true);
 			}
