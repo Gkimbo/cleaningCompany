@@ -342,6 +342,11 @@ const UserHomeInfoForm = () => {
 							</RadioButton.Group>
 						</View>
 					</View>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 10 }}>
+							You can change this value after your appointment has been booked
+						</Text>
+					</View>
 					<Text style={UserFormStyles.smallTitle}>
 						Do you need us to bring towels?
 					</Text>
@@ -362,6 +367,11 @@ const UserHomeInfoForm = () => {
 								<RadioButton.Item label="No" value="no" />
 							</RadioButton.Group>
 						</View>
+					</View>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 10 }}>
+							You can change this value after your appointment has been booked
+						</Text>
 					</View>
 					<Text style={UserFormStyles.smallTitle}>
 						Does the unit use a code or a key to get in?

@@ -117,7 +117,7 @@ const UserFormStyles = StyleSheet.create({
 		marginRight: "19%",
 		backgroundColor: "#fff",
 		width:
-			width > 1000 ? "20%" : width > 700 ? "30%" : width > 500 ? "40%" : "80%",
+			width > 1000 ? "25%" : width > 700 ? "30%" : width > 500 ? "40%" : "80%",
 	},
 	pickerContainer: {
 		marginBottom: 20,

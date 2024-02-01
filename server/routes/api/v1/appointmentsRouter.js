@@ -7,6 +7,7 @@ const {
 	UserBills,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const UserInfo = require("../../../services/UserInfoClass");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -29,7 +30,7 @@ appointmentRouter.get("/:homeId", async (req, res) => {
 });
 
 appointmentRouter.post("/", async (req, res) => {
-	const { token, homeId, dateArray } = req.body;
+	const { token, homeId, dateArray, keyPadCode, keyLocation } = req.body;
 	let appointmentTotal = 0;
 	dateArray.forEach((date) => {
 		appointmentTotal += date.price;
@@ -60,6 +61,8 @@ appointmentRouter.post("/", async (req, res) => {
 					paid: date.paid,
 					bringTowels: date.bringTowels,
 					bringSheets: date.bringSheets,
+					keyPadCode,
+					keyLocation,
 				});
 
 				return newAppointment;
@@ -108,6 +111,35 @@ appointmentRouter.delete("/:id", async (req, res) => {
 	} catch (error) {
 		console.error(error);
 		return res.status(401).json({ error: "Invalid or expired token" });
+	}
+});
+
+appointmentRouter.patch("/:id", async (req, res) => {
+	const { id, bringTowels, bringSheets } = req.body;
+	let userInfo;
+
+	try {
+		if (bringSheets) {
+			userInfo = await UserInfo.editSheetsInDB({
+				id,
+				bringSheets,
+			});
+		}
+		if (bringTowels) {
+			userInfo = await UserInfo.editTowelsInDB({
+				id,
+				bringTowels,
+			});
+		}
+		return res.status(200).json({ user: userInfo });
+	} catch (error) {
+		console.error(error);
+
+		if (error.name === "TokenExpiredError") {
+			return res.status(401).json({ error: "Token has expired" });
+		}
+
+		return res.status(401).json({ error: "Invalid token" });
 	}
 });
 

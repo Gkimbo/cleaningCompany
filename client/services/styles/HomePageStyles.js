@@ -219,13 +219,14 @@ const homePageStyles = StyleSheet.create({
 		alignItems: "center",
 	},
 	appointmentDate: {
-		fontSize: 14,
+		fontSize: width > 800 ? 20 : width > 600 ? 18 : 14,
 		fontWeight: "bold",
 		marginBottom: 4,
 	},
 	appointmentPrice: {
-		fontSize: 14,
+		fontSize: width > 800 ? 20 : width > 600 ? 18 : 14,
 		color: "#555",
+		marginBottom: 15,
 	},
 	billContainer: {
 		backgroundColor: "#f9f9f9",

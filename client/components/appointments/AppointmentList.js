@@ -44,6 +44,8 @@ const AppointmentList = ({ state, dispatch }) => {
 					address={home.address}
 					city={home.city}
 					zipcode={home.zipcode}
+					keyPadCode={home.keyPadCode}
+					keyLocation={home.keyLocation}
 					allAppointments={allAppointments}
 				/>
 			</View>

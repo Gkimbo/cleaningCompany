@@ -35,6 +35,14 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: false,
 		},
+		keyPadCode: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		keyLocation: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

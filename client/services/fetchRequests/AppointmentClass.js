@@ -62,6 +62,50 @@ class Appointment {
 			return error;
 		}
 	}
+
+	static async updateSheetsAppointments(value, appointmentId) {
+		try {
+			const response = await fetch(
+				baseURL + `/api/v1/appointments/${appointmentId}`,
+				{
+					method: "PATCH",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({ bringSheets: value, id: appointmentId }),
+				}
+			);
+			if (!response.ok) {
+				throw new Error("No data received");
+			}
+			const responseData = await response.json();
+			return responseData;
+		} catch (error) {
+			return error;
+		}
+	}
+
+	static async updateTowelsAppointments(value, appointmentId) {
+		try {
+			const response = await fetch(
+				baseURL + `/api/v1/appointments/${appointmentId}`,
+				{
+					method: "PATCH",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({ bringTowels: value, id: appointmentId }),
+				}
+			);
+			if (!response.ok) {
+				throw new Error("No data received");
+			}
+			const responseData = await response.json();
+			return responseData;
+		} catch (error) {
+			return error;
+		}
+	}
 }
 
 export default Appointment;

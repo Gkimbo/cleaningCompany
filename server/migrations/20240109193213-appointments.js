@@ -47,6 +47,14 @@ module.exports = {
 				type: Sequelize.STRING,
 				allowNull: false,
 			},
+			keyPadCode: {
+				type: Sequelize.STRING,
+				allowNull: true,
+			},
+			keyLocation: {
+				type: Sequelize.STRING,
+				allowNull: true,
+			},
 			createdAt: {
 				type: Sequelize.DATE,
 				allowNull: false,
