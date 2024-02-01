@@ -41,38 +41,42 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 		navigate(`/employee-edit/${id}`);
 	};
 
-	const handleNoPress = (homeId) => {
+	const handleNoPress = (employeeId) => {
 		setDeleteConfirmation((prevConfirmations) => ({
-			[homeId]: !prevConfirmations[homeId],
+			[employeeId]: !prevConfirmations[employeeId],
 		}));
 	};
 
-	const onDeleteHome = async (id) => {
+	const onDeleteEmployee = async (id) => {
 		try {
-			const deleteHome = await FetchData.deleteHome(id);
-			if (deleteHome) {
-				dispatch({ type: "DELETE_HOME", payload: id });
-			}
+			const deleteEmployee = await FetchData.deleteEmployee(id);
+			// if (deleteEmployee) {
+			// 	dispatch({ type: "DELETE_EM", payload: id });
+			// }
 		} catch (error) {
 			console.error("Error deleting car:", error);
 		}
 	};
 
-	const handleDeletePress = (homeId) => {
+	const handleDeletePress = (employeeId) => {
 		setDeleteConfirmation((prevConfirmations) => ({
-			[homeId]: !prevConfirmations[homeId],
+			[employeeId]: !prevConfirmations[employeeId],
 		}));
-		if (deleteConfirmation[homeId]) {
+		if (deleteConfirmation[employeeId]) {
 			Animated.timing(deleteAnimation, {
 				toValue: 0,
 				duration: 300,
 				easing: Easing.linear,
 				useNativeDriver: false,
 			}).start(() => {
-				onDeleteHome(homeId);
+				onDeleteEmployee(employeeId);
+				const updatedEmployeeList = employeeList.filter(
+					(existingEmployee) => existingEmployee.id !== Number(employeeId)
+				);
+				setEmployeeList(updatedEmployeeList);
 				setDeleteConfirmation((prevConfirmations) => ({
 					...prevConfirmations,
-					[homeId]: false,
+					[employeeId]: false,
 				}));
 			});
 		} else {
@@ -87,7 +91,7 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 
 	useEffect(() => {
 		fetchEmployees().then((response) => {
-			console.log("Triggered");
+			console.log("Employees fetched");
 		});
 		if (backRedirect) {
 			navigate("/");
@@ -113,6 +117,7 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 			/>
 		);
 	});
+
 	return (
 		<View style={UserFormStyles.container}>
 			<View style={homePageStyles.backButtonContainerList}>
@@ -130,11 +135,11 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 					</View>
 				</Pressable>
 			</View>
-			{renderEmployeeList}
 			<AddEmployeeForm
 				employeeList={employeeList}
 				setEmployeeList={setEmployeeList}
 			/>
+			{renderEmployeeList}
 		</View>
 	);
 };

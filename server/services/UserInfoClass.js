@@ -1,4 +1,5 @@
 const { UserHomes, User } = require("../models");
+const bcrypt = require("bcrypt");
 
 class UserInfoClass {
 	static async addHomeToDB({
@@ -95,14 +96,22 @@ class UserInfoClass {
 			return "Employee not found for editing";
 		}
 
-		await existingEmployee.update({
-			username,
-			password,
-			email,
-			type,
-		});
+		try {
+			const salt = await bcrypt.genSalt(10);
+			const hashedPassword = await bcrypt.hash(password, salt);
+			password = hashedPassword;
 
-		return existingEmployee;
+			await existingEmployee.update({
+				username,
+				password,
+				email,
+				type,
+			});
+
+			return existingEmployee;
+		} catch (error) {
+			throw new Error(error);
+		}
 	}
 }
 

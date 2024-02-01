@@ -231,6 +231,27 @@ class FetchData {
 			return error;
 		}
 	}
+	static async deleteEmployee(id) {
+		try {
+			const response = await fetch(baseURL + "/api/v1/users/employee", {
+				method: "DELETE",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					id,
+				}),
+			});
+			if (!response.ok) {
+				throw new Error("Failed to delete");
+			}
+
+			const responseData = await response.json();
+			return true;
+		} catch (error) {
+			return error;
+		}
+	}
 }
 
 export default FetchData;

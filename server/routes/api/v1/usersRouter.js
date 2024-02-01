@@ -1,8 +1,9 @@
 const express = require("express");
-const { User, UserBills } = require("../../../models");
+const { User, UserBills, UserAppointments } = require("../../../models");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
+const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 
 const secretKey = process.env.SESSION_SECRET;
 
@@ -124,20 +125,36 @@ usersRouter.patch("/employee", async (req, res) => {
 	}
 });
 
-usersRouter.delete("/user", async (req, res) => {
-	const { userId } = req.body;
+usersRouter.delete("/employee", async (req, res) => {
+	const userId = req.body.id;
 	try {
-		// const decodedToken = jwt.verify(token, secretKey);
-		// const userId = decodedToken.userId;
+		await UserBills.destroy({
+			where: {
+				userId: userId,
+			},
+		});
+
 		await User.destroy({
 			where: {
 				id: userId,
 			},
 		});
-		const deleteHome = await UserInfo.deleteHomeInfo(id);
-		return res.status(201).json({ message: "home deleted" });
+		return res.status(201).json({ message: "Employee Deleted from DB" });
 	} catch (error) {
 		console.log(error);
+		return res.status(401).json({ error: "Invalid or expired token" });
+	}
+});
+usersRouter.get("/appointments", async (req, res) => {
+	const token = req.headers.authorization.split(" ")[1];
+	try {
+		const userAppointments = await UserAppointments.findAll();
+		const serializedAppointments =
+			AppointmentSerializer.serializeArray(userAppointments);
+
+		return res.status(200).json({ appointments: serializedAppointments });
+	} catch (error) {
+		console.error(error);
 		return res.status(401).json({ error: "Invalid or expired token" });
 	}
 });

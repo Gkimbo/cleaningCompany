@@ -19,6 +19,7 @@ import AppointmentList from "./components/appointments/AppointmentList";
 import Bill from "./components/payments/Bill";
 import AddEmployee from "./components/admin/AddEmployee";
 import EditEmployeeForm from "./components/admin/forms/EditEmployeeForm";
+import AllAppointments from "./components/admin/AllAppointments";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +32,6 @@ export default function App() {
 		homes: [],
 		appointments: [],
 	});
-	console.log(state);
 
 	const fetchCurrentUser = async () => {
 		try {
@@ -124,6 +124,10 @@ export default function App() {
 									setEmployeeList={setEmployeeList}
 								/>
 							}
+						/>
+						<Route
+							path="/all-appointments"
+							element={<AllAppointments state={state} />}
 						/>
 					</Routes>
 				</SafeAreaView>
