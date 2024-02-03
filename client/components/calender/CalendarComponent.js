@@ -34,7 +34,7 @@ const CalendarComponent = ({
 			price += 25;
 		}
 		if (Number(numBeds) === 1 && Number(numBaths) === 1) {
-			price += price + 100;
+			price = price + 100;
 			return price;
 		} else if (Number(numBeds) === 1) {
 			const baths = (Number(numBaths) - 1) * 50;

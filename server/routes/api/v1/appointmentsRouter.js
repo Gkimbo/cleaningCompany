@@ -90,12 +90,12 @@ appointmentRouter.delete("/:id", async (req, res) => {
 			where: { id: id },
 		});
 		const appointmentTotal = Number(appointmentToDelete.dataValues.price);
-		const oldFee = existingBill.dataValues.cancellationFee;
-		const oldAppt = existingBill.dataValues.appointmentDue;
+		const oldFee = Number(existingBill.dataValues.cancellationFee);
+		const oldAppt = Number(existingBill.dataValues.appointmentDue);
 
 		const total =
-			existingBill.dataValues.cancellationFee +
-			existingBill.dataValues.appointmentDue;
+			Number(existingBill.dataValues.cancellationFee) +
+			Number(existingBill.dataValues.appointmentDue);
 
 		await existingBill.update({
 			cancellationFee: oldFee + fee,

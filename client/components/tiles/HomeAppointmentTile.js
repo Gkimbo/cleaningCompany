@@ -11,9 +11,12 @@ const HomeAppointmentTile = ({
 	address,
 	city,
 	zipcode,
+	keyLocation,
+	keyPadCode,
 	allAppointments,
 }) => {
 	const [appointments, setAppointments] = useState([]);
+
 	useEffect(() => {
 		setAppointments(allAppointments);
 	}, [allAppointments]);
@@ -37,7 +40,13 @@ const HomeAppointmentTile = ({
 				return appointment;
 			});
 
-			await Appointment.updateSheetsAppointments(value, appointmentId);
+			const appointmentToUpdate = appointments.find(
+				(appointment) => appointment.id === appointmentId
+			);
+
+			if (value !== appointmentToUpdate.bringSheets) {
+				await Appointment.updateSheetsAppointments(value, appointmentId);
+			}
 			setAppointments(updatedAppointments);
 		} catch (error) {
 			console.error("Error updating sheetsProvided:", error);
@@ -62,7 +71,12 @@ const HomeAppointmentTile = ({
 				return appointment;
 			});
 
-			await Appointment.updateTowelsAppointments(value, appointmentId);
+			const appointmentToUpdate = appointments.find(
+				(appointment) => appointment.id === appointmentId
+			);
+			if (value !== appointmentToUpdate.bringTowels) {
+				await Appointment.updateTowelsAppointments(value, appointmentId);
+			}
 			setAppointments(updatedAppointments);
 		} catch (error) {
 			console.error("Error updating towelsProvided:", error);
@@ -93,7 +107,7 @@ const HomeAppointmentTile = ({
 			const isDisabled = isWithinOneWeek(appointment.date);
 			return (
 				<View
-					key={appointment.id}
+					key={appointment.id ? appointment.id : appointment.date}
 					style={[
 						homePageStyles.eachAppointment,
 						index % 2 === 1 && homePageStyles.appointmentOdd,
@@ -183,7 +197,7 @@ const HomeAppointmentTile = ({
 							</View>
 						</View>
 					)}
-					{appointment.keyPadCode !== "" ? (
+					{keyPadCode !== "" || keyPadCode ? (
 						<>
 							<Text style={UserFormStyles.smallTitle}>
 								The code to get in is
@@ -191,7 +205,9 @@ const HomeAppointmentTile = ({
 
 							<TextInput
 								mode="outlined"
-								value={appointment.keyPadCode}
+								value={
+									appointment.keyPadCode ? appointment.keyPadCode : keyPadCode
+								}
 								// onChangeText={handleKeyPadCode}
 								style={UserFormStyles.codeInput}
 							/>
@@ -203,7 +219,11 @@ const HomeAppointmentTile = ({
 							</Text>
 							<TextInput
 								mode="outlined"
-								value={appointment.keyLocation}
+								value={
+									appointment.keyLocation
+										? appointment.keyLocation
+										: keyLocation
+								}
 								// onChangeText={handleKeyLocation}
 								style={UserFormStyles.input}
 							/>

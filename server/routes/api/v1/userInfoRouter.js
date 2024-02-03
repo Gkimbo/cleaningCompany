@@ -48,6 +48,7 @@ userInfoRouter.post("/home", async (req, res) => {
 	const {
 		address,
 		city,
+		state,
 		zipcode,
 		numBeds,
 		numBaths,
@@ -59,6 +60,7 @@ userInfoRouter.post("/home", async (req, res) => {
 		compostLocation,
 		trashLocation,
 	} = req.body.home;
+	console.log(req.body.home);
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
 		const userId = decodedToken.userId;
@@ -73,6 +75,7 @@ userInfoRouter.post("/home", async (req, res) => {
 			userId,
 			address,
 			city,
+			state,
 			zipcode,
 			numBeds,
 			numBaths,
@@ -97,6 +100,7 @@ userInfoRouter.patch("/home", async (req, res) => {
 		id,
 		address,
 		city,
+		state,
 		zipcode,
 		numBeds,
 		numBaths,
@@ -119,6 +123,7 @@ userInfoRouter.patch("/home", async (req, res) => {
 			id,
 			address,
 			city,
+			state,
 			zipcode,
 			numBeds,
 			numBaths,

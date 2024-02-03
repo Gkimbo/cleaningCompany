@@ -135,7 +135,7 @@ const homePageStyles = StyleSheet.create({
 	},
 	homeTileContent: {
 		fontSize: width < 400 ? 10 : width < 800 ? 14 : 18,
-		marginTop: "1%",
+		marginTop: "4%",
 	},
 	AddHomeButton: {
 		alignSelf: "center",

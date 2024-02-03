@@ -19,6 +19,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
+		state: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 		zipcode: {
 			type: DataTypes.STRING,
 			allowNull: false,

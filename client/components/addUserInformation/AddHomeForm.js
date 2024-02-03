@@ -16,6 +16,7 @@ const UserHomeInfoForm = () => {
 		home: {
 			address: "",
 			city: "",
+			state: "",
 			zipcode: "",
 			numBeds: "",
 			numBaths: "",
@@ -54,6 +55,15 @@ const UserHomeInfoForm = () => {
 			home: {
 				...prevState.home,
 				city: text,
+			},
+		}));
+	};
+	const handleStateChange = (text) => {
+		setUserHomeInfoForm((prevState) => ({
+			...prevState,
+			home: {
+				...prevState.home,
+				state: text,
 			},
 		}));
 	};
@@ -152,7 +162,7 @@ const UserHomeInfoForm = () => {
 	};
 
 	const handleKeyPadCode = (text) => {
-		const regex = /^\d*(\.\d*)?(\s*)?$/;
+		const regex = /^[\d#]*(\.\d*)?(\s*)?$/;
 		if (!regex.test(text)) {
 			setError("Key Pad Code can only be a number!");
 			return;
@@ -227,6 +237,13 @@ const UserHomeInfoForm = () => {
 		FetchData.addHomeInfo(userHomeInfo).then((response) => {
 			if (response === "Cannot find zipcode") {
 				setError(response);
+				setUserHomeInfoForm((prevState) => ({
+					...prevState,
+					home: {
+						...prevState.home,
+						zipcode: "",
+					},
+				}));
 			} else {
 				setError(null);
 				setFormRedirect(true);
@@ -278,6 +295,13 @@ const UserHomeInfoForm = () => {
 						mode="outlined"
 						value={userHomeInfo.home.city}
 						onChangeText={handleCityChange}
+						style={UserFormStyles.input}
+					/>
+					<Text style={UserFormStyles.smallTitle}>State:</Text>
+					<TextInput
+						mode="outlined"
+						value={userHomeInfo.home.state}
+						onChangeText={handleStateChange}
 						style={UserFormStyles.input}
 					/>
 					<Text style={UserFormStyles.smallTitle}>Zipcode:</Text>
@@ -343,7 +367,7 @@ const UserHomeInfoForm = () => {
 						</View>
 					</View>
 					<View style={{ textAlign: "center", marginBottom: 20 }}>
-						<Text style={{ color: "grey", fontSize: 10 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
 							You can change this value after your appointment has been booked
 						</Text>
 					</View>
@@ -369,7 +393,7 @@ const UserHomeInfoForm = () => {
 						</View>
 					</View>
 					<View style={{ textAlign: "center", marginBottom: 20 }}>
-						<Text style={{ color: "grey", fontSize: 10 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
 							You can change this value after your appointment has been booked
 						</Text>
 					</View>
@@ -410,11 +434,16 @@ const UserHomeInfoForm = () => {
 
 							<TextInput
 								mode="outlined"
-								placeholder="Under the fake rock to the right of the back door..."
 								value={userHomeInfo.home.keyLocation}
 								onChangeText={handleKeyLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: Under the fake rock to the right of the back door or
+									to the right of the door in a lock box with code 5555#
+								</Text>
+							</View>
 						</>
 					)}
 
@@ -423,11 +452,16 @@ const UserHomeInfoForm = () => {
 					</Text>
 					<TextInput
 						mode="outlined"
-						placeholder="In the red bin to the right side of the house when you're facing the home..."
 						value={userHomeInfo.home.trashLocation}
 						onChangeText={handleTrashLocation}
 						style={UserFormStyles.input}
 					/>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							Example: In the red bin to the right side of the house when you're
+							facing the home.
+						</Text>
+					</View>
 
 					<Text style={UserFormStyles.smallTitle}>
 						Does the unit have recycling??
@@ -458,11 +492,16 @@ const UserHomeInfoForm = () => {
 							</Text>
 							<TextInput
 								mode="outlined"
-								placeholder="In the blue bin to the right side of the house when you're facing the home..."
 								value={userHomeInfo.home.recyclingLocation}
 								onChangeText={handleRecyclingLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: In the red bin to the right side of the house when
+									you're facing the home.
+								</Text>
+							</View>
 						</>
 					)}
 
@@ -494,11 +533,16 @@ const UserHomeInfoForm = () => {
 							</Text>
 							<TextInput
 								mode="outlined"
-								placeholder="In the small green bin to the right side of the house when you're facing the home..."
 								value={userHomeInfo.home.compostLocation}
 								onChangeText={handleCompostLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: In the small green bin to the right side of the house
+									when you're facing the home
+								</Text>
+							</View>
 						</>
 					)}
 					<Pressable onPress={handleSubmit}>
