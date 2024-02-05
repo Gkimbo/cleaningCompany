@@ -5,6 +5,7 @@ import homePageStyles from "../../services/styles/HomePageStyles";
 import HomeAppointmentTile from "../tiles/HomeAppointmentTile";
 import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../services/styles/TopBarStyles";
+import FetchData from "../../services/fetchRequests/fetchData";
 
 const AppointmentList = ({ state, dispatch }) => {
 	const [allHomes, setAllHomes] = useState([]);
@@ -16,8 +17,27 @@ const AppointmentList = ({ state, dispatch }) => {
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		setAllAppointments(state.appointments);
-		setAllHomes(state.homes);
+		if (state.currentUser.token) {
+			FetchData.get("/api/v1/user-info", state.currentUser.token).then(
+				(response) => {
+					dispatch({
+						type: "USER_HOME",
+						payload: response.user.homes,
+					});
+					setAllHomes(response.user.homes);
+					dispatch({
+						type: "USER_APPOINTMENTS",
+						payload: response.user.appointments,
+					});
+					setAllAppointments(response.user.appointments);
+					dispatch({
+						type: "DB_BILL",
+						payload: response.user.bill,
+					});
+				}
+			);
+		}
+
 		if (redirect) {
 			navigate("/add-home");
 			setRedirect(false);
@@ -44,6 +64,8 @@ const AppointmentList = ({ state, dispatch }) => {
 					address={home.address}
 					city={home.city}
 					zipcode={home.zipcode}
+					keyPadCode={home.keyPadCode}
+					keyLocation={home.keyLocation}
 					allAppointments={allAppointments}
 				/>
 			</View>

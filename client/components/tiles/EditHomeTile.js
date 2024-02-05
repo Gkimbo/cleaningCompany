@@ -5,6 +5,8 @@ import Icon from "react-native-vector-icons/FontAwesome";
 
 const EditHomeTile = ({
 	id,
+	nickName,
+	state,
 	address,
 	city,
 	zipcode,
@@ -117,10 +119,19 @@ const EditHomeTile = ({
 				) : null}
 			</View>
 
-			<Text style={homePageStyles.homeTileTitle}>{address}</Text>
+			<Text style={homePageStyles.homeTileTitle}>{nickName}</Text>
+			<Text
+				style={{
+					...homePageStyles.homeTileAddress,
+					marginTop: 5,
+					marginBottom: 0,
+				}}
+			>
+				{address}
+			</Text>
 			<Text
 				style={homePageStyles.homeTileAddress}
-			>{`${city}, ${zipcode}`}</Text>
+			>{`${city}, ${state} ${zipcode}`}</Text>
 			<Text
 				style={homePageStyles.homeTileContent}
 			>{`Beds: ${numBeds}, Baths: ${numBaths}`}</Text>

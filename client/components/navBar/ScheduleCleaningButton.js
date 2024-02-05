@@ -21,7 +21,9 @@ const ScheduleCleaningButton = ({ closeModal }) => {
 
 	return (
 		<Pressable style={styles.button} onPress={handlePress}>
-			<Text style={topBarStyles.buttonTextSchedule}>Book a Cleaning</Text>
+			<Text style={topBarStyles.buttonTextSchedule}>
+				Book or cancel a Cleaning
+			</Text>
 		</Pressable>
 	);
 };

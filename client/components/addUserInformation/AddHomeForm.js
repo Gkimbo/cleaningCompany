@@ -14,8 +14,10 @@ const UserHomeInfoForm = () => {
 	const [userHomeInfo, setUserHomeInfoForm] = useState({
 		user: user,
 		home: {
+			nickName: "",
 			address: "",
 			city: "",
+			state: "",
 			zipcode: "",
 			numBeds: "",
 			numBaths: "",
@@ -38,6 +40,16 @@ const UserHomeInfoForm = () => {
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
 
+	const handleNameChange = (text) => {
+		setUserHomeInfoForm((prevState) => ({
+			...prevState,
+			home: {
+				...prevState.home,
+				nickName: text,
+			},
+		}));
+	};
+
 	const handleAddressChange = (text) => {
 		setUserHomeInfoForm((prevState) => ({
 			...prevState,
@@ -54,6 +66,15 @@ const UserHomeInfoForm = () => {
 			home: {
 				...prevState.home,
 				city: text,
+			},
+		}));
+	};
+	const handleStateChange = (text) => {
+		setUserHomeInfoForm((prevState) => ({
+			...prevState,
+			home: {
+				...prevState.home,
+				state: text,
 			},
 		}));
 	};
@@ -152,7 +173,7 @@ const UserHomeInfoForm = () => {
 	};
 
 	const handleKeyPadCode = (text) => {
-		const regex = /^\d*(\.\d*)?(\s*)?$/;
+		const regex = /^[\d#]*(\.\d*)?(\s*)?$/;
 		if (!regex.test(text)) {
 			setError("Key Pad Code can only be a number!");
 			return;
@@ -213,6 +234,10 @@ const UserHomeInfoForm = () => {
 
 	const handleSubmit = (event) => {
 		event.preventDefault();
+		if (!userHomeInfo.home.nickName) {
+			setError("Please provide a custom name to identify your home.");
+			return;
+		}
 		if (!userHomeInfo.home.trashLocation) {
 			setError("Please provide trash location");
 			return;
@@ -227,6 +252,13 @@ const UserHomeInfoForm = () => {
 		FetchData.addHomeInfo(userHomeInfo).then((response) => {
 			if (response === "Cannot find zipcode") {
 				setError(response);
+				setUserHomeInfoForm((prevState) => ({
+					...prevState,
+					home: {
+						...prevState.home,
+						zipcode: "",
+					},
+				}));
 			} else {
 				setError(null);
 				setFormRedirect(true);
@@ -266,6 +298,13 @@ const UserHomeInfoForm = () => {
 			<form onSubmit={handleSubmit}>
 				<View>
 					<Text style={UserFormStyles.title}>Add a home</Text>
+					<Text style={UserFormStyles.smallTitle}>Name Your Home:</Text>
+					<TextInput
+						mode="outlined"
+						value={`${userHomeInfo.home.nickName}`}
+						onChangeText={handleNameChange}
+						style={UserFormStyles.input}
+					/>
 					<Text style={UserFormStyles.smallTitle}>Address:</Text>
 					<TextInput
 						mode="outlined"
@@ -278,6 +317,13 @@ const UserHomeInfoForm = () => {
 						mode="outlined"
 						value={userHomeInfo.home.city}
 						onChangeText={handleCityChange}
+						style={UserFormStyles.input}
+					/>
+					<Text style={UserFormStyles.smallTitle}>State:</Text>
+					<TextInput
+						mode="outlined"
+						value={userHomeInfo.home.state}
+						onChangeText={handleStateChange}
 						style={UserFormStyles.input}
 					/>
 					<Text style={UserFormStyles.smallTitle}>Zipcode:</Text>
@@ -342,6 +388,11 @@ const UserHomeInfoForm = () => {
 							</RadioButton.Group>
 						</View>
 					</View>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							You can change this value after your appointment has been booked
+						</Text>
+					</View>
 					<Text style={UserFormStyles.smallTitle}>
 						Do you need us to bring towels?
 					</Text>
@@ -362,6 +413,11 @@ const UserHomeInfoForm = () => {
 								<RadioButton.Item label="No" value="no" />
 							</RadioButton.Group>
 						</View>
+					</View>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							You can change this value after your appointment has been booked
+						</Text>
 					</View>
 					<Text style={UserFormStyles.smallTitle}>
 						Does the unit use a code or a key to get in?
@@ -400,11 +456,16 @@ const UserHomeInfoForm = () => {
 
 							<TextInput
 								mode="outlined"
-								placeholder="Under the fake rock to the right of the back door..."
 								value={userHomeInfo.home.keyLocation}
 								onChangeText={handleKeyLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: Under the fake rock to the right of the back door or
+									to the right of the door in a lock box with code 5555#
+								</Text>
+							</View>
 						</>
 					)}
 
@@ -413,11 +474,16 @@ const UserHomeInfoForm = () => {
 					</Text>
 					<TextInput
 						mode="outlined"
-						placeholder="In the red bin to the right side of the house when you're facing the home..."
 						value={userHomeInfo.home.trashLocation}
 						onChangeText={handleTrashLocation}
 						style={UserFormStyles.input}
 					/>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							Example: In the red bin to the right side of the house when you're
+							facing the home.
+						</Text>
+					</View>
 
 					<Text style={UserFormStyles.smallTitle}>
 						Does the unit have recycling??
@@ -448,11 +514,16 @@ const UserHomeInfoForm = () => {
 							</Text>
 							<TextInput
 								mode="outlined"
-								placeholder="In the blue bin to the right side of the house when you're facing the home..."
 								value={userHomeInfo.home.recyclingLocation}
 								onChangeText={handleRecyclingLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: In the red bin to the right side of the house when
+									you're facing the home.
+								</Text>
+							</View>
 						</>
 					)}
 
@@ -484,11 +555,16 @@ const UserHomeInfoForm = () => {
 							</Text>
 							<TextInput
 								mode="outlined"
-								placeholder="In the small green bin to the right side of the house when you're facing the home..."
 								value={userHomeInfo.home.compostLocation}
 								onChangeText={handleCompostLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: In the small green bin to the right side of the house
+									when you're facing the home
+								</Text>
+							</View>
 						</>
 					)}
 					<Pressable onPress={handleSubmit}>

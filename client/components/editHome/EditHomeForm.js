@@ -14,6 +14,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 	const { user } = useContext(AuthContext);
 	const [homeDetails, setHomeDetails] = useState({
 		id: "",
+		nickName: "",
 		address: "",
 		city: "",
 		zipcode: "",
@@ -37,6 +38,13 @@ const EditHomeForm = ({ state, dispatch }) => {
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
+
+	const handleNameChange = (text) => {
+		setHomeDetails((prevState) => ({
+			...prevState,
+			nickName: text,
+		}));
+	};
 
 	const handleAddressChange = (text) => {
 		setHomeDetails((prevState) => ({
@@ -177,6 +185,20 @@ const EditHomeForm = ({ state, dispatch }) => {
 
 	const handleSubmit = (event) => {
 		event.preventDefault();
+		if (!homeDetails.nickName) {
+			setError("Please provide a custom name to identify your home.");
+			return;
+		}
+		if (!homeDetails.trashLocation) {
+			setError("Please provide trash location");
+			return;
+		}
+		if (!homeDetails.keyLocation && !homeDetails.keyPadCode) {
+			setError(
+				"Please provide instructions on how to get into the property with either a key or a code"
+			);
+			return;
+		}
 		setError(null);
 		FetchData.editHomeInfo(homeDetails, user).then((response) => {
 			if (response === "Cannot find zipcode") {
@@ -229,6 +251,13 @@ const EditHomeForm = ({ state, dispatch }) => {
 			<form onSubmit={handleSubmit}>
 				<View>
 					<Text style={UserFormStyles.title}>Add a home</Text>
+					<Text style={UserFormStyles.smallTitle}>Name Your Home:</Text>
+					<TextInput
+						mode="outlined"
+						value={`${homeDetails.nickName}`}
+						onChangeText={handleNameChange}
+						style={UserFormStyles.input}
+					/>
 					<Text style={UserFormStyles.smallTitle}>Address:</Text>
 
 					<TextInput

@@ -9,6 +9,8 @@ class AppointmentSerializer {
 			"paid",
 			"bringTowels",
 			"bringSheets",
+			"keyPadCode",
+			"keyLocation",
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};

@@ -46,8 +46,10 @@ userInfoRouter.get("/", async (req, res) => {
 userInfoRouter.post("/home", async (req, res) => {
 	const { token } = req.body.user;
 	const {
+		nickName,
 		address,
 		city,
+		state,
 		zipcode,
 		numBeds,
 		numBaths,
@@ -59,6 +61,7 @@ userInfoRouter.post("/home", async (req, res) => {
 		compostLocation,
 		trashLocation,
 	} = req.body.home;
+	console.log(req.body.home);
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
 		const userId = decodedToken.userId;
@@ -70,9 +73,11 @@ userInfoRouter.post("/home", async (req, res) => {
 			return res.status(400).json("Cannot find zipcode");
 		}
 		const userInfo = await UserInfo.addHomeToDB({
+			nickName,
 			userId,
 			address,
 			city,
+			state,
 			zipcode,
 			numBeds,
 			numBaths,
@@ -95,8 +100,10 @@ userInfoRouter.post("/home", async (req, res) => {
 userInfoRouter.patch("/home", async (req, res) => {
 	const {
 		id,
+		nickName,
 		address,
 		city,
+		state,
 		zipcode,
 		numBeds,
 		numBaths,
@@ -117,8 +124,10 @@ userInfoRouter.patch("/home", async (req, res) => {
 
 		const userInfo = await UserInfo.editHomeInDB({
 			id,
+			nickName,
 			address,
 			city,
+			state,
 			zipcode,
 			numBeds,
 			numBaths,

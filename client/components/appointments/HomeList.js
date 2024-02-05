@@ -37,6 +37,8 @@ const HomeList = ({ state, dispatch }) => {
 			<View key={home.id}>
 				<HomeTile
 					id={home.id}
+					nickName={home.nickName}
+					state={home.state}
 					address={home.address}
 					city={home.city}
 					zipcode={home.zipcode}

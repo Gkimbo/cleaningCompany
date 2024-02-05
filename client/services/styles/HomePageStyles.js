@@ -135,7 +135,7 @@ const homePageStyles = StyleSheet.create({
 	},
 	homeTileContent: {
 		fontSize: width < 400 ? 10 : width < 800 ? 14 : 18,
-		marginTop: "1%",
+		marginTop: "4%",
 	},
 	AddHomeButton: {
 		alignSelf: "center",
@@ -219,13 +219,14 @@ const homePageStyles = StyleSheet.create({
 		alignItems: "center",
 	},
 	appointmentDate: {
-		fontSize: 14,
+		fontSize: width > 800 ? 20 : width > 600 ? 18 : 14,
 		fontWeight: "bold",
 		marginBottom: 4,
 	},
 	appointmentPrice: {
-		fontSize: 14,
+		fontSize: width > 800 ? 20 : width > 600 ? 18 : 14,
 		color: "#555",
+		marginBottom: 15,
 	},
 	billContainer: {
 		backgroundColor: "#f9f9f9",

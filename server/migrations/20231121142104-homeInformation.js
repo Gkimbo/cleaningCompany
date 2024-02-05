@@ -18,6 +18,10 @@ module.exports = {
 					key: "id",
 				},
 			},
+			nickName: {
+				type: Sequelize.STRING,
+				allowNull: false,
+			},
 			address: {
 				type: Sequelize.STRING,
 				allowNull: false,
@@ -25,6 +29,10 @@ module.exports = {
 			city: {
 				type: Sequelize.STRING,
 				allowNull: false,
+			},
+			state: {
+				type: Sequelize.STRING,
+				allowNull: true,
 			},
 			zipcode: {
 				type: Sequelize.STRING,

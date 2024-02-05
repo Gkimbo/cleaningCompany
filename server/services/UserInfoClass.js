@@ -1,11 +1,13 @@
-const { UserHomes, User } = require("../models");
+const { UserHomes, User, UserAppointments, UserBills } = require("../models");
 const bcrypt = require("bcrypt");
 
 class UserInfoClass {
 	static async addHomeToDB({
 		userId,
+		nickName,
 		address,
 		city,
+		state,
 		zipcode,
 		numBeds,
 		numBaths,
@@ -19,8 +21,10 @@ class UserInfoClass {
 	}) {
 		await UserHomes.create({
 			userId,
+			nickName,
 			address,
 			city,
+			state,
 			zipcode,
 			numBeds,
 			numBaths,
@@ -36,8 +40,10 @@ class UserInfoClass {
 
 	static async editHomeInDB({
 		id,
+		nickName,
 		address,
 		city,
+		state,
 		zipcode,
 		numBeds,
 		numBaths,
@@ -58,8 +64,10 @@ class UserInfoClass {
 		}
 
 		await existingHome.update({
+			nickName,
 			address,
 			city,
+			state,
 			zipcode,
 			numBeds,
 			numBaths,
@@ -109,6 +117,86 @@ class UserInfoClass {
 			});
 
 			return existingEmployee;
+		} catch (error) {
+			throw new Error(error);
+		}
+	}
+
+	static async editSheetsInDB({ id, bringSheets }) {
+		let price;
+		if (bringSheets === "yes") {
+			price = 25;
+		} else price = -25;
+
+		const existingAppointment = await UserAppointments.findOne({
+			where: { id },
+		});
+		const userId = existingAppointment.dataValues.userId;
+		const existingBill = await UserBills.findOne({
+			where: {
+				userId,
+			},
+		});
+		const finalPrice = Number(existingAppointment.dataValues.price) + price;
+		const totalAppointmentPrice =
+			Number(existingBill.dataValues.appointmentDue) + price;
+		const totalOverallPrice = Number(existingBill.dataValues.totalDue) + price;
+
+		if (!existingAppointment) {
+			return "Employee not found for editing";
+		}
+
+		try {
+			await existingBill.update({
+				appointmentDue: totalAppointmentPrice,
+				totalDue: totalOverallPrice,
+			});
+			await existingAppointment.update({
+				bringSheets,
+				price: finalPrice,
+			});
+
+			return existingAppointment;
+		} catch (error) {
+			throw new Error(error);
+		}
+	}
+
+	static async editTowelsInDB({ id, bringTowels }) {
+		let price;
+		if (bringTowels === "yes") {
+			price = 25;
+		} else price = -25;
+
+		const existingAppointment = await UserAppointments.findOne({
+			where: { id },
+		});
+		const userId = existingAppointment.dataValues.userId;
+		const existingBill = await UserBills.findOne({
+			where: {
+				userId,
+			},
+		});
+		const finalPrice = Number(existingAppointment.dataValues.price) + price;
+		const totalAppointmentPrice =
+			Number(existingBill.dataValues.appointmentDue) + price;
+		const totalOverallPrice = Number(existingBill.dataValues.totalDue) + price;
+
+		if (!existingAppointment) {
+			return "Employee not found for editing";
+		}
+
+		try {
+			await existingBill.update({
+				appointmentDue: totalAppointmentPrice,
+				totalDue: totalOverallPrice,
+			});
+			await existingAppointment.update({
+				bringTowels,
+				price: finalPrice,
+			});
+
+			return existingAppointment;
 		} catch (error) {
 			throw new Error(error);
 		}

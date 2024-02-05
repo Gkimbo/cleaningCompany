@@ -74,6 +74,8 @@ const DetailsComponent = ({ state, dispatch }) => {
 			dateArray: datesOfCleaning,
 			homeId: homeDetails.id,
 			token: state.currentUser.token,
+			keyPadCode: homeDetails.keyPadCode,
+			keyLocation: homeDetails.keyLocation,
 		};
 		const response = await Appointment.addAppointmentToDb(infoObject);
 		if (response) {
@@ -158,15 +160,15 @@ const DetailsComponent = ({ state, dispatch }) => {
 						style={homePageStyles.homeTileContent}
 					>{`Sheets will be provided by the cleaner: ${
 						homeDetails.sheetsProvided === "yes"
-							? "Yes   + $25 has been applied to all appointments"
-							: "No"
+							? "Yes  - You can change this after booking in your appointments details. Changing it to No will save you 25$ per appointment"
+							: "No  - You can change this after booking in your appointments details. Changing it to Yes will add 25$ to each appointment"
 					}`}</Text>
 					<Text
 						style={homePageStyles.homeTileContent}
 					>{`Towels will be provided by the cleaner: ${
 						homeDetails.towelsProvided === "yes"
-							? "Yes   + $25 has been applied to all appointments"
-							: "No"
+							? "Yes  - You can change this after booking in your appointments details. Changing it to No will save you 25$ per appointment"
+							: "No  - You can change this after booking in your appointments details. Changing it to Yes will add 25$ to each appointment"
 					}`}</Text>
 					{homeDetails.keyPadCode ? (
 						<Text

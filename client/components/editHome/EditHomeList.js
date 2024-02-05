@@ -96,6 +96,8 @@ const EditHomeList = ({ state, dispatch }) => {
 			<View key={home.id}>
 				<EditHomeTile
 					id={home.id}
+					nickName={home.nickName}
+					state={home.state}
 					address={home.address}
 					city={home.city}
 					zipcode={home.zipcode}
