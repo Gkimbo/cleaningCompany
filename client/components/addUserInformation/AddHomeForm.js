@@ -28,6 +28,8 @@ const UserHomeInfoForm = () => {
 			recyclingLocation: "",
 			compostLocation: "",
 			trashLocation: "",
+			contact: "",
+			specialNotes: "",
 		},
 	});
 	const [key, setKey] = useState("code");
@@ -50,12 +52,37 @@ const UserHomeInfoForm = () => {
 		}));
 	};
 
+	const handleContactChange = (text) => {
+		if (isNaN(text) || text.length > 10) {
+			setError("Invalid phone number");
+		} else {
+			setError("");
+			setUserHomeInfoForm((prevState) => ({
+				...prevState,
+				home: {
+					...prevState.home,
+					contact: text,
+				},
+			}));
+		}
+	};
+
 	const handleAddressChange = (text) => {
 		setUserHomeInfoForm((prevState) => ({
 			...prevState,
 			home: {
 				...prevState.home,
 				address: text,
+			},
+		}));
+	};
+
+	const handleSpecialNotesChange = (text) => {
+		setUserHomeInfoForm((prevState) => ({
+			...prevState,
+			home: {
+				...prevState.home,
+				specialNotes: text,
 			},
 		}));
 	};
@@ -446,6 +473,12 @@ const UserHomeInfoForm = () => {
 								onChangeText={handleKeyPadCode}
 								style={UserFormStyles.codeInput}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									You can change this code for each appointment after the
+									appointment has been booked.
+								</Text>
+							</View>
 						</>
 					) : (
 						<>
@@ -567,6 +600,38 @@ const UserHomeInfoForm = () => {
 							</View>
 						</>
 					)}
+					<Text style={UserFormStyles.smallTitle}>
+						Please add a contact phone number.
+					</Text>
+
+					<TextInput
+						mode="outlined"
+						value={userHomeInfo.home.contact}
+						onChangeText={handleContactChange}
+						style={UserFormStyles.codeInput}
+					/>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							The cleaner will contact this number if they cannot get into the
+							home for any reason
+						</Text>
+					</View>
+					<Text style={UserFormStyles.smallTitle}>
+						Add any Special Requirements
+					</Text>
+
+					<TextInput
+						mode="outlined"
+						value={userHomeInfo.home.specialNotes}
+						onChangeText={handleSpecialNotesChange}
+						style={UserFormStyles.codeInput}
+					/>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							Example: Is there a dog? Is there a specific area the cleaner
+							should park?
+						</Text>
+					</View>
 					<Pressable onPress={handleSubmit}>
 						<Text style={UserFormStyles.button}>Submit</Text>
 					</Pressable>

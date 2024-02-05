@@ -18,6 +18,8 @@ class UserInfoClass {
 		recyclingLocation,
 		compostLocation,
 		trashLocation,
+		contact,
+		specialNotes,
 	}) {
 		await UserHomes.create({
 			userId,
@@ -35,6 +37,8 @@ class UserInfoClass {
 			recyclingLocation,
 			compostLocation,
 			trashLocation,
+			contact,
+			specialNotes,
 		});
 	}
 
@@ -54,6 +58,8 @@ class UserInfoClass {
 		recyclingLocation,
 		compostLocation,
 		trashLocation,
+		contact,
+		specialNotes,
 	}) {
 		const existingHome = await UserHomes.findOne({
 			where: { id },
@@ -78,6 +84,8 @@ class UserInfoClass {
 			recyclingLocation,
 			compostLocation,
 			trashLocation,
+			contact,
+			specialNotes,
 		});
 
 		return existingHome;

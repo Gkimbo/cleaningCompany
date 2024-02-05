@@ -16,6 +16,8 @@ class HomeSerializer {
 			"recyclingLocation",
 			"compostLocation",
 			"trashLocation",
+			"contact",
+			"specialNotes",
 		];
 		const serializedHome = homeArray.map((home) => {
 			const newHome = {};
