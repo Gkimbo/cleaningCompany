@@ -14,6 +14,7 @@ const UserHomeInfoForm = () => {
 	const [userHomeInfo, setUserHomeInfoForm] = useState({
 		user: user,
 		home: {
+			nickName: "",
 			address: "",
 			city: "",
 			state: "",
@@ -38,6 +39,16 @@ const UserHomeInfoForm = () => {
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
+
+	const handleNameChange = (text) => {
+		setUserHomeInfoForm((prevState) => ({
+			...prevState,
+			home: {
+				...prevState.home,
+				nickName: text,
+			},
+		}));
+	};
 
 	const handleAddressChange = (text) => {
 		setUserHomeInfoForm((prevState) => ({
@@ -223,6 +234,10 @@ const UserHomeInfoForm = () => {
 
 	const handleSubmit = (event) => {
 		event.preventDefault();
+		if (!userHomeInfo.home.nickName) {
+			setError("Please provide a custom name to identify your home.");
+			return;
+		}
 		if (!userHomeInfo.home.trashLocation) {
 			setError("Please provide trash location");
 			return;
@@ -283,6 +298,13 @@ const UserHomeInfoForm = () => {
 			<form onSubmit={handleSubmit}>
 				<View>
 					<Text style={UserFormStyles.title}>Add a home</Text>
+					<Text style={UserFormStyles.smallTitle}>Name Your Home:</Text>
+					<TextInput
+						mode="outlined"
+						value={`${userHomeInfo.home.nickName}`}
+						onChangeText={handleNameChange}
+						style={UserFormStyles.input}
+					/>
 					<Text style={UserFormStyles.smallTitle}>Address:</Text>
 					<TextInput
 						mode="outlined"

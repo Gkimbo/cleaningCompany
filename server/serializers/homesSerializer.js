@@ -2,8 +2,10 @@ class HomeSerializer {
 	static serializeArray(homeArray) {
 		const allowedAttributes = [
 			"id",
+			"nickName",
 			"address",
 			"city",
+			"state",
 			"zipcode",
 			"numBeds",
 			"numBaths",

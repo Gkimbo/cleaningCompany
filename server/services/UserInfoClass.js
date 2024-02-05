@@ -4,6 +4,7 @@ const bcrypt = require("bcrypt");
 class UserInfoClass {
 	static async addHomeToDB({
 		userId,
+		nickName,
 		address,
 		city,
 		state,
@@ -20,6 +21,7 @@ class UserInfoClass {
 	}) {
 		await UserHomes.create({
 			userId,
+			nickName,
 			address,
 			city,
 			state,
@@ -38,6 +40,7 @@ class UserInfoClass {
 
 	static async editHomeInDB({
 		id,
+		nickName,
 		address,
 		city,
 		state,
@@ -61,6 +64,7 @@ class UserInfoClass {
 		}
 
 		await existingHome.update({
+			nickName,
 			address,
 			city,
 			state,

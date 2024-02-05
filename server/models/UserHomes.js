@@ -11,6 +11,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
+		nickName: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+		},
 		address: {
 			type: DataTypes.INTEGER,
 			allowNull: false,

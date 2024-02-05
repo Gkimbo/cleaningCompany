@@ -46,6 +46,7 @@ userInfoRouter.get("/", async (req, res) => {
 userInfoRouter.post("/home", async (req, res) => {
 	const { token } = req.body.user;
 	const {
+		nickName,
 		address,
 		city,
 		state,
@@ -72,6 +73,7 @@ userInfoRouter.post("/home", async (req, res) => {
 			return res.status(400).json("Cannot find zipcode");
 		}
 		const userInfo = await UserInfo.addHomeToDB({
+			nickName,
 			userId,
 			address,
 			city,
@@ -98,6 +100,7 @@ userInfoRouter.post("/home", async (req, res) => {
 userInfoRouter.patch("/home", async (req, res) => {
 	const {
 		id,
+		nickName,
 		address,
 		city,
 		state,
@@ -121,6 +124,7 @@ userInfoRouter.patch("/home", async (req, res) => {
 
 		const userInfo = await UserInfo.editHomeInDB({
 			id,
+			nickName,
 			address,
 			city,
 			state,
