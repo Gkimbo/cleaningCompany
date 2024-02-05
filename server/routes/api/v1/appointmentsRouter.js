@@ -8,6 +8,7 @@ const {
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
+const calculatePrice = require("../../../services/CalculatePrice");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -32,8 +33,17 @@ appointmentRouter.get("/:homeId", async (req, res) => {
 appointmentRouter.post("/", async (req, res) => {
 	const { token, homeId, dateArray, keyPadCode, keyLocation } = req.body;
 	let appointmentTotal = 0;
+	const home = await UserHomes.findOne({ where: { id: homeId } });
+
 	dateArray.forEach((date) => {
-		appointmentTotal += date.price;
+		const price = calculatePrice(
+			date.bringSheets,
+			date.bringTowels,
+			home.dataValues.numBeds,
+			home.dataValues.numBaths
+		);
+		date.price = price;
+		appointmentTotal += price;
 	});
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
