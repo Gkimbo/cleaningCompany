@@ -3,6 +3,7 @@ import { Text, View, Pressable } from "react-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
 import { TextInput, RadioButton } from "react-native-paper";
+import Appointment from "../../services/fetchRequests/AppointmentClass";
 
 const EachAppointment = ({
 	id,
@@ -17,31 +18,78 @@ const EachAppointment = ({
 	formatDate,
 	handleTowelToggle,
 	handleSheetsToggle,
+	setChangesSubmitted,
 }) => {
-	const [code, setCode] = useState(null);
-	const [key, setKeyLocation] = useState(null);
+	const [code, setCode] = useState("");
+	const [key, setKeyLocation] = useState("");
+	const [keyCodeToggle, setKeyCodeToggle] = useState("");
+	const [changeNotification, setChangeNotification] = useState(null);
 	const [error, setError] = useState(null);
 
-	console.log(code, key);
-	const handleKeyPadCode = () => {};
-	const handleKeyLocation = () => {};
-	const handleSubmit = () => {};
-	// const handleOnPress = () => {
-	// 	navigate(`/details/${id}`);
-	// };
+	const handleKeyPadCode = (newCode) => {
+		const regex = /^[\d#]*(\.\d*)?(\s*)?$/;
+		if (!regex.test(newCode)) {
+			setError("Key Pad Code can only be a number!");
+			return;
+		}
+		if (newCode === "") {
+			setError("Key Pad Code cannot be blank!");
+		} else {
+			setError(null);
+		}
+		setCode(newCode);
+	};
+
+	const handleKeyLocation = (newLocation) => {
+		setKeyLocation(newLocation);
+	};
+
+	const handleSubmit = async () => {
+		if (!code && !key) {
+			setError(
+				"Please provide instructions on how to get into the property with either a key or a code"
+			);
+			return;
+		}
+		setError(null);
+		if (code !== keyPadCode || key !== keyLocation) {
+			if (code) {
+				await Appointment.updateCodeAppointments(code, id);
+				setChangesSubmitted(true);
+				setChangeNotification("Changes made!");
+			} else {
+				await Appointment.updateKeyAppointments(key, id);
+				setChangesSubmitted(true);
+				setChangeNotification("Changes made!");
+			}
+		} else {
+			// No changes made, display an error or message
+			setError("No changes made.");
+		}
+	};
+	const handleKeyToggle = (text) => {
+		if (text === "code") {
+			setKeyCodeToggle("code");
+			setKeyLocation("");
+		} else {
+			setKeyCodeToggle("key");
+			setCode("");
+		}
+	};
 
 	useEffect(() => {
 		if (keyPadCode !== "") {
 			setCode(keyPadCode);
+			setKeyCodeToggle("code");
 		}
 		if (keyLocation !== "") {
 			setKeyLocation(keyLocation);
+			setKeyCodeToggle("key");
 		}
 	}, []);
 
 	return (
 		<View
-			key={id ? id : date}
 			style={[
 				homePageStyles.eachAppointment,
 				index % 2 === 1 && homePageStyles.appointmentOdd,
@@ -119,7 +167,34 @@ const EachAppointment = ({
 					</View>
 				</View>
 			)}
-			{code ? (
+			<Text style={UserFormStyles.smallTitle}>Cleaner will get in with:</Text>
+			<View style={UserFormStyles.radioButtonContainer}>
+				<View>
+					<RadioButton.Group
+						onValueChange={handleKeyToggle}
+						value={keyCodeToggle}
+					>
+						<RadioButton.Item
+							label="Key"
+							value="key"
+							labelStyle={{ fontSize: 10 }}
+						/>
+					</RadioButton.Group>
+				</View>
+				<View>
+					<RadioButton.Group
+						onValueChange={handleKeyToggle}
+						value={keyCodeToggle}
+					>
+						<RadioButton.Item
+							label="Code"
+							value="code"
+							labelStyle={{ fontSize: 10 }}
+						/>
+					</RadioButton.Group>
+				</View>
+			</View>
+			{keyCodeToggle === "code" ? (
 				<>
 					<Text style={UserFormStyles.smallTitle}>The code to get in is</Text>
 
@@ -129,6 +204,11 @@ const EachAppointment = ({
 						onChangeText={handleKeyPadCode}
 						style={UserFormStyles.codeInput}
 					/>
+					{changeNotification && (
+						<Text style={UserFormStyles.changeNotification}>
+							{changeNotification}
+						</Text>
+					)}
 				</>
 			) : (
 				<>
@@ -141,6 +221,11 @@ const EachAppointment = ({
 						onChangeText={handleKeyLocation}
 						style={UserFormStyles.input}
 					/>
+					{changeNotification && (
+						<Text style={UserFormStyles.changeNotification}>
+							{changeNotification}
+						</Text>
+					)}
 					<View style={{ textAlign: "center", marginBottom: 20 }}>
 						<Text style={{ color: "grey", fontSize: 10 }}>
 							Example: Under the fake rock to the right of the back door or to
@@ -149,8 +234,8 @@ const EachAppointment = ({
 					</View>
 				</>
 			)}
-			{(code !== keyPadCode && keyPadCode !== "") ||
-			(key !== keyLocation && keyLocation !== "") ? (
+
+			{code !== keyPadCode || key !== keyLocation ? (
 				<Pressable onPress={handleSubmit}>
 					<Text style={{ ...UserFormStyles.button, width: "100%" }}>
 						Submit change

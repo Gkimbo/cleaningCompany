@@ -10,6 +10,7 @@ import FetchData from "../../services/fetchRequests/fetchData";
 const AppointmentList = ({ state, dispatch }) => {
 	const [allHomes, setAllHomes] = useState([]);
 	const [allAppointments, setAllAppointments] = useState([]);
+	const [changesSubmitted, setChangesSubmitted] = useState(false);
 	const [redirect, setRedirect] = useState(false);
 	const [backRedirect, setBackRedirect] = useState(false);
 	const { width } = Dimensions.get("window");
@@ -37,7 +38,7 @@ const AppointmentList = ({ state, dispatch }) => {
 				}
 			);
 		}
-
+		setChangesSubmitted(false);
 		if (redirect) {
 			navigate("/add-home");
 			setRedirect(false);
@@ -46,7 +47,7 @@ const AppointmentList = ({ state, dispatch }) => {
 			navigate("/");
 			setBackRedirect(false);
 		}
-	}, [redirect, backRedirect]);
+	}, [redirect, backRedirect, changesSubmitted]);
 
 	const handlePress = () => {
 		setRedirect(true);
@@ -64,9 +65,8 @@ const AppointmentList = ({ state, dispatch }) => {
 					address={home.address}
 					city={home.city}
 					zipcode={home.zipcode}
-					keyPadCode={home.keyPadCode}
-					keyLocation={home.keyLocation}
 					allAppointments={allAppointments}
+					setChangesSubmitted={setChangesSubmitted}
 				/>
 			</View>
 		);

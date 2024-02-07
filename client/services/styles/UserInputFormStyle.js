@@ -105,6 +105,15 @@ const UserFormStyles = StyleSheet.create({
 		marginBottom: 10,
 		textAlign: "center",
 	},
+
+	changeNotification: {
+		color: "green",
+		fontSize: width > 500 ? 15 : 10,
+		fontWeight: "bold",
+		marginTop: 10,
+		marginBottom: 10,
+		textAlign: "center",
+	},
 	radioButtonContainer: {
 		alignSelf: "center",
 		flexDirection: "row",

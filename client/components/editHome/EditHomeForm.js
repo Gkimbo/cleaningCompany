@@ -31,9 +31,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 		specialNotes: "",
 	});
 
-	const [key, setKey] = useState(
-		homeDetails.keyPadCode !== "" ? "code" : "key"
-	);
+	const [key, setKey] = useState("");
 	const [recycle, setRecycle] = useState("no");
 	const [compost, setCompost] = useState("no");
 	const [error, setError] = useState(null);
@@ -255,6 +253,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 		const idNeeded = Number(id);
 		const foundHome = state.homes.find((home) => home.id === idNeeded);
 		setHomeDetails(foundHome);
+		setKey(foundHome.keyPadCode !== "" ? "code" : "key");
 
 		if (formRedirect) {
 			navigate("/edit-home");

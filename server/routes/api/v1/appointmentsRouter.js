@@ -125,7 +125,7 @@ appointmentRouter.delete("/:id", async (req, res) => {
 });
 
 appointmentRouter.patch("/:id", async (req, res) => {
-	const { id, bringTowels, bringSheets } = req.body;
+	const { id, bringTowels, bringSheets, keyPadCode, keyLocation } = req.body;
 	let userInfo;
 
 	try {
@@ -139,6 +139,20 @@ appointmentRouter.patch("/:id", async (req, res) => {
 			userInfo = await UserInfo.editTowelsInDB({
 				id,
 				bringTowels,
+			});
+		}
+		if (keyPadCode) {
+			userInfo = await UserInfo.editCodeKeyInDB({
+				id,
+				keyPadCode,
+				keyLocation: "",
+			});
+		}
+		if (keyLocation) {
+			userInfo = await UserInfo.editCodeKeyInDB({
+				id,
+				keyLocation,
+				keyPadCode: "",
 			});
 		}
 		return res.status(200).json({ user: userInfo });

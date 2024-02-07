@@ -209,6 +209,25 @@ class UserInfoClass {
 			throw new Error(error);
 		}
 	}
+
+	static async editCodeKeyInDB({ id, keyPadCode, keyLocation }) {
+		const existingAppointment = await UserAppointments.findOne({
+			where: { id },
+		});
+		if (!existingAppointment) {
+			return "Employee not found for editing";
+		}
+		try {
+			await existingAppointment.update({
+				keyLocation,
+				keyPadCode,
+			});
+
+			return existingAppointment;
+		} catch (error) {
+			throw new Error(error);
+		}
+	}
 }
 
 module.exports = UserInfoClass;

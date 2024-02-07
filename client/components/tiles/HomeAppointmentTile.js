@@ -12,9 +12,8 @@ const HomeAppointmentTile = ({
 	address,
 	city,
 	zipcode,
-	keyLocation,
-	keyPadCode,
 	allAppointments,
+	setChangesSubmitted,
 }) => {
 	const [appointments, setAppointments] = useState([]);
 
@@ -122,6 +121,7 @@ const HomeAppointmentTile = ({
 					formatDate={formatDate}
 					handleTowelToggle={handleTowelToggle}
 					handleSheetsToggle={handleSheetsToggle}
+					setChangesSubmitted={setChangesSubmitted}
 				/>
 			);
 		}
