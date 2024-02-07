@@ -16,6 +16,7 @@ const HomeAppointmentTile = ({
 	setChangesSubmitted,
 }) => {
 	const [appointments, setAppointments] = useState([]);
+	const [changeNotification, setChangeNotification] = useState(null);
 
 	useEffect(() => {
 		setAppointments(allAppointments);
@@ -46,7 +47,8 @@ const HomeAppointmentTile = ({
 
 			if (value !== appointmentToUpdate.bringSheets) {
 				await Appointment.updateSheetsAppointments(value, appointmentId);
-			}
+				setChangeNotification("Sheets for this appointment have been updated");
+			} else setChangeNotification(null);
 			setAppointments(updatedAppointments);
 		} catch (error) {
 			console.error("Error updating sheetsProvided:", error);
@@ -76,6 +78,9 @@ const HomeAppointmentTile = ({
 			);
 			if (value !== appointmentToUpdate.bringTowels) {
 				await Appointment.updateTowelsAppointments(value, appointmentId);
+				setChangeNotification("Towels for this appointment have been updated");
+			} else {
+				setChangeNotification(null);
 			}
 			setAppointments(updatedAppointments);
 		} catch (error) {
@@ -122,6 +127,8 @@ const HomeAppointmentTile = ({
 					handleTowelToggle={handleTowelToggle}
 					handleSheetsToggle={handleSheetsToggle}
 					setChangesSubmitted={setChangesSubmitted}
+					changeNotification={changeNotification}
+					setChangeNotification={setChangeNotification}
 				/>
 			);
 		}

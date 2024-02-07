@@ -19,11 +19,13 @@ const EachAppointment = ({
 	handleTowelToggle,
 	handleSheetsToggle,
 	setChangesSubmitted,
+	changeNotification,
+	setChangeNotification,
 }) => {
 	const [code, setCode] = useState("");
 	const [key, setKeyLocation] = useState("");
 	const [keyCodeToggle, setKeyCodeToggle] = useState("");
-	const [changeNotification, setChangeNotification] = useState(null);
+
 	const [error, setError] = useState(null);
 
 	const handleKeyPadCode = (newCode) => {
@@ -38,10 +40,12 @@ const EachAppointment = ({
 			setError(null);
 		}
 		setCode(newCode);
+		setChangeNotification(null);
 	};
 
 	const handleKeyLocation = (newLocation) => {
 		setKeyLocation(newLocation);
+		setChangeNotification(null);
 	};
 
 	const handleSubmit = async () => {
@@ -56,11 +60,15 @@ const EachAppointment = ({
 			if (code) {
 				await Appointment.updateCodeAppointments(code, id);
 				setChangesSubmitted(true);
-				setChangeNotification("Changes made!");
+				setChangeNotification(
+					`Changes made only to the ${formatDate(date)} appointment!`
+				);
 			} else {
 				await Appointment.updateKeyAppointments(key, id);
 				setChangesSubmitted(true);
-				setChangeNotification("Changes made!");
+				setChangeNotification(
+					`Changes made only to the ${formatDate(date)} appointment!`
+				);
 			}
 		} else {
 			// No changes made, display an error or message
@@ -71,9 +79,11 @@ const EachAppointment = ({
 		if (text === "code") {
 			setKeyCodeToggle("code");
 			setKeyLocation("");
+			setChangeNotification(null);
 		} else {
 			setKeyCodeToggle("key");
 			setCode("");
+			setChangeNotification(null);
 		}
 	};
 
@@ -115,7 +125,11 @@ const EachAppointment = ({
 							onValueChange={() => handleSheetsToggle("yes", id)}
 							value={bringSheets}
 						>
-							<RadioButton.Item label="Yes" value="yes" />
+							<RadioButton.Item
+								label="Yes"
+								value="yes"
+								labelStyle={{ fontSize: 10 }}
+							/>
 						</RadioButton.Group>
 					</View>
 					<View>
@@ -123,7 +137,11 @@ const EachAppointment = ({
 							onValueChange={() => handleSheetsToggle("no", id)}
 							value={bringSheets}
 						>
-							<RadioButton.Item label="No" value="no" />
+							<RadioButton.Item
+								label="No"
+								value="no"
+								labelStyle={{ fontSize: 10 }}
+							/>
 						</RadioButton.Group>
 					</View>
 				</View>
@@ -154,7 +172,11 @@ const EachAppointment = ({
 							onValueChange={() => handleTowelToggle("yes", id)}
 							value={bringTowels}
 						>
-							<RadioButton.Item label="Yes" value="yes" />
+							<RadioButton.Item
+								label="Yes"
+								value="yes"
+								labelStyle={{ fontSize: 10 }}
+							/>
 						</RadioButton.Group>
 					</View>
 					<View>
@@ -162,7 +184,11 @@ const EachAppointment = ({
 							onValueChange={() => handleTowelToggle("no", id)}
 							value={bringTowels}
 						>
-							<RadioButton.Item label="No" value="no" />
+							<RadioButton.Item
+								label="No"
+								value="no"
+								labelStyle={{ fontSize: 10 }}
+							/>
 						</RadioButton.Group>
 					</View>
 				</View>
@@ -221,17 +247,17 @@ const EachAppointment = ({
 						onChangeText={handleKeyLocation}
 						style={UserFormStyles.input}
 					/>
-					{changeNotification && (
-						<Text style={UserFormStyles.changeNotification}>
-							{changeNotification}
-						</Text>
-					)}
 					<View style={{ textAlign: "center", marginBottom: 20 }}>
 						<Text style={{ color: "grey", fontSize: 10 }}>
 							Example: Under the fake rock to the right of the back door or to
 							the right of the door in a lock box with code 5555#
 						</Text>
 					</View>
+					{changeNotification && (
+						<Text style={UserFormStyles.changeNotification}>
+							{changeNotification}
+						</Text>
+					)}
 				</>
 			)}
 
