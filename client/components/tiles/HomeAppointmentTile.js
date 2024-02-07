@@ -47,7 +47,9 @@ const HomeAppointmentTile = ({
 
 			if (value !== appointmentToUpdate.bringSheets) {
 				await Appointment.updateSheetsAppointments(value, appointmentId);
-				setChangeNotification("Sheets for this appointment have been updated");
+				setChangeNotification(
+					"Sheets for this appointment have been updated. Price has been updated."
+				);
 			} else setChangeNotification(null);
 			setAppointments(updatedAppointments);
 		} catch (error) {
@@ -78,7 +80,9 @@ const HomeAppointmentTile = ({
 			);
 			if (value !== appointmentToUpdate.bringTowels) {
 				await Appointment.updateTowelsAppointments(value, appointmentId);
-				setChangeNotification("Towels for this appointment have been updated");
+				setChangeNotification(
+					"Towels for this appointment have been updated. Price has been updated."
+				);
 			} else {
 				setChangeNotification(null);
 			}
