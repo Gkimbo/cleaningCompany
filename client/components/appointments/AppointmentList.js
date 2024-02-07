@@ -62,8 +62,10 @@ const AppointmentList = ({ state, dispatch }) => {
 			<View key={home.id}>
 				<HomeAppointmentTile
 					id={home.id}
+					nickName={home.nickName}
 					address={home.address}
 					city={home.city}
+					state={home.state}
 					zipcode={home.zipcode}
 					allAppointments={allAppointments}
 					setChangesSubmitted={setChangesSubmitted}

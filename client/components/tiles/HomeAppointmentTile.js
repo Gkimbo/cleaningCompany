@@ -7,8 +7,10 @@ import EachAppointment from "./EachAppointment";
 
 const HomeAppointmentTile = ({
 	id,
+	nickName,
 	address,
 	city,
+	state,
 	zipcode,
 	allAppointments,
 	setChangesSubmitted,
@@ -142,9 +144,12 @@ const HomeAppointmentTile = ({
 
 	return (
 		<View style={homePageStyles.homeTileContainer}>
-			<Text style={homePageStyles.homeTileTitle}>{address}</Text>
-			<Text style={homePageStyles.homeTileAddress}>
-				{`${city}, ${zipcode}`}
+			<Text style={homePageStyles.homeTileTitle}>{nickName}</Text>
+			<Text style={{ ...homePageStyles.homeTileAddress, margin: 0 }}>
+				{address}
+			</Text>
+			<Text style={{ ...homePageStyles.homeTileAddress, marginBottom: 2 }}>
+				{`${city}, ${state} ${zipcode}`}
 			</Text>
 			<View style={homePageStyles.appointmentListContainer}>
 				<View style={homePageStyles.appointmentListRow}>
