@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Text, View } from "react-native";
+import React, { useState, useEffect } from "react";
+import { Text, View, Pressable } from "react-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
 import { TextInput, RadioButton } from "react-native-paper";
@@ -18,11 +18,26 @@ const EachAppointment = ({
 	handleTowelToggle,
 	handleSheetsToggle,
 }) => {
+	const [code, setCode] = useState(null);
+	const [key, setKeyLocation] = useState(null);
+	const [error, setError] = useState(null);
+
+	console.log(code, key);
 	const handleKeyPadCode = () => {};
 	const handleKeyLocation = () => {};
+	const handleSubmit = () => {};
 	// const handleOnPress = () => {
 	// 	navigate(`/details/${id}`);
 	// };
+
+	useEffect(() => {
+		if (keyPadCode !== "") {
+			setCode(keyPadCode);
+		}
+		if (keyLocation !== "") {
+			setKeyLocation(keyLocation);
+		}
+	}, []);
 
 	return (
 		<View
@@ -104,13 +119,13 @@ const EachAppointment = ({
 					</View>
 				</View>
 			)}
-			{keyPadCode !== "" || keyPadCode ? (
+			{code ? (
 				<>
 					<Text style={UserFormStyles.smallTitle}>The code to get in is</Text>
 
 					<TextInput
 						mode="outlined"
-						value={keyPadCode ? keyPadCode : keyPadCode}
+						value={code ? code : ""}
 						onChangeText={handleKeyPadCode}
 						style={UserFormStyles.codeInput}
 					/>
@@ -122,7 +137,7 @@ const EachAppointment = ({
 					</Text>
 					<TextInput
 						mode="outlined"
-						value={keyLocation ? keyLocation : keyLocation}
+						value={key ? key : ""}
 						onChangeText={handleKeyLocation}
 						style={UserFormStyles.input}
 					/>
@@ -134,6 +149,16 @@ const EachAppointment = ({
 					</View>
 				</>
 			)}
+			{(code !== keyPadCode && keyPadCode !== "") ||
+			(key !== keyLocation && keyLocation !== "") ? (
+				<Pressable onPress={handleSubmit}>
+					<Text style={{ ...UserFormStyles.button, width: "100%" }}>
+						Submit change
+					</Text>
+				</Pressable>
+			) : null}
+
+			{error && <Text style={UserFormStyles.error}>{error}</Text>}
 		</View>
 	);
 };

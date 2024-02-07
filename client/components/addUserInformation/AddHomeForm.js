@@ -188,6 +188,23 @@ const UserHomeInfoForm = () => {
 	};
 
 	const handleKeyToggle = (text) => {
+		if (text === "code") {
+			setUserHomeInfoForm((prevState) => ({
+				...prevState,
+				home: {
+					...prevState.home,
+					keyLocation: "",
+				},
+			}));
+		} else {
+			setUserHomeInfoForm((prevState) => ({
+				...prevState,
+				home: {
+					...prevState.home,
+					keyPadCode: "",
+				},
+			}));
+		}
 		setKey(text);
 	};
 
