@@ -2,8 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
-import UserFormStyles from "../../services/styles/UserInputFormStyle";
-import { TextInput, RadioButton } from "react-native-paper";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import EachAppointment from "./EachAppointment";
 
