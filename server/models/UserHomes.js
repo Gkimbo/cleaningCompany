@@ -67,6 +67,14 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
+		contact: {
+			type: DataTypes.STRING,
+			allowNull: false,
+		},
+		specialNotes: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

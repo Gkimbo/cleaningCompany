@@ -74,6 +74,14 @@ module.exports = {
 				type: Sequelize.STRING,
 				allowNull: true,
 			},
+			contact: {
+				type: Sequelize.STRING,
+				allowNull: false,
+			},
+			specialNotes: {
+				type: Sequelize.STRING,
+				allowNull: true,
+			},
 			createdAt: {
 				type: Sequelize.DATE,
 				allowNull: false,

@@ -60,8 +60,9 @@ userInfoRouter.post("/home", async (req, res) => {
 		recyclingLocation,
 		compostLocation,
 		trashLocation,
+		contact,
+		specialNotes,
 	} = req.body.home;
-	console.log(req.body.home);
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
 		const userId = decodedToken.userId;
@@ -88,6 +89,8 @@ userInfoRouter.post("/home", async (req, res) => {
 			recyclingLocation,
 			compostLocation,
 			trashLocation,
+			contact,
+			specialNotes,
 		});
 
 		return res.status(201).json({ user });
@@ -114,6 +117,8 @@ userInfoRouter.patch("/home", async (req, res) => {
 		recyclingLocation,
 		compostLocation,
 		trashLocation,
+		contact,
+		specialNotes,
 	} = req.body;
 
 	try {
@@ -138,6 +143,8 @@ userInfoRouter.patch("/home", async (req, res) => {
 			recyclingLocation,
 			compostLocation,
 			trashLocation,
+			contact,
+			specialNotes,
 		});
 
 		return res.status(200).json({ user: userInfo });
