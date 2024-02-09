@@ -2,20 +2,21 @@ import React, { useState, useEffect } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
-import UserFormStyles from "../../services/styles/UserInputFormStyle";
-import { TextInput, RadioButton } from "react-native-paper";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
+import EachAppointment from "./EachAppointment";
 
 const HomeAppointmentTile = ({
 	id,
+	nickName,
 	address,
 	city,
+	state,
 	zipcode,
-	keyLocation,
-	keyPadCode,
 	allAppointments,
+	setChangesSubmitted,
 }) => {
 	const [appointments, setAppointments] = useState([]);
+	const [changeNotification, setChangeNotification] = useState(null);
 
 	useEffect(() => {
 		setAppointments(allAppointments);
@@ -46,7 +47,10 @@ const HomeAppointmentTile = ({
 
 			if (value !== appointmentToUpdate.bringSheets) {
 				await Appointment.updateSheetsAppointments(value, appointmentId);
-			}
+				setChangeNotification(
+					"Sheets for this appointment have been updated. Price has been updated."
+				);
+			} else setChangeNotification(null);
 			setAppointments(updatedAppointments);
 		} catch (error) {
 			console.error("Error updating sheetsProvided:", error);
@@ -76,6 +80,11 @@ const HomeAppointmentTile = ({
 			);
 			if (value !== appointmentToUpdate.bringTowels) {
 				await Appointment.updateTowelsAppointments(value, appointmentId);
+				setChangeNotification(
+					"Towels for this appointment have been updated. Price has been updated."
+				);
+			} else {
+				setChangeNotification(null);
 			}
 			setAppointments(updatedAppointments);
 		} catch (error) {
@@ -106,136 +115,25 @@ const HomeAppointmentTile = ({
 		(appointment, index) => {
 			const isDisabled = isWithinOneWeek(appointment.date);
 			return (
-				<View
+				<EachAppointment
 					key={appointment.id ? appointment.id : appointment.date}
-					style={[
-						homePageStyles.eachAppointment,
-						index % 2 === 1 && homePageStyles.appointmentOdd,
-					]}
-				>
-					<Text style={homePageStyles.appointmentDate}>
-						{formatDate(appointment.date)}
-					</Text>
-					<Text style={homePageStyles.appointmentPrice}>
-						$ {appointment.price}
-					</Text>
-					<Text style={UserFormStyles.smallTitle}>
-						Cleaner is bringing sheets:
-					</Text>
-					{isDisabled ? (
-						<View
-							style={{
-								...UserFormStyles.radioButtonContainer,
-								width: "15%",
-								padding: 5,
-							}}
-						>
-							<Text>{appointment.bringSheets}</Text>
-						</View>
-					) : (
-						<View style={UserFormStyles.radioButtonContainer}>
-							<View>
-								<RadioButton.Group
-									onValueChange={() =>
-										handleSheetsToggle("yes", appointment.id)
-									}
-									value={appointment.bringSheets}
-								>
-									<RadioButton.Item label="Yes" value="yes" />
-								</RadioButton.Group>
-							</View>
-							<View>
-								<RadioButton.Group
-									onValueChange={() => handleSheetsToggle("no", appointment.id)}
-									value={appointment.bringSheets}
-								>
-									<RadioButton.Item label="No" value="no" />
-								</RadioButton.Group>
-							</View>
-						</View>
-					)}
-					<Text style={UserFormStyles.smallTitle}>
-						Cleaner is bringing towels:
-					</Text>
-					{isDisabled ? (
-						<>
-							<View
-								style={{
-									...UserFormStyles.radioButtonContainer,
-									width: "15%",
-									padding: 5,
-								}}
-							>
-								<Text>{appointment.bringTowels}</Text>
-							</View>
-							<Text style={{ ...homePageStyles.information }}>
-								These values cannot be changed within a week of your
-								appointment.
-							</Text>
-							<Text style={{ ...homePageStyles.information }}>
-								Please contact us if you'd like to cancel or book sheets or
-								towels
-							</Text>
-						</>
-					) : (
-						<View style={UserFormStyles.radioButtonContainer}>
-							<View>
-								<RadioButton.Group
-									onValueChange={() => handleTowelToggle("yes", appointment.id)}
-									value={appointment.bringTowels}
-								>
-									<RadioButton.Item label="Yes" value="yes" />
-								</RadioButton.Group>
-							</View>
-							<View>
-								<RadioButton.Group
-									onValueChange={() => handleTowelToggle("no", appointment.id)}
-									value={appointment.bringTowels}
-								>
-									<RadioButton.Item label="No" value="no" />
-								</RadioButton.Group>
-							</View>
-						</View>
-					)}
-					{keyPadCode !== "" || keyPadCode ? (
-						<>
-							<Text style={UserFormStyles.smallTitle}>
-								The code to get in is
-							</Text>
-
-							<TextInput
-								mode="outlined"
-								value={
-									appointment.keyPadCode ? appointment.keyPadCode : keyPadCode
-								}
-								// onChangeText={handleKeyPadCode}
-								style={UserFormStyles.codeInput}
-							/>
-						</>
-					) : (
-						<>
-							<Text style={UserFormStyles.smallTitle}>
-								The location of the key is
-							</Text>
-							<TextInput
-								mode="outlined"
-								value={
-									appointment.keyLocation
-										? appointment.keyLocation
-										: keyLocation
-								}
-								// onChangeText={handleKeyLocation}
-								style={UserFormStyles.input}
-							/>
-							<View style={{ textAlign: "center", marginBottom: 20 }}>
-								<Text style={{ color: "grey", fontSize: 10 }}>
-									Example: Under the fake rock to the right of the back door or
-									to the right of the door in a lock box with code 5555#
-								</Text>
-							</View>
-						</>
-					)}
-				</View>
+					id={appointment.id}
+					index={index}
+					date={appointment.date}
+					price={appointment.price}
+					bringSheets={appointment.bringSheets}
+					bringTowels={appointment.bringTowels}
+					keyPadCode={appointment.keyPadCode}
+					keyLocation={appointment.keyLocation}
+					isDisabled={isDisabled}
+					isWithinOneWeek={isWithinOneWeek}
+					formatDate={formatDate}
+					handleTowelToggle={handleTowelToggle}
+					handleSheetsToggle={handleSheetsToggle}
+					setChangesSubmitted={setChangesSubmitted}
+					changeNotification={changeNotification}
+					setChangeNotification={setChangeNotification}
+				/>
 			);
 		}
 	);
@@ -246,9 +144,12 @@ const HomeAppointmentTile = ({
 
 	return (
 		<View style={homePageStyles.homeTileContainer}>
-			<Text style={homePageStyles.homeTileTitle}>{address}</Text>
-			<Text style={homePageStyles.homeTileAddress}>
-				{`${city}, ${zipcode}`}
+			<Text style={homePageStyles.homeTileTitle}>{nickName}</Text>
+			<Text style={{ ...homePageStyles.homeTileAddress, margin: 0 }}>
+				{address}
+			</Text>
+			<Text style={{ ...homePageStyles.homeTileAddress, marginBottom: 2 }}>
+				{`${city}, ${state} ${zipcode}`}
 			</Text>
 			<View style={homePageStyles.appointmentListContainer}>
 				<View style={homePageStyles.appointmentListRow}>

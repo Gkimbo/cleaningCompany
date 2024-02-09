@@ -106,6 +106,50 @@ class Appointment {
 			return error;
 		}
 	}
+
+	static async updateCodeAppointments(value, appointmentId) {
+		try {
+			const response = await fetch(
+				baseURL + `/api/v1/appointments/${appointmentId}`,
+				{
+					method: "PATCH",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({ keyPadCode: value, id: appointmentId }),
+				}
+			);
+			if (!response.ok) {
+				throw new Error("No data received");
+			}
+			const responseData = await response.json();
+			return responseData;
+		} catch (error) {
+			return error;
+		}
+	}
+
+	static async updateKeyAppointments(value, appointmentId) {
+		try {
+			const response = await fetch(
+				baseURL + `/api/v1/appointments/${appointmentId}`,
+				{
+					method: "PATCH",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({ keyLocation: value, id: appointmentId }),
+				}
+			);
+			if (!response.ok) {
+				throw new Error("No data received");
+			}
+			const responseData = await response.json();
+			return responseData;
+		} catch (error) {
+			return error;
+		}
+	}
 }
 
 export default Appointment;

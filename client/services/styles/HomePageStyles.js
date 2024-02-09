@@ -211,8 +211,8 @@ const homePageStyles = StyleSheet.create({
 		marginTop: 12,
 	},
 	eachAppointment: {
-		marginRight: 16,
-		marginTop: 10,
+		marginRight: 0,
+		marginTop: 12,
 		padding: 12,
 		backgroundColor: "white",
 		borderRadius: 8,

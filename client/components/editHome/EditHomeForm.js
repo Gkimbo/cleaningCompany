@@ -31,7 +31,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 		specialNotes: "",
 	});
 
-	const [key, setKey] = useState("code");
+	const [key, setKey] = useState("");
 	const [recycle, setRecycle] = useState("no");
 	const [compost, setCompost] = useState("no");
 	const [error, setError] = useState(null);
@@ -148,6 +148,17 @@ const EditHomeForm = ({ state, dispatch }) => {
 	};
 
 	const handleKeyToggle = (text) => {
+		if (text === "code") {
+			setHomeDetails((prevState) => ({
+				...prevState,
+				keyLocation: "",
+			}));
+		} else {
+			setHomeDetails((prevState) => ({
+				...prevState,
+				keyPadCode: "",
+			}));
+		}
 		setKey(text);
 	};
 
@@ -160,7 +171,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 	};
 
 	const handleKeyPadCode = (text) => {
-		const regex = /^\d*(\.\d*)?(\s*)?$/;
+		const regex = /^[\d#]*(\.\d*)?(\s*)?$/;
 		if (!regex.test(text)) {
 			setError("Key Pad Code can only be a number!");
 			return;
@@ -242,6 +253,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 		const idNeeded = Number(id);
 		const foundHome = state.homes.find((home) => home.id === idNeeded);
 		setHomeDetails(foundHome);
+		setKey(foundHome.keyPadCode !== "" ? "code" : "key");
 
 		if (formRedirect) {
 			navigate("/edit-home");
@@ -401,11 +413,15 @@ const EditHomeForm = ({ state, dispatch }) => {
 
 							<TextInput
 								mode="outlined"
-								placeholder="Under the fake rock to the right of the back door..."
 								value={homeDetails.keyLocation}
 								onChangeText={handleKeyLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: Under the fake rock to the right of the back door.
+								</Text>
+							</View>
 						</>
 					)}
 
@@ -414,11 +430,16 @@ const EditHomeForm = ({ state, dispatch }) => {
 					</Text>
 					<TextInput
 						mode="outlined"
-						placeholder="In the red bin to the right side of the house when you're facing the home..."
 						value={homeDetails.trashLocation}
 						onChangeText={handleTrashLocation}
 						style={UserFormStyles.input}
 					/>
+					<View style={{ textAlign: "center", marginBottom: 20 }}>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							Example: In the red bin to the right side of the house when you're
+							facing the home.
+						</Text>
+					</View>
 
 					<Text style={UserFormStyles.smallTitle}>
 						Does the unit have recycling??
@@ -449,11 +470,16 @@ const EditHomeForm = ({ state, dispatch }) => {
 							</Text>
 							<TextInput
 								mode="outlined"
-								placeholder="In the blue bin to the right side of the house when you're facing the home..."
 								value={homeDetails.recyclingLocation}
 								onChangeText={handleRecyclingLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: In the blue bin to the right side of the house when
+									you're facing the home.
+								</Text>
+							</View>
 						</>
 					)}
 
@@ -485,11 +511,16 @@ const EditHomeForm = ({ state, dispatch }) => {
 							</Text>
 							<TextInput
 								mode="outlined"
-								placeholder="In the small green bin to the right side of the house when you're facing the home..."
 								value={homeDetails.compostLocation}
 								onChangeText={handleCompostLocation}
 								style={UserFormStyles.input}
 							/>
+							<View style={{ textAlign: "center", marginBottom: 20 }}>
+								<Text style={{ color: "grey", fontSize: 11 }}>
+									Example: In the small green bin to the right side of the house
+									when you're facing the home.
+								</Text>
+							</View>
 						</>
 					)}
 					<Text style={UserFormStyles.smallTitle}>

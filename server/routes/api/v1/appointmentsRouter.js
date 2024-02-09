@@ -8,6 +8,7 @@ const {
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
+const calculatePrice = require("../../../services/CalculatePrice");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -32,8 +33,17 @@ appointmentRouter.get("/:homeId", async (req, res) => {
 appointmentRouter.post("/", async (req, res) => {
 	const { token, homeId, dateArray, keyPadCode, keyLocation } = req.body;
 	let appointmentTotal = 0;
+	const home = await UserHomes.findOne({ where: { id: homeId } });
+
 	dateArray.forEach((date) => {
-		appointmentTotal += date.price;
+		const price = calculatePrice(
+			date.bringSheets,
+			date.bringTowels,
+			home.dataValues.numBeds,
+			home.dataValues.numBaths
+		);
+		date.price = price;
+		appointmentTotal += price;
 	});
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
@@ -115,7 +125,7 @@ appointmentRouter.delete("/:id", async (req, res) => {
 });
 
 appointmentRouter.patch("/:id", async (req, res) => {
-	const { id, bringTowels, bringSheets } = req.body;
+	const { id, bringTowels, bringSheets, keyPadCode, keyLocation } = req.body;
 	let userInfo;
 
 	try {
@@ -129,6 +139,20 @@ appointmentRouter.patch("/:id", async (req, res) => {
 			userInfo = await UserInfo.editTowelsInDB({
 				id,
 				bringTowels,
+			});
+		}
+		if (keyPadCode) {
+			userInfo = await UserInfo.editCodeKeyInDB({
+				id,
+				keyPadCode,
+				keyLocation: "",
+			});
+		}
+		if (keyLocation) {
+			userInfo = await UserInfo.editCodeKeyInDB({
+				id,
+				keyLocation,
+				keyPadCode: "",
 			});
 		}
 		return res.status(200).json({ user: userInfo });
