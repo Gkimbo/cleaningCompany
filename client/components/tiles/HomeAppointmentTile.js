@@ -16,7 +16,10 @@ const HomeAppointmentTile = ({
 	setChangesSubmitted,
 }) => {
 	const [appointments, setAppointments] = useState([]);
-	const [changeNotification, setChangeNotification] = useState(null);
+	const [changeNotification, setChangeNotification] = useState({
+		message: "",
+		appointment: "",
+	});
 
 	useEffect(() => {
 		setAppointments(allAppointments);
@@ -47,10 +50,16 @@ const HomeAppointmentTile = ({
 
 			if (value !== appointmentToUpdate.bringSheets) {
 				await Appointment.updateSheetsAppointments(value, appointmentId);
-				setChangeNotification(
-					"Sheets for this appointment have been updated. Price has been updated."
-				);
-			} else setChangeNotification(null);
+				setChangeNotification({
+					message:
+						"Sheets for this appointment have been updated. Price has been updated.",
+					appointment: appointmentId,
+				});
+			} else
+				setChangeNotification({
+					message: "",
+					appointment: "",
+				});
 			setAppointments(updatedAppointments);
 		} catch (error) {
 			console.error("Error updating sheetsProvided:", error);
@@ -80,11 +89,16 @@ const HomeAppointmentTile = ({
 			);
 			if (value !== appointmentToUpdate.bringTowels) {
 				await Appointment.updateTowelsAppointments(value, appointmentId);
-				setChangeNotification(
-					"Towels for this appointment have been updated. Price has been updated."
-				);
+				setChangeNotification({
+					message:
+						"Towels for this appointment have been updated. Price has been updated.",
+					appointment: appointmentId,
+				});
 			} else {
-				setChangeNotification(null);
+				setChangeNotification({
+					message: "",
+					appointment: "",
+				});
 			}
 			setAppointments(updatedAppointments);
 		} catch (error) {
@@ -96,7 +110,10 @@ const HomeAppointmentTile = ({
 
 	const formatDate = (dateString) => {
 		const options = { month: "short", day: "numeric", year: "numeric" };
-		return new Date(dateString).toLocaleDateString(undefined, options);
+		const [year, month, day] = dateString.split("-");
+		const newDate = new Date(year, month, day);
+		const formattedDate = newDate.toLocaleDateString(undefined, options);
+		return formattedDate;
 	};
 
 	const isWithinOneWeek = (dateString) => {
@@ -151,6 +168,13 @@ const HomeAppointmentTile = ({
 			<Text style={{ ...homePageStyles.homeTileAddress, marginBottom: 2 }}>
 				{`${city}, ${state} ${zipcode}`}
 			</Text>
+			<Pressable onPress={handleOnPress}>
+				<View style={homePageStyles.bookButton}>
+					<Text style={homePageStyles.bookButtonText}>
+						{`Book or cancel a cleaning for the ${nickName}`}
+					</Text>
+				</View>
+			</Pressable>
 			<View style={homePageStyles.appointmentListContainer}>
 				<View style={homePageStyles.appointmentListRow}>
 					{allAppointmentsFiltered}

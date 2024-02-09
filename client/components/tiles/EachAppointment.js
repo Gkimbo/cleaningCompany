@@ -25,7 +25,6 @@ const EachAppointment = ({
 	const [code, setCode] = useState("");
 	const [key, setKeyLocation] = useState("");
 	const [keyCodeToggle, setKeyCodeToggle] = useState("");
-
 	const [error, setError] = useState(null);
 
 	const handleKeyPadCode = (newCode) => {
@@ -40,12 +39,18 @@ const EachAppointment = ({
 			setError(null);
 		}
 		setCode(newCode);
-		setChangeNotification(null);
+		setChangeNotification({
+			message: "",
+			appointment: "",
+		});
 	};
 
 	const handleKeyLocation = (newLocation) => {
 		setKeyLocation(newLocation);
-		setChangeNotification(null);
+		setChangeNotification({
+			message: "",
+			appointment: "",
+		});
 	};
 
 	const handleSubmit = async () => {
@@ -60,18 +65,19 @@ const EachAppointment = ({
 			if (code) {
 				await Appointment.updateCodeAppointments(code, id);
 				setChangesSubmitted(true);
-				setChangeNotification(
-					`Changes made only to the ${formatDate(date)} appointment!`
-				);
+				setChangeNotification({
+					message: `Changes made only to the ${formatDate(date)} appointment!`,
+					appointment: id,
+				});
 			} else {
 				await Appointment.updateKeyAppointments(key, id);
 				setChangesSubmitted(true);
-				setChangeNotification(
-					`Changes made only to the ${formatDate(date)} appointment!`
-				);
+				setChangeNotification({
+					message: `Changes made only to the ${formatDate(date)} appointment!`,
+					appointment: id,
+				});
 			}
 		} else {
-			// No changes made, display an error or message
 			setError("No changes made.");
 		}
 	};
@@ -79,11 +85,17 @@ const EachAppointment = ({
 		if (text === "code") {
 			setKeyCodeToggle("code");
 			setKeyLocation("");
-			setChangeNotification(null);
+			setChangeNotification({
+				message: "",
+				appointment: "",
+			});
 		} else {
 			setKeyCodeToggle("key");
 			setCode("");
-			setChangeNotification(null);
+			setChangeNotification({
+				message: "",
+				appointment: "",
+			});
 		}
 	};
 
@@ -230,9 +242,9 @@ const EachAppointment = ({
 						onChangeText={handleKeyPadCode}
 						style={UserFormStyles.codeInput}
 					/>
-					{changeNotification && (
+					{changeNotification.appointment === id && (
 						<Text style={UserFormStyles.changeNotification}>
-							{changeNotification}
+							{changeNotification.message}
 						</Text>
 					)}
 				</>
@@ -253,9 +265,9 @@ const EachAppointment = ({
 							the right of the door in a lock box with code 5555#
 						</Text>
 					</View>
-					{changeNotification && (
+					{changeNotification.appointment === id && (
 						<Text style={UserFormStyles.changeNotification}>
-							{changeNotification}
+							{changeNotification.message}
 						</Text>
 					)}
 				</>

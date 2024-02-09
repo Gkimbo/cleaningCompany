@@ -18,7 +18,6 @@ const CalendarComponent = ({
 	setConfirmationModalVisible,
 	sheets,
 	towels,
-	setCancellationFee,
 }) => {
 	const [selectedDates, setSelectedDates] = useState({});
 	const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -119,7 +118,8 @@ const CalendarComponent = ({
 
 	const handleRemoveBooking = (date) => {
 		const currentDate = new Date();
-		const selectedDate = new Date(date.dateString);
+		const [year, month, day] = date.dateString.split("-");
+		const selectedDate = new Date(year, month, day);
 
 		const isWithinWeek =
 			selectedDate.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000;
@@ -128,25 +128,14 @@ const CalendarComponent = ({
 			setDateToDelete(date);
 			setConfirmationModalVisible(true);
 		} else {
-			const updatedDates = { ...selectedDates };
-			delete updatedDates[date.dateString];
-			setSelectedDates(updatedDates);
-			onAppointmentDelete(date);
+			onAppointmentDelete(date, null);
 		}
 	};
 
 	const handleConfirmation = (deleteAppointment) => {
 		setConfirmationModalVisible(false);
 		if (deleteAppointment) {
-			// dispatch({
-			// 	type: "ADD_BILL",
-			// 	payload: 25,
-			// });
-			const updatedDates = { ...selectedDates };
-			delete updatedDates[dateToDelete.dateString];
-			setCancellationFee(25);
-			setSelectedDates(updatedDates);
-			onAppointmentDelete(dateToDelete, true);
+			onAppointmentDelete(dateToDelete, 25);
 		}
 	};
 
