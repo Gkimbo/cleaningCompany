@@ -167,6 +167,18 @@ userInfoRouter.delete("/home", async (req, res) => {
 		const oneWeekFromToday = new Date(today);
 		oneWeekFromToday.setDate(oneWeekFromToday.getDate() + 7);
 
+		const homeToDelete = await UserHomes.findAll({
+			where: {
+				id: id,
+			},
+		});
+
+		const billToUpdate = await UserBills.findOne({
+			where: {
+				userId: homeToDelete[0].dataValues.userId,
+			},
+		});
+
 		const appointmentsWithinWeek = await UserAppointments.findAll({
 			where: {
 				homeId: id,
@@ -175,17 +187,28 @@ userInfoRouter.delete("/home", async (req, res) => {
 				},
 			},
 		});
-		console.log(appointmentsWithinWeek);
+
+		if (appointmentsWithinWeek.length > 0) {
+			const cancellationFee = 25 * appointmentsWithinWeek.length;
+			const oldFee = Number(billToUpdate.dataValues.cancellationFee);
+
+			const total =
+				Number(billToUpdate.dataValues.cancellationFee) +
+				Number(billToUpdate.dataValues.appointmentDue);
+
+			await billToUpdate.update({
+				cancellationFee: oldFee + cancellationFee,
+				totalDue: total + cancellationFee,
+			});
+			console.log(`Cancellation fee charged: $${cancellationFee}`);
+		}
+
 		// await UserAppointments.destroy({
 		// 	where: {
 		// 		homeId: id,
 		// 	},
 		// });
-		if (appointmentsWithinWeek.length > 0) {
-			// Charge cancellation fee
-			const cancellationFee = 25 * appointmentsWithinWeek.length;
-			console.log(`Cancellation fee charged: $${cancellationFee}`);
-		}
+
 		// const deleteHome = await UserInfo.deleteHomeInfo(id);
 		return res.status(201).json({ message: "home deleted" });
 	} catch (error) {
