@@ -14,26 +14,24 @@ const DetailsComponent = ({ state, dispatch }) => {
 	const [homeDetails, setHomeDetails] = useState(null);
 	const [appointments, setAppointments] = useState([]);
 	const [redirect, setRedirect] = useState(false);
-	const [cancellationFee, setCancellationFee] = useState(null);
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
 
-	const onAppointmentDelete = async (date) => {
+	const onAppointmentDelete = async (date, cancellationFee) => {
 		try {
 			const homeId = homeDetails.id;
 			const arrayOfAppointments = await Appointment.getHomeAppointments(homeId);
 			const appointmentToDelete = arrayOfAppointments.appointments.find(
 				(appointment) => appointment.date === date.dateString
 			);
-
 			if (appointmentToDelete) {
 				let response;
 				if (cancellationFee) {
 					response = await Appointment.deleteAppointment(
 						appointmentToDelete.id,
 						cancellationFee,
-						state.currentUser
+						state.currentUser.token
 					);
 					dispatch({ type: "ADD_FEE", payload: cancellationFee });
 					dispatch({
@@ -204,7 +202,6 @@ const DetailsComponent = ({ state, dispatch }) => {
 					setConfirmationModalVisible={setConfirmationModalVisible}
 					sheets={homeDetails.sheetsProvided}
 					towels={homeDetails.towelsProvided}
-					setCancellationFee={setCancellationFee}
 				/>
 			</View>
 		</View>
