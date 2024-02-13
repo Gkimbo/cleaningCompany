@@ -10,6 +10,7 @@ const {
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
+const { Op } = require("sequelize");
 
 const userInfoRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -162,12 +163,30 @@ userInfoRouter.patch("/home", async (req, res) => {
 userInfoRouter.delete("/home", async (req, res) => {
 	const id = req.body.id;
 	try {
-		await UserAppointments.destroy({
+		const today = new Date();
+		const oneWeekFromToday = new Date(today);
+		oneWeekFromToday.setDate(oneWeekFromToday.getDate() + 7);
+
+		const appointmentsWithinWeek = await UserAppointments.findAll({
 			where: {
 				homeId: id,
+				date: {
+					[Op.between]: [today, oneWeekFromToday],
+				},
 			},
 		});
-		const deleteHome = await UserInfo.deleteHomeInfo(id);
+		console.log(appointmentsWithinWeek);
+		// await UserAppointments.destroy({
+		// 	where: {
+		// 		homeId: id,
+		// 	},
+		// });
+		if (appointmentsWithinWeek.length > 0) {
+			// Charge cancellation fee
+			const cancellationFee = 25 * appointmentsWithinWeek.length;
+			console.log(`Cancellation fee charged: $${cancellationFee}`);
+		}
+		// const deleteHome = await UserInfo.deleteHomeInfo(id);
 		return res.status(201).json({ message: "home deleted" });
 	} catch (error) {
 		console.log(error);
