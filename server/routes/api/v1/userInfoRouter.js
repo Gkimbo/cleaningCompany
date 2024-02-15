@@ -203,13 +203,13 @@ userInfoRouter.delete("/home", async (req, res) => {
 			console.log(`Cancellation fee charged: $${cancellationFee}`);
 		}
 
-		// await UserAppointments.destroy({
-		// 	where: {
-		// 		homeId: id,
-		// 	},
-		// });
+		await UserAppointments.destroy({
+			where: {
+				homeId: id,
+			},
+		});
 
-		// const deleteHome = await UserInfo.deleteHomeInfo(id);
+		const deleteHome = await UserInfo.deleteHomeInfo(id);
 		return res.status(201).json({ message: "home deleted" });
 	} catch (error) {
 		console.log(error);
