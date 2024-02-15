@@ -64,9 +64,30 @@ const EditHomeList = ({ state, dispatch }) => {
 	const handleConfirmation = async (deleteAppointment, id) => {
 		setConfirmationModalVisible({ boolean: false, id: null });
 		if (deleteAppointment) {
+			const appointments = await Appointment.getHomeAppointments(id);
 			try {
 				const deleteHome = await FetchData.deleteHome(id);
 				if (deleteHome) {
+					let priceOfAppointments = 0;
+					const costOfAppointments = appointments.appointments.map(
+						(eachAppt) => {
+							priceOfAppointments += Number(eachAppt.price);
+						}
+					);
+					dispatch({ type: "SUBTRACT_BILL", payload: priceOfAppointments });
+					const updatedAppointments = appointments.appointments.filter(
+						(appointment) => appointment.id !== id
+					);
+					const filteredAppointments = state.appointments.filter(
+						(appointment) =>
+							!updatedAppointments.some(
+								(updAppt) => updAppt.id === appointment.id
+							)
+					);
+					dispatch({
+						type: "USER_APPOINTMENTS",
+						payload: filteredAppointments,
+					});
 					dispatch({ type: "DELETE_HOME", payload: id });
 				}
 			} catch (error) {
@@ -79,6 +100,7 @@ const EditHomeList = ({ state, dispatch }) => {
 		const appointments = await Appointment.getHomeAppointments(homeId);
 		const currentDate = new Date();
 		let fee = 0;
+
 		const dateArray = appointments.appointments.map((date) => {
 			return new Date(date.date);
 		});
@@ -101,10 +123,32 @@ const EditHomeList = ({ state, dispatch }) => {
 
 	const onDeleteHome = async (id) => {
 		try {
+			const appointments = await Appointment.getHomeAppointments(id);
 			const checkAppointments = await checkAppointmentsWithinWeek(id);
+
 			if (!checkAppointments) {
 				const deleteHome = await FetchData.deleteHome(id);
 				if (deleteHome) {
+					let priceOfAppointments = 0;
+					const costOfAppointments = appointments.appointments.map(
+						(eachAppt) => {
+							priceOfAppointments += Number(eachAppt.price);
+						}
+					);
+					dispatch({ type: "SUBTRACT_BILL", payload: priceOfAppointments });
+					const updatedAppointments = appointments.appointments.filter(
+						(appointment) => appointment.id !== id
+					);
+					const filteredAppointments = state.appointments.filter(
+						(appointment) =>
+							!updatedAppointments.some(
+								(updAppt) => updAppt.id === appointment.id
+							)
+					);
+					dispatch({
+						type: "USER_APPOINTMENTS",
+						payload: filteredAppointments,
+					});
 					dispatch({ type: "DELETE_HOME", payload: id });
 				}
 			} else {
