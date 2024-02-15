@@ -233,7 +233,7 @@ const EditHomeList = ({ state, dispatch }) => {
 					</View>
 				</Pressable>
 			</View>
-			<ScrollView>
+			<View>
 				{state.homes.length > 0 ? (
 					<>
 						{usersHomes}
@@ -251,7 +251,7 @@ const EditHomeList = ({ state, dispatch }) => {
 						<Text style={homePageStyles.AddHomeButtonText}>Add a Home</Text>
 					</Pressable>
 				)}
-			</ScrollView>
+			</View>
 			<Modal
 				animationType="slide"
 				transparent={true}

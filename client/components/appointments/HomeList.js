@@ -78,7 +78,7 @@ const HomeList = ({ state, dispatch }) => {
 					</View>
 				</Pressable>
 			</View>
-			<ScrollView>
+			<View>
 				{state.homes.length > 0 ? (
 					<>
 						{usersHomes}
@@ -96,7 +96,7 @@ const HomeList = ({ state, dispatch }) => {
 						<Text style={homePageStyles.AddHomeButtonText}>Add a Home</Text>
 					</Pressable>
 				)}
-			</ScrollView>
+			</View>
 		</View>
 	);
 };

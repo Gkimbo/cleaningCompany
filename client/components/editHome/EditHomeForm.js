@@ -75,7 +75,7 @@ const EditHomeForm = ({ state, dispatch }) => {
 	};
 
 	const handleSpecialNotesChange = (text) => {
-		setUserHomeInfoForm((prevState) => ({
+		setHomeDetails((prevState) => ({
 			...prevState,
 			specialNotes: text,
 		}));
