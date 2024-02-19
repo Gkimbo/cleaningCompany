@@ -7,6 +7,7 @@ import {
 	Animated,
 	Easing,
 	Dimensions,
+	Modal,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
@@ -14,12 +15,19 @@ import homePageStyles from "../../services/styles/HomePageStyles";
 import EditHomeTile from "../tiles/EditHomeTile";
 import FetchData from "../../services/fetchRequests/fetchData";
 import topBarStyles from "../../services/styles/TopBarStyles";
+import calenderStyles from "../../services/styles/CalenderSyles";
+import Appointment from "../../services/fetchRequests/AppointmentClass";
 
 const EditHomeList = ({ state, dispatch }) => {
 	const [redirect, setRedirect] = useState(false);
 	const [backRedirect, setBackRedirect] = useState(false);
 	const [deleteAnimation] = useState(new Animated.Value(0));
 	const [deleteConfirmation, setDeleteConfirmation] = useState({});
+	const [fee, setFee] = useState(0);
+	const [confirmationModalVisible, setConfirmationModalVisible] = useState({
+		boolean: false,
+		id: null,
+	});
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
@@ -53,14 +61,101 @@ const EditHomeList = ({ state, dispatch }) => {
 		}));
 	};
 
+	const handleConfirmation = async (deleteAppointment, id) => {
+		setConfirmationModalVisible({ boolean: false, id: null });
+		if (deleteAppointment) {
+			const appointments = await Appointment.getHomeAppointments(id);
+			try {
+				const deleteHome = await FetchData.deleteHome(id);
+				if (deleteHome) {
+					let priceOfAppointments = 0;
+					const costOfAppointments = appointments.appointments.map(
+						(eachAppt) => {
+							priceOfAppointments += Number(eachAppt.price);
+						}
+					);
+					dispatch({ type: "SUBTRACT_BILL", payload: priceOfAppointments });
+					const updatedAppointments = appointments.appointments.filter(
+						(appointment) => appointment.id !== id
+					);
+					const filteredAppointments = state.appointments.filter(
+						(appointment) =>
+							!updatedAppointments.some(
+								(updAppt) => updAppt.id === appointment.id
+							)
+					);
+					dispatch({
+						type: "USER_APPOINTMENTS",
+						payload: filteredAppointments,
+					});
+					dispatch({ type: "DELETE_HOME", payload: id });
+				}
+			} catch (error) {
+				console.error("Error deleting home:", error);
+			}
+		}
+	};
+
+	const checkAppointmentsWithinWeek = async (homeId) => {
+		const appointments = await Appointment.getHomeAppointments(homeId);
+		const currentDate = new Date();
+		let fee = 0;
+
+		const dateArray = appointments.appointments.map((date) => {
+			return new Date(date.date);
+		});
+
+		const isWithinWeek = dateArray.map((date) => {
+			if (date.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000) {
+				fee += 25;
+			}
+			return date.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000;
+		});
+
+		const withinWeek = dateArray.some((date) => {
+			const timeDifference = date.getTime() - currentDate.getTime();
+			const oneWeekInMilliseconds = 7 * 24 * 60 * 60 * 1000;
+			return timeDifference >= 0 && timeDifference <= oneWeekInMilliseconds;
+		});
+		setFee(fee);
+		return withinWeek;
+	};
+
 	const onDeleteHome = async (id) => {
 		try {
-			const deleteHome = await FetchData.deleteHome(id);
-			if (deleteHome) {
-				dispatch({ type: "DELETE_HOME", payload: id });
+			const appointments = await Appointment.getHomeAppointments(id);
+			const checkAppointments = await checkAppointmentsWithinWeek(id);
+
+			if (!checkAppointments) {
+				const deleteHome = await FetchData.deleteHome(id);
+				if (deleteHome) {
+					let priceOfAppointments = 0;
+					const costOfAppointments = appointments.appointments.map(
+						(eachAppt) => {
+							priceOfAppointments += Number(eachAppt.price);
+						}
+					);
+					dispatch({ type: "SUBTRACT_BILL", payload: priceOfAppointments });
+					const updatedAppointments = appointments.appointments.filter(
+						(appointment) => appointment.id !== id
+					);
+					const filteredAppointments = state.appointments.filter(
+						(appointment) =>
+							!updatedAppointments.some(
+								(updAppt) => updAppt.id === appointment.id
+							)
+					);
+					dispatch({
+						type: "USER_APPOINTMENTS",
+						payload: filteredAppointments,
+					});
+					dispatch({ type: "DELETE_HOME", payload: id });
+				}
+			} else {
+				setConfirmationModalVisible({ boolean: true, id: id });
 			}
 		} catch (error) {
-			console.error("Error deleting car:", error);
+			console.error("Error deleting home:", error);
 		}
 	};
 
@@ -122,12 +217,7 @@ const EditHomeList = ({ state, dispatch }) => {
 	});
 
 	return (
-		<View
-			style={{
-				...homePageStyles.container,
-				flexDirection: "column",
-			}}
-		>
+		<View style={{ ...homePageStyles.container, flexDirection: "column" }}>
 			<View style={homePageStyles.backButtonContainerList}>
 				<Pressable
 					style={homePageStyles.backButtonForm}
@@ -143,7 +233,7 @@ const EditHomeList = ({ state, dispatch }) => {
 					</View>
 				</Pressable>
 			</View>
-			<ScrollView>
+			<View>
 				{state.homes.length > 0 ? (
 					<>
 						{usersHomes}
@@ -161,7 +251,44 @@ const EditHomeList = ({ state, dispatch }) => {
 						<Text style={homePageStyles.AddHomeButtonText}>Add a Home</Text>
 					</Pressable>
 				)}
-			</ScrollView>
+			</View>
+			<Modal
+				animationType="slide"
+				transparent={true}
+				visible={confirmationModalVisible.boolean}
+				onRequestClose={() =>
+					setConfirmationModalVisible({ boolean: false, id: null })
+				}
+			>
+				<View style={calenderStyles.modalContainer}>
+					<View style={calenderStyles.modalContent}>
+						<Text style={calenderStyles.modalText}>
+							{`Are you sure you want to delete this home? 
+							A $${fee} cancellation fee will be charged to delete all appointments that are within a week of today.`}
+						</Text>
+						<View style={calenderStyles.modalButtons}>
+							<Pressable
+								onPress={() =>
+									handleConfirmation(false, confirmationModalVisible.id)
+								}
+							>
+								<View style={calenderStyles.keepButton}>
+									<Text style={calenderStyles.buttonText}>Keep</Text>
+								</View>
+							</Pressable>
+							<Pressable
+								onPress={() =>
+									handleConfirmation(true, confirmationModalVisible.id)
+								}
+							>
+								<View style={calenderStyles.deleteButton}>
+									<Text style={calenderStyles.buttonText}>Delete</Text>
+								</View>
+							</Pressable>
+						</View>
+					</View>
+				</View>
+			</Modal>
 		</View>
 	);
 };
