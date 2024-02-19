@@ -53,15 +53,21 @@ const UserHomeInfoForm = () => {
 	};
 
 	const handleContactChange = (text) => {
-		if (isNaN(text) || text.length > 10) {
+		const cleanedText = text.replace(/-/g, "");
+		// Check if the cleaned text is a valid phone number
+		if (isNaN(cleanedText) || cleanedText.length > 10) {
 			setError("Invalid phone number");
 		} else {
+			const formattedText = cleanedText.replace(
+				/(\d{3})(\d{3})(\d{4})/,
+				"$1-$2-$3"
+			);
 			setError("");
 			setUserHomeInfoForm((prevState) => ({
 				...prevState,
 				home: {
 					...prevState.home,
-					contact: text,
+					contact: formattedText,
 				},
 			}));
 		}
