@@ -63,13 +63,19 @@ const EditHomeForm = ({ state, dispatch }) => {
 	};
 
 	const handleContactChange = (text) => {
-		if (isNaN(text) || text.length > 10) {
+		const cleanedText = text.replace(/-/g, "");
+
+		if (isNaN(cleanedText) || cleanedText.length !== 10) {
 			setError("Invalid phone number");
 		} else {
+			const formattedText = cleanedText.replace(
+				/(\d{3})(\d{3})(\d{4})/,
+				"$1-$2-$3"
+			);
 			setError("");
 			setHomeDetails((prevState) => ({
 				...prevState,
-				contact: text,
+				contact: formattedText,
 			}));
 		}
 	};
