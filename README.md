@@ -70,7 +70,7 @@ npx sequelize-cli db:migrate
 
 Seed Manager:
 
-```
+```bash
 sequelize db:seed --seed managerSeeder.js
 ```
 

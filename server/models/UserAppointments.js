@@ -43,6 +43,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
+		completed: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+		},
 	});
 
 	// Define the one-to-many relationship with User

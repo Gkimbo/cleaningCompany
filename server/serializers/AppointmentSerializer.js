@@ -11,6 +11,7 @@ class AppointmentSerializer {
 			"bringSheets",
 			"keyPadCode",
 			"keyLocation",
+			"completed",
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
