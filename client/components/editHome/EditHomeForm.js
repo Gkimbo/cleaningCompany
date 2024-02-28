@@ -63,21 +63,48 @@ const EditHomeForm = ({ state, dispatch }) => {
 	};
 
 	const handleContactChange = (text) => {
-		const cleanedText = text.replace(/-/g, "");
-
-		if (isNaN(cleanedText) || cleanedText.length !== 10) {
-			setError("Invalid phone number");
-		} else {
-			const formattedText = cleanedText.replace(
-				/(\d{3})(\d{3})(\d{4})/,
-				"$1-$2-$3"
-			);
-			setError("");
+		// If text is empty or contains only whitespace characters, set contact to an empty string
+		if (!text.trim()) {
 			setHomeDetails((prevState) => ({
 				...prevState,
-				contact: formattedText,
+				contact: "",
 			}));
+			setError("");
+			return;
 		}
+
+		const cleanedText = text.replace(/\D/g, "");
+
+		// Regular expression to match only numbers
+		const numbersRegex = /^\d+$/;
+		if (!numbersRegex.test(cleanedText)) {
+			setError("That's not a valid Phone Number");
+			return;
+		}
+
+		let formattedText = cleanedText.replace(
+			/(\d{3})(\d{3})(\d{4})/,
+			"$1-$2-$3"
+		);
+		const longer = cleanedText.length > 10;
+		if (longer) {
+			if (cleanedText.length === 11) {
+				formattedText = cleanedText.replace(
+					/(\d{1})(\d{3})(\d{3})(\d{4})/,
+					"+$1-$2-$3-$4"
+				);
+			} else {
+				formattedText = cleanedText.replace(
+					/(\d{2})(\d{3})(\d{4})(\d{6})/,
+					"+$1-$2-$3-$4"
+				);
+			}
+		}
+		setError("");
+		setHomeDetails((prevState) => ({
+			...prevState,
+			contact: formattedText,
+		}));
 	};
 
 	const handleSpecialNotesChange = (text) => {
@@ -538,11 +565,17 @@ const EditHomeForm = ({ state, dispatch }) => {
 						value={homeDetails.contact}
 						onChangeText={handleContactChange}
 						style={UserFormStyles.codeInput}
+						keyboardType="phone-pad"
 					/>
 					<View style={{ textAlign: "center", marginBottom: 20 }}>
-						<Text style={{ color: "grey", fontSize: 11 }}>
+						<Text style={{ color: "grey", fontSize: 11, marginBottom: 5 }}>
 							The cleaner will contact this number if they cannot get into the
 							home for any reason
+						</Text>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							If after contacting this number and the cleaner still cannot get
+							into the home to clean the person who booked the appointment will
+							be charged 50$.
 						</Text>
 					</View>
 					<Text style={UserFormStyles.smallTitle}>

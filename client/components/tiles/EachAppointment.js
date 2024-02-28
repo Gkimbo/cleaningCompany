@@ -21,6 +21,7 @@ const EachAppointment = ({
 	setChangesSubmitted,
 	changeNotification,
 	setChangeNotification,
+	contact,
 }) => {
 	const [code, setCode] = useState("");
 	const [key, setKeyLocation] = useState("");
@@ -119,6 +120,14 @@ const EachAppointment = ({
 		>
 			<Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
 			<Text style={homePageStyles.appointmentPrice}>$ {price}</Text>
+			<Text style={homePageStyles.appointmentContact}>
+				Point of contact: {contact}
+			</Text>
+			<View style={{ textAlign: "center", marginBottom: 20 }}>
+				<Text style={{ color: "grey", fontSize: 11 }}>
+					This can be changed by editing your home.
+				</Text>
+			</View>
 			<Text style={UserFormStyles.smallTitle}>Cleaner is bringing sheets:</Text>
 			{isDisabled ? (
 				<View

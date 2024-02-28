@@ -58,6 +58,7 @@ const AppointmentList = ({ state, dispatch }) => {
 	};
 
 	const usersHomes = state.homes.map((home) => {
+		console.log(home);
 		return (
 			<View key={home.id}>
 				<HomeAppointmentTile
@@ -67,6 +68,7 @@ const AppointmentList = ({ state, dispatch }) => {
 					city={home.city}
 					state={home.state}
 					zipcode={home.zipcode}
+					contact={home.contact}
 					allAppointments={allAppointments}
 					setChangesSubmitted={setChangesSubmitted}
 				/>

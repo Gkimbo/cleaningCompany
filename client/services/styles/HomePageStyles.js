@@ -223,10 +223,15 @@ const homePageStyles = StyleSheet.create({
 		fontWeight: "bold",
 		marginBottom: 4,
 	},
+	appointmentContact: {
+		fontSize: width > 800 ? 18 : width > 600 ? 16 : 12,
+		fontWeight: "bold",
+		marginBottom: 4,
+	},
 	appointmentPrice: {
 		fontSize: width > 800 ? 20 : width > 600 ? 18 : 14,
 		color: "#555",
-		marginBottom: 15,
+		marginBottom: 4,
 	},
 	billContainer: {
 		backgroundColor: "#f9f9f9",
