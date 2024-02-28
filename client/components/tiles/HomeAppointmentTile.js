@@ -12,6 +12,7 @@ const HomeAppointmentTile = ({
 	city,
 	state,
 	zipcode,
+	contact,
 	allAppointments,
 	setChangesSubmitted,
 }) => {
@@ -131,6 +132,7 @@ const HomeAppointmentTile = ({
 	const allAppointmentsFiltered = filteredAppointments.map(
 		(appointment, index) => {
 			const isDisabled = isWithinOneWeek(appointment.date);
+
 			return (
 				<EachAppointment
 					key={appointment.id ? appointment.id : appointment.date}
@@ -150,6 +152,7 @@ const HomeAppointmentTile = ({
 					setChangesSubmitted={setChangesSubmitted}
 					changeNotification={changeNotification}
 					setChangeNotification={setChangeNotification}
+					contact={contact}
 				/>
 			);
 		}

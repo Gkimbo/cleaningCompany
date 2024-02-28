@@ -666,9 +666,14 @@ const UserHomeInfoForm = () => {
 						keyboardType="phone-pad"
 					/>
 					<View style={{ textAlign: "center", marginBottom: 20 }}>
-						<Text style={{ color: "grey", fontSize: 11 }}>
+						<Text style={{ color: "grey", fontSize: 11, marginBottom: 5 }}>
 							The cleaner will contact this number if they cannot get into the
 							home for any reason
+						</Text>
+						<Text style={{ color: "grey", fontSize: 11 }}>
+							If after contacting this number and the cleaner still cannot get
+							into the home to clean the person who booked the appointment will
+							be charged 50$.
 						</Text>
 					</View>
 					<Text style={UserFormStyles.smallTitle}>
