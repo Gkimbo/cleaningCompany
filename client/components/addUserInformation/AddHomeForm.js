@@ -53,24 +53,39 @@ const UserHomeInfoForm = () => {
 	};
 
 	const handleContactChange = (text) => {
-		const cleanedText = text.replace(/-/g, "");
-		// Check if the cleaned text is a valid phone number
-		if (isNaN(cleanedText) || cleanedText.length > 10) {
-			setError("Invalid phone number");
-		} else {
-			const formattedText = cleanedText.replace(
-				/(\d{3})(\d{3})(\d{4})/,
-				"$1-$2-$3"
-			);
-			setError("");
+		// If text is empty, set contact to an empty string
+		if (!text.trim()) {
 			setUserHomeInfoForm((prevState) => ({
 				...prevState,
 				home: {
 					...prevState.home,
-					contact: formattedText,
+					contact: "",
 				},
 			}));
+			setError("");
+			return;
 		}
+		const cleanedText = text.replace(/-/g, "");
+
+		// Regular expression to match only numbers
+		const numbersRegex = /^\d+$/;
+		if (!numbersRegex.test(cleanedText)) {
+			setError("That's not a valid Phone Number");
+			return;
+		}
+
+		const formattedText = cleanedText.replace(
+			/(\d{3})(\d{3})(\d{4})/,
+			"$1-$2-$3"
+		);
+		setError("");
+		setUserHomeInfoForm((prevState) => ({
+			...prevState,
+			home: {
+				...prevState.home,
+				contact: formattedText,
+			},
+		}));
 	};
 
 	const handleAddressChange = (text) => {
@@ -632,6 +647,7 @@ const UserHomeInfoForm = () => {
 						value={userHomeInfo.home.contact}
 						onChangeText={handleContactChange}
 						style={UserFormStyles.codeInput}
+						keyboardType="phone-pad"
 					/>
 					<View style={{ textAlign: "center", marginBottom: 20 }}>
 						<Text style={{ color: "grey", fontSize: 11 }}>
