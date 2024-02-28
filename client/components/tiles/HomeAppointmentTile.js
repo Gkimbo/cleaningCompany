@@ -132,7 +132,7 @@ const HomeAppointmentTile = ({
 	const allAppointmentsFiltered = filteredAppointments.map(
 		(appointment, index) => {
 			const isDisabled = isWithinOneWeek(appointment.date);
-			console.log(appointment);
+
 			return (
 				<EachAppointment
 					key={appointment.id ? appointment.id : appointment.date}
