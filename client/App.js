@@ -41,6 +41,9 @@ export default function App() {
 			if (user.user.username === "manager1") {
 				dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
 			}
+			if (user.user.type === "cleaner") {
+				dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
+			}
 			setLastLoginTimestamp(user.user.lastLogin);
 		} catch (err) {
 			dispatch({ type: "CURRENT_USER", payload: null });

@@ -75,18 +75,20 @@ const TopBar = ({ dispatch, state }) => {
 								<View style={styles.sideBarView}>
 									<View style={styles.modalView}>
 										<Text style={styles.modalHeader}>Menu</Text>
-										{!state.account ? (
-											<>
-												<ScheduleCleaningButton closeModal={closeModal} />
-												<View style={styles.buttonSeparator} />
-												<EditHomeButton closeModal={closeModal} />
-												<View style={styles.buttonSeparator} />
-											</>
-										) : (
+										{state.account === "manager1" ? (
 											<>
 												<ManageEmployees closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
 												<SeeAllAppointments closeModal={closeModal} />
+												<View style={styles.buttonSeparator} />
+											</>
+										) : state.account === "cleaner" ? (
+											<>null</>
+										) : (
+											<>
+												<ScheduleCleaningButton closeModal={closeModal} />
+												<View style={styles.buttonSeparator} />
+												<EditHomeButton closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
 											</>
 										)}
