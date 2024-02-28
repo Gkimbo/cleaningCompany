@@ -65,7 +65,7 @@ const UserHomeInfoForm = () => {
 			setError("");
 			return;
 		}
-		const cleanedText = text.replace(/-/g, "");
+		const cleanedText = text.replace(/\D/g, "");
 
 		// Regular expression to match only numbers
 		const numbersRegex = /^\d+$/;
@@ -74,10 +74,26 @@ const UserHomeInfoForm = () => {
 			return;
 		}
 
-		const formattedText = cleanedText.replace(
+		let formattedText = cleanedText.replace(
 			/(\d{3})(\d{3})(\d{4})/,
 			"$1-$2-$3"
 		);
+
+		const longer = cleanedText.length > 10;
+		if (longer) {
+			if (cleanedText.length === 11) {
+				formattedText = cleanedText.replace(
+					/(\d{1})(\d{3})(\d{3})(\d{4})/,
+					"+$1-$2-$3-$4"
+				);
+			} else {
+				formattedText = cleanedText.replace(
+					/(\d{2})(\d{3})(\d{4})(\d{6})/,
+					"+$1-$2-$3-$4"
+				);
+			}
+		}
+
 		setError("");
 		setUserHomeInfoForm((prevState) => ({
 			...prevState,
