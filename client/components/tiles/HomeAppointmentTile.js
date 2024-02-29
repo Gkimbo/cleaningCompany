@@ -153,6 +153,8 @@ const HomeAppointmentTile = ({
 					changeNotification={changeNotification}
 					setChangeNotification={setChangeNotification}
 					contact={contact}
+					paid={appointment.paid}
+					completed={appointment.completed}
 				/>
 			);
 		}

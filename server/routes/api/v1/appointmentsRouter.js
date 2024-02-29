@@ -73,6 +73,7 @@ appointmentRouter.post("/", async (req, res) => {
 					bringSheets: date.bringSheets,
 					keyPadCode,
 					keyLocation,
+					completed: false,
 				});
 
 				return newAppointment;

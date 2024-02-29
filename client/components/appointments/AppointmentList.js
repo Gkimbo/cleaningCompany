@@ -58,7 +58,6 @@ const AppointmentList = ({ state, dispatch }) => {
 	};
 
 	const usersHomes = state.homes.map((home) => {
-		console.log(home);
 		return (
 			<View key={home.id}>
 				<HomeAppointmentTile

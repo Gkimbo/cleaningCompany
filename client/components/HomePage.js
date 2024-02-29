@@ -75,12 +75,6 @@ const HomePage = ({ state, dispatch }) => {
 					marginTop: 20,
 				}}
 			>
-				{/* <Animated.ScrollView ref={scrollRef} scrollEventThrottle={16}>
-					<Animated.Image
-						source={image3}
-						style={[homePageStyles.parallaxImage, imageAnimatedStyles]}
-					/>
-				</Animated.ScrollView> */}
 				<Text style={homePageStyles.title}>Welcome to Cleaning Services!</Text>
 				<View style={homePageStyles.homePageParagraphSurround}>
 					<View style={homePageStyles.homePageParagraphText}>
