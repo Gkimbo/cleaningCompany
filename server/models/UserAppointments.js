@@ -15,6 +15,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: false,
 		},
+		appointmentCleanerId: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+		},
 		date: {
 			type: DataTypes.STRING,
 			allowNull: false,
@@ -58,6 +62,12 @@ module.exports = (sequelize, DataTypes) => {
 		UserAppointments.belongsTo(models.User, {
 			foreignKey: "homeId",
 			as: "home",
+		});
+		UserAppointments.belongsToMany(models.UserCleanerAppointments, {
+			through: "UserCleanerAppointments",
+			foreignKey: "appointmentCleanerId",
+			otherKey: "cleanerAppointmentId",
+			as: "cleanerAppointments",
 		});
 	};
 
