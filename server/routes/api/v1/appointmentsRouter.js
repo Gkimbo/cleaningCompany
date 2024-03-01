@@ -5,6 +5,7 @@ const {
 	UserAppointments,
 	UserHomes,
 	UserBills,
+	UserCleanerAppointments,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -75,7 +76,31 @@ appointmentRouter.post("/", async (req, res) => {
 					keyLocation,
 					completed: false,
 				});
+				//Change this to find all employees who want to work that day, if the employee doesn't already have 2 cleanings that day then assign them, otherwise move on to the next
+				const day = new Date(date.date);
+				const daysOfWeek = [
+					"Monday",
+					"Tuesday",
+					"Wednesday",
+					"Thursday",
+					"Friday",
+					"Saturday",
+					"Sunday",
+				];
+				const dayOfWeekIndex = day.getDay();
+				const dayOfWeek = daysOfWeek[dayOfWeekIndex];
+				console.log(dayOfWeek);
 
+				const appointmentId = newAppointment.dataValues.id;
+				const cleaners = await User.findAll({
+					where: { type: "cleaner" },
+				});
+
+				// const employeeId = cleanerAssigned.dataValues.id;
+				const newConnection = await UserCleanerAppointments.create({
+					appointmentId,
+					employeeId: 2,
+				});
 				return newAppointment;
 			})
 		);
@@ -112,6 +137,9 @@ appointmentRouter.delete("/:id", async (req, res) => {
 			cancellationFee: oldFee + fee,
 			appointmentDue: oldAppt - appointmentTotal,
 			totalDue: total + fee - appointmentTotal,
+		});
+		const connectionsToDelete = await UserCleanerAppointments.destroy({
+			where: { appointmentId: id },
 		});
 
 		const deletedAppointmentInfo = await UserAppointments.destroy({

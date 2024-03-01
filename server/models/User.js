@@ -24,10 +24,6 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
-		cleanerAppointmentId: {
-			type: DataTypes.INTEGER,
-			allowNull: true,
-		},
 	});
 
 	// Hash the password before saving the user
@@ -64,10 +60,8 @@ module.exports = (sequelize, DataTypes) => {
 			foreignKey: "userId",
 			as: "bills",
 		});
-		User.belongsToMany(models.UserCleanerAppointments, {
-			through: "UserCleanerAppointments",
-			foreignKey: "cleanerAppointmentId",
-			otherKey: "appointmentCleanerId",
+		User.hasMany(models.UserCleanerAppointments, {
+			foreignKey: "employeeId",
 			as: "cleanerAppointments",
 		});
 	};
