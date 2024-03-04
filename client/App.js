@@ -20,6 +20,7 @@ import Bill from "./components/payments/Bill";
 import AddEmployee from "./components/admin/AddEmployee";
 import EditEmployeeForm from "./components/admin/forms/EditEmployeeForm";
 import AllAppointments from "./components/admin/AllAppointments";
+import EmployeeAssignmentsList from "./components/employeeAssignments/lists/EmployeeAssignmentsList";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +108,12 @@ export default function App() {
 						<Route
 							path="/bill"
 							element={<Bill state={state} dispatch={dispatch} />}
+						/>
+						<Route
+							path="/employee-assignments"
+							element={
+								<EmployeeAssignmentsList state={state} dispatch={dispatch} />
+							}
 						/>
 						<Route
 							path="/employees"

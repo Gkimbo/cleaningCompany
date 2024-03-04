@@ -3,14 +3,23 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
 	up: async (queryInterface, Sequelize) => {
-		await queryInterface.createTable("UserAppointments", {
+		await queryInterface.createTable("UserCleanerAppointments", {
 			id: {
 				type: Sequelize.INTEGER,
 				allowNull: false,
 				autoIncrement: true,
 				primaryKey: true,
 			},
-			userId: {
+			appointmentId: {
+				type: Sequelize.INTEGER,
+				allowNull: false,
+				references: {
+					model: "UserAppointments",
+					key: "id",
+					onDelete: "CASCADE",
+				},
+			},
+			employeeId: {
 				type: Sequelize.INTEGER,
 				allowNull: false,
 				references: {
@@ -18,47 +27,6 @@ module.exports = {
 					key: "id",
 					onDelete: "CASCADE",
 				},
-			},
-			homeId: {
-				type: Sequelize.INTEGER,
-				allowNull: false,
-				references: {
-					model: "UserHomes",
-					key: "id",
-				},
-			},
-
-			date: {
-				type: Sequelize.STRING,
-				allowNull: false,
-			},
-			price: {
-				type: Sequelize.STRING,
-				allowNull: false,
-			},
-			paid: {
-				type: Sequelize.BOOLEAN,
-				allowNull: false,
-			},
-			bringTowels: {
-				type: Sequelize.STRING,
-				allowNull: false,
-			},
-			bringSheets: {
-				type: Sequelize.STRING,
-				allowNull: false,
-			},
-			keyPadCode: {
-				type: Sequelize.STRING,
-				allowNull: true,
-			},
-			keyLocation: {
-				type: Sequelize.STRING,
-				allowNull: true,
-			},
-			completed: {
-				type: Sequelize.BOOLEAN,
-				allowNull: false,
 			},
 			createdAt: {
 				type: Sequelize.DATE,
@@ -74,6 +42,6 @@ module.exports = {
 	},
 
 	down: async (queryInterface, Sequelize) => {
-		await queryInterface.dropTable("UserAppointments");
+		await queryInterface.dropTable("UserCleanerAppointments");
 	},
 };
