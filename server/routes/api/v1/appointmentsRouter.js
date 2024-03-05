@@ -76,6 +76,7 @@ appointmentRouter.post("/", async (req, res) => {
 					keyLocation,
 					completed: false,
 				});
+				const appointmentId = newAppointment.dataValues.id;
 				//Change this to find all employees who want to work that day, if the employee doesn't already have 2 cleanings that day then assign them, otherwise move on to the next
 				const day = new Date(date.date);
 				const daysOfWeek = [
@@ -91,7 +92,6 @@ appointmentRouter.post("/", async (req, res) => {
 				const dayOfWeek = daysOfWeek[dayOfWeekIndex];
 				console.log(dayOfWeek);
 
-				const appointmentId = newAppointment.dataValues.id;
 				const cleaners = await User.findAll({
 					where: { type: "cleaner" },
 				});
