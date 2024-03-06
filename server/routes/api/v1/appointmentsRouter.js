@@ -90,18 +90,34 @@ appointmentRouter.post("/", async (req, res) => {
 				];
 				const dayOfWeekIndex = day.getDay();
 				const dayOfWeek = daysOfWeek[dayOfWeekIndex];
-				console.log(dayOfWeek);
 
 				const cleaners = await User.findAll({
 					where: { type: "cleaner" },
 				});
 
+				let selectedCleaner = null;
+
+				for (const cleaner of cleaners) {
+					if (cleaner.dataValues.daysWorking) {
+						if (cleaner.dataValues.daysWorking.includes(dayOfWeek)) {
+							selectedCleaner = cleaner;
+							break;
+						}
+					}
+				}
+
+				if (selectedCleaner) {
+					console.log("Selected cleaner:", selectedCleaner.dataValues.id);
+					const newConnection = await UserCleanerAppointments.create({
+						appointmentId,
+						employeeId: selectedCleaner.dataValues.id,
+					});
+					return newAppointment;
+				} else {
+					console.log("No cleaner available for", dayOfWeek);
+				}
+
 				// const employeeId = cleanerAssigned.dataValues.id;
-				const newConnection = await UserCleanerAppointments.create({
-					appointmentId,
-					employeeId: 2,
-				});
-				return newAppointment;
 			})
 		);
 
