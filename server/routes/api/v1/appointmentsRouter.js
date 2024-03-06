@@ -76,6 +76,7 @@ appointmentRouter.post("/", async (req, res) => {
 					keyLocation,
 					completed: false,
 				});
+				const appointmentId = newAppointment.dataValues.id;
 				//Change this to find all employees who want to work that day, if the employee doesn't already have 2 cleanings that day then assign them, otherwise move on to the next
 				const day = new Date(date.date);
 				const daysOfWeek = [
@@ -89,19 +90,57 @@ appointmentRouter.post("/", async (req, res) => {
 				];
 				const dayOfWeekIndex = day.getDay();
 				const dayOfWeek = daysOfWeek[dayOfWeekIndex];
-				console.log(dayOfWeek);
 
-				const appointmentId = newAppointment.dataValues.id;
 				const cleaners = await User.findAll({
 					where: { type: "cleaner" },
 				});
 
-				// const employeeId = cleanerAssigned.dataValues.id;
-				const newConnection = await UserCleanerAppointments.create({
-					appointmentId,
-					employeeId: 2,
-				});
-				return newAppointment;
+				let selectedCleaner = null;
+
+				for (const cleaner of cleaners) {
+					if (cleaner.dataValues.daysWorking) {
+						if (cleaner.dataValues.daysWorking.includes(dayOfWeek)) {
+							let employee = await User.findByPk(cleaner.dataValues.id, {
+								include: [
+									{
+										model: UserCleanerAppointments,
+										as: "cleanerAppointments",
+									},
+								],
+							});
+							const appointmentIds =
+								employee.dataValues.cleanerAppointments.map(
+									(appointment) => appointment.appointmentId
+								);
+							const appointments = await UserAppointments.findAll({
+								where: {
+									id: appointmentIds,
+								},
+							});
+							const dateCounts = {};
+							appointments.forEach((appointment) => {
+								const date = appointment.dataValues.date;
+								dateCounts[date] = (dateCounts[date] || 0) + 1;
+							});
+
+							if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
+								selectedCleaner = cleaner;
+								break;
+							}
+						}
+					}
+				}
+
+				if (selectedCleaner) {
+					console.log("Selected cleaner:", selectedCleaner.dataValues.id);
+					const newConnection = await UserCleanerAppointments.create({
+						appointmentId,
+						employeeId: selectedCleaner.dataValues.id,
+					});
+					return newAppointment;
+				} else {
+					console.log("No cleaner available for", dayOfWeek);
+				}
 			})
 		);
 

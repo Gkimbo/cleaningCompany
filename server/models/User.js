@@ -24,6 +24,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
+		daysWorking: {
+			type: DataTypes.ARRAY(DataTypes.STRING),
+			allowNull: true,
+		},
 	});
 
 	// Hash the password before saving the user
