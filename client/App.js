@@ -21,11 +21,13 @@ import AddEmployee from "./components/admin/AddEmployee";
 import EditEmployeeForm from "./components/admin/forms/EditEmployeeForm";
 import AllAppointments from "./components/admin/AllAppointments";
 import EmployeeAssignmentsList from "./components/employeeAssignments/lists/EmployeeAssignmentsList";
+import EmployeeShiftForm from "./components/admin/forms/employee/EmployeeShiftForm";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
 	const [employeeList, setEmployeeList] = useState([]);
+	const [employeeDays, setEmployeeDays] = useState(null);
 	const [state, dispatch] = useReducer(reducer, {
 		account: null,
 		currentUser: { token: null },
@@ -44,6 +46,9 @@ export default function App() {
 			}
 			if (user.user.type === "cleaner") {
 				dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
+			}
+			if (user.user.daysWorking !== null) {
+				setEmployeeDays(user.user.daysWorking);
 			}
 			setLastLoginTimestamp(user.user.lastLogin);
 		} catch (err) {
@@ -113,6 +118,15 @@ export default function App() {
 							path="/employee-assignments"
 							element={
 								<EmployeeAssignmentsList state={state} dispatch={dispatch} />
+							}
+						/>
+						<Route
+							path="/employee-shifts"
+							element={
+								<EmployeeShiftForm
+									employeeDays={employeeDays}
+									setEmployeeDays={setEmployeeDays}
+								/>
 							}
 						/>
 						<Route

@@ -20,6 +20,7 @@ import BillButton from "./BillButton";
 import ManageEmployees from "./ManageEmployeeButton";
 import SeeAllAppointments from "./SeeAllAppointmentsButton";
 import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
+import EmployeeShiftButton from "./EmployeeShiftButton";
 
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
@@ -86,6 +87,8 @@ const TopBar = ({ dispatch, state }) => {
 										) : state.account === "cleaner" ? (
 											<>
 												<EmployeeAssignmentsButton closeModal={closeModal} />
+												<View style={styles.buttonSeparator} />
+												<EmployeeShiftButton closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
 											</>
 										) : (

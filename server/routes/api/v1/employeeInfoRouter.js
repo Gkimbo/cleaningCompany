@@ -50,4 +50,23 @@ employeeInfoRouter.get("/", async (req, res) => {
 	}
 });
 
+employeeInfoRouter.post("/shifts", async (req, res) => {
+	const { token } = req.body.user;
+	const daysArray = req.body.days;
+	try {
+		const decodedToken = jwt.verify(token, secretKey);
+		const userId = decodedToken.userId;
+		const user = await User.findOne({
+			where: { id: userId },
+		});
+		await user.update({
+			daysWorking: daysArray,
+		});
+		return res.status(201).json({ user });
+	} catch (error) {
+		console.log(error);
+		return res.status(401).json({ error: "Invalid or expired token" });
+	}
+});
+
 module.exports = employeeInfoRouter;

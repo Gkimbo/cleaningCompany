@@ -3,7 +3,15 @@ const AppointmentSerializer = require("./AppointmentSerializer");
 const BillSerializer = require("./BillSerializer");
 class UserSerializer {
 	static serializeOne(user) {
-		const allowedAttributes = ["id", "email", "username", "lastLogin", "type"];
+		const allowedAttributes = [
+			"id",
+			"email",
+			"username",
+			"lastLogin",
+			"type",
+			"daysWorking",
+		];
+
 		const serializedUser = {};
 		let homes = [];
 
