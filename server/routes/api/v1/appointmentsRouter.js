@@ -100,8 +100,33 @@ appointmentRouter.post("/", async (req, res) => {
 				for (const cleaner of cleaners) {
 					if (cleaner.dataValues.daysWorking) {
 						if (cleaner.dataValues.daysWorking.includes(dayOfWeek)) {
-							selectedCleaner = cleaner;
-							break;
+							let employee = await User.findByPk(cleaner.dataValues.id, {
+								include: [
+									{
+										model: UserCleanerAppointments,
+										as: "cleanerAppointments",
+									},
+								],
+							});
+							const appointmentIds =
+								employee.dataValues.cleanerAppointments.map(
+									(appointment) => appointment.appointmentId
+								);
+							const appointments = await UserAppointments.findAll({
+								where: {
+									id: appointmentIds,
+								},
+							});
+							const dateCounts = {};
+							appointments.forEach((appointment) => {
+								const date = appointment.dataValues.date;
+								dateCounts[date] = (dateCounts[date] || 0) + 1;
+							});
+
+							if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
+								selectedCleaner = cleaner;
+								break;
+							}
 						}
 					}
 				}
@@ -116,8 +141,6 @@ appointmentRouter.post("/", async (req, res) => {
 				} else {
 					console.log("No cleaner available for", dayOfWeek);
 				}
-
-				// const employeeId = cleanerAssigned.dataValues.id;
 			})
 		);
 
