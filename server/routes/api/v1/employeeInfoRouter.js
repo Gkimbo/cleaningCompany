@@ -50,6 +50,22 @@ employeeInfoRouter.get("/", async (req, res) => {
 	}
 });
 
+employeeInfoRouter.get("/home/:id", async (req, res) => {
+	const { id } = req.params;
+	try {
+		let home = await UserHomes.findOne({
+			where: {
+				id,
+			},
+		});
+
+		return res.status(200).json({ home });
+	} catch (error) {
+		console.log(error);
+		return res.status(401).json({ error: "Invalid or expired token" });
+	}
+});
+
 employeeInfoRouter.post("/shifts", async (req, res) => {
 	const { token } = req.body.user;
 	const daysArray = req.body.days;
