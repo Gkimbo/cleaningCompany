@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, Text, View, LayoutAnimation } from "react-native";
 import { useNavigate } from "react-router-native";
-import homePageStyles from "../../services/styles/HomePageStyles";
-import FetchData from "../../services/fetchRequests/fetchData";
+import homePageStyles from "../../../services/styles/HomePageStyles";
+import FetchData from "../../../services/fetchRequests/fetchData";
 
 const EmployeeAssignmentTile = ({
 	id,
@@ -32,6 +32,7 @@ const EmployeeAssignmentTile = ({
 		towelsProvided: "",
 		trashLocation: "",
 		zipcode: "",
+		cleanersNeeded: "",
 	});
 
 	const formatDate = (dateString) => {
@@ -83,6 +84,14 @@ const EmployeeAssignmentTile = ({
 						<Text style={{ ...homePageStyles.appointmentPrice, marginTop: 5 }}>
 							Towels are needed: {bringTowels}
 						</Text>
+						{home.cleanersNeeded > 1 && (
+							<Text
+								style={{ ...homePageStyles.appointmentPrice, marginTop: 5 }}
+							>
+								You will be working with {home.cleanersNeeded - 1} other person
+								to clean this home.
+							</Text>
+						)}
 					</>
 				)}
 			</Pressable>

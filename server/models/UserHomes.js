@@ -75,6 +75,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
+		cleanersNeeded: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

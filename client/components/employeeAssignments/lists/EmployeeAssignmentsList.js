@@ -5,7 +5,7 @@ import homePageStyles from "../../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../../services/styles/TopBarStyles";
 import FetchData from "../../../services/fetchRequests/fetchData";
-import EmployeeAssignmentTile from "../../tiles/EmployeeAssignmentTile";
+import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 
 const EmployeeAssignmentsList = ({ state, dispatch }) => {
 	const [allAppointments, setAllAppointments] = useState([]);
@@ -20,7 +20,6 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
 		if (state.currentUser.token) {
 			FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
 				(response) => {
-					console.log(response.employee.cleanerAppointments);
 					dispatch({
 						type: "USER_APPOINTMENTS",
 						payload: response.employee.cleanerAppointments,

@@ -38,7 +38,14 @@ class UserSerializer {
 	}
 
 	static login(user) {
-		const allowedAttributes = ["id", "email", "username"];
+		const allowedAttributes = [
+			"id",
+			"email",
+			"username",
+			"lastLogin",
+			"type",
+			"daysWorking",
+		];
 		const serializedUser = {};
 
 		for (const attribute of allowedAttributes) {
