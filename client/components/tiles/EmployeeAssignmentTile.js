@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, LayoutAnimation } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import FetchData from "../../services/fetchRequests/fetchData";
@@ -15,6 +15,7 @@ const EmployeeAssignmentTile = ({
 	keyLocation,
 }) => {
 	const navigate = useNavigate();
+	const [expandWindow, setExpandWindow] = useState(false);
 	const [home, setHome] = useState({
 		address: "",
 		city: "",
@@ -32,7 +33,7 @@ const EmployeeAssignmentTile = ({
 		trashLocation: "",
 		zipcode: "",
 	});
-	console.log(home);
+
 	const formatDate = (dateString) => {
 		const options = {
 			weekday: "long",
@@ -43,6 +44,15 @@ const EmployeeAssignmentTile = ({
 		return new Date(dateString).toLocaleDateString(undefined, options);
 	};
 
+	const expandDetails = () => {
+		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+		setExpandWindow(true);
+	};
+	const contractDetails = () => {
+		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+		setExpandWindow(false);
+	};
+
 	useEffect(() => {
 		FetchData.getHome(homeId).then((response) => {
 			setHome(response.home);
@@ -51,13 +61,31 @@ const EmployeeAssignmentTile = ({
 
 	return (
 		<View style={[homePageStyles.homeTileContainer]}>
-			<Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
-			<Text style={homePageStyles.appointmentPrice}>
-				{home.address} - {home.city}
-			</Text>
-			<Text style={homePageStyles.appointmentPrice}>
-				{home.state}, {home.zipcode}
-			</Text>
+			<Pressable onPress={expandWindow ? contractDetails : expandDetails}>
+				<Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
+				<Text style={homePageStyles.appointmentPrice}>
+					{home.address} - {home.city}
+				</Text>
+				<Text style={homePageStyles.appointmentPrice}>
+					{home.state}, {home.zipcode}
+				</Text>
+				{expandWindow && (
+					<>
+						<Text style={{ ...homePageStyles.appointmentPrice, marginTop: 5 }}>
+							Number of Beds: {home.numBeds}
+						</Text>
+						<Text style={homePageStyles.appointmentPrice}>
+							Number of Bathrooms: {home.numBaths}
+						</Text>
+						<Text style={{ ...homePageStyles.appointmentPrice, marginTop: 5 }}>
+							Sheets are needed: {bringSheets}
+						</Text>
+						<Text style={{ ...homePageStyles.appointmentPrice, marginTop: 5 }}>
+							Towels are needed: {bringTowels}
+						</Text>
+					</>
+				)}
+			</Pressable>
 		</View>
 	);
 };
