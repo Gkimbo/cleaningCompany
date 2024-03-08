@@ -74,6 +74,29 @@ userInfoRouter.post("/home", async (req, res) => {
 		if (!checkZipCode) {
 			return res.status(400).json("Cannot find zipcode");
 		}
+
+		const getRoomType = (numBeds, numBaths) => {
+			if (numBeds <= 2 && numBaths <= 1) {
+				return 1;
+			} else if (numBeds <= 2 && numBaths <= 4) {
+				return 2;
+			} else if (numBeds <= 4 && numBaths <= 2) {
+				return 2;
+			} else if (numBeds <= 3 && numBaths <= 3) {
+				return 2;
+			} else if (numBeds <= 6 && numBaths <= 3) {
+				return 3;
+			} else if (numBeds <= 8 && numBaths <= 4) {
+				return 4;
+			} else if (numBeds <= 10 && numBaths <= 5) {
+				return 5;
+			} else if (numBeds <= 12 && numBaths <= 6) {
+				return 6;
+			}
+		};
+
+		let cleanersNeeded = getRoomType(numBeds, numBaths);
+
 		const userInfo = await UserInfo.addHomeToDB({
 			nickName,
 			userId,
@@ -92,6 +115,7 @@ userInfoRouter.post("/home", async (req, res) => {
 			trashLocation,
 			contact,
 			specialNotes,
+			cleanersNeeded,
 		});
 
 		return res.status(201).json({ user });
@@ -127,6 +151,27 @@ userInfoRouter.patch("/home", async (req, res) => {
 		if (!checkZipCode) {
 			return res.status(400).json({ error: "Cannot find zipcode" });
 		}
+		const getRoomType = (numBeds, numBaths) => {
+			if (numBeds <= 2 && numBaths <= 1) {
+				return 1;
+			} else if (numBeds <= 2 && numBaths <= 4) {
+				return 2;
+			} else if (numBeds <= 4 && numBaths <= 2) {
+				return 2;
+			} else if (numBeds <= 3 && numBaths <= 3) {
+				return 2;
+			} else if (numBeds <= 6 && numBaths <= 3) {
+				return 3;
+			} else if (numBeds <= 8 && numBaths <= 4) {
+				return 4;
+			} else if (numBeds <= 10 && numBaths <= 5) {
+				return 5;
+			} else if (numBeds <= 12 && numBaths <= 6) {
+				return 6;
+			}
+		};
+
+		let cleanersNeeded = getRoomType(numBeds, numBaths);
 
 		const userInfo = await UserInfo.editHomeInDB({
 			id,
@@ -146,6 +191,7 @@ userInfoRouter.patch("/home", async (req, res) => {
 			trashLocation,
 			contact,
 			specialNotes,
+			cleanersNeeded,
 		});
 
 		return res.status(200).json({ user: userInfo });

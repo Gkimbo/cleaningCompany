@@ -19,6 +19,21 @@ class FetchData {
 		}
 	}
 
+	static async getHome(id) {
+		try {
+			const response = await fetch(
+				baseURL + `/api/v1/employee-info/home/${id}`
+			);
+			if (!response.ok) {
+				throw new Error("No data received");
+			}
+			const responseData = await response.json();
+			return responseData;
+		} catch (error) {
+			return error;
+		}
+	}
+
 	static async login(loginData) {
 		try {
 			const response = await fetch(baseURL + "/api/v1/user-sessions/login", {

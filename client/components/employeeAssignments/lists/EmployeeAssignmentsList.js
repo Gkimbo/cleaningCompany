@@ -2,13 +2,12 @@ import React, { useState, useEffect } from "react";
 import { Pressable, View, Text, ScrollView, Dimensions } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../../services/styles/HomePageStyles";
-// import HomeAppointmentTile from "../tiles/HomeAppointmentTile";
 import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../../services/styles/TopBarStyles";
 import FetchData from "../../../services/fetchRequests/fetchData";
+import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 
 const EmployeeAssignmentsList = ({ state, dispatch }) => {
-	const [allHomes, setAllHomes] = useState([]);
 	const [allAppointments, setAllAppointments] = useState([]);
 	const [changesSubmitted, setChangesSubmitted] = useState(false);
 	const [redirect, setRedirect] = useState(false);
@@ -21,12 +20,11 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
 		if (state.currentUser.token) {
 			FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
 				(response) => {
-					console.log(response);
 					dispatch({
 						type: "USER_APPOINTMENTS",
-						payload: response.user.assignedAppointments,
+						payload: response.employee.cleanerAppointments,
 					});
-					setAllAppointments(response.user.assignedAppointments);
+					setAllAppointments(response.employee.cleanerAppointments);
 				}
 			);
 		}
@@ -49,23 +47,26 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
 		setBackRedirect(true);
 	};
 
-	// const usersHomes = state.homes.map((home) => {
-	// 	return (
-	// <View key={home.id}>
-	// 	<HomeAppointmentTile
-	// 		id={home.id}
-	// 		nickName={home.nickName}
-	// 		address={home.address}
-	// 		city={home.city}
-	// 		state={home.state}
-	// 		zipcode={home.zipcode}
-	// 		contact={home.contact}
-	// 		allAppointments={allAppointments}
-	// 		setChangesSubmitted={setChangesSubmitted}
-	// 	/>
-	// </View>
-	// 	);
-	// });
+	const sortedAppointments = allAppointments.sort((a, b) => {
+		return new Date(a.date) - new Date(b.date);
+	});
+
+	const assignedAppointments = sortedAppointments.map((appointment) => {
+		return (
+			<View key={appointment.id}>
+				<EmployeeAssignmentTile
+					id={appointment.id}
+					date={appointment.date}
+					homeId={appointment.homeId}
+					bringSheets={appointment.bringSheets}
+					bringTowels={appointment.bringTowels}
+					completed={appointment.completed}
+					keyPadCode={appointment.keyPadCode}
+					keyLocation={appointment.keyLocation}
+				/>
+			</View>
+		);
+	});
 
 	return (
 		<View
@@ -93,6 +94,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
 					</View>
 				</Pressable>
 			</View>
+			{assignedAppointments}
 		</View>
 	);
 };
