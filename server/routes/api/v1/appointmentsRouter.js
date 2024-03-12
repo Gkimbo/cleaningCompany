@@ -152,7 +152,7 @@ appointmentRouter.post("/", async (req, res) => {
 					);
 					return newAppointments;
 				} else {
-					console.log("No cleaner available for", dayOfWeek);
+					console.log("No cleaner available for", day);
 				}
 			})
 		);
