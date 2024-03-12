@@ -1,5 +1,3 @@
-//TO-DO: allow user to turn off and on towels and sheets from the booking page
-// Add 25$ fee for deleting appointment within a week and add to db
 
 import React, { useState, useEffect } from "react";
 import { View, Text, Button, Pressable, Modal } from "react-native";
@@ -8,6 +6,8 @@ import calenderStyles from "../../services/styles/CalenderSyles";
 import Icon from "react-native-vector-icons/FontAwesome";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
 import FetchData from "../../services/fetchRequests/fetchData";
+import { useNavigate } from "react-router-native";
+
 
 const CalendarComponent = ({
 	onDatesSelected,
@@ -24,6 +24,8 @@ const CalendarComponent = ({
 	const [currentMonth, setCurrentMonth] = useState(new Date());
 	const [dateToDelete, setDateToDelete] = useState(null);
 	const [error, setError] = useState(null);
+	const [redirectToBill, setRedirectToBill] = useState(false);
+	const navigate = useNavigate();
 
 	const calculatePrice = () => {
 		let price = 0;
@@ -107,6 +109,18 @@ const CalendarComponent = ({
 		);
 	};
 
+	const isDatePastAndNotPaid = (date) => {
+		let toggle = false;
+		appointments.forEach((appointment) => {
+			if (appointment.date === date.dateString) {
+				if (isDateDisabled(date) && !appointment.paid) {
+					toggle = true;
+				}
+			}
+		});
+		return toggle;
+	};
+
 	const priceOfBooking = (date) => {
 		let price;
 		appointments.forEach((day) => {
@@ -119,8 +133,7 @@ const CalendarComponent = ({
 
 	const handleRemoveBooking = (date) => {
 		const currentDate = new Date();
-		const [year, month, day] = date.dateString.split("-");
-		const selectedDate = new Date(year, month, day);
+		const selectedDate = new Date(date.dateString);
 
 		const isWithinWeek =
 			selectedDate.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000;
@@ -131,6 +144,10 @@ const CalendarComponent = ({
 		} else {
 			onAppointmentDelete(date, null);
 		}
+	};
+
+	const handleRedirectToBill = () => {
+		setRedirectToBill(true);
 	};
 
 	const handleConfirmation = (deleteAppointment) => {
@@ -144,7 +161,12 @@ const CalendarComponent = ({
 		FetchData.getEmployeesWorking().then((response) => {
 			console.log(response);
 		});
-	}, []);
+    		if (redirectToBill) {
+			navigate("/bill");
+			setRedirectToBill(false);
+		}
+	}, [redirectToBill]);
+
 
 	const renderDay = ({ date }) => {
 		const selectedStyle = {
@@ -170,6 +192,16 @@ const CalendarComponent = ({
 					: 1,
 		};
 
+		const pastDate = {
+			backgroundColor: confirmationModalVisible
+				? "red"
+				: isDateBooked(date)
+					? "red"
+					: "#3498db",
+			borderRadius: 50,
+			padding: 10,
+		};
+
 		const selectedPriceStyle = {
 			fontSize: 12,
 			color: "black",
@@ -182,7 +214,12 @@ const CalendarComponent = ({
 
 		return (
 			<>
-				{isDateDisabled(date) ? (
+				{isDatePastAndNotPaid(date) ? (
+					<Pressable style={pastDate} onPress={() => handleRedirectToBill()}>
+						<Text>{date.day}</Text>
+						<Text style={selectedPriceStyle}>${priceOfBooking(date)}</Text>
+					</Pressable>
+				) : isDateDisabled(date) ? (
 					<View style={dayStyle}>
 						<Text>{date.day}</Text>
 					</View>

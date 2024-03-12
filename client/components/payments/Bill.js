@@ -7,7 +7,7 @@ import UserFormStyles from "../../services/styles/UserInputFormStyle";
 const Bill = ({ state, dispatch }) => {
 	const [redirect, setRedirect] = useState(false);
 	let appointmentOverdue = 0 + state.bill.cancellationFee;
-	const [amountToPay, setAmountToPay] = useState(appointmentOverdue);
+	const [amountToPay, setAmountToPay] = useState(0);
 	const [error, setError] = useState(null);
 	const navigate = useNavigate();
 
@@ -39,7 +39,8 @@ const Bill = ({ state, dispatch }) => {
 			navigate("/");
 			setRedirect(false);
 		}
-	}, [redirect]);
+		setAmountToPay(appointmentOverdue);
+	}, [redirect, appointmentOverdue]);
 
 	const handlePress = () => {
 		setRedirect(true);
