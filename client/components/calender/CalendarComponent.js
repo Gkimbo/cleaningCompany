@@ -1,12 +1,13 @@
 //TO-DO: allow user to turn off and on towels and sheets from the booking page
 // Add 25$ fee for deleting appointment within a week and add to db
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, Button, Pressable, Modal } from "react-native";
 import { Calendar } from "react-native-calendars";
 import calenderStyles from "../../services/styles/CalenderSyles";
 import Icon from "react-native-vector-icons/FontAwesome";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
+import FetchData from "../../services/fetchRequests/fetchData";
 
 const CalendarComponent = ({
 	onDatesSelected,
@@ -138,6 +139,12 @@ const CalendarComponent = ({
 			onAppointmentDelete(dateToDelete, 25);
 		}
 	};
+
+	useEffect(() => {
+		FetchData.getEmployeesWorking().then((response) => {
+			console.log(response);
+		});
+	}, []);
 
 	const renderDay = ({ date }) => {
 		const selectedStyle = {
