@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { View, Text, Button, Pressable, Modal } from "react-native";
 import { Calendar } from "react-native-calendars";
@@ -7,7 +6,6 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
-
 
 const CalendarComponent = ({
 	onDatesSelected,
@@ -161,12 +159,12 @@ const CalendarComponent = ({
 		FetchData.getEmployeesWorking().then((response) => {
 			console.log(response);
 		});
-    		if (redirectToBill) {
+
+		if (redirectToBill) {
 			navigate("/bill");
 			setRedirectToBill(false);
 		}
 	}, [redirectToBill]);
-
 
 	const renderDay = ({ date }) => {
 		const selectedStyle = {
