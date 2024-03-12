@@ -95,9 +95,18 @@ appointmentRouter.post("/", async (req, res) => {
 					where: { type: "cleaner" },
 				});
 
-				let selectedCleaner = null;
+				const homeBeingScheduled = await UserHomes.findOne({
+					where: { id: homeId },
+				});
+				const numCleaners = homeBeingScheduled.dataValues.cleanersNeeded;
+
+				let selectedCleaners = [];
+				let cleanersAssigned = 0;
 
 				for (const cleaner of cleaners) {
+					if (cleanersAssigned >= numCleaners) {
+						break;
+					}
 					if (cleaner.dataValues.daysWorking) {
 						if (cleaner.dataValues.daysWorking.includes(dayOfWeek)) {
 							let employee = await User.findByPk(cleaner.dataValues.id, {
@@ -124,22 +133,26 @@ appointmentRouter.post("/", async (req, res) => {
 							});
 
 							if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
-								selectedCleaner = cleaner;
-								break;
+								selectedCleaners.push(cleaner);
+								cleanersAssigned++;
 							}
 						}
 					}
 				}
 
-				if (selectedCleaner) {
-					console.log("Selected cleaner:", selectedCleaner.dataValues.id);
-					const newConnection = await UserCleanerAppointments.create({
-						appointmentId,
-						employeeId: selectedCleaner.dataValues.id,
-					});
-					return newAppointment;
+				if (selectedCleaners.length > 0) {
+					const newAppointments = await Promise.all(
+						selectedCleaners.map(async (cleaner) => {
+							const newConnection = await UserCleanerAppointments.create({
+								appointmentId,
+								employeeId: cleaner.dataValues.id,
+							});
+							return newConnection;
+						})
+					);
+					return newAppointments;
 				} else {
-					console.log("No cleaner available for", dayOfWeek);
+					console.log("No cleaner available for", day);
 				}
 			})
 		);
