@@ -60,6 +60,18 @@ module.exports = {
 				type: Sequelize.BOOLEAN,
 				allowNull: false,
 			},
+			hasBeenAssigned: {
+				type: Sequelize.BOOLEAN,
+				allowNull: false,
+			},
+			employeesAssigned: {
+				type: Sequelize.ARRAY(Sequelize.STRING),
+				allowNull: true,
+			},
+			empoyeesNeeded: {
+				type: Sequelize.INTEGER,
+				allowNull: false,
+			},
 			createdAt: {
 				type: Sequelize.DATE,
 				allowNull: false,

@@ -12,6 +12,9 @@ class AppointmentSerializer {
 			"keyPadCode",
 			"keyLocation",
 			"completed",
+			"hasBeenAssigned",
+			"employeesAssigned",
+			"empoyeesNeeded"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};

@@ -47,6 +47,18 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.BOOLEAN,
 			allowNull: false,
 		},
+		hasBeenAssigned: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+		},
+		employeesAssigned: {
+			type:  DataTypes.ARRAY(DataTypes.STRING),
+			allowNull: true,
+		},
+		empoyeesNeeded: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+		},
 	});
 
 	// Define the one-to-many relationship with User

@@ -64,6 +64,9 @@ appointmentRouter.post("/", async (req, res) => {
 
 		const appointments = await Promise.all(
 			dateArray.map(async (date) => {
+				const homeBeingScheduled = await UserHomes.findOne({
+					where: { id: homeId },
+				});
 				const newAppointment = await UserAppointments.create({
 					userId,
 					homeId,
@@ -75,6 +78,8 @@ appointmentRouter.post("/", async (req, res) => {
 					keyPadCode,
 					keyLocation,
 					completed: false,
+					hasBeenAssigned: false,
+					empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded
 				});
 				const appointmentId = newAppointment.dataValues.id;
 
@@ -93,10 +98,6 @@ appointmentRouter.post("/", async (req, res) => {
 
 				const cleaners = await User.findAll({
 					where: { type: "cleaner" },
-				});
-
-				const homeBeingScheduled = await UserHomes.findOne({
-					where: { id: homeId },
 				});
 				const numCleaners = homeBeingScheduled.dataValues.cleanersNeeded;
 
@@ -134,6 +135,7 @@ appointmentRouter.post("/", async (req, res) => {
 
 							if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
 								selectedCleaners.push(cleaner);
+								console.log(cleaner)
 								cleanersAssigned++;
 							}
 						}
