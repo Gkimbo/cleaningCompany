@@ -64,6 +64,9 @@ appointmentRouter.post("/", async (req, res) => {
 
 		const appointments = await Promise.all(
 			dateArray.map(async (date) => {
+				const homeBeingScheduled = await UserHomes.findOne({
+					where: { id: homeId },
+				});
 				const newAppointment = await UserAppointments.create({
 					userId,
 					homeId,
@@ -75,6 +78,8 @@ appointmentRouter.post("/", async (req, res) => {
 					keyPadCode,
 					keyLocation,
 					completed: false,
+					hasBeenAssigned: false,
+					empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded
 				});
 				const appointmentId = newAppointment.dataValues.id;
 
@@ -94,15 +99,11 @@ appointmentRouter.post("/", async (req, res) => {
 				const cleaners = await User.findAll({
 					where: { type: "cleaner" },
 				});
-
-				const homeBeingScheduled = await UserHomes.findOne({
-					where: { id: homeId },
-				});
 				const numCleaners = homeBeingScheduled.dataValues.cleanersNeeded;
 
 				let selectedCleaners = [];
 				let cleanersAssigned = 0;
-
+				let employeeArray = []
 				for (const cleaner of cleaners) {
 					if (cleanersAssigned >= numCleaners) {
 						break;
@@ -133,13 +134,17 @@ appointmentRouter.post("/", async (req, res) => {
 							});
 
 							if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
-								selectedCleaners.push(cleaner);
+								const assignedEmployee = {id: cleaner.dataValues.id , name:cleaner.dataValues.username, daysWorking: cleaner.dataValues.daysWorking }
+								employeeArray.push(assignedEmployee)
+								selectedCleaners.push(cleaner)
+								await newAppointment.update({
+									employeesAssigned: employeeArray
+								})
 								cleanersAssigned++;
 							}
 						}
 					}
 				}
-
 				if (selectedCleaners.length > 0) {
 					const newAppointments = await Promise.all(
 						selectedCleaners.map(async (cleaner) => {
@@ -150,6 +155,7 @@ appointmentRouter.post("/", async (req, res) => {
 							return newConnection;
 						})
 					);
+					
 					return newAppointments;
 				} else {
 					console.log("No cleaner available for", day);

@@ -7,6 +7,8 @@
 	},
 	"dependencies": {
 		"concurrently": "^8.2.2",
-		"expo": "^49.0.16"
+		"expo": "^49.0.16",
+		"mysql2": "^3.9.2",
+		"sequelize": "^6.37.1"
 	}
 }
