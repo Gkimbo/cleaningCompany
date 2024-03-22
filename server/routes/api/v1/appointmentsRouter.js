@@ -1,11 +1,11 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const {
-	User,
-	UserAppointments,
-	UserHomes,
-	UserBills,
-	UserCleanerAppointments,
+  User,
+  UserAppointments,
+  UserHomes,
+  UserBills,
+  UserCleanerAppointments,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -14,244 +14,267 @@ const calculatePrice = require("../../../services/CalculatePrice");
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
+appointmentRouter.get("/unassigned", async (req, res) => {
+  const token = req.headers.authorization.split(" ")[1];
+  try {
+    const userAppointments = await UserAppointments.findAll({
+      where: { hasBeenAssigned: false },
+    });
+    const serializedAppointments =
+      AppointmentSerializer.serializeArray(userAppointments);
+
+    return res.status(200).json({ appointments: serializedAppointments });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
 appointmentRouter.get("/:homeId", async (req, res) => {
-	const { homeId } = req.params;
-	try {
-		const appointments = await UserAppointments.findAll({
-			where: {
-				homeId: homeId,
-			},
-		});
-		const serializedAppointments =
-			AppointmentSerializer.serializeArray(appointments);
-		return res.status(200).json({ appointments: serializedAppointments });
-	} catch (error) {
-		console.log(error);
-		return res.status(401).json({ error: "Invalid or expired token" });
-	}
+  const { homeId } = req.params;
+  try {
+    const appointments = await UserAppointments.findAll({
+      where: {
+        homeId: homeId,
+      },
+    });
+    const serializedAppointments =
+      AppointmentSerializer.serializeArray(appointments);
+    return res.status(200).json({ appointments: serializedAppointments });
+  } catch (error) {
+    console.log(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
 });
 
 appointmentRouter.post("/", async (req, res) => {
-	const { token, homeId, dateArray, keyPadCode, keyLocation } = req.body;
-	let appointmentTotal = 0;
-	const home = await UserHomes.findOne({ where: { id: homeId } });
+  const { token, homeId, dateArray, keyPadCode, keyLocation } = req.body;
+  let appointmentTotal = 0;
+  const home = await UserHomes.findOne({ where: { id: homeId } });
 
-	dateArray.forEach((date) => {
-		const price = calculatePrice(
-			date.bringSheets,
-			date.bringTowels,
-			home.dataValues.numBeds,
-			home.dataValues.numBaths
-		);
-		date.price = price;
-		appointmentTotal += price;
-	});
-	try {
-		const decodedToken = jwt.verify(token, secretKey);
-		const userId = decodedToken.userId;
-		const existingBill = await UserBills.findOne({
-			where: { userId },
-		});
-		const oldAppt = existingBill.dataValues.appointmentDue;
-		const total =
-			existingBill.dataValues.cancellationFee +
-			existingBill.dataValues.appointmentDue;
+  dateArray.forEach((date) => {
+    const price = calculatePrice(
+      date.bringSheets,
+      date.bringTowels,
+      home.dataValues.numBeds,
+      home.dataValues.numBaths
+    );
+    date.price = price;
+    appointmentTotal += price;
+  });
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+    const existingBill = await UserBills.findOne({
+      where: { userId },
+    });
+    const oldAppt = existingBill.dataValues.appointmentDue;
+    const total =
+      existingBill.dataValues.cancellationFee +
+      existingBill.dataValues.appointmentDue;
 
-		await existingBill.update({
-			appointmentDue: oldAppt + appointmentTotal,
-			totalDue: total + appointmentTotal,
-		});
+    await existingBill.update({
+      appointmentDue: oldAppt + appointmentTotal,
+      totalDue: total + appointmentTotal,
+    });
 
-		const appointments = await Promise.all(
-			dateArray.map(async (date) => {
-				const homeBeingScheduled = await UserHomes.findOne({
-					where: { id: homeId },
-				});
-				const newAppointment = await UserAppointments.create({
-					userId,
-					homeId,
-					date: date.date,
-					price: date.price,
-					paid: date.paid,
-					bringTowels: date.bringTowels,
-					bringSheets: date.bringSheets,
-					keyPadCode,
-					keyLocation,
-					completed: false,
-					hasBeenAssigned: false,
-					empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded
-				});
-				const appointmentId = newAppointment.dataValues.id;
+    const appointments = await Promise.all(
+      dateArray.map(async (date) => {
+        const homeBeingScheduled = await UserHomes.findOne({
+          where: { id: homeId },
+        });
+        const newAppointment = await UserAppointments.create({
+          userId,
+          homeId,
+          date: date.date,
+          price: date.price,
+          paid: date.paid,
+          bringTowels: date.bringTowels,
+          bringSheets: date.bringSheets,
+          keyPadCode,
+          keyLocation,
+          completed: false,
+          hasBeenAssigned: false,
+          empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded,
+        });
+        const appointmentId = newAppointment.dataValues.id;
 
-				const day = new Date(date.date);
-				const daysOfWeek = [
-					"Monday",
-					"Tuesday",
-					"Wednesday",
-					"Thursday",
-					"Friday",
-					"Saturday",
-					"Sunday",
-				];
-				const dayOfWeekIndex = day.getDay();
-				const dayOfWeek = daysOfWeek[dayOfWeekIndex];
+        const day = new Date(date.date);
+        const daysOfWeek = [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+        ];
+        const dayOfWeekIndex = day.getDay();
+        const dayOfWeek = daysOfWeek[dayOfWeekIndex];
 
-				const cleaners = await User.findAll({
-					where: { type: "cleaner" },
-				});
-				const numCleaners = homeBeingScheduled.dataValues.cleanersNeeded;
+        const cleaners = await User.findAll({
+          where: { type: "cleaner" },
+        });
+        const numCleaners = homeBeingScheduled.dataValues.cleanersNeeded;
 
-				let selectedCleaners = [];
-				let cleanersAssigned = 0;
-				let employeeArray = []
-				for (const cleaner of cleaners) {
-					if (cleanersAssigned >= numCleaners) {
-						break;
-					}
-					if (cleaner.dataValues.daysWorking) {
-						if (cleaner.dataValues.daysWorking.includes(dayOfWeek)) {
-							let employee = await User.findByPk(cleaner.dataValues.id, {
-								include: [
-									{
-										model: UserCleanerAppointments,
-										as: "cleanerAppointments",
-									},
-								],
-							});
-							const appointmentIds =
-								employee.dataValues.cleanerAppointments.map(
-									(appointment) => appointment.appointmentId
-								);
-							const appointments = await UserAppointments.findAll({
-								where: {
-									id: appointmentIds,
-								},
-							});
-							const dateCounts = {};
-							appointments.forEach((appointment) => {
-								const date = appointment.dataValues.date;
-								dateCounts[date] = (dateCounts[date] || 0) + 1;
-							});
+        let selectedCleaners = [];
+        let cleanersAssigned = 0;
+        let employeeArray = [];
+        for (const cleaner of cleaners) {
+          if (cleanersAssigned >= numCleaners) {
+			await newAppointment.update({
+				hasBeenAssigned: true,
+			  });
+            break;
+          }
+          if (cleaner.dataValues.daysWorking) {
+            if (cleaner.dataValues.daysWorking.includes(dayOfWeek)) {
+              let employee = await User.findByPk(cleaner.dataValues.id, {
+                include: [
+                  {
+                    model: UserCleanerAppointments,
+                    as: "cleanerAppointments",
+                  },
+                ],
+              });
+              const appointmentIds =
+                employee.dataValues.cleanerAppointments.map(
+                  (appointment) => appointment.appointmentId
+                );
+              const appointments = await UserAppointments.findAll({
+                where: {
+                  id: appointmentIds,
+                },
+              });
+              const dateCounts = {};
+              appointments.forEach((appointment) => {
+                const date = appointment.dataValues.date;
+                dateCounts[date] = (dateCounts[date] || 0) + 1;
+              });
 
-							if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
-								const assignedEmployee = {id: cleaner.dataValues.id , name:cleaner.dataValues.username, daysWorking: cleaner.dataValues.daysWorking }
-								employeeArray.push(assignedEmployee)
-								selectedCleaners.push(cleaner)
-								await newAppointment.update({
-									employeesAssigned: employeeArray
-								})
-								cleanersAssigned++;
-							}
-						}
-					}
-				}
-				if (selectedCleaners.length > 0) {
-					const newAppointments = await Promise.all(
-						selectedCleaners.map(async (cleaner) => {
-							const newConnection = await UserCleanerAppointments.create({
-								appointmentId,
-								employeeId: cleaner.dataValues.id,
-							});
-							return newConnection;
-						})
-					);
-					
-					return newAppointments;
-				} else {
-					console.log("No cleaner available for", day);
-				}
-			})
-		);
+              if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
+                const assignedEmployee = {
+                  id: cleaner.dataValues.id,
+                  name: cleaner.dataValues.username,
+                  daysWorking: cleaner.dataValues.daysWorking,
+                };
+                employeeArray.push(assignedEmployee);
+                selectedCleaners.push(cleaner);
+                await newAppointment.update({
+                  employeesAssigned: employeeArray,
+                });
+                cleanersAssigned++;
+              }
+            }
+          }
+        }
+        if (selectedCleaners.length > 0) {
+          const newAppointments = await Promise.all(
+            selectedCleaners.map(async (cleaner) => {
+              const newConnection = await UserCleanerAppointments.create({
+                appointmentId,
+                employeeId: cleaner.dataValues.id,
+              });
+              return newConnection;
+            })
+          );
 
-		return res.status(201).json({ appointments });
-	} catch (error) {
-		console.error(error);
-		return res.status(401).json({ error: "Invalid or expired token" });
-	}
+          return newAppointments;
+        } else {
+          console.log("No cleaner available for", day);
+        }
+      })
+    );
+
+    return res.status(201).json({ appointments });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
 });
 
 appointmentRouter.delete("/:id", async (req, res) => {
-	const { id } = req.params;
-	const { fee, user } = req.body;
-	try {
-		const decodedToken = jwt.verify(user, secretKey);
-		const userId = decodedToken.userId;
-		const existingBill = await UserBills.findOne({
-			where: { userId },
-		});
+  const { id } = req.params;
+  const { fee, user } = req.body;
+  try {
+    const decodedToken = jwt.verify(user, secretKey);
+    const userId = decodedToken.userId;
+    const existingBill = await UserBills.findOne({
+      where: { userId },
+    });
 
-		const appointmentToDelete = await UserAppointments.findOne({
-			where: { id: id },
-		});
-		const appointmentTotal = Number(appointmentToDelete.dataValues.price);
-		const oldFee = Number(existingBill.dataValues.cancellationFee);
-		const oldAppt = Number(existingBill.dataValues.appointmentDue);
+    const appointmentToDelete = await UserAppointments.findOne({
+      where: { id: id },
+    });
+    const appointmentTotal = Number(appointmentToDelete.dataValues.price);
+    const oldFee = Number(existingBill.dataValues.cancellationFee);
+    const oldAppt = Number(existingBill.dataValues.appointmentDue);
 
-		const total =
-			Number(existingBill.dataValues.cancellationFee) +
-			Number(existingBill.dataValues.appointmentDue);
+    const total =
+      Number(existingBill.dataValues.cancellationFee) +
+      Number(existingBill.dataValues.appointmentDue);
 
-		await existingBill.update({
-			cancellationFee: oldFee + fee,
-			appointmentDue: oldAppt - appointmentTotal,
-			totalDue: total + fee - appointmentTotal,
-		});
-		const connectionsToDelete = await UserCleanerAppointments.destroy({
-			where: { appointmentId: id },
-		});
+    await existingBill.update({
+      cancellationFee: oldFee + fee,
+      appointmentDue: oldAppt - appointmentTotal,
+      totalDue: total + fee - appointmentTotal,
+    });
+    const connectionsToDelete = await UserCleanerAppointments.destroy({
+      where: { appointmentId: id },
+    });
 
-		const deletedAppointmentInfo = await UserAppointments.destroy({
-			where: { id: id },
-		});
+    const deletedAppointmentInfo = await UserAppointments.destroy({
+      where: { id: id },
+    });
 
-		return res.status(201).json({ message: "Appointment Deleted" });
-	} catch (error) {
-		console.error(error);
-		return res.status(401).json({ error: "Invalid or expired token" });
-	}
+    return res.status(201).json({ message: "Appointment Deleted" });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
 });
 
 appointmentRouter.patch("/:id", async (req, res) => {
-	const { id, bringTowels, bringSheets, keyPadCode, keyLocation } = req.body;
-	let userInfo;
+  const { id, bringTowels, bringSheets, keyPadCode, keyLocation } = req.body;
+  let userInfo;
 
-	try {
-		if (bringSheets) {
-			userInfo = await UserInfo.editSheetsInDB({
-				id,
-				bringSheets,
-			});
-		}
-		if (bringTowels) {
-			userInfo = await UserInfo.editTowelsInDB({
-				id,
-				bringTowels,
-			});
-		}
-		if (keyPadCode) {
-			userInfo = await UserInfo.editCodeKeyInDB({
-				id,
-				keyPadCode,
-				keyLocation: "",
-			});
-		}
-		if (keyLocation) {
-			userInfo = await UserInfo.editCodeKeyInDB({
-				id,
-				keyLocation,
-				keyPadCode: "",
-			});
-		}
-		return res.status(200).json({ user: userInfo });
-	} catch (error) {
-		console.error(error);
+  try {
+    if (bringSheets) {
+      userInfo = await UserInfo.editSheetsInDB({
+        id,
+        bringSheets,
+      });
+    }
+    if (bringTowels) {
+      userInfo = await UserInfo.editTowelsInDB({
+        id,
+        bringTowels,
+      });
+    }
+    if (keyPadCode) {
+      userInfo = await UserInfo.editCodeKeyInDB({
+        id,
+        keyPadCode,
+        keyLocation: "",
+      });
+    }
+    if (keyLocation) {
+      userInfo = await UserInfo.editCodeKeyInDB({
+        id,
+        keyLocation,
+        keyPadCode: "",
+      });
+    }
+    return res.status(200).json({ user: userInfo });
+  } catch (error) {
+    console.error(error);
 
-		if (error.name === "TokenExpiredError") {
-			return res.status(401).json({ error: "Token has expired" });
-		}
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
 
-		return res.status(401).json({ error: "Invalid token" });
-	}
+    return res.status(401).json({ error: "Invalid token" });
+  }
 });
 
 module.exports = appointmentRouter;

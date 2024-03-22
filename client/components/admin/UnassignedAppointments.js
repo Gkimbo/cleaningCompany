@@ -23,23 +23,24 @@ const groupAppointmentsByDate = (appointments) => {
   return groupedAppointments;
 };
 
-const AllAppointments = ({ state }) => {
-  const [allAppointments, setAllAppointments] = useState([]);
+const UnassignedAppointments = ({ state }) => {
+  const [unassignedAppointments, setUnassignedAppointments] = useState([]);
   const [backRedirect, setBackRedirect] = useState(false);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
 
-  const filteredAppointments = allAppointments.sort(
+  const filteredAppointments = unassignedAppointments.sort(
     (a, b) => new Date(a.date) - new Date(b.date)
   );
 
   const fetchAppointments = async () => {
     const response = await FetchData.get(
-      "/api/v1/users/appointments",
+      "/api/v1/appointments/unassigned",
       state.currentUser.token
     );
-    setAllAppointments(response.appointments);
+    console.log(response);
+    setUnassignedAppointments(response.appointments);
   };
 
   useEffect(() => {
@@ -58,7 +59,6 @@ const AllAppointments = ({ state }) => {
   };
 
   const groupedAppointments = groupAppointmentsByDate(filteredAppointments);
-
   const appointmentArray = [];
 
   for (const [date, appointments] of groupedAppointments) {
@@ -92,8 +92,8 @@ const AllAppointments = ({ state }) => {
             price={appointment.price}
             homeId={appointment.homeId}
             employeesAssigned={appointment.employeesAssigned}
-            hasBeenAssigned={appointment.hasBeenAssigned}
             empoyeesNeeded={appointment.empoyeesNeeded}
+            hasBeenAssigned={appointment.hasBeenAssigned}
           />
         </View>
       );
@@ -109,7 +109,7 @@ const AllAppointments = ({ state }) => {
         flexDirection: "column",
       }}
     >
-      <View style={homePageStyles.backButtonAllAppointments}>
+      <View style={homePageStyles.backButtonunassignedAppointments}>
         <Pressable
           style={homePageStyles.backButtonForm}
           onPress={handleBackPress}
@@ -133,4 +133,4 @@ const AllAppointments = ({ state }) => {
   );
 };
 
-export default AllAppointments;
+export default UnassignedAppointments;
