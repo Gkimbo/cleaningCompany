@@ -20,7 +20,7 @@ const AppointmentTile = ({
     const options = { month: "short", day: "numeric", year: "numeric" };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
-
+//CREATE ROUTE TO DETAILS PAGE WHERE EMPLOYEES CAN BE ASSINED AND REMOVED
   const handleAppointmentPress = () => {
     navigate(`/assign-cleaner/${id}`);
   };
