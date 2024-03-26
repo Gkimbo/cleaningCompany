@@ -22,6 +22,8 @@ import EditEmployeeForm from "./components/admin/forms/EditEmployeeForm";
 import AllAppointments from "./components/admin/AllAppointments";
 import EmployeeAssignmentsList from "./components/employeeAssignments/lists/EmployeeAssignmentsList";
 import EmployeeShiftForm from "./components/admin/forms/employee/EmployeeShiftForm";
+import UnassignedAppointments from "./components/admin/UnassignedAppointments";
+import AppointmentDetailsPage from "./components/admin/AssignAppointments/AppointmentDetailsPage";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -152,6 +154,14 @@ export default function App() {
 						<Route
 							path="/all-appointments"
 							element={<AllAppointments state={state} />}
+						/>
+						<Route
+							path="/unassigned-appointments"
+							element={<UnassignedAppointments state={state} />}
+						/>
+						<Route
+							path="/assign-cleaner/:id"
+							element={<AppointmentDetailsPage state={state} />}
 						/>
 					</Routes>
 				</SafeAreaView>
