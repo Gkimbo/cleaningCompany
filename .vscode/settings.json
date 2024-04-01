@@ -1,3 +1,9 @@
 {
-	"cSpell.words": ["animatable", "Appt", "lucide", "Pressable"]
+	"cSpell.words": [
+		"animatable",
+		"Appt",
+		"lucide",
+		"Pressable"
+	],
+	"editor.formatOnSave": true
 }

@@ -35,7 +35,7 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const userAppointments = await UserAppointments.findOne({
-      where: { id: id},
+      where: { id: id },
     });
     const serializedAppointment =
       AppointmentSerializer.serializeOne(userAppointments);
@@ -139,9 +139,9 @@ appointmentRouter.post("/", async (req, res) => {
         let employeeArray = [];
         for (const cleaner of cleaners) {
           if (cleanersAssigned >= numCleaners) {
-			await newAppointment.update({
-				hasBeenAssigned: true,
-			  });
+            await newAppointment.update({
+              hasBeenAssigned: true,
+            });
             break;
           }
           if (cleaner.dataValues.daysWorking) {
