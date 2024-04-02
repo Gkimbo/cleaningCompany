@@ -30,6 +30,23 @@ appointmentRouter.get("/unassigned", async (req, res) => {
   }
 });
 
+appointmentRouter.get("/unassigned/:id", async (req, res) => {
+  const token = req.headers.authorization.split(" ")[1];
+  const { id } = req.params;
+  try {
+    const userAppointments = await UserAppointments.findOne({
+      where: { id: id },
+    });
+    const serializedAppointment =
+      AppointmentSerializer.serializeOne(userAppointments);
+
+    return res.status(200).json({ appointment: serializedAppointment });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
 appointmentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;
   try {
@@ -122,9 +139,9 @@ appointmentRouter.post("/", async (req, res) => {
         let employeeArray = [];
         for (const cleaner of cleaners) {
           if (cleanersAssigned >= numCleaners) {
-			await newAppointment.update({
-				hasBeenAssigned: true,
-			  });
+            await newAppointment.update({
+              hasBeenAssigned: true,
+            });
             break;
           }
           if (cleaner.dataValues.daysWorking) {
