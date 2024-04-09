@@ -28,6 +28,7 @@ const AppointmentDetailsPage = ({ state }) => {
 
     return (
       <EmployeeShiftAssign
+        key={employee.id}
         id={employee.id}
         username={employee.username}
         email={employee.email}

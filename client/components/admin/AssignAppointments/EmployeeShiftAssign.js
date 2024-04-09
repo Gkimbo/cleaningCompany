@@ -13,6 +13,7 @@ const EmployeeShiftAssign = ({
   removeEmployee,
   addEmployee,
 }) => {
+  console.log(assigned);
   return (
     <View style={homePageStyles.homeTileContainer}>
       {assigned ? (
@@ -25,6 +26,7 @@ const EmployeeShiftAssign = ({
             style={homePageStyles.homeTileContent}
           >{`Last Login: ${lastLogin}`}</Text>
           <Text style={homePageStyles.homeTileContent}>{type}</Text>
+          <View>assigned: YES</View>
         </>
       ) : (
         <>
@@ -36,6 +38,7 @@ const EmployeeShiftAssign = ({
             style={homePageStyles.homeTileContent}
           >{`Last Login: ${lastLogin}`}</Text>
           <Text style={homePageStyles.homeTileContent}>{type}</Text>
+          <View>assigned: NO</View>
         </>
       )}
     </View>
