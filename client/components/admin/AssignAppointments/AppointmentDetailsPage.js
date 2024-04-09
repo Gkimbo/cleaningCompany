@@ -13,9 +13,19 @@ const AppointmentDetailsPage = ({ state }) => {
   const [allEmployees, setAllEmployees] = useState([]);
   const { id } = useParams();
 
-  console.log(allEmployees);
+  const removeEmployee = (employeeId) => {
+    //remove employee from appointment
+  };
+
+  const addEmployee = (employeeId) => {
+    //add employee to appointment
+  };
 
   const employeeTiles = allEmployees.map((employee) => {
+    const isAssigned = assignedEmployees.some((assignedEmployee) => {
+      return assignedEmployee.name === employee.username;
+    });
+
     return (
       <EmployeeShiftAssign
         id={employee.id}
@@ -23,6 +33,9 @@ const AppointmentDetailsPage = ({ state }) => {
         email={employee.email}
         lastLogin={employee.lastLogin}
         type={employee.type}
+        assigned={isAssigned}
+        removeEmployee={removeEmployee}
+        addEmployee={addEmployee}
       />
     );
   });
