@@ -15,10 +15,12 @@ const AppointmentDetailsPage = ({ state }) => {
 
   const removeEmployee = (employeeId) => {
     //remove employee from appointment
+    console.log("pressed remove employee: ", employeeId);
   };
 
   const addEmployee = (employeeId) => {
     //add employee to appointment
+    console.log("pressed add employee: ", employeeId);
   };
 
   const employeeTiles = allEmployees.map((employee) => {
