@@ -1,7 +1,6 @@
 import React from "react";
-import { Pressable, Text, View, Animated } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import homePageStyles from "../../../services/styles/HomePageStyles";
-import Icon from "react-native-vector-icons/FontAwesome";
 
 const EmployeeShiftAssign = ({
   id,
@@ -13,33 +12,36 @@ const EmployeeShiftAssign = ({
   removeEmployee,
   addEmployee,
 }) => {
-  console.log(assigned);
   return (
     <View style={homePageStyles.homeTileContainer}>
+      <Text style={homePageStyles.homeTileTitle}>{username}</Text>
+      <Text style={homePageStyles.homeTileAddress}>{`Email: ${email}`}</Text>
+      <Text
+        style={homePageStyles.homeTileContent}
+      >{`Last Login: ${lastLogin}`}</Text>
+      <Text style={homePageStyles.homeTileContent}>{type}</Text>
       {assigned ? (
-        <>
-          <Text style={homePageStyles.homeTileTitle}>{username}</Text>
-          <Text
-            style={homePageStyles.homeTileAddress}
-          >{`Email: ${email}`}</Text>
-          <Text
-            style={homePageStyles.homeTileContent}
-          >{`Last Login: ${lastLogin}`}</Text>
-          <Text style={homePageStyles.homeTileContent}>{type}</Text>
-          <View>assigned: YES</View>
-        </>
+        <Pressable
+          style={{
+            ...homePageStyles.button,
+            backgroundColor: "red",
+            marginTop: 15,
+          }}
+          onPress={() => removeEmployee(id)}
+        >
+          <Text>Remove Employee</Text>
+        </Pressable>
       ) : (
-        <>
-          <Text style={homePageStyles.homeTileTitle}>{username}</Text>
-          <Text
-            style={homePageStyles.homeTileAddress}
-          >{`Email: ${email}`}</Text>
-          <Text
-            style={homePageStyles.homeTileContent}
-          >{`Last Login: ${lastLogin}`}</Text>
-          <Text style={homePageStyles.homeTileContent}>{type}</Text>
-          <View>assigned: NO</View>
-        </>
+        <Pressable
+          style={{
+            ...homePageStyles.button,
+            backgroundColor: "green",
+            marginTop: 15,
+          }}
+          onPress={() => addEmployee(id)}
+        >
+          <Text>Add Employee</Text>
+        </Pressable>
       )}
     </View>
   );
