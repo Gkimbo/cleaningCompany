@@ -4,6 +4,7 @@ import homePageStyles from "../../../services/styles/HomePageStyles";
 
 const EmployeeShiftAssign = ({
   id,
+  appointmentId,
   username,
   email,
   lastLogin,
@@ -27,7 +28,7 @@ const EmployeeShiftAssign = ({
             backgroundColor: "red",
             marginTop: 15,
           }}
-          onPress={() => removeEmployee(id)}
+          onPress={() => removeEmployee(id, appointmentId)}
         >
           <Text>Remove Employee</Text>
         </Pressable>
@@ -38,7 +39,7 @@ const EmployeeShiftAssign = ({
             backgroundColor: "green",
             marginTop: 15,
           }}
-          onPress={() => addEmployee(id)}
+          onPress={() => addEmployee(id, appointmentId)}
         >
           <Text>Add Employee</Text>
         </Pressable>

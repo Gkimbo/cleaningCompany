@@ -306,6 +306,56 @@ class FetchData {
       return err;
     }
   }
+  static async removeEmployee(id, appointmentId) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/appointments/remove-employee",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            appointmentId,
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to delete");
+      }
+
+      const responseData = await response.json();
+      return true;
+    } catch (error) {
+      return error;
+    }
+  }
+  static async addEmployee(id, appointmentId) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/appointments/add-employee",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            appointmentId,
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to delete");
+      }
+
+      const responseData = await response.json();
+      return true;
+    } catch (error) {
+      return error;
+    }
+  }
 }
 
 export default FetchData;

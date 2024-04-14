@@ -13,13 +13,17 @@ const AppointmentDetailsPage = ({ state }) => {
   const [allEmployees, setAllEmployees] = useState([]);
   const { id } = useParams();
 
-  const removeEmployee = (employeeId) => {
+  const removeEmployee = async (employeeId, appointmentId) => {
     //remove employee from appointment
+    const employeeRemoved = await FetchData.removeEmployee(employeeId);
+    console.log(employeeRemoved);
     console.log("pressed remove employee: ", employeeId);
   };
 
-  const addEmployee = (employeeId) => {
+  const addEmployee = async (employeeId, appointmentId) => {
     //add employee to appointment
+    const employeeAdded = await FetchData.addEmployee(employeeId);
+    console.log(employeeAdded);
     console.log("pressed add employee: ", employeeId);
   };
 
@@ -32,6 +36,7 @@ const AppointmentDetailsPage = ({ state }) => {
       <EmployeeShiftAssign
         key={employee.id}
         id={employee.id}
+        appointmentId={id}
         username={employee.username}
         email={employee.email}
         lastLogin={employee.lastLogin}
