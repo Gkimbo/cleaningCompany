@@ -251,6 +251,54 @@ appointmentRouter.delete("/:id", async (req, res) => {
   }
 });
 
+appointmentRouter.patch("/remove-employee", async (req, res) => {
+  const { id, appointmentId } = req.body;
+  let userInfo;
+  console.log("remove employee: ", id);
+  // try {
+  //   if (keyLocation) {
+  //     userInfo = await UserInfo.editCodeKeyInDB({
+  //       id,
+  //       keyLocation,
+  //       keyPadCode: "",
+  //     });
+  //   }
+  //   return res.status(200).json({ user: userInfo });
+  // } catch (error) {
+  //   console.error(error);
+
+  //   if (error.name === "TokenExpiredError") {
+  //     return res.status(401).json({ error: "Token has expired" });
+  //   }
+
+  //   return res.status(401).json({ error: "Invalid token" });
+  // }
+});
+
+appointmentRouter.patch("/add-employee", async (req, res) => {
+  const { id, appointmentId } = req.body;
+  let userInfo;
+  console.log("add employee: ", id);
+  // try {
+  //   if (keyLocation) {
+  //     userInfo = await UserInfo.editCodeKeyInDB({
+  //       id,
+  //       keyLocation,
+  //       keyPadCode: "",
+  //     });
+  //   }
+  //   return res.status(200).json({ user: userInfo });
+  // } catch (error) {
+  //   console.error(error);
+
+  //   if (error.name === "TokenExpiredError") {
+  //     return res.status(401).json({ error: "Token has expired" });
+  //   }
+
+  //   return res.status(401).json({ error: "Invalid token" });
+  // }
+});
+
 appointmentRouter.patch("/:id", async (req, res) => {
   const { id, bringTowels, bringSheets, keyPadCode, keyLocation } = req.body;
   let userInfo;
