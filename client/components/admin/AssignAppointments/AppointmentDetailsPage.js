@@ -15,14 +15,20 @@ const AppointmentDetailsPage = ({ state }) => {
 
   const removeEmployee = async (employeeId, appointmentId) => {
     //remove employee from appointment
-    const employeeRemoved = await FetchData.removeEmployee(employeeId);
+    const employeeRemoved = await FetchData.removeEmployee(
+      employeeId,
+      appointmentId
+    );
     console.log(employeeRemoved);
     console.log("pressed remove employee: ", employeeId);
   };
 
   const addEmployee = async (employeeId, appointmentId) => {
     //add employee to appointment
-    const employeeAdded = await FetchData.addEmployee(employeeId);
+    const employeeAdded = await FetchData.addEmployee(
+      employeeId,
+      appointmentId
+    );
     console.log(employeeAdded);
     console.log("pressed add employee: ", employeeId);
   };
