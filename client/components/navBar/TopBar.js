@@ -26,6 +26,7 @@ import UnassignedAppointmentsButton from "./UnassignedAppointmentsButton";
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
 	const [signUpRedirect, setSignUpRedirect] = useState(false);
+	const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
 	const [modalVisible, setModalVisible] = useState(false);
 	const navigate = useNavigate();
 
@@ -38,7 +39,11 @@ const TopBar = ({ dispatch, state }) => {
 			navigate("/sign-up");
 			setSignUpRedirect(false);
 		}
-	}, [signInRedirect, signUpRedirect]);
+		if (becomeCleanerRedirect) {
+			navigate("/apply");
+			setBecomeCleanerRedirect(false);
+		}
+	}, [signInRedirect, signUpRedirect, becomeCleanerRedirect]);
 
 	const handlePressSignIn = () => {
 		setSignInRedirect(true);
@@ -46,6 +51,10 @@ const TopBar = ({ dispatch, state }) => {
 
 	const handlePressSignUp = () => {
 		setSignUpRedirect(true);
+	};
+
+	const handlePressApply = () => {
+		setBecomeCleanerRedirect(true);
 	};
 
 	const toggleModal = () => {
@@ -59,7 +68,7 @@ const TopBar = ({ dispatch, state }) => {
 	return (
 		<View style={topBarStyles.container}>
 			<View style={topBarStyles.containerTitleSection}>
-				<Text style={topBarStyles.title}>Air BNB Cleaning Services</Text>
+				<Text style={topBarStyles.title}>Cleaning On Demand</Text>
 			</View>
 			<View style={topBarStyles.containerButtonSection}>
 				<HomeButton />
@@ -141,6 +150,9 @@ const TopBar = ({ dispatch, state }) => {
 						</Pressable>
 						<Pressable style={topBarStyles.button} onPress={handlePressSignUp}>
 							<Text style={topBarStyles.buttonText}>Sign up</Text>
+						</Pressable>
+						<Pressable style={topBarStyles.button} onPress={handlePressApply}>
+							<Text style={topBarStyles.buttonText}>Become a cleaner!</Text>
 						</Pressable>
 					</>
 				)}
