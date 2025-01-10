@@ -254,6 +254,7 @@ appointmentRouter.delete("/:id", async (req, res) => {
 appointmentRouter.patch("/remove-employee", async (req, res) => {
   const { id, appointmentId } = req.body;
   let userInfo;
+  console.log("Appointment id: ", appointmentId);
   console.log("remove employee: ", id);
   // try {
   //   if (keyLocation) {
@@ -278,6 +279,7 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
 appointmentRouter.patch("/add-employee", async (req, res) => {
   const { id, appointmentId } = req.body;
   let userInfo;
+  console.log("Appointment id: ", appointmentId);
   console.log("add employee: ", id);
   // try {
   //   if (keyLocation) {

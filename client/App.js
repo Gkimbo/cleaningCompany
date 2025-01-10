@@ -24,6 +24,7 @@ import EmployeeAssignmentsList from "./components/employeeAssignments/lists/Empl
 import EmployeeShiftForm from "./components/admin/forms/employee/EmployeeShiftForm";
 import UnassignedAppointments from "./components/admin/UnassignedAppointments";
 import AppointmentDetailsPage from "./components/admin/AssignAppointments/AppointmentDetailsPage";
+import NewCleanerInformationPage from "./components/admin/CleanerApplications/NewCleanerInformationPage";
 
 export default function App() {
 	const [isLoading, setIsLoading] = useState(true);
@@ -90,6 +91,10 @@ export default function App() {
 						<Route
 							path="/sign-up"
 							element={<SignUp state={state} dispatch={dispatch} />}
+						/>
+						<Route
+							path="/apply"
+							element={<NewCleanerInformationPage state={state} dispatch={dispatch} />}
 						/>
 						<Route
 							path="/list-of-homes"
