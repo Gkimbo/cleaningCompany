@@ -79,7 +79,7 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
-	});
+	}); 
 
 	// Define the one-to-many relationship with User
 	UserHomes.associate = (models) => {

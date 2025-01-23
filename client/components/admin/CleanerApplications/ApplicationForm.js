@@ -8,10 +8,12 @@ import {
   ScrollView,
   Alert,
 } from "react-native";
+import Application from "../../../services/fetchRequests/ApplicationClass";
 
 const CleanerApplicationForm = () => {
   const [formData, setFormData] = useState({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     email: "",
     phone: "",
     experience: "",
@@ -28,9 +30,9 @@ const CleanerApplicationForm = () => {
     });
   };
 
-  const handleSubmit = () => {
-    // You can send the form data to your backend here
-    console.log("Form submitted:", formData);
+  const handleSubmit = async () => {
+    const submittedApplication = await Application.addApplicationToDb(formData)
+    console.log("Form submitted:", submittedApplication);
     setSubmitted(true);
     Alert.alert("Thank You", "Your application has been submitted successfully.");
   };
@@ -56,12 +58,19 @@ const CleanerApplicationForm = () => {
       </Text>
 
       {/* Full Name */}
-      <Text style={styles.label}>Full Name</Text>
+      <Text style={styles.label}>First Name</Text>
       <TextInput
         style={styles.input}
         placeholder="Enter your full name"
-        value={formData.fullName}
-        onChangeText={(text) => handleChange("fullName", text)}
+        value={formData.firstName}
+        onChangeText={(text) => handleChange("firstName", text)}
+      />
+      <Text style={styles.label}>Last Name</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter your full name"
+        value={formData.lastName}
+        onChangeText={(text) => handleChange("lastName", text)}
       />
 
       {/* Email */}
@@ -123,6 +132,7 @@ const CleanerApplicationForm = () => {
 
 const styles = StyleSheet.create({
   container: {
+    marginTop: "20%",
     padding: 20,
     backgroundColor: "#fff",
     flexGrow: 1,
