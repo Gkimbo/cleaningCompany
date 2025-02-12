@@ -1,8 +1,19 @@
 import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+} from "react-native";
+import Application from "../../../services/fetchRequests/ApplicationClass";
 
 const CleanerApplicationForm = () => {
   const [formData, setFormData] = useState({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     email: "",
     phone: "",
     experience: "",
@@ -12,190 +23,183 @@ const CleanerApplicationForm = () => {
 
   const [submitted, setSubmitted] = useState(false);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const handleChange = (name, value) => {
     setFormData({
       ...formData,
       [name]: value,
     });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // You can send the form data to your backend here
-    console.log("Form submitted:", formData);
+  const handleSubmit = async () => {
+    const submittedApplication = await Application.addApplicationToDb(formData)
+    console.log("Form submitted:", submittedApplication);
     setSubmitted(true);
+    Alert.alert("Thank You", "Your application has been submitted successfully.");
   };
 
   if (submitted) {
     return (
-      <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-        <h1>Thank You for Applying!</h1>
-        <p>
+      <View style={styles.thankYouContainer}>
+        <Text style={styles.thankYouTitle}>Thank You for Applying!</Text>
+        <Text style={styles.thankYouMessage}>
           Your application has been submitted successfully. We will review your
           information and get back to you shortly.
-        </p>
-      </div>
+        </Text>
+      </View>
     );
   }
 
   return (
-    <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      <h1>Cleaner Job Application</h1>
-      <p>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Cleaner Job Application</Text>
+      <Text style={styles.description}>
         Please fill out the form below to apply for a position as a cleaner with
         our company.
-      </p>
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          maxWidth: "600px",
-          margin: "0 auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "16px",
-        }}
-      >
-        {/* Full Name */}
-        <label>
-          <strong>Full Name</strong>
-          <input
-            type="text"
-            name="fullName"
-            value={formData.fullName}
-            onChange={handleChange}
-            required
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-              marginTop: "4px",
-            }}
-          />
-        </label>
+      </Text>
 
-        {/* Email */}
-        <label>
-          <strong>Email Address</strong>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-              marginTop: "4px",
-            }}
-          />
-        </label>
+      {/* Full Name */}
+      <Text style={styles.label}>First Name</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter your full name"
+        value={formData.firstName}
+        onChangeText={(text) => handleChange("firstName", text)}
+      />
+      <Text style={styles.label}>Last Name</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter your full name"
+        value={formData.lastName}
+        onChangeText={(text) => handleChange("lastName", text)}
+      />
 
-        {/* Phone */}
-        <label>
-          <strong>Phone Number</strong>
-          <input
-            type="tel"
-            name="phone"
-            value={formData.phone}
-            onChange={handleChange}
-            required
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-              marginTop: "4px",
-            }}
-          />
-        </label>
+      {/* Email */}
+      <Text style={styles.label}>Email Address</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter your email address"
+        value={formData.email}
+        onChangeText={(text) => handleChange("email", text)}
+        keyboardType="email-address"
+      />
 
-        {/* Experience */}
-        <label>
-          <strong>Experience</strong>
-          <select
-            name="experience"
-            value={formData.experience}
-            onChange={handleChange}
-            required
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-              marginTop: "4px",
-            }}
-          >
-            <option value="" disabled>
-              Select your experience level
-            </option>
-            <option value="No experience">No experience</option>
-            <option value="Less than 1 year">Less than 1 year</option>
-            <option value="1-2 years">1-2 years</option>
-            <option value="3+ years">3+ years</option>
-          </select>
-        </label>
+      {/* Phone */}
+      <Text style={styles.label}>Phone Number</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter your phone number"
+        value={formData.phone}
+        onChangeText={(text) => handleChange("phone", text)}
+        keyboardType="phone-pad"
+      />
 
-        {/* Availability */}
-        <label>
-          <strong>Availability</strong>
-          <textarea
-            name="availability"
-            value={formData.availability}
-            onChange={handleChange}
-            required
-            placeholder="E.g., Mondays, Fridays, weekends only"
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-              marginTop: "4px",
-              height: "80px",
-            }}
-          />
-        </label>
+      {/* Experience */}
+      <Text style={styles.label}>Experience</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="E.g., No experience, 1-2 years"
+        value={formData.experience}
+        onChangeText={(text) => handleChange("experience", text)}
+      />
 
-        {/* Additional Message */}
-        <label>
-          <strong>Why Do You Want to Work With Us?</strong>
-          <textarea
-            name="message"
-            value={formData.message}
-            onChange={handleChange}
-            placeholder="Tell us why you're interested in this job"
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: "1px solid #ddd",
-              borderRadius: "4px",
-              marginTop: "4px",
-              height: "100px",
-            }}
-          />
-        </label>
+      {/* Availability */}
+      <Text style={styles.label}>Availability</Text>
+      <TextInput
+        style={styles.textArea}
+        placeholder="E.g., Mondays, Fridays, weekends only"
+        value={formData.availability}
+        onChangeText={(text) => handleChange("availability", text)}
+        multiline
+      />
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: "16px",
-          }}
-        >
-          Submit Application
-        </button>
-      </form>
-    </div>
+      {/* Additional Message */}
+      <Text style={styles.label}>Why Do You Want to Work With Us?</Text>
+      <TextInput
+        style={styles.textArea}
+        placeholder="Tell us why you're interested in this job"
+        value={formData.message}
+        onChangeText={(text) => handleChange("message", text)}
+        multiline
+      />
+
+      {/* Submit Button */}
+      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
+        <Text style={styles.buttonText}>Submit Application</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    marginTop: "20%",
+    padding: 20,
+    backgroundColor: "#fff",
+    flexGrow: 1,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  description: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: "center",
+    color: "#555",
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
+    fontWeight: "bold",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 15,
+    fontSize: 16,
+  },
+  textArea: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 4,
+    padding: 10,
+    fontSize: 16,
+    height: 100,
+    textAlignVertical: "top",
+    marginBottom: 15,
+  },
+  button: {
+    backgroundColor: "#4CAF50",
+    paddingVertical: 15,
+    borderRadius: 4,
+    alignItems: "center",
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  thankYouContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#fff",
+  },
+  thankYouTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  thankYouMessage: {
+    fontSize: 16,
+    textAlign: "center",
+    color: "#555",
+  },
+});
 
 export default CleanerApplicationForm;

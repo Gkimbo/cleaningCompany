@@ -25,152 +25,180 @@ import EmployeeShiftForm from "./components/admin/forms/employee/EmployeeShiftFo
 import UnassignedAppointments from "./components/admin/UnassignedAppointments";
 import AppointmentDetailsPage from "./components/admin/AssignAppointments/AppointmentDetailsPage";
 import NewCleanerInformationPage from "./components/admin/CleanerApplications/NewCleanerInformationPage";
+import CleanerApplicationForm from "./components/admin/CleanerApplications/ApplicationForm";
+import ListOfApplications from "./components/admin/CleanerApplications/ListOfApplications";
 
 export default function App() {
-	const [isLoading, setIsLoading] = useState(true);
-	const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
-	const [employeeList, setEmployeeList] = useState([]);
-	const [employeeDays, setEmployeeDays] = useState(null);
-	const [state, dispatch] = useReducer(reducer, {
-		account: null,
-		currentUser: { token: null },
-		bill: 0,
-		homes: [],
-		appointments: [],
-	});
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
+  const [employeeList, setEmployeeList] = useState([]);
+  const [applicationList, setApplicationList] = useState([]);
+  const [employeeDays, setEmployeeDays] = useState(null);
+  const [state, dispatch] = useReducer(reducer, {
+    account: null,
+    currentUser: { token: null },
+    bill: 0,
+    homes: [],
+    appointments: [],
+  });
 
-	const fetchCurrentUser = async () => {
-		try {
-			const user = await getCurrentUser();
+  const fetchCurrentUser = async () => {
+    try {
+      const user = await getCurrentUser();
 
-			dispatch({ type: "CURRENT_USER", payload: user.token });
-			if (user.user.username === "manager1") {
-				dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
-			}
-			if (user.user.type === "cleaner") {
-				dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
-			}
-			if (user.user.daysWorking !== null) {
-				setEmployeeDays(user.user.daysWorking);
-			}
-			setLastLoginTimestamp(user.user.lastLogin);
-		} catch (err) {
-			dispatch({ type: "CURRENT_USER", payload: null });
-		}
-	};
+      dispatch({ type: "CURRENT_USER", payload: user.token });
+      if (user.user.username === "manager1") {
+        dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
+      }
+      if (user.user.type === "cleaner") {
+        dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
+      }
+      if (user.user.daysWorking !== null) {
+        setEmployeeDays(user.user.daysWorking);
+      }
+      setLastLoginTimestamp(user.user.lastLogin);
+    } catch (err) {
+      dispatch({ type: "CURRENT_USER", payload: null });
+    }
+  };
 
-	useEffect(() => {
-		fetchCurrentUser();
-		setTimeout(() => {
-			setIsLoading(false);
-		}, 2000);
-	}, []);
+  useEffect(() => {
+    fetchCurrentUser();
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+  }, []);
 
-	if (isLoading) {
-		return (
-			<View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-				<ActivityIndicator size="large" />
-			</View>
-		);
-	}
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
-	return (
-		<AuthProvider>
-			<NativeRouter>
-				<SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
-					<TopBar dispatch={dispatch} state={state} />
-					<Routes>
-						<Route
-							path="/"
-							element={<HomePage dispatch={dispatch} state={state} />}
-						/>
-						<Route
-							path="/sign-in"
-							element={<SignIn state={state} dispatch={dispatch} />}
-						/>
-						<Route
-							path="/sign-up"
-							element={<SignUp state={state} dispatch={dispatch} />}
-						/>
-						<Route
-							path="/apply"
-							element={<NewCleanerInformationPage state={state} dispatch={dispatch} />}
-						/>
-						<Route
-							path="/list-of-homes"
-							element={<HomeList state={state} dispatch={dispatch} />}
-						/>
-						<Route path="/add-home" element={<AddHomeForm />} />
-						<Route
-							path="/details/:id"
-							element={<DetailsComponent state={state} dispatch={dispatch} />}
-						/>
-						<Route
-							path="/edit-home"
-							element={<EditHomeList state={state} dispatch={dispatch} />}
-						/>
-						<Route
-							path="/edit-home/:id"
-							element={<EditHomeForm state={state} dispatch={dispatch} />}
-						/>
-						<Route
-							path="/appointments"
-							element={<AppointmentList state={state} dispatch={dispatch} />}
-						/>
-						<Route
-							path="/bill"
-							element={<Bill state={state} dispatch={dispatch} />}
-						/>
-						<Route
-							path="/employee-assignments"
-							element={
-								<EmployeeAssignmentsList state={state} dispatch={dispatch} />
-							}
-						/>
-						<Route
-							path="/employee-shifts"
-							element={
-								<EmployeeShiftForm
-									employeeDays={employeeDays}
-									setEmployeeDays={setEmployeeDays}
-								/>
-							}
-						/>
-						<Route
-							path="/employees"
-							element={
-								<AddEmployee
-									state={state}
-									employeeList={employeeList}
-									setEmployeeList={setEmployeeList}
-								/>
-							}
-						/>
-						<Route
-							path="/employee-edit/:id"
-							element={
-								<EditEmployeeForm
-									state={state}
-									employeeList={employeeList}
-									setEmployeeList={setEmployeeList}
-								/>
-							}
-						/>
-						<Route
-							path="/all-appointments"
-							element={<AllAppointments state={state} />}
-						/>
-						<Route
-							path="/unassigned-appointments"
-							element={<UnassignedAppointments state={state} />}
-						/>
-						<Route
-							path="/assign-cleaner/:id"
-							element={<AppointmentDetailsPage state={state} />}
-						/>
-					</Routes>
-				</SafeAreaView>
-			</NativeRouter>
-		</AuthProvider>
-	);
+  return (
+    <AuthProvider>
+      <NativeRouter>
+        <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
+          <TopBar dispatch={dispatch} state={state} />
+          <Routes>
+            <Route
+              path="/"
+              element={<HomePage dispatch={dispatch} state={state} />}
+            />
+            <Route
+              path="/sign-in"
+              element={<SignIn state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/sign-up"
+              element={<SignUp state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/apply"
+              element={
+                <NewCleanerInformationPage state={state} dispatch={dispatch} />
+              }
+            />
+            <Route
+              path="/application-form"
+              element={
+                <CleanerApplicationForm state={state} dispatch={dispatch} />
+              }
+            />
+            <Route
+              path="/view-all-applications"
+              element={
+                <ListOfApplications state={state} dispatch={dispatch} />
+              }
+            />
+            <Route
+              path="/list-of-applications"
+              element={
+                <ListOfApplications
+                  state={state}
+                  applicationList={applicationList}
+                  setApplicationList={setApplicationList}
+                />
+              }
+            />
+
+            <Route
+              path="/list-of-homes"
+              element={<HomeList state={state} dispatch={dispatch} />}
+            />
+            <Route path="/add-home" element={<AddHomeForm />} />
+            <Route
+              path="/details/:id"
+              element={<DetailsComponent state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/edit-home"
+              element={<EditHomeList state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/edit-home/:id"
+              element={<EditHomeForm state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/appointments"
+              element={<AppointmentList state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/bill"
+              element={<Bill state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/employee-assignments"
+              element={
+                <EmployeeAssignmentsList state={state} dispatch={dispatch} />
+              }
+            />
+            <Route
+              path="/employee-shifts"
+              element={
+                <EmployeeShiftForm
+                  employeeDays={employeeDays}
+                  setEmployeeDays={setEmployeeDays}
+                />
+              }
+            />
+            <Route
+              path="/employees"
+              element={
+                <AddEmployee
+                  state={state}
+                  employeeList={employeeList}
+                  setEmployeeList={setEmployeeList}
+                />
+              }
+            />
+            <Route
+              path="/employee-edit/:id"
+              element={
+                <EditEmployeeForm
+                  state={state}
+                  employeeList={employeeList}
+                  setEmployeeList={setEmployeeList}
+                />
+              }
+            />
+            <Route
+              path="/all-appointments"
+              element={<AllAppointments state={state} />}
+            />
+            <Route
+              path="/unassigned-appointments"
+              element={<UnassignedAppointments state={state} />}
+            />
+            <Route
+              path="/assign-cleaner/:id"
+              element={<AppointmentDetailsPage state={state} />}
+            />
+          </Routes>
+        </SafeAreaView>
+      </NativeRouter>
+    </AuthProvider>
+  );
 }
