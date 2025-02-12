@@ -22,6 +22,7 @@ import SeeAllAppointments from "./SeeAllAppointmentsButton";
 import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
 import EmployeeShiftButton from "./EmployeeShiftButton";
 import UnassignedAppointmentsButton from "./UnassignedAppointmentsButton";
+import ViewApplicationsButton from "./ViewApplicationsButton";
 
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
@@ -94,6 +95,8 @@ const TopBar = ({ dispatch, state }) => {
 												<SeeAllAppointments closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
 												<UnassignedAppointmentsButton closeModal={closeModal}/>
+												<View style={styles.buttonSeparator} />
+												<ViewApplicationsButton closeModal={closeModal}/>
 												<View style={styles.buttonSeparator} />
 											</>
 										) : state.account === "cleaner" ? (

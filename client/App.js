@@ -108,6 +108,12 @@ export default function App() {
               }
             />
             <Route
+              path="/view-all-applications"
+              element={
+                <ListOfApplications state={state} dispatch={dispatch} />
+              }
+            />
+            <Route
               path="/list-of-applications"
               element={
                 <ListOfApplications
@@ -117,6 +123,7 @@ export default function App() {
                 />
               }
             />
+
             <Route
               path="/list-of-homes"
               element={<HomeList state={state} dispatch={dispatch} />}
