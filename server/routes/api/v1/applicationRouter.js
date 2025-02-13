@@ -40,4 +40,21 @@ applicationRouter.post("/submitted", async (req, res) => {
     }
   });
 
+  applicationRouter.delete("/:id", async (req, res) => {
+    const { id } = req.params;
+    try {
+      const applicationToDelete = await UserApplications.findOne({
+        where: { id: id },
+      });
+      console.log(applicationToDelete)
+      const deletedAppointmentInfo = await UserApplications.destroy({
+        where: { id: id },
+      });
+      return res.status(201).json({ message: "Application Deleted" });
+    } catch (error) {
+      console.error(error);
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+  });
+
 module.exports = applicationRouter

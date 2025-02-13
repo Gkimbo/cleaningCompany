@@ -1,6 +1,6 @@
 class ApplicationSerializer {
 	static serializeArray(applicationArray) {
-		const allowedAttributes = ["availability", "email", "experience", "firstName", "lastName", "message", "phone"];
+		const allowedAttributes = ["id","availability", "email", "experience", "firstName", "lastName", "message", "phone"];
 		const serializedApplications = applicationArray.map((application) => {
 			const newApplication = {};
 			for (const attribute of allowedAttributes) {

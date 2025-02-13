@@ -9,6 +9,7 @@ import {
   Alert,
 } from "react-native";
 import Application from "../../../services/fetchRequests/ApplicationClass";
+import ApplicationFormStyles from "../../../services/styles/ApplicationFormStyles";
 
 const CleanerApplicationForm = () => {
   const [formData, setFormData] = useState({
@@ -20,8 +21,9 @@ const CleanerApplicationForm = () => {
     availability: "",
     message: "",
   });
-
+  const [formError, setFormError] = useState(null)
   const [submitted, setSubmitted] = useState(false);
+  const styles = ApplicationFormStyles
 
   const handleChange = (name, value) => {
     setFormData({
@@ -30,11 +32,30 @@ const CleanerApplicationForm = () => {
     });
   };
 
+  const validate = () => {
+		const validationErrors = [];
+		if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.experience || !formData.availability) {
+			validationErrors.push("All Fields must be filled out!");
+		}
+
+		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+		if (!emailRegex.test(formData.email)) {
+			validationErrors.push("Please enter a valid email address.");
+		}
+
+		setFormError(validationErrors);
+		return validationErrors.length === 0;
+	};
+
   const handleSubmit = async () => {
-    const submittedApplication = await Application.addApplicationToDb(formData)
-    console.log("Form submitted:", submittedApplication);
-    setSubmitted(true);
-    Alert.alert("Thank You", "Your application has been submitted successfully.");
+    if (!validate()) {
+			return;
+		} else {
+      const submittedApplication = await Application.addApplicationToDb(formData)
+      console.log("Form submitted:", submittedApplication);
+      setSubmitted(true);
+      Alert.alert("Thank You", "Your application has been submitted successfully.");
+    }
   };
 
   if (submitted) {
@@ -126,80 +147,11 @@ const CleanerApplicationForm = () => {
       <TouchableOpacity style={styles.button} onPress={handleSubmit}>
         <Text style={styles.buttonText}>Submit Application</Text>
       </TouchableOpacity>
+      {formError ? <View style={styles.errorContainer}>{formError.map((error, index) => (
+      <Text key={index} style={styles.errorText}>{error}</Text>
+    ))}</View> : null}
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    marginTop: "20%",
-    padding: 20,
-    backgroundColor: "#fff",
-    flexGrow: 1,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  description: {
-    fontSize: 16,
-    marginBottom: 20,
-    textAlign: "center",
-    color: "#555",
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 5,
-    fontWeight: "bold",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 4,
-    padding: 10,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-  textArea: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 4,
-    padding: 10,
-    fontSize: 16,
-    height: 100,
-    textAlignVertical: "top",
-    marginBottom: 15,
-  },
-  button: {
-    backgroundColor: "#4CAF50",
-    paddingVertical: 15,
-    borderRadius: 4,
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  thankYouContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    backgroundColor: "#fff",
-  },
-  thankYouTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  thankYouMessage: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#555",
-  },
-});
 
 export default CleanerApplicationForm;
