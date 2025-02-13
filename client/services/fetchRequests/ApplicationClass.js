@@ -26,10 +26,9 @@ class Application {
     }
   }
 
-  static async deleteApplication(id, fee, user) {
+  static async deleteApplication(id) {
     try {
       const response = await fetch(baseURL + `/api/v1/applications/${id}`, {
-        body: JSON.stringify({ fee: fee, user: user }),
         method: "delete",
         headers: {
           "Content-Type": "application/json",
@@ -43,6 +42,7 @@ class Application {
         throw new Error(`${response.status} (${response.statusText})`);
       }
       const responseData = await response.json();
+      console.log(responseData)
       return responseData;
     } catch (err) {
       console.log(err);
