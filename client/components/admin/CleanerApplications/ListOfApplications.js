@@ -16,6 +16,7 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 import ApplicationListStyles from "../../../services/styles/ApplicationListStyles"
 import ApplicationTile from "./ApplicationTile";
 import Application from "../../../services/fetchRequests/ApplicationClass";
+import CreateNewEmployeeForm from "./CreateNewEmployeeForm";
 
 const ListOfApplications = () => {
   const [listApplications, setApplicationsList] = useState([]);
@@ -26,6 +27,7 @@ const ListOfApplications = () => {
 		boolean: false,
 		id: null,
 	});
+ 
 	const { width } = Dimensions.get("window");
 	const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 	const navigate = useNavigate();
@@ -36,10 +38,6 @@ const ListOfApplications = () => {
       setApplicationsList(response.serializedApplications);
     });
   }, []);
-
-  const handleAccept = (id) => {
-    console.log(id)
-  }
 
   const onDeleteApplication = async (id) => {
 		try {
@@ -103,7 +101,8 @@ const ListOfApplications = () => {
 					deleteConfirmation={deleteConfirmation}
 					setDeleteConfirmation={setDeleteConfirmation}
 					handleNoPress={handleNoPress}
-          handleAccept={handleAccept}
+          CreateNewEmployeeForm={CreateNewEmployeeForm}
+          setApplicationsList={setApplicationsList}
 				/>
 			</View>
 		);
