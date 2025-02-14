@@ -1,5 +1,5 @@
 const express = require("express");
-const { User, UserBills, UserAppointments } = require("../../../models");
+const { User, UserBills, UserAppointments, UserCleanerAppointments } = require("../../../models");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -132,6 +132,12 @@ usersRouter.delete("/employee", async (req, res) => {
 				userId: userId,
 			},
 		});
+
+		await UserCleanerAppointments.destroy({
+			where: {
+				employeeId: userId,
+			},
+		})
 
 		await User.destroy({
 			where: {
