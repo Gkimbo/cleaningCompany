@@ -33,14 +33,25 @@ appointmentRouter.get("/unassigned", async (req, res) => {
 appointmentRouter.get("/unassigned/:id", async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
   const { id } = req.params;
+  let employees = []
   try {
     const userAppointments = await UserAppointments.findOne({
       where: { id: id },
     });
+    const employeesAssigned = await UserCleanerAppointments.findAll({
+      where: {
+        appointmentId: id
+      }
+    })
+    if(employeesAssigned){
+      employees = employeesAssigned.map(employeeId => {
+        return employeeId.dataValues.employeeId
+      }) 
+    }
     const serializedAppointment =
       AppointmentSerializer.serializeOne(userAppointments);
 
-    return res.status(200).json({ appointment: serializedAppointment });
+    return res.status(200).json({ appointment: serializedAppointment, employeesAssigned: employees });
   } catch (error) {
     console.error(error);
     return res.status(401).json({ error: "Invalid or expired token" });
@@ -254,51 +265,60 @@ appointmentRouter.delete("/:id", async (req, res) => {
 appointmentRouter.patch("/remove-employee", async (req, res) => {
   const { id, appointmentId } = req.body;
   let userInfo;
-  console.log("Appointment id: ", appointmentId);
-  console.log("remove employee: ", id);
-  // try {
-  //   if (keyLocation) {
-  //     userInfo = await UserInfo.editCodeKeyInDB({
-  //       id,
-  //       keyLocation,
-  //       keyPadCode: "",
-  //     });
-  //   }
-  //   return res.status(200).json({ user: userInfo });
-  // } catch (error) {
-  //   console.error(error);
+  try {
+    const checkItExists = await UserCleanerAppointments.findOne({
+      where: {
+        employeeId: id,
+        appointmentId: Number(appointmentId),
+      }
+    })
+    if(checkItExists){
+      userInfo = await UserCleanerAppointments.destroy({
+        where: {
+          employeeId: id,
+          appointmentId: Number(appointmentId),
+        }
+      });
+      console.log(userInfo)
+    }
+      return res.status(200).json({ user: userInfo });
+  } catch (error) {
+    console.error(error);
 
-  //   if (error.name === "TokenExpiredError") {
-  //     return res.status(401).json({ error: "Token has expired" });
-  //   }
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
 
-  //   return res.status(401).json({ error: "Invalid token" });
-  // }
+    return res.status(401).json({ error: "Invalid token" });
+  }
 });
 
 appointmentRouter.patch("/add-employee", async (req, res) => {
   const { id, appointmentId } = req.body;
   let userInfo;
-  console.log("Appointment id: ", appointmentId);
-  console.log("add employee: ", id);
-  // try {
-  //   if (keyLocation) {
-  //     userInfo = await UserInfo.editCodeKeyInDB({
-  //       id,
-  //       keyLocation,
-  //       keyPadCode: "",
-  //     });
-  //   }
-  //   return res.status(200).json({ user: userInfo });
-  // } catch (error) {
-  //   console.error(error);
-
-  //   if (error.name === "TokenExpiredError") {
-  //     return res.status(401).json({ error: "Token has expired" });
-  //   }
-
-  //   return res.status(401).json({ error: "Invalid token" });
-  // }
+  try {
+    const checkItExists = await UserCleanerAppointments.findOne({
+      where: {
+        employeeId: id,
+        appointmentId: Number(appointmentId),
+      }
+    })
+    if(!checkItExists){
+      userInfo = await UserCleanerAppointments.create({
+        employeeId: id,
+        appointmentId: Number(appointmentId),
+      });
+      console.log(userInfo)
+      return res.status(200).json({ user: userInfo });
+    }
+    return res.status(201).json({error: "This cleaner is already attached to this appointment"})
+  } catch (error) {
+    console.error(error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+    return res.status(401).json({ error: "Invalid token" });
+  }
 });
 
 appointmentRouter.patch("/:id", async (req, res) => {

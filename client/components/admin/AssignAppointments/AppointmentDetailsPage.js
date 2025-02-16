@@ -11,7 +11,33 @@ const AppointmentDetailsPage = ({ state }) => {
   const [home, setHome] = useState(null);
   const [assignedEmployees, setAssignedEmployees] = useState([]);
   const [allEmployees, setAllEmployees] = useState([]);
+  const [refresh, setRefresh] = useState(false)
   const { id } = useParams();
+
+  useEffect(() => {
+    FetchData.get(
+      `/api/v1/appointments/unassigned/${id}`,
+      state.currentUser.token
+    ).then((response) => {
+      console.log(response.employeesAssigned)
+      setAppointment(response.appointment);
+
+      if (response.employeesAssigned) {
+        setAssignedEmployees(response.employeesAssigned);
+      } 
+      const homeId = response.appointment.homeId;
+      if (homeId) {
+        FetchData.get(
+          `/api/v1/employee-info/home/${homeId}`,
+          state.currentUser.token
+        ).then((response) => {
+          setHome(response.home);
+        });
+      }
+    });
+    fetchEmployees();
+    setRefresh(false)
+  }, [refresh]);
 
   const removeEmployee = async (employeeId, appointmentId) => {
     //remove employee from appointment
@@ -19,8 +45,7 @@ const AppointmentDetailsPage = ({ state }) => {
       employeeId,
       appointmentId
     );
-    console.log(employeeRemoved);
-    console.log("pressed remove employee: ", employeeId);
+    setRefresh(true)
   };
 
   const addEmployee = async (employeeId, appointmentId) => {
@@ -29,15 +54,12 @@ const AppointmentDetailsPage = ({ state }) => {
       employeeId,
       appointmentId
     );
-    console.log(employeeAdded);
-    console.log("pressed add employee: ", employeeId);
+    setRefresh(true)
   };
 
+ 
   const employeeTiles = allEmployees.map((employee) => {
-    const isAssigned = assignedEmployees.some((assignedEmployee) => {
-      return assignedEmployee.name === employee.username;
-    });
-
+    const isAssigned = assignedEmployees.includes(employee.id);
     return (
       <EmployeeShiftAssign
         key={employee.id}
@@ -61,34 +83,6 @@ const AppointmentDetailsPage = ({ state }) => {
     );
     setAllEmployees(response.users);
   };
-
-  useEffect(() => {
-    FetchData.get(
-      `/api/v1/appointments/unassigned/${id}`,
-      state.currentUser.token
-    ).then((response) => {
-      setAppointment(response.appointment);
-      const assignedEmployees = JSON.parse(
-        response.appointment.employeesAssigned
-      );
-      if (!assignedEmployees.length) {
-        setAssignedEmployees([assignedEmployees]);
-      } else {
-        setAssignedEmployees(assignedEmployees);
-      }
-      const homeId = response.appointment.homeId;
-
-      if (homeId) {
-        FetchData.get(
-          `/api/v1/employee-info/home/${homeId}`,
-          state.currentUser.token
-        ).then((response) => {
-          setHome(response.home);
-        });
-      }
-    });
-    fetchEmployees();
-  }, []);
 
   return (
     <View style={UserFormStyles.container}>
