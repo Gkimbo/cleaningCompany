@@ -282,7 +282,6 @@ appointmentRouter.delete("/:id", async (req, res) => {
 });
 
 appointmentRouter.delete("/id/:id", async (req, res) => {
-  console.log("HERRRRRRRREEEEEEE")
   const { id } = req.params;
   try {
     const appointmentToDelete = await UserAppointments.findOne({
@@ -350,7 +349,34 @@ appointmentRouter.patch("/add-employee", async (req, res) => {
         employeeId: id,
         appointmentId: Number(appointmentId),
       });
-      console.log(userInfo)
+      const updateAppointment = await UserAppointments.findOne({
+        where: {
+          id: appointmentId
+        }
+      })
+      console.log("Before update:", updateAppointment.dataValues.employeesAssigned);
+
+      if (updateAppointment) {
+        let employeesAssigned = updateAppointment.dataValues.employeesAssigned || [];
+
+        if (!employeesAssigned.includes(String(id))) {
+          employeesAssigned.push(String(id));
+
+
+          console.log("DATA To ADD:", employeesAssigned)
+          const response = await updateAppointment.update({
+            employeesAssigned: [...employeesAssigned],
+          });
+
+         console.log("Response to update: ", response)
+          const updatedAppointment = await UserAppointments.findOne({
+            where: {
+              id: appointmentId,
+            },
+          })
+          console.log("After Update: ",updatedAppointment.dataValues.employeesAssigned)
+        }
+      }
       return res.status(200).json({ user: userInfo });
     }
     return res.status(201).json({error: "This cleaner is already attached to this appointment"})

@@ -44,12 +44,12 @@ const AllAppointments = ({ state }) => {
       "/api/v1/users/appointments",
       state.currentUser.token
     );
+    console.log(response)
     setAllAppointments(response.appointments);
   };
 
   useEffect(() => {
     fetchAppointments()
-
     if (backRedirect) {
       navigate("/");
       setBackRedirect(false);

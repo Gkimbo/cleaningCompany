@@ -51,7 +51,7 @@ const AppointmentTile = ({
         Number of cleaners needed: {empoyeesNeeded - numberOfAssigned}
       </Text>
       <Text style={homePageStyles.appointmentPrice}>
-        Number of cleaners assigned {numberOfAssigned}
+        Number of cleaners assigned: {numberOfAssigned}
       </Text>
       <Pressable
         style={{...homePageStyles.backButtonForm, width: "30%", height: "15%",  paddingTop: "4%", alignItems: "center", justifyContent: "center",}}
