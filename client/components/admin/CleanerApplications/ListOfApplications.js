@@ -34,7 +34,6 @@ const ListOfApplications = () => {
 
   useEffect(() => {
     FetchData.getApplicationsFromBackend().then((response) => {
-      console.log(response.serializedApplications);
       setApplicationsList(response.serializedApplications);
     });
   }, []);
@@ -43,7 +42,6 @@ const ListOfApplications = () => {
 		try {
 			const application = await Application.deleteApplication(id);
       FetchData.getApplicationsFromBackend().then((response) => {
-        console.log(response.serializedApplications);
         setApplicationsList(response.serializedApplications);
       });
 		} catch (error) {
@@ -90,19 +88,19 @@ const ListOfApplications = () => {
 				<ApplicationTile
 					id={application.id}
 					firstName= {application.firstName}
-          lastName={application.lastName}
-          email={application.email}
-          phone={application.phone}
-          availability={application.availability}
-          experience={application.experience}
-          message={application.message}
+          			lastName={application.lastName}
+          			email={application.email}
+          			phone={application.phone}
+          			availability={application.availability}
+          			experience={application.experience}
+          			message={application.message}
 					handleDeletePress={handleDeletePress}
 					deleteAnimation={deleteAnimation}
 					deleteConfirmation={deleteConfirmation}
 					setDeleteConfirmation={setDeleteConfirmation}
 					handleNoPress={handleNoPress}
-          CreateNewEmployeeForm={CreateNewEmployeeForm}
-          setApplicationsList={setApplicationsList}
+          			CreateNewEmployeeForm={CreateNewEmployeeForm}
+          			setApplicationsList={setApplicationsList}
 				/>
 			</View>
 		);

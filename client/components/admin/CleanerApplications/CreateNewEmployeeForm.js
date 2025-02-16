@@ -56,7 +56,6 @@ const CreateNewEmployeeForm = ({id, firstName, lastName, email, setApplicationsL
 				setPassword("");
 				setUserName("");
                 FetchData.getApplicationsFromBackend().then((response) => {
-                    console.log(response.serializedApplications);
                     setApplicationsList(response.serializedApplications);
                 })
 			}

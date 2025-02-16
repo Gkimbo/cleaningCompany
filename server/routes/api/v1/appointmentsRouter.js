@@ -10,6 +10,7 @@ const {
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const calculatePrice = require("../../../services/CalculatePrice");
+const HomeSerializer = require("../../../serializers/homesSerializer");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -69,6 +70,24 @@ appointmentRouter.get("/:homeId", async (req, res) => {
     const serializedAppointments =
       AppointmentSerializer.serializeArray(appointments);
     return res.status(200).json({ appointments: serializedAppointments });
+  } catch (error) {
+    console.log(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+appointmentRouter.get("/home/:homeId", async (req, res) => {
+  const { homeId } = req.params;
+  try {
+    const home = await UserHomes.findAll({
+      where: {
+        id: homeId,
+      },
+    });
+    const serializedHome =
+      HomeSerializer.serializeArray(home);
+
+    return res.status(200).json({ home: serializedHome });
   } catch (error) {
     console.log(error);
     return res.status(401).json({ error: "Invalid or expired token" });
@@ -140,77 +159,77 @@ appointmentRouter.post("/", async (req, res) => {
         const dayOfWeekIndex = day.getDay();
         const dayOfWeek = daysOfWeek[dayOfWeekIndex];
 
-        const cleaners = await User.findAll({
-          where: { type: "cleaner" },
-        });
-        const numCleaners = homeBeingScheduled.dataValues.cleanersNeeded;
+        // const cleaners = await User.findAll({
+        //   where: { type: "cleaner" },
+        // });
+        // const numCleaners = homeBeingScheduled.dataValues.cleanersNeeded;
 
-        let selectedCleaners = [];
-        let cleanersAssigned = 0;
-        let employeeArray = [];
-        for (const cleaner of cleaners) {
-          if (cleanersAssigned >= numCleaners) {
-            await newAppointment.update({
-              hasBeenAssigned: true,
-            });
-            break;
-          }
-          if (cleaner.dataValues.daysWorking) {
-            if (cleaner.dataValues.daysWorking.includes(dayOfWeek)) {
-              let employee = await User.findByPk(cleaner.dataValues.id, {
-                include: [
-                  {
-                    model: UserCleanerAppointments,
-                    as: "cleanerAppointments",
-                  },
-                ],
-              });
-              const appointmentIds =
-                employee.dataValues.cleanerAppointments.map(
-                  (appointment) => appointment.appointmentId
-                );
-              const appointments = await UserAppointments.findAll({
-                where: {
-                  id: appointmentIds,
-                },
-              });
-              const dateCounts = {};
-              appointments.forEach((appointment) => {
-                const date = appointment.dataValues.date;
-                dateCounts[date] = (dateCounts[date] || 0) + 1;
-              });
+        // let selectedCleaners = [];
+        // let cleanersAssigned = 0;
+        // let employeeArray = [];
+        // for (const cleaner of cleaners) {
+        //   if (cleanersAssigned >= numCleaners) {
+            // await newAppointment.update({
+            //   hasBeenAssigned: true,
+            // });
+            // break;
+          // }
+          // if (cleaner.dataValues.daysWorking) {
+          //   if (cleaner.dataValues.daysWorking.includes(dayOfWeek)) {
+          //     let employee = await User.findByPk(cleaner.dataValues.id, {
+          //       include: [
+          //         {
+          //           model: UserCleanerAppointments,
+          //           as: "cleanerAppointments",
+          //         },
+          //       ],
+          //     });
+              // const appointmentIds =
+              //   employee.dataValues.cleanerAppointments.map(
+              //     (appointment) => appointment.appointmentId
+              //   );
+              // const appointments = await UserAppointments.findAll({
+              //   where: {
+              //     id: appointmentIds,
+              //   },
+              // });
+              // const dateCounts = {};
+              // appointments.forEach((appointment) => {
+              //   const date = appointment.dataValues.date;
+              //   dateCounts[date] = (dateCounts[date] || 0) + 1;
+              // });
 
-              if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
-                const assignedEmployee = {
-                  id: cleaner.dataValues.id,
-                  name: cleaner.dataValues.username,
-                  daysWorking: cleaner.dataValues.daysWorking,
-                };
-                employeeArray.push(assignedEmployee);
-                selectedCleaners.push(cleaner);
-                await newAppointment.update({
-                  employeesAssigned: employeeArray,
-                });
-                cleanersAssigned++;
-              }
-            }
-          }
-        }
-        if (selectedCleaners.length > 0) {
-          const newAppointments = await Promise.all(
-            selectedCleaners.map(async (cleaner) => {
-              const newConnection = await UserCleanerAppointments.create({
-                appointmentId,
-                employeeId: cleaner.dataValues.id,
-              });
-              return newConnection;
-            })
-          );
+              // if (!dateCounts[date.date] || dateCounts[date.date] < 2) {
+              //   const assignedEmployee = {
+              //     id: cleaner.dataValues.id,
+              //     name: cleaner.dataValues.username,
+              //     daysWorking: cleaner.dataValues.daysWorking,
+              //   };
+        //         employeeArray.push(assignedEmployee);
+        //         selectedCleaners.push(cleaner);
+        //         await newAppointment.update({
+        //           employeesAssigned: employeeArray,
+        //         });
+        //         cleanersAssigned++;
+        //       }
+        //     }
+        //   }
+        // }
+        // if (selectedCleaners.length > 0) {
+        //   const newAppointments = await Promise.all(
+        //     selectedCleaners.map(async (cleaner) => {
+        //       const newConnection = await UserCleanerAppointments.create({
+        //         appointmentId,
+        //         employeeId: cleaner.dataValues.id,
+        //       });
+        //       return newConnection;
+        //     })
+        //  );
 
-          return newAppointments;
-        } else {
-          console.log("No cleaner available for", day);
-        }
+        //   return newAppointments;
+        // } else {
+        //   console.log("No cleaner available for", day);
+        // }
       })
     );
 
@@ -247,6 +266,29 @@ appointmentRouter.delete("/:id", async (req, res) => {
       appointmentDue: oldAppt - appointmentTotal,
       totalDue: total + fee - appointmentTotal,
     });
+    const connectionsToDelete = await UserCleanerAppointments.destroy({
+      where: { appointmentId: id },
+    });
+
+    const deletedAppointmentInfo = await UserAppointments.destroy({
+      where: { id: id },
+    });
+
+    return res.status(201).json({ message: "Appointment Deleted" });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+appointmentRouter.delete("/id/:id", async (req, res) => {
+  console.log("HERRRRRRRREEEEEEE")
+  const { id } = req.params;
+  try {
+    const appointmentToDelete = await UserAppointments.findOne({
+      where: { id: id },
+    });
+
     const connectionsToDelete = await UserCleanerAppointments.destroy({
       where: { appointmentId: id },
     });

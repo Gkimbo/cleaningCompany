@@ -157,7 +157,7 @@ const CalendarComponent = ({
 
 	useEffect(() => {
 		FetchData.getEmployeesWorking().then((response) => {
-			console.log(response);
+			console.log("response");
 		});
 
 		if (redirectToBill) {

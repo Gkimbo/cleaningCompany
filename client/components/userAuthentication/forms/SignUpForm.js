@@ -60,7 +60,7 @@ const SignUpForm = ({ state, dispatch }) => {
 				email,
 			};
 			const response = await FetchData.makeNewUser(data);
-			console.log(response)
+			console.log("response")
 			if (
 				response === "An account already has this email" ||
 				response === "Username already exists"

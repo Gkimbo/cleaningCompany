@@ -19,7 +19,6 @@ const AppointmentDetailsPage = ({ state }) => {
       `/api/v1/appointments/unassigned/${id}`,
       state.currentUser.token
     ).then((response) => {
-      console.log(response.employeesAssigned)
       setAppointment(response.appointment);
 
       if (response.employeesAssigned) {

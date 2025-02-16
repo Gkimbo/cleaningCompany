@@ -11,6 +11,9 @@ const groupAppointmentsByDate = (appointments) => {
   const groupedAppointments = new Map();
 
   for (const appointment of appointments) {
+    if(!appointment.employeesAssigned){
+      appointment.employeesAssigned = []
+    }
     const date = appointment.date;
 
     if (!groupedAppointments.has(date)) {
@@ -39,7 +42,6 @@ const UnassignedAppointments = ({ state }) => {
       "/api/v1/appointments/unassigned",
       state.currentUser.token
     );
-    console.log(response);
     setUnassignedAppointments(response.appointments);
   };
 
