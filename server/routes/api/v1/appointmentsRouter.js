@@ -11,6 +11,7 @@ const AppointmentSerializer = require("../../../serializers/AppointmentSerialize
 const UserInfo = require("../../../services/UserInfoClass");
 const calculatePrice = require("../../../services/CalculatePrice");
 const HomeSerializer = require("../../../serializers/homesSerializer");
+const { emit } = require("nodemon");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -313,15 +314,35 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
         appointmentId: Number(appointmentId),
       }
     })
-    if(checkItExists){
-      userInfo = await UserCleanerAppointments.destroy({
+    if (checkItExists) {
+      await UserCleanerAppointments.destroy({
         where: {
           employeeId: id,
           appointmentId: Number(appointmentId),
         }
       });
-      console.log(userInfo)
+    
+      const updateAppointment = await UserAppointments.findOne({
+        where: {
+          id: Number(appointmentId),
+        }
+      });
+    
+      if (updateAppointment) {
+        let employees = Array.isArray(updateAppointment?.dataValues?.employeesAssigned)
+          ? [...updateAppointment.dataValues.employeesAssigned]
+          : [];
+    
+        const updatedEmployees = employees.filter(empId => empId !== String(id));
+    
+        if (updatedEmployees.length !== employees.length) { 
+          await updateAppointment.update({
+            employeesAssigned: updatedEmployees,
+          });
+        }
+      }
     }
+    
       return res.status(200).json({ user: userInfo });
   } catch (error) {
     console.error(error);
@@ -354,27 +375,20 @@ appointmentRouter.patch("/add-employee", async (req, res) => {
           id: appointmentId
         }
       })
-      console.log("Before update:", updateAppointment.dataValues.employeesAssigned);
 
+      let employees
       if (updateAppointment) {
-        let employeesAssigned = updateAppointment.dataValues.employeesAssigned || [];
-
-        if (!employeesAssigned.includes(String(id))) {
-          employeesAssigned.push(String(id));
-
-
-          console.log("DATA To ADD:", employeesAssigned)
+        if (!Array.isArray(updateAppointment?.dataValues?.employeesAssigned)) {
+          employees = [];
+        } else {
+          employees = [...updateAppointment.dataValues.employeesAssigned]; 
+        }
+        
+        if (!employees.includes(String(id))) {
+          employees.push(String(id));
           const response = await updateAppointment.update({
-            employeesAssigned: [...employeesAssigned],
+            employeesAssigned: employees, 
           });
-
-         console.log("Response to update: ", response)
-          const updatedAppointment = await UserAppointments.findOne({
-            where: {
-              id: appointmentId,
-            },
-          })
-          console.log("After Update: ",updatedAppointment.dataValues.employeesAssigned)
         }
       }
       return res.status(200).json({ user: userInfo });
