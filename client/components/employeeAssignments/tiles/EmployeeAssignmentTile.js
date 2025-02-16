@@ -6,13 +6,18 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 
 const EmployeeAssignmentTile = ({
 	id,
+	cleanerId,
 	date,
+	price,
 	homeId,
 	bringSheets,
 	bringTowels,
 	completed,
 	keyPadCode,
 	keyLocation,
+	addEmployee,
+	removeEmployee,
+	assigned,
 }) => {
 	const navigate = useNavigate();
 	const [expandWindow, setExpandWindow] = useState(false);
@@ -64,13 +69,14 @@ const EmployeeAssignmentTile = ({
 		<View style={[homePageStyles.homeTileContainer]}>
 			<Pressable onPress={expandWindow ? contractDetails : expandDetails}>
 				<Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
+				<Text style={{...homePageStyles.appointmentDate, fontSize: 15}}>{`You could make $${price} cleaning this home`}</Text>
 				<Text style={homePageStyles.appointmentPrice}>
-					{home.address} - {home.city}
+					{home.city}
 				</Text>
 				<Text style={homePageStyles.appointmentPrice}>
 					{home.state}, {home.zipcode}
 				</Text>
-				{expandWindow && (
+				{(expandWindow || assigned) && (
 					<>
 						<Text style={{ ...homePageStyles.appointmentPrice, marginTop: 5 }}>
 							Number of Beds: {home.numBeds}
@@ -85,16 +91,45 @@ const EmployeeAssignmentTile = ({
 							Towels are needed: {bringTowels}
 						</Text>
 						{home.cleanersNeeded > 1 && (
+							<>
 							<Text
-								style={{ ...homePageStyles.appointmentPrice, marginTop: 5 }}
+								style={{ ...homePageStyles.appointmentPrice, marginTop: 10, fontWeight: "bold"}}
 							>
-								You will be working with {home.cleanersNeeded - 1} other person
-								to clean this home.
+								This is a larger home. You may need more people to clean it in a timely manor. 
 							</Text>
+							<Text
+							style={{ ...homePageStyles.appointmentPrice }}
+						>
+							If you dont think you can complete it, please choose a smaller home!
+						</Text>
+						</>
 						)}
 					</>
 				)}
 			</Pressable>
+			{assigned ? (
+        <Pressable
+          style={{
+            ...homePageStyles.button,
+            backgroundColor: "red",
+            marginTop: 15,
+          }}
+          onPress={() => removeEmployee(cleanerId, id)}
+        >
+          <Text>I no longer want to clean this home!</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          style={{
+            ...homePageStyles.button,
+            backgroundColor: "green",
+            marginTop: 15,
+          }}
+          onPress={() => addEmployee(cleanerId, id)}
+        >
+          <Text>I want to clean this home!</Text>
+        </Pressable>
+      )}
 		</View>
 	);
 };

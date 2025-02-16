@@ -338,6 +338,7 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
         if (updatedEmployees.length !== employees.length) { 
           await updateAppointment.update({
             employeesAssigned: updatedEmployees,
+            hasBeenAssigned: false,
           });
         }
       }
@@ -377,17 +378,19 @@ appointmentRouter.patch("/add-employee", async (req, res) => {
       })
 
       let employees
+      
       if (updateAppointment) {
         if (!Array.isArray(updateAppointment?.dataValues?.employeesAssigned)) {
           employees = [];
         } else {
           employees = [...updateAppointment.dataValues.employeesAssigned]; 
         }
-        
+      
         if (!employees.includes(String(id))) {
           employees.push(String(id));
           const response = await updateAppointment.update({
-            employeesAssigned: employees, 
+            employeesAssigned: employees,
+            hasBeenAssigned: true,
           });
         }
       }

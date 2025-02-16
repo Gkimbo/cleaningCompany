@@ -3,13 +3,13 @@ import { Pressable, Text } from "react-native";
 import { useNavigate } from "react-router-native";
 import topBarStyles from "../../services/styles/TopBarStyles";
 
-const EmployeeAssignmentsButton = ({ closeModal }) => {
+const ChooseNewJobButton = ({ closeModal }) => {
 	const [redirect, setRedirect] = useState(false);
 	const navigate = useNavigate();
 
 	useEffect(() => {
 		if (redirect) {
-			navigate("/employee-assignments");
+			navigate("/new-job-choice");
 			setRedirect(false);
 		}
 	}, [redirect]);
@@ -21,7 +21,9 @@ const EmployeeAssignmentsButton = ({ closeModal }) => {
 
 	return (
 		<Pressable style={styles.button} onPress={handlePress}>
-			<Text style={topBarStyles.buttonTextSchedule}>My Jobs</Text>
+			<Text style={topBarStyles.buttonTextSchedule}>
+				Search all jobs
+			</Text>
 		</Pressable>
 	);
 };
@@ -34,4 +36,4 @@ const styles = {
 	},
 };
 
-export default EmployeeAssignmentsButton;
+export default ChooseNewJobButton;
