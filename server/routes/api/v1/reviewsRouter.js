@@ -15,7 +15,7 @@ const { emit } = require("nodemon");
 const reviewsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
-reviewsRouter.get("/:id", async (req, res) => {
+reviewsRouter.get("/:userId", async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
   try {
     const userAppointments = await UserAppointments.findAll({
@@ -31,7 +31,7 @@ reviewsRouter.get("/:id", async (req, res) => {
   }
 });
 
-reviewsRouter.post("/", async (req, res) => {
+reviewsRouter.post("/submit", async (req, res) => {
   const { userId, reviewerId, appointmentId, rating, comment } = req.body;
 
   

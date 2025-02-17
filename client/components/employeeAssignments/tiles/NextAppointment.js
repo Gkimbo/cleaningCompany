@@ -23,7 +23,7 @@ const NextAppointment = ({ appointment }) => {
 		zipcode: "",
 		cleanersNeeded: "",
 	});
-console.log(appointment.price)
+	
 	const formatDate = (dateString) => {
 		const options = {
 			weekday: "long",
@@ -121,7 +121,7 @@ console.log(appointment.price)
 					</>
 				)}
 			</Pressable>
-			
+
 		</View>
 	);
 };
