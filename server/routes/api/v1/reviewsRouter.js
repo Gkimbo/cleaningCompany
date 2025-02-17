@@ -5,26 +5,23 @@ const {
   UserAppointments,
   UserReviews
 } = require("../../../models");
-const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
-const UserInfo = require("../../../services/UserInfoClass");
-const calculatePrice = require("../../../services/CalculatePrice");
-const HomeSerializer = require("../../../serializers/homesSerializer");
 const { emit } = require("nodemon");
 const ReviewsClass = require("../../../services/ReviewsClass");
 
 const reviewsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
-reviewsRouter.get("/:userId", async (req, res) => {
+reviewsRouter.get("/", async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
   try {
-    const userAppointments = await UserAppointments.findAll({
-      where: { hasBeenAssigned: false },
+    const decodedToken = jwt.verify(token, secretKey);
+	const userId = decodedToken.userId;
+    
+    const reviews = await UserReviews.findAll({
+      where: { userId: userId },
     });
-    const serializedAppointments =
-      AppointmentSerializer.serializeArray(userAppointments);
 
-    return res.status(200).json({ appointments: serializedAppointments });
+    return res.status(200).json({ reviews });
   } catch (error) {
     console.error(error);
     return res.status(401).json({ error: "Invalid or expired token" });
@@ -35,7 +32,7 @@ reviewsRouter.post("/submit", async (req, res) => {
     const { userId, reviewerId, appointmentId, rating, comment } = req.body;
     try{
         const newReview = await ReviewsClass.addReviewToDB(userId, reviewerId, appointmentId, rating, comment)
-        
+
         return res.status(200).json({ newReview });
     }catch(error){
         return res.status(401).json({ error: "Invalid or expired token" });

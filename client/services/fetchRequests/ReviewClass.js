@@ -50,9 +50,13 @@ class Review {
     }
   }
 
-  static async getReviews(userId) {
+  static async getReviews(user) {
     try {
-      const response = await fetch(baseURL + `/api/v1/reviews/${userId}`);
+      const response = await fetch(baseURL + `/api/v1/reviews`,{
+        headers: {
+            Authorization: `Bearer ${user}`,
+          },
+      });
       if (!response.ok) {
         throw new Error("No data received");
       }

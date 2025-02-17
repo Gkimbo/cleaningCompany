@@ -19,6 +19,7 @@ import Animated, {
   useScrollViewOffset,
 } from "react-native-reanimated";
 import { Pressable } from "react-native-web";
+import ReviewsOverview from "./reviews/ReviewsOverview";
 
 const HomePage = ({ state, dispatch }) => {
   const scrollRef = useAnimatedRef();
@@ -177,6 +178,7 @@ const HomePage = ({ state, dispatch }) => {
       >
           {todaysAppointment}
           {nextAppointment}
+          <ReviewsOverview state={state} dispatch={dispatch}/>
         </View>
       ) : (
         <View

@@ -28,6 +28,15 @@ module.exports = {
 					onDelete: "CASCADE",
 				},
 			},
+			appointmentId: {
+				type: Sequelize.INTEGER,
+				allowNull: false,
+				references: {
+					model: "UserAppointments",
+					key: "id",
+					onDelete: "CASCADE",
+				},
+			},
 			review: {
 				type: Sequelize.FLOAT,
 				allowNull: false,
