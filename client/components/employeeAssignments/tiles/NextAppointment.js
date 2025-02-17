@@ -34,6 +34,9 @@ const NextAppointment = ({ appointment }) => {
 		return new Date(dateString).toLocaleDateString(undefined, options);
 	};
 
+	const totalPrice = Number(appointment.price)
+    const correctedAmount = (totalPrice * 0.9)
+
 	const expandDetails = () => {
 		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 		setExpandWindow(true);
@@ -65,7 +68,7 @@ const NextAppointment = ({ appointment }) => {
 				<Text
 					style={{ ...homePageStyles.appointmentPrice, alignSelf: "center" }}
 				>
-					{`Payout: $${appointment.price}`}
+					{`Payout: $${correctedAmount}`}
 				</Text>
 				{expandWindow && (
 					<>

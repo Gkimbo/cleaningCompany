@@ -96,8 +96,9 @@ const HomePage = ({ state, dispatch }) => {
   });
 
   sortedAppointments.forEach((appointment, index) => {
-
-    upcomingPayment = upcomingPayment + Number(appointment.price)
+    const totalPrice = Number(appointment.price)
+    const correctedAmount = (totalPrice * 0.9)
+    upcomingPayment = upcomingPayment + correctedAmount
     const today = new Date();
     let appointmentDate = new Date(appointment.date);
 
