@@ -14,8 +14,22 @@ const ReviewForm = ({userId, reviewerId, appointmentId}) => {
 	const navigate = useNavigate();
 	const { login } = useContext(AuthContext);
 
+    
+    const validate = () => {
+        const validationErrors = [];
+    
+        if (comment.length < 4) {
+            validationErrors.push(`Please input a comment about why you gave a ${rating} star rating.`);
+        }
+    
+        setErrors(validationErrors);
+        return validationErrors.length === 0;
+    };
 
 	const onSubmit = async () => {
+        if (!validate()) {
+			return;
+		} else {
 			const data = {
 				userId, 
                 reviewerId, 
@@ -32,6 +46,7 @@ const ReviewForm = ({userId, reviewerId, appointmentId}) => {
 			} else {
 				setRedirect(true);
 			}
+        }
 	};
 
 	useEffect(() => {

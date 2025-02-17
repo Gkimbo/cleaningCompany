@@ -3,7 +3,6 @@ const jwt = require("jsonwebtoken");
 const {
   User,
   UserAppointments,
-  UserCleanerAppointments,
   UserReviews
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
@@ -11,6 +10,7 @@ const UserInfo = require("../../../services/UserInfoClass");
 const calculatePrice = require("../../../services/CalculatePrice");
 const HomeSerializer = require("../../../serializers/homesSerializer");
 const { emit } = require("nodemon");
+const ReviewsClass = require("../../../services/ReviewsClass");
 
 const reviewsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -32,8 +32,14 @@ reviewsRouter.get("/:userId", async (req, res) => {
 });
 
 reviewsRouter.post("/submit", async (req, res) => {
-  const { userId, reviewerId, appointmentId, rating, comment } = req.body;
-
+    const { userId, reviewerId, appointmentId, rating, comment } = req.body;
+    try{
+        const newReview = await ReviewsClass.addReviewToDB(userId, reviewerId, appointmentId, rating, comment)
+        
+        return res.status(200).json({ newReview });
+    }catch(error){
+        return res.status(401).json({ error: "Invalid or expired token" });
+    }
   
 });
 
