@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Text, View, Image, ScrollView } from "react-native";
 import homePageStyles from "../services/styles/HomePageStyles";
 import FetchData from "../services/fetchRequests/fetchData";
@@ -9,17 +9,33 @@ import image4 from "../services/photos/cleaning_supplies_on_floor.jpg";
 import { cleaningCompany } from "../services/data/companyInfo";
 import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
 import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
+import topBarStyles from "../services/styles/TopBarStyles";
 import { FadeInSection } from "../services/FadeInSection";
+import { useNavigate } from "react-router-native";
 import Animated, {
   interpolate,
   useAnimatedRef,
   useAnimatedStyle,
   useScrollViewOffset,
 } from "react-native-reanimated";
+import { Pressable } from "react-native-web";
 
 const HomePage = ({ state, dispatch }) => {
   const scrollRef = useAnimatedRef();
   const scrollOffSet = useScrollViewOffset(scrollRef);
+  const [redirect, setRedirect] = useState(false);
+	const navigate = useNavigate();
+
+  useEffect(() => {
+		if (redirect) {
+			navigate("/employee-assignments");
+			setRedirect(false);
+		}
+	}, [redirect]);
+
+	const handlePress = () => {
+		setRedirect(true);
+	};
 
   const imageAnimatedStyles = useAnimatedStyle(() => {
     return {
@@ -73,12 +89,15 @@ const HomePage = ({ state, dispatch }) => {
   let todaysAppointment = null;
   let nextAppointment = null;
   let foundToday = false;
+  let upcomingPayment = 0
 
   const sortedAppointments = state.appointments.sort((a, b) => {
     return new Date(a.date) - new Date(b.date);
   });
 
   sortedAppointments.forEach((appointment, index) => {
+
+    upcomingPayment = upcomingPayment + Number(appointment.price)
     const today = new Date();
     let appointmentDate = new Date(appointment.date);
 
@@ -87,14 +106,38 @@ const HomePage = ({ state, dispatch }) => {
       todaysAppointment = <TodaysAppointment appointment={appointment} />;
       if (index < sortedAppointments.length - 1) {
         nextAppointment = (
-          <NextAppointment appointment={sortedAppointments[index + 1]} />
+          <>
+            <NextAppointment appointment={sortedAppointments[index + 1]} />
+            
+            <Pressable style={{
+		            backgroundColor: "#f9bc60",
+		            padding: 10,
+		            borderRadius: 50,
+                width:"40%",
+                alignSelf: "center"
+	              }} onPress={handlePress}>
+			        <Text style={topBarStyles.buttonTextSchedule}>View all your appointments</Text>
+		        </Pressable>
+          </>
         );
       }
     } else if (!nextAppointment && appointmentDate > today) {
-      nextAppointment = <NextAppointment appointment={appointment} />;
+      nextAppointment = 
+      <>
+        <NextAppointment appointment={appointment} />
+        <Pressable style={{
+		            backgroundColor: "#f9bc60",
+		            padding: 10,
+		            borderRadius: 50,
+                width:"40%",
+                alignSelf: "center"
+	              }} onPress={handlePress}>
+			        <Text style={topBarStyles.buttonTextSchedule}>View all your appointments</Text>
+		        </Pressable>
+      </>
     }
   });
-
+  
   if (!foundToday && !nextAppointment) {
     nextAppointment = (
       <Text style={homePageStyles.title}>
@@ -104,7 +147,16 @@ const HomePage = ({ state, dispatch }) => {
   } else if (!foundToday) {
     todaysAppointment = (
       <>
-        <Text style={homePageStyles.title}>
+        <Text style={{...homePageStyles.homeTileTitle}}>
+          {`Your'e expected payout is `}
+        </Text>
+        <Text style={{...homePageStyles.homeTileTitle, fontFamily: "italic", fontSize: 25}}>
+          {`$${upcomingPayment}`}
+        </Text>
+        <Text style={{...homePageStyles.homeTileTitle, marginBottom: "40%"}}>
+          {`After scheduled cleanings are completed!`}
+        </Text>
+        <Text style={{...homePageStyles.title, marginBottom: "30%"}}>
           You have no appointments scheduled for today
         </Text>
         <Text style={homePageStyles.smallTitle}>Your next cleaning is:</Text>
@@ -113,19 +165,26 @@ const HomePage = ({ state, dispatch }) => {
   }
 
   return (
-    <View
+    <>
+      {state.account === "cleaner" ? (
+        <View
+        style={{
+          ...homePageStyles.container,
+          flexDirection: "column",
+          marginTop: 100,
+        }}
+      >
+          {todaysAppointment}
+          {nextAppointment}
+        </View>
+      ) : (
+        <View
       style={{
         ...homePageStyles.container,
         flexDirection: "column",
         marginTop: 105,
       }}
     >
-      {state.account === "cleaner" ? (
-        <>
-          {todaysAppointment}
-          {nextAppointment}
-        </>
-      ) : (
         <View
           style={{
             ...homePageStyles.container,
@@ -190,8 +249,10 @@ const HomePage = ({ state, dispatch }) => {
             {cleaningCompany.cancellationPolicy.description}
           </Text>
         </View>
+      </View>
       )}
-    </View>
+    </>
+    
   );
 };
 

@@ -24,7 +24,6 @@ const SelectNewJobList = ({ state, dispatch }) => {
 		  "/api/v1/users/appointments",
 		  state.currentUser.token
 		);
-		console.log(response)
 		setAllAppointments(response.appointments);
 	  };
 	

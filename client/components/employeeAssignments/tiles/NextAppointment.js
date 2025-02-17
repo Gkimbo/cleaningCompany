@@ -23,7 +23,7 @@ const NextAppointment = ({ appointment }) => {
 		zipcode: "",
 		cleanersNeeded: "",
 	});
-
+console.log(appointment.price)
 	const formatDate = (dateString) => {
 		const options = {
 			weekday: "long",
@@ -60,12 +60,12 @@ const NextAppointment = ({ appointment }) => {
 				<Text
 					style={{ ...homePageStyles.appointmentPrice, alignSelf: "center" }}
 				>
-					{home.address} - {home.city}
+					{home.city}, {home.state}, {home.zipcode}
 				</Text>
 				<Text
 					style={{ ...homePageStyles.appointmentPrice, alignSelf: "center" }}
 				>
-					{home.state}, {home.zipcode}
+					{`Payout: $${appointment.price}`}
 				</Text>
 				{expandWindow && (
 					<>
@@ -105,20 +105,23 @@ const NextAppointment = ({ appointment }) => {
 							Towels are needed: {appointment.bringTowels}
 						</Text>
 						{home.cleanersNeeded > 1 && (
-							<Text
-								style={{
-									...homePageStyles.appointmentPrice,
-									marginTop: 5,
-									alignSelf: "center",
-								}}
-							>
-								You will be working with {home.cleanersNeeded - 1} other person
-								to clean this home.
-							</Text>
+							<>
+								<Text
+									style={{ ...homePageStyles.appointmentPrice, marginTop: 10, fontWeight: "bold"}}
+								>
+									This is a larger home. You may need more people to clean it in a timely manor. 
+								</Text>
+								<Text
+									style={{ ...homePageStyles.appointmentPrice }}
+								>
+									If you dont think you can complete it, please choose a smaller home!
+								</Text>
+							</>
 						)}
 					</>
 				)}
 			</Pressable>
+			
 		</View>
 	);
 };
