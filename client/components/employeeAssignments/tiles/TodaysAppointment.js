@@ -111,18 +111,11 @@ const TodaysAppointment = ({ appointment }) => {
 			>
 				Towels are needed: {appointment.bringTowels}
 			</Text>
-			{home.cleanersNeeded > 1 && (
-				<Text
-					style={{
-						...homePageStyles.appointmentPrice,
-						marginTop: 5,
-						alignSelf: "center",
-					}}
+			<Text
+					style={{ ...homePageStyles.appointmentPrice, alignSelf: "center" }}
 				>
-					You will be working with {home.cleanersNeeded - 1} other person to
-					clean this home.
+					{`Payout once finished: $${appointment.price}`}
 				</Text>
-			)}
 			{home.specialNotes && (
 				<Text
 					style={{

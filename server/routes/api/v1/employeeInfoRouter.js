@@ -73,8 +73,6 @@ employeeInfoRouter.get("/employeeSchedule", async (req, res) => {
         type: "cleaner",
       },
     });
-
-    console.log(employees);
     return res.status(200).json({ employees });
   } catch (error) {
     console.log(error);

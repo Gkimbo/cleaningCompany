@@ -27,6 +27,8 @@ import AppointmentDetailsPage from "./components/admin/AssignAppointments/Appoin
 import NewCleanerInformationPage from "./components/admin/CleanerApplications/NewCleanerInformationPage";
 import CleanerApplicationForm from "./components/admin/CleanerApplications/ApplicationForm";
 import ListOfApplications from "./components/admin/CleanerApplications/ListOfApplications";
+import ChooseNewJobButton from "./components/navBar/ChooseNewJobButton";
+import SelectNewJobList from "./components/employeeAssignments/lists/SelectNewJobList";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -153,6 +155,12 @@ export default function App() {
               path="/employee-assignments"
               element={
                 <EmployeeAssignmentsList state={state} dispatch={dispatch} />
+              }
+            />
+            <Route
+              path="/new-job-choice"
+              element={
+                <SelectNewJobList state={state} dispatch={dispatch} />
               }
             />
             <Route

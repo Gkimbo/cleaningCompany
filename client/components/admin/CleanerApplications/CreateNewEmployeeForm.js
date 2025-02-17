@@ -6,39 +6,23 @@ import { TextInput } from "react-native-paper";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import formStyles from "../../../services/styles/FormStyle";
 import { AuthContext } from "../../../services/AuthContext";
+import Application from "../../../services/fetchRequests/ApplicationClass";
 
-const SignUpForm = ({ state, dispatch }) => {
-	const [userName, setUserName] = useState("");
-	const [password, setPassword] = useState("");
-	const [email, setEmail] = useState("");
-	const [redirect, setRedirect] = useState(false);
+const CreateNewEmployeeForm = ({id, firstName, lastName, email, setApplicationsList}) => {
+	const [userName, setUserName] = useState(`${firstName}${lastName}`);
+	const [password, setPassword] = useState(`${lastName}$${firstName}124`);
+	const [emailInput, setEmail] = useState(email);
 	const [showPassword, setShowPassword] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const navigate = useNavigate();
 	const { login } = useContext(AuthContext);
+	const type = "cleaner";
 
 	const validate = () => {
 		const validationErrors = [];
 
 		if (userName.length < 4 || userName.length > 12) {
 			validationErrors.push("Username must be between 4 and 12 characters.");
-		}
-
-		const uppercaseCount = (password.match(/[A-Z]/g) || []).length;
-		const lowercaseCount = (password.match(/[a-z]/g) || []).length;
-		const specialCharCount = (
-			password.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/g) || []
-		).length;
-
-		if (
-			password.length < 8 ||
-			uppercaseCount < 2 ||
-			lowercaseCount < 2 ||
-			specialCharCount < 2
-		) {
-			validationErrors.push(
-				"Password must be at least 8 characters long with 2 uppercase letters, 2 lowercase letters, and 2 special characters."
-			);
 		}
 
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -58,30 +42,30 @@ const SignUpForm = ({ state, dispatch }) => {
 				userName,
 				password,
 				email,
+				type,
 			};
-			const response = await FetchData.makeNewUser(data);
-			console.log("response")
+			const response = await FetchData.makeNewEmployee(data);
 			if (
 				response === "An account already has this email" ||
 				response === "Username already exists"
 			) {
 				setErrors([response]);
 			} else {
-				dispatch({ type: "CURRENT_USER", payload: response.token });
-				login(response.token);
-				setRedirect(true);
+                const response = await Application.deleteApplication(id)
+				setEmail("");
+				setPassword("");
+				setUserName("");
+                FetchData.getApplicationsFromBackend().then((response) => {
+                    setApplicationsList(response.serializedApplications);
+                })
 			}
-		}
-	};
+        }
+    }
+    
 
-	useEffect(() => {
-		if (redirect) {
-			navigate("/");
-		}
-	}, [redirect]);
 
 	return (
-		<ScrollView contentContainerStyle={formStyles.container}>
+		<View style={formStyles.container}>
 			{errors.length > 0 && (
 				<View style={formStyles.errorContainer}>
 					{errors.map((error, index) => (
@@ -117,16 +101,16 @@ const SignUpForm = ({ state, dispatch }) => {
 				mode="outlined"
 				placeholder="Email"
 				style={formStyles.input}
-				value={email}
+				value={emailInput}
 				onChangeText={setEmail}
 				keyboardType="email-address"
 			/>
 
 			<Pressable onPress={onSubmit}>
-				<Text style={formStyles.button}>Register</Text>
+				<Text style={formStyles.button}>Add new employee</Text>
 			</Pressable>
-		</ScrollView>
+		</View>
 	);
 };
 
-export default SignUpForm;
+export default CreateNewEmployeeForm;

@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useState} from "react";
 import { Pressable, Text, View, Animated } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import homePageStyles from "../../../services/styles/HomePageStyles";
@@ -15,8 +15,17 @@ const ApplicationTile = ({
     deleteConfirmation,
 	handleDeletePress,
 	handleNoPress,
-	handleAccept,
+    CreateNewEmployeeForm,
+    setApplicationsList
 }) => {
+    const [formVisible, setFormVisible] = useState(false)
+    const handleAccept = () => {
+        if(!formVisible){
+          setFormVisible(true)
+        }else{
+          setFormVisible(false)
+        }
+      }
 	return (
 		<View style={homePageStyles.homeTileContainer}>
 			<View
@@ -38,6 +47,7 @@ const ApplicationTile = ({
 							style={{
 								borderRadius: 20,
 								marginRight: 10,
+                                padding: 10,
 								width: deleteConfirmation[id] ? 75 : pressed ? 40 : 30,
 								height: deleteConfirmation[id] ? 25 : pressed ? 40 : 30,
 								backgroundColor: deleteConfirmation[id]
@@ -56,7 +66,7 @@ const ApplicationTile = ({
 									fontSize: deleteConfirmation[id] ? 10 : 14,
 								}}
 							>
-								{deleteConfirmation[id] ? "Delete Home" : "X"}
+								{deleteConfirmation[id] ? "Delete Application" : "X"}
 							</Text>
 						</Animated.View>
 					)}
@@ -72,8 +82,9 @@ const ApplicationTile = ({
 							style={{
 								backgroundColor: "green",
 								borderRadius: 20,
-								width: 65,
-								height: 25,
+								width: 80,
+								height: 30,
+                                padding: 10,
 								justifyContent: "center",
 								alignItems: "center",
 							}}
@@ -85,16 +96,16 @@ const ApplicationTile = ({
 									fontSize: 10,
 								}}
 							>
-								Keep Home
+								Keep Application
 							</Text>
 						</View>
 					</Pressable>
 				)}
 				{!deleteConfirmation[id] ? (
 					<Pressable
-						onPress={() => handleAccept(id)}
+						onPress={() => handleAccept()}
 						accessible={true}
-						accessibilityLabel="Edit Button"
+						accessibilityLabel="Add Button"
 					>
 						<View
 							style={{
@@ -106,7 +117,7 @@ const ApplicationTile = ({
 								alignItems: "center",
 							}}
 						>
-							<Icon name="edit" size={20} color="white" />
+							<Icon name="plus" size={18} color="white" />
 						</View>
 					</Pressable>
 				) : null}
@@ -132,6 +143,15 @@ const ApplicationTile = ({
 					style={homePageStyles.homeTileContent}
 				>{`Message: ${message}`}</Text>
 			) : null}
+            {formVisible ? (
+                <CreateNewEmployeeForm 
+                id={id}
+                firstName={firstName}
+                lastName={lastName}
+                email={email}
+                setApplicationsList={setApplicationsList}
+                />
+            ) : null}
 		</View>
 	);
 };

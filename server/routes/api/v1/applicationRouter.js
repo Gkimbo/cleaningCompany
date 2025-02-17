@@ -46,7 +46,6 @@ applicationRouter.post("/submitted", async (req, res) => {
       const applicationToDelete = await UserApplications.findOne({
         where: { id: id },
       });
-      console.log(applicationToDelete)
       const deletedAppointmentInfo = await UserApplications.destroy({
         where: { id: id },
       });

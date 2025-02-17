@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Pressable, View, Text, Dimensions } from "react-native";
+import { Pressable, View, Text, Dimensions, Animated } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import AppointmentTile from "../tiles/AppointmentTile";
@@ -11,6 +11,9 @@ const groupAppointmentsByDate = (appointments) => {
   const groupedAppointments = new Map();
 
   for (const appointment of appointments) {
+    if(!appointment.employeesAssigned){
+      appointment.employeesAssigned = []
+    }
     const date = appointment.date;
 
     if (!groupedAppointments.has(date)) {
@@ -26,6 +29,8 @@ const groupAppointmentsByDate = (appointments) => {
 const UnassignedAppointments = ({ state }) => {
   const [unassignedAppointments, setUnassignedAppointments] = useState([]);
   const [backRedirect, setBackRedirect] = useState(false);
+  const [deleteAnimation] = useState(new Animated.Value(0));
+	const [deleteConfirmation, setDeleteConfirmation] = useState({});
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
@@ -39,15 +44,11 @@ const UnassignedAppointments = ({ state }) => {
       "/api/v1/appointments/unassigned",
       state.currentUser.token
     );
-    console.log(response);
     setUnassignedAppointments(response.appointments);
   };
 
   useEffect(() => {
-    fetchAppointments().then((response) => {
-      console.log("response");
-    });
-
+    fetchAppointments()
     if (backRedirect) {
       navigate("/");
       setBackRedirect(false);
@@ -57,6 +58,48 @@ const UnassignedAppointments = ({ state }) => {
   const handleBackPress = () => {
     setBackRedirect(true);
   };
+
+  const onDeleteAppointment = async (id) => {
+		try {
+			const appointment = await Appointment.deleteAppointmentById(id)
+      fetchAppointments()
+		} catch (error) {
+			console.error("Error deleting appointment:", error);
+		}
+	};
+
+  const handleDeletePress = (appointmentId) => {
+		setDeleteConfirmation((prevConfirmations) => ({
+			[appointmentId]: !prevConfirmations[appointmentId],
+		}));
+		if (deleteConfirmation[appointmentId]) {
+			Animated.timing(deleteAnimation, {
+				toValue: 0,
+				duration: 300,
+				easing: Easing.linear,
+				useNativeDriver: false,
+			}).start(() => {
+				onDeleteAppointment(appointmentId);
+				setDeleteConfirmation((prevConfirmations) => ({
+					...prevConfirmations,
+					[appointmentId]: false,
+				}));
+			});
+		} else {
+			Animated.timing(deleteAnimation, {
+				toValue: 1,
+				duration: 300,
+				easing: Easing.linear,
+				useNativeDriver: false,
+			}).start();
+		}
+	};
+
+  const handleNoPress = (appointmentId) => {
+		setDeleteConfirmation((prevConfirmations) => ({
+			[appointmentId]: !prevConfirmations[appointmentId],
+		}));
+	};
 
   const groupedAppointments = groupAppointmentsByDate(filteredAppointments);
   const appointmentArray = [];
@@ -75,6 +118,11 @@ const UnassignedAppointments = ({ state }) => {
               employeesAssigned={appointment.employeesAssigned}
               hasBeenAssigned={appointment.hasBeenAssigned}
               empoyeesNeeded={appointment.empoyeesNeeded}
+              handleDeletePress={handleDeletePress}
+					    deleteAnimation={deleteAnimation}
+					    deleteConfirmation={deleteConfirmation}
+					    setDeleteConfirmation={setDeleteConfirmation}
+					    handleNoPress={handleNoPress}
             />
           ))}
         </View>
@@ -94,6 +142,11 @@ const UnassignedAppointments = ({ state }) => {
             employeesAssigned={appointment.employeesAssigned}
             empoyeesNeeded={appointment.empoyeesNeeded}
             hasBeenAssigned={appointment.hasBeenAssigned}
+            handleDeletePress={handleDeletePress}
+					  deleteAnimation={deleteAnimation}
+					  deleteConfirmation={deleteConfirmation}
+					  setDeleteConfirmation={setDeleteConfirmation}
+					  handleNoPress={handleNoPress}
           />
         </View>
       );

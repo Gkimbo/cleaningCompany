@@ -1,9 +1,10 @@
 const express = require("express");
-const { User, UserBills, UserAppointments } = require("../../../models");
+const { User, UserBills, UserAppointments, UserCleanerAppointments } = require("../../../models");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const { Op } = require("sequelize")
 
 const secretKey = process.env.SESSION_SECRET;
 
@@ -132,6 +133,34 @@ usersRouter.delete("/employee", async (req, res) => {
 				userId: userId,
 			},
 		});
+
+		await UserCleanerAppointments.destroy({
+			where: {
+				employeeId: userId,
+			},
+		})
+
+		const appointmentsToUpdate = await UserAppointments.findAll({
+			where:{
+				employeesAssigned:{
+					[Op.contains]: [String(userId)],
+				}
+			}
+		})
+
+		for (const appointment of appointmentsToUpdate) {
+			let employees = Array.isArray(appointment.employeesAssigned) ? [...appointment.employeesAssigned] : [];
+		  
+			// Remove userId from the array
+			const updatedEmployees = employees.filter(empId => empId !== String(userId));
+		  console.log(updatedEmployees)
+			// Update only if something was removed
+			if (updatedEmployees.length !== employees.length) {
+			  await appointment.update({
+				employeesAssigned: updatedEmployees,
+			  });
+			}
+		  }
 
 		await User.destroy({
 			where: {
