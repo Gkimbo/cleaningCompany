@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Dimensions, Pressable } from "react-native";
+import { Pressable, View, Text, ScrollView, Dimensions } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
+import topBarStyles from "../../services/styles/TopBarStyles"
+import ReviewTile from "./ReviewTile";
 import Review from "../../services/fetchRequests/ReviewClass";
 
 const tempTestData = [
   {
+    id: 1,
     userId: 13,
     reviewerId: 12,
     appointmentId: 2,
@@ -14,6 +17,7 @@ const tempTestData = [
     comment: "Was very thourgh but missed a few areas.",
   },
   {
+    id: 2,
     userId: 13,
     reviewerId: 7,
     appointmentId: 4,
@@ -22,28 +26,20 @@ const tempTestData = [
   },
 ];
 
-const ReviewsOverview = ({ state, dispatch }) => {
+const AllReviewsList = ({ state, dispatch }) => {
   const [allReviews, setAllReviews] = useState(tempTestData);
-  const [redirect, setRedirect] = useState(false);
+  const [backRedirect, setBackRedirect] = useState(false);
+  const [userId, setUserId] = useState(null);
   const { width } = Dimensions.get("window");
-  const iconSize = width < 400 ? 16 : width < 800 ? 20 : 24;
+  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const fetchReviews = async () => {
     if (state.currentUser.token) {
-      Review.getReviews(state.currentUser.token).then((response) => {
-        console.log(response);
-        // setAllReviews(response.reviews);
-      });
+      const response = await Review.getReviews(state.currentUser.token);
+      console.log(response);
+      //   setAllReviews(response.reviews);
     }
-    if (redirect) {
-      navigate("/all-reviews");
-      setRedirect(false);
-    }
-  }, [redirect]);
-
-  const handlePress = () => {
-    setRedirect(true);
   };
 
   const getAverageRating = () => {
@@ -78,29 +74,48 @@ const ReviewsOverview = ({ state, dispatch }) => {
     return stars;
   };
 
+
+  useEffect(() => {
+    fetchReviews();
+    if (backRedirect) {
+      navigate("/");
+      setBackRedirect(false);
+    }
+  }, [backRedirect]);
+
+  const handleBackPress = () => {
+    setBackRedirect(true);
+  };
+
+  const sortedReviews = allReviews.sort((a, b) => {
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  });
+
+  const displayReviews = sortedReviews.map((review) => {
+    return (
+      <View key={review.id}>
+        <ReviewTile
+          id={review.id}
+          userId={review.userId}
+          reviewerId={review.reviewerId}
+          appointmentId={review.appointmentId}
+          rating={review.rating}
+          comment={review.comment}
+          createdAt={review.createdAt}
+        />
+      </View>
+    );
+  });
+
   return (
     <View
       style={{
         ...homePageStyles.container,
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
+        marginTop: 0
       }}
     >
-      {allReviews.length === 0 ? (
-        <View style={{ alignItems: "center" }}>
-          <View style={{ flexDirection: "row", marginBottom: 8 }}>
-            {[...Array(5)].map((_, index) => (
-              <Icon key={index} name="star" size={iconSize} color="#cccccc" />
-            ))}
-          </View>
-          <Text style={{ textAlign: "center", color: "#666", fontSize: 14 }}>
-            You have no reviews yet. Please complete cleanings to get reviews
-            and improve your status with cleaners.
-          </Text>
-        </View>
-      ) : (
-        <View style={{ alignItems: "center", paddingHorizontal: 16 }}>
+         <View style={{ alignItems: "center", paddingHorizontal: 16 , marginBottom: "20%"}}>
           {/* Section Title */}
           <Text
             style={{
@@ -112,12 +127,10 @@ const ReviewsOverview = ({ state, dispatch }) => {
           >
             Your Average Rating
           </Text>
-
-          <Pressable onPress={handlePress}>
+          
             <View style={{ flexDirection: "row", marginBottom: 4 }}>
               {renderStars()}
             </View>
-          </Pressable>
 
           <Text
             style={{
@@ -129,23 +142,29 @@ const ReviewsOverview = ({ state, dispatch }) => {
           >
             {averageRating.toFixed(1)} / 5.0 ({allReviews.length} Reviews)
           </Text>
-
-          <Text
+        </View>
+      <View style={homePageStyles.backButtonAllReviewsList}>
+        <Pressable
+          style={homePageStyles.backButtonForm}
+          onPress={handleBackPress}
+        >
+          <View
             style={{
-              textAlign: "center",
-              color: "#666",
-              fontSize: 14,
-              lineHeight: 20,
+              flexDirection: "row",
+              alignItems: "center",
+              padding: 10,
             }}
           >
-            Your rating is based on feedback from past cleanings. A higher
-            rating helps you build trust with homeowners and get more cleaning
-            requests. Keep up the great work!
-          </Text>
-        </View>
-      )}
+            <Icon name="angle-left" size={iconSize} color="black" />
+            <View style={{ marginLeft: 15 }}>
+              <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
+            </View>
+          </View>
+        </Pressable>
+      </View>
+      {displayReviews}
     </View>
   );
 };
 
-export default ReviewsOverview;
+export default AllReviewsList;
