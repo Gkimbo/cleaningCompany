@@ -13,56 +13,28 @@ const ReviewTile = ({
   comment,
   createdAt,
 }) => {
-  const navigate = useNavigate();
-  const animatedScale = new Animated.Value(1);
-
-  const handlePressIn = () => {
-    Animated.spring(animatedScale, {
-      toValue: 0.98,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(animatedScale, {
-      toValue: 1,
-      friction: 3,
-      useNativeDriver: true,
-    }).start();
-    // () => navigate(`/review/${id}`)
-  };
 
   const renderStars = () => {
     const stars = [];
-    const roundedRating = Math.round(rating * 2) / 2; 
+    const roundedRating = Math.round(rating * 2) / 2;
 
     for (let i = 1; i <= 5; i++) {
       if (i <= roundedRating) {
-        stars.push(<Icon key={i} name="star" size={18} color="#FFD700" />); 
+        stars.push(<Icon key={i} name="star" size={18} color="#FFD700" />);
       } else if (i - 0.5 === roundedRating) {
         stars.push(
           <Icon key={i} name="star-half-full" size={18} color="#FFD700" />
-        ); 
+        );
       } else {
-        stars.push(<Icon key={i} name="star-o" size={18} color="#cccccc" />); 
+        stars.push(<Icon key={i} name="star-o" size={18} color="#cccccc" />);
       }
     }
     return stars;
   };
 
   return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={{ marginBottom: 12 }}
-    >
-      <Animated.View
-        style={[
-          homePageStyles.appointmentListContainer,
-          styles.tile,
-          { transform: [{ scale: animatedScale }] },
-        ]}
-      >
+    <View style={{ marginBottom: 12 }}>
+      <View style={[homePageStyles.appointmentListContainer, styles.tile]}>
         <View style={styles.header}>
           <Text style={styles.reviewerText}>Reviewer: {reviewerId}</Text>
           <Text style={styles.dateText}>
@@ -79,10 +51,9 @@ const ReviewTile = ({
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Appointment ID: {appointmentId}</Text>
-          <Text style={styles.tapText}>Tap to see more</Text>
         </View>
-      </Animated.View>
-    </Pressable>
+      </View>
+    </View>
   );
 };
 
