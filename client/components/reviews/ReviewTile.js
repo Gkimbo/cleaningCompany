@@ -3,6 +3,7 @@ import { Pressable, Text, View, Animated } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import homePageStyles from "../../services/styles/HomePageStyles";
+import ReviewTileStyles from "../../services/styles/ReviewTileStyles";
 
 const ReviewTile = ({
   id,
@@ -13,6 +14,13 @@ const ReviewTile = ({
   comment,
   createdAt,
 }) => {
+  const formatDate = (createdAt) => {
+    const date = new Date(createdAt);
+    const options = { day: "numeric", month: "long", year: "numeric" };
+    return date.toLocaleDateString("en-GB", options);
+  };
+
+  const date = createdAt ? formatDate(createdAt) : null;
 
   const renderStars = () => {
     const stars = [];
@@ -34,93 +42,38 @@ const ReviewTile = ({
 
   return (
     <View style={{ marginBottom: 12 }}>
-      <View style={[homePageStyles.appointmentListContainer, styles.tile]}>
-        <View style={styles.header}>
-          <Text style={styles.reviewerText}>Reviewer: {reviewerId}</Text>
-          <Text style={styles.dateText}>
-            {createdAt ? createdAt : "Date not available"}
+      <View
+        style={[
+          homePageStyles.appointmentListContainer,
+          ReviewTileStyles.tile,
+        ]}
+      >
+        <View style={ReviewTileStyles.header}>
+          <Text style={ReviewTileStyles.reviewerText}>
+            Reviewer: {reviewerId}
+          </Text>
+          <Text style={ReviewTileStyles.dateText}>
+            {date ? date : "Date not available"}
           </Text>
         </View>
 
-        <View style={styles.ratingContainer}>
-          <View style={styles.starsRow}>{renderStars()}</View>
-          <Text style={styles.ratingText}>{rating.toFixed(1)} / 5.0</Text>
+        <View style={ReviewTileStyles.ratingContainer}>
+          <View style={ReviewTileStyles.starsRow}>{renderStars()}</View>
+          <Text style={ReviewTileStyles.ratingText}>
+            {rating.toFixed(1)} / 5.0
+          </Text>
         </View>
 
-        <Text style={styles.commentText}>{comment}</Text>
+        <Text style={ReviewTileStyles.commentText}>{comment}</Text>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Appointment ID: {appointmentId}</Text>
+        <View style={ReviewTileStyles.footer}>
+          <Text style={ReviewTileStyles.footerText}>
+            Appointment ID: {appointmentId}
+          </Text>
         </View>
       </View>
     </View>
   );
-};
-
-const styles = {
-  tile: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  reviewerText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#444",
-  },
-  dateText: {
-    fontSize: 12,
-    color: "#777",
-  },
-  ratingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  starsRow: {
-    flexDirection: "row",
-  },
-  commentText: {
-    fontSize: 14,
-    color: "#555",
-    fontStyle: "italic",
-    marginBottom: 10,
-    lineHeight: 20,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-    paddingTop: 6,
-    marginTop: 6,
-  },
-  footerText: {
-    fontSize: 12,
-    color: "#888",
-  },
-  tapText: {
-    fontSize: 12,
-    color: "#007BFF",
-    fontWeight: "bold",
-  },
 };
 
 export default ReviewTile;
