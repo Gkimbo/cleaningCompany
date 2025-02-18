@@ -19,6 +19,7 @@ import Animated, {
   useScrollViewOffset,
 } from "react-native-reanimated";
 import { Pressable } from "react-native-web";
+import ReviewsOverview from "./reviews/ReviewsOverview";
 
 const HomePage = ({ state, dispatch }) => {
   const scrollRef = useAnimatedRef();
@@ -96,8 +97,9 @@ const HomePage = ({ state, dispatch }) => {
   });
 
   sortedAppointments.forEach((appointment, index) => {
-
-    upcomingPayment = upcomingPayment + Number(appointment.price)
+    const totalPrice = Number(appointment.price)
+    const correctedAmount = (totalPrice * 0.9)
+    upcomingPayment = upcomingPayment + correctedAmount
     const today = new Date();
     let appointmentDate = new Date(appointment.date);
 
@@ -176,6 +178,7 @@ const HomePage = ({ state, dispatch }) => {
       >
           {todaysAppointment}
           {nextAppointment}
+          <ReviewsOverview state={state} dispatch={dispatch}/>
         </View>
       ) : (
         <View

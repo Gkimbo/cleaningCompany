@@ -32,6 +32,8 @@ const TodaysAppointment = ({ appointment }) => {
 		};
 		return new Date(dateString).toLocaleDateString(undefined, options);
 	};
+	const totalPrice = Number(appointment.price)
+    const correctedAmount = (totalPrice * 0.9)
 
 	useEffect(() => {
 		FetchData.getHome(appointment.homeId).then((response) => {
@@ -114,7 +116,7 @@ const TodaysAppointment = ({ appointment }) => {
 			<Text
 					style={{ ...homePageStyles.appointmentPrice, alignSelf: "center" }}
 				>
-					{`Payout once finished: $${appointment.price}`}
+					{`Payout once finished: $${correctedAmount}`}
 				</Text>
 			{home.specialNotes && (
 				<Text

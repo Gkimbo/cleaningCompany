@@ -23,7 +23,7 @@ const NextAppointment = ({ appointment }) => {
 		zipcode: "",
 		cleanersNeeded: "",
 	});
-console.log(appointment.price)
+	
 	const formatDate = (dateString) => {
 		const options = {
 			weekday: "long",
@@ -33,6 +33,9 @@ console.log(appointment.price)
 		};
 		return new Date(dateString).toLocaleDateString(undefined, options);
 	};
+
+	const totalPrice = Number(appointment.price)
+    const correctedAmount = (totalPrice * 0.9)
 
 	const expandDetails = () => {
 		LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -65,7 +68,7 @@ console.log(appointment.price)
 				<Text
 					style={{ ...homePageStyles.appointmentPrice, alignSelf: "center" }}
 				>
-					{`Payout: $${appointment.price}`}
+					{`Payout: $${correctedAmount}`}
 				</Text>
 				{expandWindow && (
 					<>
@@ -121,7 +124,7 @@ console.log(appointment.price)
 					</>
 				)}
 			</Pressable>
-			
+
 		</View>
 	);
 };

@@ -29,6 +29,7 @@ import CleanerApplicationForm from "./components/admin/CleanerApplications/Appli
 import ListOfApplications from "./components/admin/CleanerApplications/ListOfApplications";
 import ChooseNewJobButton from "./components/navBar/ChooseNewJobButton";
 import SelectNewJobList from "./components/employeeAssignments/lists/SelectNewJobList";
+import AllReviewsList from "./components/reviews/AllReviewsList";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -110,10 +111,12 @@ export default function App() {
               }
             />
             <Route
+              path="/all-reviews"
+              element={<AllReviewsList state={state} dispatch={dispatch} />}
+            />
+            <Route
               path="/view-all-applications"
-              element={
-                <ListOfApplications state={state} dispatch={dispatch} />
-              }
+              element={<ListOfApplications state={state} dispatch={dispatch} />}
             />
             <Route
               path="/list-of-applications"
@@ -159,9 +162,7 @@ export default function App() {
             />
             <Route
               path="/new-job-choice"
-              element={
-                <SelectNewJobList state={state} dispatch={dispatch} />
-              }
+              element={<SelectNewJobList state={state} dispatch={dispatch} />}
             />
             <Route
               path="/employee-shifts"
