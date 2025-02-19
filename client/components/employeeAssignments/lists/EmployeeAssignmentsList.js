@@ -182,7 +182,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                 },
               ]}
             >
-              {` HERE! `}
+              <Text>{` HERE! `}</Text>
             </Pressable>
           </Text>
         </>

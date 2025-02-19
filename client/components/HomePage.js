@@ -200,7 +200,7 @@ const HomePage = ({ state, dispatch }) => {
               },
             ]}
           >
-            {` here `}
+            <Text>{` here `}</Text>
           </Pressable>
           to see your potential earnings!
         </Text>
