@@ -23,7 +23,6 @@ class AppointmentSerializer {
 			}
 			return newAppointment;
 		});
-		console.log(appointmentArray)
 		return serializedAppointment;
 	}
 	static serializeOne(appointment) {

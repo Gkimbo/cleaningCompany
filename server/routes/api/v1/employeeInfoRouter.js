@@ -66,6 +66,23 @@ employeeInfoRouter.get("/home/:id", async (req, res) => {
   }
 });
 
+employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    let home = await UserHomes.findOne({
+      where: {
+        id,
+      },
+    });
+    const { zipcode } = home;
+    const { latitude, longitude } = await HomeClass.getLatAndLong(zipcode);
+    return res.status(200).json({ latitude, longitude });
+  } catch (error) {
+    console.log(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
 employeeInfoRouter.get("/employeeSchedule", async (req, res) => {
   try {
     const employees = await User.findAll({
