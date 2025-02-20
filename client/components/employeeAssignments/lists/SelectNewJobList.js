@@ -142,7 +142,7 @@ const SelectNewJobList = ({ state }) => {
   }, [allAppointments, userLocation, appointmentLocations, sortOption]);
 
   return (
-    <View style={{ ...homePageStyles.container, flexDirection: "column", marginTop: "10%"}}>
+    <View style={{ ...homePageStyles.container, flexDirection: "column", marginTop: "27%"}}>
       <View style={homePageStyles.backButtonSelectNewJobList}>
         <Pressable
           style={homePageStyles.backButtonForm}

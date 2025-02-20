@@ -43,7 +43,6 @@ const EmployeeAssignmentTile = ({
   });
 
   const amount = Number(price) * 0.9;
-
   const formatDate = (dateString) => {
     const options = {
       weekday: "long",
