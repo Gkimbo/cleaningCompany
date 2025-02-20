@@ -19,7 +19,6 @@ const EmployeeAssignmentTile = ({
   removeEmployee,
   assigned,
   distance,
-  refresh,
 }) => {
   const navigate = useNavigate();
   const [expandWindow, setExpandWindow] = useState(false);
@@ -52,13 +51,6 @@ const EmployeeAssignmentTile = ({
     };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
-//   if (refresh !== null) {
-//     if (refresh === id) {
-//       assigned = true;
-//     } else {
-//       assigned = false;
-//     }
-//   }
 
   const expandDetails = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
