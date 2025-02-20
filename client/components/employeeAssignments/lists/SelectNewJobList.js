@@ -142,7 +142,7 @@ const SelectNewJobList = ({ state }) => {
   }, [allAppointments, userLocation, appointmentLocations, sortOption]);
 
   return (
-    <View style={{ ...homePageStyles.container, flexDirection: "column" }}>
+    <View style={{ ...homePageStyles.container, flexDirection: "column", marginTop: "10%"}}>
       <View style={homePageStyles.backButtonSelectNewJobList}>
         <Pressable
           style={homePageStyles.backButtonForm}
@@ -159,7 +159,6 @@ const SelectNewJobList = ({ state }) => {
         </Pressable>
       </View>
 
-      {/* Sort Dropdown */}
       <View
         style={{
           margin: 10,
@@ -191,7 +190,7 @@ const SelectNewJobList = ({ state }) => {
           style={{ marginTop: 20 }}
         />
       ) : (
-        <ScrollView>
+        <View style={{ flex: 1 }}>
           {sortedAppointments.map((appointment) => (
             <View key={appointment.id}>
               <EmployeeAssignmentTile
@@ -254,7 +253,7 @@ const SelectNewJobList = ({ state }) => {
               />
             </View>
           ))}
-        </ScrollView>
+        </View>
       )}
     </View>
   );
