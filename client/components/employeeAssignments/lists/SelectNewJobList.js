@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Pressable, View, Text, ScrollView, Dimensions } from "react-native";
 import { useNavigate } from "react-router-native";
 import { Picker } from "@react-native-picker/picker";
@@ -15,21 +15,15 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
     const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) *
-            Math.cos(toRad(lat2)) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 };
 
-const SelectNewJobList = ({ state, dispatch }) => {
+const SelectNewJobList = ({ state }) => {
     const [allAppointments, setAllAppointments] = useState([]);
-    const [refresh, setRefresh] = useState(false);
-    const [changesSubmitted, setChangesSubmitted] = useState(false);
-    const [redirect, setRedirect] = useState(false);
-    const [backRedirect, setBackRedirect] = useState(false);
+    const [refresh, setRefresh] = useState(null);
     const [userId, setUserId] = useState(null);
     const [userLocation, setUserLocation] = useState(null);
     const [appointmentLocations, setAppointmentLocations] = useState(null);
@@ -40,46 +34,25 @@ const SelectNewJobList = ({ state, dispatch }) => {
 
     useEffect(() => {
         const fetchAppointments = async () => {
-            const response = await FetchData.get("/api/v1/users/appointments", state.currentUser.token);
-            setAllAppointments(response.appointments || []);
+            try {
+                const response = await FetchData.get("/api/v1/users/appointments", state.currentUser.token);
+                setAllAppointments(response.appointments || []);
+            } catch (error) {
+                console.error("Error fetching appointments:", error);
+            }
         };
+
         const fetchUser = async () => {
-            const response = await getCurrentUser();
-            setUserId(response.user.id);
+            try {
+                const response = await getCurrentUser();
+                setUserId(response.user.id);
+            } catch (error) {
+                console.error("Error fetching user:", error);
+            }
         };
+
         fetchAppointments();
         fetchUser();
-        setChangesSubmitted(false);
-        if (redirect) {
-            navigate("/add-home");
-            setRedirect(false);
-        }
-        if (backRedirect) {
-            navigate("/");
-            setBackRedirect(false);
-        }
-        if (refresh) {
-            setRefresh(false);
-        }
-    }, [redirect, backRedirect, changesSubmitted, refresh]);
-
-    useEffect(() => {
-        if (navigator.geolocation) {
-            const watcher = navigator.geolocation.watchPosition(
-                (position) => {
-                    setUserLocation({
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude,
-                    });
-                },
-                (error) => {
-                    console.error("Error getting location:", error);
-                },
-                { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
-            );
-
-            return () => navigator.geolocation.clearWatch(watcher);
-        }
     }, []);
 
     useEffect(() => {
@@ -102,34 +75,57 @@ const SelectNewJobList = ({ state, dispatch }) => {
         }
     }, [allAppointments]);
 
-    const sortedAppointments = [...allAppointments];
+    useEffect(() => {
+        if (navigator.geolocation) {
+            const watcher = navigator.geolocation.watchPosition(
+                (position) => {
+                    setUserLocation({
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                    });
+                },
+                (error) => {
+                    console.error("Error getting location:", error);
+                },
+                { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+            );
 
-    if (sortOption === "distanceClosest" && userLocation && appointmentLocations) {
-        sortedAppointments.sort((a, b) => {
-            const locA = appointmentLocations[a.homeId];
-            const locB = appointmentLocations[b.homeId];
-            if (!locA || !locB) return 0;
-            return haversineDistance(userLocation.latitude, userLocation.longitude, locA.latitude, locA.longitude) -
-                   haversineDistance(userLocation.latitude, userLocation.longitude, locB.latitude, locB.longitude);
+            return () => navigator.geolocation.clearWatch(watcher);
+        }
+    }, []);
+
+    // Sort appointments using useMemo
+    const sortedAppointments = useMemo(() => {
+        let sorted = allAppointments.map((appointment) => {
+            let distance = null;
+            
+            if (userLocation && appointmentLocations && appointmentLocations[appointment.homeId]) {
+                const loc = appointmentLocations[appointment.homeId];
+                distance = haversineDistance(userLocation.latitude, userLocation.longitude, loc.latitude, loc.longitude);
+            }
+    
+            return { ...appointment, distance }; 
         });
-    } else if (sortOption === "distanceFurthest" && userLocation && appointmentLocations) {
-        sortedAppointments.sort((a, b) => {
-            const locA = appointmentLocations[a.homeId];
-            const locB = appointmentLocations[b.homeId];
-            if (!locA || !locB) return 0;
-            return haversineDistance(userLocation.latitude, userLocation.longitude, locB.latitude, locB.longitude) -
-                   haversineDistance(userLocation.latitude, userLocation.longitude, locA.latitude, locA.longitude);
-        });
-    } else if (sortOption === "priceLow") {
-        sortedAppointments.sort((a, b) => a.price - b.price);
-    } else if (sortOption === "priceHigh") {
-        sortedAppointments.sort((a, b) => b.price - a.price);
-    }
+    
+        if (sortOption === "distanceClosest") {
+            sorted.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+        } else if (sortOption === "distanceFurthest") {
+            sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
+        } else if (sortOption === "priceLow") {
+            sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+        } else if (sortOption === "priceHigh") {
+            sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+        }
+    
+        return sorted;
+    }, [allAppointments, userLocation, appointmentLocations, sortOption]);
+    
+    
 
     return (
         <View style={{ ...homePageStyles.container, flexDirection: "column" }}>
             <View style={homePageStyles.backButtonSelectNewJobList}>
-                <Pressable style={homePageStyles.backButtonForm} onPress={() => setBackRedirect(true)}>
+                <Pressable style={homePageStyles.backButtonForm} onPress={() => navigate("/")}>
                     <View style={{ flexDirection: "row", alignItems: "center", padding: 10 }}>
                         <Icon name="angle-left" size={iconSize} color="black" />
                         <View style={{ marginLeft: 15 }}>
@@ -141,10 +137,7 @@ const SelectNewJobList = ({ state, dispatch }) => {
 
             {/* Sort Dropdown */}
             <View style={{ margin: 10, borderWidth: 1, borderRadius: 5, borderColor: "#ccc" }}>
-                <Picker
-                    selectedValue={sortOption}
-                    onValueChange={(itemValue) => setSortOption(itemValue)}
-                >
+                <Picker selectedValue={sortOption} onValueChange={(itemValue) => setSortOption(itemValue)}>
                     <Picker.Item label="Sort by: Distance (Closest)" value="distanceClosest" />
                     <Picker.Item label="Sort by: Distance (Furthest)" value="distanceFurthest" />
                     <Picker.Item label="Sort by: Price (Low to High)" value="priceLow" />
@@ -167,15 +160,27 @@ const SelectNewJobList = ({ state, dispatch }) => {
                             completed={appointment.completed}
                             keyPadCode={appointment.keyPadCode}
                             keyLocation={appointment.keyLocation}
+                            distance={appointment.distance}
+                            refresh={refresh}
+                            assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
                             addEmployee={async (employeeId, appointmentId) => {
-                                await FetchData.addEmployee(employeeId, appointmentId);
-                                setRefresh(true);
+                                try {
+                                    await FetchData.addEmployee(employeeId, appointmentId);
+                                    // assigned={true}
+                                    setRefresh(true);
+                                } catch (error) {
+                                    console.error("Error adding employee:", error);
+                                }
                             }}
                             removeEmployee={async (employeeId, appointmentId) => {
-                                await FetchData.removeEmployee(employeeId, appointmentId);
-                                setRefresh(true);
+                                try {
+                                    await FetchData.removeEmployee(employeeId, appointmentId);
+                                    // assigned={false}
+                                    setRefresh(false);
+                                } catch (error) {
+                                    console.error("Error removing employee:", error);
+                                }
                             }}
-                            assigned={appointment.employeesAssigned.includes(String(userId))}
                         />
                     </View>
                 ))}
