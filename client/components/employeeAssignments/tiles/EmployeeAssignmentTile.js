@@ -40,6 +40,7 @@ const EmployeeAssignmentTile = ({
 		cleanersNeeded: "",
 	});
 
+	const amount = (Number(price)* 0.9)
 	const formatDate = (dateString) => {
 		const options = {
 			weekday: "long",
@@ -69,7 +70,7 @@ const EmployeeAssignmentTile = ({
 		<View style={[homePageStyles.homeTileContainer]}>
 			<Pressable onPress={expandWindow ? contractDetails : expandDetails}>
 				<Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
-				<Text style={{...homePageStyles.appointmentDate, fontSize: 15}}>{`You could make $${price} cleaning this home`}</Text>
+				<Text style={{...homePageStyles.appointmentDate, fontSize: 15}}>{`You could make $${amount} cleaning this home`}</Text>
 				<Text style={homePageStyles.appointmentPrice}>
 					{home.city}
 				</Text>

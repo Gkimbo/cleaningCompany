@@ -25,18 +25,27 @@ const HomePage = ({ state, dispatch }) => {
   const scrollRef = useAnimatedRef();
   const scrollOffSet = useScrollViewOffset(scrollRef);
   const [redirect, setRedirect] = useState(false);
-	const navigate = useNavigate();
+  const [redirectToJobs, setRedirectToJobs] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-		if (redirect) {
-			navigate("/employee-assignments");
-			setRedirect(false);
-		}
-	}, [redirect]);
+    if (redirect) {
+      navigate("/employee-assignments");
+      setRedirect(false);
+    }
+    if (redirectToJobs) {
+      navigate("/new-job-choice");
+      setRedirect(false);
+    }
+  }, [redirect, redirectToJobs]);
 
-	const handlePress = () => {
-		setRedirect(true);
-	};
+  const handlePress = () => {
+    setRedirect(true);
+  };
+
+  const handlePressToJobsList = () => {
+    setRedirectToJobs(true);
+  };
 
   const imageAnimatedStyles = useAnimatedStyle(() => {
     return {
@@ -90,16 +99,16 @@ const HomePage = ({ state, dispatch }) => {
   let todaysAppointment = null;
   let nextAppointment = null;
   let foundToday = false;
-  let upcomingPayment = 0
+  let upcomingPayment = 0;
 
   const sortedAppointments = state.appointments.sort((a, b) => {
     return new Date(a.date) - new Date(b.date);
   });
 
   sortedAppointments.forEach((appointment, index) => {
-    const totalPrice = Number(appointment.price)
-    const correctedAmount = (totalPrice * 0.9)
-    upcomingPayment = upcomingPayment + correctedAmount
+    const totalPrice = Number(appointment.price);
+    const correctedAmount = totalPrice * 0.9;
+    upcomingPayment = upcomingPayment + correctedAmount;
     const today = new Date();
     let appointmentDate = new Date(appointment.date);
 
@@ -110,55 +119,112 @@ const HomePage = ({ state, dispatch }) => {
         nextAppointment = (
           <>
             <NextAppointment appointment={sortedAppointments[index + 1]} />
-            
-            <Pressable style={{
-		            backgroundColor: "#f9bc60",
-		            padding: 10,
-		            borderRadius: 50,
-                width:"40%",
-                alignSelf: "center"
-	              }} onPress={handlePress}>
-			        <Text style={topBarStyles.buttonTextSchedule}>View all your appointments</Text>
-		        </Pressable>
+
+            <Pressable
+              style={{
+                backgroundColor: "#f9bc60",
+                padding: 10,
+                borderRadius: 50,
+                width: "40%",
+                alignSelf: "center",
+              }}
+              onPress={handlePress}
+            >
+              <Text style={topBarStyles.buttonTextSchedule}>
+                View all your appointments
+              </Text>
+            </Pressable>
           </>
         );
       }
     } else if (!nextAppointment && appointmentDate > today) {
-      nextAppointment = 
-      <>
-        <NextAppointment appointment={appointment} />
-        <Pressable style={{
-		            backgroundColor: "#f9bc60",
-		            padding: 10,
-		            borderRadius: 50,
-                width:"40%",
-                alignSelf: "center"
-	              }} onPress={handlePress}>
-			        <Text style={topBarStyles.buttonTextSchedule}>View all your appointments</Text>
-		        </Pressable>
-      </>
+      nextAppointment = (
+        <>
+          <NextAppointment appointment={appointment} />
+          <Pressable
+            style={{
+              backgroundColor: "#f9bc60",
+              padding: 10,
+              borderRadius: 50,
+              width: "40%",
+              alignSelf: "center",
+            }}
+            onPress={handlePress}
+          >
+            <Text style={topBarStyles.buttonTextSchedule}>
+              View all your appointments
+            </Text>
+          </Pressable>
+        </>
+      );
     }
   });
-  
+
   if (!foundToday && !nextAppointment) {
     nextAppointment = (
-      <Text style={homePageStyles.title}>
-        You have no appointments scheduled
-      </Text>
+      <>
+        <Text
+          style={[
+            homePageStyles.title,
+            {
+              fontSize: 18,
+              fontWeight: "600",
+              color: "#1E1E1E",
+              textAlign: "center",
+              letterSpacing: 0.5,
+            },
+          ]}
+        >
+          You have no appointments scheduled.
+        </Text>
+        <Text
+          style={[
+            homePageStyles.homeTileTitle,
+            {
+              fontSize: 18,
+              fontWeight: "600",
+              color: "#1E1E1E",
+              textAlign: "center",
+              letterSpacing: 0.5,
+            },
+          ]}
+        >
+          Schedule jobs
+          <Pressable
+            onPress={handlePressToJobsList}
+            style={({ pressed }) => [
+              {
+                textDecorationLine: pressed ? "underline" : "none",
+                color: pressed ? "#FF6B00" : "#007AFF",
+                fontWeight: "700",
+              },
+            ]}
+          >
+            <Text>{` here `}</Text>
+          </Pressable>
+          to see your potential earnings!
+        </Text>
+      </>
     );
   } else if (!foundToday) {
     todaysAppointment = (
       <>
-        <Text style={{...homePageStyles.homeTileTitle}}>
+        <Text style={{ ...homePageStyles.homeTileTitle }}>
           {`Your'e expected payout is `}
         </Text>
-        <Text style={{...homePageStyles.homeTileTitle, fontFamily: "italic", fontSize: 25}}>
+        <Text
+          style={{
+            ...homePageStyles.homeTileTitle,
+            fontFamily: "italic",
+            fontSize: 25,
+          }}
+        >
           {`$${upcomingPayment}`}
         </Text>
-        <Text style={{...homePageStyles.homeTileTitle, marginBottom: "40%"}}>
+        <Text style={{ ...homePageStyles.homeTileTitle, marginBottom: "40%" }}>
           {`After scheduled cleanings are completed!`}
         </Text>
-        <Text style={{...homePageStyles.title, marginBottom: "30%"}}>
+        <Text style={{ ...homePageStyles.title, marginBottom: "30%" }}>
           You have no appointments scheduled for today
         </Text>
         <Text style={homePageStyles.smallTitle}>Your next cleaning is:</Text>
@@ -170,92 +236,93 @@ const HomePage = ({ state, dispatch }) => {
     <>
       {state.account === "cleaner" ? (
         <View
-        style={{
-          ...homePageStyles.container,
-          flexDirection: "column",
-          marginTop: 100,
-        }}
-      >
+          style={{
+            ...homePageStyles.container,
+            flexDirection: "column",
+            marginTop: 100,
+          }}
+        >
           {todaysAppointment}
           {nextAppointment}
-          <ReviewsOverview state={state} dispatch={dispatch}/>
+          <ReviewsOverview state={state} dispatch={dispatch} />
         </View>
       ) : (
-        <View
-      style={{
-        ...homePageStyles.container,
-        flexDirection: "column",
-        marginTop: 105,
-      }}
-    >
         <View
           style={{
             ...homePageStyles.container,
             flexDirection: "column",
-            justifyContent: "flex-start",
-            paddingLeft: "10%",
-            paddingRight: "10%",
-            marginTop: 20,
+            marginTop: 105,
           }}
         >
-          <Text style={homePageStyles.title}>
-            Welcome to Cleaning Services!
-          </Text>
-          <View style={homePageStyles.homePageParagraphSurround}>
-            <View style={homePageStyles.homePageParagraphText}>
-              <Text style={homePageStyles.smallTitle}>About Our Service: </Text>
-              <Text style={homePageStyles.information}>
-                {cleaningCompany.aboutService.description}
-              </Text>
-            </View>
-            <Image source={image3} style={homePageStyles.image} />
-          </View>
-          <View style={homePageStyles.homePageParagraphSurround}>
-            <View style={homePageStyles.reverseImage}>
-              <Image source={image2} style={homePageStyles.image} />
+          <View
+            style={{
+              ...homePageStyles.container,
+              flexDirection: "column",
+              justifyContent: "flex-start",
+              paddingLeft: "10%",
+              paddingRight: "10%",
+              marginTop: 20,
+            }}
+          >
+            <Text style={homePageStyles.title}>
+              Welcome to Cleaning Services!
+            </Text>
+            <View style={homePageStyles.homePageParagraphSurround}>
               <View style={homePageStyles.homePageParagraphText}>
                 <Text style={homePageStyles.smallTitle}>
-                  Booking Information:{" "}
+                  About Our Service:{" "}
                 </Text>
                 <Text style={homePageStyles.information}>
-                  {cleaningCompany.bookingInfo.description}
+                  {cleaningCompany.aboutService.description}
                 </Text>
               </View>
+              <Image source={image3} style={homePageStyles.image} />
             </View>
-          </View>
-          <View style={homePageStyles.homePageParagraphSurround}>
-            <View style={homePageStyles.homePageParagraphText}>
-              <Text style={homePageStyles.smallTitle}>
-                Special Considerations:
-              </Text>
-              <Text style={homePageStyles.information}>
-                {cleaningCompany.specialConsiderations.description}
-              </Text>
+            <View style={homePageStyles.homePageParagraphSurround}>
+              <View style={homePageStyles.reverseImage}>
+                <Image source={image2} style={homePageStyles.image} />
+                <View style={homePageStyles.homePageParagraphText}>
+                  <Text style={homePageStyles.smallTitle}>
+                    Booking Information:{" "}
+                  </Text>
+                  <Text style={homePageStyles.information}>
+                    {cleaningCompany.bookingInfo.description}
+                  </Text>
+                </View>
+              </View>
             </View>
-            <Image source={image4} style={homePageStyles.image} />
-          </View>
-          <View style={homePageStyles.homePageParagraphSurround}>
-            <View style={homePageStyles.reverseImage}>
-              <Image source={image1} style={homePageStyles.imageGuarantee} />
+            <View style={homePageStyles.homePageParagraphSurround}>
               <View style={homePageStyles.homePageParagraphText}>
                 <Text style={homePageStyles.smallTitle}>
-                  Our Worry-Free Guarantee:{" "}
+                  Special Considerations:
                 </Text>
                 <Text style={homePageStyles.information}>
-                  {cleaningCompany.ourWorryFreeGuarantee.description}
+                  {cleaningCompany.specialConsiderations.description}
                 </Text>
               </View>
+              <Image source={image4} style={homePageStyles.image} />
             </View>
+            <View style={homePageStyles.homePageParagraphSurround}>
+              <View style={homePageStyles.reverseImage}>
+                <Image source={image1} style={homePageStyles.imageGuarantee} />
+                <View style={homePageStyles.homePageParagraphText}>
+                  <Text style={homePageStyles.smallTitle}>
+                    Our Worry-Free Guarantee:{" "}
+                  </Text>
+                  <Text style={homePageStyles.information}>
+                    {cleaningCompany.ourWorryFreeGuarantee.description}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <Text style={homePageStyles.smallTitle}>Cancellation Policy: </Text>
+            <Text style={homePageStyles.information}>
+              {cleaningCompany.cancellationPolicy.description}
+            </Text>
           </View>
-          <Text style={homePageStyles.smallTitle}>Cancellation Policy: </Text>
-          <Text style={homePageStyles.information}>
-            {cleaningCompany.cancellationPolicy.description}
-          </Text>
         </View>
-      </View>
       )}
     </>
-    
   );
 };
 

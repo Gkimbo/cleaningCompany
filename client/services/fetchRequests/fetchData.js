@@ -33,6 +33,20 @@ class FetchData {
       return error;
     }
   }
+  static async getLatAndLong(id) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/employee-info/home/LL/${id}`
+      );
+      if (!response.ok) {
+        throw new Error("No data received");
+      }
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      return error;
+    }
+  }
 
   static async getEmployeesWorking() {
     try {
