@@ -93,17 +93,21 @@ const SelectNewJobList = ({ state }) => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
+          setLoading(false); // Set loading to false when location is found
         },
         (error) => {
           console.error("Error getting location:", error);
+          setLoading(false); // Set loading to false on timeout or error
         },
         { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
       );
-
+  
       return () => navigator.geolocation.clearWatch(watcher);
+    } else {
+      setLoading(false); // Ensure loading stops if geolocation is unavailable
     }
   }, []);
-
+  
   const sortedAppointments = useMemo(() => {
     let sorted = allAppointments.map((appointment) => {
       let distance = null;
