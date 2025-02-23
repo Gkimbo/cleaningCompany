@@ -30,6 +30,7 @@ import ListOfApplications from "./components/admin/CleanerApplications/ListOfApp
 import ChooseNewJobButton from "./components/navBar/ChooseNewJobButton";
 import SelectNewJobList from "./components/employeeAssignments/lists/SelectNewJobList";
 import AllReviewsList from "./components/reviews/AllReviewsList";
+import AppointmentCalendar from "./components/employeeAssignments/lists/AppointmentCalendar";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -149,6 +150,10 @@ export default function App() {
             <Route
               path="/appointments"
               element={<AppointmentList state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/appointment-calender"
+              element={<AppointmentCalendar state={state} dispatch={dispatch} />}
             />
             <Route
               path="/bill"

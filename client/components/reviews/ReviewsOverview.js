@@ -5,27 +5,6 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import Review from "../../services/fetchRequests/ReviewClass";
 import RatingsStyles from "../../services/styles/RatingsStyles";
 
-// const tempTestData = [
-//   {
-//     id: 3,
-//     userId: 13,
-//     reviewerId: 12,
-//     appointmentId: 2,
-//     rating: 3.5,
-//     comment: "Was very thorough but missed a few areas.",
-//     createdAt: "2025-02-16T13:55:35.940Z"
-//   },
-//   {
-//     id: 12,
-//     userId: 13,
-//     reviewerId: 7,
-//     appointmentId: 4,
-//     rating: 4,
-//     comment: "Great Job!",
-//     createdAt: "2025-02-16T13:55:35.940Z"
-//   },
-// ];
-
 const ReviewsOverview = ({ state, dispatch }) => {
   const [allReviews, setAllReviews] = useState([]);
   const { width } = Dimensions.get("window");
