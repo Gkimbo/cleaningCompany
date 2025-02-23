@@ -22,6 +22,7 @@ usersRouter.post("/", async (req, res) => {
 					username,
 					password,
 					email,
+					notifications:["phone", "email"]
 				});
 				const newBill = await UserBills.create({
 					userId: newUser.dataValues.id,
@@ -58,6 +59,7 @@ usersRouter.post("/new-employee", async (req, res) => {
 					password,
 					email,
 					type,
+					notifications:["phone", "email"]
 				});
 				const newBill = await UserBills.create({
 					userId: newUser.dataValues.id,
@@ -111,6 +113,7 @@ usersRouter.patch("/employee", async (req, res) => {
 			password,
 			email,
 			type,
+			
 		});
 
 		return res.status(200).json({ user: userInfo });

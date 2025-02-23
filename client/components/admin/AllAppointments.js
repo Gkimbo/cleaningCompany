@@ -44,7 +44,6 @@ const AllAppointments = ({ state }) => {
       "/api/v1/users/appointments",
       state.currentUser.token
     );
-    console.log(response)
     setAllAppointments(response.appointments);
   };
 

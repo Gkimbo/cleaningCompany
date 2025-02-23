@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Pressable, View, Text, ScrollView, Dimensions } from "react-native";
+import React, { useState, useEffect, useMemo } from "react";
+import { Pressable, View, Text, ScrollView, Dimensions, ActivityIndicator } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -8,13 +8,26 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 
+const haversineDistance = (lat1, lon1, lat2, lon2) => {
+  const toRad = (x) => (x * Math.PI) / 180;
+  const R = 6371; 
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; 
+};
+
 const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [allAppointments, setAllAppointments] = useState([]);
-  const [refresh, setRefresh] = useState(false);
-  const [changesSubmitted, setChangesSubmitted] = useState(false);
-  const [redirect, setRedirect] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [appointmentLocations, setAppointmentLocations] = useState(null);
+  const [sortOption, setSortOption] = useState("distanceClosest");
+  const [loading, setLoading] = useState(true);
   const [backRedirect, setBackRedirect] = useState(false);
-  const [redirectToJobs, setRedirectToJobs] = useState(false);
+  const [refresh, setRefresh] = useState(false);
   const [userId, setUserId] = useState(null);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
@@ -24,6 +37,61 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     const response = await getCurrentUser();
     setUserId(response.user.id);
   };
+
+  const sortedAppointments = useMemo(() => {
+    let sorted = allAppointments.map((appointment) => {
+      let distance = null;
+
+      if (
+        userLocation &&
+        appointmentLocations &&
+        appointmentLocations[appointment.homeId]
+      ) {
+        const loc = appointmentLocations[appointment.homeId];
+        distance = haversineDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          loc.latitude,
+          loc.longitude
+        );
+        setLoading(false);
+      }
+      return { ...appointment, distance };
+    });
+
+    if (sortOption === "distanceClosest") {
+      sorted.sort(
+        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
+      );
+    } else if (sortOption === "distanceFurthest") {
+      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
+    } else if (sortOption === "priceLow") {
+      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    } else if (sortOption === "priceHigh") {
+      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+    }
+
+    return sorted;
+  }, [allAppointments, userLocation, appointmentLocations, sortOption]);
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      const watcher = navigator.geolocation.watchPosition(
+        (position) => {
+          setUserLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+        },
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+      );
+
+      return () => navigator.geolocation.clearWatch(watcher);
+    }
+  }, []);
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -38,24 +106,36 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
       );
     }
     fetchUser();
-    setChangesSubmitted(false);
-    if (redirect) {
-      navigate("/add-home");
-      setRedirect(false);
-    }
-    if (backRedirect) {
-      navigate("/");
-      setBackRedirect(false);
-    }
-    if (refresh) {
-      setRefresh(false);
-    }
-    if (redirectToJobs) {
-      navigate("/new-job-choice");
-      setRefresh(false);
-    }
-  }, [redirect, backRedirect, changesSubmitted, refresh, redirectToJobs]);
 
+    if(backRedirect){
+      navigate("/")
+      setBackRedirect(false)
+    }
+
+    if(refresh){
+      setRefresh(false)
+    }
+  }, [state.currentUser.token, backRedirect, refresh]);
+
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        const locations = await Promise.all(
+          allAppointments.map(async (appointment) => {
+            const response = await FetchData.getLatAndLong(appointment.homeId);
+            return { [appointment.homeId]: response };
+          })
+        );
+        setAppointmentLocations(Object.assign({}, ...locations));
+      } catch (error) {
+        console.error("Error fetching appointment locations:", error);
+      }
+    };
+
+    if (allAppointments.length > 0) {
+      fetchLocations();
+    }
+  }, [allAppointments]);
   const handlePress = () => {
     setRedirect(true);
   };
@@ -68,12 +148,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     setRedirectToJobs(true);
   };
 
-  const sortedAppointments = allAppointments.sort((a, b) => {
-    return new Date(a.date) - new Date(b.date);
-  });
-
   const removeEmployee = async (employeeId, appointmentId) => {
-    //remove employee from appointment
     const employeeRemoved = await FetchData.removeEmployee(
       employeeId,
       appointmentId
@@ -82,7 +157,6 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   };
 
   const addEmployee = async (employeeId, appointmentId) => {
-    //add employee to appointment
     const employeeAdded = await FetchData.addEmployee(
       employeeId,
       appointmentId
@@ -110,6 +184,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
           addEmployee={addEmployee}
           removeEmployee={removeEmployee}
           assigned={isAssigned}
+          distance={appointment.distance}
         />
       </View>
     );
@@ -141,35 +216,18 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
           </View>
         </Pressable>
       </View>
-      {sortedAppointments.length ? (
-        <>{assignedAppointments}</>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#0000ff" />
+      ) : sortedAppointments.length ? (
+        assignedAppointments
       ) : (
         <>
-          <Text
-            style={[
-              homePageStyles.title,
-              {
-                fontSize: 18,
-                fontWeight: "600",
-                color: "#1E1E1E",
-                textAlign: "center",
-                letterSpacing: 0.5,
-              },
-            ]}
-          >
+          <Text style={[homePageStyles.title, { fontSize: 18, fontWeight: "600", color: "#1E1E1E", textAlign: "center", letterSpacing: 0.5 }]}>
             You have no jobs scheduled.
           </Text>
           <Text
-            style={[
-              homePageStyles.homeTileTitle,
-              {
-                fontSize: 18,
-                fontWeight: "600",
-                color: "#1E1E1E",
-                textAlign: "center",
-                letterSpacing: 0.5,
-              },
-            ]}
+            style={[homePageStyles.homeTileTitle, { fontSize: 18, fontWeight: "600", color: "#1E1E1E", textAlign: "center", letterSpacing: 0.5 }]}
           >
             Schedule jobs
             <Pressable
