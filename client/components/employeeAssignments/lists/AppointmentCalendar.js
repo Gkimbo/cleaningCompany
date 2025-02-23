@@ -18,7 +18,6 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 
-
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371;
@@ -162,33 +161,28 @@ const AppointmentCalendar = ({ state, dispatch }) => {
     return new Date(date.dateString) < currentDate;
   };
 
-    const isDateBooked = (date) => {
-      return allAppointments.some(
-        (appointment) => appointment.date === date.dateString
-      );
-    };
+  const isDateBooked = (date) => {
+    return allAppointments.some(
+      (appointment) => appointment.date === date.dateString
+    );
+  };
 
-    const isDatePastAndNotPaid = (date) => {
-      let toggle = false;
-      allAppointments.forEach((appointment) => {
-        if (appointment.date === date.dateString) {
-          if (isDateDisabled(date) && !appointment.paid) {
-            toggle = true;
-          }
+  const isDatePastAndNotPaid = (date) => {
+    let toggle = false;
+    allAppointments.forEach((appointment) => {
+      if (appointment.date === date.dateString) {
+        if (isDateDisabled(date) && !appointment.paid) {
+          toggle = true;
         }
-      });
-      return toggle;
-    };
+      }
+    });
+    return toggle;
+  };
 
-  //   const priceOfBooking = (date) => {
-  //     let price;
-  //     allAppointments.forEach((day) => {
-  //       if (day.date === date.dateString) {
-  //         price = day.price;
-  //       }
-  //     });
-  //     return price;
-  //   };
+  const priceOfBooking = (date) => {
+    let price = 100;
+    return price;
+  };
 
   const handleConfirmation = (deleteAppointment) => {
     if (deleteAppointment) {
@@ -266,7 +260,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   };
   return (
     <>
-      <View style={calenderStyles.container}>
+      <View style={{ flex: 1, marginTop: "25%" }}>
         {/* {error && <Text style={UserFormStyles.error}>{error}</Text>} */}
         <Text style={calenderStyles.title}>Select Dates</Text>
         <Calendar
