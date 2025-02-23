@@ -3,20 +3,18 @@ import {
   Pressable,
   View,
   Text,
-  ScrollView,
   Dimensions,
-  ActivityIndicator,
-  Modal,
   Button,
+  ActivityIndicator,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
 import calenderStyles from "../../../services/styles/CalenderSyles";
-import UserFormStyles from "../../../services/styles/UserInputFormStyle";
 import { useNavigate } from "react-router-native";
 import { Picker } from "@react-native-picker/picker";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
+import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -33,6 +31,7 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 const AppointmentCalendar = ({ state, dispatch }) => {
   const [allAppointments, setAllAppointments] = useState([]);
   const [selectedDates, setSelectedDates] = useState({});
+  const [dateSelectAppointments, setDateSelectAppointments] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
@@ -66,9 +65,11 @@ const AppointmentCalendar = ({ state, dispatch }) => {
       }
     };
 
-    fetchAppointments();
-    fetchUser();
-  }, []);
+    if (state.currentUser?.token) {
+      fetchAppointments();
+      fetchUser();
+    }
+  }, [state.currentUser.token]);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -102,6 +103,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
         },
         (error) => {
           console.error("Error getting location:", error);
+          setUserLocation({ latitude: 0, longitude: 0 }); // Fallback
           setLoading(false);
         },
         { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
@@ -113,11 +115,51 @@ const AppointmentCalendar = ({ state, dispatch }) => {
     }
   }, []);
 
-  const handleRemoveBooking = (date) => {
+  const handleDateSelectAppointments = (date) => {
     const currentDate = new Date();
     const selectedDate = new Date(date.dateString);
-    console.log(date, "REMOVED APPOINTMENT");
+    const appointments = allAppointments.filter(
+      (appointment) => appointment.date === date.dateString
+    );
+    setDateSelectAppointments(appointments);
   };
+
+  const sortedAppointments = useMemo(() => {
+    let sorted = dateSelectAppointments.map((appointment) => {
+      let distance = null;
+
+      if (
+        userLocation &&
+        appointmentLocations &&
+        appointmentLocations[appointment.homeId]
+      ) {
+        const loc = appointmentLocations[appointment.homeId];
+        distance = haversineDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          loc.latitude,
+          loc.longitude
+        );
+        setLoading(false);
+      }
+
+      return { ...appointment, distance };
+    });
+
+    if (sortOption === "distanceClosest") {
+      sorted.sort(
+        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
+      );
+    } else if (sortOption === "distanceFurthest") {
+      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
+    } else if (sortOption === "priceLow") {
+      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    } else if (sortOption === "priceHigh") {
+      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+    }
+
+    return sorted;
+  }, [allAppointments, userLocation, appointmentLocations, sortOption]);
 
   const handleDateSelect = (date) => {
     const currentDate = new Date();
@@ -129,7 +171,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
     } else {
       updatedDates[date.dateString] = {
         selected: true,
-        // price: calculatePrice(),
       };
     }
 
@@ -138,18 +179,8 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
   const handleSubmit = () => {
     const selectedDateArray = Object.keys(selectedDates).map((dateString) => {
-      //   const { price } = selectedDates[dateString];
-      //   return {
-      //     date: dateString,
-      //     price,
-      //     paid: false,
-      //     bringTowels: towels,
-      //     bringSheets: sheets,
-      //   };
       console.log(dateString);
     });
-
-    // onDatesSelected(selectedDateArray);
   };
 
   const handleMonthChange = (date) => {
@@ -179,9 +210,10 @@ const AppointmentCalendar = ({ state, dispatch }) => {
     return toggle;
   };
 
-  const priceOfBooking = (date) => {
-    let price = 100;
-    return price;
+  const numberOfAppointmentsOnDate = (date) => {
+    return allAppointments.filter(
+      (appointment) => appointment.date === date.dateString
+    ).length;
   };
 
   const handleConfirmation = (deleteAppointment) => {
@@ -224,10 +256,12 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
     return (
       <>
-        {isDatePastAndNotPaid(date) ? (
+        { isDatePastAndNotPaid(date) ? (
           <Pressable style={pastDate} onPress={() => handleRedirectToBill()}>
             <Text>{date.day}</Text>
-            <Text style={selectedPriceStyle}>${priceOfBooking(date)}</Text>
+            <Text style={selectedPriceStyle}>
+              {numberOfAppointmentsOnDate(date)}
+            </Text>
           </Pressable>
         ) : isDateDisabled(date) ? (
           <View style={dayStyle}>
@@ -236,10 +270,12 @@ const AppointmentCalendar = ({ state, dispatch }) => {
         ) : isDateBooked(date) ? (
           <Pressable
             style={selectedStyle}
-            onPress={() => handleRemoveBooking(date)}
+            onPress={() => handleDateSelectAppointments(date)}
           >
             <Text>{date.day}</Text>
-            <Text style={selectedPriceStyle}>${priceOfBooking(date)}</Text>
+            <Text style={selectedPriceStyle}>
+              {numberOfAppointmentsOnDate(date)}
+            </Text>
           </Pressable>
         ) : selectedDates[date.dateString] ? (
           <Pressable
@@ -247,12 +283,10 @@ const AppointmentCalendar = ({ state, dispatch }) => {
             onPress={() => handleDateSelect(date)}
           >
             <Text>{date.day}</Text>
-            {/* <Text style={selectedPriceStyle}>${calculatePrice()}</Text> */}
           </Pressable>
         ) : (
           <Pressable style={dayStyle} onPress={() => handleDateSelect(date)}>
             <Text>{date.day}</Text>
-            {/* <Text style={priceStyle}>${calculatePrice()}</Text> */}
           </Pressable>
         )}
       </>
@@ -261,8 +295,9 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   return (
     <>
       <View style={{ flex: 1, marginTop: "25%" }}>
-        {/* {error && <Text style={UserFormStyles.error}>{error}</Text>} */}
-        <Text style={calenderStyles.title}>Select Dates</Text>
+        <Text style={calenderStyles.title}>
+          Select Dates to see available appointments
+        </Text>
         <Calendar
           current={currentMonth.toISOString().split("T")[0]}
           onMonthChange={handleMonthChange}
@@ -292,6 +327,121 @@ const AppointmentCalendar = ({ state, dispatch }) => {
           </View>
         )}
       </View>
+      {dateSelectAppointments.length > 0 && (
+        <>
+          <View
+            style={{
+              margin: 10,
+              borderWidth: 1,
+              borderRadius: 5,
+              borderColor: "#ccc",
+            }}
+          >
+            <Picker
+              selectedValue={sortOption}
+              onValueChange={(itemValue) => setSortOption(itemValue)}
+            >
+              <Picker.Item
+                label="Sort by: Distance (Closest)"
+                value="distanceClosest"
+              />
+              <Picker.Item
+                label="Sort by: Distance (Furthest)"
+                value="distanceFurthest"
+              />
+              <Picker.Item
+                label="Sort by: Price (Low to High)"
+                value="priceLow"
+              />
+              <Picker.Item
+                label="Sort by: Price (High to Low)"
+                value="priceHigh"
+              />
+            </Picker>
+          </View>
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color="#0000ff"
+              style={{ marginTop: 20 }}
+            />
+          ) : (
+            <View
+              style={
+                dateSelectAppointments.length === 1
+                  ? { flex: 0.5 }
+                  : { flex: 1 }
+              }
+            >
+              {sortedAppointments.map((appointment) => (
+                <View key={appointment.id}>
+                  <EmployeeAssignmentTile
+                    id={appointment.id}
+                    cleanerId={userId}
+                    date={appointment.date}
+                    price={appointment.price}
+                    homeId={appointment.homeId}
+                    hasBeenAssigned={appointment.hasBeenAssigned}
+                    bringSheets={appointment.bringSheets}
+                    bringTowels={appointment.bringTowels}
+                    completed={appointment.completed}
+                    keyPadCode={appointment.keyPadCode}
+                    keyLocation={appointment.keyLocation}
+                    distance={appointment.distance}
+                    assigned={
+                      appointment.employeesAssigned?.includes(String(userId)) ||
+                      false
+                    }
+                    addEmployee={async (employeeId, appointmentId) => {
+                      try {
+                        await FetchData.addEmployee(employeeId, appointmentId);
+                        setDateSelectAppointments((prevAppointments) =>
+                          prevAppointments.map((appointment) =>
+                            appointment.id === appointmentId
+                              ? {
+                                  ...appointment,
+                                  employeesAssigned: [
+                                    ...(appointment.employeesAssigned || []),
+                                    String(employeeId),
+                                  ],
+                                }
+                              : appointment
+                          )
+                        );
+                      } catch (error) {
+                        console.error("Error adding employee:", error);
+                      }
+                    }}
+                    removeEmployee={async (employeeId, appointmentId) => {
+                      try {
+                        await FetchData.removeEmployee(
+                          employeeId,
+                          appointmentId
+                        );
+                        setDateSelectAppointments((prevAppointments) =>
+                          prevAppointments.map((appointment) =>
+                            appointment.id === appointmentId
+                              ? {
+                                  ...appointment,
+                                  employeesAssigned:
+                                    appointment.employeesAssigned?.filter(
+                                      (id) => id !== String(employeeId)
+                                    ),
+                                }
+                              : appointment
+                          )
+                        );
+                      } catch (error) {
+                        console.error("Error removing employee:", error);
+                      }
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </>
+      )}
     </>
   );
 };
