@@ -102,7 +102,6 @@ appointmentRouter.post("/", async (req, res) => {
   const { token, homeId, dateArray, keyPadCode, keyLocation } = req.body;
   let appointmentTotal = 0;
   const home = await UserHomes.findOne({ where: { id: homeId } });
-  console.log(dateArray)
 
   dateArray.forEach((date) => {
     const price = calculatePrice(

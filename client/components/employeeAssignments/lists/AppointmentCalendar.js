@@ -131,6 +131,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
         }
         return { ...appointment, distance };
       });
+      
 
     const sorted = selectedAppointments.sort((a, b) => {
       if (sortOption === "distanceClosest") {
