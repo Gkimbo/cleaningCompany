@@ -15,6 +15,8 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
+import homePageStyles from "../../../services/styles/HomePageStyles";
+import topBarStyles from "../../../services/styles/TopBarStyles";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -99,11 +101,10 @@ const AppointmentCalendar = ({ state, dispatch }) => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
-          setLoading(false);
         },
         (error) => {
           console.error("Error getting location:", error);
-          setUserLocation({ latitude: 0, longitude: 0 }); // Fallback
+          setUserLocation({ latitude: 0, longitude: 0 });
           setLoading(false);
         },
         { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
@@ -116,50 +117,56 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   }, []);
 
   const handleDateSelectAppointments = (date) => {
-    const currentDate = new Date();
-    const selectedDate = new Date(date.dateString);
-    const appointments = allAppointments.filter(
-      (appointment) => appointment.date === date.dateString
-    );
-    setDateSelectAppointments(appointments);
+    const selectedAppointments = allAppointments
+      .filter((appointment) => appointment.date === date.dateString)
+      .map((appointment) => {
+        let distance = null;
+        if (userLocation && appointmentLocations?.[appointment.homeId]) {
+          const loc = appointmentLocations[appointment.homeId];
+          distance = haversineDistance(
+            userLocation.latitude,
+            userLocation.longitude,
+            loc.latitude,
+            loc.longitude
+          );
+        }
+        return { ...appointment, distance };
+      });
+
+    const sorted = selectedAppointments.sort((a, b) => {
+      if (sortOption === "distanceClosest") {
+        return (a.distance || Infinity) - (b.distance || Infinity);
+      } else if (sortOption === "distanceFurthest") {
+        return (b.distance || 0) - (a.distance || 0);
+      } else if (sortOption === "priceLow") {
+        return (Number(a.price) || 0) - (Number(b.price) || 0);
+      } else if (sortOption === "priceHigh") {
+        return (Number(b.price) || 0) - (Number(a.price) || 0);
+      }
+      return 0;
+    });
+    setLoading(false);
+    setDateSelectAppointments(sorted);
   };
 
-  const sortedAppointments = useMemo(() => {
-    let sorted = dateSelectAppointments.map((appointment) => {
-      let distance = null;
+  useEffect(() => {
+    if (dateSelectAppointments.length > 0) {
+      const sorted = [...dateSelectAppointments].sort((a, b) => {
+        if (sortOption === "distanceClosest") {
+          return (a.distance || Infinity) - (b.distance || Infinity);
+        } else if (sortOption === "distanceFurthest") {
+          return (b.distance || 0) - (a.distance || 0);
+        } else if (sortOption === "priceLow") {
+          return (Number(a.price) || 0) - (Number(b.price) || 0);
+        } else if (sortOption === "priceHigh") {
+          return (Number(b.price) || 0) - (Number(a.price) || 0);
+        }
+        return 0;
+      });
 
-      if (
-        userLocation &&
-        appointmentLocations &&
-        appointmentLocations[appointment.homeId]
-      ) {
-        const loc = appointmentLocations[appointment.homeId];
-        distance = haversineDistance(
-          userLocation.latitude,
-          userLocation.longitude,
-          loc.latitude,
-          loc.longitude
-        );
-        setLoading(false);
-      }
-
-      return { ...appointment, distance };
-    });
-
-    if (sortOption === "distanceClosest") {
-      sorted.sort(
-        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
-      );
-    } else if (sortOption === "distanceFurthest") {
-      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
-    } else if (sortOption === "priceLow") {
-      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
-    } else if (sortOption === "priceHigh") {
-      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+      setDateSelectAppointments(sorted);
     }
-
-    return sorted;
-  }, [allAppointments, userLocation, appointmentLocations, sortOption]);
+  }, [sortOption]);
 
   const handleDateSelect = (date) => {
     const currentDate = new Date();
@@ -173,7 +180,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
         selected: true,
       };
     }
-
+    setDateSelectAppointments([]);
     setSelectedDates(updatedDates);
   };
 
@@ -256,7 +263,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
     return (
       <>
-        { isDatePastAndNotPaid(date) ? (
+        {isDatePastAndNotPaid(date) ? (
           <Pressable style={pastDate} onPress={() => handleRedirectToBill()}>
             <Text>{date.day}</Text>
             <Text style={selectedPriceStyle}>
@@ -294,7 +301,42 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   };
   return (
     <>
-      <View style={{ flex: 1, marginTop: "25%" }}>
+	 <View
+        style={{
+          ...homePageStyles.backButtonSelectNewJobList,
+          flexDirection: "row",
+          justifyContent: "space-evenly",
+		  marginTop: "28%"
+        }}
+      >
+        <Pressable
+          style={homePageStyles.backButtonForm}
+          onPress={() => navigate("/")}
+        >
+          <View
+            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+          >
+            <Icon name="angle-left" size={iconSize} color="black" />
+            <View style={{ marginLeft: 15 }}>
+              <Text style={topBarStyles.buttonTextSchedule}>Home</Text>
+            </View>
+          </View>
+        </Pressable>
+        <Pressable
+          style={homePageStyles.backButtonForm}
+          onPress={() => navigate("/new-job-choice")}
+        >
+          <View
+            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+          >
+            <View style={{ marginRight: 15 }}>
+              <Text style={topBarStyles.buttonTextSchedule}>List</Text>
+            </View>
+            <Icon name="angle-right" size={iconSize} color="black" />
+          </View>
+        </Pressable>
+      </View>
+      <View style={{ flex: 1}}>
         <Text style={calenderStyles.title}>
           Select Dates to see available appointments
         </Text>
@@ -313,7 +355,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
           dayComponent={renderDay}
         />
         <Button
-          title="Book Cleanings!"
+          title="Choose a date to see appointments"
           onPress={handleSubmit}
           disabled={Object.keys(selectedDates).length === 0}
         />
@@ -373,7 +415,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                   : { flex: 1 }
               }
             >
-              {sortedAppointments.map((appointment) => (
+              {dateSelectAppointments.map((appointment) => (
                 <View key={appointment.id}>
                   <EmployeeAssignmentTile
                     id={appointment.id}
@@ -401,8 +443,10 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                               ? {
                                   ...appointment,
                                   employeesAssigned: [
-                                    ...(appointment.employeesAssigned || []),
-                                    String(employeeId),
+                                    ...new Set([
+                                      ...(appointment.employeesAssigned || []),
+                                      String(employeeId),
+                                    ]),
                                   ],
                                 }
                               : appointment
@@ -423,10 +467,9 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                             appointment.id === appointmentId
                               ? {
                                   ...appointment,
-                                  employeesAssigned:
-                                    appointment.employeesAssigned?.filter(
-                                      (id) => id !== String(employeeId)
-                                    ),
+                                  employeesAssigned: [
+                                    ...(appointment.employeesAssigned || []),
+                                  ].filter((id) => id !== String(employeeId)),
                                 }
                               : appointment
                           )

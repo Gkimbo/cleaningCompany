@@ -44,14 +44,16 @@ const EmployeeAssignmentTile = ({
 
   const amount = Number(price) * 0.9;
   const formatDate = (dateString) => {
-    const options = {
-      weekday: "long",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+  const date = new Date(dateString + "T00:00:00"); 
+  const options = {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   };
+  return date.toLocaleDateString(undefined, options);
+};
+
 
   const expandDetails = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
