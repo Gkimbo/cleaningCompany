@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Pressable,
   View,
@@ -59,6 +59,10 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
     }
   }, [state.currentUser.token]);
 
+  useEffect(() => {
+   
+  }, [allAppointments]);
+
   const handleDateSelectAppointments = (date) => {
     const selectedAppointments = allAppointments.filter(
       (appointment) => appointment.date === date.dateString
@@ -87,7 +91,7 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
     setCurrentMonth(new Date(date.year, date.month - 1));
   };
 
-  const renderDay = ({ date }) => {
+  const renderDay = useCallback(({ date }) => {
     const isAssigned = allAppointments.some(
       (appointment) =>
         appointment.date === date.dateString &&
@@ -107,10 +111,12 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
         style={dayStyle}
         onPress={() => handleDateSelectAppointments(date)}
       >
-        <Text style={{ color: isAssigned ? "white" : "black" }}>{date.day}</Text>
+        <Text style={{ color: isAssigned ? "white" : "black" }}>
+          {date.day}
+        </Text>
       </Pressable>
     );
-  };
+  }, [allAppointments, dateSelectAppointments, userId])
 
   return (
     <>
@@ -177,19 +183,51 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
 
       {dateSelectAppointments.length > 0 && (
         <>
-          <View style={{ margin: 10, borderWidth: 1, borderRadius: 5, borderColor: "#ccc" }}>
-            <Picker selectedValue={sortOption} onValueChange={(itemValue) => setSortOption(itemValue)}>
-              <Picker.Item label="Sort by: Distance (Closest)" value="distanceClosest" />
-              <Picker.Item label="Sort by: Distance (Furthest)" value="distanceFurthest" />
-              <Picker.Item label="Sort by: Price (Low to High)" value="priceLow" />
-              <Picker.Item label="Sort by: Price (High to Low)" value="priceHigh" />
+          <View
+            style={{
+              margin: 10,
+              borderWidth: 1,
+              borderRadius: 5,
+              borderColor: "#ccc",
+            }}
+          >
+            <Picker
+              selectedValue={sortOption}
+              onValueChange={(itemValue) => setSortOption(itemValue)}
+            >
+              <Picker.Item
+                label="Sort by: Distance (Closest)"
+                value="distanceClosest"
+              />
+              <Picker.Item
+                label="Sort by: Distance (Furthest)"
+                value="distanceFurthest"
+              />
+              <Picker.Item
+                label="Sort by: Price (Low to High)"
+                value="priceLow"
+              />
+              <Picker.Item
+                label="Sort by: Price (High to Low)"
+                value="priceHigh"
+              />
             </Picker>
           </View>
 
           {loading ? (
-            <ActivityIndicator size="large" color="#0000ff" style={{ marginTop: 20 }} />
+            <ActivityIndicator
+              size="large"
+              color="#0000ff"
+              style={{ marginTop: 20 }}
+            />
           ) : (
-            <View style={dateSelectAppointments.length === 1 ? { flex: 0.5 } : { flex: 1 }}>
+            <View
+              style={
+                dateSelectAppointments.length === 1
+                  ? { flex: 0.5 }
+                  : { flex: 1 }
+              }
+            >
               {dateSelectAppointments.map((appointment) => (
                 <View key={appointment.id}>
                   <EmployeeAssignmentTile
@@ -198,7 +236,92 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
                     date={appointment.date}
                     price={appointment.price}
                     homeId={appointment.homeId}
-                    assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
+                    assigned={
+                      appointment.employeesAssigned?.includes(String(userId)) ||
+                      false
+                    }
+                    addEmployee={async (employeeId, appointmentId) => {
+                      try {
+                        await FetchData.addEmployee(employeeId, appointmentId);
+
+                        const updateEmployeesAssigned = (
+                          appointments,
+                          appointmentId,
+                          employeeId
+                        ) =>
+                          appointments.map((appointment) =>
+                            appointment.id === appointmentId
+                              ? {
+                                  ...appointment,
+                                  employeesAssigned: [
+                                    ...new Set([
+                                      ...(appointment.employeesAssigned || []),
+                                      String(employeeId),
+                                    ]),
+                                  ],
+                                }
+                              : appointment
+                          );
+
+                        setAllAppointments((prevAppointments) =>
+                          updateEmployeesAssigned(
+                            prevAppointments,
+                            appointmentId,
+                            employeeId
+                          )
+                        );
+                        setDateSelectAppointments((prevAppointments) =>
+                          updateEmployeesAssigned(
+                            prevAppointments,
+                            appointmentId,
+                            employeeId
+                          )
+                        );
+                      } catch (error) {
+                        console.error("Error adding employee:", error);
+                      }
+                    }}
+                    removeEmployee={async (employeeId, appointmentId) => {
+                      try {
+                        await FetchData.removeEmployee(
+                          employeeId,
+                          appointmentId
+                        );
+                        
+                        const removeEmployeeFromAssignments = (
+                          appointments,
+                          appointmentId,
+                          employeeId
+                        ) =>
+                          appointments.map((appointment) =>
+                            appointment.id === appointmentId
+                              ? {
+                                  ...appointment,
+                                  employeesAssigned: (
+                                    appointment.employeesAssigned || []
+                                  ).filter((id) => id !== String(employeeId)),
+                                }
+                              : appointment
+                          );
+
+                        setAllAppointments((prevAppointments) =>
+                          removeEmployeeFromAssignments(
+                            prevAppointments,
+                            appointmentId,
+                            employeeId
+                          )
+                        );
+                        setDateSelectAppointments((prevAppointments) =>
+                          removeEmployeeFromAssignments(
+                            prevAppointments,
+                            appointmentId,
+                            employeeId
+                          )
+                        );
+                      } catch (error) {
+                        console.error("Error removing employee:", error);
+                      }
+                    }}
                   />
                 </View>
               ))}

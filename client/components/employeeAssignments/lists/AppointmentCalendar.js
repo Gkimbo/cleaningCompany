@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Pressable,
   View,
@@ -198,7 +198,17 @@ const AppointmentCalendar = ({ state, dispatch }) => {
     return new Date(date.dateString) < currentDate;
   };
 
-  const isDateBooked = (date) => {
+  const myAppointments = (date, id) => {
+    const employeeId = String(id);
+    return allAppointments.some(
+      (appointment) =>
+        appointment.date === date.dateString &&
+        Array.isArray(appointment.employeesAssigned) &&
+        appointment.employeesAssigned.includes(employeeId)
+    );
+  };
+
+  const areAppointmentsAvailable = (date) => {
     return allAppointments.some(
       (appointment) => appointment.date === date.dateString
     );
@@ -228,84 +238,107 @@ const AppointmentCalendar = ({ state, dispatch }) => {
     }
   };
 
-  const renderDay = ({ date }) => {
-    const selectedStyle = {
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: "#3498db",
-      borderRadius: 50,
-      padding: 10,
-    };
+  const renderDay = useCallback(
+    ({ date }) => {
+      if (!allAppointments.length) return <View />;
+      if (!userId) return <View />;
+      const selectedStyle = {
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#3498db",
+        borderRadius: 50,
+        padding: 10,
+      };
 
-    const dayStyle = {
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 10,
-      opacity: isDateDisabled(date) ? 0.5 : 1,
-    };
+      const hasAppStyle = {
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "green",
+        borderRadius: 50,
+        padding: 10,
+      };
 
-    const pastDate = {
-      backgroundColor: "#3498db",
-      borderRadius: 50,
-      padding: 10,
-    };
+      const dayStyle = {
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 10,
+        opacity: isDateDisabled(date) ? 0.5 : 1,
+      };
 
-    const selectedPriceStyle = {
-      fontSize: 12,
-      color: "black",
-    };
+      const pastDate = {
+        backgroundColor: "#3498db",
+        borderRadius: 50,
+        padding: 10,
+      };
 
-    const priceStyle = {
-      fontSize: 12,
-      color: "gray",
-    };
+      const selectedPriceStyle = {
+        fontSize: 12,
+        color: "black",
+      };
 
-    return (
-      <>
-        {isDatePastAndNotPaid(date) ? (
-          <Pressable style={pastDate} onPress={() => handleRedirectToBill()}>
-            <Text>{date.day}</Text>
-            <Text style={selectedPriceStyle}>
-              {numberOfAppointmentsOnDate(date)}
-            </Text>
-          </Pressable>
-        ) : isDateDisabled(date) ? (
-          <View style={dayStyle}>
-            <Text>{date.day}</Text>
-          </View>
-        ) : isDateBooked(date) ? (
-          <Pressable
-            style={selectedStyle}
-            onPress={() => handleDateSelectAppointments(date)}
-          >
-            <Text>{date.day}</Text>
-            <Text style={selectedPriceStyle}>
-              {numberOfAppointmentsOnDate(date)}
-            </Text>
-          </Pressable>
-        ) : selectedDates[date.dateString] ? (
-          <Pressable
-            style={selectedStyle}
-            onPress={() => handleDateSelect(date)}
-          >
-            <Text>{date.day}</Text>
-          </Pressable>
-        ) : (
-          <Pressable style={dayStyle} onPress={() => handleDateSelect(date)}>
-            <Text>{date.day}</Text>
-          </Pressable>
-        )}
-      </>
-    );
-  };
+      const priceStyle = {
+        fontSize: 12,
+        color: "gray",
+      };
+
+      return (
+        <>
+          {isDatePastAndNotPaid(date) ? (
+            <Pressable style={pastDate} onPress={() => handleRedirectToBill()}>
+              <Text>{date.day}</Text>
+              <Text style={selectedPriceStyle}>
+                {numberOfAppointmentsOnDate(date)}
+              </Text>
+            </Pressable>
+          ) : isDateDisabled(date) ? (
+            <View style={dayStyle}>
+              <Text>{date.day}</Text>
+            </View>
+          ) : myAppointments(date, userId) ? (
+            <Pressable
+              style={hasAppStyle}
+              onPress={() => handleDateSelectAppointments(date)}
+            >
+              <Text>{date.day}</Text>
+              <Text style={selectedPriceStyle}>
+                {numberOfAppointmentsOnDate(date)}
+              </Text>
+            </Pressable>
+          ) : areAppointmentsAvailable(date) ? (
+            <Pressable
+              style={selectedStyle}
+              onPress={() => handleDateSelectAppointments(date)}
+            >
+              <Text>{date.day}</Text>
+              <Text style={selectedPriceStyle}>
+                {numberOfAppointmentsOnDate(date)}
+              </Text>
+            </Pressable>
+          ) : selectedDates[date.dateString] ? (
+            <Pressable
+              style={selectedStyle}
+              onPress={() => handleDateSelect(date)}
+            >
+              <Text>{date.day}</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={dayStyle} onPress={() => handleDateSelect(date)}>
+              <Text>{date.day}</Text>
+            </Pressable>
+          )}
+        </>
+      );
+    },
+    [allAppointments, userId]
+  );
   return (
     <>
-	 <View
+      <View
         style={{
           ...homePageStyles.backButtonSelectNewJobList,
           flexDirection: "row",
           justifyContent: "space-evenly",
-		  marginTop: "28%"
+          marginTop: "28%",
         }}
       >
         <Pressable
@@ -335,7 +368,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
           </View>
         </Pressable>
       </View>
-      <View style={{ flex: 1}}>
+      <View style={{ flex: 1 }}>
         <Text style={calenderStyles.title}>
           Select Dates to see available appointments
         </Text>
@@ -436,8 +469,14 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                     addEmployee={async (employeeId, appointmentId) => {
                       try {
                         await FetchData.addEmployee(employeeId, appointmentId);
-                        setDateSelectAppointments((prevAppointments) =>
-                          prevAppointments.map((appointment) =>
+
+                        // Define a helper to update employeesAssigned
+                        const updateEmployeesAssigned = (
+                          appointments,
+                          appointmentId,
+                          employeeId
+                        ) =>
+                          appointments.map((appointment) =>
                             appointment.id === appointmentId
                               ? {
                                   ...appointment,
@@ -449,6 +488,21 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                                   ],
                                 }
                               : appointment
+                          );
+
+                        // Update both states in parallel
+                        setAllAppointments((prevAppointments) =>
+                          updateEmployeesAssigned(
+                            prevAppointments,
+                            appointmentId,
+                            employeeId
+                          )
+                        );
+                        setDateSelectAppointments((prevAppointments) =>
+                          updateEmployeesAssigned(
+                            prevAppointments,
+                            appointmentId,
+                            employeeId
                           )
                         );
                       } catch (error) {
@@ -461,16 +515,37 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                           employeeId,
                           appointmentId
                         );
-                        setDateSelectAppointments((prevAppointments) =>
-                          prevAppointments.map((appointment) =>
+
+                        // Define a helper to remove the employee from employeesAssigned
+                        const removeEmployeeFromAssignments = (
+                          appointments,
+                          appointmentId,
+                          employeeId
+                        ) =>
+                          appointments.map((appointment) =>
                             appointment.id === appointmentId
                               ? {
                                   ...appointment,
-                                  employeesAssigned: [
-                                    ...(appointment.employeesAssigned || []),
-                                  ].filter((id) => id !== String(employeeId)),
+                                  employeesAssigned: (
+                                    appointment.employeesAssigned || []
+                                  ).filter((id) => id !== String(employeeId)),
                                 }
                               : appointment
+                          );
+
+                        // Update both states in parallel
+                        setAllAppointments((prevAppointments) =>
+                          removeEmployeeFromAssignments(
+                            prevAppointments,
+                            appointmentId,
+                            employeeId
+                          )
+                        );
+                        setDateSelectAppointments((prevAppointments) =>
+                          removeEmployeeFromAssignments(
+                            prevAppointments,
+                            appointmentId,
+                            employeeId
                           )
                         );
                       } catch (error) {
