@@ -38,7 +38,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
   const [sortOption, setSortOption] = useState("distanceClosest");
-  const [backToList, setBackToList] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const { width } = Dimensions.get("window");
