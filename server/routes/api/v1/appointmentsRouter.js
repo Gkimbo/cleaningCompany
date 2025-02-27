@@ -134,6 +134,7 @@ appointmentRouter.post("/", async (req, res) => {
         const homeBeingScheduled = await UserHomes.findOne({
           where: { id: homeId },
         });
+        console.log(date.date)
         const newAppointment = await UserAppointments.create({
           userId,
           homeId,

@@ -34,6 +34,7 @@ const SelectNewJobList = ({ state }) => {
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
   const [sortOption, setSortOption] = useState("distanceClosest");
+  const [seeCalender, setSeeCalender] = useState(false);
   const [loading, setLoading] = useState(true);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
@@ -93,21 +94,32 @@ const SelectNewJobList = ({ state }) => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
-          setLoading(false); // Set loading to false when location is found
+          setLoading(false);
         },
         (error) => {
           console.error("Error getting location:", error);
-          setLoading(false); // Set loading to false on timeout or error
+          setLoading(false);
         },
         { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
       );
-  
+
       return () => navigator.geolocation.clearWatch(watcher);
     } else {
-      setLoading(false); // Ensure loading stops if geolocation is unavailable
+      setLoading(false);
     }
   }, []);
-  
+
+  useEffect(() => {
+    if (seeCalender) {
+      navigate("/appointment-calender");
+      setSeeCalender(false);
+    }
+  }, [seeCalender]);
+
+  const pressedSeeCalender = () => {
+    setSeeCalender(true);
+  };
+
   const sortedAppointments = useMemo(() => {
     let sorted = allAppointments.map((appointment) => {
       let distance = null;
@@ -146,8 +158,20 @@ const SelectNewJobList = ({ state }) => {
   }, [allAppointments, userLocation, appointmentLocations, sortOption]);
 
   return (
-    <View style={{ ...homePageStyles.container, flexDirection: "column", marginTop: "27%"}}>
-      <View style={homePageStyles.backButtonSelectNewJobList}>
+    <View
+      style={{
+        ...homePageStyles.container,
+        flexDirection: "column",
+        marginTop: "27%",
+      }}
+    >
+      <View
+        style={{
+          ...homePageStyles.backButtonSelectNewJobList,
+          flexDirection: "row",
+          justifyContent: "space-evenly",
+        }}
+      >
         <Pressable
           style={homePageStyles.backButtonForm}
           onPress={() => navigate("/")}
@@ -159,6 +183,19 @@ const SelectNewJobList = ({ state }) => {
             <View style={{ marginLeft: 15 }}>
               <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
             </View>
+          </View>
+        </Pressable>
+        <Pressable
+          style={homePageStyles.backButtonForm}
+          onPress={pressedSeeCalender}
+        >
+          <View
+            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+          >
+            <View style={{ marginRight: 15 }}>
+              <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
+            </View>
+            <Icon name="angle-right" size={iconSize} color="black" />
           </View>
         </Pressable>
       </View>

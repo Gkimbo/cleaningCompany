@@ -7,27 +7,6 @@ import topBarStyles from "../../services/styles/TopBarStyles"
 import ReviewTile from "./ReviewTile";
 import Review from "../../services/fetchRequests/ReviewClass";
 
-// const tempTestData = [
-//   {
-//     id: 1,
-//     userId: 13,
-//     reviewerId: 12,
-//     appointmentId: 2,
-//     rating: 3.5,
-//     comment: "Was very thourgh but missed a few areas.",
-//     createdAt: "2025-02-10T13:55:35.940Z"
-//   },
-//   {
-//     id: 2,
-//     userId: 13,
-//     reviewerId: 7,
-//     appointmentId: 4,
-//     rating: 4,
-//     comment: "Great Job!",
-//     createdAt: "2025-02-16T13:55:35.940Z"
-//   },
-// ];
-
 const AllReviewsList = ({ state, dispatch }) => {
   const [allReviews, setAllReviews] = useState([]);
   const [backRedirect, setBackRedirect] = useState(false);
@@ -117,7 +96,6 @@ const AllReviewsList = ({ state, dispatch }) => {
       }}
     >
          <View style={{ alignItems: "center", paddingHorizontal: 16 , marginBottom: "20%"}}>
-          {/* Section Title */}
           <Text
             style={{
               fontSize: 18,

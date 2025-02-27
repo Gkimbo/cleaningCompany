@@ -26,7 +26,6 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [appointmentLocations, setAppointmentLocations] = useState(null);
   const [sortOption, setSortOption] = useState("distanceClosest");
   const [loading, setLoading] = useState(true);
-  const [backRedirect, setBackRedirect] = useState(false);
   const [refresh, setRefresh] = useState(false);
   const [userId, setUserId] = useState(null);
   const { width } = Dimensions.get("window");
@@ -106,16 +105,11 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
       );
     }
     fetchUser();
-
-    if(backRedirect){
-      navigate("/")
-      setBackRedirect(false)
-    }
-
+    
     if(refresh){
       setRefresh(false)
     }
-  }, [state.currentUser.token, backRedirect, refresh]);
+  }, [state.currentUser.token, refresh]);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -197,22 +191,37 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
         flexDirection: "column",
       }}
     >
-      <View style={homePageStyles.backButtonEmployeeAssignmentsList}>
+       <View
+        style={{
+          ...homePageStyles.backButtonSelectNewJobList,
+          flexDirection: "row",
+          justifyContent: "space-evenly",
+        }}
+      >
         <Pressable
           style={homePageStyles.backButtonForm}
-          onPress={handleBackPress}
+          onPress={() => navigate("/")}
         >
           <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              padding: 10,
-            }}
+            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
           >
             <Icon name="angle-left" size={iconSize} color="black" />
             <View style={{ marginLeft: 15 }}>
               <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
             </View>
+          </View>
+        </Pressable>
+        <Pressable
+          style={homePageStyles.backButtonForm}
+          onPress={() => navigate("/my-appointment-calender")}
+        >
+          <View
+            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+          >
+            <View style={{ marginRight: 15 }}>
+              <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
+            </View>
+            <Icon name="angle-right" size={iconSize} color="black" />
           </View>
         </Pressable>
       </View>
