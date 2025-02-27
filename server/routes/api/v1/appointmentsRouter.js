@@ -6,6 +6,7 @@ const {
   UserHomes,
   UserBills,
   UserCleanerAppointments,
+  UserPendingRequests
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -134,7 +135,7 @@ appointmentRouter.post("/", async (req, res) => {
         const homeBeingScheduled = await UserHomes.findOne({
           where: { id: homeId },
         });
-        console.log(date.date)
+        console.log(date.date);
         const newAppointment = await UserAppointments.create({
           userId,
           homeId,
@@ -405,6 +406,61 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
   }
 });
 
+appointmentRouter.patch("/request-employee", async (req, res) => {
+  const { id, appointmentId } = req.body;
+  try {
+    const appointment = await UserAppointments.findOne({
+      where: { id: Number(appointmentId) },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    const client = await User.findOne({ where: { id: appointment.userId } });
+
+    if (!client) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+
+    const cleaner = await User.findOne({ where: { id } });
+
+    if (!cleaner) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    const existingRequest = await UserPendingRequests.findOne({
+      where: { employeeId: id, appointmentId: Number(appointmentId) },
+    });
+    console.log(existingRequest);
+    if (existingRequest) {
+      return res
+        .status(400)
+        .json({ error: "Request already sent to the client" });
+    }
+
+    const newRequest = await UserPendingRequests.create({
+      employeeId: id,
+      appointmentId: Number(appointmentId),
+      status: "pending",
+    });
+    console.log(newRequest);
+    // await Email.sendEmployeeRequest(
+    //   client.email,
+    //   cleaner.username,
+    //   cleaner.rating,
+    //   appointment.date
+    // );
+
+    return res
+      .status(200)
+      .json({ message: "Request sent to the client for approval" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 appointmentRouter.patch("/add-employee", async (req, res) => {
   const { id, appointmentId } = req.body;
   let userInfo;
@@ -537,6 +593,50 @@ appointmentRouter.patch("/:id", async (req, res) => {
     }
 
     return res.status(401).json({ error: "Invalid token" });
+  }
+});
+
+appointmentRouter.patch("/confirm-employee", async (req, res) => {
+  const { requestId, approve } = req.body;
+  try {
+    const request = await UserPendingRequests.findOne({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    if (approve) {
+      await UserCleanerAppointments.create({
+        employeeId: request.employeeId,
+        appointmentId: request.appointmentId,
+      });
+
+      const appointment = await UserAppointments.findOne({
+        where: { id: request.appointmentId },
+      });
+
+      let employees = appointment.employeesAssigned || [];
+      if (!employees.includes(String(request.employeeId))) {
+        employees.push(String(request.employeeId));
+      }
+
+      await appointment.update({
+        employeesAssigned: employees,
+        hasBeenAssigned: true,
+      });
+
+      await request.destroy();
+
+      return res.status(200).json({ message: "Cleaner assigned successfully" });
+    } else {
+      await request.destroy();
+      return res.status(200).json({ message: "Request denied" });
+    }
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

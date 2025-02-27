@@ -363,7 +363,7 @@ class FetchData {
   static async addEmployee(id, appointmentId) {
     try {
       const response = await fetch(
-        baseURL + "/api/v1/appointments/add-employee",
+        baseURL + "/api/v1/appointments/request-employee",
         {
           method: "PATCH",
           headers: {
@@ -374,12 +374,13 @@ class FetchData {
             appointmentId,
           }),
         }
-      );
+      )
       if (!response.ok) {
         throw new Error("Failed to delete");
       }
 
       const responseData = await response.json();
+      console.log(responseData)
       return true;
     } catch (error) {
       return error;

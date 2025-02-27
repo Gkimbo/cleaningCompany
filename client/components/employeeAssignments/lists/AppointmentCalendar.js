@@ -34,6 +34,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   const [allAppointments, setAllAppointments] = useState([]);
   const [selectedDates, setSelectedDates] = useState({});
   const [dateSelectAppointments, setDateSelectAppointments] = useState([]);
+  const [selectedDate, setSelectedDate] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
@@ -75,22 +76,38 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const locations = await Promise.all(
+        const locationsWithDistances = await Promise.all(
           allAppointments.map(async (appointment) => {
-            const response = await FetchData.getLatAndLong(appointment.homeId);
-            return { [appointment.homeId]: response };
+            const loc = await FetchData.getLatAndLong(appointment.homeId);
+            if (!loc) return null;
+
+            const distance = haversineDistance(
+              userLocation.latitude,
+              userLocation.longitude,
+              loc.latitude,
+              loc.longitude
+            );
+
+            return {
+              [appointment.homeId]: {
+                location: loc,
+                distance: distance,
+              },
+            };
           })
         );
-        setAppointmentLocations(Object.assign({}, ...locations));
+        setAppointmentLocations(
+          Object.assign({}, ...locationsWithDistances.filter(Boolean))
+        );
       } catch (error) {
         console.error("Error fetching appointment locations:", error);
       }
     };
 
-    if (allAppointments.length > 0) {
+    if (allAppointments.length > 0 && userLocation) {
       fetchLocations();
     }
-  }, [allAppointments]);
+  }, [allAppointments, userLocation]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -116,22 +133,20 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   }, []);
 
   const handleDateSelectAppointments = (date) => {
+    if (!appointmentLocations) {
+      console.warn("Appointment locations not loaded yet.");
+    }
+
     const selectedAppointments = allAppointments
       .filter((appointment) => appointment.date === date.dateString)
       .map((appointment) => {
         let distance = null;
         if (userLocation && appointmentLocations?.[appointment.homeId]) {
           const loc = appointmentLocations[appointment.homeId];
-          distance = haversineDistance(
-            userLocation.latitude,
-            userLocation.longitude,
-            loc.latitude,
-            loc.longitude
-          );
+          distance = loc.distance;
         }
         return { ...appointment, distance };
       });
-      
 
     const sorted = selectedAppointments.sort((a, b) => {
       if (sortOption === "distanceClosest") {
@@ -145,9 +160,17 @@ const AppointmentCalendar = ({ state, dispatch }) => {
       }
       return 0;
     });
+
     setLoading(false);
     setDateSelectAppointments(sorted);
   };
+
+  useEffect(() => {
+    if (appointmentLocations && selectedDate) {
+      handleDateSelectAppointments(selectedDate);
+    }
+  }, [appointmentLocations, selectedDate]);
+  
 
   useEffect(() => {
     if (dateSelectAppointments.length > 0) {
@@ -298,7 +321,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
           ) : myAppointments(date, userId) ? (
             <Pressable
               style={hasAppStyle}
-              onPress={() => handleDateSelectAppointments(date)}
+              onPress={() => setSelectedDate(date)}
             >
               <Text>{date.day}</Text>
               <Text style={selectedPriceStyle}>
@@ -308,7 +331,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
           ) : areAppointmentsAvailable(date) ? (
             <Pressable
               style={selectedStyle}
-              onPress={() => handleDateSelectAppointments(date)}
+              onPress={() => setSelectedDate(date)}
             >
               <Text>{date.day}</Text>
               <Text style={selectedPriceStyle}>
@@ -470,8 +493,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                     addEmployee={async (employeeId, appointmentId) => {
                       try {
                         await FetchData.addEmployee(employeeId, appointmentId);
-
-                        // Define a helper to update employeesAssigned
                         const updateEmployeesAssigned = (
                           appointments,
                           appointmentId,
@@ -491,7 +512,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                               : appointment
                           );
 
-                        // Update both states in parallel
                         setAllAppointments((prevAppointments) =>
                           updateEmployeesAssigned(
                             prevAppointments,
@@ -517,7 +537,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                           appointmentId
                         );
 
-                        // Define a helper to remove the employee from employeesAssigned
                         const removeEmployeeFromAssignments = (
                           appointments,
                           appointmentId,
@@ -534,7 +553,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                               : appointment
                           );
 
-                        // Update both states in parallel
                         setAllAppointments((prevAppointments) =>
                           removeEmployeeFromAssignments(
                             prevAppointments,

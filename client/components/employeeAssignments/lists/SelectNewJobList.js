@@ -100,7 +100,7 @@ const SelectNewJobList = ({ state }) => {
           console.error("Error getting location:", error);
           setLoading(false);
         },
-        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
 
       return () => navigator.geolocation.clearWatch(watcher);
