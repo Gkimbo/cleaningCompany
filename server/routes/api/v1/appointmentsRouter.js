@@ -16,7 +16,6 @@ const HomeSerializer = require("../../../serializers/homesSerializer");
 const { emit } = require("nodemon");
 const Email = require("../../../services/sendNotifications/EmailClass");
 
-
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
@@ -40,6 +39,7 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
   const { id } = req.params;
   let employees = [];
+ 
   try {
     const userAppointments = await UserAppointments.findOne({
       where: { id: id },
@@ -102,6 +102,7 @@ appointmentRouter.get("/home/:homeId", async (req, res) => {
 });
 
 appointmentRouter.post("/", async (req, res) => {
+  
   const { token, homeId, dateArray, keyPadCode, keyLocation } = req.body;
   let appointmentTotal = 0;
   const home = await UserHomes.findOne({ where: { id: homeId } });

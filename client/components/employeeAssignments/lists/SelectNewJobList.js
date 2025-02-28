@@ -30,6 +30,7 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 
 const SelectNewJobList = ({ state }) => {
   const [allAppointments, setAllAppointments] = useState([]);
+  const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
@@ -39,15 +40,16 @@ const SelectNewJobList = ({ state }) => {
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
-
+console.log(appointmentLocations)
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
         const response = await FetchData.get(
-          "/api/v1/users/appointments",
+          "/api/v1/users/appointments/employee",
           state.currentUser.token
         );
         setAllAppointments(response.appointments || []);
+        setAllRequests(response.requested || []);
       } catch (error) {
         console.error("Error fetching appointments:", error);
       }
@@ -73,9 +75,14 @@ const SelectNewJobList = ({ state }) => {
           allAppointments.map(async (appointment) => {
             const response = await FetchData.getLatAndLong(appointment.homeId);
             return { [appointment.homeId]: response };
-          })
+          }),
+          allRequests.map(async (appointment) => {
+            const response = await FetchData.getLatAndLong(appointment.homeId);
+            return { [appointment.homeId]: response };
+          }),
         );
         setAppointmentLocations(Object.assign({}, ...locations));
+        
       } catch (error) {
         console.error("Error fetching appointment locations:", error);
       }
