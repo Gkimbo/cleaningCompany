@@ -6,7 +6,8 @@ const {
   UserHomes,
   UserBills,
   UserCleanerAppointments,
-  UserPendingRequests
+  UserPendingRequests,
+  UserReviews
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -14,6 +15,7 @@ const calculatePrice = require("../../../services/CalculatePrice");
 const HomeSerializer = require("../../../serializers/homesSerializer");
 const { emit } = require("nodemon");
 const Email = require("../../../services/sendNotifications/EmailClass");
+
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -408,23 +410,19 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
 
 appointmentRouter.patch("/request-employee", async (req, res) => {
   const { id, appointmentId } = req.body;
-  try {
-    const appointment = await UserAppointments.findOne({
-      where: { id: Number(appointmentId) },
-    });
 
+  try {
+    const appointment = await UserAppointments.findByPk(Number(appointmentId));
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found" });
     }
 
-    const client = await User.findOne({ where: { id: appointment.userId } });
-
+    const client = await User.findByPk(appointment.dataValues.userId);
     if (!client) {
       return res.status(404).json({ error: "Client not found" });
     }
 
-    const cleaner = await User.findOne({ where: { id } });
-
+    const cleaner = await User.findByPk(id);
     if (!cleaner) {
       return res.status(404).json({ error: "Cleaner not found" });
     }
@@ -432,32 +430,41 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     const existingRequest = await UserPendingRequests.findOne({
       where: { employeeId: id, appointmentId: Number(appointmentId) },
     });
-    console.log(existingRequest);
     if (existingRequest) {
-      return res
-        .status(400)
-        .json({ error: "Request already sent to the client" });
+      return res.status(400).json({ error: "Request already sent to the client" });
     }
 
-    const newRequest = await UserPendingRequests.create({
+    await UserPendingRequests.create({
       employeeId: id,
       appointmentId: Number(appointmentId),
       status: "pending",
     });
-    console.log(newRequest);
-    // await Email.sendEmployeeRequest(
-    //   client.email,
-    //   cleaner.username,
-    //   cleaner.rating,
-    //   appointment.date
-    // );
 
-    return res
-      .status(200)
-      .json({ message: "Request sent to the client for approval" });
+    const allReviews = await UserReviews.findAll({
+      where: { userId: cleaner.dataValues.id },
+    });
+
+    const getAverageRating = () => {
+      if (allReviews.length === 0) return "No ratings yet";
+      const totalRating = allReviews.reduce((sum, review) => sum + review.dataValues.rating, 0);
+      return (totalRating / allReviews.length).toFixed(1); 
+    };
+
+    const averageRating = getAverageRating();
+
+    await Email.sendEmployeeRequest(
+      client.dataValues.email,
+      client.dataValues.username,
+      cleaner.dataValues.username,
+      averageRating,
+      appointment.dataValues.date
+    );
+
+    return res.status(200).json({ message: "Request sent to the client for approval" });
+
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Server error" });
+    console.error("❌ Server error:", error);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
