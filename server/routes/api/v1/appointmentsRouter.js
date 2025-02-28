@@ -7,7 +7,7 @@ const {
   UserBills,
   UserCleanerAppointments,
   UserPendingRequests,
-  UserReviews
+  UserReviews,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -39,7 +39,7 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
   const { id } = req.params;
   let employees = [];
- 
+
   try {
     const userAppointments = await UserAppointments.findOne({
       where: { id: id },
@@ -102,7 +102,6 @@ appointmentRouter.get("/home/:homeId", async (req, res) => {
 });
 
 appointmentRouter.post("/", async (req, res) => {
-  
   const { token, homeId, dateArray, keyPadCode, keyLocation } = req.body;
   let appointmentTotal = 0;
   const home = await UserHomes.findOne({ where: { id: homeId } });
@@ -432,7 +431,9 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
       where: { employeeId: id, appointmentId: Number(appointmentId) },
     });
     if (existingRequest) {
-      return res.status(400).json({ error: "Request already sent to the client" });
+      return res
+        .status(400)
+        .json({ error: "Request already sent to the client" });
     }
 
     await UserPendingRequests.create({
@@ -447,8 +448,11 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
 
     const getAverageRating = () => {
       if (allReviews.length === 0) return "No ratings yet";
-      const totalRating = allReviews.reduce((sum, review) => sum + review.dataValues.rating, 0);
-      return (totalRating / allReviews.length).toFixed(1); 
+      const totalRating = allReviews.reduce(
+        (sum, review) => sum + review.dataValues.rating,
+        0
+      );
+      return (totalRating / allReviews.length).toFixed(1);
     };
 
     const averageRating = getAverageRating();
@@ -461,8 +465,9 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
       appointment.dataValues.date
     );
 
-    return res.status(200).json({ message: "Request sent to the client for approval" });
-
+    return res
+      .status(200)
+      .json({ message: "Request sent to the client for approval" });
   } catch (error) {
     console.error("❌ Server error:", error);
     return res.status(500).json({ error: "Internal server error" });
@@ -558,6 +563,51 @@ appointmentRouter.patch("/add-employee", async (req, res) => {
       return res.status(401).json({ error: "Token has expired" });
     }
     return res.status(401).json({ error: "Invalid token" });
+  }
+});
+
+appointmentRouter.patch("/remove-request", async (req, res) => {
+  const { id, appointmentId } = req.body;
+  try {
+    const request = await UserPendingRequests.findOne({
+      where: { appointmentId: Number(appointmentId), employeeId: Number(id) },
+    });
+
+    if (!request) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+
+    const appointment = await UserAppointments.findByPk(Number(appointmentId));
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    const client = await User.findByPk(appointment.dataValues.userId);
+    if (!client) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+
+    const cleaner = await User.findByPk(id);
+    if (!cleaner) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    const removedRequestData = request.get();
+    await request.destroy();
+
+    await Email.removeRequestEmail(
+      client.dataValues.email,
+      client.dataValues.username,
+      appointment.dataValues.date
+    );
+
+    return res.status(200).json({
+      message: "Request removed",
+      removedRequest: removedRequestData,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

@@ -14,6 +14,7 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../../services/styles/TopBarStyles";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
+import RequestedTile from "../tiles/RequestedTile";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
@@ -40,7 +41,7 @@ const SelectNewJobList = ({ state }) => {
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
-console.log(appointmentLocations)
+
   useEffect(() => {
     const fetchAppointments = async () => {
       try {
@@ -164,6 +165,43 @@ console.log(appointmentLocations)
     return sorted;
   }, [allAppointments, userLocation, appointmentLocations, sortOption]);
 
+  const sortedRequests = useMemo(() => {
+    let sorted = allRequests.map((appointment) => {
+      let distance = null;
+
+      if (
+        userLocation &&
+        appointmentLocations &&
+        appointmentLocations[appointment.homeId]
+      ) {
+        const loc = appointmentLocations[appointment.homeId];
+        distance = haversineDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          loc.latitude,
+          loc.longitude
+        );
+        setLoading(false);
+      }
+
+      return { ...appointment, distance };
+    });
+
+    if (sortOption === "distanceClosest") {
+      sorted.sort(
+        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
+      );
+    } else if (sortOption === "distanceFurthest") {
+      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
+    } else if (sortOption === "priceLow") {
+      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    } else if (sortOption === "priceHigh") {
+      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+    }
+
+    return sorted;
+  }, [allRequests, userLocation, appointmentLocations, sortOption]);
+
   return (
     <View
       style={{
@@ -238,6 +276,7 @@ console.log(appointmentLocations)
           style={{ marginTop: 20 }}
         />
       ) : (
+        
         <View style={{ flex: 1 }}>
           {sortedAppointments.map((appointment) => (
             <View key={appointment.id}>
@@ -260,24 +299,26 @@ console.log(appointmentLocations)
                 }
                 addEmployee={async (employeeId, appointmentId) => {
                   try {
-                    await FetchData.addEmployee(employeeId, appointmentId);
-                    setAllAppointments((prevAppointments) =>
-                      prevAppointments.map((appointment) =>
-                        appointment.id === appointmentId
-                          ? {
-                              ...appointment,
-                              employeesAssigned: [
-                                ...(appointment.employeesAssigned || []),
-                                String(employeeId),
-                              ],
-                            }
-                          : appointment
-                      )
-                    );
+                    const response = await FetchData.addEmployee(employeeId, appointmentId);
+                
+                    setAllAppointments((prevAppointments) => {
+                      const assignedAppointment = prevAppointments.find(
+                        (appointment) => appointment.id === appointmentId
+                      );
+                
+                      if (!assignedAppointment) return prevAppointments; 
+                
+                      setAllRequests((prevRequests) => [...prevRequests, assignedAppointment]);
+                
+                      return prevAppointments.filter(
+                        (appointment) => appointment.id !== appointmentId
+                      );
+                    });
                   } catch (error) {
                     console.error("Error adding employee:", error);
                   }
                 }}
+                
                 removeEmployee={async (employeeId, appointmentId) => {
                   try {
                     await FetchData.removeEmployee(employeeId, appointmentId);
@@ -298,6 +339,46 @@ console.log(appointmentLocations)
                     console.error("Error removing employee:", error);
                   }
                 }}
+              />
+            </View>
+          ))}
+          {sortedRequests.map((appointment) => (
+            <View key={appointment.id}>
+              <RequestedTile
+                id={appointment.id}
+                cleanerId={userId}
+                date={appointment.date}
+                price={appointment.price}
+                homeId={appointment.homeId}
+                hasBeenAssigned={appointment.hasBeenAssigned}
+                bringSheets={appointment.bringSheets}
+                bringTowels={appointment.bringTowels}
+                completed={appointment.completed}
+                keyPadCode={appointment.keyPadCode}
+                keyLocation={appointment.keyLocation}
+                distance={appointment.distance}
+                removeRequest={async (employeeId, appointmentId) => {
+                  try {
+                    await FetchData.removeRequest(employeeId, appointmentId);
+                
+                    setAllRequests((prevRequests) => {
+                      const removedAppointment = prevRequests.find(
+                        (appointment) => appointment.id === appointmentId
+                      );
+                
+                      if (!removedAppointment) return prevRequests;
+
+                      setAllAppointments((prevAppointments) => [
+                        ...prevAppointments,
+                        removedAppointment,
+                      ]);
+
+                      return prevRequests.filter((appointment) => appointment.id !== appointmentId);
+                    });
+                  } catch (error) {
+                    console.error("Error removing request:", error);
+                  }
+                }}                
               />
             </View>
           ))}

@@ -360,6 +360,33 @@ class FetchData {
       return error;
     }
   }
+
+  static async removeRequest(id, appointmentId) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/appointments/remove-request",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            appointmentId,
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to delete");
+      }
+
+      const responseData = await response.json();
+      return true;
+    } catch (error) {
+      return error;
+    }
+  }
+
   static async addEmployee(id, appointmentId) {
     try {
       const response = await fetch(

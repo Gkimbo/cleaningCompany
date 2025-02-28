@@ -211,34 +211,42 @@ usersRouter.get("/appointments/employee", async (req, res) => {
 
     const userAppointments = await UserAppointments.findAll();
 
-    const filteredAppointments = userAppointments.filter((appointment) => {
-      const assignedEmployees = appointment.dataValues.employeesAssigned;
-      return (
-        assignedEmployees === null ||
-        assignedEmployees.length === 0 ||
-        assignedEmployees.includes(String(userId))
-      );
-    });
-
     const requestsForCleaning = await UserPendingRequests.findAll({
       where: { employeeId: userId },
     });
 
-    const requestedAppointmentIds = requestsForCleaning.map(
-      (req) => req.dataValues.appointmentId
+    const requestedAppointmentIds = new Set(
+      requestsForCleaning.map((req) => req.dataValues.appointmentId)
     );
 
-    const requestedAppointments = await UserAppointments.findAll({
-      where: { id: requestedAppointmentIds },
+    const filteredAppointments = userAppointments.filter((appointment) => {
+      const assignedEmployees = appointment.dataValues.employeesAssigned;
+      return (
+        !requestedAppointmentIds.has(appointment.dataValues.id) &&
+        (assignedEmployees === null ||
+          assignedEmployees.length === 0 ||
+          assignedEmployees.includes(String(userId)))
+      );
     });
+
+    const requestedAppointments = await UserAppointments.findAll({
+      where: {
+        id: Array.from(requestedAppointmentIds),
+        hasBeenAssigned: false,
+      },
+    });
+
+    const serializedAppointments =
+      AppointmentSerializer.serializeArray(filteredAppointments);
 
     const serializedRequests = AppointmentSerializer.serializeArray(
       requestedAppointments
     );
 
-    const serializedAppointments =
-      AppointmentSerializer.serializeArray(filteredAppointments);
-    return res.status(200).json({ appointments: serializedAppointments, requested: serializedRequests });
+    return res.status(200).json({
+      appointments: serializedAppointments,
+      requested: serializedRequests,
+    });
   } catch (error) {
     console.error(error);
     return res.status(401).json({ error: "Invalid or expired token" });

@@ -168,7 +168,55 @@ Kleanr Support Team`,
 
       const info = await transporter.sendMail(mailOptions);
       console.log("✅ Email sent successfully:", info.response);
-      return("✅ Email sent successfully:", info.response);
+      return "✅ Email sent successfully:", info.response;
+    } catch (error) {
+      console.error("❌ Error sending email:", error);
+    }
+  }
+
+  static async removeRequestEmail(
+    email,
+    userName,
+    appointmentDate
+  ) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+      
+      const formattedDate = (dateString) => {
+        const options = {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        };
+        return new Date(dateString).toLocaleDateString(undefined, options);
+      };
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject:
+          "DO NOT REPLY: Cleaner Request Removal Notification (Automated Message)",
+        text: `Dear ${userName},
+
+A cleaner has removed their request to clean your home on ${formattedDate(appointmentDate)}.
+You do not need to do anything at this time.
+
+Best regards,  
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Email sent successfully:", info.response);
+      return "✅ Email sent successfully:", info.response;
     } catch (error) {
       console.error("❌ Error sending email:", error);
     }
