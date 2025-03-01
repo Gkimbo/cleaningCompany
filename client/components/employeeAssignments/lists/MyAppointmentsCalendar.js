@@ -59,10 +59,6 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
     }
   }, [state.currentUser.token]);
 
-  useEffect(() => {
-   
-  }, [allAppointments]);
-
   const handleDateSelectAppointments = (date) => {
     const selectedAppointments = allAppointments.filter(
       (appointment) => appointment.date === date.dateString
@@ -70,6 +66,13 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
 
     setLoading(false);
     setDateSelectAppointments(selectedAppointments);
+  };
+
+  const numberOfAppointmentsOnDate = (date) => {
+    const appointments = state.appointments.filter(
+      (appointment) => appointment.date === date.dateString
+    ).length;
+    return appointments;
   };
 
   const handleDateSelect = (date) => {
@@ -91,32 +94,46 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
     setCurrentMonth(new Date(date.year, date.month - 1));
   };
 
-  const renderDay = useCallback(({ date }) => {
-    const isAssigned = allAppointments.some(
-      (appointment) =>
-        appointment.date === date.dateString &&
-        appointment.employeesAssigned?.includes(String(userId))
-    );
+  const renderDay = useCallback(
+    ({ date }) => {
+      const isAssigned = allAppointments.some(
+        (appointment) =>
+          appointment.date === date.dateString &&
+          appointment.employeesAssigned?.includes(String(userId))
+      );
 
-    const dayStyle = {
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: isAssigned ? "green" : "transparent",
-      borderRadius: 50,
-      padding: 10,
-    };
+      const dayStyle = {
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: isAssigned ? "green" : "transparent",
+        borderRadius: 25,
+        paddingVertical: 10,
+        paddingHorizontal: 18,
+      };
 
-    return (
-      <Pressable
-        style={dayStyle}
-        onPress={() => handleDateSelectAppointments(date)}
-      >
-        <Text style={{ color: isAssigned ? "white" : "black" }}>
-          {date.day}
-        </Text>
-      </Pressable>
-    );
-  }, [allAppointments, dateSelectAppointments, userId])
+      const selectedPriceStyle = {
+        fontSize: 12,
+        color: "white",
+      };
+
+      return (
+        <Pressable
+          style={dayStyle}
+          onPress={() => handleDateSelectAppointments(date)}
+        >
+          <Text style={{ color: isAssigned ? "white" : "black" }}>
+            {date.day}
+          </Text>
+          {isAssigned ? (
+            <Text style={selectedPriceStyle}>
+              {numberOfAppointmentsOnDate(date)}
+            </Text>
+          ) : null}
+        </Pressable>
+      );
+    },
+    [allAppointments, dateSelectAppointments, userId]
+  );
 
   return (
     <>
@@ -287,7 +304,7 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
                           employeeId,
                           appointmentId
                         );
-                        
+
                         const removeEmployeeFromAssignments = (
                           appointments,
                           appointmentId,

@@ -161,12 +161,10 @@ usersRouter.delete("/employee", async (req, res) => {
         ? [...appointment.employeesAssigned]
         : [];
 
-      // Remove userId from the array
       const updatedEmployees = employees.filter(
         (empId) => empId !== String(userId)
       );
-      console.log(updatedEmployees);
-      // Update only if something was removed
+
       if (updatedEmployees.length !== employees.length) {
         await appointment.update({
           employeesAssigned: updatedEmployees,
