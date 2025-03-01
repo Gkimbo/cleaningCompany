@@ -47,6 +47,7 @@ export default function App() {
     bill: 0,
     homes: [],
     appointments: [],
+    requests: []
   });
 
   const fetchCurrentUser = async () => {

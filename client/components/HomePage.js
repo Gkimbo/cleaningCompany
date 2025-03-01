@@ -91,11 +91,20 @@ const HomePage = ({ state, dispatch }) => {
               payload: response.user.bill,
             });
           }
-        );
+        ),
+        FetchData.get("/api/v1/appointments/my-requests", state.currentUser.token).then(
+          (response) => {
+            console.log(response)
+            dispatch({
+              type: "CLEANING_REQUESTS",
+              payload: ["Test", "1,2,3"],
+            });
+          }
+        )
       }
     }
   }, []);
-
+console.log(state)
   let todaysAppointment = null;
   let nextAppointment = null;
   let foundToday = false;
