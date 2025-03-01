@@ -68,6 +68,8 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
 });
 
 const { Op } = require("sequelize");
+const UserSerializer = require("../../../serializers/userSerializer");
+const RequestSerializer = require("../../../serializers/RequestsSerializer");
 
 appointmentRouter.get("/my-requests", async (req, res) => {
   try {
@@ -88,19 +90,47 @@ appointmentRouter.get("/my-requests", async (req, res) => {
       return res.status(404).json({ message: "No appointments found" });
     }
 
-    const appointmentIds = existingAppointments.map((appointment) => appointment.id);
+    const appointmentIds = existingAppointments.map(
+      (appointment) => appointment.id
+    );
 
     const pendingRequests = await UserPendingRequests.findAll({
       where: { appointmentId: { [Op.in]: appointmentIds } },
     });
 
-    return res.status(200).json({ pendingRequests });
+    if (!pendingRequests.length) {
+      return res.status(404).json({ message: "you have no requests" });
+    }
+
+    const pendingRequestsEmployee = await Promise.all(
+      pendingRequests.map(async (request) => {
+        const appointment = existingAppointments.find(
+          (appointment) =>
+            appointment.dataValues.id === request.dataValues.appointmentId
+        );
+
+        const employeeRequesting = await User.findOne({
+          where: { id: request.dataValues.employeeId },
+        });
+
+        const serializedAppointment = AppointmentSerializer.serializeOne(appointment)
+        const serializedEmployee = UserSerializer.serializeOne(employeeRequesting)
+        const serializedRequest = RequestSerializer.serializeOne(request)
+
+        return {
+          request: serializedRequest,
+          appointment: serializedAppointment,
+          employeeRequesting: serializedEmployee,
+        };
+      })
+    );
+    
+    return res.status(200).json({ pendingRequestsEmployee });
   } catch (error) {
     console.error("Error fetching my requests:", error);
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 });
-
 
 appointmentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;

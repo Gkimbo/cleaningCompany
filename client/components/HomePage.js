@@ -97,7 +97,7 @@ const HomePage = ({ state, dispatch }) => {
             console.log(response)
             dispatch({
               type: "CLEANING_REQUESTS",
-              payload: ["Test", "1,2,3"],
+              payload: response.pendingRequestsEmployee,
             });
           }
         )
