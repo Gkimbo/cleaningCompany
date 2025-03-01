@@ -67,7 +67,7 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
   }
 });
 
-appointmentRouter.get("/my-appointments", async (req, res) => {
+appointmentRouter.get("/my-requests", async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
   if (!token) {
     return res.status(401).json({ error: "Authorization token required" });
