@@ -13,7 +13,6 @@ import homePageStyles from "../../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../../services/styles/TopBarStyles";
 import FetchData from "../../../services/fetchRequests/fetchData";
-import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import RequestedTile from "../tiles/RequestedTile";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 
@@ -29,8 +28,7 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const SelectNewJobList = ({ state }) => {
-  const [allAppointments, setAllAppointments] = useState([]);
+const MyRequests = ({ state }) => {
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
@@ -49,7 +47,6 @@ const SelectNewJobList = ({ state }) => {
           "/api/v1/users/appointments/employee",
           state.currentUser.token
         );
-        setAllAppointments(response.appointments || []);
         setAllRequests(response.requested || []);
       } catch (error) {
         console.error("Error fetching appointments:", error);
@@ -73,10 +70,6 @@ const SelectNewJobList = ({ state }) => {
     const fetchLocations = async () => {
       try {
         const locations = await Promise.all(
-          allAppointments.map(async (appointment) => {
-            const response = await FetchData.getLatAndLong(appointment.homeId);
-            return { [appointment.homeId]: response };
-          }),
           allRequests.map(async (appointment) => {
             const response = await FetchData.getLatAndLong(appointment.homeId);
             return { [appointment.homeId]: response };
@@ -89,10 +82,10 @@ const SelectNewJobList = ({ state }) => {
       }
     };
 
-    if (allAppointments.length > 0) {
+    if (allRequests.length > 0) {
       fetchLocations();
     }
-  }, [allAppointments]);
+  }, [allRequests]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -119,7 +112,7 @@ const SelectNewJobList = ({ state }) => {
 
   useEffect(() => {
     if (seeCalender) {
-      navigate("/appointment-calender");
+      navigate("/my-requests-calendar");
       setSeeCalender(false);
     }
   }, [seeCalender]);
@@ -127,43 +120,6 @@ const SelectNewJobList = ({ state }) => {
   const pressedSeeCalender = () => {
     setSeeCalender(true);
   };
-
-  const sortedAppointments = useMemo(() => {
-    let sorted = allAppointments.map((appointment) => {
-      let distance = null;
-
-      if (
-        userLocation &&
-        appointmentLocations &&
-        appointmentLocations[appointment.homeId]
-      ) {
-        const loc = appointmentLocations[appointment.homeId];
-        distance = haversineDistance(
-          userLocation.latitude,
-          userLocation.longitude,
-          loc.latitude,
-          loc.longitude
-        );
-        setLoading(false);
-      }
-
-      return { ...appointment, distance };
-    });
-
-    if (sortOption === "distanceClosest") {
-      sorted.sort(
-        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
-      );
-    } else if (sortOption === "distanceFurthest") {
-      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
-    } else if (sortOption === "priceLow") {
-      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
-    } else if (sortOption === "priceHigh") {
-      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
-    }
-
-    return sorted;
-  }, [allAppointments, userLocation, appointmentLocations, sortOption]);
 
   const sortedRequests = useMemo(() => {
     let sorted = allRequests.map((appointment) => {
@@ -212,7 +168,7 @@ const SelectNewJobList = ({ state }) => {
     >
       <View
         style={{
-          ...homePageStyles.backButtonSelectNewJobList,
+          ...homePageStyles.backButtonSelectNewJob,
           flexDirection: "row",
           justifyContent: "space-evenly",
         }}
@@ -276,72 +232,7 @@ const SelectNewJobList = ({ state }) => {
           style={{ marginTop: 20 }}
         />
       ) : (
-        
         <View style={{ flex: 1 }}>
-          {sortedAppointments.map((appointment) => (
-            <View key={appointment.id}>
-              <EmployeeAssignmentTile
-                id={appointment.id}
-                cleanerId={userId}
-                date={appointment.date}
-                price={appointment.price}
-                homeId={appointment.homeId}
-                hasBeenAssigned={appointment.hasBeenAssigned}
-                bringSheets={appointment.bringSheets}
-                bringTowels={appointment.bringTowels}
-                completed={appointment.completed}
-                keyPadCode={appointment.keyPadCode}
-                keyLocation={appointment.keyLocation}
-                distance={appointment.distance}
-                assigned={
-                  appointment.employeesAssigned?.includes(String(userId)) ||
-                  false
-                }
-                addEmployee={async (employeeId, appointmentId) => {
-                  try {
-                    const response = await FetchData.addEmployee(employeeId, appointmentId);
-                
-                    setAllAppointments((prevAppointments) => {
-                      const assignedAppointment = prevAppointments.find(
-                        (appointment) => appointment.id === appointmentId
-                      );
-                
-                      if (!assignedAppointment) return prevAppointments; 
-                
-                      setAllRequests((prevRequests) => [...prevRequests, assignedAppointment]);
-                
-                      return prevAppointments.filter(
-                        (appointment) => appointment.id !== appointmentId
-                      );
-                    });
-                  } catch (error) {
-                    console.error("Error adding employee:", error);
-                  }
-                }}
-                
-                removeEmployee={async (employeeId, appointmentId) => {
-                  try {
-                    await FetchData.removeEmployee(employeeId, appointmentId);
-                    setAllAppointments((prevAppointments) =>
-                      prevAppointments.map((appointment) =>
-                        appointment.id === appointmentId
-                          ? {
-                              ...appointment,
-                              employeesAssigned:
-                                appointment.employeesAssigned?.filter(
-                                  (id) => id !== String(employeeId)
-                                ),
-                            }
-                          : appointment
-                      )
-                    );
-                  } catch (error) {
-                    console.error("Error removing employee:", error);
-                  }
-                }}
-              />
-            </View>
-          ))}
           {sortedRequests.map((appointment) => (
             <View key={appointment.id}>
               <RequestedTile
@@ -360,19 +251,11 @@ const SelectNewJobList = ({ state }) => {
                 removeRequest={async (employeeId, appointmentId) => {
                   try {
                     await FetchData.removeRequest(employeeId, appointmentId);
-                
                     setAllRequests((prevRequests) => {
                       const removedAppointment = prevRequests.find(
                         (appointment) => appointment.id === appointmentId
                       );
-                
                       if (!removedAppointment) return prevRequests;
-
-                      setAllAppointments((prevAppointments) => [
-                        ...prevAppointments,
-                        removedAppointment,
-                      ]);
-
                       return prevRequests.filter((appointment) => appointment.id !== appointmentId);
                     });
                   } catch (error) {
@@ -388,4 +271,4 @@ const SelectNewJobList = ({ state }) => {
   );
 };
 
-export default SelectNewJobList;
+export default MyRequests;

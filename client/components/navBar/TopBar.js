@@ -24,6 +24,7 @@ import EmployeeShiftButton from "./EmployeeShiftButton";
 import UnassignedAppointmentsButton from "./UnassignedAppointmentsButton";
 import ViewApplicationsButton from "./ViewApplicationsButton";
 import ChooseNewJobButton from "./ChooseNewJobButton";
+import MyRequestsButton from "./MyRequestsButton";
 
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
@@ -105,6 +106,8 @@ const TopBar = ({ dispatch, state }) => {
 												<ChooseNewJobButton closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
 												<EmployeeAssignmentsButton closeModal={closeModal} />
+												<View style={styles.buttonSeparator} />
+												<MyRequestsButton closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
 												<EmployeeShiftButton closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />

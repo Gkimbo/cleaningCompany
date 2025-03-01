@@ -14,7 +14,6 @@ import { Picker } from "@react-native-picker/picker";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
-import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import RequestedTile from "../tiles/RequestedTile";
 import homePageStyles from "../../../services/styles/HomePageStyles";
 import topBarStyles from "../../../services/styles/TopBarStyles";
@@ -31,8 +30,7 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const AppointmentCalendar = ({ state, dispatch }) => {
-  const [allAppointments, setAllAppointments] = useState([]);
+const MyRequestsCalendar = ({ state, dispatch }) => {
   const [allRequests, setAllRequests] = useState([]);
   const [selectedDates, setSelectedDates] = useState({});
   const [dateSelectAppointments, setDateSelectAppointments] = useState({
@@ -57,7 +55,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
           "/api/v1/users/appointments/employee",
           state.currentUser.token
         );
-        setAllAppointments(response.appointments || []);
         setAllRequests(response.requested || []);
       } catch (error) {
         console.error("Error fetching appointments:", error);
@@ -83,24 +80,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
     const fetchLocations = async () => {
       try {
         const locationsWithDistances = await Promise.all(
-          allAppointments.map(async (appointment) => {
-            const loc = await FetchData.getLatAndLong(appointment.homeId);
-            if (!loc) return null;
-
-            const distance = haversineDistance(
-              userLocation.latitude,
-              userLocation.longitude,
-              loc.latitude,
-              loc.longitude
-            );
-
-            return {
-              [appointment.homeId]: {
-                location: loc,
-                distance: distance,
-              },
-            };
-          }),
           allRequests.map(async (appointment) => {
             const loc = await FetchData.getLatAndLong(appointment.homeId);
             if (!loc) return null;
@@ -128,10 +107,10 @@ const AppointmentCalendar = ({ state, dispatch }) => {
       }
     };
 
-    if (allAppointments.length > 0 && userLocation) {
+    if (allRequests.length > 0 && userLocation) {
       fetchLocations();
     }
-  }, [allAppointments, userLocation]);
+  }, [allRequests, userLocation]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -190,7 +169,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
     const selectedRequests = sortAppointments(processAppointments(allRequests));
     const selectedAppointments = sortAppointments(
-      processAppointments(allAppointments)
+      processAppointments(allRequests)
     );
 
     setLoading(false);
@@ -259,46 +238,17 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
   const myAppointments = (date, id) => {
     const employeeId = String(id);
-    const appointments = allAppointments.some(
-      (appointment) =>
-        appointment.date === date.dateString &&
-        Array.isArray(appointment.employeesAssigned) &&
-        appointment.employeesAssigned.includes(employeeId)
+    const appointments = allRequests.some(
+      (appointment) => appointment.date === date.dateString
     );
     return appointments;
   };
 
-  const areAppointmentsAvailable = (date) => {
-    const appointments = allAppointments.some(
-      (appointment) => appointment.date === date.dateString
-    );
-    const requests = allRequests.some(
-      (request) => request.date === date.dateString
-    );
-
-    return appointments || requests;
-  };
-
-  const isDatePastAndNotPaid = (date) => {
-    let toggle = false;
-    allAppointments.forEach((appointment) => {
-      if (appointment.date === date.dateString) {
-        if (isDateDisabled(date) && !appointment.paid) {
-          toggle = true;
-        }
-      }
-    });
-    return toggle;
-  };
-
   const numberOfAppointmentsOnDate = (date) => {
-    const appointments = allAppointments.filter(
-      (appointment) => appointment.date === date.dateString
-    ).length;
     const requested = allRequests.filter(
       (appointment) => appointment.date === date.dateString
     ).length;
-    let total = appointments + requested;
+    let total = requested;
     return total;
   };
 
@@ -310,7 +260,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
   const renderDay = useCallback(
     ({ date }) => {
-      if (!allAppointments.length) return <View />;
+      if (!allRequests.length) return <View />;
       if (!userId) return <View />;
       const selectedStyle = {
         justifyContent: "center",
@@ -357,30 +307,9 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
       return (
         <>
-          {isDatePastAndNotPaid(date) ? (
-            <Pressable style={pastDate} onPress={() => handleRedirectToBill()}>
-              <Text>{date.day}</Text>
-              <Text style={selectedPriceStyle}>
-                {numberOfAppointmentsOnDate(date)}
-              </Text>
-            </Pressable>
-          ) : isDateDisabled(date) ? (
-            <View style={dayStyle}>
-              <Text>{date.day}</Text>
-            </View>
-          ) : myAppointments(date, userId) ? (
+          {myAppointments(date, userId) ? (
             <Pressable
               style={hasAppStyle}
-              onPress={() => setSelectedDate(date)}
-            >
-              <Text>{date.day}</Text>
-              <Text style={selectedPriceStyle}>
-                {numberOfAppointmentsOnDate(date)}
-              </Text>
-            </Pressable>
-          ) : areAppointmentsAvailable(date) ? (
-            <Pressable
-              style={selectedStyle}
               onPress={() => setSelectedDate(date)}
             >
               <Text>{date.day}</Text>
@@ -403,7 +332,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
         </>
       );
     },
-    [allAppointments, userId]
+    [allRequests, userId]
   );
   return (
     <>
@@ -445,7 +374,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
       <View style={{ flex: 1 }}>
         <Text style={calenderStyles.title}>
-          Select Dates to see available appointments
+          Select Dates to see requested appointments
         </Text>
         <Calendar
           current={currentMonth.toISOString().split("T")[0]}
@@ -462,7 +391,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
           dayComponent={renderDay}
         />
         <Button
-          title="Choose a date to see appointments"
+          title="Choose a date to see your requests"
           onPress={handleSubmit}
           disabled={Object.keys(selectedDates).length === 0}
         />
@@ -478,8 +407,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
         )}
       </View>
 
-      {dateSelectAppointments.appointments.length > 0 ||
-      dateSelectAppointments.requests.length > 0 ? (
+      {dateSelectAppointments.requests.length > 0 ? (
         <>
           <View
             style={{
@@ -555,130 +483,44 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                               appointmentId
                             );
 
+                            setAllRequests((prevRequests) =>
+                              prevRequests.filter(
+                                (request) => request.id !== appointmentId
+                              )
+                            );
+
+                            const response = await FetchData.get(
+                              "/api/v1/users/appointments/employee",
+                              state.currentUser.token
+                            );
+                            setAllRequests(response.requested || []);
+
                             setDateSelectAppointments((prevState) => {
                               const updatedRequests = prevState.requests.filter(
                                 (appointment) =>
                                   appointment.id !== appointmentId
                               );
 
-                              const appointmentToMove = prevState.requests.find(
-                                (appointment) =>
-                                  appointment.id === appointmentId
+                              return {
+                                ...prevState,
+                                requests: updatedRequests,
+                              };
+                            });
+
+                            setSelectedDates((prevDates) => {
+                              const newDates = { ...prevDates };
+                              const remainingRequests = allRequests.filter(
+                                (req) => req.date in newDates
                               );
 
-                              const updatedAppointments = appointmentToMove
-                                ? [...prevState.appointments, appointmentToMove]
-                                : prevState.appointments;
+                              if (remainingRequests.length === 0) {
+                                delete newDates[appointmentId];
+                              }
 
-                              return {
-                                ...prevState,
-                                appointments: updatedAppointments,
-                                requests: updatedRequests,
-                              };
+                              return newDates;
                             });
                           } catch (error) {
-                            console.error("Error removing employee:", error);
-                          }
-                        }}
-                      />
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {dateSelectAppointments.appointments.length > 0 && (
-                <View>
-                  <Text style={calenderStyles.sectionTitle}>
-                    Available Appointments
-                  </Text>
-                  {dateSelectAppointments.appointments.map((appointment) => (
-                    <View key={appointment.id}>
-                      <EmployeeAssignmentTile
-                        id={appointment.id}
-                        cleanerId={userId}
-                        date={appointment.date}
-                        price={appointment.price}
-                        homeId={appointment.homeId}
-                        hasBeenAssigned={appointment.hasBeenAssigned}
-                        bringSheets={appointment.bringSheets}
-                        bringTowels={appointment.bringTowels}
-                        completed={appointment.completed}
-                        keyPadCode={appointment.keyPadCode}
-                        keyLocation={appointment.keyLocation}
-                        distance={appointment.distance}
-                        assigned={
-                          appointment.employeesAssigned?.includes(
-                            String(userId)
-                          ) || false
-                        }
-                        addEmployee={async (employeeId, appointmentId) => {
-                          try {
-                            await FetchData.addEmployee(
-                              employeeId,
-                              appointmentId
-                            );
-
-                            setDateSelectAppointments((prevState) => {
-                              const updatedAppointments =
-                                prevState.appointments.filter(
-                                  (appointment) =>
-                                    appointment.id !== appointmentId
-                                );
-
-                              const updatedRequests = [
-                                ...prevState.requests,
-                                ...prevState.appointments.filter(
-                                  (appointment) =>
-                                    appointment.id === appointmentId
-                                ),
-                              ];
-
-                              return {
-                                ...prevState,
-                                appointments: updatedAppointments,
-                                requests: updatedRequests,
-                              };
-                            });
-                          } catch (error) {
-                            console.error("Error adding employee:", error);
-                          }
-                        }}
-                        removeEmployee={async (employeeId, appointmentId) => {
-                          try {
-                            await FetchData.removeEmployee(
-                              employeeId,
-                              appointmentId
-                            );
-
-                            setDateSelectAppointments((prevState) => ({
-                              appointments: prevState.appointments.map(
-                                (appointment) =>
-                                  appointment.id === appointmentId
-                                    ? {
-                                        ...appointment,
-                                        employeesAssigned: (
-                                          appointment.employeesAssigned || []
-                                        ).filter(
-                                          (id) => id !== String(employeeId)
-                                        ),
-                                      }
-                                    : appointment
-                              ),
-                              requests: prevState.requests.map((request) =>
-                                request.id === appointmentId
-                                  ? {
-                                      ...request,
-                                      employeesAssigned: (
-                                        request.employeesAssigned || []
-                                      ).filter(
-                                        (id) => id !== String(employeeId)
-                                      ),
-                                    }
-                                  : request
-                              ),
-                            }));
-                          } catch (error) {
-                            console.error("Error removing employee:", error);
+                            console.error("Error removing request:", error);
                           }
                         }}
                       />
@@ -694,4 +536,4 @@ const AppointmentCalendar = ({ state, dispatch }) => {
   );
 };
 
-export default AppointmentCalendar;
+export default MyRequestsCalendar;

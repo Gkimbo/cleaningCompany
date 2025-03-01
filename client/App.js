@@ -32,6 +32,8 @@ import SelectNewJobList from "./components/employeeAssignments/lists/SelectNewJo
 import AllReviewsList from "./components/reviews/AllReviewsList";
 import AppointmentCalendar from "./components/employeeAssignments/lists/AppointmentCalendar";
 import MyAppointmentsCalendar from "./components/employeeAssignments/lists/MyAppointmentsCalendar";
+import MyRequests from "./components/employeeAssignments/lists/MyRequests";
+import MyRequestsCalendar from "./components/employeeAssignments/lists/MyRequestsCalendar";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -151,6 +153,14 @@ export default function App() {
             <Route
               path="/appointments"
               element={<AppointmentList state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/my-requests"
+              element={<MyRequests state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/my-requests-calendar"
+              element={<MyRequestsCalendar state={state} dispatch={dispatch} />}
             />
             <Route
               path="/appointment-calender"
