@@ -94,7 +94,6 @@ const HomePage = ({ state, dispatch }) => {
         ),
         FetchData.get("/api/v1/appointments/my-requests", state.currentUser.token).then(
           (response) => {
-            console.log(response)
             dispatch({
               type: "CLEANING_REQUESTS",
               payload: response.pendingRequestsEmployee,
@@ -104,7 +103,7 @@ const HomePage = ({ state, dispatch }) => {
       }
     }
   }, []);
-console.log(state)
+  console.log(state.requests.map(request => request.appointment))
   let todaysAppointment = null;
   let nextAppointment = null;
   let foundToday = false;

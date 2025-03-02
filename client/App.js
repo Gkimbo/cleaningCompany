@@ -34,6 +34,7 @@ import AppointmentCalendar from "./components/employeeAssignments/lists/Appointm
 import MyAppointmentsCalendar from "./components/employeeAssignments/lists/MyAppointmentsCalendar";
 import MyRequests from "./components/employeeAssignments/lists/MyRequests";
 import MyRequestsCalendar from "./components/employeeAssignments/lists/MyRequestsCalendar";
+import CleaningRequestList from "./components/appointments/CleaningRequestList";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -158,6 +159,10 @@ export default function App() {
             <Route
               path="/my-requests"
               element={<MyRequests state={state} dispatch={dispatch} />}
+            />
+            <Route
+              path="/cleaner-requests"
+              element={<CleaningRequestList state={state} dispatch={dispatch} />}
             />
             <Route
               path="/my-requests-calendar"
