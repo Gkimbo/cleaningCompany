@@ -67,29 +67,67 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
   }
 });
 
+const { Op } = require("sequelize");
+const UserSerializer = require("../../../serializers/userSerializer");
+const RequestSerializer = require("../../../serializers/RequestsSerializer");
+
 appointmentRouter.get("/my-requests", async (req, res) => {
-  const token = req.headers.authorization.split(" ")[1];
-  if (!token) {
-    return res.status(401).json({ error: "Authorization token required" });
-  }
   try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
-    const existingRequest = await UserPendingRequests.findOne({
-      where: { employeeId: userId },
+    const existingAppointments = await UserAppointments.findAll({
+      where: { userId },
     });
-    console.log(existingRequest);
-    // const appointments = await UserAppointments.findAll({
-    //   where: {
-    //     homeId: homeId,
-    //   },
-    // });
-    // const serializedAppointments =
-    //   AppointmentSerializer.serializeArray(appointments);
-    return res.status(200).json({ test: "test" });
+
+    if (!existingAppointments.length) {
+      return res.status(404).json({ message: "No appointments found" });
+    }
+
+    const appointmentIds = existingAppointments.map(
+      (appointment) => appointment.id
+    );
+
+    const pendingRequests = await UserPendingRequests.findAll({
+      where: { appointmentId: { [Op.in]: appointmentIds } },
+    });
+
+    if (!pendingRequests.length) {
+      return res.status(404).json({ message: "you have no requests" });
+    }
+
+    const pendingRequestsEmployee = await Promise.all(
+      pendingRequests.map(async (request) => {
+        const appointment = existingAppointments.find(
+          (appointment) =>
+            appointment.dataValues.id === request.dataValues.appointmentId
+        );
+
+        const employeeRequesting = await User.findOne({
+          where: { id: request.dataValues.employeeId },
+        });
+
+        const serializedAppointment = AppointmentSerializer.serializeOne(appointment)
+        const serializedEmployee = UserSerializer.serializeOne(employeeRequesting)
+        const serializedRequest = RequestSerializer.serializeOne(request)
+
+        return {
+          request: serializedRequest,
+          appointment: serializedAppointment,
+          employeeRequesting: serializedEmployee,
+        };
+      })
+    );
+    
+    return res.status(200).json({ pendingRequestsEmployee });
   } catch (error) {
-    console.log(error);
+    console.error("Error fetching my requests:", error);
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 });

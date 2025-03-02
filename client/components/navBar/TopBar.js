@@ -25,6 +25,7 @@ import UnassignedAppointmentsButton from "./UnassignedAppointmentsButton";
 import ViewApplicationsButton from "./ViewApplicationsButton";
 import ChooseNewJobButton from "./ChooseNewJobButton";
 import MyRequestsButton from "./MyRequestsButton";
+import CleanerRequestsButton from "./CleanerRequestsButton";
 
 const TopBar = ({ dispatch, state }) => {
 	const [signInRedirect, setSignInRedirect] = useState(false);
@@ -117,6 +118,8 @@ const TopBar = ({ dispatch, state }) => {
 												<ScheduleCleaningButton closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
 												<EditHomeButton closeModal={closeModal} />
+												<View style={styles.buttonSeparator} />
+												<CleanerRequestsButton closeModal={closeModal} />
 												<View style={styles.buttonSeparator} />
 											</>
 										)}
