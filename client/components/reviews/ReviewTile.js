@@ -50,7 +50,7 @@ const ReviewTile = ({
       >
         <View style={ReviewTileStyles.header}>
           <Text style={ReviewTileStyles.reviewerText}>
-            Reviewer: {reviewerId}
+            {/* Reviewer: {reviewerId} */}
           </Text>
           <Text style={ReviewTileStyles.dateText}>
             {date ? date : "Date not available"}
@@ -68,7 +68,7 @@ const ReviewTile = ({
 
         <View style={ReviewTileStyles.footer}>
           <Text style={ReviewTileStyles.footerText}>
-            Appointment ID: {appointmentId}
+            {/* Appointment ID: {appointmentId} */}
           </Text>
         </View>
       </View>

@@ -97,19 +97,6 @@ const RequestResponseTile = ({
         <Text style={styles.appointmentPrice}>
           {home.state}, {home.zipcode}
         </Text>
-        <View style={{ flex: 1 }}>
-          {matchingEmployees.map((employee) => (
-            <View key={employee.id}>
-              <EmployeeTile
-                id={employee.id}
-                username={employee.username}
-                approveRequest={approveRequest}
-                denyRequest={denyRequest}
-              />
-            </View>
-          ))}
-        </View>
-
         {(expandWindow || assigned) && (
           <>
             <Text style={styles.appointmentDetails}>
@@ -126,6 +113,19 @@ const RequestResponseTile = ({
             </Text>
           </>
         )}
+        <View style={{ flex: 1 }}>
+          {matchingEmployees.map((employee) => (
+            <View key={employee.id}>
+              <EmployeeTile
+                id={employee.id}
+                username={employee.username}
+                reviews={employee.reviews}
+                approveRequest={approveRequest}
+                denyRequest={denyRequest}
+              />
+            </View>
+          ))}
+        </View>
       </Pressable>
     </View>
   );

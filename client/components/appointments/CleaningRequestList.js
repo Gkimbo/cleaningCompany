@@ -97,7 +97,7 @@ const CleaningRequestList = ({ state }) => {
 
   useEffect(() => {
     if (seeCalender) {
-      navigate("/my-requests-calendar");
+      navigate("/all-requests-calendar");
       setSeeCalender(false);
     }
   }, [seeCalender]);
