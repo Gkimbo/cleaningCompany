@@ -12,8 +12,8 @@ import homePageStyles from "../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../services/styles/TopBarStyles";
 import FetchData from "../../services/fetchRequests/fetchData";
-import RequestedTile from "../employeeAssignments/tiles/RequestedTile";
 import getCurrentUser from "../../services/fetchRequests/getCurrentUser";
+import RequestResponseTile from "./tiles/RequestResponseTile";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -31,7 +31,7 @@ const CleaningRequestList = ({ state }) => {
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
-  const [sortOption, setSortOption] = useState("distanceClosest");
+  const [sortOption, setSortOption] = useState("dateNewest");
   const [seeCalender, setSeeCalender] = useState(false);
   const [loading, setLoading] = useState(true);
   const { width } = Dimensions.get("window");
@@ -109,7 +109,7 @@ const CleaningRequestList = ({ state }) => {
   const sortedRequests = useMemo(() => {
     let sorted = appointmentArray.map((appointment) => {
       let distance = null;
-
+  
       if (
         userLocation &&
         appointmentLocations &&
@@ -124,24 +124,19 @@ const CleaningRequestList = ({ state }) => {
         );
         setLoading(false);
       }
-
+  
       return { ...appointment, distance };
     });
-
-    if (sortOption === "distanceClosest") {
-      sorted.sort(
-        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
-      );
-    } else if (sortOption === "distanceFurthest") {
-      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
-    } else if (sortOption === "priceLow") {
-      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
-    } else if (sortOption === "priceHigh") {
-      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+  
+    if (sortOption === "dateOldest") {
+      sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+    } else if (sortOption === "dateNewest") {
+      sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
-
+  
     return sorted;
   }, [appointmentArray, userLocation, appointmentLocations, sortOption]);
+  
 
   return (
     <View
@@ -199,15 +194,13 @@ const CleaningRequestList = ({ state }) => {
           onValueChange={(itemValue) => setSortOption(itemValue)}
         >
           <Picker.Item
-            label="Sort by: Distance (Closest)"
-            value="distanceClosest"
+            label="Sort by: Upcoming"
+            value="dateNewest"
           />
           <Picker.Item
-            label="Sort by: Distance (Furthest)"
-            value="distanceFurthest"
+            label="Sort by: Furthest Out"
+            value="dateOldest"
           />
-          <Picker.Item label="Sort by: Price (Low to High)" value="priceLow" />
-          <Picker.Item label="Sort by: Price (High to Low)" value="priceHigh" />
         </Picker>
       </View>
       {loading ? (
@@ -220,8 +213,9 @@ const CleaningRequestList = ({ state }) => {
         <View style={{ flex: 1 }}>
           {sortedRequests.map((appointment) => (
             <View key={appointment.id}>
-              <RequestedTile
+              <RequestResponseTile
                 id={appointment.id}
+                state={state}
                 cleanerId={userId}
                 date={appointment.date}
                 price={appointment.price}

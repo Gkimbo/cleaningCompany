@@ -111,11 +111,20 @@ appointmentRouter.get("/my-requests", async (req, res) => {
 
         const employeeRequesting = await User.findOne({
           where: { id: request.dataValues.employeeId },
+          include: [
+            {
+              model: UserReviews,
+              as: "reviews",
+            },
+          ]
         });
 
-        const serializedAppointment = AppointmentSerializer.serializeOne(appointment)
-        const serializedEmployee = UserSerializer.serializeOne(employeeRequesting)
-        const serializedRequest = RequestSerializer.serializeOne(request)
+        console.log(employeeRequesting)
+        const serializedAppointment =
+          AppointmentSerializer.serializeOne(appointment);
+        const serializedEmployee =
+          UserSerializer.serializeOne(employeeRequesting);
+        const serializedRequest = RequestSerializer.serializeOne(request);
 
         return {
           request: serializedRequest,
@@ -124,7 +133,7 @@ appointmentRouter.get("/my-requests", async (req, res) => {
         };
       })
     );
-    
+
     return res.status(200).json({ pendingRequestsEmployee });
   } catch (error) {
     console.error("Error fetching my requests:", error);

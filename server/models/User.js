@@ -57,22 +57,33 @@ module.exports = (sequelize, DataTypes) => {
 	// Define the one-to-many relationship with UserInformation
 	User.associate = (models) => {
 		User.hasMany(models.UserAppointments, {
-			foreignKey: "userId",
-			as: "appointments",
+		  foreignKey: "userId",
+		  as: "appointments",
 		});
 		User.hasMany(models.UserHomes, {
-			foreignKey: "userId",
-			as: "homes",
+		  foreignKey: "userId",
+		  as: "homes",
 		});
 		User.hasMany(models.UserBills, {
-			foreignKey: "userId",
-			as: "bills",
+		  foreignKey: "userId",
+		  as: "bills",
 		});
 		User.hasMany(models.UserCleanerAppointments, {
-			foreignKey: "employeeId",
-			as: "cleanerAppointments",
+		  foreignKey: "employeeId",
+		  as: "cleanerAppointments",
 		});
-	};
+	  
+		User.hasMany(models.UserReviews, {
+		  foreignKey: "userId",
+		  as: "reviews",
+		});
+	  
+		User.hasMany(models.UserReviews, {
+		  foreignKey: "reviewerId",
+		  as: "writtenReviews", 
+		});
+	  };
+	  
 
 	return User;
 };

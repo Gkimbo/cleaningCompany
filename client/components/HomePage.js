@@ -103,7 +103,7 @@ const HomePage = ({ state, dispatch }) => {
       }
     }
   }, []);
-  console.log(state.requests.map(request => request.appointment))
+  
   let todaysAppointment = null;
   let nextAppointment = null;
   let foundToday = false;

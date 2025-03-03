@@ -10,7 +10,8 @@ class UserSerializer {
 			"lastLogin",
 			"type",
 			"daysWorking",
-			"notifications"
+			"notifications",
+			"reviews"
 		];
 
 		const serializedUser = {};
