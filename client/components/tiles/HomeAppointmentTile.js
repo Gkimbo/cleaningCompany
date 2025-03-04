@@ -111,10 +111,9 @@ const HomeAppointmentTile = ({
 
 	const formatDate = (dateString) => {
 		const options = { month: "short", day: "numeric", year: "numeric" };
-		const [year, month, day] = dateString.split("-");
-		const newDate = new Date(year, month, day);
-		const formattedDate = newDate.toLocaleDateString(undefined, options);
-		return formattedDate;
+		const [year, month, day] = dateString.split("-").map(Number);
+		const newDate = new Date(year, month - 1, day); // Subtract 1 from month
+		return newDate.toLocaleDateString(undefined, options);
 	};
 
 	const isWithinOneWeek = (dateString) => {
