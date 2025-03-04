@@ -82,6 +82,22 @@ appointmentRouter.get("/my-requests", async (req, res) => {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
+    // await UserReviews.create({
+    //   userId: 4,
+    //   reviewerId: userId,
+    //   appointmentId: 2,
+    //   review: 3.5,
+    //   reviewComment: "He was Great but missed wiping down the stove",
+    // });
+
+    // await UserReviews.create({
+    //   userId: 4,
+    //   reviewerId: userId,
+    //   appointmentId: 1,
+    //   review: 4,
+    //   reviewComment: "He was Great but missed wiping down the stove",
+    // });
+
     const existingAppointments = await UserAppointments.findAll({
       where: { userId },
     });
@@ -111,12 +127,20 @@ appointmentRouter.get("/my-requests", async (req, res) => {
 
         const employeeRequesting = await User.findOne({
           where: { id: request.dataValues.employeeId },
+          include: [
+            {
+              model: UserReviews,
+              as: "reviews",
+            },
+          ],
         });
 
-        const serializedAppointment = AppointmentSerializer.serializeOne(appointment)
-        const serializedEmployee = UserSerializer.serializeOne(employeeRequesting)
-        const serializedRequest = RequestSerializer.serializeOne(request)
-
+        const serializedAppointment =
+          AppointmentSerializer.serializeOne(appointment);
+        const serializedEmployee =
+          UserSerializer.serializeOne(employeeRequesting);
+        const serializedRequest = RequestSerializer.serializeOne(request);
+       
         return {
           request: serializedRequest,
           appointment: serializedAppointment,
@@ -124,7 +148,7 @@ appointmentRouter.get("/my-requests", async (req, res) => {
         };
       })
     );
-    
+
     return res.status(200).json({ pendingRequestsEmployee });
   } catch (error) {
     console.error("Error fetching my requests:", error);
