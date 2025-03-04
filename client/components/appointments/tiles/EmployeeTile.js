@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Pressable, Text, View, LayoutAnimation, Dimensions, Animated } from "react-native";
+import {
+  Pressable,
+  Text,
+  View,
+  LayoutAnimation,
+  Dimensions,
+  Animated,
+} from "react-native";
 import { useNavigate } from "react-router-native";
 import { StyleSheet } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -38,7 +45,7 @@ const EmployeeTile = ({
     return totalRating / reviews.length;
   };
 
-  const averageRating = getAverageRating(); 
+  const averageRating = getAverageRating();
   const roundedRating = Math.round(averageRating * 2) / 2;
 
   const renderStars = () => {

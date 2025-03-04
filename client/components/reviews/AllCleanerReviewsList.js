@@ -3,13 +3,13 @@ import { Pressable, View, Text, ScrollView, Dimensions } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
-import topBarStyles from "../../services/styles/TopBarStyles"
+import topBarStyles from "../../services/styles/TopBarStyles";
 import ReviewTile from "./ReviewTile";
 import Review from "../../services/fetchRequests/ReviewClass";
-import { useParams } from 'react-router-native';
+import { useParams } from "react-router-native";
 
 const AllCleanerReviewsList = ({ state, dispatch }) => {
-  const [cleaner, setCleaner] = useState({username: ""});
+  const [cleaner, setCleaner] = useState({ username: "" });
   const [allReviews, setAllReviews] = useState([]);
   const [backRedirect, setBackRedirect] = useState(false);
   const { width } = Dimensions.get("window");
@@ -31,10 +31,12 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
     return Array.from(uniqueEmployees.values());
   }, [state]);
 
-  const fetchReviews = async () => { 
-    const employeeChosen = employeeArray.find((employee) => employee.id === Number(id))
-    setAllReviews(employeeChosen.reviews)
-    setCleaner(employeeChosen)
+  const fetchReviews = async () => {
+    const employeeChosen = employeeArray.find(
+      (employee) => employee.id === Number(id)
+    );
+    setAllReviews(employeeChosen.reviews);
+    setCleaner(employeeChosen);
   };
 
   const getAverageRating = () => {
@@ -68,7 +70,6 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
     }
     return stars;
   };
-
 
   useEffect(() => {
     fetchReviews();
@@ -107,36 +108,42 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
       style={{
         ...homePageStyles.container,
         flexDirection: "column",
-        marginTop: 0
+        marginTop: 0,
       }}
     >
-         <View style={{ alignItems: "center", paddingHorizontal: 16 , marginBottom: "20%"}}>
-          <Text
-            style={{
-              fontSize: 18,
-              fontWeight: "bold",
-              color: "#333",
-              marginBottom: 4,
-            }}
-          >
-            {`${cleaner.username}'s Average Rating`}
-          </Text>
-          
-            <View style={{ flexDirection: "row", marginBottom: 4 }}>
-              {renderStars()}
-            </View>
+      <View
+        style={{
+          alignItems: "center",
+          paddingHorizontal: 16,
+          marginBottom: "20%",
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 18,
+            fontWeight: "bold",
+            color: "#333",
+            marginBottom: 4,
+          }}
+        >
+          {`${cleaner.username}'s Average Rating`}
+        </Text>
 
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "bold",
-              color: "#333",
-              marginBottom: 4,
-            }}
-          >
-            {averageRating.toFixed(1)} / 5.0 ({allReviews.length} Reviews)
-          </Text>
+        <View style={{ flexDirection: "row", marginBottom: 4 }}>
+          {renderStars()}
         </View>
+
+        <Text
+          style={{
+            fontSize: 16,
+            fontWeight: "bold",
+            color: "#333",
+            marginBottom: 4,
+          }}
+        >
+          {averageRating.toFixed(1)} / 5.0 ({allReviews.length} Reviews)
+        </Text>
+      </View>
       <View style={homePageStyles.backButtonAllReviewsList}>
         <Pressable
           style={homePageStyles.backButtonForm}
