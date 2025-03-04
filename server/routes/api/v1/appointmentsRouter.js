@@ -140,7 +140,7 @@ appointmentRouter.get("/my-requests", async (req, res) => {
         const serializedEmployee =
           UserSerializer.serializeOne(employeeRequesting);
         const serializedRequest = RequestSerializer.serializeOne(request);
-        console.log(serializedAppointment);
+       
         return {
           request: serializedRequest,
           appointment: serializedAppointment,
