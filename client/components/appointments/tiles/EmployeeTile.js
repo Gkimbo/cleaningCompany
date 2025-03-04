@@ -60,7 +60,7 @@ const EmployeeTile = ({
     }
     return stars;
   };
-console.log(reviews)
+
   return (
     <View style={styles.homeTileContainer}>
       <Text style={styles.appointmentPrice}>{username}</Text>

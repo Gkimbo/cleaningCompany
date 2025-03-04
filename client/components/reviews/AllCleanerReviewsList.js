@@ -85,7 +85,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
   const sortedReviews = allReviews.sort((a, b) => {
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
-console.log(sortedReviews)
+
   const displayReviews = sortedReviews.map((review) => {
     return (
       <View key={review.id}>

@@ -8,16 +8,15 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
-import calenderStyles from "../../../services/styles/CalenderSyles";
+import calenderStyles from "../../services/styles/CalenderSyles";
 import { useNavigate } from "react-router-native";
 import { Picker } from "@react-native-picker/picker";
 import Icon from "react-native-vector-icons/FontAwesome";
-import FetchData from "../../../services/fetchRequests/fetchData";
-import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
-import RequestedTile from "../tiles/RequestedTile";
-import homePageStyles from "../../../services/styles/HomePageStyles";
-import topBarStyles from "../../../services/styles/TopBarStyles";
-
+import FetchData from "../../services/fetchRequests/fetchData";
+import getCurrentUser from "../../services/fetchRequests/getCurrentUser";
+import RequestedTile from "../employeeAssignments/tiles/RequestedTile";
+import homePageStyles from "../../services/styles/HomePageStyles";
+import topBarStyles from "../../services/styles/TopBarStyles";
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371;
@@ -41,7 +40,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
-  const [sortOption, setSortOption] = useState("distanceClosest");
+  const [sortOption, setSortOption] = useState("dateNewest");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const { width } = Dimensions.get("window");
@@ -142,14 +141,10 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
 
     const sortAppointments = (appointments) => {
       return appointments.sort((a, b) => {
-        if (sortOption === "distanceClosest") {
-          return (a.distance || Infinity) - (b.distance || Infinity);
-        } else if (sortOption === "distanceFurthest") {
-          return (b.distance || 0) - (a.distance || 0);
-        } else if (sortOption === "priceLow") {
-          return (Number(a.price) || 0) - (Number(b.price) || 0);
-        } else if (sortOption === "priceHigh") {
-          return (Number(b.price) || 0) - (Number(a.price) || 0);
+        if (sortOption === "dateOldest") {
+          sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+        } else if (sortOption === "dateNewest") {
+          sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
         }
         return 0;
       });
@@ -189,14 +184,10 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
   useEffect(() => {
     if (dateSelectAppointments.length > 0) {
       const sorted = [...dateSelectAppointments].sort((a, b) => {
-        if (sortOption === "distanceClosest") {
-          return (a.distance || Infinity) - (b.distance || Infinity);
-        } else if (sortOption === "distanceFurthest") {
-          return (b.distance || 0) - (a.distance || 0);
-        } else if (sortOption === "priceLow") {
-          return (Number(a.price) || 0) - (Number(b.price) || 0);
-        } else if (sortOption === "priceHigh") {
-          return (Number(b.price) || 0) - (Number(a.price) || 0);
+        if (sortOption === "dateOldest") {
+          sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+        } else if (sortOption === "dateNewest") {
+          sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
         }
         return 0;
       });
@@ -359,7 +350,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
         </Pressable>
         <Pressable
           style={homePageStyles.backButtonForm}
-          onPress={() => navigate("/new-job-choice")}
+          onPress={() => navigate("/cleaner-requests")}
         >
           <View
             style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
@@ -525,7 +516,6 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                         }}
                       />
                     </View>
-                    
                   ))}
                 </View>
               )}
