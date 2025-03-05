@@ -27,7 +27,7 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const CleaningRequestList = ({ state }) => {
+const CleaningRequestList = ({ state, dispatch }) => {
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
@@ -136,7 +136,6 @@ const CleaningRequestList = ({ state }) => {
   
     return sorted;
   }, [appointmentArray, userLocation, appointmentLocations, sortOption]);
-  
 
   return (
     <View
@@ -228,33 +227,27 @@ const CleaningRequestList = ({ state }) => {
                 keyLocation={appointment.keyLocation}
                 distance={appointment.distance}
                 approveRequest={async (employeeId, appointmentId) => {
-                //   try {
-                //     await FetchData.approveRequest(employeeId, appointmentId);
-                //     appointmentArray((prevRequests) => {
-                //       const removedAppointment = prevRequests.find(
-                //         (appointment) => appointment.id === appointmentId
-                //       );
-                //       if (!removedAppointment) return prevRequests;
-                //       return prevRequests.filter((appointment) => appointment.id !== appointmentId);
-                //     });
-                //   } catch (error) {
-                //     console.error("Error removing request:", error);
-                //   }
+                  try {
+                    dispatch({
+                      type: "UPDATE_REQUEST_STATUS",
+                      payload: { employeeId, appointmentId, status: "approved" },
+                    });
+                    await FetchData.approveRequest(employeeId, appointmentId);
+                  } catch (error) {
+                    console.error("Error approving request:", error);
+                  }
                 }}
                 denyRequest={async (employeeId, appointmentId) => {
-                    // try {
-                    //   await FetchData.denyRequest(employeeId, appointmentId);
-                    //   appointmentArray((prevRequests) => {
-                    //     const removedAppointment = prevRequests.find(
-                    //       (appointment) => appointment.id === appointmentId
-                    //     );
-                    //     if (!removedAppointment) return prevRequests;
-                    //     return prevRequests.filter((appointment) => appointment.id !== appointmentId);
-                    //   });
-                    // } catch (error) {
-                    //   console.error("Error removing request:", error);
-                    // }
-                  }}                                
+                  try {
+                    dispatch({
+                      type: "UPDATE_REQUEST_STATUS",
+                      payload: { employeeId, appointmentId, status: "denied" },
+                    });
+                    await FetchData.denyRequest(employeeId, appointmentId);
+                  } catch (error) {
+                    console.error("Error denying request:", error);
+                  }
+                }}             
               />
             </View>
           ))}

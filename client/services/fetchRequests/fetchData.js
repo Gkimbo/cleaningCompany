@@ -387,10 +387,37 @@ class FetchData {
     }
   }
 
-  static async addEmployee(id, appointmentId) {
+  static async approveRequest(id, appointmentId) {
     try {
       const response = await fetch(
-        baseURL + "/api/v1/appointments/request-employee",
+        baseURL + "/api/v1/appointments/approve-request",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            appointmentId,
+          }),
+        }
+      )
+      if (!response.ok) {
+        throw new Error("Failed to delete");
+      }
+
+      const responseData = await response.json();
+      console.log(responseData)
+      return true;
+    } catch (error) {
+      return error;
+    }
+  }
+
+  static async denyRequest(id, appointmentId) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/appointments/deny-request",
         {
           method: "PATCH",
           headers: {

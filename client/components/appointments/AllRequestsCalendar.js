@@ -456,46 +456,26 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                         distance={appointment.distance}
                         approveRequest={async (employeeId, appointmentId) => {
                           try {
-                            await FetchData.approveRequest(
-                              employeeId,
-                              appointmentId
-                            );
-                            appointmentArray((prevRequests) => {
-                              const removedAppointment = prevRequests.find(
-                                (appointment) =>
-                                  appointment.id === appointmentId
-                              );
-                              if (!removedAppointment) return prevRequests;
-                              return prevRequests.filter(
-                                (appointment) =>
-                                  appointment.id !== appointmentId
-                              );
+                            dispatch({
+                              type: "UPDATE_REQUEST_STATUS",
+                              payload: { employeeId, appointmentId, status: "approved" },
                             });
+                            await FetchData.approveRequest(employeeId, appointmentId);
                           } catch (error) {
-                            console.error("Error removing request:", error);
+                            console.error("Error approving request:", error);
                           }
                         }}
                         denyRequest={async (employeeId, appointmentId) => {
                           try {
-                            await FetchData.denyRequest(
-                              employeeId,
-                              appointmentId
-                            );
-                            appointmentArray((prevRequests) => {
-                              const removedAppointment = prevRequests.find(
-                                (appointment) =>
-                                  appointment.id === appointmentId
-                              );
-                              if (!removedAppointment) return prevRequests;
-                              return prevRequests.filter(
-                                (appointment) =>
-                                  appointment.id !== appointmentId
-                              );
+                            dispatch({
+                              type: "UPDATE_REQUEST_STATUS",
+                              payload: { employeeId, appointmentId, status: "denied" },
                             });
+                            await FetchData.denyRequest(employeeId, appointmentId);
                           } catch (error) {
-                            console.error("Error removing request:", error);
+                            console.error("Error denying request:", error);
                           }
-                        }}
+                        }}             
                       />
                     </View>
                   ))}

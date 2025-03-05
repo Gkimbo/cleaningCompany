@@ -89,15 +89,6 @@ appointmentRouter.get("/my-requests", async (req, res) => {
     //   review: 3.5,
     //   reviewComment: "He was Great but missed wiping down the stove",
     // });
-
-    // await UserReviews.create({
-    //   userId: 4,
-    //   reviewerId: userId,
-    //   appointmentId: 1,
-    //   review: 4,
-    //   reviewComment: "He was Great but missed wiping down the stove",
-    // });
-
     const existingAppointments = await UserAppointments.findAll({
       where: { userId },
     });
@@ -140,7 +131,7 @@ appointmentRouter.get("/my-requests", async (req, res) => {
         const serializedEmployee =
           UserSerializer.serializeOne(employeeRequesting);
         const serializedRequest = RequestSerializer.serializeOne(request);
-       
+
         return {
           request: serializedRequest,
           appointment: serializedAppointment,
@@ -491,7 +482,7 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
   }
 });
 
-appointmentRouter.patch("/add-employee", async (req, res) => {
+appointmentRouter.patch("/approve-request", async (req, res) => {
   const { id, appointmentId } = req.body;
   let userInfo;
   try {
@@ -501,79 +492,173 @@ appointmentRouter.patch("/add-employee", async (req, res) => {
         appointmentId: Number(appointmentId),
       },
     });
-    if (!checkItExists) {
-      userInfo = await UserCleanerAppointments.create({
+    // if (!checkItExists) {
+    //   userInfo = await UserCleanerAppointments.create({
+    //     employeeId: id,
+    //     appointmentId: Number(appointmentId),
+    //   });
+    //   const updateAppointment = await UserAppointments.findOne({
+    //     where: {
+    //       id: appointmentId,
+    //     },
+    //   });
+
+    //   const bookingClientId = updateAppointment.dataValues.userId;
+    //   const homeId = updateAppointment.dataValues.homeId;
+    //   const appointmentDate = updateAppointment.dataValues.date;
+    //   let employees;
+
+    //   if (updateAppointment) {
+    //     if (!Array.isArray(updateAppointment?.dataValues?.employeesAssigned)) {
+    //       employees = [];
+    //     } else {
+    //       employees = [...updateAppointment.dataValues.employeesAssigned];
+    //     }
+
+    //     if (!employees.includes(String(id))) {
+    //       employees.push(String(id));
+    //       const response = await updateAppointment.update({
+    //         employeesAssigned: employees,
+    //         hasBeenAssigned: true,
+    //       });
+    //     }
+
+    //     let clientEmail;
+    //     let clientUserName;
+    //     let phoneNumber;
+    //     let address;
+
+    //     if (bookingClientId) {
+    //       const id = Number(bookingClientId);
+    //       const bookingClient = await User.findOne({
+    //         where: {
+    //           id: id,
+    //         },
+    //       });
+    //       clientEmail = bookingClient.dataValues.email;
+    //       clientUserName = bookingClient.dataValues.username;
+    //     }
+    //     if (homeId) {
+    //       const id = Number(homeId);
+    //       const home = await UserHomes.findOne({
+    //         where: {
+    //           id: id,
+    //         },
+    //       });
+    //       phoneNumber = home.dataValues.contact;
+    //       address = {
+    //         street: home.dataValues.address,
+    //         city: home.dataValues.city,
+    //         state: home.dataValues.state,
+    //         zipcode: home.dataValues.zipcode,
+    //       };
+    //     }
+    //     await Email.sendEmailConfirmation(
+    //       clientEmail,
+    //       address,
+    //       clientUserName,
+    //       appointmentDate
+    //     );
+    //   }
+    //   return res.status(200).json({ user: userInfo });
+    // }
+    // return res
+    //   .status(201)
+    //   .json({ error: "This cleaner is already attached to this appointment" });
+console.log("APPOINTMENT APPROVED!!!!!!!!!")
+  } catch (error) {
+    console.error(error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+    return res.status(401).json({ error: "Invalid token" });
+  }
+});
+
+appointmentRouter.patch("/deny-request", async (req, res) => {
+  const { id, appointmentId } = req.body;
+  let userInfo;
+  try {
+    const checkItExists = await UserCleanerAppointments.findOne({
+      where: {
         employeeId: id,
         appointmentId: Number(appointmentId),
-      });
-      const updateAppointment = await UserAppointments.findOne({
-        where: {
-          id: appointmentId,
-        },
-      });
+      },
+    });
+    // if (!checkItExists) {
+    //   userInfo = await UserCleanerAppointments.create({
+    //     employeeId: id,
+    //     appointmentId: Number(appointmentId),
+    //   });
+    //   const updateAppointment = await UserAppointments.findOne({
+    //     where: {
+    //       id: appointmentId,
+    //     },
+    //   });
 
-      const bookingClientId = updateAppointment.dataValues.userId;
-      const homeId = updateAppointment.dataValues.homeId;
-      const appointmentDate = updateAppointment.dataValues.date;
-      let employees;
+    //   const bookingClientId = updateAppointment.dataValues.userId;
+    //   const homeId = updateAppointment.dataValues.homeId;
+    //   const appointmentDate = updateAppointment.dataValues.date;
+    //   let employees;
 
-      if (updateAppointment) {
-        if (!Array.isArray(updateAppointment?.dataValues?.employeesAssigned)) {
-          employees = [];
-        } else {
-          employees = [...updateAppointment.dataValues.employeesAssigned];
-        }
+    //   if (updateAppointment) {
+    //     if (!Array.isArray(updateAppointment?.dataValues?.employeesAssigned)) {
+    //       employees = [];
+    //     } else {
+    //       employees = [...updateAppointment.dataValues.employeesAssigned];
+    //     }
 
-        if (!employees.includes(String(id))) {
-          employees.push(String(id));
-          const response = await updateAppointment.update({
-            employeesAssigned: employees,
-            hasBeenAssigned: true,
-          });
-        }
+    //     if (!employees.includes(String(id))) {
+    //       employees.push(String(id));
+    //       const response = await updateAppointment.update({
+    //         employeesAssigned: employees,
+    //         hasBeenAssigned: true,
+    //       });
+    //     }
 
-        let clientEmail;
-        let clientUserName;
-        let phoneNumber;
-        let address;
+    //     let clientEmail;
+    //     let clientUserName;
+    //     let phoneNumber;
+    //     let address;
 
-        if (bookingClientId) {
-          const id = Number(bookingClientId);
-          const bookingClient = await User.findOne({
-            where: {
-              id: id,
-            },
-          });
-          clientEmail = bookingClient.dataValues.email;
-          clientUserName = bookingClient.dataValues.username;
-        }
-        if (homeId) {
-          const id = Number(homeId);
-          const home = await UserHomes.findOne({
-            where: {
-              id: id,
-            },
-          });
-          phoneNumber = home.dataValues.contact;
-          address = {
-            street: home.dataValues.address,
-            city: home.dataValues.city,
-            state: home.dataValues.state,
-            zipcode: home.dataValues.zipcode,
-          };
-        }
-        await Email.sendEmailConfirmation(
-          clientEmail,
-          address,
-          clientUserName,
-          appointmentDate
-        );
-      }
-      return res.status(200).json({ user: userInfo });
-    }
-    return res
-      .status(201)
-      .json({ error: "This cleaner is already attached to this appointment" });
+    //     if (bookingClientId) {
+    //       const id = Number(bookingClientId);
+    //       const bookingClient = await User.findOne({
+    //         where: {
+    //           id: id,
+    //         },
+    //       });
+    //       clientEmail = bookingClient.dataValues.email;
+    //       clientUserName = bookingClient.dataValues.username;
+    //     }
+    //     if (homeId) {
+    //       const id = Number(homeId);
+    //       const home = await UserHomes.findOne({
+    //         where: {
+    //           id: id,
+    //         },
+    //       });
+    //       phoneNumber = home.dataValues.contact;
+    //       address = {
+    //         street: home.dataValues.address,
+    //         city: home.dataValues.city,
+    //         state: home.dataValues.state,
+    //         zipcode: home.dataValues.zipcode,
+    //       };
+    //     }
+    //     await Email.sendEmailConfirmation(
+    //       clientEmail,
+    //       address,
+    //       clientUserName,
+    //       appointmentDate
+    //     );
+    //   }
+      // return res.status(200).json({ user: userInfo });
+    // }
+    // return res
+    //   .status(201)
+    //   .json({ error: "This cleaner is already attached to this appointment" });
+    console.log("APPOINTMENT DENIED!!!!!")
   } catch (error) {
     console.error(error);
     if (error.name === "TokenExpiredError") {

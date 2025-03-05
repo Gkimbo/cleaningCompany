@@ -17,6 +17,7 @@ const EmployeeTile = ({
   appointmentId,
   username,
   reviews,
+  status,
   approveRequest,
   denyRequest,
 }) => {
@@ -24,7 +25,7 @@ const EmployeeTile = ({
   const iconSize = width < 400 ? 16 : width < 800 ? 20 : 24;
   const animatedScale = new Animated.Value(1);
   const navigate = useNavigate();
-
+  
   const handlePressIn = () => {
     Animated.spring(animatedScale, {
       toValue: 0.98,
