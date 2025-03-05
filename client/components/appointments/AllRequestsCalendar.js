@@ -50,7 +50,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
     [state]
   );
   const navigate = useNavigate();
-console.log(dateSelectAppointments)
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -455,32 +455,32 @@ console.log(dateSelectAppointments)
                         keyLocation={appointment.keyLocation}
                         distance={appointment.distance}
                         approveRequest={async (employeeId, appointmentId) => {
-                          //   try {
-                          //     await FetchData.approveRequest(employeeId, appointmentId);
-                          //     appointmentArray((prevRequests) => {
-                          //       const removedAppointment = prevRequests.find(
-                          //         (appointment) => appointment.id === appointmentId
-                          //       );
-                          //       if (!removedAppointment) return prevRequests;
-                          //       return prevRequests.filter((appointment) => appointment.id !== appointmentId);
-                          //     });
-                          //   } catch (error) {
-                          //     console.error("Error removing request:", error);
-                          //   }
+                            try {
+                              await FetchData.approveRequest(employeeId, appointmentId);
+                              appointmentArray((prevRequests) => {
+                                const removedAppointment = prevRequests.find(
+                                  (appointment) => appointment.id === appointmentId
+                                );
+                                if (!removedAppointment) return prevRequests;
+                                return prevRequests.filter((appointment) => appointment.id !== appointmentId);
+                              });
+                            } catch (error) {
+                              console.error("Error removing request:", error);
+                            }
                         }}
                         denyRequest={async (employeeId, appointmentId) => {
-                          // try {
-                          //   await FetchData.denyRequest(employeeId, appointmentId);
-                          //   appointmentArray((prevRequests) => {
-                          //     const removedAppointment = prevRequests.find(
-                          //       (appointment) => appointment.id === appointmentId
-                          //     );
-                          //     if (!removedAppointment) return prevRequests;
-                          //     return prevRequests.filter((appointment) => appointment.id !== appointmentId);
-                          //   });
-                          // } catch (error) {
-                          //   console.error("Error removing request:", error);
-                          // }
+                          try {
+                            await FetchData.denyRequest(employeeId, appointmentId);
+                            appointmentArray((prevRequests) => {
+                              const removedAppointment = prevRequests.find(
+                                (appointment) => appointment.id === appointmentId
+                              );
+                              if (!removedAppointment) return prevRequests;
+                              return prevRequests.filter((appointment) => appointment.id !== appointmentId);
+                            });
+                          } catch (error) {
+                            console.error("Error removing request:", error);
+                          }
                         }}
                       />
                     </View>

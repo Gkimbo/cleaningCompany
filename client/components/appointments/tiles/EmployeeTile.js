@@ -14,6 +14,7 @@ import RatingsStyles from "../../../services/styles/RatingsStyles";
 
 const EmployeeTile = ({
   id,
+  appointmentId,
   username,
   reviews,
   approveRequest,
@@ -110,13 +111,13 @@ const EmployeeTile = ({
       </View>
       <Pressable
         style={[styles.button, { backgroundColor: "green" }]}
-        onPress={() => approveRequest(cleanerId, id)}
+        onPress={() => approveRequest(id, appointmentId)}
       >
         <Text style={styles.buttonText}>Approve Cleaner!</Text>
       </Pressable>
       <Pressable
         style={[styles.button, { backgroundColor: "#E74C3C" }]}
-        onPress={() => denyRequest(cleanerId, id)}
+        onPress={() => denyRequest(id, appointmentId)}
       >
         <Text style={styles.buttonText}>Deny Cleaner!</Text>
       </Pressable>
