@@ -458,9 +458,16 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                           try {
                             dispatch({
                               type: "UPDATE_REQUEST_STATUS",
-                              payload: { employeeId, appointmentId, status: "approved" },
+                              payload: {
+                                employeeId,
+                                appointmentId,
+                                status: "approved",
+                              },
                             });
-                            await FetchData.approveRequest(employeeId, appointmentId);
+                            await FetchData.approveRequest(
+                              employeeId,
+                              appointmentId
+                            );
                           } catch (error) {
                             console.error("Error approving request:", error);
                           }
@@ -469,13 +476,20 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                           try {
                             dispatch({
                               type: "UPDATE_REQUEST_STATUS",
-                              payload: { employeeId, appointmentId, status: "denied" },
+                              payload: {
+                                employeeId,
+                                appointmentId,
+                                status: "denied",
+                              },
                             });
-                            await FetchData.denyRequest(employeeId, appointmentId);
+                            await FetchData.denyRequest(
+                              employeeId,
+                              appointmentId
+                            );
                           } catch (error) {
                             console.error("Error denying request:", error);
                           }
-                        }}             
+                        }}
                       />
                     </View>
                   ))}

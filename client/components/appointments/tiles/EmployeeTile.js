@@ -20,14 +20,14 @@ const EmployeeTile = ({
   approveRequest,
   denyRequest,
   undoRequest,
-  requestData
+  requestData,
 }) => {
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 16 : width < 800 ? 20 : 24;
   const animatedScale = new Animated.Value(1);
-  const status=requestData?.status
-  const requestId=requestData?.id
-  
+  const status = requestData?.status;
+  const requestId = requestData?.id;
+
   const navigate = useNavigate();
 
   const handlePressIn = () => {
@@ -131,9 +131,7 @@ const EmployeeTile = ({
         </>
       ) : status === "approved" ? (
         <>
-          <View
-            style={[styles.button, { backgroundColor: "#28A745" }]}
-          >
+          <View style={[styles.button, { backgroundColor: "#28A745" }]}>
             <Text style={styles.buttonText}>Approved!</Text>
           </View>
           <Pressable
@@ -145,9 +143,7 @@ const EmployeeTile = ({
         </>
       ) : status === "denied" ? (
         <>
-          <View
-            style={[styles.button, { backgroundColor: "#E74C3C" }]}
-          >
+          <View style={[styles.button, { backgroundColor: "#E74C3C" }]}>
             <Text style={styles.buttonText}>Denied!</Text>
           </View>
           <Pressable

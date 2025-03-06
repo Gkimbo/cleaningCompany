@@ -55,7 +55,7 @@ const RequestResponseTile = ({
     });
     return map;
   }, [requestsForThisAppointment]);
-  
+
   const employeeStatusMap = useMemo(() => {
     const map = new Map();
     requestsForThisAppointment.forEach((request) => {

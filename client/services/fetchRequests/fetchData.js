@@ -9,7 +9,7 @@ class FetchData {
           Authorization: `Bearer ${user}`,
         },
       });
-    
+
       if (!response.ok) {
         throw new Error("No data received");
       }
