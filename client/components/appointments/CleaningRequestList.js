@@ -14,6 +14,7 @@ import topBarStyles from "../../services/styles/TopBarStyles";
 import FetchData from "../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../services/fetchRequests/getCurrentUser";
 import RequestResponseTile from "./tiles/RequestResponseTile";
+import UserFormStyles from "../../services/styles/UserInputFormStyle";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -37,10 +38,12 @@ const CleaningRequestList = ({ state, dispatch }) => {
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 
-  const appointmentArray = useMemo(
-    () => state.requests.map((request) => request.appointment) || [],
-    [state]
-  );
+  const appointmentArray = useMemo(() => {
+    return state.requests.length > 0
+      ? state.requests.flatMap((request) => request.appointment || [])
+      : [];
+  }, [state]);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -108,8 +111,12 @@ const CleaningRequestList = ({ state, dispatch }) => {
   const pressedSeeCalender = () => {
     setSeeCalender(true);
   };
-
+  console.log("Appontment array", appointmentArray);
   const sortedRequests = useMemo(() => {
+    if (appointmentArray.length === 0) {
+      // Fix: Properly check for an empty array
+      return null;
+    }
     let sorted = appointmentArray.map((appointment) => {
       let distance = null;
 
@@ -288,7 +295,53 @@ const CleaningRequestList = ({ state, dispatch }) => {
             </View>
           )}
         </>
-      ) : null}
+      ) : (
+        <>
+          <View
+            style={{
+              ...homePageStyles.backButtonSelectNewJob,
+              flexDirection: "row",
+              justifyContent: "space-evenly",
+            }}
+          >
+            <Pressable
+              style={homePageStyles.backButtonForm}
+              onPress={() => navigate("/")}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 10,
+                }}
+              >
+                <Icon name="angle-left" size={iconSize} color="black" />
+                <View style={{ marginLeft: 15 }}>
+                  <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
+                </View>
+              </View>
+            </Pressable>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginLeft: 15,
+              }}
+            ></View>
+          </View>
+          <Text
+            style={{
+              ...UserFormStyles.error,
+              fontSize: 15,
+              marginTop: "70%",
+              marginBottom: "70%",
+            }}
+          >
+            You dont have any cleaning requests
+          </Text>
+        </>
+      )}
     </View>
   );
 };

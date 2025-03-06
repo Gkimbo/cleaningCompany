@@ -104,7 +104,7 @@ appointmentRouter.get("/my-requests", async (req, res) => {
         appointment: [],
         employeeRequesting: [],
       };
-      return res.status(200).json({pendingRequestsEmployee });
+      return res.status(200).json({ pendingRequestsEmployee: [pendingRequestsEmployee] });
     }
 
     const pendingRequestsEmployee = await Promise.all(
