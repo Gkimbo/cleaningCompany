@@ -104,7 +104,9 @@ appointmentRouter.get("/my-requests", async (req, res) => {
         appointment: [],
         employeeRequesting: [],
       };
-      return res.status(200).json({ pendingRequestsEmployee: [pendingRequestsEmployee] });
+      return res
+        .status(200)
+        .json({ pendingRequestsEmployee: [pendingRequestsEmployee] });
     }
 
     const pendingRequestsEmployee = await Promise.all(
@@ -482,7 +484,7 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
 
 appointmentRouter.patch("/approve-request", async (req, res) => {
   const { requestId, approve } = req.body;
-  console.log(requestId)
+  console.log(requestId);
   try {
     const request = await UserPendingRequests.findOne({
       where: { id: requestId },
@@ -501,7 +503,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       const appointment = await UserAppointments.findOne({
         where: { id: request.dataValues.appointmentId },
       });
-      
+
       let employees = appointment.dataValues.employeesAssigned || [];
       if (!employees.includes(String(request.dataValues.employeeId))) {
         employees.push(String(request.dataValues.employeeId));
@@ -647,15 +649,47 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
           zipcode: home.dataValues.zipcode,
         };
       }
+
+      const appointment = await UserAppointments.findByPk(
+        Number(appointmentId)
+      );
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+
+      const client = await User.findByPk(appointment.dataValues.userId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const cleaner = await User.findByPk(id);
+      if (!cleaner) {
+        return res.status(404).json({ error: "Cleaner not found" });
+      }
+
+      const existingRequest = await UserPendingRequests.findOne({
+        where: { employeeId: id, appointmentId: Number(appointmentId) },
+      });
+      if (existingRequest) {
+        return res
+          .status(400)
+          .json({ error: "Request already sent to the client" });
+      }
+
+      await UserPendingRequests.create({
+        employeeId: id,
+        appointmentId: Number(appointmentId),
+        status: "pending",
+      });
+
       await Email.sendEmailCancellation(
         clientEmail,
         address,
         clientUserName,
         appointmentDate
       );
-      return res
-      .status(200)
-      .json({ message: "Request update" });
+      console.log("UNDO (Employee has been removed)");
+      return res.status(200).json({ message: "Request update" });
     } else {
       const appointment = await UserAppointments.findByPk(
         Number(appointmentId)
@@ -689,8 +723,8 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
         status: "pending",
       });
       return res
-      .status(200)
-      .json({ message: "Request sent to the client for approval" });
+        .status(200)
+        .json({ message: "Request sent to the client for approval" });
     }
   } catch (error) {
     console.error("❌ Server error:", error);

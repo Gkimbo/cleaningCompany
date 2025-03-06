@@ -104,7 +104,7 @@ const HomePage = ({ state, dispatch }) => {
       }
     }
   }, []);
-  console.log(state);
+  
   let todaysAppointment = null;
   let nextAppointment = null;
   let foundToday = false;
