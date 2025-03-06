@@ -36,7 +36,11 @@ const CleaningRequestList = ({ state, dispatch }) => {
   const [loading, setLoading] = useState(true);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
-  const appointmentArray = useMemo(() => state.requests.map(request => request.appointment) || [], [state]);
+
+  const appointmentArray = useMemo(
+    () => state.requests.map((request) => request.appointment) || [],
+    [state]
+  );
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -58,10 +62,9 @@ const CleaningRequestList = ({ state, dispatch }) => {
           appointmentArray.map(async (appointment) => {
             const response = await FetchData.getLatAndLong(appointment.homeId);
             return { [appointment.homeId]: response };
-          }),
+          })
         );
         setAppointmentLocations(Object.assign({}, ...locations));
-        
       } catch (error) {
         console.error("Error fetching appointment locations:", error);
       }
@@ -109,7 +112,7 @@ const CleaningRequestList = ({ state, dispatch }) => {
   const sortedRequests = useMemo(() => {
     let sorted = appointmentArray.map((appointment) => {
       let distance = null;
-  
+
       if (
         userLocation &&
         appointmentLocations &&
@@ -124,19 +127,19 @@ const CleaningRequestList = ({ state, dispatch }) => {
         );
         setLoading(false);
       }
-  
+
       return { ...appointment, distance };
     });
-  
+
     if (sortOption === "dateOldest") {
       sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
     } else if (sortOption === "dateNewest") {
       sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
-  
+
     return sorted;
   }, [appointmentArray, userLocation, appointmentLocations, sortOption]);
-
+  console.log(sortedRequests);
   return (
     <View
       style={{
@@ -145,114 +148,147 @@ const CleaningRequestList = ({ state, dispatch }) => {
         marginTop: "27%",
       }}
     >
-      <View
-        style={{
-          ...homePageStyles.backButtonSelectNewJob,
-          flexDirection: "row",
-          justifyContent: "space-evenly",
-        }}
-      >
-        <Pressable
-          style={homePageStyles.backButtonForm}
-          onPress={() => navigate("/")}
-        >
+      {sortedRequests ? (
+        <>
           <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+            style={{
+              ...homePageStyles.backButtonSelectNewJob,
+              flexDirection: "row",
+              justifyContent: "space-evenly",
+            }}
           >
-            <Icon name="angle-left" size={iconSize} color="black" />
-            <View style={{ marginLeft: 15 }}>
-              <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
-            </View>
-          </View>
-        </Pressable>
-        <Pressable
-          style={homePageStyles.backButtonForm}
-          onPress={pressedSeeCalender}
-        >
-          <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-          >
-            <View style={{ marginRight: 15 }}>
-              <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
-            </View>
-            <Icon name="angle-right" size={iconSize} color="black" />
-          </View>
-        </Pressable>
-      </View>
-
-      <View
-        style={{
-          margin: 10,
-          borderWidth: 1,
-          borderRadius: 5,
-          borderColor: "#ccc",
-        }}
-      >
-        <Picker
-          selectedValue={sortOption}
-          onValueChange={(itemValue) => setSortOption(itemValue)}
-        >
-          <Picker.Item
-            label="Sort by: Upcoming"
-            value="dateNewest"
-          />
-          <Picker.Item
-            label="Sort by: Furthest Out"
-            value="dateOldest"
-          />
-        </Picker>
-      </View>
-      {loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#0000ff"
-          style={{ marginTop: 20 }}
-        />
-      ) : (
-        <View style={{ flex: 1 }}>
-          {sortedRequests.map((appointment) => (
-            <View key={appointment.id}>
-              <RequestResponseTile
-                id={appointment.id}
-                state={state}
-                cleanerId={userId}
-                date={appointment.date}
-                price={appointment.price}
-                homeId={appointment.homeId}
-                hasBeenAssigned={appointment.hasBeenAssigned}
-                bringSheets={appointment.bringSheets}
-                bringTowels={appointment.bringTowels}
-                completed={appointment.completed}
-                keyPadCode={appointment.keyPadCode}
-                keyLocation={appointment.keyLocation}
-                distance={appointment.distance}
-                approveRequest={async (employeeId, appointmentId) => {
-                  try {
-                    dispatch({
-                      type: "UPDATE_REQUEST_STATUS",
-                      payload: { employeeId, appointmentId, status: "approved" },
-                    });
-                    await FetchData.approveRequest(employeeId, appointmentId);
-                  } catch (error) {
-                    console.error("Error approving request:", error);
-                  }
+            <Pressable
+              style={homePageStyles.backButtonForm}
+              onPress={() => navigate("/")}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 10,
                 }}
-                denyRequest={async (employeeId, appointmentId) => {
-                  try {
-                    dispatch({
-                      type: "UPDATE_REQUEST_STATUS",
-                      payload: { employeeId, appointmentId, status: "denied" },
-                    });
-                    await FetchData.denyRequest(employeeId, appointmentId);
-                  } catch (error) {
-                    console.error("Error denying request:", error);
-                  }
-                }}             
-              />
+              >
+                <Icon name="angle-left" size={iconSize} color="black" />
+                <View style={{ marginLeft: 15 }}>
+                  <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
+                </View>
+              </View>
+            </Pressable>
+            <Pressable
+              style={homePageStyles.backButtonForm}
+              onPress={pressedSeeCalender}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 10,
+                }}
+              >
+                <View style={{ marginRight: 15 }}>
+                  <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
+                </View>
+                <Icon name="angle-right" size={iconSize} color="black" />
+              </View>
+            </Pressable>
+          </View>
+
+          <View
+            style={{
+              margin: 10,
+              borderWidth: 1,
+              borderRadius: 5,
+              borderColor: "#ccc",
+            }}
+          >
+            <Picker
+              selectedValue={sortOption}
+              onValueChange={(itemValue) => setSortOption(itemValue)}
+            >
+              <Picker.Item label="Sort by: Upcoming" value="dateNewest" />
+              <Picker.Item label="Sort by: Furthest Out" value="dateOldest" />
+            </Picker>
+          </View>
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color="#0000ff"
+              style={{ marginTop: 20 }}
+            />
+          ) : (
+            <View style={{ flex: 1 }}>
+              {sortedRequests.map((appointment) => (
+                <View key={appointment.id}>
+                  <RequestResponseTile
+                    id={appointment.id}
+                    state={state}
+                    cleanerId={userId}
+                    date={appointment.date}
+                    price={appointment.price}
+                    homeId={appointment.homeId}
+                    hasBeenAssigned={appointment.hasBeenAssigned}
+                    bringSheets={appointment.bringSheets}
+                    bringTowels={appointment.bringTowels}
+                    completed={appointment.completed}
+                    keyPadCode={appointment.keyPadCode}
+                    keyLocation={appointment.keyLocation}
+                    distance={appointment.distance}
+                    approveRequest={async (
+                      employeeId,
+                      appointmentId,
+                      requestId
+                    ) => {
+                      try {
+                        dispatch({
+                          type: "UPDATE_REQUEST_STATUS",
+                          payload: {
+                            employeeId,
+                            appointmentId,
+                            status: "approved",
+                          },
+                        });
+                        await FetchData.approveRequest(requestId, true);
+                      } catch (error) {
+                        console.error("Error approving request:", error);
+                      }
+                    }}
+                    denyRequest={async (employeeId, appointmentId) => {
+                      try {
+                        dispatch({
+                          type: "UPDATE_REQUEST_STATUS",
+                          payload: {
+                            employeeId,
+                            appointmentId,
+                            status: "denied",
+                          },
+                        });
+                        await FetchData.denyRequest(employeeId, appointmentId);
+                      } catch (error) {
+                        console.error("Error denying request:", error);
+                      }
+                    }}
+                    undoRequest={async (employeeId, appointmentId) => {
+                      try {
+                        dispatch({
+                          type: "UPDATE_REQUEST_STATUS",
+                          payload: {
+                            employeeId,
+                            appointmentId,
+                            status: "pending",
+                          },
+                        });
+                        await FetchData.undoRequest(employeeId, appointmentId);
+                      } catch (error) {
+                        console.error("Error denying request:", error);
+                      }
+                    }}
+                  />
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
-      )}
+          )}
+        </>
+      ) : null}
     </View>
   );
 };

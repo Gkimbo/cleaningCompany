@@ -82,13 +82,6 @@ appointmentRouter.get("/my-requests", async (req, res) => {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
-    // await UserReviews.create({
-    //   userId: 4,
-    //   reviewerId: userId,
-    //   appointmentId: 2,
-    //   review: 3.5,
-    //   reviewComment: "He was Great but missed wiping down the stove",
-    // });
     const existingAppointments = await UserAppointments.findAll({
       where: { userId },
     });
@@ -106,7 +99,12 @@ appointmentRouter.get("/my-requests", async (req, res) => {
     });
 
     if (!pendingRequests.length) {
-      return res.status(404).json({ message: "you have no requests" });
+      const pendingRequestsEmployee = {
+        request: [],
+        appointment: [],
+        employeeRequesting: [],
+      };
+      return res.status(200).json({pendingRequestsEmployee });
     }
 
     const pendingRequestsEmployee = await Promise.all(
@@ -483,192 +481,51 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
 });
 
 appointmentRouter.patch("/approve-request", async (req, res) => {
-  const { id, appointmentId } = req.body;
-  let userInfo;
+  const { requestId, approve } = req.body;
+  console.log(requestId)
   try {
-    const checkItExists = await UserCleanerAppointments.findOne({
-      where: {
-        employeeId: id,
-        appointmentId: Number(appointmentId),
-      },
+    const request = await UserPendingRequests.findOne({
+      where: { id: requestId },
     });
-    // if (!checkItExists) {
-    //   userInfo = await UserCleanerAppointments.create({
-    //     employeeId: id,
-    //     appointmentId: Number(appointmentId),
-    //   });
-    //   const updateAppointment = await UserAppointments.findOne({
-    //     where: {
-    //       id: appointmentId,
-    //     },
-    //   });
+    console.log("Request: ", request);
+    if (!request) {
+      return res.status(404).json({ error: "Request not found" });
+    }
 
-    //   const bookingClientId = updateAppointment.dataValues.userId;
-    //   const homeId = updateAppointment.dataValues.homeId;
-    //   const appointmentDate = updateAppointment.dataValues.date;
-    //   let employees;
+    if (approve) {
+      await UserCleanerAppointments.create({
+        employeeId: request.dataValues.employeeId,
+        appointmentId: request.dataValues.appointmentId,
+      });
 
-    //   if (updateAppointment) {
-    //     if (!Array.isArray(updateAppointment?.dataValues?.employeesAssigned)) {
-    //       employees = [];
-    //     } else {
-    //       employees = [...updateAppointment.dataValues.employeesAssigned];
-    //     }
+      const appointment = await UserAppointments.findOne({
+        where: { id: request.dataValues.appointmentId },
+      });
+      
+      let employees = appointment.dataValues.employeesAssigned || [];
+      if (!employees.includes(String(request.dataValues.employeeId))) {
+        employees.push(String(request.dataValues.employeeId));
+      }
 
-    //     if (!employees.includes(String(id))) {
-    //       employees.push(String(id));
-    //       const response = await updateAppointment.update({
-    //         employeesAssigned: employees,
-    //         hasBeenAssigned: true,
-    //       });
-    //     }
+      await appointment.update({
+        employeesAssigned: employees,
+        hasBeenAssigned: true,
+      });
 
-    //     let clientEmail;
-    //     let clientUserName;
-    //     let phoneNumber;
-    //     let address;
+      await request.destroy();
 
-    //     if (bookingClientId) {
-    //       const id = Number(bookingClientId);
-    //       const bookingClient = await User.findOne({
-    //         where: {
-    //           id: id,
-    //         },
-    //       });
-    //       clientEmail = bookingClient.dataValues.email;
-    //       clientUserName = bookingClient.dataValues.username;
-    //     }
-    //     if (homeId) {
-    //       const id = Number(homeId);
-    //       const home = await UserHomes.findOne({
-    //         where: {
-    //           id: id,
-    //         },
-    //       });
-    //       phoneNumber = home.dataValues.contact;
-    //       address = {
-    //         street: home.dataValues.address,
-    //         city: home.dataValues.city,
-    //         state: home.dataValues.state,
-    //         zipcode: home.dataValues.zipcode,
-    //       };
-    //     }
-    //     await Email.sendEmailConfirmation(
-    //       clientEmail,
-    //       address,
-    //       clientUserName,
-    //       appointmentDate
-    //     );
-    //   }
-    //   return res.status(200).json({ user: userInfo });
-    // }
-    // return res
-    //   .status(201)
-    //   .json({ error: "This cleaner is already attached to this appointment" });
-console.log("APPOINTMENT APPROVED!!!!!!!!!")
+      return res.status(200).json({ message: "Cleaner assigned successfully" });
+    } else {
+      await request.destroy();
+      return res.status(200).json({ message: "Request denied" });
+    }
   } catch (error) {
     console.error(error);
-    if (error.name === "TokenExpiredError") {
-      return res.status(401).json({ error: "Token has expired" });
-    }
-    return res.status(401).json({ error: "Invalid token" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
 appointmentRouter.patch("/deny-request", async (req, res) => {
-  const { id, appointmentId } = req.body;
-  let userInfo;
-  try {
-    const checkItExists = await UserCleanerAppointments.findOne({
-      where: {
-        employeeId: id,
-        appointmentId: Number(appointmentId),
-      },
-    });
-    // if (!checkItExists) {
-    //   userInfo = await UserCleanerAppointments.create({
-    //     employeeId: id,
-    //     appointmentId: Number(appointmentId),
-    //   });
-    //   const updateAppointment = await UserAppointments.findOne({
-    //     where: {
-    //       id: appointmentId,
-    //     },
-    //   });
-
-    //   const bookingClientId = updateAppointment.dataValues.userId;
-    //   const homeId = updateAppointment.dataValues.homeId;
-    //   const appointmentDate = updateAppointment.dataValues.date;
-    //   let employees;
-
-    //   if (updateAppointment) {
-    //     if (!Array.isArray(updateAppointment?.dataValues?.employeesAssigned)) {
-    //       employees = [];
-    //     } else {
-    //       employees = [...updateAppointment.dataValues.employeesAssigned];
-    //     }
-
-    //     if (!employees.includes(String(id))) {
-    //       employees.push(String(id));
-    //       const response = await updateAppointment.update({
-    //         employeesAssigned: employees,
-    //         hasBeenAssigned: true,
-    //       });
-    //     }
-
-    //     let clientEmail;
-    //     let clientUserName;
-    //     let phoneNumber;
-    //     let address;
-
-    //     if (bookingClientId) {
-    //       const id = Number(bookingClientId);
-    //       const bookingClient = await User.findOne({
-    //         where: {
-    //           id: id,
-    //         },
-    //       });
-    //       clientEmail = bookingClient.dataValues.email;
-    //       clientUserName = bookingClient.dataValues.username;
-    //     }
-    //     if (homeId) {
-    //       const id = Number(homeId);
-    //       const home = await UserHomes.findOne({
-    //         where: {
-    //           id: id,
-    //         },
-    //       });
-    //       phoneNumber = home.dataValues.contact;
-    //       address = {
-    //         street: home.dataValues.address,
-    //         city: home.dataValues.city,
-    //         state: home.dataValues.state,
-    //         zipcode: home.dataValues.zipcode,
-    //       };
-    //     }
-    //     await Email.sendEmailConfirmation(
-    //       clientEmail,
-    //       address,
-    //       clientUserName,
-    //       appointmentDate
-    //     );
-    //   }
-      // return res.status(200).json({ user: userInfo });
-    // }
-    // return res
-    //   .status(201)
-    //   .json({ error: "This cleaner is already attached to this appointment" });
-    console.log("APPOINTMENT DENIED!!!!!")
-  } catch (error) {
-    console.error(error);
-    if (error.name === "TokenExpiredError") {
-      return res.status(401).json({ error: "Token has expired" });
-    }
-    return res.status(401).json({ error: "Invalid token" });
-  }
-});
-
-appointmentRouter.patch("/remove-request", async (req, res) => {
   const { id, appointmentId } = req.body;
   try {
     const request = await UserPendingRequests.findOne({
@@ -713,6 +570,179 @@ appointmentRouter.patch("/remove-request", async (req, res) => {
   }
 });
 
+appointmentRouter.patch("/undo-request-choice", async (req, res) => {
+  const { id, appointmentId } = req.body;
+  let userInfo;
+  try {
+    const checkItExists = await UserCleanerAppointments.findOne({
+      where: {
+        employeeId: id,
+        appointmentId: Number(appointmentId),
+      },
+    });
+    if (checkItExists) {
+      await UserCleanerAppointments.destroy({
+        where: {
+          employeeId: id,
+          appointmentId: Number(appointmentId),
+        },
+      });
+
+      const updateAppointment = await UserAppointments.findOne({
+        where: {
+          id: Number(appointmentId),
+        },
+      });
+
+      const bookingClientId = updateAppointment.dataValues.userId;
+      const homeId = updateAppointment.dataValues.homeId;
+      const appointmentDate = updateAppointment.dataValues.date;
+
+      if (updateAppointment) {
+        let employees = Array.isArray(
+          updateAppointment?.dataValues?.employeesAssigned
+        )
+          ? [...updateAppointment.dataValues.employeesAssigned]
+          : [];
+
+        const updatedEmployees = employees.filter(
+          (empId) => empId !== String(id)
+        );
+
+        if (updatedEmployees.length !== employees.length) {
+          await updateAppointment.update({
+            employeesAssigned: updatedEmployees,
+            hasBeenAssigned: false,
+          });
+        }
+      }
+
+      let clientEmail;
+      let clientUserName;
+      let phoneNumber;
+      let address;
+
+      if (bookingClientId) {
+        const id = Number(bookingClientId);
+        const bookingClient = await User.findOne({
+          where: {
+            id: id,
+          },
+        });
+        clientEmail = bookingClient.dataValues.email;
+        clientUserName = bookingClient.dataValues.username;
+      }
+      if (homeId) {
+        const id = Number(homeId);
+        const home = await UserHomes.findOne({
+          where: {
+            id: id,
+          },
+        });
+        phoneNumber = home.dataValues.contact;
+        address = {
+          street: home.dataValues.address,
+          city: home.dataValues.city,
+          state: home.dataValues.state,
+          zipcode: home.dataValues.zipcode,
+        };
+      }
+      await Email.sendEmailCancellation(
+        clientEmail,
+        address,
+        clientUserName,
+        appointmentDate
+      );
+      return res
+      .status(200)
+      .json({ message: "Request update" });
+    } else {
+      const appointment = await UserAppointments.findByPk(
+        Number(appointmentId)
+      );
+      if (!appointment) {
+        return res.status(404).json({ error: "Appointment not found" });
+      }
+
+      const client = await User.findByPk(appointment.dataValues.userId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const cleaner = await User.findByPk(id);
+      if (!cleaner) {
+        return res.status(404).json({ error: "Cleaner not found" });
+      }
+
+      const existingRequest = await UserPendingRequests.findOne({
+        where: { employeeId: id, appointmentId: Number(appointmentId) },
+      });
+      if (existingRequest) {
+        return res
+          .status(400)
+          .json({ error: "Request already sent to the client" });
+      }
+
+      await UserPendingRequests.create({
+        employeeId: id,
+        appointmentId: Number(appointmentId),
+        status: "pending",
+      });
+      return res
+      .status(200)
+      .json({ message: "Request sent to the client for approval" });
+    }
+  } catch (error) {
+    console.error("❌ Server error:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// appointmentRouter.patch("/remove-request", async (req, res) => {
+//   const { id, appointmentId } = req.body;
+//   try {
+//     const request = await UserPendingRequests.findOne({
+//       where: { appointmentId: Number(appointmentId), employeeId: Number(id) },
+//     });
+
+//     if (!request) {
+//       return res.status(404).json({ error: "Request not found" });
+//     }
+
+//     const appointment = await UserAppointments.findByPk(Number(appointmentId));
+//     if (!appointment) {
+//       return res.status(404).json({ error: "Appointment not found" });
+//     }
+
+//     const client = await User.findByPk(appointment.dataValues.userId);
+//     if (!client) {
+//       return res.status(404).json({ error: "Client not found" });
+//     }
+
+//     const cleaner = await User.findByPk(id);
+//     if (!cleaner) {
+//       return res.status(404).json({ error: "Cleaner not found" });
+//     }
+
+//     const removedRequestData = request.get();
+//     await request.destroy();
+
+//     await Email.removeRequestEmail(
+//       client.dataValues.email,
+//       client.dataValues.username,
+//       appointment.dataValues.date
+//     );
+
+//     return res.status(200).json({
+//       message: "Request removed",
+//       removedRequest: removedRequestData,
+//     });
+//   } catch (error) {
+//     console.error(error);
+//     return res.status(500).json({ error: "Server error" });
+//   }
+// });
+
 appointmentRouter.patch("/:id", async (req, res) => {
   const { id, bringTowels, bringSheets, keyPadCode, keyLocation } = req.body;
   let userInfo;
@@ -753,50 +783,6 @@ appointmentRouter.patch("/:id", async (req, res) => {
     }
 
     return res.status(401).json({ error: "Invalid token" });
-  }
-});
-
-appointmentRouter.patch("/confirm-employee", async (req, res) => {
-  const { requestId, approve } = req.body;
-  try {
-    const request = await UserPendingRequests.findOne({
-      where: { id: requestId },
-    });
-
-    if (!request) {
-      return res.status(404).json({ error: "Request not found" });
-    }
-
-    if (approve) {
-      await UserCleanerAppointments.create({
-        employeeId: request.employeeId,
-        appointmentId: request.appointmentId,
-      });
-
-      const appointment = await UserAppointments.findOne({
-        where: { id: request.appointmentId },
-      });
-
-      let employees = appointment.employeesAssigned || [];
-      if (!employees.includes(String(request.employeeId))) {
-        employees.push(String(request.employeeId));
-      }
-
-      await appointment.update({
-        employeesAssigned: employees,
-        hasBeenAssigned: true,
-      });
-
-      await request.destroy();
-
-      return res.status(200).json({ message: "Cleaner assigned successfully" });
-    } else {
-      await request.destroy();
-      return res.status(200).json({ message: "Request denied" });
-    }
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Server error" });
   }
 });
 

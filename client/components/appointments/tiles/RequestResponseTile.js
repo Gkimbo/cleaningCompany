@@ -14,6 +14,7 @@ const RequestResponseTile = ({
   approveRequest,
   denyRequest,
   assigned,
+  undoRequest,
 }) => {
   const [expandWindow, setExpandWindow] = useState(false);
   const [home, setHome] = useState({
@@ -44,6 +45,17 @@ const RequestResponseTile = ({
     (request) => request.appointmentId === id
   );
 
+  const employeeRequestMap = useMemo(() => {
+    const map = new Map();
+    requestsForThisAppointment.forEach((request) => {
+      map.set(Number(request.employeeId), {
+        status: request.status,
+        id: request.id,
+      });
+    });
+    return map;
+  }, [requestsForThisAppointment]);
+  
   const employeeStatusMap = useMemo(() => {
     const map = new Map();
     requestsForThisAppointment.forEach((request) => {
@@ -130,9 +142,10 @@ const RequestResponseTile = ({
                 appointmentId={id}
                 username={employee.username}
                 reviews={employee.reviews}
-                status={employeeStatusMap.get(Number(employee.id))}
+                requestData={employeeRequestMap.get(Number(employee.id))}
                 approveRequest={approveRequest}
                 denyRequest={denyRequest}
+                undoRequest={undoRequest}
               />
             </View>
           ))}

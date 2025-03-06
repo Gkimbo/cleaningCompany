@@ -9,6 +9,7 @@ class FetchData {
           Authorization: `Bearer ${user}`,
         },
       });
+    
       if (!response.ok) {
         throw new Error("No data received");
       }
@@ -335,6 +336,33 @@ class FetchData {
       return err;
     }
   }
+
+  static async addEmployee(id, appointmentId) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/appointments/request-employee",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            appointmentId,
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to delete");
+      }
+
+      const responseData = await response.json();
+      return true;
+    } catch (error) {
+      return error;
+    }
+  }
+
   static async removeEmployee(id, appointmentId) {
     try {
       const response = await fetch(
@@ -387,7 +415,7 @@ class FetchData {
     }
   }
 
-  static async approveRequest(id, appointmentId) {
+  static async approveRequest(requestId, approve) {
     try {
       const response = await fetch(
         baseURL + "/api/v1/appointments/approve-request",
@@ -397,17 +425,15 @@ class FetchData {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            id,
-            appointmentId,
+            requestId,
+            approve,
           }),
         }
-      )
+      );
       if (!response.ok) {
         throw new Error("Failed to delete");
       }
-
       const responseData = await response.json();
-      console.log(responseData)
       return true;
     } catch (error) {
       return error;
@@ -428,13 +454,40 @@ class FetchData {
             appointmentId,
           }),
         }
-      )
+      );
       if (!response.ok) {
         throw new Error("Failed to delete");
       }
 
       const responseData = await response.json();
-      console.log(responseData)
+      console.log(responseData);
+      return true;
+    } catch (error) {
+      return error;
+    }
+  }
+
+  static async undoRequest(id, appointmentId) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/appointments/undo-request-choice",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            appointmentId,
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to delete");
+      }
+
+      const responseData = await response.json();
+      console.log(responseData);
       return true;
     } catch (error) {
       return error;

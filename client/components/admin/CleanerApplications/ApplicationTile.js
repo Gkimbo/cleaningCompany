@@ -80,7 +80,7 @@ const ApplicationTile = ({
 					>
 						<View
 							style={{
-								backgroundColor: "green",
+								backgroundColor: "#28A745",
 								borderRadius: 20,
 								width: 80,
 								height: 30,

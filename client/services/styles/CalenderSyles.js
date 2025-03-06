@@ -67,7 +67,7 @@ const calenderStyles = StyleSheet.create({
 	},
 
 	keepButton: {
-		backgroundColor: "green",
+		backgroundColor: "#28A745",
 		borderRadius: 10,
 		padding: 15,
 	},

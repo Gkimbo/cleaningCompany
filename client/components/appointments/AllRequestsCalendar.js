@@ -259,7 +259,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
       const hasAppStyle = {
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "green",
+        backgroundColor: "#28A745",
         borderRadius: 25,
         paddingVertical: 10,
         paddingHorizontal: 18,

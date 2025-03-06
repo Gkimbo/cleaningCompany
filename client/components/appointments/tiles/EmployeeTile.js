@@ -17,15 +17,19 @@ const EmployeeTile = ({
   appointmentId,
   username,
   reviews,
-  status,
   approveRequest,
   denyRequest,
+  undoRequest,
+  requestData
 }) => {
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 16 : width < 800 ? 20 : 24;
   const animatedScale = new Animated.Value(1);
-  const navigate = useNavigate();
+  const status=requestData?.status
+  const requestId=requestData?.id
   
+  const navigate = useNavigate();
+
   const handlePressIn = () => {
     Animated.spring(animatedScale, {
       toValue: 0.98,
@@ -110,18 +114,50 @@ const EmployeeTile = ({
           </View>
         )}
       </View>
-      <Pressable
-        style={[styles.button, { backgroundColor: "green" }]}
-        onPress={() => approveRequest(id, appointmentId)}
-      >
-        <Text style={styles.buttonText}>Approve Cleaner!</Text>
-      </Pressable>
-      <Pressable
-        style={[styles.button, { backgroundColor: "#E74C3C" }]}
-        onPress={() => denyRequest(id, appointmentId)}
-      >
-        <Text style={styles.buttonText}>Deny Cleaner!</Text>
-      </Pressable>
+      {status === "pending" ? (
+        <>
+          <Pressable
+            style={[styles.button, { backgroundColor: "#28A745" }]}
+            onPress={() => approveRequest(id, appointmentId, requestId, true)}
+          >
+            <Text style={styles.buttonText}>Approve Cleaner!</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.button, { backgroundColor: "#E74C3C" }]}
+            onPress={() => denyRequest(id, appointmentId)}
+          >
+            <Text style={styles.buttonText}>Deny Cleaner!</Text>
+          </Pressable>
+        </>
+      ) : status === "approved" ? (
+        <>
+          <View
+            style={[styles.button, { backgroundColor: "#28A745" }]}
+          >
+            <Text style={styles.buttonText}>Approved!</Text>
+          </View>
+          <Pressable
+            style={[styles.button, { backgroundColor: "#007AFF" }]}
+            onPress={() => undoRequest(id, appointmentId)}
+          >
+            <Text style={styles.buttonText}>Undo</Text>
+          </Pressable>
+        </>
+      ) : status === "denied" ? (
+        <>
+          <View
+            style={[styles.button, { backgroundColor: "#E74C3C" }]}
+          >
+            <Text style={styles.buttonText}>Denied!</Text>
+          </View>
+          <Pressable
+            style={[styles.button, { backgroundColor: "#007AFF" }]}
+            onPress={() => undoRequest(id, appointmentId)}
+          >
+            <Text style={styles.buttonText}>Undo</Text>
+          </Pressable>
+        </>
+      ) : null}
     </View>
   );
 };
