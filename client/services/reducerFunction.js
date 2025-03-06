@@ -30,6 +30,19 @@ const reducer = (state, action) => {
         ...state,
         requests: action.payload,
       };
+    case "UPDATE_REQUEST_STATUS":
+      return {
+        ...state,
+        requests: state.requests.map((request) =>
+          request.request.appointmentId === action.payload.appointmentId &&
+          request.request.employeeId === action.payload.employeeId
+            ? {
+                ...request,
+                request: { ...request.request, status: action.payload.status },
+              }
+            : request
+        ),
+      };
     case "ADD_DATES":
       return {
         ...state,

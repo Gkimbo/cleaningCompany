@@ -56,7 +56,7 @@ const AppointmentList = ({ state, dispatch }) => {
   const handleBackPress = () => {
     setBackRedirect(true);
   };
-  console.log(allAppointments);
+ 
   const usersHomes = state.homes.map((home) => {
     return (
       <View key={home.id}>

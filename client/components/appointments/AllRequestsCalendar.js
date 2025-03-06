@@ -17,6 +17,7 @@ import getCurrentUser from "../../services/fetchRequests/getCurrentUser";
 import RequestedTile from "../employeeAssignments/tiles/RequestedTile";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import topBarStyles from "../../services/styles/TopBarStyles";
+import RequestResponseTile from "./tiles/RequestResponseTile";
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371;
@@ -30,7 +31,6 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const AllRequestsCalendar = ({ state, dispatch }) => {
-  const [allRequests, setAllRequests] = useState([]);
   const [selectedDates, setSelectedDates] = useState({});
   const [dateSelectAppointments, setDateSelectAppointments] = useState({
     appointments: [],
@@ -45,21 +45,13 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
   const [loading, setLoading] = useState(true);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
+  const appointmentArray = useMemo(
+    () => state.requests.map((request) => request.appointment) || [],
+    [state]
+  );
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchAppointments = async () => {
-      try {
-        const response = await FetchData.get(
-          "/api/v1/users/appointments/employee",
-          state.currentUser.token
-        );
-        setAllRequests(response.requested || []);
-      } catch (error) {
-        console.error("Error fetching appointments:", error);
-      }
-    };
-
     const fetchUser = async () => {
       try {
         const response = await getCurrentUser();
@@ -70,7 +62,6 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
     };
 
     if (state.currentUser?.token) {
-      fetchAppointments();
       fetchUser();
     }
   }, [state.currentUser.token]);
@@ -79,7 +70,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
     const fetchLocations = async () => {
       try {
         const locationsWithDistances = await Promise.all(
-          allRequests.map(async (appointment) => {
+          appointmentArray.map(async (appointment) => {
             const loc = await FetchData.getLatAndLong(appointment.homeId);
             if (!loc) return null;
 
@@ -106,10 +97,10 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
       }
     };
 
-    if (allRequests.length > 0 && userLocation) {
+    if (appointmentArray.length > 0 && userLocation) {
       fetchLocations();
     }
-  }, [allRequests, userLocation]);
+  }, [appointmentArray, userLocation]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -162,9 +153,11 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
         });
     };
 
-    const selectedRequests = sortAppointments(processAppointments(allRequests));
+    const selectedRequests = sortAppointments(
+      processAppointments(appointmentArray)
+    );
     const selectedAppointments = sortAppointments(
-      processAppointments(allRequests)
+      processAppointments(appointmentArray)
     );
 
     setLoading(false);
@@ -183,10 +176,11 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
 
   useEffect(() => {
     if (dateSelectAppointments.length > 0) {
+      //fix this sorting function
       const sorted = [...dateSelectAppointments].sort((a, b) => {
-        if (sortOption === "dateOldest") {
+        if (sortOption === "worst") {
           sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
-        } else if (sortOption === "dateNewest") {
+        } else if (sortOption === "best") {
           sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
         }
         return 0;
@@ -229,14 +223,14 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
 
   const myAppointments = (date, id) => {
     const employeeId = String(id);
-    const appointments = allRequests.some(
+    const appointments = appointmentArray.some(
       (appointment) => appointment.date === date.dateString
     );
     return appointments;
   };
 
   const numberOfAppointmentsOnDate = (date) => {
-    const requested = allRequests.filter(
+    const requested = appointmentArray.filter(
       (appointment) => appointment.date === date.dateString
     ).length;
     let total = requested;
@@ -251,7 +245,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
 
   const renderDay = useCallback(
     ({ date }) => {
-      if (!allRequests.length) return <View />;
+      if (!appointmentArray.length) return <View />;
       if (!userId) return <View />;
       const selectedStyle = {
         justifyContent: "center",
@@ -265,7 +259,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
       const hasAppStyle = {
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "green",
+        backgroundColor: "#28A745",
         borderRadius: 25,
         paddingVertical: 10,
         paddingHorizontal: 18,
@@ -323,7 +317,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
         </>
       );
     },
-    [allRequests, userId]
+    [appointmentArray, userId]
   );
   return (
     <>
@@ -413,20 +407,12 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
               onValueChange={(itemValue) => setSortOption(itemValue)}
             >
               <Picker.Item
-                label="Sort by: Distance (Closest)"
-                value="distanceClosest"
+                label="Sort by: Rating (Worst to best"
+                value="worst"
               />
               <Picker.Item
-                label="Sort by: Distance (Furthest)"
-                value="distanceFurthest"
-              />
-              <Picker.Item
-                label="Sort by: Price (Low to High)"
-                value="priceLow"
-              />
-              <Picker.Item
-                label="Sort by: Price (High to Low)"
-                value="priceHigh"
+                label="Sort by: Rating (Best to Worst)"
+                value="best"
               />
             </Picker>
           </View>
@@ -441,9 +427,9 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
             <View
               style={
                 dateSelectAppointments.requests.length === 1
-                  ? { flex: 0.5 }
+                  ? { flex: 1 }
                   : dateSelectAppointments.appointments.length === 1
-                    ? { flex: 0.5 }
+                    ? { flex: 1 }
                     : { flex: 1 }
               }
             >
@@ -454,8 +440,9 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                   </Text>
                   {dateSelectAppointments.requests.map((appointment) => (
                     <View key={appointment.id}>
-                      <RequestedTile
+                      <RequestResponseTile
                         id={appointment.id}
+                        state={state}
                         cleanerId={userId}
                         date={appointment.date}
                         price={appointment.price}
@@ -467,51 +454,40 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
                         keyPadCode={appointment.keyPadCode}
                         keyLocation={appointment.keyLocation}
                         distance={appointment.distance}
-                        removeRequest={async (employeeId, appointmentId) => {
+                        approveRequest={async (employeeId, appointmentId) => {
                           try {
-                            await FetchData.removeRequest(
+                            dispatch({
+                              type: "UPDATE_REQUEST_STATUS",
+                              payload: {
+                                employeeId,
+                                appointmentId,
+                                status: "approved",
+                              },
+                            });
+                            await FetchData.approveRequest(
                               employeeId,
                               appointmentId
                             );
-
-                            setAllRequests((prevRequests) =>
-                              prevRequests.filter(
-                                (request) => request.id !== appointmentId
-                              )
-                            );
-
-                            const response = await FetchData.get(
-                              "/api/v1/users/appointments/employee",
-                              state.currentUser.token
-                            );
-                            setAllRequests(response.requested || []);
-
-                            setDateSelectAppointments((prevState) => {
-                              const updatedRequests = prevState.requests.filter(
-                                (appointment) =>
-                                  appointment.id !== appointmentId
-                              );
-
-                              return {
-                                ...prevState,
-                                requests: updatedRequests,
-                              };
-                            });
-
-                            setSelectedDates((prevDates) => {
-                              const newDates = { ...prevDates };
-                              const remainingRequests = allRequests.filter(
-                                (req) => req.date in newDates
-                              );
-
-                              if (remainingRequests.length === 0) {
-                                delete newDates[appointmentId];
-                              }
-
-                              return newDates;
-                            });
                           } catch (error) {
-                            console.error("Error removing request:", error);
+                            console.error("Error approving request:", error);
+                          }
+                        }}
+                        denyRequest={async (employeeId, appointmentId) => {
+                          try {
+                            dispatch({
+                              type: "UPDATE_REQUEST_STATUS",
+                              payload: {
+                                employeeId,
+                                appointmentId,
+                                status: "denied",
+                              },
+                            });
+                            await FetchData.denyRequest(
+                              employeeId,
+                              appointmentId
+                            );
+                          } catch (error) {
+                            console.error("Error denying request:", error);
                           }
                         }}
                       />

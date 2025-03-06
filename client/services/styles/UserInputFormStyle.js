@@ -107,7 +107,7 @@ const UserFormStyles = StyleSheet.create({
 	},
 
 	changeNotification: {
-		color: "green",
+		color: "#28A745",
 		fontSize: width > 500 ? 15 : 10,
 		fontWeight: "bold",
 		marginTop: 10,

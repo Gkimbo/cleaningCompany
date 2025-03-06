@@ -14,6 +14,7 @@ const RequestResponseTile = ({
   approveRequest,
   denyRequest,
   assigned,
+  undoRequest,
 }) => {
   const [expandWindow, setExpandWindow] = useState(false);
   const [home, setHome] = useState({
@@ -34,16 +35,35 @@ const RequestResponseTile = ({
     zipcode: "",
     cleanersNeeded: "",
   });
+
   const requestArray = useMemo(
     () => state.requests.map((request) => request.request) || [],
     [state]
   );
+
   const requestsForThisAppointment = requestArray.filter(
     (request) => request.appointmentId === id
   );
-  const employeeIds = requestsForThisAppointment.map(
-    (request) => request.employeeId
-  );
+
+  const employeeRequestMap = useMemo(() => {
+    const map = new Map();
+    requestsForThisAppointment.forEach((request) => {
+      map.set(Number(request.employeeId), {
+        status: request.status,
+        id: request.id,
+      });
+    });
+    return map;
+  }, [requestsForThisAppointment]);
+
+  const employeeStatusMap = useMemo(() => {
+    const map = new Map();
+    requestsForThisAppointment.forEach((request) => {
+      map.set(Number(request.employeeId), request.status);
+    });
+    return map;
+  }, [requestsForThisAppointment]);
+
   const employeeArray = useMemo(() => {
     if (!state.requests || state.requests.length === 0) {
       return [];
@@ -59,8 +79,9 @@ const RequestResponseTile = ({
   }, [state]);
 
   const matchingEmployees = employeeArray.filter((employee) =>
-    employeeIds.includes(employee.id)
+    employeeStatusMap.has(Number(employee.id))
   );
+
   const formatDate = (dateString) => {
     const date = new Date(dateString + "T00:00:00");
     const options = {
@@ -118,10 +139,13 @@ const RequestResponseTile = ({
             <View key={employee.id}>
               <EmployeeTile
                 id={employee.id}
+                appointmentId={id}
                 username={employee.username}
                 reviews={employee.reviews}
+                requestData={employeeRequestMap.get(Number(employee.id))}
                 approveRequest={approveRequest}
                 denyRequest={denyRequest}
+                undoRequest={undoRequest}
               />
             </View>
           ))}
@@ -156,61 +180,11 @@ const styles = StyleSheet.create({
     color: "#7F8C8D",
     textAlign: "center",
   },
-  distanceContainer: {
-    marginVertical: 12,
-  },
-  distanceText: {
-    fontSize: 12,
-    color: "#7F8C8D",
-    marginBottom: 4,
-  },
-  distanceValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#2C3E50",
-  },
-  distanceKm: {
-    fontSize: 14,
-    color: "#7F8C8D",
-  },
-  addressInfo: {
-    fontSize: 12,
-    color: "#95A5A6",
-    marginTop: 6,
-  },
-  unknownDistance: {
-    fontSize: 14,
-    color: "#95A5A6",
-    textAlign: "center",
-  },
   appointmentDetails: {
     fontSize: 16,
     fontWeight: "600",
     color: "#34495E",
     marginTop: 6,
-  },
-  largeHomeMessage: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#E74C3C",
-    marginTop: 12,
-  },
-  smallHomeMessage: {
-    fontSize: 14,
-    color: "#7F8C8D",
-  },
-  button: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 15,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
   },
 });
 

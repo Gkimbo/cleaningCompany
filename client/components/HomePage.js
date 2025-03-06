@@ -92,18 +92,19 @@ const HomePage = ({ state, dispatch }) => {
             });
           }
         ),
-        FetchData.get("/api/v1/appointments/my-requests", state.currentUser.token).then(
-          (response) => {
+          FetchData.get(
+            "/api/v1/appointments/my-requests",
+            state.currentUser.token
+          ).then((response) => {
             dispatch({
               type: "CLEANING_REQUESTS",
               payload: response.pendingRequestsEmployee,
             });
-          }
-        )
+          });
       }
     }
   }, []);
-  
+  console.log(state);
   let todaysAppointment = null;
   let nextAppointment = null;
   let foundToday = false;

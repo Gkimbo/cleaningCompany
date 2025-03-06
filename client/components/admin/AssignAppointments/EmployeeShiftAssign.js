@@ -36,7 +36,7 @@ const EmployeeShiftAssign = ({
         <Pressable
           style={{
             ...homePageStyles.button,
-            backgroundColor: "green",
+            backgroundColor: "#28A745",
             marginTop: 15,
           }}
           onPress={() => addEmployee(id, appointmentId)}

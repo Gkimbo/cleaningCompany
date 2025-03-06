@@ -105,7 +105,7 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
       const dayStyle = {
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: isAssigned ? "green" : "transparent",
+        backgroundColor: isAssigned ? "#28A745" : "transparent",
         borderRadius: 25,
         paddingVertical: 10,
         paddingHorizontal: 18,
