@@ -17,6 +17,7 @@ const CalendarComponent = ({
   setConfirmationModalVisible,
   sheets,
   towels,
+  timeToBeCompleted
 }) => {
   const [selectedDates, setSelectedDates] = useState({});
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -27,6 +28,15 @@ const CalendarComponent = ({
 
   const calculatePrice = () => {
     let price = 0;
+    if (timeToBeCompleted === "anytime") {
+      price += 0;
+    } else if (timeToBeCompleted === "10-3") {
+      price += 30;
+    } else if (timeToBeCompleted === "11-4") {
+      price += 30;
+    } else if (timeToBeCompleted === "12-2") {
+      price += 50;
+    }
     if (sheets === "yes") {
       price += 25;
     }

@@ -8,7 +8,6 @@ class ReviewSerializer {
 			}
 			return newReview;
 		});
-		console.log(serializedReviews)
 		return serializedReviews;
 	}
 }

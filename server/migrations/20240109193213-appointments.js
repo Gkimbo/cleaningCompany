@@ -72,6 +72,10 @@ module.exports = {
 				type: Sequelize.INTEGER,
 				allowNull: false,
 			},
+			timeToBeCompleted: {
+				type: Sequelize.STRING,
+				allowNull: false,
+			},
 			createdAt: {
 				type: Sequelize.DATE,
 				allowNull: false,

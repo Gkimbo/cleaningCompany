@@ -154,6 +154,7 @@ const HomeAppointmentTile = ({
           contact={contact}
           paid={appointment.paid}
           completed={appointment.completed}
+          timeToBeCompleted={appointment.timeToBeCompleted}
         />
       );
     }

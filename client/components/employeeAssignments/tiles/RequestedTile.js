@@ -16,6 +16,7 @@ const RequestedTile = ({
   removeRequest,
   assigned,
   distance,
+  timeToBeCompleted
 }) => {
   const navigate = useNavigate();
   const [expandWindow, setExpandWindow] = useState(false);

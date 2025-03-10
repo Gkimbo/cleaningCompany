@@ -191,7 +191,8 @@ appointmentRouter.post("/", async (req, res) => {
       date.bringSheets,
       date.bringTowels,
       home.dataValues.numBeds,
-      home.dataValues.numBaths
+      home.dataValues.numBaths,
+      home.dataValues.timeToBeCompleted
     );
     date.price = price;
     appointmentTotal += price;
@@ -217,7 +218,6 @@ appointmentRouter.post("/", async (req, res) => {
         const homeBeingScheduled = await UserHomes.findOne({
           where: { id: homeId },
         });
-        console.log(date.date);
         const newAppointment = await UserAppointments.create({
           userId,
           homeId,
@@ -231,6 +231,7 @@ appointmentRouter.post("/", async (req, res) => {
           completed: false,
           hasBeenAssigned: false,
           empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded,
+          timeToBeCompleted: homeBeingScheduled.dataValues.timeToBeCompleted,
         });
         const appointmentId = newAppointment.dataValues.id;
 
@@ -484,12 +485,10 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
 
 appointmentRouter.patch("/approve-request", async (req, res) => {
   const { requestId, approve } = req.body;
-  console.log(requestId);
   try {
     const request = await UserPendingRequests.findOne({
       where: { id: requestId },
     });
-    console.log("Request: ", request);
     if (!request) {
       return res.status(404).json({ error: "Request not found" });
     }
@@ -688,7 +687,6 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
         clientUserName,
         appointmentDate
       );
-      console.log("UNDO (Employee has been removed)");
       return res.status(200).json({ message: "Request update" });
     } else {
       const appointment = await UserAppointments.findByPk(
@@ -778,10 +776,23 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
 // });
 
 appointmentRouter.patch("/:id", async (req, res) => {
-  const { id, bringTowels, bringSheets, keyPadCode, keyLocation } = req.body;
+  const {
+    id,
+    bringTowels,
+    bringSheets,
+    keyPadCode,
+    keyLocation,
+    timeToBeCompleted,
+  } = req.body;
   let userInfo;
 
   try {
+    if (timeToBeCompleted) {
+      userInfo = await UserInfo.editTimeInDB({
+        id,
+        timeToBeCompleted,
+      });
+    }
     if (bringSheets) {
       userInfo = await UserInfo.editSheetsInDB({
         id,

@@ -19,6 +19,7 @@ class HomeSerializer {
 			"contact",
 			"specialNotes",
 			"cleanersNeeded",
+			"timeToBeCompleted"
 		];
 		const serializedHome = homeArray.map((home) => {
 			const newHome = {};

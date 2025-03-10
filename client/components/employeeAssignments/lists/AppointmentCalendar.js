@@ -548,6 +548,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                         keyPadCode={appointment.keyPadCode}
                         keyLocation={appointment.keyLocation}
                         distance={appointment.distance}
+                        timeToBeCompleted={appointment.timeToBeCompleted}
                         removeRequest={async (employeeId, appointmentId) => {
                           try {
                             await FetchData.removeRequest(
