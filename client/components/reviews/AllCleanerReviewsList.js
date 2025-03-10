@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Pressable, View, Text, ScrollView, Dimensions } from "react-native";
+import { Pressable, View, Text, Dimensions } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
 import topBarStyles from "../../services/styles/TopBarStyles";
 import ReviewTile from "./ReviewTile";
-import Review from "../../services/fetchRequests/ReviewClass";
 import { useParams } from "react-router-native";
 
 const AllCleanerReviewsList = ({ state, dispatch }) => {
@@ -108,14 +107,14 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
       style={{
         ...homePageStyles.container,
         flexDirection: "column",
-        marginTop: 0,
+        marginTop: "30%",
       }}
     >
       <View
         style={{
           alignItems: "center",
           paddingHorizontal: 16,
-          marginBottom: "20%",
+          marginBottom: "10%",
         }}
       >
         <Text
