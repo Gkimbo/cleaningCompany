@@ -82,6 +82,10 @@ module.exports = {
 				type: Sequelize.STRING,
 				allowNull: true,
 			},
+			timeToBeCompleted: {
+				type: Sequelize.STRING,
+				allowNull: false,
+			},
 			createdAt: {
 				type: Sequelize.DATE,
 				allowNull: false,

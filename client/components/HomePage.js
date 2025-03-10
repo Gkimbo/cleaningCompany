@@ -104,7 +104,7 @@ const HomePage = ({ state, dispatch }) => {
       }
     }
   }, []);
-  console.log(state);
+
   let todaysAppointment = null;
   let nextAppointment = null;
   let foundToday = false;
@@ -248,7 +248,6 @@ const HomePage = ({ state, dispatch }) => {
           style={{
             ...homePageStyles.container,
             flexDirection: "column",
-            marginTop: 100,
           }}
         >
           {todaysAppointment}

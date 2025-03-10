@@ -293,6 +293,7 @@ const SelectNewJobList = ({ state }) => {
                 keyPadCode={appointment.keyPadCode}
                 keyLocation={appointment.keyLocation}
                 distance={appointment.distance}
+                timeToBeCompleted={appointment.timeToBeCompleted}
                 assigned={
                   appointment.employeesAssigned?.includes(String(userId)) ||
                   false

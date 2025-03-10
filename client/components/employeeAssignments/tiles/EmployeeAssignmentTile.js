@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, Text, View, LayoutAnimation } from "react-native";
 import { useNavigate } from "react-router-native";
-import homePageStyles from "../../../services/styles/HomePageStyles";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import { StyleSheet } from "react-native";
 
@@ -20,6 +19,7 @@ const EmployeeAssignmentTile = ({
   removeEmployee,
   assigned,
   distance,
+  timeToBeCompleted
 }) => {
   const navigate = useNavigate();
   const [expandWindow, setExpandWindow] = useState(false);

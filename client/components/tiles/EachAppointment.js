@@ -25,6 +25,7 @@ const EachAppointment = ({
   contact,
   paid,
   completed,
+  timeToBeCompleted,
 }) => {
   const [code, setCode] = useState("");
   const [key, setKeyLocation] = useState("");
@@ -166,9 +167,36 @@ const EachAppointment = ({
               This can be changed by editing your home.
             </Text>
           </View>
+          <Text style={UserFormStyles.smallTitle}>Time of cleaning:</Text>
+          <Text
+            style={{
+              ...UserFormStyles.radioButtonContainer,
+              justifyContent: "center",
+              alignItems: "center",
+              textAlign: "center",
+              paddingTop: 10,
+              paddingBottom: 10,
+              paddingLeft: 5,
+              paddingRight: 5,
+            }}
+          >
+            {`${
+              timeToBeCompleted === "anytime"
+                ? ` Anytime on ${formatDate(date)}`
+                : timeToBeCompleted === "10-3"
+                  ? ` 10am to 3pm on ${formatDate(date)}`
+                  : timeToBeCompleted === "11-4"
+                    ? ` 11am to 4pm on ${formatDate(date)}`
+                    : timeToBeCompleted === "12-2"
+                      ? ` 12pm to 2pm on ${formatDate(date)}`
+                      : null
+            }`}
+          </Text>
+
           <Text style={UserFormStyles.smallTitle}>
             Cleaner is bringing sheets:
           </Text>
+
           {isDisabled ? (
             <View
               style={{

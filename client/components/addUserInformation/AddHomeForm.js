@@ -30,6 +30,7 @@ const UserHomeInfoForm = () => {
       trashLocation: "",
       contact: "",
       specialNotes: "",
+      timeToBeCompleted: "",
     },
   });
   const [key, setKey] = useState("code");
@@ -205,6 +206,16 @@ const UserHomeInfoForm = () => {
     }));
   };
 
+  const handleTimeToComplete = (unit) => {
+    setUserHomeInfoForm((prevState) => ({
+      ...prevState,
+      home: {
+        ...prevState.home,
+        timeToBeCompleted: unit,
+      },
+    }));
+  };
+
   const handleSheetsProvided = (unit) => {
     setUserHomeInfoForm((prevState) => ({
       ...prevState,
@@ -214,6 +225,7 @@ const UserHomeInfoForm = () => {
       },
     }));
   };
+
   const handleTowelsProvided = (unit) => {
     setUserHomeInfoForm((prevState) => ({
       ...prevState,
@@ -327,6 +339,10 @@ const UserHomeInfoForm = () => {
       setError(
         "Please provide instructions on how to get into the property with either a key or a code"
       );
+      return;
+    }
+    if (!userHomeInfo.home.timeToBeCompleted) {
+      setError("Please specify when you need the cleaner to clean.");
       return;
     }
     setError(null);
@@ -447,6 +463,35 @@ const UserHomeInfoForm = () => {
             >
               baths
             </Text>
+          </View>
+          <Text style={UserFormStyles.smallTitle}>
+            What time do you need the home to be cleaned?
+          </Text>
+          <View style={{...UserFormStyles.radioButtonContainer, flexDirection: "column", }}>
+            <View>
+              <RadioButton.Group
+                onValueChange={handleTimeToComplete}
+                value={userHomeInfo.home.timeToBeCompleted}
+              >
+                <RadioButton.Item label="Anytime" value="anytime" />
+              </RadioButton.Group>
+            </View>
+            <View>
+              <RadioButton.Group
+                onValueChange={handleTimeToComplete}
+                value={userHomeInfo.home.timeToBeCompleted}
+              >
+                <RadioButton.Item label="Between 10am and 3pm" value="10-3" />
+              </RadioButton.Group>
+            </View>
+            <View>
+              <RadioButton.Group
+                onValueChange={handleTimeToComplete}
+                value={userHomeInfo.home.timeToBeCompleted}
+              >
+                <RadioButton.Item label="Between 11am and 4pm" value="11-4" />
+              </RadioButton.Group>
+            </View>
           </View>
           <Text style={UserFormStyles.smallTitle}>
             Do you need us to bring sheets?

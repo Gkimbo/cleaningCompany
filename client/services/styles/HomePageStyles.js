@@ -7,7 +7,16 @@ const homePageStyles = StyleSheet.create({
 		flex: 1,
 		flexDirection: "row",
 		justifyContent: "center",
-		marginTop: 120,
+		marginTop:
+			width > 600
+				? "10%"
+				: width > 540
+					? "15%"
+					: width > 440
+						? "20%"
+						: width > 340
+							? "25%"
+							: "30%",
 	},
 	title: {
 		alignSelf: "center",

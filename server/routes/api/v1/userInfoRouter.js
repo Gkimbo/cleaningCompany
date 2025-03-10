@@ -63,6 +63,7 @@ userInfoRouter.post("/home", async (req, res) => {
 		trashLocation,
 		contact,
 		specialNotes,
+		timeToBeCompleted
 	} = req.body.home;
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
@@ -116,6 +117,7 @@ userInfoRouter.post("/home", async (req, res) => {
 			contact,
 			specialNotes,
 			cleanersNeeded,
+			timeToBeCompleted
 		});
 
 		return res.status(201).json({ user });
@@ -144,6 +146,7 @@ userInfoRouter.patch("/home", async (req, res) => {
 		trashLocation,
 		contact,
 		specialNotes,
+		timeToBeCompleted
 	} = req.body;
 
 	try {
@@ -192,6 +195,7 @@ userInfoRouter.patch("/home", async (req, res) => {
 			contact,
 			specialNotes,
 			cleanersNeeded,
+			timeToBeCompleted
 		});
 
 		return res.status(200).json({ user: userInfo });
@@ -225,6 +229,7 @@ userInfoRouter.delete("/home", async (req, res) => {
 				userId: homeToDelete[0].dataValues.userId,
 			},
 		});
+		
 		const oldAppt = Number(billToUpdate.dataValues.appointmentDue);
 		const total =
 			Number(billToUpdate.dataValues.cancellationFee) +

@@ -111,7 +111,7 @@ const CleaningRequestList = ({ state, dispatch }) => {
   const pressedSeeCalender = () => {
     setSeeCalender(true);
   };
-  console.log("Appontment array", appointmentArray);
+
   const sortedRequests = useMemo(() => {
     if (appointmentArray.length === 0) {
       // Fix: Properly check for an empty array
@@ -146,7 +146,7 @@ const CleaningRequestList = ({ state, dispatch }) => {
 
     return sorted;
   }, [appointmentArray, userLocation, appointmentLocations, sortOption]);
-  console.log(sortedRequests);
+  
   return (
     <View
       style={{

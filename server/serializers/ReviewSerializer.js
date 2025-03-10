@@ -1,6 +1,6 @@
 class ReviewSerializer {
 	static serializeArray(reviewArray) {
-		const allowedAttributes = ["id", "userId", "reviewerId", "appointmentId", "rating", "comment", "createdAt"];
+		const allowedAttributes = ["id", "userId", "reviewerId", "appointmentId", "review", "reviewComment", "createdAt"];
 		const serializedReviews = reviewArray.map((review) => {
 			const newReview = {};
 			for (const attribute of allowedAttributes) {
