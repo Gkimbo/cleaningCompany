@@ -248,7 +248,6 @@ const HomePage = ({ state, dispatch }) => {
           style={{
             ...homePageStyles.container,
             flexDirection: "column",
-            marginTop: 100,
           }}
         >
           {todaysAppointment}

@@ -25,7 +25,7 @@ const AllReviewsList = ({ state, dispatch }) => {
   const getAverageRating = () => {
     if (allReviews.length === 0) return 0;
     const totalRating = allReviews.reduce(
-      (sum, review) => sum + review.rating,
+      (sum, review) => sum + review.review,
       0
     );
     return totalRating / allReviews.length;
@@ -79,8 +79,8 @@ const AllReviewsList = ({ state, dispatch }) => {
           userId={review.userId}
           reviewerId={review.reviewerId}
           appointmentId={review.appointmentId}
-          rating={review.rating}
-          comment={review.comment}
+          rating={review.review}
+          comment={review.reviewComment}
           createdAt={review.createdAt}
         />
       </View>
@@ -92,10 +92,10 @@ const AllReviewsList = ({ state, dispatch }) => {
       style={{
         ...homePageStyles.container,
         flexDirection: "column",
-        marginTop: 0
+        marginTop: "30%"
       }}
     >
-         <View style={{ alignItems: "center", paddingHorizontal: 16 , marginBottom: "20%"}}>
+         <View style={{ alignItems: "center", paddingHorizontal: 16 , marginBottom: "10%"}}>
           <Text
             style={{
               fontSize: 18,
