@@ -80,10 +80,9 @@ const SelectNewJobList = ({ state }) => {
           allRequests.map(async (appointment) => {
             const response = await FetchData.getLatAndLong(appointment.homeId);
             return { [appointment.homeId]: response };
-          }),
+          })
         );
         setAppointmentLocations(Object.assign({}, ...locations));
-        
       } catch (error) {
         console.error("Error fetching appointment locations:", error);
       }
@@ -276,7 +275,6 @@ const SelectNewJobList = ({ state }) => {
           style={{ marginTop: 20 }}
         />
       ) : (
-        
         <View style={{ flex: 1 }}>
           {sortedAppointments.map((appointment) => (
             <View key={appointment.id}>
@@ -300,17 +298,23 @@ const SelectNewJobList = ({ state }) => {
                 }
                 addEmployee={async (employeeId, appointmentId) => {
                   try {
-                    const response = await FetchData.addEmployee(employeeId, appointmentId);
-                
+                    const response = await FetchData.addEmployee(
+                      employeeId,
+                      appointmentId
+                    );
+
                     setAllAppointments((prevAppointments) => {
                       const assignedAppointment = prevAppointments.find(
                         (appointment) => appointment.id === appointmentId
                       );
-                
-                      if (!assignedAppointment) return prevAppointments; 
-                
-                      setAllRequests((prevRequests) => [...prevRequests, assignedAppointment]);
-                
+
+                      if (!assignedAppointment) return prevAppointments;
+
+                      setAllRequests((prevRequests) => [
+                        ...prevRequests,
+                        assignedAppointment,
+                      ]);
+
                       return prevAppointments.filter(
                         (appointment) => appointment.id !== appointmentId
                       );
@@ -319,7 +323,6 @@ const SelectNewJobList = ({ state }) => {
                     console.error("Error adding employee:", error);
                   }
                 }}
-                
                 removeEmployee={async (employeeId, appointmentId) => {
                   try {
                     await FetchData.removeEmployee(employeeId, appointmentId);
@@ -361,12 +364,12 @@ const SelectNewJobList = ({ state }) => {
                 removeRequest={async (employeeId, appointmentId) => {
                   try {
                     await FetchData.removeRequest(employeeId, appointmentId);
-                
+
                     setAllRequests((prevRequests) => {
                       const removedAppointment = prevRequests.find(
                         (appointment) => appointment.id === appointmentId
                       );
-                
+
                       if (!removedAppointment) return prevRequests;
 
                       setAllAppointments((prevAppointments) => [
@@ -374,12 +377,14 @@ const SelectNewJobList = ({ state }) => {
                         removedAppointment,
                       ]);
 
-                      return prevRequests.filter((appointment) => appointment.id !== appointmentId);
+                      return prevRequests.filter(
+                        (appointment) => appointment.id !== appointmentId
+                      );
                     });
                   } catch (error) {
                     console.error("Error removing request:", error);
                   }
-                }}                
+                }}
               />
             </View>
           ))}

@@ -180,6 +180,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
           removeEmployee={removeEmployee}
           assigned={isAssigned}
           distance={appointment.distance}
+          timeToBeCompleted={appointment.timeToBeCompleted}
         />
       </View>
     );

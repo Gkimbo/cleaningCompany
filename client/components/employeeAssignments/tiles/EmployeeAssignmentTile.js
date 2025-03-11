@@ -19,7 +19,7 @@ const EmployeeAssignmentTile = ({
   removeEmployee,
   assigned,
   distance,
-  timeToBeCompleted
+  timeToBeCompleted,
 }) => {
   const navigate = useNavigate();
   const [expandWindow, setExpandWindow] = useState(false);
@@ -44,16 +44,15 @@ const EmployeeAssignmentTile = ({
 
   const amount = Number(price) * 0.9;
   const formatDate = (dateString) => {
-  const date = new Date(dateString + "T00:00:00"); 
-  const options = {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    const date = new Date(dateString + "T00:00:00");
+    const options = {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    };
+    return date.toLocaleDateString(undefined, options);
   };
-  return date.toLocaleDateString(undefined, options);
-};
-
 
   const expandDetails = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -73,14 +72,31 @@ const EmployeeAssignmentTile = ({
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
   const kilometers = distance ? distance.toFixed(1) : null;
+  const timeOptions = {
+    anytime: "anytime",
+    "10-3": "Between 10am and 3pm",
+    "11-4": "Between 11am and 4pm",
+    "12-2": "Between 12pm and 2pm",
+  };
+
+  const formattedTime = timeOptions[timeToBeCompleted] || null;
 
   return (
     <View style={styles.homeTileContainer}>
       <Pressable onPress={expandWindow ? contractDetails : expandDetails}>
         <Text style={styles.appointmentDate}>{formatDate(date)}</Text>
+        {formattedTime && (
+          <View style={styles.timeContainer}>
+            <Text style={styles.timeLabel}>Time to complete:</Text>
+            <Text style={styles.timeText}>{`${formattedTime} on ${formatDate(
+              date
+            )}`}</Text>
+          </View>
+        )}
         <Text style={{ ...styles.appointmentDate, fontSize: 15 }}>
           {`You could make $${amount} cleaning this home`}
         </Text>
+        
         <Text style={styles.appointmentPrice}>{home.city}</Text>
         <Text style={styles.appointmentPrice}>
           {home.state}, {home.zipcode}
@@ -88,7 +104,9 @@ const EmployeeAssignmentTile = ({
         <View style={styles.distanceContainer}>
           {distance !== null ? (
             <>
-              <Text style={styles.distanceText}>Distance to the center of town:</Text>
+              <Text style={styles.distanceText}>
+                Distance to the center of town:
+              </Text>
               <Text style={styles.distanceValue}>
                 {miles} mi{" "}
                 <Text style={styles.distanceKm}>({kilometers} km)</Text>
@@ -104,17 +122,27 @@ const EmployeeAssignmentTile = ({
 
         {(expandWindow || assigned) && (
           <>
-            <Text style={styles.appointmentDetails}>Number of Beds: {home.numBeds}</Text>
-            <Text style={styles.appointmentDetails}>Number of Bathrooms: {home.numBaths}</Text>
-            <Text style={styles.appointmentDetails}>Sheets are needed: {bringSheets}</Text>
-            <Text style={styles.appointmentDetails}>Towels are needed: {bringTowels}</Text>
+            <Text style={styles.appointmentDetails}>
+              Number of Beds: {home.numBeds}
+            </Text>
+            <Text style={styles.appointmentDetails}>
+              Number of Bathrooms: {home.numBaths}
+            </Text>
+            <Text style={styles.appointmentDetails}>
+              Sheets are needed: {bringSheets}
+            </Text>
+            <Text style={styles.appointmentDetails}>
+              Towels are needed: {bringTowels}
+            </Text>
             {home.cleanersNeeded > 1 && (
               <>
                 <Text style={styles.largeHomeMessage}>
-                  This is a larger home. You may need more people to clean it in a timely manner.
+                  This is a larger home. You may need more people to clean it in
+                  a timely manner.
                 </Text>
                 <Text style={styles.smallHomeMessage}>
-                  If you don’t think you can complete it, please choose a smaller home!
+                  If you don’t think you can complete it, please choose a
+                  smaller home!
                 </Text>
               </>
             )}
@@ -127,7 +155,9 @@ const EmployeeAssignmentTile = ({
           style={[styles.button, { backgroundColor: "#E74C3C" }]}
           onPress={() => removeEmployee(cleanerId, id)}
         >
-          <Text style={styles.buttonText}>I no longer want to clean this home!</Text>
+          <Text style={styles.buttonText}>
+            I no longer want to clean this home!
+          </Text>
         </Pressable>
       ) : (
         <Pressable
@@ -221,6 +251,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
+  },
+  timeContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginVertical: 15,
+  },
+  timeLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#444",
+    marginBottom: 5,
+  },
+  timeText: {
+    fontSize: 14,
+    color: "#333",
+    opacity: 0.8, 
   },
 });
 

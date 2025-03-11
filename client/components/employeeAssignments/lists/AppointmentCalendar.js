@@ -310,101 +310,68 @@ const AppointmentCalendar = ({ state, dispatch }) => {
 
   const renderDay = useCallback(
     ({ date }) => {
-      if (!allAppointments.length) return <View />;
-      if (!userId) return <View />;
-      const selectedStyle = {
+      if (!allAppointments.length || !userId) return <View />;
+
+      const appointmentsOnDate = numberOfAppointmentsOnDate(date);
+      const isDisabled = isDateDisabled(date);
+      const hasMyAppointments = myAppointments(date, userId);
+      const isAvailable = areAppointmentsAvailable(date);
+      const isSelected = !!selectedDates[date.dateString];
+
+      const commonStyle = {
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#3498db",
         borderRadius: 25,
         paddingVertical: 10,
         paddingHorizontal: 18,
       };
 
-      const hasAppStyle = {
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#28A745",
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-      };
+      if (isDatePastAndNotPaid(date)) {
+        return (
+          <Pressable
+            style={{ ...commonStyle, backgroundColor: "#3498db" }}
+            onPress={handleRedirectToBill}
+          >
+            <Text>{date.day}</Text>
+            <Text style={{ fontSize: 12, color: "black" }}>
+              {appointmentsOnDate}
+            </Text>
+          </Pressable>
+        );
+      }
 
-      const dayStyle = {
-        justifyContent: "center",
-        alignItems: "center",
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-        opacity: isDateDisabled(date) ? 0.5 : 1,
-      };
-
-      const pastDate = {
-        backgroundColor: "#3498db",
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-      };
-
-      const selectedPriceStyle = {
-        fontSize: 12,
-        color: "black",
-      };
-
-      const priceStyle = {
-        fontSize: 12,
-        color: "gray",
-      };
+      if (isDisabled || !appointmentsOnDate) {
+        return (
+          <View style={{ ...commonStyle, opacity: 0.5 }}>
+            <Text>{date.day}</Text>
+          </View>
+        );
+      }
 
       return (
-        <>
-          {isDatePastAndNotPaid(date) ? (
-            <Pressable style={pastDate} onPress={() => handleRedirectToBill()}>
-              <Text>{date.day}</Text>
-              <Text style={selectedPriceStyle}>
-                {numberOfAppointmentsOnDate(date)}
-              </Text>
-            </Pressable>
-          ) : isDateDisabled(date) ? (
-            <View style={dayStyle}>
-              <Text>{date.day}</Text>
-            </View>
-          ) : myAppointments(date, userId) ? (
-            <Pressable
-              style={hasAppStyle}
-              onPress={() => setSelectedDate(date)}
-            >
-              <Text>{date.day}</Text>
-              <Text style={selectedPriceStyle}>
-                {numberOfAppointmentsOnDate(date)}
-              </Text>
-            </Pressable>
-          ) : areAppointmentsAvailable(date) ? (
-            <Pressable
-              style={selectedStyle}
-              onPress={() => setSelectedDate(date)}
-            >
-              <Text>{date.day}</Text>
-              <Text style={selectedPriceStyle}>
-                {numberOfAppointmentsOnDate(date)}
-              </Text>
-            </Pressable>
-          ) : selectedDates[date.dateString] ? (
-            <Pressable
-              style={selectedStyle}
-              onPress={() => handleDateSelect(date)}
-            >
-              <Text>{date.day}</Text>
-            </Pressable>
-          ) : (
-            <Pressable style={dayStyle} onPress={() => handleDateSelect(date)}>
-              <Text>{date.day}</Text>
-            </Pressable>
+        <Pressable
+          style={{
+            ...commonStyle,
+            backgroundColor: hasMyAppointments
+              ? "#28A745"
+              : isAvailable || isSelected
+                ? "#3498db"
+                : "transparent",
+          }}
+          onPress={() => setSelectedDate(date)}
+        >
+          <Text>{date.day}</Text>
+          {appointmentsOnDate > 0 && (
+            <Text style={{ fontSize: 12, color: "black" }}>
+              {appointmentsOnDate}
+            </Text>
           )}
-        </>
+        </Pressable>
       );
     },
-    [allAppointments, userId]
+    [allAppointments, userId, selectedDates]
   );
+
   return (
     <>
       <View
@@ -520,13 +487,16 @@ const AppointmentCalendar = ({ state, dispatch }) => {
             />
           ) : (
             <View
-              style={
-                dateSelectAppointments.requests.length === 1
-                  ? { flex: 0.5 }
-                  : dateSelectAppointments.appointments.length === 1
-                    ? { flex: 0.5 }
-                    : { flex: 1 }
-              }
+              style={{
+                flex:
+                  dateSelectAppointments?.requests?.length === 1 &&
+                  dateSelectAppointments?.appointments?.length === 1
+                    ? 1.25 // Adjust this value if it's too small
+                    : dateSelectAppointments?.requests?.length === 1 ||
+                        dateSelectAppointments?.appointments?.length === 1
+                      ? 0.5 // A balanced middle ground
+                      : 1.25,
+              }}
             >
               {dateSelectAppointments.requests.length > 0 && (
                 <View>
@@ -607,6 +577,7 @@ const AppointmentCalendar = ({ state, dispatch }) => {
                         keyPadCode={appointment.keyPadCode}
                         keyLocation={appointment.keyLocation}
                         distance={appointment.distance}
+                        timeToBeCompleted={appointment.timeToBeCompleted}
                         assigned={
                           appointment.employeesAssigned?.includes(
                             String(userId)
