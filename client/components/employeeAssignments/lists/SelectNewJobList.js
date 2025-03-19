@@ -130,7 +130,7 @@ const SelectNewJobList = ({ state }) => {
 
   const sortedData = useMemo(() => {
     const processAppointments = (appointments, isRequest = false) => {
-      return appointments.map((appointment) => {
+      return appointments.map((appointment, index) => {
         let distance = null;
   
         if (
@@ -148,14 +148,14 @@ const SelectNewJobList = ({ state }) => {
           setLoading(false);
         }
   
-        return { ...appointment, distance, isRequest };
+        return { ...appointment, distance, isRequest, originalIndex: index };
       });
     };
   
-    let combined = [
-      ...processAppointments(allAppointments, false),
-      ...processAppointments(allRequests, true),
-    ];
+    const processedAppointments = processAppointments(allAppointments, false);
+    const processedRequests = processAppointments(allRequests, true);
+  
+    let combined = [...processedAppointments, ...processedRequests];
   
     if (sortOption === "distanceClosest") {
       combined.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
@@ -166,6 +166,28 @@ const SelectNewJobList = ({ state }) => {
     } else if (sortOption === "priceHigh") {
       combined.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
     }
+  
+    // Ensure stable sorting by maintaining original order in case of equal values
+    combined = combined.sort((a, b) => {
+      if (
+        sortOption === "distanceClosest" ||
+        sortOption === "distanceFurthest" ||
+        sortOption === "priceLow" ||
+        sortOption === "priceHigh"
+      ) {
+        const primarySort =
+          (sortOption === "distanceClosest" && (a.distance || Infinity) - (b.distance || Infinity)) ||
+          (sortOption === "distanceFurthest" && (b.distance || 0) - (a.distance || 0)) ||
+          (sortOption === "priceLow" && (Number(a.price) || 0) - (Number(b.price) || 0)) ||
+          (sortOption === "priceHigh" && (Number(b.price) || 0) - (Number(a.price) || 0));
+        
+        if (primarySort === 0) {
+          return a.originalIndex - b.originalIndex; // Maintain original order
+        }
+        return primarySort;
+      }
+      return 0;
+    });
   
     return combined;
   }, [allAppointments, allRequests, userLocation, appointmentLocations, sortOption]);
