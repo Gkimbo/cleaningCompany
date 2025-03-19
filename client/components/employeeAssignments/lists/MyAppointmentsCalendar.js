@@ -253,6 +253,7 @@ const MyAppointmentsCalendar = ({ state, dispatch }) => {
                     date={appointment.date}
                     price={appointment.price}
                     homeId={appointment.homeId}
+                    timeToBeCompleted={appointment.timeToBeCompleted}
                     assigned={
                       appointment.employeesAssigned?.includes(String(userId)) ||
                       false

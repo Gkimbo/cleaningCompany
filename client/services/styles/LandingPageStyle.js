@@ -1,7 +1,7 @@
 import { Dimensions, StyleSheet } from "react-native";
 // import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-const { height } = Dimensions.get("screen");
+const { height, width } = Dimensions.get("screen");
 const heightLogo = height * 0.28;
 const widthScreen = height * 0.45;
 
@@ -16,6 +16,15 @@ const LandingPageStyles = StyleSheet.create({
 		flex: 2,
 		justifyContent: "center",
 		alignItems: "center",
+		marginTop: width > 600
+			? "10%"
+			: width > 540
+				? "15%"
+				: width > 440
+					? "20%"
+					: width > 340
+						? "25%"
+						: "30%",
 	},
 	footer: {
 		flex: 1,

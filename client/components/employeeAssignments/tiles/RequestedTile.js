@@ -16,7 +16,7 @@ const RequestedTile = ({
   removeRequest,
   assigned,
   distance,
-  timeToBeCompleted
+  timeToBeCompleted,
 }) => {
   const navigate = useNavigate();
   const [expandWindow, setExpandWindow] = useState(false);
@@ -69,11 +69,27 @@ const RequestedTile = ({
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
   const kilometers = distance ? distance.toFixed(1) : null;
+  const timeOptions = {
+    anytime: "anytime",
+    "10-3": "Between 10am and 3pm",
+    "11-4": "Between 11am and 4pm",
+    "12-2": "Between 12pm and 2pm",
+  };
+
+  const formattedTime = timeOptions[timeToBeCompleted] || null;
 
   return (
     <View style={styles.homeTileContainer}>
       <Pressable onPress={expandWindow ? contractDetails : expandDetails}>
         <Text style={styles.appointmentDate}>{formatDate(date)}</Text>
+        {formattedTime && (
+          <View style={styles.timeContainer}>
+            <Text style={styles.timeLabel}>Time to complete:</Text>
+            <Text style={styles.timeText}>{`${formattedTime} on ${formatDate(
+              date
+            )}`}</Text>
+          </View>
+        )}
         <Text style={{ ...styles.appointmentDate, fontSize: 15 }}>
           {`You could make $${amount} cleaning this home`}
         </Text>
@@ -136,9 +152,7 @@ const RequestedTile = ({
         style={[styles.button, { backgroundColor: "#E74C3C" }]}
         onPress={() => removeRequest(cleanerId, id)}
       >
-        <Text style={styles.buttonText}>
-          Cancel Request!
-        </Text>
+        <Text style={styles.buttonText}>Cancel Request!</Text>
       </Pressable>
     </View>
   );
@@ -224,6 +238,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
+  },
+  timeContainer: {
+    alignItems: "center", 
+    justifyContent: "center",
+    marginVertical: 15, 
+  },
+  timeLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#444",
+    marginBottom: 5, 
+  },
+  timeText: {
+    fontSize: 14,
+    color: "#333",
+    opacity: 0.8, 
   },
 });
 

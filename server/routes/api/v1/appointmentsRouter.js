@@ -730,50 +730,50 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
   }
 });
 
-// appointmentRouter.patch("/remove-request", async (req, res) => {
-//   const { id, appointmentId } = req.body;
-//   try {
-//     const request = await UserPendingRequests.findOne({
-//       where: { appointmentId: Number(appointmentId), employeeId: Number(id) },
-//     });
+appointmentRouter.patch("/remove-request", async (req, res) => {
+  const { id, appointmentId } = req.body;
+  try {
+    const request = await UserPendingRequests.findOne({
+      where: { appointmentId: Number(appointmentId), employeeId: Number(id) },
+    });
 
-//     if (!request) {
-//       return res.status(404).json({ error: "Request not found" });
-//     }
+    if (!request) {
+      return res.status(404).json({ error: "Request not found" });
+    }
 
-//     const appointment = await UserAppointments.findByPk(Number(appointmentId));
-//     if (!appointment) {
-//       return res.status(404).json({ error: "Appointment not found" });
-//     }
+    const appointment = await UserAppointments.findByPk(Number(appointmentId));
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
 
-//     const client = await User.findByPk(appointment.dataValues.userId);
-//     if (!client) {
-//       return res.status(404).json({ error: "Client not found" });
-//     }
+    const client = await User.findByPk(appointment.dataValues.userId);
+    if (!client) {
+      return res.status(404).json({ error: "Client not found" });
+    }
 
-//     const cleaner = await User.findByPk(id);
-//     if (!cleaner) {
-//       return res.status(404).json({ error: "Cleaner not found" });
-//     }
+    const cleaner = await User.findByPk(id);
+    if (!cleaner) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
 
-//     const removedRequestData = request.get();
-//     await request.destroy();
+    const removedRequestData = request.get();
+    await request.destroy();
 
-//     await Email.removeRequestEmail(
-//       client.dataValues.email,
-//       client.dataValues.username,
-//       appointment.dataValues.date
-//     );
+    await Email.removeRequestEmail(
+      client.dataValues.email,
+      client.dataValues.username,
+      appointment.dataValues.date
+    );
 
-//     return res.status(200).json({
-//       message: "Request removed",
-//       removedRequest: removedRequestData,
-//     });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: "Server error" });
-//   }
-// });
+    return res.status(200).json({
+      message: "Request removed",
+      removedRequest: removedRequestData,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
 
 appointmentRouter.patch("/:id", async (req, res) => {
   const {

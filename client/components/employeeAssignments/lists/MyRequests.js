@@ -73,10 +73,9 @@ const MyRequests = ({ state }) => {
           allRequests.map(async (appointment) => {
             const response = await FetchData.getLatAndLong(appointment.homeId);
             return { [appointment.homeId]: response };
-          }),
+          })
         );
         setAppointmentLocations(Object.assign({}, ...locations));
-        
       } catch (error) {
         console.error("Error fetching appointment locations:", error);
       }
@@ -248,6 +247,7 @@ const MyRequests = ({ state }) => {
                 keyPadCode={appointment.keyPadCode}
                 keyLocation={appointment.keyLocation}
                 distance={appointment.distance}
+                timeToBeCompleted={appointment.timeToBeCompleted}
                 removeRequest={async (employeeId, appointmentId) => {
                   try {
                     await FetchData.removeRequest(employeeId, appointmentId);
@@ -256,12 +256,14 @@ const MyRequests = ({ state }) => {
                         (appointment) => appointment.id === appointmentId
                       );
                       if (!removedAppointment) return prevRequests;
-                      return prevRequests.filter((appointment) => appointment.id !== appointmentId);
+                      return prevRequests.filter(
+                        (appointment) => appointment.id !== appointmentId
+                      );
                     });
                   } catch (error) {
                     console.error("Error removing request:", error);
                   }
-                }}                
+                }}
               />
             </View>
           ))}
