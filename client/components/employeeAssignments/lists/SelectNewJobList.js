@@ -38,9 +38,22 @@ const SelectNewJobList = ({ state }) => {
   const [sortOption, setSortOption] = useState("distanceClosest");
   const [seeCalender, setSeeCalender] = useState(false);
   const [loading, setLoading] = useState(true);
+
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
+
+  const requestsAndAppointments = useMemo(() => {
+    const requestsWithFlag = allRequests.map((item) => ({
+      ...item,
+      isRequest: true,
+    }));
+    const appointmentsWithFlag = allAppointments.map((item) => ({
+      ...item,
+      isRequest: false,
+    }));
+    return [...requestsWithFlag, ...appointmentsWithFlag];
+  }, [allRequests, allAppointments]);
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -49,7 +62,6 @@ const SelectNewJobList = ({ state }) => {
           "/api/v1/users/appointments/employee",
           state.currentUser.token
         );
-        console.log(response)
         setAllAppointments(response.appointments || []);
         setAllRequests(response.requested || []);
       } catch (error) {
@@ -74,11 +86,7 @@ const SelectNewJobList = ({ state }) => {
     const fetchLocations = async () => {
       try {
         const locations = await Promise.all(
-          allAppointments.map(async (appointment) => {
-            const response = await FetchData.getLatAndLong(appointment.homeId);
-            return { [appointment.homeId]: response };
-          }),
-          allRequests.map(async (appointment) => {
+          [...allAppointments, ...allRequests].map(async (appointment) => {
             const response = await FetchData.getLatAndLong(appointment.homeId);
             return { [appointment.homeId]: response };
           })
@@ -89,10 +97,10 @@ const SelectNewJobList = ({ state }) => {
       }
     };
 
-    if (allAppointments.length > 0) {
+    if (allAppointments.length > 0 || allRequests.length > 0) {
       fetchLocations();
     }
-  }, [allAppointments]);
+  }, [allAppointments, allRequests]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -124,109 +132,62 @@ const SelectNewJobList = ({ state }) => {
     }
   }, [seeCalender]);
 
-  const pressedSeeCalender = () => {
-    setSeeCalender(true);
-  };
+  const pressedSeeCalender = () => setSeeCalender(true);
 
   const sortedData = useMemo(() => {
-    const processAppointments = (appointments, isRequest = false) => {
-      return appointments.map((appointment, index) => {
-        let distance = null;
-  
-        if (
-          userLocation &&
-          appointmentLocations &&
-          appointmentLocations[appointment.homeId]
-        ) {
-          const loc = appointmentLocations[appointment.homeId];
-          distance = haversineDistance(
-            userLocation.latitude,
-            userLocation.longitude,
-            loc.latitude,
-            loc.longitude
-          );
-          setLoading(false);
-        }
-  
-        return { ...appointment, distance, isRequest, originalIndex: index };
-      });
-    };
-  
-    const processedAppointments = processAppointments(allAppointments, false);
-    const processedRequests = processAppointments(allRequests, true);
-  
-    let combined = [...processedAppointments, ...processedRequests];
-  
-    if (sortOption === "distanceClosest") {
-      combined.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
-    } else if (sortOption === "distanceFurthest") {
-      combined.sort((a, b) => (b.distance || 0) - (a.distance || 0));
-    } else if (sortOption === "priceLow") {
-      combined.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
-    } else if (sortOption === "priceHigh") {
-      combined.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
-    }
-  
-    // Ensure stable sorting by maintaining original order in case of equal values
-    combined = combined.sort((a, b) => {
+    const processed = requestsAndAppointments.map((appointment) => {
+      let distance = null;
       if (
-        sortOption === "distanceClosest" ||
-        sortOption === "distanceFurthest" ||
-        sortOption === "priceLow" ||
-        sortOption === "priceHigh"
+        userLocation &&
+        appointmentLocations &&
+        appointmentLocations[appointment.homeId]
       ) {
-        const primarySort =
-          (sortOption === "distanceClosest" && (a.distance || Infinity) - (b.distance || Infinity)) ||
-          (sortOption === "distanceFurthest" && (b.distance || 0) - (a.distance || 0)) ||
-          (sortOption === "priceLow" && (Number(a.price) || 0) - (Number(b.price) || 0)) ||
-          (sortOption === "priceHigh" && (Number(b.price) || 0) - (Number(a.price) || 0));
-        
-        if (primarySort === 0) {
-          return a.originalIndex - b.originalIndex; // Maintain original order
-        }
-        return primarySort;
+        const loc = appointmentLocations[appointment.homeId];
+        distance = haversineDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          loc.latitude,
+          loc.longitude
+        );
       }
-      return 0;
+      return { ...appointment, distance };
     });
-  
-    return combined;
-  }, [allAppointments, allRequests, userLocation, appointmentLocations, sortOption]);
-  
+
+    const sortFn = {
+      distanceClosest: (a, b) =>
+        (a.distance ?? Infinity) - (b.distance ?? Infinity),
+      distanceFurthest: (a, b) =>
+        (b.distance ?? 0) - (a.distance ?? 0),
+      priceLow: (a, b) =>
+        (Number(a.price) || 0) - (Number(b.price) || 0),
+      priceHigh: (a, b) =>
+        (Number(b.price) || 0) - (Number(a.price) || 0),
+    };
+
+    const sorted = [...processed].sort((a, b) => {
+      const primary = sortFn[sortOption]?.(a, b) ?? 0;
+      if (primary === 0) {
+        return a.id > b.id ? 1 : -1; // Stable fallback using ID
+      }
+      return primary;
+    });
+
+    return sorted;
+  }, [requestsAndAppointments, userLocation, appointmentLocations, sortOption]);
+
   return (
-    <View
-      style={{
-        ...homePageStyles.container,
-        flexDirection: "column",
-        marginTop: "27%",
-      }}
-    >
-      <View
-        style={{
-          ...homePageStyles.backButtonSelectNewJobList,
-          flexDirection: "row",
-          justifyContent: "space-evenly",
-        }}
-      >
-        <Pressable
-          style={homePageStyles.backButtonForm}
-          onPress={() => navigate("/")}
-        >
-          <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-          >
+    <View style={{ ...homePageStyles.container, flexDirection: "column", marginTop: "27%" }}>
+      <View style={{ ...homePageStyles.backButtonSelectNewJobList, flexDirection: "row", justifyContent: "space-evenly" }}>
+        <Pressable style={homePageStyles.backButtonForm} onPress={() => navigate("/")}>
+          <View style={{ flexDirection: "row", alignItems: "center", padding: 10 }}>
             <Icon name="angle-left" size={iconSize} color="black" />
             <View style={{ marginLeft: 15 }}>
               <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
             </View>
           </View>
         </Pressable>
-        <Pressable
-          style={homePageStyles.backButtonForm}
-          onPress={pressedSeeCalender}
-        >
-          <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-          >
+        <Pressable style={homePageStyles.backButtonForm} onPress={pressedSeeCalender}>
+          <View style={{ flexDirection: "row", alignItems: "center", padding: 10 }}>
             <View style={{ marginRight: 15 }}>
               <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
             </View>
@@ -235,153 +196,85 @@ const SelectNewJobList = ({ state }) => {
         </Pressable>
       </View>
 
-      <View
-        style={{
-          margin: 10,
-          borderWidth: 1,
-          borderRadius: 5,
-          borderColor: "#ccc",
-        }}
-      >
-        <Picker
-          selectedValue={sortOption}
-          onValueChange={(itemValue) => setSortOption(itemValue)}
-        >
-          <Picker.Item
-            label="Sort by: Distance (Closest)"
-            value="distanceClosest"
-          />
-          <Picker.Item
-            label="Sort by: Distance (Furthest)"
-            value="distanceFurthest"
-          />
+      <View style={{ margin: 10, borderWidth: 1, borderRadius: 5, borderColor: "#ccc" }}>
+        <Picker selectedValue={sortOption} onValueChange={(itemValue) => setSortOption(itemValue)}>
+          <Picker.Item label="Sort by: Distance (Closest)" value="distanceClosest" />
+          <Picker.Item label="Sort by: Distance (Furthest)" value="distanceFurthest" />
           <Picker.Item label="Sort by: Price (Low to High)" value="priceLow" />
           <Picker.Item label="Sort by: Price (High to Low)" value="priceHigh" />
         </Picker>
       </View>
+
       {loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#0000ff"
-          style={{ marginTop: 20 }}
-        />
+        <ActivityIndicator size="large" color="#0000ff" style={{ marginTop: 20 }} />
       ) : (
-        <View style={{ flex: 1 }}>
+        <ScrollView>
           {sortedData.map((appointment) => (
             <View key={appointment.id}>
               {appointment.isRequest ? (
                 <RequestedTile
-                  id={appointment.id}
+                  {...appointment}
                   cleanerId={userId}
-                  date={appointment.date}
-                  price={appointment.price}
-                  homeId={appointment.homeId}
-                  hasBeenAssigned={appointment.hasBeenAssigned}
-                  bringSheets={appointment.bringSheets}
-                  bringTowels={appointment.bringTowels}
-                  completed={appointment.completed}
-                  keyPadCode={appointment.keyPadCode}
-                  keyLocation={appointment.keyLocation}
-                  distance={appointment.distance}
                   removeRequest={async (employeeId, appointmentId) => {
                     try {
                       await FetchData.removeRequest(employeeId, appointmentId);
-                      setAllRequests((prevRequests) => {
-                        const removedAppointment = prevRequests.find(
-                          (appointment) => appointment.id === appointmentId
-                        );
-      
-                        if (!removedAppointment) return prevRequests;
-      
-                        setAllAppointments((prevAppointments) => [
-                          ...prevAppointments,
-                          removedAppointment,
-                        ]);
-      
-                        return prevRequests.filter(
-                          (appointment) => appointment.id !== appointmentId
-                        );
+                      setAllRequests((prev) => {
+                        const removed = prev.find((a) => a.id === appointmentId);
+                        if (!removed) return prev;
+                        setAllAppointments((apps) => [...apps, removed]);
+                        return prev.filter((a) => a.id !== appointmentId);
                       });
-                    } catch (error) {
-                      console.error("Error removing request:", error);
+                    } catch (err) {
+                      console.error("Error removing request:", err);
                     }
                   }}
                 />
               ) : (
                 <EmployeeAssignmentTile
-                  id={appointment.id}
+                  {...appointment}
                   cleanerId={userId}
-                  date={appointment.date}
-                  price={appointment.price}
-                  homeId={appointment.homeId}
-                  hasBeenAssigned={appointment.hasBeenAssigned}
-                  bringSheets={appointment.bringSheets}
-                  bringTowels={appointment.bringTowels}
-                  completed={appointment.completed}
-                  keyPadCode={appointment.keyPadCode}
-                  keyLocation={appointment.keyLocation}
-                  distance={appointment.distance}
-                  timeToBeCompleted={appointment.timeToBeCompleted}
-                  assigned={
-                    appointment.employeesAssigned?.includes(String(userId)) ||
-                    false
-                  }
+                  assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
                   addEmployee={async (employeeId, appointmentId) => {
                     try {
-                      const response = await FetchData.addEmployee(
-                        employeeId,
-                        appointmentId
-                      );
-      
-                      setAllAppointments((prevAppointments) => {
-                        const assignedAppointment = prevAppointments.find(
-                          (appointment) => appointment.id === appointmentId
-                        );
-      
-                        if (!assignedAppointment) return prevAppointments;
-      
-                        setAllRequests((prevRequests) => [
-                          ...prevRequests,
-                          assignedAppointment,
-                        ]);
-      
-                        return prevAppointments.filter(
-                          (appointment) => appointment.id !== appointmentId
-                        );
+                      await FetchData.addEmployee(employeeId, appointmentId);
+                      setAllAppointments((prev) => {
+                        const assigned = prev.find((a) => a.id === appointmentId);
+                        if (!assigned) return prev;
+                        setAllRequests((reqs) => [...reqs, assigned]);
+                        return prev.filter((a) => a.id !== appointmentId);
                       });
-                    } catch (error) {
-                      console.error("Error adding employee:", error);
+                    } catch (err) {
+                      console.error("Error adding employee:", err);
                     }
                   }}
                   removeEmployee={async (employeeId, appointmentId) => {
                     try {
                       await FetchData.removeEmployee(employeeId, appointmentId);
-                      setAllAppointments((prevAppointments) =>
-                        prevAppointments.map((appointment) =>
-                          appointment.id === appointmentId
+                      setAllAppointments((prev) =>
+                        prev.map((a) =>
+                          a.id === appointmentId
                             ? {
-                                ...appointment,
-                                employeesAssigned:
-                                  appointment.employeesAssigned?.filter(
-                                    (id) => id !== String(employeeId)
-                                  ),
+                                ...a,
+                                employeesAssigned: a.employeesAssigned?.filter(
+                                  (id) => id !== String(employeeId)
+                                ),
                               }
-                            : appointment
+                            : a
                         )
                       );
-                    } catch (error) {
-                      console.error("Error removing employee:", error);
+                    } catch (err) {
+                      console.error("Error removing employee:", err);
                     }
                   }}
                 />
               )}
             </View>
           ))}
-        </View>
-      )
-      }
+        </ScrollView>
+      )}
     </View>
   );
 };
 
 export default SelectNewJobList;
+
