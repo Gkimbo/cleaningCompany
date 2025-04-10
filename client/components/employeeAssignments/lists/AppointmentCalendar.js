@@ -330,7 +330,6 @@ const AppointmentCalendar = ({ state, dispatch }) => {
         return (
           <Pressable
             style={{ ...commonStyle, backgroundColor: "#3498db" }}
-            onPress={handleRedirectToBill}
           >
             <Text>{date.day}</Text>
             <Text style={{ fontSize: 12, color: "black" }}>
