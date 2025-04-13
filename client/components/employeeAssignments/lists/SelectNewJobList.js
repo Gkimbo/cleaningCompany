@@ -62,8 +62,16 @@ const SelectNewJobList = ({ state }) => {
           "/api/v1/users/appointments/employee",
           state.currentUser.token
         );
-        setAllAppointments(response.appointments || []);
-        setAllRequests(response.requested || []);
+        const now = new Date();
+
+        const isUpcoming = (item) => {
+          console.log(item);
+          const itemDate = new Date(item.date);
+          return itemDate >= now;
+        };
+
+        setAllAppointments((response.appointments || []).filter(isUpcoming));
+        setAllRequests((response.requested || []).filter(isUpcoming));
       } catch (error) {
         console.error("Error fetching appointments:", error);
       }
@@ -156,12 +164,9 @@ const SelectNewJobList = ({ state }) => {
     const sortFn = {
       distanceClosest: (a, b) =>
         (a.distance ?? Infinity) - (b.distance ?? Infinity),
-      distanceFurthest: (a, b) =>
-        (b.distance ?? 0) - (a.distance ?? 0),
-      priceLow: (a, b) =>
-        (Number(a.price) || 0) - (Number(b.price) || 0),
-      priceHigh: (a, b) =>
-        (Number(b.price) || 0) - (Number(a.price) || 0),
+      distanceFurthest: (a, b) => (b.distance ?? 0) - (a.distance ?? 0),
+      priceLow: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
+      priceHigh: (a, b) => (Number(b.price) || 0) - (Number(a.price) || 0),
     };
 
     const sorted = [...processed].sort((a, b) => {
@@ -176,18 +181,40 @@ const SelectNewJobList = ({ state }) => {
   }, [requestsAndAppointments, userLocation, appointmentLocations, sortOption]);
 
   return (
-    <View style={{ ...homePageStyles.container, flexDirection: "column", marginTop: "27%" }}>
-      <View style={{ ...homePageStyles.backButtonSelectNewJobList, flexDirection: "row", justifyContent: "space-evenly" }}>
-        <Pressable style={homePageStyles.backButtonForm} onPress={() => navigate("/")}>
-          <View style={{ flexDirection: "row", alignItems: "center", padding: 10 }}>
+    <View
+      style={{
+        ...homePageStyles.container,
+        flexDirection: "column",
+        marginTop: "27%",
+      }}
+    >
+      <View
+        style={{
+          ...homePageStyles.backButtonSelectNewJobList,
+          flexDirection: "row",
+          justifyContent: "space-evenly",
+        }}
+      >
+        <Pressable
+          style={homePageStyles.backButtonForm}
+          onPress={() => navigate("/")}
+        >
+          <View
+            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+          >
             <Icon name="angle-left" size={iconSize} color="black" />
             <View style={{ marginLeft: 15 }}>
               <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
             </View>
           </View>
         </Pressable>
-        <Pressable style={homePageStyles.backButtonForm} onPress={pressedSeeCalender}>
-          <View style={{ flexDirection: "row", alignItems: "center", padding: 10 }}>
+        <Pressable
+          style={homePageStyles.backButtonForm}
+          onPress={pressedSeeCalender}
+        >
+          <View
+            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+          >
             <View style={{ marginRight: 15 }}>
               <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
             </View>
@@ -196,17 +223,60 @@ const SelectNewJobList = ({ state }) => {
         </Pressable>
       </View>
 
-      <View style={{ margin: 10, borderWidth: 1, borderRadius: 5, borderColor: "#ccc" }}>
-        <Picker selectedValue={sortOption} onValueChange={(itemValue) => setSortOption(itemValue)}>
-          <Picker.Item label="Sort by: Distance (Closest)" value="distanceClosest" />
-          <Picker.Item label="Sort by: Distance (Furthest)" value="distanceFurthest" />
+      <View
+        style={{
+          margin: 10,
+          borderWidth: 1,
+          borderRadius: 5,
+          borderColor: "#ccc",
+        }}
+      >
+        <Picker
+          selectedValue={sortOption}
+          onValueChange={(itemValue) => setSortOption(itemValue)}
+        >
+          <Picker.Item
+            label="Sort by: Distance (Closest)"
+            value="distanceClosest"
+          />
+          <Picker.Item
+            label="Sort by: Distance (Furthest)"
+            value="distanceFurthest"
+          />
           <Picker.Item label="Sort by: Price (Low to High)" value="priceLow" />
           <Picker.Item label="Sort by: Price (High to Low)" value="priceHigh" />
         </Picker>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#0000ff" style={{ marginTop: 20 }} />
+        <ActivityIndicator
+          size="large"
+          color="#0000ff"
+          style={{ marginTop: 20 }}
+        />
+      ) : sortedData.length === 0 ? (
+        <View style={{ marginTop: 50, alignItems: "center", padding: 20 }}>
+          <Text
+            style={{
+              fontSize: 18,
+              fontWeight: "600",
+              color: "#444",
+              marginBottom: 10,
+            }}
+          >
+            No appointments yet.
+          </Text>
+          <Text
+            style={{
+              fontSize: 16,
+              color: "#666",
+              textAlign: "center",
+              lineHeight: 22,
+            }}
+          >
+            Check back later to see upcoming appointments or job requests.
+          </Text>
+        </View>
       ) : (
         <ScrollView>
           {sortedData.map((appointment) => (
@@ -219,7 +289,9 @@ const SelectNewJobList = ({ state }) => {
                     try {
                       await FetchData.removeRequest(employeeId, appointmentId);
                       setAllRequests((prev) => {
-                        const removed = prev.find((a) => a.id === appointmentId);
+                        const removed = prev.find(
+                          (a) => a.id === appointmentId
+                        );
                         if (!removed) return prev;
                         setAllAppointments((apps) => [...apps, removed]);
                         return prev.filter((a) => a.id !== appointmentId);
@@ -233,12 +305,17 @@ const SelectNewJobList = ({ state }) => {
                 <EmployeeAssignmentTile
                   {...appointment}
                   cleanerId={userId}
-                  assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
+                  assigned={
+                    appointment.employeesAssigned?.includes(String(userId)) ||
+                    false
+                  }
                   addEmployee={async (employeeId, appointmentId) => {
                     try {
                       await FetchData.addEmployee(employeeId, appointmentId);
                       setAllAppointments((prev) => {
-                        const assigned = prev.find((a) => a.id === appointmentId);
+                        const assigned = prev.find(
+                          (a) => a.id === appointmentId
+                        );
                         if (!assigned) return prev;
                         setAllRequests((reqs) => [...reqs, assigned]);
                         return prev.filter((a) => a.id !== appointmentId);
@@ -277,4 +354,3 @@ const SelectNewJobList = ({ state }) => {
 };
 
 export default SelectNewJobList;
-
