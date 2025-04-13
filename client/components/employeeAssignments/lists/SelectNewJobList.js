@@ -65,7 +65,6 @@ const SelectNewJobList = ({ state }) => {
         const now = new Date();
 
         const isUpcoming = (item) => {
-          console.log(item);
           const itemDate = new Date(item.date);
           return itemDate >= now;
         };

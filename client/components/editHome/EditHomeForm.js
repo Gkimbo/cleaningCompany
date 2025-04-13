@@ -309,7 +309,6 @@ const EditHomeForm = ({ state, dispatch }) => {
   useEffect(() => {
     const idNeeded = Number(id);
     const foundHome = state.homes.find((home) => home.id === idNeeded);
-    console.log(foundHome);
     setHomeDetails(foundHome);
     setKey(foundHome.keyPadCode !== "" ? "code" : "key");
 

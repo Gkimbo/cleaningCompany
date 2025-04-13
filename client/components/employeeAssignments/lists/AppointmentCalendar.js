@@ -162,7 +162,7 @@ const AppointmentCalendar = ({ state }) => {
     ({ date }) => {
       const today = new Date();
       const dayDate = new Date(date.dateString);
-      const isPast = dayDate < new Date(today.toDateString()); // ignore time, just compare days
+      const isPast = dayDate < new Date(today.toDateString());
 
       const hasData =
         appointments.some((a) => a.date === date.dateString) ||
@@ -183,7 +183,7 @@ const AppointmentCalendar = ({ state }) => {
               : hasData && !isPast
                 ? "#b2ebf2"
                 : "transparent",
-            opacity: isPast ? 0.4 : 1, // grayed out past dates
+            opacity: isPast ? 0.4 : 1, 
           }}
           onPress={() => !isPast && hasData && handleDateSelect(date)}
         >
