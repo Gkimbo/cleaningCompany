@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Pressable, View, Text, ScrollView, Dimensions, ActivityIndicator } from "react-native";
+import {
+  Pressable,
+  View,
+  Text,
+  ScrollView,
+  Dimensions,
+  ActivityIndicator,
+} from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -10,14 +17,16 @@ import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
-  const R = 6371; 
+  const R = 6371;
   const dLat = toRad(lat2 - lat1);
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; 
+  return R * c;
 };
 
 const EmployeeAssignmentsList = ({ state, dispatch }) => {
@@ -26,8 +35,10 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [appointmentLocations, setAppointmentLocations] = useState(null);
   const [sortOption, setSortOption] = useState("distanceClosest");
   const [loading, setLoading] = useState(true);
+  const [redirectToJobs, setRedirectToJobs] = useState(false);
   const [refresh, setRefresh] = useState(false);
   const [userId, setUserId] = useState(null);
+
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
@@ -36,43 +47,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     const response = await getCurrentUser();
     setUserId(response.user.id);
   };
-
-  const sortedAppointments = useMemo(() => {
-    let sorted = allAppointments.map((appointment) => {
-      let distance = null;
-
-      if (
-        userLocation &&
-        appointmentLocations &&
-        appointmentLocations[appointment.homeId]
-      ) {
-        const loc = appointmentLocations[appointment.homeId];
-        distance = haversineDistance(
-          userLocation.latitude,
-          userLocation.longitude,
-          loc.latitude,
-          loc.longitude
-        );
-        setLoading(false);
-      }
-      return { ...appointment, distance };
-    });
-
-    if (sortOption === "distanceClosest") {
-      sorted.sort(
-        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
-      );
-    } else if (sortOption === "distanceFurthest") {
-      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
-    } else if (sortOption === "priceLow") {
-      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
-    } else if (sortOption === "priceHigh") {
-      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
-    }
-
-    return sorted;
-  }, [allAppointments, userLocation, appointmentLocations, sortOption]);
-
+console.log(redirectToJobs)
   useEffect(() => {
     if (navigator.geolocation) {
       const watcher = navigator.geolocation.watchPosition(
@@ -83,12 +58,11 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
           });
         },
         (error) => {
-          setLoading(false);
           console.error("Error getting location:", error);
+          setLoading(false);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
-
       return () => navigator.geolocation.clearWatch(watcher);
     }
   }, []);
@@ -97,20 +71,28 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     if (state.currentUser.token) {
       FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
         (response) => {
+          const appointments = response.employee.cleanerAppointments;
           dispatch({
             type: "USER_APPOINTMENTS",
-            payload: response.employee.cleanerAppointments,
+            payload: appointments,
           });
-          setAllAppointments(response.employee.cleanerAppointments);
+          setAllAppointments(appointments);
         }
       );
     }
     fetchUser();
-    
-    if(refresh){
-      setRefresh(false)
+
+    if (refresh) {
+      setRefresh(false);
     }
   }, [state.currentUser.token, refresh]);
+
+  useEffect(() => {
+    if (redirectToJobs) {
+      navigate("/new-job-choice");
+      setRedirectToJobs(false);
+    }
+  }, [redirectToJobs]);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -131,37 +113,71 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
       fetchLocations();
     }
   }, [allAppointments]);
-  const handlePress = () => {
-    setRedirect(true);
-  };
 
-  const handleBackPress = () => {
-    setBackRedirect(true);
-  };
+  useEffect(() => {
+    if (allAppointments.length === 0) {
+      setLoading(false);
+    }
+  }, [allAppointments]);
 
-  const handlePressToJobsList = () => {
-    setRedirectToJobs(true);
-  };
+  useEffect(() => {
+    if (
+      allAppointments.length > 0 &&
+      userLocation &&
+      appointmentLocations
+    ) {
+      setLoading(false);
+    }
+  }, [userLocation, appointmentLocations, allAppointments]);
+
+  const sortedAppointments = useMemo(() => {
+    let sorted = allAppointments.map((appointment) => {
+      let distance = null;
+
+      if (
+        userLocation &&
+        appointmentLocations &&
+        appointmentLocations[appointment.homeId]
+      ) {
+        const loc = appointmentLocations[appointment.homeId];
+        distance = haversineDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          loc.latitude,
+          loc.longitude
+        );
+      }
+
+      return { ...appointment, distance };
+    });
+
+    if (sortOption === "distanceClosest") {
+      sorted.sort(
+        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
+      );
+    } else if (sortOption === "distanceFurthest") {
+      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
+    } else if (sortOption === "priceLow") {
+      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    } else if (sortOption === "priceHigh") {
+      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+    }
+
+    return sorted;
+  }, [allAppointments, userLocation, appointmentLocations, sortOption]);
 
   const removeEmployee = async (employeeId, appointmentId) => {
-    const employeeRemoved = await FetchData.removeEmployee(
-      employeeId,
-      appointmentId
-    );
+    await FetchData.removeEmployee(employeeId, appointmentId);
     setRefresh(true);
   };
 
   const addEmployee = async (employeeId, appointmentId) => {
-    const employeeAdded = await FetchData.addEmployee(
-      employeeId,
-      appointmentId
-    );
+    await FetchData.addEmployee(employeeId, appointmentId);
     setRefresh(true);
   };
 
   const assignedAppointments = sortedAppointments.map((appointment) => {
-    let isAssigned = appointment.employeesAssigned.includes(String(userId));
-
+    const isAssigned = appointment.employeesAssigned.includes(String(userId));
     return (
       <View key={appointment.id}>
         <EmployeeAssignmentTile
@@ -193,7 +209,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
         flexDirection: "column",
       }}
     >
-       <View
+      <View
         style={{
           ...homePageStyles.backButtonSelectNewJobList,
           flexDirection: "row",
@@ -234,15 +250,35 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
         assignedAppointments
       ) : (
         <>
-          <Text style={[homePageStyles.title, { fontSize: 18, fontWeight: "600", color: "#1E1E1E", textAlign: "center", letterSpacing: 0.5 }]}>
+          <Text
+            style={[
+              homePageStyles.title,
+              {
+                fontSize: 18,
+                fontWeight: "600",
+                color: "#1E1E1E",
+                textAlign: "center",
+                letterSpacing: 0.5,
+              },
+            ]}
+          >
             You have no jobs scheduled.
           </Text>
           <Text
-            style={[homePageStyles.homeTileTitle, { fontSize: 18, fontWeight: "600", color: "#1E1E1E", textAlign: "center", letterSpacing: 0.5 }]}
+            style={[
+              homePageStyles.homeTileTitle,
+              {
+                fontSize: 18,
+                fontWeight: "600",
+                color: "#1E1E1E",
+                textAlign: "center",
+                letterSpacing: 0.5,
+              },
+            ]}
           >
             Schedule jobs
             <Pressable
-              onPress={handlePressToJobsList}
+              onPress={() => setRedirectToJobs(true)}
               style={({ pressed }) => [
                 {
                   textDecorationLine: pressed ? "underline" : "none",
