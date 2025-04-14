@@ -42,6 +42,7 @@ const AppointmentCalendar = ({ state }) => {
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [sortOption, setSortOption] = useState("distanceClosest");
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
@@ -199,7 +200,7 @@ const AppointmentCalendar = ({ state }) => {
         </Pressable>
       );
     },
-    [appointments, selectedDate, userId]
+    [appointments, selectedDate, userId, refreshKey]
   );
 
   return (
@@ -292,43 +293,6 @@ const AppointmentCalendar = ({ state }) => {
                </View>
       ) : (
         <>
-          {filteredRequests.length > 0 && (
-            <View>
-              <Text style={calenderStyles.sectionTitle}>
-                Requested Appointments
-              </Text>
-              {filteredRequests.map((appt) => (
-                <RequestedTile
-                  key={appt.id}
-                  {...appt}
-                  cleanerId={userId}
-                  removeRequest={async (employeeId, appointmentId) => {
-                    await FetchData.removeRequest(employeeId, appointmentId);
-                    const removed = requests.find((r) => r.id === appointmentId);
-                    if (!removed) return;
-                    const updatedAppt = {
-                      ...removed,
-                      employeesAssigned: (
-                        removed.employeesAssigned || []
-                      ).filter((id) => id !== String(employeeId)),
-                    };
-                    const updatedRequests = requests.filter(
-                      (r) => r.id !== appointmentId
-                    );
-                    const updatedAppointments = [...appointments, updatedAppt];
-                    setRequests(updatedRequests);
-                    setAppointments(updatedAppointments);
-                    handleDateSelect(
-                      { dateString: selectedDate },
-                      updatedAppointments,
-                      updatedRequests
-                    );
-                  }}
-                />
-              ))}
-            </View>
-          )}
-
           {filteredAppointments.length > 0 && (
             <View>
               <Text style={calenderStyles.sectionTitle}>
@@ -357,6 +321,7 @@ const AppointmentCalendar = ({ state }) => {
                     const updatedRequests = [...requests, updatedAppt];
                     setAppointments(updatedAppointments);
                     setRequests(updatedRequests);
+                    setRefreshKey((prev) => prev + 1);
                     handleDateSelect(
                       { dateString: selectedDate },
                       updatedAppointments,
@@ -380,6 +345,7 @@ const AppointmentCalendar = ({ state }) => {
                     );
                     setAppointments(updatedAppointments);
                     setRequests(updatedRequests);
+                    setRefreshKey((prev) => prev + 1);
                     handleDateSelect(
                       { dateString: selectedDate },
                       updatedAppointments,
