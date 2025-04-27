@@ -36,6 +36,7 @@ const MyRequests = ({ state }) => {
   const [sortOption, setSortOption] = useState("distanceClosest");
   const [seeCalender, setSeeCalender] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [redirectToJobs, setRedirectToJobs] = useState(false);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
@@ -120,6 +121,13 @@ const MyRequests = ({ state }) => {
     setSeeCalender(true);
   };
 
+  useEffect(() => {
+    if (redirectToJobs) {
+      navigate("/new-job-choice");
+      setRedirectToJobs(false);
+    }
+  }, [redirectToJobs]);
+
   const sortedRequests = useMemo(() => {
     let sorted = allRequests.map((appointment) => {
       let distance = null;
@@ -185,6 +193,7 @@ const MyRequests = ({ state }) => {
             </View>
           </View>
         </Pressable>
+
         <Pressable
           style={homePageStyles.backButtonForm}
           onPress={pressedSeeCalender}
@@ -193,7 +202,7 @@ const MyRequests = ({ state }) => {
             style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
           >
             <View style={{ marginRight: 15 }}>
-              <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
+              <Text style={topBarStyles.buttonTextSchedule}>Calendar</Text>
             </View>
             <Icon name="angle-right" size={iconSize} color="black" />
           </View>
@@ -224,6 +233,7 @@ const MyRequests = ({ state }) => {
           <Picker.Item label="Sort by: Price (High to Low)" value="priceHigh" />
         </Picker>
       </View>
+
       {loading ? (
         <ActivityIndicator
           size="large"
@@ -232,41 +242,89 @@ const MyRequests = ({ state }) => {
         />
       ) : (
         <View style={{ flex: 1 }}>
-          {sortedRequests.map((appointment) => (
-            <View key={appointment.id}>
-              <RequestedTile
-                id={appointment.id}
-                cleanerId={userId}
-                date={appointment.date}
-                price={appointment.price}
-                homeId={appointment.homeId}
-                hasBeenAssigned={appointment.hasBeenAssigned}
-                bringSheets={appointment.bringSheets}
-                bringTowels={appointment.bringTowels}
-                completed={appointment.completed}
-                keyPadCode={appointment.keyPadCode}
-                keyLocation={appointment.keyLocation}
-                distance={appointment.distance}
-                timeToBeCompleted={appointment.timeToBeCompleted}
-                removeRequest={async (employeeId, appointmentId) => {
-                  try {
-                    await FetchData.removeRequest(employeeId, appointmentId);
-                    setAllRequests((prevRequests) => {
-                      const removedAppointment = prevRequests.find(
-                        (appointment) => appointment.id === appointmentId
-                      );
-                      if (!removedAppointment) return prevRequests;
-                      return prevRequests.filter(
-                        (appointment) => appointment.id !== appointmentId
-                      );
-                    });
-                  } catch (error) {
-                    console.error("Error removing request:", error);
-                  }
-                }}
-              />
-            </View>
-          ))}
+          {sortedRequests.length ? (
+            sortedRequests.map((appointment) => (
+              <View key={appointment.id}>
+                <RequestedTile
+                  id={appointment.id}
+                  cleanerId={userId}
+                  date={appointment.date}
+                  price={appointment.price}
+                  homeId={appointment.homeId}
+                  hasBeenAssigned={appointment.hasBeenAssigned}
+                  bringSheets={appointment.bringSheets}
+                  bringTowels={appointment.bringTowels}
+                  completed={appointment.completed}
+                  keyPadCode={appointment.keyPadCode}
+                  keyLocation={appointment.keyLocation}
+                  distance={appointment.distance}
+                  timeToBeCompleted={appointment.timeToBeCompleted}
+                  removeRequest={async (employeeId, appointmentId) => {
+                    try {
+                      await FetchData.removeRequest(employeeId, appointmentId);
+                      setAllRequests((prevRequests) => {
+                        const removedAppointment = prevRequests.find(
+                          (appointment) => appointment.id === appointmentId
+                        );
+                        if (!removedAppointment) return prevRequests;
+                        return prevRequests.filter(
+                          (appointment) => appointment.id !== appointmentId
+                        );
+                      });
+                    } catch (error) {
+                      console.error("Error removing request:", error);
+                    }
+                  }}
+                />
+              </View>
+            ))
+          ) : (
+            <>
+              <Text
+                style={[
+                  homePageStyles.title,
+                  {
+                    fontSize: 18,
+                    fontWeight: "600",
+                    color: "#1E1E1E",
+                    textAlign: "center",
+                    letterSpacing: 0.5,
+                  },
+                ]}
+              >
+                You have no jobs requested.
+              </Text>
+              <Text
+                style={[
+                  homePageStyles.homeTileTitle,
+                  {
+                    fontSize: 18,
+                    fontWeight: "600",
+                    color: "#1E1E1E",
+                    textAlign: "center",
+                    letterSpacing: 0.5,
+                  },
+                ]}
+              >
+                Request jobs
+                <Pressable
+                  onPress={() => setRedirectToJobs(true)}
+                  style={({ pressed }) => ({
+                    textDecorationLine: pressed ? "underline" : "none",
+                  })}
+                >
+                  <Text
+                    style={{
+                      color: "#007AFF",
+                      fontWeight: "700",
+                    }}
+                  >
+                    {" HERE! "}
+                  </Text>
+                </Pressable>
+              </Text>
+            </>
+          )}
         </View>
       )}
     </View>

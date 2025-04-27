@@ -260,80 +260,39 @@ const MyRequestsCalendar = ({ state, dispatch }) => {
 
   const renderDay = useCallback(
     ({ date }) => {
-      if (!allRequests.length) return <View />;
-      if (!userId) return <View />;
-      const selectedStyle = {
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#3498db",
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-      };
+      const today = new Date();
+      const dayDate = new Date(date.dateString);
+      const isPast = dayDate < new Date(today.toDateString());
 
-      const hasAppStyle = {
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#28A745",
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-      };
+      const hasData =
+        allRequests.some((r) => r.date === date.dateString);
 
-      const dayStyle = {
-        justifyContent: "center",
-        alignItems: "center",
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-        opacity: isDateDisabled(date) ? 0.5 : 1,
-      };
-
-      const pastDate = {
-        backgroundColor: "#3498db",
-        borderRadius: 25,
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-      };
-
-      const selectedPriceStyle = {
-        fontSize: 12,
-        color: "black",
-      };
-
-      const priceStyle = {
-        fontSize: 12,
-        color: "gray",
-      };
+      const isSelected = selectedDate === date.dateString;
 
       return (
-        <>
-          {myAppointments(date, userId) ? (
-            <Pressable
-              style={hasAppStyle}
-              onPress={() => setSelectedDate(date)}
-            >
-              <Text>{date.day}</Text>
-              <Text style={selectedPriceStyle}>
-                {numberOfAppointmentsOnDate(date)}
-              </Text>
-            </Pressable>
-          ) : selectedDates[date.dateString] ? (
-            <Pressable
-              style={selectedStyle}
-              onPress={() => handleDateSelect(date)}
-            >
-              <Text>{date.day}</Text>
-            </Pressable>
-          ) : (
-            <Pressable style={dayStyle} onPress={() => handleDateSelect(date)}>
-              <Text>{date.day}</Text>
-            </Pressable>
-          )}
-        </>
+        <Pressable
+          disabled={isPast || !hasData}
+          style={{
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 10,
+            borderRadius: 20,
+            backgroundColor: isSelected
+              ? "#3498db"
+              : hasData && !isPast
+                ? "#b2ebf2"
+                : "transparent",
+            opacity: isPast ? 0.4 : 1, 
+          }}
+          onPress={() => !isPast && hasData && handleDateSelect(date)}
+        >
+          <Text style={{ color: isPast ? "#999" : "#000" }}>{date.day}</Text>
+        </Pressable>
       );
     },
     [allRequests, userId]
   );
+
   return (
     <>
       <View

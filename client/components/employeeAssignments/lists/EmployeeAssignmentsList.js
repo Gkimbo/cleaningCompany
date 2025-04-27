@@ -178,28 +178,30 @@ console.log(redirectToJobs)
 
   const assignedAppointments = sortedAppointments.map((appointment) => {
     const isAssigned = appointment.employeesAssigned.includes(String(userId));
-    return (
-      <View key={appointment.id}>
-        <EmployeeAssignmentTile
-          id={appointment.id}
-          cleanerId={userId}
-          date={appointment.date}
-          price={appointment.price}
-          homeId={appointment.homeId}
-          hasBeenAssigned={appointment.hasBeenAssigned}
-          bringSheets={appointment.bringSheets}
-          bringTowels={appointment.bringTowels}
-          completed={appointment.completed}
-          keyPadCode={appointment.keyPadCode}
-          keyLocation={appointment.keyLocation}
-          addEmployee={addEmployee}
-          removeEmployee={removeEmployee}
-          assigned={isAssigned}
-          distance={appointment.distance}
-          timeToBeCompleted={appointment.timeToBeCompleted}
-        />
-      </View>
-    );
+    if(isAssigned){
+      return (
+        <View key={appointment.id}>
+          <EmployeeAssignmentTile
+            id={appointment.id}
+            cleanerId={userId}
+            date={appointment.date}
+            price={appointment.price}
+            homeId={appointment.homeId}
+            hasBeenAssigned={appointment.hasBeenAssigned}
+            bringSheets={appointment.bringSheets}
+            bringTowels={appointment.bringTowels}
+            completed={appointment.completed}
+            keyPadCode={appointment.keyPadCode}
+            keyLocation={appointment.keyLocation}
+            addEmployee={addEmployee}
+            removeEmployee={removeEmployee}
+            assigned={isAssigned}
+            distance={appointment.distance}
+            timeToBeCompleted={appointment.timeToBeCompleted}
+          />
+        </View>
+      );
+    } else {return null}
   });
 
   return (
