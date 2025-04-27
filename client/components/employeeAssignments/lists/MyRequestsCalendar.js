@@ -318,7 +318,7 @@ const MyRequestsCalendar = ({ state, dispatch }) => {
         </Pressable>
         <Pressable
           style={homePageStyles.backButtonForm}
-          onPress={() => navigate("/new-job-choice")}
+          onPress={() => navigate("/my-requests")}
         >
           <View
             style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
