@@ -47,7 +47,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     const response = await getCurrentUser();
     setUserId(response.user.id);
   };
-console.log(redirectToJobs)
+
   useEffect(() => {
     if (navigator.geolocation) {
       const watcher = navigator.geolocation.watchPosition(
@@ -176,46 +176,43 @@ console.log(redirectToJobs)
     setRefresh(true);
   };
 
-  const assignedAppointments = sortedAppointments.map((appointment) => {
-    const isAssigned = appointment.employeesAssigned.includes(String(userId));
-    if(isAssigned){
-      return (
-        <View key={appointment.id}>
-          <EmployeeAssignmentTile
-            id={appointment.id}
-            cleanerId={userId}
-            date={appointment.date}
-            price={appointment.price}
-            homeId={appointment.homeId}
-            hasBeenAssigned={appointment.hasBeenAssigned}
-            bringSheets={appointment.bringSheets}
-            bringTowels={appointment.bringTowels}
-            completed={appointment.completed}
-            keyPadCode={appointment.keyPadCode}
-            keyLocation={appointment.keyLocation}
-            addEmployee={addEmployee}
-            removeEmployee={removeEmployee}
-            assigned={isAssigned}
-            distance={appointment.distance}
-            timeToBeCompleted={appointment.timeToBeCompleted}
-          />
-        </View>
-      );
-    } else {return null}
-  });
+  const assignedAppointments = sortedAppointments
+    .filter((appointment) =>
+      appointment.employeesAssigned.includes(String(userId))
+    )
+    .map((appointment) => (
+      <View key={appointment.id}>
+        <EmployeeAssignmentTile
+          id={appointment.id}
+          cleanerId={userId}
+          date={appointment.date}
+          price={appointment.price}
+          homeId={appointment.homeId}
+          hasBeenAssigned={appointment.hasBeenAssigned}
+          bringSheets={appointment.bringSheets}
+          bringTowels={appointment.bringTowels}
+          completed={appointment.completed}
+          keyPadCode={appointment.keyPadCode}
+          keyLocation={appointment.keyLocation}
+          addEmployee={addEmployee}
+          removeEmployee={removeEmployee}
+          assigned={true}
+          distance={appointment.distance}
+          timeToBeCompleted={appointment.timeToBeCompleted}
+        />
+      </View>
+    ));
 
   return (
-    <View
-      style={{
-        ...homePageStyles.container,
-        flexDirection: "column",
-      }}
-    >
-      <View
+    <View style={{ ...homePageStyles.container, flexDirection: "column" }}>
+       <View
         style={{
-          ...homePageStyles.backButtonSelectNewJobList,
+          ...homePageStyles.backButtonSelectNewJob,
           flexDirection: "row",
-          justifyContent: "space-evenly",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 20, 
+          marginVertical: 20,
         }}
       >
         <Pressable
@@ -231,6 +228,7 @@ console.log(redirectToJobs)
             </View>
           </View>
         </Pressable>
+
         <Pressable
           style={homePageStyles.backButtonForm}
           onPress={() => navigate("/my-appointment-calender")}
@@ -239,7 +237,7 @@ console.log(redirectToJobs)
             style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
           >
             <View style={{ marginRight: 15 }}>
-              <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
+              <Text style={topBarStyles.buttonTextSchedule}>Calendar</Text>
             </View>
             <Icon name="angle-right" size={iconSize} color="black" />
           </View>
@@ -248,8 +246,8 @@ console.log(redirectToJobs)
 
       {loading ? (
         <ActivityIndicator size="large" color="#0000ff" />
-      ) : sortedAppointments.length ? (
-        assignedAppointments
+      ) : assignedAppointments.length > 0 ? (
+        <ScrollView>{assignedAppointments}</ScrollView>
       ) : (
         <>
           <Text
