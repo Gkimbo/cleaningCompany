@@ -165,6 +165,7 @@ class FetchData {
       return error;
     }
   }
+  
   static async editEmployee(data) {
     try {
       const response = await fetch(baseURL + "/api/v1/users/employee", {

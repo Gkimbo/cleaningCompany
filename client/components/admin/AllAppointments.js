@@ -36,7 +36,7 @@ const AllAppointments = ({ state }) => {
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
-
+console.log(state)
   const fetchAppointments = async () => {
     const response = await FetchData.get(
       "/api/v1/users/appointments",

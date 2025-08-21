@@ -82,14 +82,14 @@ const CleanerApplicationForm = () => {
       <Text style={styles.label}>First Name</Text>
       <TextInput
         style={styles.input}
-        placeholder="Enter your full name"
+        placeholder="Enter your first name"
         value={formData.firstName}
         onChangeText={(text) => handleChange("firstName", text)}
       />
       <Text style={styles.label}>Last Name</Text>
       <TextInput
         style={styles.input}
-        placeholder="Enter your full name"
+        placeholder="Enter your last name"
         value={formData.lastName}
         onChangeText={(text) => handleChange("lastName", text)}
       />
