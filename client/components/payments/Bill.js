@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Pressable, ScrollView, TextInput, Alert } from "react-native";
 import { useNavigate } from "react-router-native";
-import { useStripe } from "@stripe/stripe-react-native"; // 👈 import Stripe hook
+// import { useStripe } from "@stripe/stripe-react-native"; // 👈 import Stripe hook
 import homePageStyles from "../../services/styles/HomePageStyles";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
 
@@ -10,7 +10,7 @@ const Bill = ({ state, dispatch }) => {
   const [amountToPay, setAmountToPay] = useState(0);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe(); // 👈 useStripe hook
+  // const { initPaymentSheet, presentPaymentSheet } = useStripe(); // 👈 useStripe hook
 
   let appointmentOverdue = 0 + state.bill.cancellationFee;
 
@@ -46,47 +46,47 @@ const Bill = ({ state, dispatch }) => {
   }, [redirect, appointmentOverdue]);
 
   // 👉 Call backend to create a PaymentIntent
-  const fetchPaymentSheetParams = async () => {
-    try {
-      const response = await fetch("http://localhost:3000/create-payment-intent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: Math.round(amountToPay * 100), // convert dollars to cents
-          currency: "usd",
-        }),
-      });
-      return await response.json();
-    } catch (err) {
-      console.error(err);
-      setError("Failed to connect to payment server.");
-    }
-  };
+  // const fetchPaymentSheetParams = async () => {
+  //   try {
+  //     const response = await fetch("http://localhost:3000/create-payment-intent", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({
+  //         amount: Math.round(amountToPay * 100), // convert dollars to cents
+  //         currency: "usd",
+  //       }),
+  //     });
+  //     return await response.json();
+  //   } catch (err) {
+  //     console.error(err);
+  //     setError("Failed to connect to payment server.");
+  //   }
+  // };
 
-  const openPaymentSheet = async () => {
-    const { clientSecret } = await fetchPaymentSheetParams();
+  // const openPaymentSheet = async () => {
+  //   const { clientSecret } = await fetchPaymentSheetParams();
 
-    if (!clientSecret) return;
+  //   if (!clientSecret) return;
 
-    const { error: initError } = await initPaymentSheet({
-      paymentIntentClientSecret: clientSecret,
-      merchantDisplayName: "My Clinic",
-    });
+  //   const { error: initError } = await initPaymentSheet({
+  //     paymentIntentClientSecret: clientSecret,
+  //     merchantDisplayName: "My Clinic",
+  //   });
 
-    if (initError) {
-      Alert.alert("Error", initError.message);
-      return;
-    }
+  //   if (initError) {
+  //     Alert.alert("Error", initError.message);
+  //     return;
+  //   }
 
-    const { error: paymentError } = await presentPaymentSheet();
+  //   const { error: paymentError } = await presentPaymentSheet();
 
-    if (paymentError) {
-      Alert.alert(`Error code: ${paymentError.code}`, paymentError.message);
-    } else {
-      Alert.alert("Success", "Your payment was successful!");
-      setRedirect(true);
-    }
-  };
+  //   if (paymentError) {
+  //     Alert.alert(`Error code: ${paymentError.code}`, paymentError.message);
+  //   } else {
+  //     Alert.alert("Success", "Your payment was successful!");
+  //     setRedirect(true);
+  //   }
+  // };
 
   return (
     <ScrollView contentContainerStyle={homePageStyles.container}>
@@ -123,9 +123,9 @@ const Bill = ({ state, dispatch }) => {
               {error}
             </Text>
           )}
-          <Pressable style={homePageStyles.button} onPress={openPaymentSheet}>
+          {/* <Pressable style={homePageStyles.button} onPress={openPaymentSheet}>
             <Text style={homePageStyles.buttonText}>Pay Now</Text>
-          </Pressable>
+          </Pressable> */}
         </View>
       </View>
     </ScrollView>
