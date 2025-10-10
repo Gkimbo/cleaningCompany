@@ -10,6 +10,7 @@ const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const Email = require("../../../services/sendNotifications/EmailClass");
 const { Op } = require("sequelize");
 
 const secretKey = process.env.SESSION_SECRET;
@@ -75,6 +76,26 @@ usersRouter.post("/new-employee", async (req, res) => {
         });
         await newUser.update({ lastLogin: new Date() });
         const serializedUser = UserSerializer.serializeOne(newUser.dataValues);
+
+        const splitName = (username) => {
+          let parts = username.split(/(?=[A-Z])/); // split before capital letters
+          let [firstName, lastName] = parts;
+        
+          // Capitalize first letter of each part
+          firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+          lastName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
+        
+          return { firstName, lastName };
+        };
+        let { firstName, lastName } = splitName(serializedUser.username)
+        await Email.sendEmailCongragulations(
+          firstName,
+          lastName,
+          username,
+          password,
+          email,
+          type,
+        )
         return res.status(201).json({ user: serializedUser });
       } else {
         return res.status(410).json("Username already exists");

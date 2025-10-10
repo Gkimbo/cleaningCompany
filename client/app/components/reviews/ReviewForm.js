@@ -1,0 +1,95 @@
+import React, { useContext, useEffect, useState } from "react";
+import { Pressable, Slider, Text, View } from "react-native";
+import { TextInput } from "react-native-paper";
+import { useNavigate } from "react-router-native";
+import { AuthContext } from "../../services/AuthContext";
+import Review from "../../services/fetchRequests/ReviewClass";
+import formStyles from "../../services/styles/FormStyle";
+
+const ReviewForm = ({userId, reviewerId, appointmentId}) => {
+    const [rating, setRating] = useState(3)
+    const [comment, setComment] = useState("")
+	const [redirect, setRedirect] = useState(false);
+	const [errors, setErrors] = useState([]);
+	const navigate = useNavigate();
+	const { login } = useContext(AuthContext);
+
+    
+    const validate = () => {
+        const validationErrors = [];
+    
+        if (comment.length < 4) {
+            validationErrors.push(`Please input a comment about why you gave a ${rating} star rating.`);
+        }
+    
+        setErrors(validationErrors);
+        return validationErrors.length === 0;
+    };
+
+	const onSubmit = async () => {
+        if (!validate()) {
+			return;
+		} else {
+			const data = {
+				userId, 
+                reviewerId, 
+                appointmentId, 
+                rating, 
+                comment
+			};
+			const response = await Review.addReviewToDb(data);
+			if (
+				response === "An account already has this email" ||
+				response === "Username already exists"
+			) {
+				setErrors([response]);
+			} else {
+				setRedirect(true);
+			}
+        }
+	};
+
+	useEffect(() => {
+		if (redirect) {
+			navigate("/");
+		}
+	}, [redirect]);
+
+	return (
+		<View style={formStyles.container}>
+			{errors.length > 0 && (
+				<View style={formStyles.errorContainer}>
+					{errors.map((error, index) => (
+						<Text key={index} style={formStyles.errorText}>
+							{error}
+						</Text>
+					))}
+				</View>
+			)}
+
+			<Text style={formStyles.label}>Rating: {rating} ★</Text>
+			<Slider
+				style={{ width: 200, height: 40 }}
+				minimumValue={1}
+				maximumValue={5}
+				step={0.5}
+				value={rating}
+				onValueChange={setRating}
+			/>
+
+			<TextInput
+				mode="outlined"
+				placeholder="Comments"
+				style={formStyles.input}
+				value={comment}
+				onChangeText={setComment}
+			/>
+
+			<Pressable onPress={() => onSubmit(rating)}>
+				<Text style={formStyles.button}>Submit</Text>
+			</Pressable>
+		</View>
+	);
+};
+
+export default ReviewForm;

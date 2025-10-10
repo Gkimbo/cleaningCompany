@@ -111,6 +111,65 @@ class Email {
     }
   }
 
+  static async sendEmailCongragulations(
+    firstName,
+    lastName,
+    username,
+    password,
+    email,
+    type,
+  ) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+      console.log(email, username, password, type);
+      const formattedDate = (dateString) => {
+        const options = {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        };
+        return new Date(dateString).toLocaleDateString(undefined, options);
+      };
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject:
+          "DO NOT REPLY: Employment Notification (Automated Message)",
+        text: `Dear ${firstName} ${lastName},
+
+Congragulations! You have been selected to be a cleaner for Kleanr!
+You can login to the app using the following username and password.
+
+
+- Username: ${username}
+
+- Password: ${password}
+
+
+Please log into the app to find cleaning jobs you'd like to take on!
+
+Best regards,  
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Email sent successfully:", info.response);
+      return "✅ Email sent successfully:", info.response;
+    } catch (error) {
+      console.error("❌ Error sending email:", error);
+    }
+  }
+
   static async sendEmployeeRequest(
     email,
     userName,
