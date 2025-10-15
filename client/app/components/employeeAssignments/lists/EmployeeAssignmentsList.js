@@ -21,7 +21,9 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
@@ -31,11 +33,11 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
   const [sortOption, setSortOption] = useState("distanceClosest");
+  const [showSortPicker, setShowSortPicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [redirectToJobs, setRedirectToJobs] = useState(false);
   const [refresh, setRefresh] = useState(false);
   const [userId, setUserId] = useState(null);
-  const [showSortPicker, setShowSortPicker] = useState(false);
 
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
@@ -107,20 +109,19 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     if (allAppointments.length > 0) fetchLocations();
   }, [allAppointments]);
 
+  // Fix spinner for empty appointments
   useEffect(() => {
-    if (
-      allAppointments.length > 0 &&
-      userLocation &&
-      appointmentLocations
-    ) {
+    if (allAppointments.length === 0) setLoading(false);
+  }, [allAppointments]);
+
+  useEffect(() => {
+    if (allAppointments.length > 0 && userLocation && appointmentLocations)
       setLoading(false);
-    }
   }, [userLocation, appointmentLocations, allAppointments]);
 
   const sortedAppointments = useMemo(() => {
     let sorted = allAppointments.map((appointment) => {
       let distance = null;
-
       if (
         userLocation &&
         appointmentLocations &&
@@ -134,7 +135,6 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
           loc.longitude
         );
       }
-
       return { ...appointment, distance };
     });
 
@@ -166,24 +166,26 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
       appointment.employeesAssigned.includes(String(userId))
     )
     .map((appointment) => (
-      <EmployeeAssignmentTile
-        key={appointment.id}
-        id={appointment.id}
-        cleanerId={userId}
-        date={appointment.date}
-        price={appointment.price}
-        homeId={appointment.homeId}
-        bringSheets={appointment.bringSheets}
-        bringTowels={appointment.bringTowels}
-        completed={appointment.completed}
-        keyPadCode={appointment.keyPadCode}
-        keyLocation={appointment.keyLocation}
-        addEmployee={addEmployee}
-        removeEmployee={removeEmployee}
-        assigned={true}
-        distance={appointment.distance}
-        timeToBeCompleted={appointment.timeToBeCompleted}
-      />
+      <View key={appointment.id}>
+        <EmployeeAssignmentTile
+          id={appointment.id}
+          cleanerId={userId}
+          date={appointment.date}
+          price={appointment.price}
+          homeId={appointment.homeId}
+          hasBeenAssigned={appointment.hasBeenAssigned}
+          bringSheets={appointment.bringSheets}
+          bringTowels={appointment.bringTowels}
+          completed={appointment.completed}
+          keyPadCode={appointment.keyPadCode}
+          keyLocation={appointment.keyLocation}
+          addEmployee={addEmployee}
+          removeEmployee={removeEmployee}
+          assigned={true}
+          distance={appointment.distance}
+          timeToBeCompleted={appointment.timeToBeCompleted}
+        />
+      </View>
     ));
 
   return (
@@ -243,8 +245,9 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
         </View>
       )}
 
+      {/* Appointments List */}
       {loading ? (
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 40 }} />
       ) : assignedAppointments.length > 0 ? (
         <ScrollView style={{ marginTop: 10 }}>{assignedAppointments}</ScrollView>
       ) : (
@@ -261,7 +264,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 15, backgroundColor: "#F8F9FB" },
-  topButtonRow: { flexDirection: "row", justifyContent: "space-around", marginBottom: 15 },
+  topButtonRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 30, marginBottom: 15 },
   glassButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -294,10 +297,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.1)",
   },
-  option: {
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-  },
+  option: { paddingVertical: 10, paddingHorizontal: 15 },
   emptyContainer: { alignItems: "center", marginTop: 50 },
   emptyText: { fontSize: 18, fontWeight: "600", marginBottom: 10, color: "#1E1E1E" },
   linkText: { fontSize: 16, color: "#007AFF", fontWeight: "700" },
