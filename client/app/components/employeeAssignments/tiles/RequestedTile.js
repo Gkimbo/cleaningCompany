@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, Text, View, LayoutAnimation } from "react-native";
+import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
-import homePageStyles from "../../../services/styles/HomePageStyles";
 import FetchData from "../../../services/fetchRequests/fetchData";
-import { StyleSheet } from "react-native";
 
 const RequestedTile = ({
   id,
@@ -20,96 +18,58 @@ const RequestedTile = ({
 }) => {
   const navigate = useNavigate();
   const [expandWindow, setExpandWindow] = useState(false);
-  const [home, setHome] = useState({
-    address: "",
-    city: "",
-    compostLocation: "",
-    contact: "",
-    keyLocation: "",
-    keyPadCode: "",
-    numBaths: "",
-    numBeds: "",
-    recyclingLocation: "",
-    sheetsProvided: "",
-    specialNotes: "",
-    state: "",
-    towelsProvided: "",
-    trashLocation: "",
-    zipcode: "",
-    cleanersNeeded: "",
-  });
+  const [home, setHome] = useState({});
 
   const amount = Number(price) * 0.9;
+
   const formatDate = (dateString) => {
     const date = new Date(dateString + "T00:00:00");
-    const options = {
-      weekday: "long",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    };
+    const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
     return date.toLocaleDateString(undefined, options);
   };
 
-  const expandDetails = () => {
+  const toggleDetails = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandWindow(true);
-  };
-
-  const contractDetails = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandWindow(false);
+    setExpandWindow(!expandWindow);
   };
 
   useEffect(() => {
     FetchData.getHome(homeId).then((response) => {
       setHome(response.home);
     });
-  }, []);
+  }, [homeId]);
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
   const kilometers = distance ? distance.toFixed(1) : null;
   const timeOptions = {
-    anytime: "anytime",
+    anytime: "Anytime",
     "10-3": "Between 10am and 3pm",
     "11-4": "Between 11am and 4pm",
     "12-2": "Between 12pm and 2pm",
   };
-
   const formattedTime = timeOptions[timeToBeCompleted] || null;
 
   return (
-    <View style={styles.homeTileContainer}>
-      <Pressable onPress={expandWindow ? contractDetails : expandDetails}>
-        <Text style={styles.appointmentDate}>{formatDate(date)}</Text>
+    <View style={styles.tileContainer}>
+      <Pressable onPress={toggleDetails} style={{ padding: 10 }}>
+        <Text style={styles.date}>{formatDate(date)}</Text>
+
         {formattedTime && (
           <View style={styles.timeContainer}>
             <Text style={styles.timeLabel}>Time to complete:</Text>
-            <Text style={styles.timeText}>{`${formattedTime} on ${formatDate(
-              date
-            )}`}</Text>
+            <Text style={styles.timeText}>{`${formattedTime} on ${formatDate(date)}`}</Text>
           </View>
         )}
-        <Text style={{ ...styles.appointmentDate, fontSize: 15 }}>
-          {`You could make $${amount} cleaning this home`}
-        </Text>
-        <Text style={styles.appointmentPrice}>{home.city}</Text>
-        <Text style={styles.appointmentPrice}>
-          {home.state}, {home.zipcode}
-        </Text>
+
+        <Text style={styles.amount}>Potential Earnings: ${amount}</Text>
+        <Text style={styles.location}>{home.city}, {home.state} {home.zipcode}</Text>
+
         <View style={styles.distanceContainer}>
           {distance !== null ? (
             <>
-              <Text style={styles.distanceText}>
-                Distance to the center of town:
-              </Text>
-              <Text style={styles.distanceValue}>
-                {miles} mi{" "}
-                <Text style={styles.distanceKm}>({kilometers} km)</Text>
-              </Text>
-              <Text style={styles.addressInfo}>
-                Address will be available on the day of the appointment.
-              </Text>
+              <Text style={styles.distanceLabel}>Distance to center:</Text>
+              <Text style={styles.distanceValue}>{miles} mi <Text style={styles.distanceKm}>({kilometers} km)</Text></Text>
+              <Text style={styles.addressInfo}>Address available on the day of appointment.</Text>
             </>
           ) : (
             <Text style={styles.unknownDistance}>Distance: Unknown</Text>
@@ -118,142 +78,155 @@ const RequestedTile = ({
 
         {(expandWindow || assigned) && (
           <>
-            <Text style={styles.appointmentDetails}>
-              Number of Beds: {home.numBeds}
-            </Text>
-            <Text style={styles.appointmentDetails}>
-              Number of Bathrooms: {home.numBaths}
-            </Text>
-            <Text style={styles.appointmentDetails}>
-              Sheets are needed: {bringSheets}
-            </Text>
-            <Text style={styles.appointmentDetails}>
-              Towels are needed: {bringTowels}
-            </Text>
+            <Text style={styles.detailText}>Beds: {home.numBeds}</Text>
+            <Text style={styles.detailText}>Bathrooms: {home.numBaths}</Text>
+            <Text style={styles.detailText}>Sheets needed: {bringSheets}</Text>
+            <Text style={styles.detailText}>Towels needed: {bringTowels}</Text>
             {home.cleanersNeeded > 1 && (
               <>
-                <Text style={styles.largeHomeMessage}>
-                  This is a larger home. You may need more people to clean it in
-                  a timely manner.
-                </Text>
-                <Text style={styles.smallHomeMessage}>
-                  If you don’t think you can complete it, please choose a
-                  smaller home!
-                </Text>
+                <Text style={styles.warningText}>This is a larger home. You may need more people.</Text>
+                <Text style={styles.subWarningText}>If unsure, choose a smaller home!</Text>
               </>
             )}
           </>
         )}
       </Pressable>
-      <View style={[styles.button, { backgroundColor: "blue" }]}>
-        <Text style={styles.buttonText}>Request to clean sent!</Text>
+
+      {/* Buttons */}
+      <View style={styles.buttonsRow}>
+        <View style={[styles.button, styles.glassBlue]}>
+          <Text style={styles.buttonText}>Request Sent!</Text>
+        </View>
+
+        <Pressable
+          style={[styles.button, styles.glassRed]}
+          onPress={() => removeRequest(cleanerId, id)}
+        >
+          <Text style={styles.buttonText}>Cancel Request</Text>
+        </Pressable>
       </View>
-      <Pressable
-        style={[styles.button, { backgroundColor: "#E74C3C" }]}
-        onPress={() => removeRequest(cleanerId, id)}
-      >
-        <Text style={styles.buttonText}>Cancel Request!</Text>
-      </Pressable>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  homeTileContainer: {
-    backgroundColor: "#ffffff",
-    padding: 20,
-    marginVertical: 12,
-    borderRadius: 12,
-    shadowColor: "#2C3E50",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 5,
+  tileContainer: {
+    backgroundColor: "#fff",
+    padding: 18,
+    marginVertical: 10,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  appointmentDate: {
+  date: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#34495E",
-    marginBottom: 8,
+    color: "#2C3E50",
     textAlign: "center",
+    marginBottom: 6,
   },
-  appointmentPrice: {
+  amount: {
     fontSize: 16,
     fontWeight: "600",
+    color: "#34495E",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  location: {
+    fontSize: 14,
     color: "#7F8C8D",
     textAlign: "center",
   },
   distanceContainer: {
     marginVertical: 12,
+    alignItems: "center",
   },
-  distanceText: {
+  distanceLabel: {
     fontSize: 12,
     color: "#7F8C8D",
-    marginBottom: 4,
   },
   distanceValue: {
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 16,
+    fontWeight: "600",
     color: "#2C3E50",
   },
   distanceKm: {
-    fontSize: 14,
-    color: "#7F8C8D",
+    fontSize: 12,
+    color: "#95A5A6",
   },
   addressInfo: {
     fontSize: 12,
     color: "#95A5A6",
-    marginTop: 6,
+    marginTop: 4,
+    textAlign: "center",
   },
   unknownDistance: {
     fontSize: 14,
     color: "#95A5A6",
     textAlign: "center",
   },
-  appointmentDetails: {
-    fontSize: 16,
-    fontWeight: "600",
+  detailText: {
+    fontSize: 15,
+    fontWeight: "500",
     color: "#34495E",
-    marginTop: 6,
+    marginTop: 4,
   },
-  largeHomeMessage: {
+  warningText: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
     color: "#E74C3C",
-    marginTop: 12,
+    marginTop: 10,
   },
-  smallHomeMessage: {
+  subWarningText: {
     fontSize: 14,
     color: "#7F8C8D",
-  },
-  button: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 15,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
+    marginBottom: 6,
   },
   timeContainer: {
-    alignItems: "center", 
-    justifyContent: "center",
-    marginVertical: 15, 
+    alignItems: "center",
+    marginVertical: 10,
   },
   timeLabel: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#444",
-    marginBottom: 5, 
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#34495E",
   },
   timeText: {
-    fontSize: 14,
-    color: "#333",
-    opacity: 0.8, 
+    fontSize: 13,
+    color: "#2C3E50",
+    opacity: 0.8,
+    marginTop: 2,
+  },
+  buttonsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 15,
+  },
+  button: {
+    flex: 1,
+    paddingVertical: 10,
+    marginHorizontal: 5,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  glassBlue: {
+    backgroundColor: "rgba(0, 123, 255, 0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 123, 255, 0.3)",
+  },
+  glassRed: {
+    backgroundColor: "rgba(231, 76, 60, 0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(231, 76, 60, 0.3)",
+  },
+  buttonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#2C3E50",
   },
 });
 
