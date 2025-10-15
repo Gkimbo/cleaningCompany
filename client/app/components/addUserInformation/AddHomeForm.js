@@ -1,7 +1,6 @@
 import React, { useContext, useEffect, useState } from "react";
-import { Dimensions, Pressable, Text, View } from "react-native";
+import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
 import { RadioButton, TextInput } from "react-native-paper";
-import { ScrollView } from "react-native-reanimated/lib/typescript/Animated";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";

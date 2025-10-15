@@ -1,32 +1,22 @@
 import React, { useEffect, useState } from "react";
-import { Text, View, Image, ScrollView } from "react-native";
-import homePageStyles from "../services/styles/HomePageStyles";
+import { Dimensions, Image, Pressable, ScrollView, Text, View } from "react-native";
+import { useNavigate } from "react-router-native";
+import { cleaningCompany } from "../services/data/companyInfo";
 import FetchData from "../services/fetchRequests/fetchData";
 import image1 from "../services/photos/Best-Cleaning-Service.jpeg";
 import image2 from "../services/photos/clean-laptop.jpg";
 import image3 from "../services/photos/cleaning-tech.png";
 import image4 from "../services/photos/cleaning_supplies_on_floor.jpg";
-import { cleaningCompany } from "../services/data/companyInfo";
-import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
+import homePageStyles from "../services/styles/HomePageStyles";
 import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
-import topBarStyles from "../services/styles/TopBarStyles";
-import { FadeInSection } from "../services/FadeInSection";
-import { useNavigate } from "react-router-native";
-import Animated, {
-  interpolate,
-  useAnimatedRef,
-  useAnimatedStyle,
-  useScrollViewOffset,
-} from "react-native-reanimated";
-import { Pressable } from "react-native-web";
+import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
 import ReviewsOverview from "./reviews/ReviewsOverview";
 
 const HomePage = ({ state, dispatch }) => {
-  const scrollRef = useAnimatedRef();
-  const scrollOffSet = useScrollViewOffset(scrollRef);
   const [redirect, setRedirect] = useState(false);
   const [redirectToJobs, setRedirectToJobs] = useState(false);
   const navigate = useNavigate();
+  const { width } = Dimensions.get("window");
 
   useEffect(() => {
     if (redirect) {
@@ -35,73 +25,37 @@ const HomePage = ({ state, dispatch }) => {
     }
     if (redirectToJobs) {
       navigate("/new-job-choice");
-      setRedirect(false);
+      setRedirectToJobs(false);
     }
   }, [redirect, redirectToJobs]);
 
-  const handlePress = () => {
-    setRedirect(true);
-  };
-
-  const handlePressToJobsList = () => {
-    setRedirectToJobs(true);
-  };
-
-  const imageAnimatedStyles = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          translateY: interpolate(
-            scrollOffSet.value,
-            [-300, 0, 300],
-            [-300 / 2, 0, 300 * 0.75]
-          ),
-        },
-        {
-          scale: interpolate(scrollOffSet.value, [-300, 0, 300], [2, 1, 1]),
-        },
-      ],
-    };
-  });
+  const handlePress = () => setRedirect(true);
+  const handlePressToJobsList = () => setRedirectToJobs(true);
 
   useEffect(() => {
-    if (state.currentUser.token) {
-      if (state.account === "cleaner") {
-        FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
-          (response) => {
-            dispatch({
-              type: "USER_APPOINTMENTS",
-              payload: response.employee.cleanerAppointments,
-            });
-          }
-        );
-      } else {
-        FetchData.get("/api/v1/user-info", state.currentUser.token).then(
-          (response) => {
-            dispatch({
-              type: "USER_HOME",
-              payload: response.user.homes,
-            });
-            dispatch({
-              type: "USER_APPOINTMENTS",
-              payload: response.user.appointments,
-            });
-            dispatch({
-              type: "DB_BILL",
-              payload: response.user.bill,
-            });
-          }
-        ),
-          FetchData.get(
-            "/api/v1/appointments/my-requests",
-            state.currentUser.token
-          ).then((response) => {
-            dispatch({
-              type: "CLEANING_REQUESTS",
-              payload: response.pendingRequestsEmployee,
-            });
+    if (!state.currentUser.token) return;
+    if (state.account === "cleaner") {
+      FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
+        (response) => {
+          dispatch({
+            type: "USER_APPOINTMENTS",
+            payload: response.employee.cleanerAppointments,
           });
-      }
+        }
+      );
+    } else {
+      FetchData.get("/api/v1/user-info", state.currentUser.token).then(
+        (response) => {
+          dispatch({ type: "USER_HOME", payload: response.user.homes });
+          dispatch({ type: "USER_APPOINTMENTS", payload: response.user.appointments });
+          dispatch({ type: "DB_BILL", payload: response.user.bill });
+        }
+      );
+      FetchData.get("/api/v1/appointments/my-requests", state.currentUser.token).then(
+        (response) => {
+          dispatch({ type: "CLEANING_REQUESTS", payload: response.pendingRequestsEmployee });
+        }
+      );
     }
   }, []);
 
@@ -110,223 +64,187 @@ const HomePage = ({ state, dispatch }) => {
   let foundToday = false;
   let upcomingPayment = 0;
 
-  const sortedAppointments = state.appointments.sort((a, b) => {
-    return new Date(a.date) - new Date(b.date);
-  });
+  const sortedAppointments = state.appointments.sort(
+    (a, b) => new Date(a.date) - new Date(b.date)
+  );
 
   sortedAppointments.forEach((appointment, index) => {
-    const totalPrice = Number(appointment.price);
-    const correctedAmount = totalPrice * 0.9;
-    upcomingPayment = upcomingPayment + correctedAmount;
+    const correctedAmount = Number(appointment.price) * 0.9;
+    upcomingPayment += correctedAmount;
     const today = new Date();
-    let appointmentDate = new Date(appointment.date);
+    const appointmentDate = new Date(appointment.date);
 
     if (appointmentDate.toDateString() === today.toDateString()) {
       foundToday = true;
       todaysAppointment = <TodaysAppointment appointment={appointment} />;
       if (index < sortedAppointments.length - 1) {
         nextAppointment = (
-          <>
+          <View style={{ marginVertical: 15 }}>
             <NextAppointment appointment={sortedAppointments[index + 1]} />
-
             <Pressable
               style={{
                 backgroundColor: "#f9bc60",
-                padding: 10,
-                borderRadius: 50,
-                width: "40%",
+                paddingVertical: 14,
+                paddingHorizontal: 25,
+                borderRadius: 25,
                 alignSelf: "center",
+                marginTop: 20,
+                shadowColor: "#000",
+                shadowOpacity: 0.2,
+                shadowOffset: { width: 0, height: 2 },
+                shadowRadius: 4,
+                elevation: 3,
               }}
               onPress={handlePress}
             >
-              <Text style={topBarStyles.buttonTextSchedule}>
-                View all your appointments
+              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 16 }}>
+                View All Appointments
               </Text>
             </Pressable>
-          </>
+          </View>
         );
       }
     } else if (!nextAppointment && appointmentDate > today) {
       nextAppointment = (
-        <>
+        <View style={{ marginVertical: 15 }}>
           <NextAppointment appointment={appointment} />
           <Pressable
             style={{
               backgroundColor: "#f9bc60",
-              padding: 10,
-              borderRadius: 50,
-              width: "40%",
+              paddingVertical: 14,
+              paddingHorizontal: 25,
+              borderRadius: 25,
               alignSelf: "center",
+              marginTop: 20,
+              shadowColor: "#000",
+              shadowOpacity: 0.2,
+              shadowOffset: { width: 0, height: 2 },
+              shadowRadius: 4,
+              elevation: 3,
             }}
             onPress={handlePress}
           >
-            <Text style={topBarStyles.buttonTextSchedule}>
-              View all your appointments
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 16 }}>
+              View All Appointments
             </Text>
           </Pressable>
-        </>
+        </View>
       );
     }
   });
 
   if (!foundToday && !nextAppointment) {
     nextAppointment = (
-      <>
-        <Text
-          style={[
-            homePageStyles.title,
-            {
-              fontSize: 18,
-              fontWeight: "600",
-              color: "#1E1E1E",
-              textAlign: "center",
-              letterSpacing: 0.5,
-            },
-          ]}
+      <View style={{ marginVertical: 20, alignItems: "center" }}>
+        <Text style={{ ...homePageStyles.title, fontSize: 18 }}>No appointments scheduled.</Text>
+        <Pressable
+          onPress={handlePressToJobsList}
+          style={{
+            marginTop: 15,
+            backgroundColor: "#007AFF",
+            paddingVertical: 12,
+            paddingHorizontal: 20,
+            borderRadius: 25,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 4,
+            elevation: 3,
+          }}
         >
-          You have no appointments scheduled.
-        </Text>
-        <Text
-          style={[
-            homePageStyles.homeTileTitle,
-            {
-              fontSize: 18,
-              fontWeight: "600",
-              color: "#1E1E1E",
-              textAlign: "center",
-              letterSpacing: 0.5,
-            },
-          ]}
-        >
-          Schedule jobs
-          <Pressable
-            onPress={handlePressToJobsList}
-            style={({ pressed }) => [
-              {
-                textDecorationLine: pressed ? "underline" : "none",
-                color: pressed ? "#FF6B00" : "#007AFF",
-                fontWeight: "700",
-              },
-            ]}
-          >
-            <Text>{` here `}</Text>
-          </Pressable>
-          To see your potential earnings!
-        </Text>
-      </>
+          <Text style={{ color: "#fff", fontWeight: "600", fontSize: 16 }}>
+            Schedule Jobs
+          </Text>
+        </Pressable>
+      </View>
     );
   } else if (!foundToday) {
     todaysAppointment = (
-      <>
-        <Text style={{ ...homePageStyles.homeTileTitle }}>
-          {`Your'e expected payout is `}
+      <View style={{ marginVertical: 20, alignItems: "center" }}>
+        <Text style={{ ...homePageStyles.homeTileTitle }}>Expected payout:</Text>
+        <Text style={{ ...homePageStyles.homeTileTitle, fontSize: 28, fontStyle: "italic", marginVertical: 5 }}>
+          ${upcomingPayment.toFixed(2)}
         </Text>
-        <Text
-          style={{
-            ...homePageStyles.homeTileTitle,
-            fontFamily: "italic",
-            fontSize: 25,
-          }}
-        >
-          {`$${upcomingPayment}`}
+        <Text style={{ ...homePageStyles.homeTileTitle, marginBottom: 20 }}>
+          After scheduled cleanings are completed!
         </Text>
-        <Text style={{ ...homePageStyles.homeTileTitle, marginBottom: "40%" }}>
-          {`After scheduled cleanings are completed!`}
+        <Text style={{ ...homePageStyles.title, marginBottom: 15 }}>
+          No appointments scheduled for today
         </Text>
-        <Text style={{ ...homePageStyles.title, marginBottom: "30%" }}>
-          You have no appointments scheduled for today
-        </Text>
-        <Text style={homePageStyles.smallTitle}>Your next cleaning is:</Text>
-      </>
+        <Text style={{ ...homePageStyles.smallTitle }}>Next cleaning:</Text>
+      </View>
     );
   }
 
+  const cardStyle = {
+    backgroundColor: "#fff",
+    borderRadius: 15,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 5,
+    elevation: 3,
+  };
+
   return (
-    <ScrollView>
+    <ScrollView
+      contentContainerStyle={{
+        paddingTop: 40, // More space from top bar
+        paddingHorizontal: 20,
+        backgroundColor: "#f5f5f5",
+        paddingBottom: 50,
+      }}
+    >
       {state.account === "cleaner" ? (
-        <View
-          style={{
-            ...homePageStyles.container,
-            flexDirection: "column",
-          }}
-        >
+        <View style={{ flexDirection: "column" }}>
           {todaysAppointment}
           {nextAppointment}
           <ReviewsOverview state={state} dispatch={dispatch} />
         </View>
       ) : (
-        <View
-          style={{
-            ...homePageStyles.container,
-            flexDirection: "column",
-            marginTop: 105,
-          }}
-        >
-          <View
-            style={{
-              ...homePageStyles.container,
-              flexDirection: "column",
-              justifyContent: "flex-start",
-              paddingLeft: "10%",
-              paddingRight: "10%",
-              marginTop: 20,
-            }}
-          >
-            <Text style={homePageStyles.title}>
-              Welcome to Cleaning Services!
-            </Text>
-            <View style={homePageStyles.homePageParagraphSurround}>
-              <View style={homePageStyles.homePageParagraphText}>
-                <Text style={homePageStyles.smallTitle}>
-                  About Our Service:{" "}
-                </Text>
-                <Text style={homePageStyles.information}>
-                  {cleaningCompany.aboutService.description}
-                </Text>
-              </View>
-              <Image source={image3} style={homePageStyles.image} />
+        <View style={{ flexDirection: "column" }}>
+          <Text style={{ ...homePageStyles.title, marginBottom: 20, textAlign: "center" }}>
+            Welcome to Cleaning Services!
+          </Text>
+
+          {/* About Service */}
+          <View style={cardStyle}>
+            <Text style={homePageStyles.smallTitle}>About Our Service:</Text>
+            <Text style={homePageStyles.information}>{cleaningCompany.aboutService.description}</Text>
+            <Image source={image3} style={{ width: "100%", height: 150, borderRadius: 12, marginTop: 10 }} />
+          </View>
+
+          {/* Booking Info */}
+          <View style={{ ...cardStyle, flexDirection: width > 600 ? "row" : "column", alignItems: "center" }}>
+            <Image source={image2} style={{ width: width > 600 ? 120 : "100%", height: 120, borderRadius: 12, marginRight: width > 600 ? 15 : 0, marginBottom: width > 600 ? 0 : 10 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={homePageStyles.smallTitle}>Booking Information:</Text>
+              <Text style={homePageStyles.information}>{cleaningCompany.bookingInfo.description}</Text>
             </View>
-            <View style={homePageStyles.homePageParagraphSurround}>
-              <View style={homePageStyles.reverseImage}>
-                <Image source={image2} style={homePageStyles.image} />
-                <View style={homePageStyles.homePageParagraphText}>
-                  <Text style={homePageStyles.smallTitle}>
-                    Booking Information:{" "}
-                  </Text>
-                  <Text style={homePageStyles.information}>
-                    {cleaningCompany.bookingInfo.description}
-                  </Text>
-                </View>
-              </View>
+          </View>
+
+          {/* Special Considerations */}
+          <View style={cardStyle}>
+            <Text style={homePageStyles.smallTitle}>Special Considerations:</Text>
+            <Text style={homePageStyles.information}>{cleaningCompany.specialConsiderations.description}</Text>
+            <Image source={image4} style={{ width: "100%", height: 150, borderRadius: 12, marginTop: 10 }} />
+          </View>
+
+          {/* Worry-Free Guarantee */}
+          <View style={{ ...cardStyle, flexDirection: width > 600 ? "row" : "column", alignItems: "center" }}>
+            <Image source={image1} style={{ width: width > 600 ? 120 : "100%", height: 120, borderRadius: 12, marginRight: width > 600 ? 15 : 0, marginBottom: width > 600 ? 0 : 10 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={homePageStyles.smallTitle}>Our Worry-Free Guarantee:</Text>
+              <Text style={homePageStyles.information}>{cleaningCompany.ourWorryFreeGuarantee.description}</Text>
             </View>
-            <View style={homePageStyles.homePageParagraphSurround}>
-              <View style={homePageStyles.homePageParagraphText}>
-                <Text style={homePageStyles.smallTitle}>
-                  Special Considerations:
-                </Text>
-                <Text style={homePageStyles.information}>
-                  {cleaningCompany.specialConsiderations.description}
-                </Text>
-              </View>
-              <Image source={image4} style={homePageStyles.image} />
-            </View>
-            <View style={homePageStyles.homePageParagraphSurround}>
-              <View style={homePageStyles.reverseImage}>
-                <Image source={image1} style={homePageStyles.imageGuarantee} />
-                <View style={homePageStyles.homePageParagraphText}>
-                  <Text style={homePageStyles.smallTitle}>
-                    Our Worry-Free Guarantee:{" "}
-                  </Text>
-                  <Text style={homePageStyles.information}>
-                    {cleaningCompany.ourWorryFreeGuarantee.description}
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <Text style={homePageStyles.smallTitle}>Cancellation Policy: </Text>
-            <Text style={homePageStyles.information}>
-              {cleaningCompany.cancellationPolicy.description}
-            </Text>
+          </View>
+
+          {/* Cancellation Policy */}
+          <View style={cardStyle}>
+            <Text style={homePageStyles.smallTitle}>Cancellation Policy:</Text>
+            <Text style={homePageStyles.information}>{cleaningCompany.cancellationPolicy.description}</Text>
           </View>
         </View>
       )}
