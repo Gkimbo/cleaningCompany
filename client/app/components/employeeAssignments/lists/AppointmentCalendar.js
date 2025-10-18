@@ -94,7 +94,7 @@ const AppointmentCalendar = ({ state }) => {
   useEffect(() => {
     const fetchDistances = async () => {
       if (!userLocation || (appointments.length === 0 && requests.length === 0)) {
-        setLoading(false); // Stop loading if no appointments/requests
+        setLoading(false);
         return;
       }
 
@@ -205,75 +205,74 @@ const AppointmentCalendar = ({ state }) => {
 
   return (
     <ScrollView style={{ flex: 1, paddingBottom: 30 }}>
-     {/* Top Buttons */}
-<View
-  style={{
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 40, // Increased top margin to move buttons down
-    marginBottom: 20,
-    gap: 20, // Space between buttons
-  }}
->
-  <Pressable
-    style={{
-      backgroundColor: "rgba(52,152,219,0.15)",
-      paddingVertical: 12, // More vertical padding
-      paddingHorizontal: 20, // More horizontal padding
-      borderRadius: 14,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.1,
-      shadowRadius: 5,
-    }}
-    onPress={() => navigate("/")}
-  >
-    <Icon name="angle-left" size={iconSize} color="#3498db" />
-    <Text
-      style={{
-        ...topBarStyles.buttonTextSchedule,
-        color: "#3498db",
-        fontWeight: "600",
-        marginLeft: 10, // Add spacing between icon and text
-      }}
-    >
-      Home
-    </Text>
-  </Pressable>
+      {/* Top Buttons */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "center",
+          marginTop: 40,
+          marginBottom: 20,
+          gap: 20,
+        }}
+      >
+        <Pressable
+          style={{
+            backgroundColor: "rgba(52,152,219,0.15)",
+            paddingVertical: 12,
+            paddingHorizontal: 20,
+            borderRadius: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.1,
+            shadowRadius: 5,
+          }}
+          onPress={() => navigate("/")}
+        >
+          <Icon name="angle-left" size={iconSize} color="#3498db" />
+          <Text
+            style={{
+              ...topBarStyles.buttonTextSchedule,
+              color: "#3498db",
+              fontWeight: "600",
+              marginLeft: 10,
+            }}
+          >
+            Home
+          </Text>
+        </Pressable>
 
-  <Pressable
-    style={{
-      backgroundColor: "rgba(52,152,219,0.15)",
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 14,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.1,
-      shadowRadius: 5,
-    }}
-    onPress={() => navigate("/new-job-choice")}
-  >
-    <Text
-      style={{
-        ...topBarStyles.buttonTextSchedule,
-        color: "#3498db",
-        fontWeight: "600",
-        marginRight: 10, // Add spacing between text and icon
-      }}
-    >
-      List
-    </Text>
-    <Icon name="angle-right" size={iconSize} color="#3498db" />
-  </Pressable>
-</View>
-
+        <Pressable
+          style={{
+            backgroundColor: "rgba(52,152,219,0.15)",
+            paddingVertical: 12,
+            paddingHorizontal: 20,
+            borderRadius: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.1,
+            shadowRadius: 5,
+          }}
+          onPress={() => navigate("/new-job-choice")}
+        >
+          <Text
+            style={{
+              ...topBarStyles.buttonTextSchedule,
+              color: "#3498db",
+              fontWeight: "600",
+              marginRight: 10,
+            }}
+          >
+            List
+          </Text>
+          <Icon name="angle-right" size={iconSize} color="#3498db" />
+        </Pressable>
+      </View>
 
       <Text style={calenderStyles.title}>Tap a date to view appointments</Text>
 
@@ -310,7 +309,8 @@ const AppointmentCalendar = ({ state }) => {
         }}
       >
         <Text style={{ fontWeight: "600", color: "#3498db" }}>
-          Sort by: {sortOption === "distanceClosest"
+          Sort by:{" "}
+          {sortOption === "distanceClosest"
             ? "Distance (Closest)"
             : sortOption === "distanceFurthest"
             ? "Distance (Furthest)"
@@ -318,7 +318,11 @@ const AppointmentCalendar = ({ state }) => {
             ? "Price (Low)"
             : "Price (High)"}
         </Text>
-        <Icon name={showSortPicker ? "angle-up" : "angle-down"} size={16} color="#3498db" />
+        <Icon
+          name={showSortPicker ? "angle-up" : "angle-down"}
+          size={16}
+          color="#3498db"
+        />
       </Pressable>
 
       {showSortPicker && (
@@ -331,23 +335,97 @@ const AppointmentCalendar = ({ state }) => {
             paddingVertical: 8,
           }}
         >
-          <Pressable onPress={() => { setSortOption("distanceClosest"); setShowSortPicker(false); }}>
-            <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>Distance (Closest)</Text>
+          <Pressable
+            onPress={() => {
+              setSortOption("distanceClosest");
+              setShowSortPicker(false);
+            }}
+          >
+            <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>
+              Distance (Closest)
+            </Text>
           </Pressable>
-          <Pressable onPress={() => { setSortOption("distanceFurthest"); setShowSortPicker(false); }}>
-            <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>Distance (Furthest)</Text>
+          <Pressable
+            onPress={() => {
+              setSortOption("distanceFurthest");
+              setShowSortPicker(false);
+            }}
+          >
+            <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>
+              Distance (Furthest)
+            </Text>
           </Pressable>
-          <Pressable onPress={() => { setSortOption("priceLow"); setShowSortPicker(false); }}>
-            <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>Price (Low to High)</Text>
+          <Pressable
+            onPress={() => {
+              setSortOption("priceLow");
+              setShowSortPicker(false);
+            }}
+          >
+            <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>
+              Price (Low to High)
+            </Text>
           </Pressable>
-          <Pressable onPress={() => { setSortOption("priceHigh"); setShowSortPicker(false); }}>
-            <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>Price (High to Low)</Text>
+          <Pressable
+            onPress={() => {
+              setSortOption("priceHigh");
+              setShowSortPicker(false);
+            }}
+          >
+            <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>
+              Price (High to Low)
+            </Text>
           </Pressable>
         </View>
       )}
 
-      {/* Loading / Empty */}
-      {loading ? (
+      {/* Loading / Empty / No Date Selected */}
+      {!selectedDate ? (
+        <View
+        style={{
+          marginTop: 20,
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+          backgroundColor: "rgba(52,152,219,0.05)",
+          borderRadius: 16,
+          marginHorizontal: 20,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 4,
+        }}
+      >
+        <Icon
+          name="calendar"
+          size={36}
+          color="#3498db"
+          style={{ marginBottom: 15, opacity: 0.9 }}
+        />
+        <Text
+          style={{
+            fontSize: 20,
+            fontWeight: "700",
+            color: "#2c3e50",
+            marginBottom: 8,
+            textAlign: "center",
+          }}
+        >
+          Select a date to see appointments
+        </Text>
+        <Text
+          style={{
+            fontSize: 16,
+            color: "#666",
+            textAlign: "center",
+            lineHeight: 22,
+            maxWidth: 300,
+          }}
+        >
+          Tap any highlighted date on the calendar to view available or requested jobs.
+        </Text>
+      </View>
+      
+      ) : loading ? (
         <ActivityIndicator size="large" color="#3498db" style={{ marginTop: 30 }} />
       ) : filteredRequests.length === 0 && filteredAppointments.length === 0 ? (
         <View style={{ marginTop: 50, alignItems: "center", padding: 20 }}>
@@ -376,7 +454,9 @@ const AppointmentCalendar = ({ state }) => {
         <>
           {filteredRequests.length > 0 && (
             <View>
-              <Text style={calenderStyles.sectionTitle}>Requested Appointments</Text>
+              <Text style={calenderStyles.sectionTitle}>
+                Requested Appointments
+              </Text>
               {filteredRequests.map((appt) => (
                 <RequestedTile key={appt.id} {...appt} cleanerId={userId} />
               ))}
@@ -384,7 +464,9 @@ const AppointmentCalendar = ({ state }) => {
           )}
           {filteredAppointments.length > 0 && (
             <View>
-              <Text style={calenderStyles.sectionTitle}>Available Appointments</Text>
+              <Text style={calenderStyles.sectionTitle}>
+                Available Appointments
+              </Text>
               {filteredAppointments.map((appt) => (
                 <EmployeeAssignmentTile
                   key={appt.id}
