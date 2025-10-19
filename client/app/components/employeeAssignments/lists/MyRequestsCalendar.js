@@ -378,11 +378,16 @@ const MyRequestsCalendar = ({ state }) => {
               maxWidth: 300,
             }}
           >
-            Tap any highlighted date on the calendar to view pending job requests.
+            Tap any highlighted date on the calendar to view pending job
+            requests.
           </Text>
         </View>
       ) : loading ? (
-        <ActivityIndicator size="large" color="#3498db" style={{ marginTop: 30 }} />
+        <ActivityIndicator
+          size="large"
+          color="#3498db"
+          style={{ marginTop: 30 }}
+        />
       ) : filteredRequests.length === 0 ? (
         <View
           style={{
@@ -429,8 +434,14 @@ const MyRequestsCalendar = ({ state }) => {
           </Text>
         </View>
       ) : (
-        <>
-          <Text style={calenderStyles.sectionTitle}>Requested Appointments</Text>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 60 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={calenderStyles.sectionTitle}>
+            Requested Appointments
+          </Text>
           {filteredRequests.map((req) => (
             <RequestedTile
               key={req.id}
@@ -451,7 +462,7 @@ const MyRequestsCalendar = ({ state }) => {
               }}
             />
           ))}
-        </>
+        </ScrollView>
       )}
     </ScrollView>
   );

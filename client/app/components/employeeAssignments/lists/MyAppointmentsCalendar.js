@@ -24,9 +24,7 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) ** 2;
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
@@ -43,6 +41,7 @@ const AppointmentCalendar = ({ state }) => {
   const [sortOption, setSortOption] = useState("distanceClosest");
   const [showSortPicker, setShowSortPicker] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(false);
 
   const navigate = useNavigate();
   const { width } = Dimensions.get("window");
@@ -93,7 +92,10 @@ const AppointmentCalendar = ({ state }) => {
   // Fetch distances for sorting
   useEffect(() => {
     const fetchDistances = async () => {
-      if (!userLocation || (appointments.length === 0 && requests.length === 0)) {
+      if (
+        !userLocation ||
+        (appointments.length === 0 && requests.length === 0)
+      ) {
         setLoading(false);
         return;
       }
@@ -117,7 +119,10 @@ const AppointmentCalendar = ({ state }) => {
     };
 
     fetchDistances();
-  }, [userLocation, appointments, requests]);
+    if (refresh) {
+      setRefresh(false);
+    }
+  }, [userLocation, appointments, requests, refresh]);
 
   // Sorting helper
   const sortAppointments = (list) => {
@@ -359,6 +364,7 @@ const AppointmentCalendar = ({ state }) => {
       {/* Display filtered appointments/requests only */}
       {!selectedDate ? (
         <View
+          pointerEvents="none"
           style={{
             marginTop: 60,
             alignItems: "center",
@@ -399,11 +405,16 @@ const AppointmentCalendar = ({ state }) => {
               maxWidth: 300,
             }}
           >
-            Tap any highlighted date on the calendar to view available or requested jobs.
+            Tap any highlighted date on the calendar to view available or
+            requested jobs.
           </Text>
         </View>
       ) : loading ? (
-        <ActivityIndicator size="large" color="#3498db" style={{ marginTop: 30 }} />
+        <ActivityIndicator
+          size="large"
+          color="#3498db"
+          style={{ marginTop: 30 }}
+        />
       ) : filteredRequests.length === 0 && filteredAppointments.length === 0 ? (
         <View
           style={{
@@ -450,19 +461,62 @@ const AppointmentCalendar = ({ state }) => {
           </Text>
         </View>
       ) : (
-        <>
+        <ScrollView
+          style={{ flex: 1, zIndex: 1 }}
+          contentContainerStyle={{ paddingBottom: 60, paddingHorizontal: 10 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {filteredRequests.length > 0 && (
-            <View>
+            <View style={{ marginBottom: 20 }}>
               <Text style={calenderStyles.sectionTitle}>
                 Requested Appointments
               </Text>
               {filteredRequests.map((appt) => (
-                <RequestedTile key={appt.id} {...appt} cleanerId={userId} />
+                <RequestedTile
+                  key={appt.id}
+                  {...appt}
+                  cleanerId={userId}
+                  removeRequest={async (employeeId, appointmentId) => {
+                    try {
+                      await FetchData.removeRequest(employeeId, appointmentId);
+                      setRequests((prev) => {
+                        const removed = prev.find(
+                          (r) => r.id === appointmentId
+                        );
+                        if (removed) {
+                          setAppointments((appsPrev) => {
+                            const exists = appsPrev.some(
+                              (a) => a.id === appointmentId
+                            );
+                            return exists ? appsPrev : [...appsPrev, removed];
+                          });
+
+                          setFilteredAppointments((appsPrev) => {
+                            const exists = appsPrev.some(
+                              (a) => a.id === appointmentId
+                            );
+                            return exists ? appsPrev : [...appsPrev, removed];
+                          });
+                        }
+
+                        return prev.filter((r) => r.id !== appointmentId);
+                      });
+
+                      setFilteredRequests((prev) =>
+                        prev.filter((r) => r.id !== appointmentId)
+                      );
+                    } catch (err) {
+                      console.error("Error removing request:", err);
+                    }
+                  }}
+                />
               ))}
             </View>
           )}
+
           {filteredAppointments.length > 0 && (
-            <View>
+            <View style={{ marginBottom: 20 }}>
               <Text style={calenderStyles.sectionTitle}>
                 Available Appointments
               </Text>
@@ -472,13 +526,43 @@ const AppointmentCalendar = ({ state }) => {
                   {...appt}
                   cleanerId={userId}
                   assigned={appt.employeesAssigned?.includes(String(userId))}
-                  addEmployee={async () => {}}
+                  addEmployee={async (employeeId, appointmentId) => {
+                    try {
+                      await FetchData.addEmployee(employeeId, appointmentId);
+                      setAppointments((prev) => {
+                        const appointment = prev.find(
+                          (r) => r.id === appointmentId
+                        );
+                        if (appointment) {
+                          setRequests((reqPrev) => {
+                            const exists = reqPrev.some(
+                              (r) => r.id === appointmentId
+                            );
+                            return exists ? reqPrev : [...reqPrev, appointment];
+                          });
+                          setFilteredRequests((reqPrev) => {
+                            const exists = reqPrev.some(
+                              (r) => r.id === appointmentId
+                            );
+                            return exists ? reqPrev : [...reqPrev, appointment];
+                          });
+                        }
+                        return prev.filter((r) => r.id !== appointmentId);
+                      });
+                      setFilteredAppointments((prev) =>
+                        prev.filter((r) => r.id !== appointmentId)
+                      );
+                      setRefresh(true);
+                    } catch (err) {
+                      console.error("Error sending request:", err);
+                    }
+                  }}
                   removeEmployee={async () => {}}
                 />
               ))}
             </View>
           )}
-        </>
+        </ScrollView>
       )}
     </ScrollView>
   );
