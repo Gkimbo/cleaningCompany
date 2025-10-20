@@ -1,19 +1,18 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Pressable,
-  View,
-  Text,
-  ScrollView,
-  Dimensions,
   ActivityIndicator,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { useNavigate } from "react-router-native";
-import homePageStyles from "../../../services/styles/HomePageStyles";
 import Icon from "react-native-vector-icons/FontAwesome";
-import topBarStyles from "../../../services/styles/TopBarStyles";
+import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
-import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
+import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -34,6 +33,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
   const [sortOption, setSortOption] = useState("distanceClosest");
+  const [showSortPicker, setShowSortPicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [redirectToJobs, setRedirectToJobs] = useState(false);
   const [refresh, setRefresh] = useState(false);
@@ -82,9 +82,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     }
     fetchUser();
 
-    if (refresh) {
-      setRefresh(false);
-    }
+    if (refresh) setRefresh(false);
   }, [state.currentUser.token, refresh]);
 
   useEffect(() => {
@@ -108,32 +106,22 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
         console.error("Error fetching appointment locations:", error);
       }
     };
+    if (allAppointments.length > 0) fetchLocations();
+  }, [allAppointments]);
 
-    if (allAppointments.length > 0) {
-      fetchLocations();
-    }
+  // Fix spinner for empty appointments
+  useEffect(() => {
+    if (allAppointments.length === 0) setLoading(false);
   }, [allAppointments]);
 
   useEffect(() => {
-    if (allAppointments.length === 0) {
+    if (allAppointments.length > 0 && userLocation && appointmentLocations)
       setLoading(false);
-    }
-  }, [allAppointments]);
-
-  useEffect(() => {
-    if (
-      allAppointments.length > 0 &&
-      userLocation &&
-      appointmentLocations
-    ) {
-      setLoading(false);
-    }
   }, [userLocation, appointmentLocations, allAppointments]);
 
   const sortedAppointments = useMemo(() => {
     let sorted = allAppointments.map((appointment) => {
       let distance = null;
-
       if (
         userLocation &&
         appointmentLocations &&
@@ -147,14 +135,11 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
           loc.longitude
         );
       }
-
       return { ...appointment, distance };
     });
 
     if (sortOption === "distanceClosest") {
-      sorted.sort(
-        (a, b) => (a.distance || Infinity) - (b.distance || Infinity)
-      );
+      sorted.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
     } else if (sortOption === "distanceFurthest") {
       sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
     } else if (sortOption === "priceLow") {
@@ -204,96 +189,119 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     ));
 
   return (
-    <View style={{ ...homePageStyles.container, flexDirection: "column" }}>
-       <View
-        style={{
-          ...homePageStyles.backButtonSelectNewJob,
-          flexDirection: "row",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 20, 
-          marginVertical: 20,
-        }}
-      >
-        <Pressable
-          style={homePageStyles.backButtonForm}
-          onPress={() => navigate("/")}
-        >
-          <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-          >
-            <Icon name="angle-left" size={iconSize} color="black" />
-            <View style={{ marginLeft: 15 }}>
-              <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
-            </View>
-          </View>
+    <View style={styles.container}>
+      {/* Top Buttons */}
+      <View style={styles.topButtonRow}>
+        <Pressable style={styles.glassButton} onPress={() => navigate("/")}>
+          <Icon name="angle-left" size={iconSize} color="#007AFF" />
+          <Text style={styles.glassButtonText}>Back</Text>
         </Pressable>
 
         <Pressable
-          style={homePageStyles.backButtonForm}
+          style={styles.glassButton}
           onPress={() => navigate("/my-appointment-calender")}
         >
-          <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-          >
-            <View style={{ marginRight: 15 }}>
-              <Text style={topBarStyles.buttonTextSchedule}>Calendar</Text>
-            </View>
-            <Icon name="angle-right" size={iconSize} color="black" />
-          </View>
+          <Text style={styles.glassButtonText}>Calendar</Text>
+          <Icon name="angle-right" size={iconSize} color="#007AFF" />
         </Pressable>
       </View>
 
+      {/* Sort Button */}
+      <Pressable
+        style={styles.sortButton}
+        onPress={() => setShowSortPicker(!showSortPicker)}
+      >
+        <Text style={styles.sortText}>
+          Sort by:{" "}
+          {sortOption === "distanceClosest"
+            ? "Distance (Closest)"
+            : sortOption === "distanceFurthest"
+            ? "Distance (Furthest)"
+            : sortOption === "priceLow"
+            ? "Price (Low to High)"
+            : "Price (High to Low)"}
+        </Text>
+        <Icon
+          name={showSortPicker ? "angle-up" : "angle-down"}
+          size={20}
+          color="#007AFF"
+        />
+      </Pressable>
+
+      {showSortPicker && (
+        <View style={styles.sortOptions}>
+          <Pressable onPress={() => setSortOption("distanceClosest")} style={styles.option}>
+            <Text>Distance (Closest)</Text>
+          </Pressable>
+          <Pressable onPress={() => setSortOption("distanceFurthest")} style={styles.option}>
+            <Text>Distance (Furthest)</Text>
+          </Pressable>
+          <Pressable onPress={() => setSortOption("priceLow")} style={styles.option}>
+            <Text>Price (Low to High)</Text>
+          </Pressable>
+          <Pressable onPress={() => setSortOption("priceHigh")} style={styles.option}>
+            <Text>Price (High to Low)</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Appointments List */}
       {loading ? (
-        <ActivityIndicator size="large" color="#0000ff" />
+        <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 40 }} />
       ) : assignedAppointments.length > 0 ? (
-        <ScrollView>{assignedAppointments}</ScrollView>
+        <ScrollView style={{ marginTop: 10 }}>{assignedAppointments}</ScrollView>
       ) : (
-        <>
-          <Text
-            style={[
-              homePageStyles.title,
-              {
-                fontSize: 18,
-                fontWeight: "600",
-                color: "#1E1E1E",
-                textAlign: "center",
-                letterSpacing: 0.5,
-              },
-            ]}
-          >
-            You have no jobs scheduled.
-          </Text>
-          <Text
-            style={[
-              homePageStyles.homeTileTitle,
-              {
-                fontSize: 18,
-                fontWeight: "600",
-                color: "#1E1E1E",
-                textAlign: "center",
-                letterSpacing: 0.5,
-              },
-            ]}
-          >
-            Schedule jobs
-            <Pressable
-              onPress={() => setRedirectToJobs(true)}
-              style={({ pressed }) => [
-                {
-                  textDecorationLine: pressed ? "underline" : "none",
-                  color: pressed ? "#FF6B00" : "#007AFF",
-                  fontWeight: "700",
-                },
-              ]}
-            >
-              <Text>{` HERE! `}</Text>
-            </Pressable>
-          </Text>
-        </>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>You have no jobs scheduled.</Text>
+          <Pressable onPress={() => setRedirectToJobs(true)}>
+            <Text style={styles.linkText}>Schedule jobs HERE!</Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );
 };
 
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 15, backgroundColor: "#F8F9FB" },
+  topButtonRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 30, marginBottom: 15 },
+  glassButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,122,255,0.1)",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0,122,255,0.3)",
+    gap: 8,
+  },
+  glassButtonText: { color: "#007AFF", fontWeight: "600", fontSize: 16 },
+  sortButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(0,122,255,0.1)",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0,122,255,0.3)",
+    marginBottom: 10,
+  },
+  sortText: { color: "#007AFF", fontWeight: "600", fontSize: 15 },
+  sortOptions: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingVertical: 5,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.1)",
+  },
+  option: { paddingVertical: 10, paddingHorizontal: 15 },
+  emptyContainer: { alignItems: "center", marginTop: 50 },
+  emptyText: { fontSize: 18, fontWeight: "600", marginBottom: 10, color: "#1E1E1E" },
+  linkText: { fontSize: 16, color: "#007AFF", fontWeight: "700" },
+});
+
 export default EmployeeAssignmentsList;
+

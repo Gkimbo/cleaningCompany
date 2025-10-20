@@ -1,21 +1,19 @@
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  Pressable,
-  View,
-  Text,
-  ScrollView,
-  Dimensions,
-  ActivityIndicator,
-} from "react-native";
-import { useNavigate } from "react-router-native";
 import { Picker } from "@react-native-picker/picker";
-import homePageStyles from "../../../services/styles/HomePageStyles";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import topBarStyles from "../../../services/styles/TopBarStyles";
+import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
+import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import RequestedTile from "../tiles/RequestedTile";
-import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -38,10 +36,18 @@ const SelectNewJobList = ({ state }) => {
   const [sortOption, setSortOption] = useState("distanceClosest");
   const [seeCalender, setSeeCalender] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showSortPicker, setShowSortPicker] = useState(false);
 
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
+
+const sortLabelMap = {
+  distanceClosest: "Distance (Closest)",
+  distanceFurthest: "Distance (Furthest)",
+  priceLow: "Price (Low → High)",
+  priceHigh: "Price (High → Low)",
+};
 
   const requestsAndAppointments = useMemo(() => {
     const requestsWithFlag = allRequests.map((item) => ({
@@ -182,104 +188,99 @@ const SelectNewJobList = ({ state }) => {
   return (
     <View
       style={{
-        ...homePageStyles.container,
-        flexDirection: "column",
-        marginTop: "27%",
+        flex: 1,
+        backgroundColor: "#f8f9fa",
+        paddingHorizontal: 16,
+        paddingTop: 30, // more space from top bar
       }}
     >
+      {/* --- Top Navigation Buttons --- */}
       <View
         style={{
-          ...homePageStyles.backButtonSelectNewJobList,
           flexDirection: "row",
-          justifyContent: "space-evenly",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 25,
         }}
       >
         <Pressable
-          style={homePageStyles.backButtonForm}
+          style={styles.navButton}
           onPress={() => navigate("/")}
         >
-          <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-          >
-            <Icon name="angle-left" size={iconSize} color="black" />
-            <View style={{ marginLeft: 15 }}>
-              <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
-            </View>
-          </View>
+          <Icon name="angle-left" size={iconSize + 4} color="#007AFF" />
+          <Text style={styles.navButtonText}>Back</Text>
         </Pressable>
+  
         <Pressable
-          style={homePageStyles.backButtonForm}
+          style={styles.navButton}
           onPress={pressedSeeCalender}
         >
-          <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
-          >
-            <View style={{ marginRight: 15 }}>
-              <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
-            </View>
-            <Icon name="angle-right" size={iconSize} color="black" />
-          </View>
+          <Text style={styles.navButtonText}>Calendar</Text>
+          <Icon name="calendar" size={iconSize} color="#007AFF" style={{ marginLeft: 8 }} />
+        </Pressable>
+      </View>
+  
+   {/* --- Sort Button & Picker Modal --- */}
+<View style={styles.sortContainer}>
+  <Pressable style={styles.sortButton} onPress={() => setShowSortPicker(true)}>
+    <Icon name="sort" size={16} color="#3da9fc" />
+    <Text style={styles.sortButtonText}>
+      {sortLabelMap[sortOption] || "Sort Jobs"}
+    </Text>
+  </Pressable>
+
+  {showSortPicker && (
+  <View style={styles.pickerOverlay}>
+    <View style={styles.bottomSheet}>
+      <View style={styles.sheetHeader}>
+        <Text style={styles.sheetTitle}>Sort Jobs By</Text>
+        <Pressable onPress={() => setShowSortPicker(false)}>
+          <Text style={styles.doneButtonText}>Done</Text>
         </Pressable>
       </View>
 
-      <View
-        style={{
-          margin: 10,
-          borderWidth: 1,
-          borderRadius: 5,
-          borderColor: "#ccc",
-        }}
-      >
+      <View style={styles.pickerContainer}>
         <Picker
           selectedValue={sortOption}
           onValueChange={(itemValue) => setSortOption(itemValue)}
+          itemStyle={{ fontSize: 18, height: 150 }} // Makes it easier to scroll and tap
         >
-          <Picker.Item
-            label="Sort by: Distance (Closest)"
-            value="distanceClosest"
-          />
-          <Picker.Item
-            label="Sort by: Distance (Furthest)"
-            value="distanceFurthest"
-          />
-          <Picker.Item label="Sort by: Price (Low to High)" value="priceLow" />
-          <Picker.Item label="Sort by: Price (High to Low)" value="priceHigh" />
+          <Picker.Item label="Distance (Closest)" value="distanceClosest" />
+          <Picker.Item label="Distance (Furthest)" value="distanceFurthest" />
+          <Picker.Item label="Price (Low → High)" value="priceLow" />
+          <Picker.Item label="Price (High → Low)" value="priceHigh" />
         </Picker>
       </View>
+    </View>
+  </View>
+)}
 
+</View>
+
+
+  
+      {/* --- Loading / Empty States --- */}
       {loading ? (
         <ActivityIndicator
           size="large"
-          color="#0000ff"
-          style={{ marginTop: 20 }}
+          color="#007AFF"
+          style={{ marginTop: 30 }}
         />
       ) : sortedData.length === 0 ? (
-        <View style={{ marginTop: 50, alignItems: "center", padding: 20 }}>
-          <Text
-            style={{
-              fontSize: 18,
-              fontWeight: "600",
-              color: "#444",
-              marginBottom: 10,
-            }}
-          >
-            No appointments yet.
-          </Text>
-          <Text
-            style={{
-              fontSize: 16,
-              color: "#666",
-              textAlign: "center",
-              lineHeight: 22,
-            }}
-          >
-            Check back later to see upcoming appointments or job requests.
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No appointments yet</Text>
+          <Text style={styles.emptyText}>
+            Check back later to see upcoming jobs or new requests.
           </Text>
         </View>
       ) : (
-        <ScrollView>
+        /* --- Scrollable Job List --- */
+        <ScrollView
+          style={{ marginTop: 10 }}
+          showsVerticalScrollIndicator={false}
+        >
           {sortedData.map((appointment) => (
-            <View key={appointment.id}>
+            <View key={appointment.id} style={styles.tileWrapper}>
               {appointment.isRequest ? (
                 <RequestedTile
                   {...appointment}
@@ -288,9 +289,7 @@ const SelectNewJobList = ({ state }) => {
                     try {
                       await FetchData.removeRequest(employeeId, appointmentId);
                       setAllRequests((prev) => {
-                        const removed = prev.find(
-                          (a) => a.id === appointmentId
-                        );
+                        const removed = prev.find((a) => a.id === appointmentId);
                         if (!removed) return prev;
                         setAllAppointments((apps) => [...apps, removed]);
                         return prev.filter((a) => a.id !== appointmentId);
@@ -312,9 +311,7 @@ const SelectNewJobList = ({ state }) => {
                     try {
                       await FetchData.addEmployee(employeeId, appointmentId);
                       setAllAppointments((prev) => {
-                        const assigned = prev.find(
-                          (a) => a.id === appointmentId
-                        );
+                        const assigned = prev.find((a) => a.id === appointmentId);
                         if (!assigned) return prev;
                         setAllRequests((reqs) => [...reqs, assigned]);
                         return prev.filter((a) => a.id !== appointmentId);
@@ -350,6 +347,156 @@ const SelectNewJobList = ({ state }) => {
       )}
     </View>
   );
+  
 };
+const styles = {
+  // --- NAVIGATION BUTTONS (Back / Calendar) ---
+  navButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,122,255,0.1)",
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    backdropFilter: "blur(10px)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  navButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#007AFF",
+    marginLeft: 8,
+    letterSpacing: 0.4,
+  },
+
+  // --- SORT BUTTON / DROPDOWN ---
+  sortContainer: {
+    alignItems: "flex-end",
+    marginBottom: 15,
+    marginRight: 15,
+  },
+  sortButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(61,169,252,0.15)",
+    borderColor: "rgba(255,255,255,0.25)",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  sortButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#3da9fc",
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+
+  // --- PICKER MODAL / BOTTOM SHEET ---
+  pickerOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+  },
+  bottomSheet: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 30,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#222",
+  },
+  doneButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#3da9fc",
+  },
+  pickerContainer: {
+    backgroundColor: "#fff",
+    justifyContent: "center",
+  },
+
+  // --- EMPTY STATE ---
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 50,
+    padding: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#222",
+    marginBottom: 10,
+  },
+  emptyText: {
+    fontSize: 15,
+    color: "#555",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+
+  // --- TILE WRAPPER (for job/request cards) ---
+  tileWrapper: {
+    marginBottom: 15,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+
+  // --- CLOSE BUTTON / CONFIRM ACTION ---
+  closeButton: {
+    backgroundColor: "#3da9fc",
+    marginTop: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  closeButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+};
+
+
 
 export default SelectNewJobList;

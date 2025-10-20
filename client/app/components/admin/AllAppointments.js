@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { Pressable, View, Text, Dimensions, Animated, Easing } from "react-native";
-import { useNavigate } from "react-router-native";
-import homePageStyles from "../../services/styles/HomePageStyles";
-import AppointmentTile from "../tiles/AppointmentTile";
+import React, { useEffect, useState } from "react";
+import { Animated, Dimensions, Easing, Pressable, ScrollView, Text, View } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import topBarStyles from "../../services/styles/TopBarStyles";
+import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import FetchData from "../../services/fetchRequests/fetchData";
+import homePageStyles from "../../services/styles/HomePageStyles";
+import topBarStyles from "../../services/styles/TopBarStyles";
+import AppointmentTile from "../tiles/AppointmentTile";
 
 const groupAppointmentsByHome = (appointments) => {
   const groupedByHome = new Map();
@@ -36,7 +36,7 @@ const AllAppointments = ({ state }) => {
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
-console.log(state)
+
   const fetchAppointments = async () => {
     const response = await FetchData.get(
       "/api/v1/users/appointments",
@@ -109,7 +109,7 @@ console.log(state)
 
   for (const [homeId, appointments] of groupedAppointments) {
     const appointmentsContainer = (
-      <View key={homeId} style={{ marginBottom: 10, borderWidth: 3, borderColor: "blue", padding: 10 }}>
+      <View key={homeId} style={{ marginBottom: 10, borderWidth: 3, borderColor: "black", padding: 5 }}>
         <Text style={{ fontWeight: "bold", fontSize: 16, marginBottom: 5 }}>
           Home ID: {homeId}
         </Text>
@@ -148,7 +148,11 @@ console.log(state)
           </View>
         </Pressable>
       </View>
-      {appointmentArray}
+
+      {/* Make this scrollable */}
+      <ScrollView style={{ flex: 1 }}>
+        {appointmentArray}
+      </ScrollView>
     </View>
   );
 };

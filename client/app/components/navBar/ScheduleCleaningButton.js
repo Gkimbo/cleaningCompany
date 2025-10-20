@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, Text } from "react-native";
 import { useNavigate } from "react-router-native";
-import topBarStyles from "../../services/styles/TopBarStyles";
+import ButtonStyles from "../../services/styles/ButtonStyles";
 
 const ScheduleCleaningButton = ({ closeModal }) => {
 	const [redirect, setRedirect] = useState(false);
@@ -19,21 +19,17 @@ const ScheduleCleaningButton = ({ closeModal }) => {
 		setRedirect(true);
 	};
 
-	return (
-		<Pressable style={styles.button} onPress={handlePress}>
-			<Text style={topBarStyles.buttonTextSchedule}>
-				Book or cancel a Cleaning
-			</Text>
-		</Pressable>
-	);
-};
-
-const styles = {
-	button: {
-		backgroundColor: "#f9bc60",
-		padding: 10,
-		borderRadius: 50,
-	},
+ return (
+	<Pressable
+	  style={({ pressed }) => [
+		ButtonStyles.glassButton,
+		pressed && { backgroundColor: "rgba(255,255,255,0.25)" },
+	  ]}
+	  onPress={handlePress}
+	>
+	  <Text style={ButtonStyles.buttonText}>Book or Cancel a cleaning</Text>
+	</Pressable>
+  );
 };
 
 export default ScheduleCleaningButton;

@@ -1,23 +1,21 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
   Dimensions,
   Pressable,
-  ActivityIndicator,
   ScrollView,
+  Text,
+  View,
 } from "react-native";
 import { Calendar } from "react-native-calendars";
-import { Picker } from "@react-native-picker/picker";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
+import calenderStyles from "../../../services/styles/CalenderSyles";
+import topBarStyles from "../../../services/styles/TopBarStyles";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import RequestedTile from "../tiles/RequestedTile";
-import homePageStyles from "../../../services/styles/HomePageStyles";
-import topBarStyles from "../../../services/styles/TopBarStyles";
-import calenderStyles from "../../../services/styles/CalenderSyles";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -41,12 +39,15 @@ const AppointmentCalendar = ({ state }) => {
   const [filteredAppointments, setFilteredAppointments] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [sortOption, setSortOption] = useState("distanceClosest");
+  const [showSortPicker, setShowSortPicker] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refresh, setRefresh] = useState(false);
+
   const navigate = useNavigate();
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 
+  // Fetch appointments and user
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -61,12 +62,14 @@ const AppointmentCalendar = ({ state }) => {
         setUserId(userData.user.id);
       } catch (error) {
         console.error("Fetch error:", error);
+        setLoading(false);
       }
     };
 
     if (state.currentUser?.token) fetchData();
   }, [state.currentUser?.token]);
 
+  // Get user location
   useEffect(() => {
     if (navigator.geolocation) {
       const watcher = navigator.geolocation.watchPosition(
@@ -86,10 +89,18 @@ const AppointmentCalendar = ({ state }) => {
     }
   }, []);
 
+  // Fetch distances for sorting
   useEffect(() => {
     const fetchDistances = async () => {
-      const all = [...appointments, ...requests];
+      if (
+        !userLocation ||
+        (appointments.length === 0 && requests.length === 0)
+      ) {
+        setLoading(false);
+        return;
+      }
 
+      const all = [...appointments, ...requests];
       const locations = await Promise.all(
         all.map(async (appt) => {
           const loc = await FetchData.getLatAndLong(appt.homeId);
@@ -103,20 +114,21 @@ const AppointmentCalendar = ({ state }) => {
           return { [appt.homeId]: { location: loc, distance } };
         })
       );
-
-      const merged = Object.assign({}, ...locations.filter(Boolean));
-      setAppointmentLocations(merged);
+      setAppointmentLocations(Object.assign({}, ...locations.filter(Boolean)));
       setLoading(false);
     };
 
-    if (userLocation && appointments.length) fetchDistances();
-  }, [userLocation, appointments, requests]);
+    fetchDistances();
+    if (refresh) {
+      setRefresh(false);
+    }
+  }, [userLocation, appointments, requests, refresh]);
 
+  // Sorting helper
   const sortAppointments = (list) => {
     return [...list].sort((a, b) => {
       const getDistance = (appt) =>
         appointmentLocations[appt.homeId]?.distance || Infinity;
-
       const getPrice = (appt) => Number(appt.price) || 0;
 
       switch (sortOption) {
@@ -134,21 +146,16 @@ const AppointmentCalendar = ({ state }) => {
     });
   };
 
+  // Filter by date
   const handleDateSelect = (date, appts = appointments, reqs = requests) => {
     setSelectedDate(date.dateString);
 
     const sameDay = (appt) => appt.date === date.dateString;
 
-    const updatedAppointments = appts
-  .filter(
-    (a) =>
-      sameDay(a) && a.employeesAssigned?.includes(String(userId))
-  )
-  .map((a) => ({
-    ...a,
-    distance: appointmentLocations[a.homeId]?.distance || null,
-  }));
-
+    const updatedAppointments = appts.filter(sameDay).map((a) => ({
+      ...a,
+      distance: appointmentLocations[a.homeId]?.distance || null,
+    }));
 
     const updatedRequests = reqs.filter(sameDay).map((r) => ({
       ...r,
@@ -159,29 +166,27 @@ const AppointmentCalendar = ({ state }) => {
     setFilteredRequests(sortAppointments(updatedRequests));
   };
 
+  // Update filtering when sort changes
   useEffect(() => {
-    if (selectedDate) {
-      handleDateSelect({ dateString: selectedDate });
-    }
+    if (selectedDate) handleDateSelect({ dateString: selectedDate });
   }, [sortOption]);
 
+  // Calendar day render
   const renderDay = useCallback(
     ({ date }) => {
       const today = new Date();
       const dayDate = new Date(date.dateString);
       const isPast = dayDate < new Date(today.toDateString());
-  
-      const hasAssignedAppointment = appointments.some(
-        (a) =>
-          a.date === date.dateString &&
-          a.employeesAssigned?.includes(String(userId))
-      );
-  
+
+      const hasData =
+        appointments.some((a) => a.date === date.dateString) ||
+        requests.some((r) => r.date === date.dateString);
+
       const isSelected = selectedDate === date.dateString;
-  
+
       return (
         <Pressable
-          disabled={isPast || !hasAssignedAppointment}
+          disabled={isPast || !hasData}
           style={{
             justifyContent: "center",
             alignItems: "center",
@@ -189,57 +194,94 @@ const AppointmentCalendar = ({ state }) => {
             borderRadius: 20,
             backgroundColor: isSelected
               ? "#3498db"
-              : hasAssignedAppointment && !isPast
-                ? "#b2ebf2"
-                : "transparent",
+              : hasData && !isPast
+              ? "rgba(52,152,219,0.2)"
+              : "transparent",
             opacity: isPast ? 0.4 : 1,
           }}
-          onPress={() => !isPast && hasAssignedAppointment && handleDateSelect(date)}
+          onPress={() => !isPast && hasData && handleDateSelect(date)}
         >
           <Text style={{ color: isPast ? "#999" : "#000" }}>{date.day}</Text>
         </Pressable>
       );
     },
-    [appointments, selectedDate, userId, refreshKey]
+    [appointments, requests, selectedDate]
   );
 
   return (
-    <ScrollView style={{ flex: 1 }}>
-       <View
+    <ScrollView style={{ flex: 1, paddingBottom: 30 }}>
+      {/* Top Buttons */}
+      <View
         style={{
           flexDirection: "row",
-          justifyContent: "space-between",
-          marginHorizontal: 20,
-          marginTop: "30%",
-          marginBottom: 10,
+          justifyContent: "center",
+          marginTop: 40,
+          marginBottom: 20,
+          gap: 20,
         }}
       >
         <Pressable
           style={{
-            ...homePageStyles.backButtonForm,
+            backgroundColor: "rgba(52,152,219,0.15)",
+            paddingVertical: 12,
+            paddingHorizontal: 20,
+            borderRadius: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.1,
+            shadowRadius: 5,
           }}
           onPress={() => navigate("/")}
         >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Icon name="angle-left" size={iconSize} />
-            <Text style={topBarStyles.buttonTextSchedule}>Home</Text>
-          </View>
+          <Icon name="angle-left" size={iconSize} color="#3498db" />
+          <Text
+            style={{
+              ...topBarStyles.buttonTextSchedule,
+              color: "#3498db",
+              fontWeight: "600",
+              marginLeft: 10,
+            }}
+          >
+            Home
+          </Text>
         </Pressable>
+
         <Pressable
           style={{
-            ...homePageStyles.backButtonForm,
+            backgroundColor: "rgba(52,152,219,0.15)",
+            paddingVertical: 12,
+            paddingHorizontal: 20,
+            borderRadius: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.1,
+            shadowRadius: 5,
           }}
-          onPress={() => navigate("/employee-assignments")}
+          onPress={() => navigate("/new-job-choice")}
         >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={topBarStyles.buttonTextSchedule}>List</Text>
-            <Icon name="angle-right" size={iconSize} />
-          </View>
+          <Text
+            style={{
+              ...topBarStyles.buttonTextSchedule,
+              color: "#3498db",
+              fontWeight: "600",
+              marginRight: 10,
+            }}
+          >
+            List
+          </Text>
+          <Icon name="angle-right" size={iconSize} color="#3498db" />
         </Pressable>
       </View>
 
       <Text style={calenderStyles.title}>Tap a date to view appointments</Text>
 
+      {/* Calendar */}
       <Calendar
         current={new Date().toISOString().split("T")[0]}
         onDayPress={handleDateSelect}
@@ -253,48 +295,228 @@ const AppointmentCalendar = ({ state }) => {
         )}
       />
 
-      <View style={{ margin: 10 }}>
-        <Picker
-          selectedValue={sortOption}
-          onValueChange={(val) => setSortOption(val)}
-        >
-          <Picker.Item label="Distance (Closest)" value="distanceClosest" />
-          <Picker.Item label="Distance (Furthest)" value="distanceFurthest" />
-          <Picker.Item label="Price (Low to High)" value="priceLow" />
-          <Picker.Item label="Price (High to Low)" value="priceHigh" />
-        </Picker>
-      </View>
+      {/* Sort Picker */}
+      <Pressable
+        onPress={() => setShowSortPicker(!showSortPicker)}
+        style={{
+          margin: 10,
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+          borderRadius: 12,
+          backgroundColor: "rgba(52,152,219,0.15)",
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.1,
+          shadowRadius: 5,
+        }}
+      >
+        <Text style={{ fontWeight: "600", color: "#3498db" }}>
+          Sort by:{" "}
+          {sortOption === "distanceClosest"
+            ? "Distance (Closest)"
+            : sortOption === "distanceFurthest"
+            ? "Distance (Furthest)"
+            : sortOption === "priceLow"
+            ? "Price (Low)"
+            : "Price (High)"}
+        </Text>
+        <Icon
+          name={showSortPicker ? "angle-up" : "angle-down"}
+          size={16}
+          color="#3498db"
+        />
+      </Pressable>
 
-      {loading ? (
-        <ActivityIndicator size="large" color="blue" />
+      {showSortPicker && (
+        <View
+          style={{
+            marginHorizontal: 10,
+            marginBottom: 10,
+            backgroundColor: "rgba(52,152,219,0.15)",
+            borderRadius: 12,
+            paddingVertical: 8,
+          }}
+        >
+          {[
+            { label: "Distance (Closest)", value: "distanceClosest" },
+            { label: "Distance (Furthest)", value: "distanceFurthest" },
+            { label: "Price (Low to High)", value: "priceLow" },
+            { label: "Price (High to Low)", value: "priceHigh" },
+          ].map((item) => (
+            <Pressable
+              key={item.value}
+              onPress={() => {
+                setSortOption(item.value);
+                setShowSortPicker(false);
+              }}
+            >
+              <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>
+                {item.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Display filtered appointments/requests only */}
+      {!selectedDate ? (
+        <View
+          pointerEvents="none"
+          style={{
+            marginTop: 60,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            backgroundColor: "rgba(52,152,219,0.05)",
+            borderRadius: 16,
+            marginHorizontal: 20,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 4,
+          }}
+        >
+          <Icon
+            name="calendar"
+            size={36}
+            color="#3498db"
+            style={{ marginBottom: 15, opacity: 0.9 }}
+          />
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: "700",
+              color: "#2c3e50",
+              marginBottom: 8,
+              textAlign: "center",
+            }}
+          >
+            Select a date to see appointments
+          </Text>
+          <Text
+            style={{
+              fontSize: 16,
+              color: "#666",
+              textAlign: "center",
+              lineHeight: 22,
+              maxWidth: 300,
+            }}
+          >
+            Tap any highlighted date on the calendar to view available or
+            requested jobs.
+          </Text>
+        </View>
+      ) : loading ? (
+        <ActivityIndicator
+          size="large"
+          color="#3498db"
+          style={{ marginTop: 30 }}
+        />
       ) : filteredRequests.length === 0 && filteredAppointments.length === 0 ? (
-        <View style={{ marginTop: 50, alignItems: "center", padding: 20 }}>
-                 <Text
-                   style={{
-                     fontSize: 18,
-                     fontWeight: "600",
-                     color: "#444",
-                     marginBottom: 10,
-                   }}
-                 >
-                   No appointments available for this day.
-                 </Text>
-                 <Text
-                   style={{
-                     fontSize: 16,
-                     color: "#666",
-                     textAlign: "center",
-                     lineHeight: 22,
-                   }}
-                 >
-                   Try selecting a different date or check back later to see any new
-                   job requests or available shifts.
-                 </Text>
-               </View>
+        <View
+          style={{
+            marginTop: 60,
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            backgroundColor: "rgba(52,152,219,0.05)",
+            borderRadius: 16,
+            marginHorizontal: 20,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 4,
+          }}
+        >
+          <Icon
+            name="calendar-times-o"
+            size={36}
+            color="#999"
+            style={{ marginBottom: 15, opacity: 0.8 }}
+          />
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: "700",
+              color: "#444",
+              marginBottom: 8,
+              textAlign: "center",
+            }}
+          >
+            No appointments available
+          </Text>
+          <Text
+            style={{
+              fontSize: 16,
+              color: "#666",
+              textAlign: "center",
+              lineHeight: 22,
+              maxWidth: 300,
+            }}
+          >
+            Try selecting a different date or check back later for new requests.
+          </Text>
+        </View>
       ) : (
-        <>
+        <ScrollView
+          style={{ flex: 1, zIndex: 1 }}
+          contentContainerStyle={{ paddingBottom: 60, paddingHorizontal: 10 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {filteredRequests.length > 0 && (
+            <View style={{ marginBottom: 20 }}>
+              <Text style={calenderStyles.sectionTitle}>
+                Requested Appointments
+              </Text>
+              {filteredRequests.map((appt) => (
+                <RequestedTile
+                  key={appt.id}
+                  {...appt}
+                  cleanerId={userId}
+                  removeRequest={async (employeeId, appointmentId) => {
+                    try {
+                      await FetchData.removeRequest(employeeId, appointmentId);
+                      setRequests((prev) => {
+                        const removed = prev.find(
+                          (r) => r.id === appointmentId
+                        );
+                        if (removed) {
+                          setAppointments((appsPrev) => {
+                            const exists = appsPrev.some(
+                              (a) => a.id === appointmentId
+                            );
+                            return exists ? appsPrev : [...appsPrev, removed];
+                          });
+
+                          setFilteredAppointments((appsPrev) => {
+                            const exists = appsPrev.some(
+                              (a) => a.id === appointmentId
+                            );
+                            return exists ? appsPrev : [...appsPrev, removed];
+                          });
+                        }
+
+                        return prev.filter((r) => r.id !== appointmentId);
+                      });
+
+                      setFilteredRequests((prev) =>
+                        prev.filter((r) => r.id !== appointmentId)
+                      );
+                    } catch (err) {
+                      console.error("Error removing request:", err);
+                    }
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
           {filteredAppointments.length > 0 && (
-            <View>
+            <View style={{ marginBottom: 20 }}>
               <Text style={calenderStyles.sectionTitle}>
                 Available Appointments
               </Text>
@@ -305,58 +527,42 @@ const AppointmentCalendar = ({ state }) => {
                   cleanerId={userId}
                   assigned={appt.employeesAssigned?.includes(String(userId))}
                   addEmployee={async (employeeId, appointmentId) => {
-                    await FetchData.addEmployee(employeeId, appointmentId);
-                    const updated = appointments.find((a) => a.id === appointmentId);
-                    if (!updated) return;
-                    const updatedAppt = {
-                      ...updated,
-                      employeesAssigned: [
-                        ...(updated.employeesAssigned || []),
-                        String(employeeId),
-                      ],
-                    };
-                    const updatedAppointments = appointments.filter(
-                      (a) => a.id !== appointmentId
-                    );
-                    const updatedRequests = [...requests, updatedAppt];
-                    setAppointments(updatedAppointments);
-                    setRequests(updatedRequests);
-                    setRefreshKey((prev) => prev + 1);
-                    handleDateSelect(
-                      { dateString: selectedDate },
-                      updatedAppointments,
-                      updatedRequests
-                    );
+                    try {
+                      await FetchData.addEmployee(employeeId, appointmentId);
+                      setAppointments((prev) => {
+                        const appointment = prev.find(
+                          (r) => r.id === appointmentId
+                        );
+                        if (appointment) {
+                          setRequests((reqPrev) => {
+                            const exists = reqPrev.some(
+                              (r) => r.id === appointmentId
+                            );
+                            return exists ? reqPrev : [...reqPrev, appointment];
+                          });
+                          setFilteredRequests((reqPrev) => {
+                            const exists = reqPrev.some(
+                              (r) => r.id === appointmentId
+                            );
+                            return exists ? reqPrev : [...reqPrev, appointment];
+                          });
+                        }
+                        return prev.filter((r) => r.id !== appointmentId);
+                      });
+                      setFilteredAppointments((prev) =>
+                        prev.filter((r) => r.id !== appointmentId)
+                      );
+                      setRefresh(true);
+                    } catch (err) {
+                      console.error("Error sending request:", err);
+                    }
                   }}
-                  removeEmployee={async (employeeId, appointmentId) => {
-                    await FetchData.removeEmployee(employeeId, appointmentId);
-                    const updatedAppointments = appointments.map((a) =>
-                      a.id === appointmentId
-                        ? {
-                            ...a,
-                            employeesAssigned: (
-                              a.employeesAssigned || []
-                            ).filter((id) => id !== String(employeeId)),
-                          }
-                        : a
-                    );
-                    const updatedRequests = requests.filter(
-                      (r) => r.id !== appointmentId
-                    );
-                    setAppointments(updatedAppointments);
-                    setRequests(updatedRequests);
-                    setRefreshKey((prev) => prev + 1);
-                    handleDateSelect(
-                      { dateString: selectedDate },
-                      updatedAppointments,
-                      updatedRequests
-                    );
-                  }}
+                  removeEmployee={async () => {}}
                 />
               ))}
             </View>
           )}
-        </>
+        </ScrollView>
       )}
     </ScrollView>
   );

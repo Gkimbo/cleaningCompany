@@ -1,159 +1,163 @@
-import React, {useState} from "react";
-import { Pressable, Text, View, Animated } from "react-native";
+import React, { useState } from "react";
+import { Animated, Pressable, Text, View } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import homePageStyles from "../../../services/styles/HomePageStyles";
 
 const ApplicationTile = ({
 	id,
 	firstName,
-    lastName,
-    email,
-    phone,
-    availability,
-    experience,
-    message,
-    deleteConfirmation,
+	lastName,
+	email,
+	phone,
+	availability,
+	experience,
+	message,
+	deleteConfirmation,
 	handleDeletePress,
 	handleNoPress,
-    CreateNewEmployeeForm,
-    setApplicationsList
+	CreateNewEmployeeForm,
+	setApplicationsList,
 }) => {
-    const [formVisible, setFormVisible] = useState(false)
-    const handleAccept = () => {
-        if(!formVisible){
-          setFormVisible(true)
-        }else{
-          setFormVisible(false)
-        }
-      }
+	const [formVisible, setFormVisible] = useState(false);
+
+	const handleAccept = () => {
+		setFormVisible(!formVisible);
+	};
+
 	return (
-		<View style={homePageStyles.homeTileContainer}>
+		<View style={styles.card}>
+			{/* --- Top Action Row --- */}
 			<View
 				style={{
-					flexDirection: "row",
+					flexDirection: deleteConfirmation[id] ? "column" : "row",
 					alignItems: "center",
 					justifyContent: deleteConfirmation[id]
-						? "flex-start"
+						? "center"
 						: "space-between",
+					marginBottom: deleteConfirmation[id] ? 10 : 0,
+					gap: deleteConfirmation[id] ? 10 : 0,
 				}}
 			>
-				<Pressable
-					onPress={() => handleDeletePress(id)}
-					accessible={true}
-					accessibilityLabel="Delete Button"
-				>
-					{({ pressed }) => (
-						<Animated.View
-							style={{
-								borderRadius: 20,
-								marginRight: 10,
-                                padding: 10,
-								width: deleteConfirmation[id] ? 75 : pressed ? 40 : 30,
-								height: deleteConfirmation[id] ? 25 : pressed ? 40 : 30,
-								backgroundColor: deleteConfirmation[id]
-									? "red"
-									: pressed
-										? "red"
-										: "#d65d5d",
-								justifyContent: "center",
-								alignItems: "center",
-							}}
-						>
-							<Text
-								style={{
-									color: "white",
-									fontWeight: "bold",
-									fontSize: deleteConfirmation[id] ? 10 : 14,
-								}}
-							>
-								{deleteConfirmation[id] ? "Delete Application" : "X"}
-							</Text>
-						</Animated.View>
-					)}
+				{/* Delete Button */}
+				<Pressable onPress={() => handleDeletePress(id)}>
+					<Animated.View
+						style={[
+							styles.actionButton,
+							{
+								backgroundColor: deleteConfirmation[id] ? "#ff4d4f" : "#dc3545",
+								width: deleteConfirmation[id] ? 160 : 35,
+								height: deleteConfirmation[id] ? 35 : 35,
+							},
+						]}
+					>
+						<Text style={styles.actionButtonText}>
+							{deleteConfirmation[id] ? "Delete Application" : "X"}
+						</Text>
+					</Animated.View>
 				</Pressable>
 
+				{/* Keep Button */}
 				{deleteConfirmation[id] && (
-					<Pressable
-						onPress={() => handleNoPress(id)}
-						accessible={true}
-						accessibilityLabel="Keep Button"
-					>
-						<View
-							style={{
-								backgroundColor: "#28A745",
-								borderRadius: 20,
-								width: 80,
-								height: 30,
-                                padding: 10,
-								justifyContent: "center",
-								alignItems: "center",
-							}}
-						>
-							<Text
-								style={{
-									color: "white",
-									fontWeight: "bold",
-									fontSize: 10,
-								}}
-							>
-								Keep Application
-							</Text>
+					<Pressable onPress={() => handleNoPress(id)}>
+						<View style={[styles.actionButton, styles.keepButton]}>
+							<Text style={styles.actionButtonText}>Keep Application</Text>
 						</View>
 					</Pressable>
 				)}
-				{!deleteConfirmation[id] ? (
-					<Pressable
-						onPress={() => handleAccept()}
-						accessible={true}
-						accessibilityLabel="Add Button"
-					>
-						<View
-							style={{
-								backgroundColor: "#3da9fc",
-								borderRadius: 20,
-								width: 30,
-								height: 30,
-								justifyContent: "center",
-								alignItems: "center",
-							}}
-						>
+
+				{/* Add Button */}
+				{!deleteConfirmation[id] && (
+					<Pressable onPress={() => handleAccept()}>
+						<View style={[styles.actionButton, styles.addButton]}>
 							<Icon name="plus" size={18} color="white" />
 						</View>
 					</Pressable>
+				)}
+			</View>
+
+			{/* --- Applicant Info --- */}
+			<View style={styles.infoContainer}>
+				<Text style={styles.nameText}>{`${firstName} ${lastName}`}</Text>
+				<Text style={styles.infoText}>📧 {email}</Text>
+				<Text style={styles.infoText}>📞 {phone}</Text>
+				<Text style={styles.infoText}>🕓 Availability: {availability}</Text>
+				<Text style={styles.infoText}>💼 Experience: {experience}</Text>
+				{message ? (
+					<Text style={styles.infoText}>📝 Message: {message}</Text>
 				) : null}
 			</View>
 
-			<Text style={homePageStyles.homeTileTitle}>{`${firstName} ${lastName}`}</Text>
-			<Text
-				style={homePageStyles.homeTileAddress}
-			>{`Email: ${email}`}</Text>
-			<Text
-				style={homePageStyles.homeTileContent}
-			>{`Phone Number: ${phone}`}</Text>
-			<Text
-				style={homePageStyles.homeTileContent}
-			>{`Availability: ${availability}`}</Text>
-			<Text
-				style={homePageStyles.homeTileContent}
-			>{`Expirience: ${
-				experience
-			}`}</Text>
-			{message ? (
-				<Text
-					style={homePageStyles.homeTileContent}
-				>{`Message: ${message}`}</Text>
-			) : null}
-            {formVisible ? (
-                <CreateNewEmployeeForm 
-                id={id}
-                firstName={firstName}
-                lastName={lastName}
-                email={email}
-                setApplicationsList={setApplicationsList}
-                />
-            ) : null}
+			{/* --- Create Employee Form --- */}
+			{formVisible && (
+				<View style={{ marginTop: 12 }}>
+					<CreateNewEmployeeForm
+						id={id}
+						firstName={firstName}
+						lastName={lastName}
+						email={email}
+						setApplicationsList={setApplicationsList}
+					/>
+				</View>
+			)}
 		</View>
 	);
+};
+
+const styles = {
+	card: {
+		backgroundColor: "#fff",
+		borderRadius: 14,
+		padding: 16,
+		marginBottom: 16,
+		shadowColor: "#000",
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 5,
+		elevation: 3,
+	},
+
+	actionButton: {
+		borderRadius: 20,
+		alignItems: "center",
+		justifyContent: "center",
+		paddingHorizontal: 10,
+	},
+
+	actionButtonText: {
+		color: "white",
+		fontWeight: "600",
+		fontSize: 12,
+		textAlign: "center",
+	},
+
+	addButton: {
+		backgroundColor: "#3da9fc",
+		width: 35,
+		height: 35,
+	},
+
+	keepButton: {
+		backgroundColor: "#28a745",
+		width: 160,
+		height: 35,
+	},
+
+	infoContainer: {
+		marginTop: 10,
+	},
+
+	nameText: {
+		fontSize: 18,
+		fontWeight: "700",
+		color: "#1E1E1E",
+		marginBottom: 5,
+	},
+
+	infoText: {
+		fontSize: 14,
+		color: "#4b5563",
+		marginBottom: 3,
+		lineHeight: 20,
+	},
 };
 
 export default ApplicationTile;

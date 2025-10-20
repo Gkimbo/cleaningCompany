@@ -1,13 +1,13 @@
-import React, { useState, useContext, useEffect } from "react";
-import { View, Text, Pressable, Dimensions } from "react-native";
-import { TextInput, RadioButton } from "react-native-paper";
+import React, { useContext, useEffect, useState } from "react";
+import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
+import { RadioButton, TextInput } from "react-native-paper";
+import Icon from "react-native-vector-icons/FontAwesome";
+import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
-import UserFormStyles from "../../services/styles/UserInputFormStyle";
-import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import topBarStyles from "../../services/styles/TopBarStyles";
-import Icon from "react-native-vector-icons/FontAwesome";
+import UserFormStyles from "../../services/styles/UserInputFormStyle";
 
 const UserHomeInfoForm = () => {
   const { user } = useContext(AuthContext);
@@ -379,7 +379,7 @@ const UserHomeInfoForm = () => {
   };
 
   return (
-    <View style={UserFormStyles.container}>
+    <ScrollView style={UserFormStyles.container}>
       <View style={homePageStyles.backButtonContainerForm}>
         <Pressable style={homePageStyles.backButtonForm} onPress={handlePress}>
           <View
@@ -743,7 +743,7 @@ const UserHomeInfoForm = () => {
         </View>
       </form>
       {error && <Text style={UserFormStyles.error}>{error}</Text>}
-    </View>
+    </ScrollView>
   );
 };
 

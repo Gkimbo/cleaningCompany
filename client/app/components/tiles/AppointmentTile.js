@@ -1,8 +1,6 @@
-import React, {useEffect, useState} from "react";
-import { Pressable, Text, View, Animated, Easing } from "react-native";
-import Icon from "react-native-vector-icons/FontAwesome";
+import React, { useEffect, useState } from "react";
+import { Animated, Pressable, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
-import homePageStyles from "../../services/styles/HomePageStyles";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 
 const AppointmentTile = ({
@@ -12,23 +10,31 @@ const AppointmentTile = ({
   homeId,
   empoyeesNeeded,
   employeesAssigned,
-  hasBeenAssigned,
   handleDeletePress,
   deleteAnimation,
   deleteConfirmation,
   setDeleteConfirmation,
   handleNoPress,
 }) => {
-  const[home, setHome] = useState({})
+  const [home, setHome] = useState({});
   const navigate = useNavigate();
-  const numberOfAssigned = employeesAssigned.length;
-  const fetchHomeInfo = async() => {
-    const response = await Appointment.getHomeInfo(homeId)
-    setHome(response.home[0])
-  }
+  const numberOfAssigned = Array.isArray(employeesAssigned)
+    ? employeesAssigned.length
+    : 0;
+
+  const fetchHomeInfo = async () => {
+    try {
+      const response = await Appointment.getHomeInfo(homeId);
+      if (response?.home?.[0]) {
+        setHome(response.home[0]);
+      }
+    } catch (error) {
+      console.error("Error fetching home info:", error);
+    }
+  };
 
   useEffect(() => {
-    fetchHomeInfo()
+    fetchHomeInfo();
   }, []);
 
   const formatDate = (dateString) => {
@@ -40,99 +46,155 @@ const AppointmentTile = ({
     navigate(`/assign-cleaner/${id}`);
   };
 
+  // Determine status color for left accent
+  let statusColor = "#dc3545"; // Red = none assigned
+  if (numberOfAssigned === empoyeesNeeded) statusColor = "#28a745"; // Green = all assigned
+  else if (numberOfAssigned > 0) statusColor = "#ffc107"; // Orange = partially assigned
 
   return (
-    <View style={[homePageStyles.homeTileContainer]}>
-      <Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
-      <Text style={homePageStyles.appointmentDate}>{home.nickName}</Text>
-      <Text style={homePageStyles.appointmentPrice}>{`Address: ${home.address}, ${home.city}, ${home.state}, ${home.zipcode}`}</Text>
-      <Text style={homePageStyles.appointmentDate}>$ {price}</Text>
-      <Text style={homePageStyles.appointmentPrice}>
-        Number of cleaners needed: {empoyeesNeeded - numberOfAssigned}
-      </Text>
-      <Text style={homePageStyles.appointmentPrice}>
-        Number of cleaners assigned: {numberOfAssigned}
-      </Text>
-      <Pressable
-        style={{...homePageStyles.backButtonForm, width: "30%", height: "15%",  paddingTop: "4%", alignItems: "center", justifyContent: "center",}}
-        onPress={handleAppointmentPress}
-          ><Text style={{ fontSize: "150%", fontWeight: "bold", textAlign: "center" }}>Assign Employees</Text>
-      </Pressable>
+    <View
+      style={{
+        flexDirection: "row",
+        backgroundColor: "#fff",
+        borderRadius: 12,
+        marginVertical: 8,
+        marginHorizontal: 10,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+      }}
+    >
+      {/* Left colored accent */}
       <View
-				style={{
-					flexDirection: "row",
-					alignItems: "center",
-					justifyContent: deleteConfirmation[id]
-						? "flex-start"
-						: "space-between",
-          paddingTop: "7%"
-				}}
-			>
-				<Pressable
-					onPress={() => handleDeletePress(id)}
-					accessible={true}
-					accessibilityLabel="Delete Button"
-				>
-					{({ pressed }) => (
-						<Animated.View
-							style={{
-								borderRadius: 20,
-								marginRight: 10,
-                                padding: 10,
-								width: deleteConfirmation[id] ? 75 : pressed ? 40 : 30,
-								height: deleteConfirmation[id] ? 25 : pressed ? 40 : 30,
-								backgroundColor: deleteConfirmation[id]
-									? "red"
-									: pressed
-										? "red"
-										: "#d65d5d",
-								justifyContent: "center",
-								alignItems: "center",
-							}}
-						>
-							<Text
-								style={{
-									color: "white",
-									fontWeight: "bold",
-									fontSize: deleteConfirmation[id] ? 10 : 14,
-								}}
-							>
-								{deleteConfirmation[id] ? "Delete Appointment" : "X"}
-							</Text>
-						</Animated.View>
-					)}
-				</Pressable>
+        style={{
+          width: 8,
+          borderTopLeftRadius: 12,
+          borderBottomLeftRadius: 12,
+          backgroundColor: statusColor,
+        }}
+      />
 
-				{deleteConfirmation[id] && (
-					<Pressable
-						onPress={() => handleNoPress(id)}
-						accessible={true}
-						accessibilityLabel="Keep Button"
-					>
-						<View
-							style={{
-								backgroundColor: "#28A745",
-								borderRadius: 20,
-								width: 80,
-								height: 30,
-                                padding: 10,
-								justifyContent: "center",
-								alignItems: "center",
-							}}
-						>
-							<Text
-								style={{
-									color: "white",
-									fontWeight: "bold",
-									fontSize: 10,
-								}}
-							>
-								Keep Appointment
-							</Text>
-						</View>
-					</Pressable>
-				)}
-			</View>
+      {/* Main content */}
+      <View style={{ flex: 1, padding: 15 }}>
+        {/* Header */}
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: "#333" }}>
+            {formatDate(date)}
+          </Text>
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: "#333" }}>
+            ${price}
+          </Text>
+        </View>
+
+        {/* Home Info */}
+        <View style={{ marginTop: 5 }}>
+          <Text style={{ fontSize: 14, fontWeight: "600", color: "#555" }}>
+            {home.nickName || "Home Name"}
+          </Text>
+          <Text style={{ fontSize: 13, color: "#777", marginTop: 2 }}>
+            {home.address}, {home.city}, {home.state} {home.zipcode}
+          </Text>
+        </View>
+
+        {/* Cleaners Info */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginTop: 10,
+          }}
+        >
+          <Text style={{ fontSize: 14, color: "#555" }}>
+            Cleaners Needed: {empoyeesNeeded - numberOfAssigned}
+          </Text>
+          <Text style={{ fontSize: 14, color: "#555" }}>
+            Assigned: {numberOfAssigned}
+          </Text>
+        </View>
+
+        {/* Buttons */}
+        <View
+          style={{
+            flexDirection: "row",
+            marginTop: 12,
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
+        >
+          {/* Assign Button */}
+          <Pressable
+            style={{
+              backgroundColor: "#007bff",
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 8,
+            }}
+            onPress={handleAppointmentPress}
+          >
+            <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 14 }}>
+              Assign Employees
+            </Text>
+          </Pressable>
+
+          {/* Delete/Keep Buttons stacked vertically */}
+          <View style={{ flexDirection: "column", alignItems: "flex-end" }}>
+            {/* Delete Button */}
+            <Pressable onPress={() => handleDeletePress(id)}>
+              {({ pressed }) => (
+                <Animated.View
+                  style={{
+                    borderRadius: 8,
+                    marginBottom: deleteConfirmation[id] ? 6 : 0,
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    backgroundColor: deleteConfirmation[id]
+                      ? "#dc3545"
+                      : pressed
+                      ? "#c82333"
+                      : "#e04e4e",
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "bold",
+                      fontSize: deleteConfirmation[id] ? 12 : 14,
+                    }}
+                  >
+                    {deleteConfirmation[id] ? "Delete Appointment" : "X"}
+                  </Text>
+                </Animated.View>
+              )}
+            </Pressable>
+
+            {/* Keep Button */}
+            {deleteConfirmation[id] && (
+              <Pressable onPress={() => handleNoPress(id)}>
+                <View
+                  style={{
+                    backgroundColor: "#28a745",
+                    borderRadius: 8,
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#fff",
+                      fontWeight: "bold",
+                      fontSize: 12,
+                    }}
+                  >
+                    Keep Appointment
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </View>
     </View>
   );
 };

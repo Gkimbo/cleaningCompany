@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, Text, View, LayoutAnimation } from "react-native";
+import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
-import { StyleSheet } from "react-native";
 
 const EmployeeAssignmentTile = ({
   id,
@@ -26,31 +25,18 @@ const EmployeeAssignmentTile = ({
   const [home, setHome] = useState({
     address: "",
     city: "",
-    compostLocation: "",
-    contact: "",
-    keyLocation: "",
-    keyPadCode: "",
+    state: "",
+    zipcode: "",
     numBaths: "",
     numBeds: "",
-    recyclingLocation: "",
-    sheetsProvided: "",
-    specialNotes: "",
-    state: "",
-    towelsProvided: "",
-    trashLocation: "",
-    zipcode: "",
     cleanersNeeded: "",
   });
 
   const amount = Number(price) * 0.9;
+
   const formatDate = (dateString) => {
     const date = new Date(dateString + "T00:00:00");
-    const options = {
-      weekday: "long",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    };
+    const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
     return date.toLocaleDateString(undefined, options);
   };
 
@@ -68,10 +54,11 @@ const EmployeeAssignmentTile = ({
     FetchData.getHome(homeId).then((response) => {
       setHome(response.home);
     });
-  }, []);
+  }, [homeId]);
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
   const kilometers = distance ? distance.toFixed(1) : null;
+
   const timeOptions = {
     anytime: "anytime",
     "10-3": "Between 10am and 3pm",
@@ -82,38 +69,31 @@ const EmployeeAssignmentTile = ({
   const formattedTime = timeOptions[timeToBeCompleted] || null;
 
   return (
-    <View style={styles.homeTileContainer}>
+    <View style={styles.tileContainer}>
       <Pressable onPress={expandWindow ? contractDetails : expandDetails}>
-        <Text style={styles.appointmentDate}>{formatDate(date)}</Text>
+        <Text style={styles.date}>{formatDate(date)}</Text>
+
         {formattedTime && (
           <View style={styles.timeContainer}>
             <Text style={styles.timeLabel}>Time to complete:</Text>
-            <Text style={styles.timeText}>{`${formattedTime} on ${formatDate(
-              date
-            )}`}</Text>
+            <Text style={styles.timeText}>{`${formattedTime} on ${formatDate(date)}`}</Text>
           </View>
         )}
-        <Text style={{ ...styles.appointmentDate, fontSize: 15 }}>
-          {`You could make $${amount} cleaning this home`}
-        </Text>
-        
-        <Text style={styles.appointmentPrice}>{home.city}</Text>
-        <Text style={styles.appointmentPrice}>
+
+        <Text style={styles.amount}>You could make ${amount} cleaning this home</Text>
+        <Text style={styles.location}>{home.city}</Text>
+        <Text style={styles.location}>
           {home.state}, {home.zipcode}
         </Text>
+
         <View style={styles.distanceContainer}>
           {distance !== null ? (
             <>
-              <Text style={styles.distanceText}>
-                Distance to the center of town:
-              </Text>
+              <Text style={styles.distanceLabel}>Distance to the center of town:</Text>
               <Text style={styles.distanceValue}>
-                {miles} mi{" "}
-                <Text style={styles.distanceKm}>({kilometers} km)</Text>
+                {miles} mi <Text style={styles.distanceKm}>({kilometers} km)</Text>
               </Text>
-              <Text style={styles.addressInfo}>
-                Address will be available on the day of the appointment.
-              </Text>
+              <Text style={styles.addressInfo}>Address available on the day of the appointment.</Text>
             </>
           ) : (
             <Text style={styles.unknownDistance}>Distance: Unknown</Text>
@@ -122,27 +102,18 @@ const EmployeeAssignmentTile = ({
 
         {(expandWindow || assigned) && (
           <>
-            <Text style={styles.appointmentDetails}>
-              Number of Beds: {home.numBeds}
-            </Text>
-            <Text style={styles.appointmentDetails}>
-              Number of Bathrooms: {home.numBaths}
-            </Text>
-            <Text style={styles.appointmentDetails}>
-              Sheets are needed: {bringSheets}
-            </Text>
-            <Text style={styles.appointmentDetails}>
-              Towels are needed: {bringTowels}
-            </Text>
+            <Text style={styles.infoText}>Beds: {home.numBeds}</Text>
+            <Text style={styles.infoText}>Bathrooms: {home.numBaths}</Text>
+            <Text style={styles.infoText}>Sheets needed: {bringSheets}</Text>
+            <Text style={styles.infoText}>Towels needed: {bringTowels}</Text>
+
             {home.cleanersNeeded > 1 && (
               <>
-                <Text style={styles.largeHomeMessage}>
-                  This is a larger home. You may need more people to clean it in
-                  a timely manner.
+                <Text style={styles.warning}>
+                  This is a larger home. You may need more people to clean it in a timely manner.
                 </Text>
-                <Text style={styles.smallHomeMessage}>
-                  If you don’t think you can complete it, please choose a
-                  smaller home!
+                <Text style={styles.infoText}>
+                  If you don’t think you can complete it, please choose a smaller home!
                 </Text>
               </>
             )}
@@ -155,9 +126,7 @@ const EmployeeAssignmentTile = ({
           style={[styles.button, { backgroundColor: "#E74C3C" }]}
           onPress={() => removeEmployee(cleanerId, id)}
         >
-          <Text style={styles.buttonText}>
-            I no longer want to clean this home!
-          </Text>
+          <Text style={styles.buttonText}>I no longer want to clean this home!</Text>
         </Pressable>
       ) : (
         <Pressable
@@ -172,101 +141,108 @@ const EmployeeAssignmentTile = ({
 };
 
 const styles = StyleSheet.create({
-  homeTileContainer: {
-    backgroundColor: "#ffffff",
-    padding: 20,
-    marginVertical: 12,
-    borderRadius: 12,
-    shadowColor: "#2C3E50",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 5,
+  tileContainer: {
+    backgroundColor: "#fff",
+    padding: 18,
+    marginVertical: 10,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+    alignItems: "center",
   },
-  appointmentDate: {
+  date: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#34495E",
-    marginBottom: 8,
+    color: "#2C3E50",
+    marginBottom: 6,
     textAlign: "center",
   },
-  appointmentPrice: {
-    fontSize: 16,
+  amount: {
+    fontSize: 15,
     fontWeight: "600",
+    color: "#34495E",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  location: {
+    fontSize: 14,
+    fontWeight: "500",
     color: "#7F8C8D",
     textAlign: "center",
   },
   distanceContainer: {
-    marginVertical: 12,
+    marginVertical: 10,
   },
-  distanceText: {
+  distanceLabel: {
     fontSize: 12,
     color: "#7F8C8D",
     marginBottom: 4,
   },
   distanceValue: {
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 16,
+    fontWeight: "700",
     color: "#2C3E50",
   },
   distanceKm: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#7F8C8D",
   },
   addressInfo: {
     fontSize: 12,
     color: "#95A5A6",
-    marginTop: 6,
+    marginTop: 4,
+    textAlign: "center",
   },
   unknownDistance: {
     fontSize: 14,
     color: "#95A5A6",
     textAlign: "center",
   },
-  appointmentDetails: {
-    fontSize: 16,
-    fontWeight: "600",
+  infoText: {
+    fontSize: 14,
     color: "#34495E",
-    marginTop: 6,
+    marginTop: 4,
+    textAlign: "center",
   },
-  largeHomeMessage: {
-    fontSize: 16,
+  warning: {
+    fontSize: 14,
     fontWeight: "bold",
     color: "#E74C3C",
-    marginTop: 12,
-  },
-  smallHomeMessage: {
-    fontSize: 14,
-    color: "#7F8C8D",
+    marginTop: 8,
+    textAlign: "center",
   },
   button: {
     paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 15,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    marginTop: 12,
     justifyContent: "center",
     alignItems: "center",
+    minWidth: "80%",
   },
   buttonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#ffffff",
+    color: "#fff",
+    textAlign: "center",
   },
   timeContainer: {
     alignItems: "center",
-    justifyContent: "center",
-    marginVertical: 15,
+    marginVertical: 10,
   },
   timeLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
-    color: "#444",
-    marginBottom: 5,
+    color: "#34495E",
   },
   timeText: {
-    fontSize: 14,
-    color: "#333",
-    opacity: 0.8, 
+    fontSize: 13,
+    color: "#7F8C8D",
+    marginTop: 2,
+    textAlign: "center",
   },
 });
 
