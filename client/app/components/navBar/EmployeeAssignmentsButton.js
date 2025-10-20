@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Pressable, Text } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Pressable, StyleSheet, Text } from "react-native";
 import { useNavigate } from "react-router-native";
-import topBarStyles from "../../services/styles/TopBarStyles";
 
 const EmployeeAssignmentsButton = ({ closeModal }) => {
 	const [redirect, setRedirect] = useState(false);
@@ -19,19 +18,41 @@ const EmployeeAssignmentsButton = ({ closeModal }) => {
 		setRedirect(true);
 	};
 
-	return (
-		<Pressable style={styles.button} onPress={handlePress}>
-			<Text style={topBarStyles.buttonTextSchedule}>My Jobs</Text>
-		</Pressable>
-	);
+ return (
+	<Pressable
+	  style={({ pressed }) => [
+		styles.glassButton,
+		pressed && { backgroundColor: "rgba(255,255,255,0.25)" },
+	  ]}
+	  onPress={handlePress}
+	>
+	  <Text style={styles.buttonText}>My Jobs</Text>
+	</Pressable>
+  );
 };
 
-const styles = {
-	button: {
-		backgroundColor: "#f9bc60",
-		padding: 10,
-		borderRadius: 50,
-	},
-};
+const styles = StyleSheet.create({
+  glassButton: {
+	marginTop: 10,
+	backgroundColor: "rgba(255, 255, 255, 0.64)",
+	borderRadius: 50,
+	paddingVertical: 10,
+	paddingHorizontal: 20,
+	alignItems: "center",
+	justifyContent: "center",
+	borderWidth: 1,
+	borderColor: "rgba(255, 255, 255, 0.3)",
+	shadowColor: "#00BFFF",
+	shadowOffset: { width: 0, height: 2 },
+	shadowOpacity: 0.25,
+	shadowRadius: 6,
+	elevation: 4,
+  },
+  buttonText: {
+	color: "rgba(0, 0, 0, 0.5)",
+	fontWeight: "600",
+	fontSize: 16,
+  },
+});
 
 export default EmployeeAssignmentsButton;
