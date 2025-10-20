@@ -191,7 +191,7 @@ const sortLabelMap = {
         flex: 1,
         backgroundColor: "#f8f9fa",
         paddingHorizontal: 16,
-        paddingTop: 60, // more space from top bar
+        paddingTop: 30, // more space from top bar
       }}
     >
       {/* --- Top Navigation Buttons --- */}
@@ -207,7 +207,7 @@ const sortLabelMap = {
           style={styles.navButton}
           onPress={() => navigate("/")}
         >
-          <Icon name="angle-left" size={iconSize + 4} color="#111" />
+          <Icon name="angle-left" size={iconSize + 4} color="#007AFF" />
           <Text style={styles.navButtonText}>Back</Text>
         </Pressable>
   
@@ -216,7 +216,7 @@ const sortLabelMap = {
           onPress={pressedSeeCalender}
         >
           <Text style={styles.navButtonText}>Calendar</Text>
-          <Icon name="calendar" size={iconSize} color="#111" style={{ marginLeft: 8 }} />
+          <Icon name="calendar" size={iconSize} color="#007AFF" style={{ marginLeft: 8 }} />
         </Pressable>
       </View>
   
@@ -350,143 +350,77 @@ const sortLabelMap = {
   
 };
 const styles = {
+  // --- NAVIGATION BUTTONS (Back / Calendar) ---
   navButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(0,122,255,0.1)",
     paddingVertical: 10,
     paddingHorizontal: 18,
-    borderRadius: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    backdropFilter: "blur(10px)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 5,
-    elevation: 3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   navButtonText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#111",
+    color: "#007AFF",
     marginLeft: 8,
-  },
-  sortContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    marginBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  sortLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#444",
-    marginRight: 8,
-  },
-  picker: {
-    flex: 1,
-    height: 32,
-    transform: [{ scale: 0.9 }],
-    color: "#333",
-  },
-  sortContainer: {
-    alignItems: "flex-end",
-    marginBottom: 15,
-    marginRight: 15,
-  },
-  sortButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f2f6fa",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  sortButtonText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: "#3da9fc",
-    fontWeight: "600",
-  },
-  pickerOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  pickerModal: {
-    backgroundColor: "#fff",
-    width: "80%",
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 10,
-    textAlign: "center",
-  },sortContainer: {
-    alignItems: "flex-end",
-    marginBottom: 15,
-    marginRight: 15,
-  },
-  sortButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f2f6fa",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  sortButtonText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: "#3da9fc",
-    fontWeight: "600",
+    letterSpacing: 0.4,
   },
 
-  // Picker overlay and bottom sheet
+  // --- SORT BUTTON / DROPDOWN ---
+  sortContainer: {
+    alignItems: "flex-end",
+    marginBottom: 15,
+    marginRight: 15,
+  },
+  sortButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(61,169,252,0.15)",
+    borderColor: "rgba(255,255,255,0.25)",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  sortButtonText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#3da9fc",
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+
+  // --- PICKER MODAL / BOTTOM SHEET ---
   pickerOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "flex-end",
   },
   bottomSheet: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingBottom: 30,
     shadowColor: "#000",
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 10,
   },
@@ -495,15 +429,15 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: "rgba(0,0,0,0.05)",
   },
   sheetTitle: {
     fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
+    fontWeight: "700",
+    color: "#222",
   },
   doneButtonText: {
     fontSize: 16,
@@ -514,6 +448,41 @@ const styles = {
     backgroundColor: "#fff",
     justifyContent: "center",
   },
+
+  // --- EMPTY STATE ---
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 50,
+    padding: 20,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#222",
+    marginBottom: 10,
+  },
+  emptyText: {
+    fontSize: 15,
+    color: "#555",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+
+  // --- TILE WRAPPER (for job/request cards) ---
+  tileWrapper: {
+    marginBottom: 15,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+
+  // --- CLOSE BUTTON / CONFIRM ACTION ---
   closeButton: {
     backgroundColor: "#3da9fc",
     marginTop: 10,
@@ -526,36 +495,8 @@ const styles = {
     fontWeight: "600",
     fontSize: 14,
   },
-  
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 50,
-    padding: 20,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 10,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: "#666",
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  tileWrapper: {
-    marginBottom: 15,
-    borderRadius: 14,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
 };
+
 
 
 export default SelectNewJobList;
