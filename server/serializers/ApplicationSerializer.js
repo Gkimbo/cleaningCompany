@@ -1,15 +1,29 @@
 class ApplicationSerializer {
 	static serializeArray(applicationArray) {
-		const allowedAttributes = ["id","availability", "email", "experience", "firstName", "lastName", "message", "phone"];
-		const serializedApplications = applicationArray.map((application) => {
-			const newApplication = {};
-			for (const attribute of allowedAttributes) {
-				newApplication[attribute] = application.dataValues[attribute];
-			}
-			return newApplication;
-		});
-		return serializedApplications;
+	  // Updated allowed attributes to match the new form fields
+	  const allowedAttributes = [
+		"id",
+		"firstName",
+		"lastName",
+		"email",
+		"phone",
+		"experience",
+		"message",
+		"idPhoto",
+		"backgroundConsent",
+	  ];
+  
+	  const serializedApplications = applicationArray.map((application) => {
+		const newApplication = {};
+		for (const attribute of allowedAttributes) {
+		  newApplication[attribute] = application.dataValues[attribute];
+		}
+		return newApplication;
+	  });
+  
+	  return serializedApplications;
 	}
-}
-
-module.exports = ApplicationSerializer;
+  }
+  
+  module.exports = ApplicationSerializer;
+  

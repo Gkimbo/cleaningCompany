@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
   Pressable,
+  ScrollView,
   StyleSheet,
-  Alert,
+  Text
 } from "react-native";
 import { useNavigate } from "react-router-native";
 
@@ -109,8 +107,7 @@ const NewCleanerInformationPage = () => {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: "20%",
-    padding: 20,
+    padding: 5,
     backgroundColor: "#fff",
   },
   button: {
