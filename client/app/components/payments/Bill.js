@@ -1,19 +1,20 @@
-import React, { useState, useEffect } from "react";
+import { useStripe } from "@stripe/stripe-react-native";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
+  Alert,
   Pressable,
   ScrollView,
+  Text,
   TextInput,
-  Alert,
+  View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
-import { useStripe } from "@stripe/stripe-react-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
 
+const API_BASE = "https://your-backend-url.com/api/v1"; // 🔹 Update to your backend URL
+
 const Bill = ({ state, dispatch }) => {
-  const [redirect, setRedirect] = useState(false);
   const [amountToPay, setAmountToPay] = useState(0);
   const [error, setError] = useState(null);
   const [appointmentId, setAppointmentId] = useState(null);
@@ -22,7 +23,7 @@ const Bill = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
-  // total overdue logic
+  // Compute total due
   let appointmentOverdue = 0 + state.bill.cancellationFee;
   state.appointments.forEach((appt) => {
     const appointmentDate = new Date(appt.date);
@@ -32,62 +33,51 @@ const Bill = ({ state, dispatch }) => {
     }
   });
 
+  useEffect(() => {
+    setAmountToPay(appointmentOverdue);
+  }, [appointmentOverdue]);
+
   const handleAmountToPay = (amount) => {
-    const regex = /^\d*(\.\d*)?(\s*)?$/;
+    const regex = /^\d*(\.\d*)?$/;
     if (!regex.test(amount)) {
-      setError("Amount can only be a number!");
+      setError("Amount must be a number");
       return;
     }
-    if (amount === "") {
-      setError("Amount cannot be blank!");
-    } else {
-      setError(null);
-    }
+    setError(null);
     setAmountToPay(amount);
   };
 
-  useEffect(() => {
-    if (redirect) {
-      navigate("/");
-      setRedirect(false);
-    }
-    setAmountToPay(appointmentOverdue);
-  }, [redirect, appointmentOverdue]);
-
   /**
-   * ------------------------------------------------------
-   *  Create PaymentIntent via backend (authorize only)
-   * ------------------------------------------------------
+   * 🔹 Step 1: Create Payment Intent (Backend Handles Airbnb + Email)
    */
   const createPaymentIntent = async () => {
     try {
-      const response = await fetch(
-        "http://localhost:3000/api/v1/payments/create-payment-intent",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            token: state.currentUser.token,
-            homeId: state.userHomeId || state.user?.homes?.[0]?.id,
-            amount: Math.round(amountToPay * 100),
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE}/payments/create-intent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: state.currentUser.token,
+          homeId: state.userHomeId || state.user?.homes?.[0]?.id,
+          amount: Math.round(amountToPay * 100),
+          userEmail: state.currentUser.email,
+          userName: state.currentUser.userName,
+        }),
+      });
+
       const data = await response.json();
-      if (!data.clientSecret) throw new Error("Missing clientSecret");
+      if (!response.ok) throw new Error(data.error || "Failed to create payment intent");
+
       setAppointmentId(data.appointmentId);
       return data.clientSecret;
     } catch (err) {
-      console.error(err);
-      setError("Failed to create payment intent.");
+      console.error("❌ PaymentIntent Error:", err);
+      Alert.alert("Error", err.message || "Could not start payment");
       return null;
     }
   };
 
   /**
-   * ------------------------------------------------------
-   *  Open Stripe Payment Sheet
-   * ------------------------------------------------------
+   * 🔹 Step 2: Present Stripe Payment Sheet
    */
   const openPaymentSheet = async () => {
     setIsProcessing(true);
@@ -112,113 +102,114 @@ const Bill = ({ state, dispatch }) => {
     setIsProcessing(false);
 
     if (paymentError) {
-      Alert.alert(`Error code: ${paymentError.code}`, paymentError.message);
+      Alert.alert("Error", paymentError.message);
     } else {
-      Alert.alert("Success", "Payment authorized and held!");
+      Alert.alert("Success", "Payment authorized!");
       dispatch({
         type: "UPDATE_BILL",
         payload: { totalDue: state.bill.totalDue + Number(amountToPay) },
       });
-      setRedirect(true);
+
+      // 🔹 Notify backend to sync with Airbnb and create cleaner job
+      await syncAirbnbBooking();
+      navigate("/");
     }
   };
 
   /**
-   * ------------------------------------------------------
-   *  Cleaner: Capture Payment After Job Completion
-   * ------------------------------------------------------
+   * 🔹 Step 3: Notify backend to sync Airbnb + Create Job for Cleaners
+   */
+  const syncAirbnbBooking = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/airbnb/sync-booking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: state.currentUser.token,
+          userEmail: state.currentUser.email,
+          homeId: state.userHomeId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Airbnb sync failed");
+      console.log("✅ Airbnb Booking Synced:", data);
+    } catch (err) {
+      console.error("❌ Airbnb Sync Error:", err);
+    }
+  };
+
+  /**
+   * 🔹 Step 4: Cleaner Captures Payment after Job Completion
    */
   const handleCapturePayment = async () => {
     if (!appointmentId) {
-      Alert.alert("No Payment Found", "Please ensure a client has paid first.");
+      Alert.alert("No Payment", "Please wait until client payment is confirmed.");
       return;
     }
 
-    Alert.alert(
-      "Release Payment",
-      "Confirm job completion and release held funds?",
-      [
-        { text: "No" },
-        {
-          text: "Yes, release",
-          onPress: async () => {
-            setIsCapturing(true);
-            try {
-              const response = await fetch(
-                "http://localhost:3000/api/v1/payments/capture-payment",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    token: state.currentUser.token,
-                    appointmentId,
-                  }),
-                }
-              );
-              const data = await response.json();
-              if (data.success) {
-                Alert.alert("✅ Success", "Funds released to cleaner!");
-                dispatch({
-                  type: "UPDATE_APPOINTMENT",
-                  payload: { appointmentId, status: "completed" },
-                });
-              } else {
-                Alert.alert("Error", data.error || "Unable to capture payment.");
-              }
-            } catch (err) {
-              console.error(err);
-              Alert.alert("Error", "Payment capture failed.");
-            } finally {
-              setIsCapturing(false);
-            }
-          },
+    Alert.alert("Release Payment", "Confirm job completion?", [
+      { text: "Cancel" },
+      {
+        text: "Yes",
+        onPress: async () => {
+          setIsCapturing(true);
+          try {
+            const res = await fetch(`${API_BASE}/payments/capture`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                token: state.currentUser.token,
+                appointmentId,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to capture payment");
+
+            Alert.alert("✅ Success", "Funds released to cleaner!");
+            dispatch({
+              type: "UPDATE_APPOINTMENT",
+              payload: { appointmentId, status: "completed" },
+            });
+          } catch (err) {
+            Alert.alert("Error", err.message);
+          } finally {
+            setIsCapturing(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   /**
-   * ------------------------------------------------------
-   *  Cancel or Refund Payment
-   * ------------------------------------------------------
+   * 🔹 Step 5: Refund / Cancel Payment
    */
   const handleCancelOrRefund = async () => {
     if (!appointmentId) {
-      Alert.alert("No Payment Found", "Please make a payment first.");
+      Alert.alert("Error", "No active payment to cancel.");
       return;
     }
 
-    Alert.alert("Cancel Payment", "Are you sure you want to cancel/refund?", [
+    Alert.alert("Cancel Payment", "Are you sure?", [
       { text: "No" },
       {
         text: "Yes",
         onPress: async () => {
           try {
-            const response = await fetch(
-              "http://localhost:3000/api/v1/payments/cancel-or-refund",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  token: state.currentUser.token,
-                  appointmentId,
-                }),
-              }
-            );
-            const data = await response.json();
-            if (data.success) {
-              Alert.alert("Success", "Payment canceled/refunded successfully.");
-              setAppointmentId(null);
-              dispatch({
-                type: "UPDATE_BILL",
-                payload: { totalDue: state.bill.totalDue - Number(amountToPay) },
-              });
-            } else {
-              Alert.alert("Error", data.error || "Refund failed.");
-            }
+            const res = await fetch(`${API_BASE}/payments/refund`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                token: state.currentUser.token,
+                appointmentId,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Refund failed");
+
+            Alert.alert("✅ Success", "Payment refunded successfully");
+            setAppointmentId(null);
           } catch (err) {
-            console.error(err);
-            Alert.alert("Error", "Unable to process refund.");
+            Alert.alert("Error", err.message);
           }
         },
       },
@@ -232,86 +223,61 @@ const Bill = ({ state, dispatch }) => {
 
         <View style={homePageStyles.billDetails}>
           <View style={homePageStyles.billRow}>
-            <Text style={homePageStyles.billLabel}>Total Due today:</Text>
+            <Text style={homePageStyles.billLabel}>Total Due:</Text>
             <Text style={homePageStyles.billValue}>${appointmentOverdue}</Text>
           </View>
-
-          <View style={homePageStyles.billDivider} />
-          <Text style={homePageStyles.billText}>
-            Appointment Due: ${state.bill.appointmentDue}
-          </Text>
-          <Text style={homePageStyles.billText}>
-            Cancellation Fee: ${state.bill.cancellationFee}
-          </Text>
-          <View style={homePageStyles.billDivider} />
-          <Text style={homePageStyles.billText}>
-            Total for all appointments: ${state.bill.totalDue}
-          </Text>
         </View>
 
-        <View style={{ flexDirection: "column" }}>
-          <Text style={UserFormStyles.smallTitle}>How much to pay:</Text>
-          <TextInput
-            value={String(amountToPay)}
-            onChangeText={handleAmountToPay}
-            style={UserFormStyles.input}
-            keyboardType="numeric"
-          />
+        <Text style={UserFormStyles.smallTitle}>How much to pay:</Text>
+        <TextInput
+          value={String(amountToPay)}
+          onChangeText={handleAmountToPay}
+          style={UserFormStyles.input}
+          keyboardType="numeric"
+        />
 
-          {error && (
-            <Text style={{ alignSelf: "center", color: "red", marginBottom: 20 }}>
-              {error}
-            </Text>
-          )}
+        {error && (
+          <Text style={{ color: "red", textAlign: "center" }}>{error}</Text>
+        )}
 
-          {/* CLIENT ACTIONS */}
-          {state.account === "client" && (
-            <>
-              <Pressable
-                style={[
-                  homePageStyles.button,
-                  isProcessing && { backgroundColor: "#aaa" },
-                ]}
-                onPress={!isProcessing ? openPaymentSheet : null}
-              >
-                <Text style={homePageStyles.buttonText}>
-                  {isProcessing ? "Processing..." : "Pay Now"}
-                </Text>
-              </Pressable>
-
-              {appointmentId && (
-                <Pressable
-                  style={[
-                    homePageStyles.button,
-                    { backgroundColor: "#FF6B6B", marginTop: 10 },
-                  ]}
-                  onPress={handleCancelOrRefund}
-                >
-                  <Text style={homePageStyles.buttonText}>Cancel / Refund</Text>
-                </Pressable>
-              )}
-            </>
-          )}
-
-          {/* CLEANER ACTION */}
-          {state.account === "cleaner" && appointmentId && (
+        {/* CLIENT ACTIONS */}
+        {state.account === "client" && (
+          <>
             <Pressable
-              style={[
-                homePageStyles.button,
-                {
-                  backgroundColor: "#4CAF50",
-                  marginTop: 20,
-                  opacity: isCapturing ? 0.7 : 1,
-                },
-              ]}
-              onPress={!isCapturing ? handleCapturePayment : null}
+              style={[homePageStyles.button, isProcessing && { backgroundColor: "#aaa" }]}
+              onPress={!isProcessing ? openPaymentSheet : null}
             >
               <Text style={homePageStyles.buttonText}>
-                {isCapturing ? "Releasing..." : "Release Payment"}
+                {isProcessing ? "Processing..." : "Pay Now"}
               </Text>
             </Pressable>
-          )}
-        </View>
+
+            {appointmentId && (
+              <Pressable
+                style={[homePageStyles.button, { backgroundColor: "#FF6B6B", marginTop: 10 }]}
+                onPress={handleCancelOrRefund}
+              >
+                <Text style={homePageStyles.buttonText}>Cancel / Refund</Text>
+              </Pressable>
+            )}
+          </>
+        )}
+
+        {/* CLEANER ACTIONS */}
+        {state.account === "cleaner" && appointmentId && (
+          <Pressable
+            style={[
+              homePageStyles.button,
+              { backgroundColor: "#4CAF50", marginTop: 20 },
+              isCapturing && { opacity: 0.6 },
+            ]}
+            onPress={!isCapturing ? handleCapturePayment : null}
+          >
+            <Text style={homePageStyles.buttonText}>
+              {isCapturing ? "Releasing..." : "Release Payment"}
+            </Text>
+          </Pressable>
+        )}
       </View>
     </ScrollView>
   );

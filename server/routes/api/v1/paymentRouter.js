@@ -1,6 +1,11 @@
+// ------------------------------------------------------
+// Payment Router — Handles Stripe payments and scheduling
+// ------------------------------------------------------
+
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const cron = require("node-cron");
 const {
   User,
   UserAppointments,
@@ -8,9 +13,15 @@ const {
   UserBills,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const Email = require("../../../services/sendNotifications/EmailClass");
 
 const paymentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+// ✅ Environment variable check
+if (!process.env.STRIPE_SECRET_KEY || !process.env.SESSION_SECRET) {
+  throw new Error("❌ Missing required Stripe or JWT environment variables.");
+}
 
 /**
  * ------------------------------------------------------
@@ -32,10 +43,11 @@ paymentRouter.get("/:homeId", async (req, res) => {
 /**
  * ------------------------------------------------------
  * 2️⃣ Create Payment Intent (Authorize Only)
+ * Used when booking an appointment
  * ------------------------------------------------------
  */
 paymentRouter.post("/create-payment-intent", async (req, res) => {
-  const { token, homeId, amount } = req.body;
+  const { token, homeId, amount, appointmentDate } = req.body;
 
   try {
     const decodedToken = jwt.verify(token, secretKey);
@@ -44,17 +56,20 @@ paymentRouter.post("/create-payment-intent", async (req, res) => {
     const home = await UserHomes.findByPk(homeId);
     if (!home) return res.status(404).json({ error: "Home not found" });
 
+    // Create Stripe payment intent (authorization only)
     const paymentIntent = await stripe.paymentIntents.create({
       amount, // in cents
       currency: "usd",
-      capture_method: "manual", // authorize only
+      capture_method: "manual",
       metadata: { userId, homeId },
     });
 
+    // Create appointment in DB
     const appointment = await UserAppointments.create({
       userId,
       homeId,
       amount: amount / 100,
+      appointmentDate,
       status: "pending",
       paymentIntentId: paymentIntent.id,
     });
@@ -71,49 +86,49 @@ paymentRouter.post("/create-payment-intent", async (req, res) => {
 
 /**
  * ------------------------------------------------------
- * 3️⃣ Capture Payment & Pay Cleaner After Completion
+ * 3️⃣ Simple Payment Intent for Mobile App
+ * Used by React Native Bill.js (no JWT)
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/create-intent", async (req, res) => {
+  const { amount, email } = req.body;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: "usd",
+      automatic_payment_methods: { enabled: true },
+      receipt_email: email,
+    });
+
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    console.error("Error creating payment intent:", error);
+    res.status(400).json({ error: "Payment creation failed" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * 4️⃣ Capture Payment Manually (Cleaner or Admin Trigger)
  * ------------------------------------------------------
  */
 paymentRouter.post("/capture-payment", async (req, res) => {
-  const { token, appointmentId } = req.body;
+  const { appointmentId } = req.body;
 
   try {
-    const decodedToken = jwt.verify(token, secretKey);
-    const userId = decodedToken.userId;
-
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment) return res.status(404).json({ error: "Appointment not found" });
 
-    const paymentIntent = await stripe.paymentIntents.capture(appointment.paymentIntentId);
+    if (!appointment.cleanerId)
+      return res.status(400).json({ error: "Cannot charge without a cleaner" });
 
-    const cleaner = await User.findByPk(appointment.cleanerId);
-    if (!cleaner || !cleaner.stripeAccountId)
-      return res.status(400).json({ error: "Cleaner Stripe account missing" });
+    const paymentIntent = await stripe.paymentIntents.capture(
+      appointment.paymentIntentId
+    );
 
-    // Example platform fee: 10%
-    const platformFee = Math.round(appointment.amount * 10);
-    const transfer = await stripe.transfers.create({
-      amount: appointment.amount * 100 - platformFee,
-      currency: "usd",
-      destination: cleaner.stripeAccountId,
-      source_transaction: paymentIntent.charges.data[0].id,
-      metadata: { appointmentId, cleanerId: cleaner.id },
-    });
-
-    await appointment.update({
-      status: "completed",
-      paidOut: true,
-    });
-
-    const userBill = await UserBills.findOne({ where: { userId } });
-    if (userBill) {
-      await userBill.update({
-        appointmentDue: 0,
-        totalDue: userBill.totalDue + appointment.amount,
-      });
-    }
-
-    return res.json({ success: true, transfer });
+    await appointment.update({ status: "completed" });
+    return res.json({ success: true, paymentIntent });
   } catch (error) {
     console.error("Capture error:", error);
     return res.status(400).json({ error: "Payment capture failed" });
@@ -122,33 +137,91 @@ paymentRouter.post("/capture-payment", async (req, res) => {
 
 /**
  * ------------------------------------------------------
- * 4️⃣ Handle Cancellations or Refunds
+ * 5️⃣ Daily Scheduler — Charge 2 Days Before Appointment
  * ------------------------------------------------------
- * - If appointment is pending (not captured), cancel authorization.
- * - If captured, issue refund to client.
  */
-paymentRouter.post("/cancel-or-refund", async (req, res) => {
-  const { token, appointmentId } = req.body;
+cron.schedule("0 7 * * *", async () => {
+  console.log("🕒 Running daily payment check...");
+
+  const now = new Date();
+  const twoDaysFromNow = new Date(now);
+  twoDaysFromNow.setDate(now.getDate() + 2);
 
   try {
-    const decodedToken = jwt.verify(token, secretKey);
-    const userId = decodedToken.userId;
+    const appointments = await UserAppointments.findAll({
+      where: { status: "pending" },
+    });
 
+    for (const appointment of appointments) {
+      const appointmentDate = new Date(appointment.appointmentDate);
+      const diffInDays = Math.floor(
+        (appointmentDate - now) / (1000 * 60 * 60 * 24)
+      );
+
+      // ✅ Only act 2 days before the appointment
+      if (diffInDays === 2) {
+        const user = await User.findByPk(appointment.userId);
+        const home = await UserHomes.findByPk(appointment.homeId);
+        if (!user || !home) continue;
+
+        if (appointment.cleanerId) {
+          // Capture payment if cleaner assigned
+          try {
+            await stripe.paymentIntents.capture(appointment.paymentIntentId);
+            await appointment.update({ status: "confirmed" });
+            console.log(`✅ Charged client for appointment ${appointment.id}`);
+          } catch (err) {
+            console.error("❌ Stripe capture failed:", err.message);
+          }
+        } else {
+          // ❌ No cleaner — cancel payment & notify client
+          try {
+            await stripe.paymentIntents.cancel(appointment.paymentIntentId);
+            await appointment.update({ status: "cancelled" });
+
+            await Email.sendEmailCancellation(
+              user.email,
+              home,
+              user.firstName,
+              appointmentDate
+            );
+
+            console.log(
+              `⚠️ Appointment ${appointment.id} cancelled — user notified (${user.email})`
+            );
+          } catch (err) {
+            console.error("❌ Failed to cancel appointment or send email:", err);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Cron job error:", err);
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * 6️⃣ Cancel or Refund Payment
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/cancel-or-refund", async (req, res) => {
+  const { appointmentId } = req.body;
+
+  try {
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment) return res.status(404).json({ error: "Appointment not found" });
 
-    const paymentIntentId = appointment.paymentIntentId;
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await stripe.paymentIntents.retrieve(
+      appointment.paymentIntentId
+    );
 
     let result;
-
     if (paymentIntent.status === "requires_capture") {
-      // Payment authorized but not captured — cancel it
-      result = await stripe.paymentIntents.cancel(paymentIntentId);
+      result = await stripe.paymentIntents.cancel(paymentIntent.id);
       await appointment.update({ status: "cancelled" });
     } else if (paymentIntent.status === "succeeded") {
-      // Payment captured — issue refund
-      result = await stripe.refunds.create({ payment_intent: paymentIntentId });
+      result = await stripe.refunds.create({ payment_intent: paymentIntent.id });
       await appointment.update({ status: "refunded" });
     } else {
       return res.status(400).json({ error: "Cannot cancel or refund this payment" });
@@ -164,7 +237,7 @@ paymentRouter.post("/cancel-or-refund", async (req, res) => {
 
 /**
  * ------------------------------------------------------
- * 5️⃣ Stripe Webhook — Confirm Payments
+ * 7️⃣ Stripe Webhook — Handle Payment Events
  * ------------------------------------------------------
  */
 paymentRouter.post(
@@ -172,6 +245,7 @@ paymentRouter.post(
   express.raw({ type: "application/json" }),
   async (req, res) => {
     const sig = req.headers["stripe-signature"];
+
     try {
       const event = stripe.webhooks.constructEvent(
         req.body,
@@ -179,30 +253,35 @@ paymentRouter.post(
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
-      if (event.type === "payment_intent.succeeded") {
-        const paymentIntent = event.data.object;
-        const { userId, homeId } = paymentIntent.metadata;
+      switch (event.type) {
+        case "payment_intent.succeeded":
+          const paymentIntent = event.data.object;
+          console.log(`✅ PaymentIntent succeeded: ${paymentIntent.id}`);
 
-        const existingBill = await UserBills.findOne({ where: { userId } });
-        if (existingBill) {
-          await existingBill.update({
-            appointmentDue: existingBill.appointmentDue + paymentIntent.amount / 100,
-            totalDue: existingBill.totalDue + paymentIntent.amount / 100,
+          const appointment = await UserAppointments.findOne({
+            where: { paymentIntentId: paymentIntent.id },
           });
-        }
+          if (appointment) await appointment.update({ status: "completed" });
+          break;
 
-        console.log("✅ Payment recorded for user:", userId);
+        case "payment_intent.payment_failed":
+          console.error("❌ Payment failed");
+          break;
+
+        default:
+          console.log(`Unhandled event type ${event.type}`);
       }
 
       res.json({ received: true });
     } catch (err) {
-      console.error("Webhook error:", err.message);
+      console.error("⚠️ Webhook signature verification failed:", err.message);
       res.status(400).send(`Webhook Error: ${err.message}`);
     }
   }
 );
 
 module.exports = paymentRouter;
+
 
 
 // const user = await User.findByPk(userId, {
