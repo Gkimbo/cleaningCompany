@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { Text, View, Pressable } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Pressable, Text, View } from "react-native";
+import { RadioButton, TextInput } from "react-native-paper";
+import { useNavigate } from "react-router-native";
+import Appointment from "../../services/fetchRequests/AppointmentClass";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
-import { TextInput, RadioButton } from "react-native-paper";
-import Appointment from "../../services/fetchRequests/AppointmentClass";
-import { useNavigate } from "react-router-native";
 
 const EachAppointment = ({
   id,
@@ -34,6 +34,7 @@ const EachAppointment = ({
   const [redirect, setRedirect] = useState(false);
   const navigate = useNavigate();
 
+  // Handle code and key inputs
   const handleKeyPadCode = (newCode) => {
     const regex = /^[\d#]*(\.\d*)?(\s*)?$/;
     if (!regex.test(newCode)) {
@@ -46,20 +47,15 @@ const EachAppointment = ({
       setError(null);
     }
     setCode(newCode);
-    setChangeNotification({
-      message: "",
-      appointment: "",
-    });
+    setChangeNotification({ message: "", appointment: "" });
   };
 
   const handleKeyLocation = (newLocation) => {
     setKeyLocation(newLocation);
-    setChangeNotification({
-      message: "",
-      appointment: "",
-    });
+    setChangeNotification({ message: "", appointment: "" });
   };
 
+  // Submit updates
   const handleSubmit = async () => {
     if (!code && !key) {
       setError(
@@ -71,41 +67,32 @@ const EachAppointment = ({
     if (code !== keyPadCode || key !== keyLocation) {
       if (code) {
         await Appointment.updateCodeAppointments(code, id);
-        setChangesSubmitted(true);
-        setChangeNotification({
-          message: `Changes made only to the ${formatDate(date)} appointment!`,
-          appointment: id,
-        });
       } else {
         await Appointment.updateKeyAppointments(key, id);
-        setChangesSubmitted(true);
-        setChangeNotification({
-          message: `Changes made only to the ${formatDate(date)} appointment!`,
-          appointment: id,
-        });
       }
+      setChangesSubmitted(true);
+      setChangeNotification({
+        message: `Changes made only to the ${formatDate(date)} appointment!`,
+        appointment: id,
+      });
     } else {
       setError("No changes made.");
     }
   };
+
+  // Toggle between code/key
   const handleKeyToggle = (text) => {
     if (text === "code") {
       setKeyCodeToggle("code");
       setKeyLocation("");
-      setChangeNotification({
-        message: "",
-        appointment: "",
-      });
     } else {
       setKeyCodeToggle("key");
       setCode("");
-      setChangeNotification({
-        message: "",
-        appointment: "",
-      });
     }
+    setChangeNotification({ message: "", appointment: "" });
   };
 
+  // Preload values
   useEffect(() => {
     if (keyPadCode !== "") {
       setCode(keyPadCode);
@@ -117,6 +104,7 @@ const EachAppointment = ({
     }
   }, []);
 
+  // Redirect handler
   useEffect(() => {
     if (redirect) {
       navigate("/bill");
@@ -128,45 +116,39 @@ const EachAppointment = ({
     setRedirect(true);
   };
 
+  // --- Render ---
   return (
-    <View
-      style={[
-        homePageStyles.eachAppointment,
-        index % 2 === 1 && homePageStyles.appointmentOdd,
+    <Pressable
+      onPress={completed && !paid ? handleRedirectToBill : null}
+      style={({ pressed }) => [
+        homePageStyles.appointmentCard,
+        pressed && homePageStyles.appointmentCardPressed,
       ]}
     >
+      <View style={homePageStyles.appointmentHeader}>
+        <Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
+        <Text style={homePageStyles.appointmentPrice}>${price}</Text>
+      </View>
+
       {completed && !paid ? (
-        <Pressable
-          onPress={handleRedirectToBill}
-          style={[
-            homePageStyles.eachAppointment,
-            index % 2 === 1 && homePageStyles.appointmentOdd,
-          ]}
-        >
-          <Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
-          <Text style={homePageStyles.appointmentPrice}>$ {price}</Text>
-          <Text style={homePageStyles.appointmentDate}>
-            Cleaning complete, Please click to pay
-          </Text>
-        </Pressable>
+        <Text style={homePageStyles.appointmentStatus}>
+          Cleaning complete — tap to pay
+        </Text>
       ) : completed && paid ? (
-        <>
-          <Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
-          <Text style={homePageStyles.appointmentPrice}>$ {price}</Text>
-          <Text style={homePageStyles.appointmentDate}>Complete!</Text>
-        </>
+        <Text style={homePageStyles.appointmentStatusComplete}>Complete!</Text>
       ) : (
         <>
-          <Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
-          <Text style={homePageStyles.appointmentPrice}>$ {price}</Text>
           <Text style={homePageStyles.appointmentContact}>
             Point of contact: {contact}
           </Text>
-          <View style={{ textAlign: "center", marginBottom: 20 }}>
-            <Text style={{ color: "grey", fontSize: 11 }}>
+
+          <View style={{ marginBottom: 10 }}>
+            <Text style={{ color: "grey", fontSize: 11, textAlign: "center" }}>
               This can be changed by editing your home.
             </Text>
           </View>
+
+          {/* Cleaning time */}
           <Text style={UserFormStyles.smallTitle}>Time of cleaning:</Text>
           <Text
             style={{
@@ -174,29 +156,24 @@ const EachAppointment = ({
               justifyContent: "center",
               alignItems: "center",
               textAlign: "center",
-              paddingTop: 10,
-              paddingBottom: 10,
-              paddingLeft: 5,
-              paddingRight: 5,
+              paddingVertical: 10,
             }}
           >
-            {`${
-              timeToBeCompleted === "anytime"
-                ? ` Anytime on ${formatDate(date)}`
-                : timeToBeCompleted === "10-3"
-                  ? ` 10am to 3pm on ${formatDate(date)}`
-                  : timeToBeCompleted === "11-4"
-                    ? ` 11am to 4pm on ${formatDate(date)}`
-                    : timeToBeCompleted === "12-2"
-                      ? ` 12pm to 2pm on ${formatDate(date)}`
-                      : null
-            }`}
+            {timeToBeCompleted === "anytime"
+              ? `Anytime on ${formatDate(date)}`
+              : timeToBeCompleted === "10-3"
+              ? `10am to 3pm on ${formatDate(date)}`
+              : timeToBeCompleted === "11-4"
+              ? `11am to 4pm on ${formatDate(date)}`
+              : timeToBeCompleted === "12-2"
+              ? `12pm to 2pm on ${formatDate(date)}`
+              : null}
           </Text>
 
+          {/* Sheets toggle */}
           <Text style={UserFormStyles.smallTitle}>
             Cleaner is bringing sheets:
           </Text>
-
           {isDisabled ? (
             <View
               style={{
@@ -235,6 +212,8 @@ const EachAppointment = ({
               </View>
             </View>
           )}
+
+          {/* Towels toggle */}
           <Text style={UserFormStyles.smallTitle}>
             Cleaner is bringing towels:
           </Text>
@@ -249,10 +228,10 @@ const EachAppointment = ({
               >
                 <Text>{bringTowels}</Text>
               </View>
-              <Text style={{ ...homePageStyles.information }}>
+              <Text style={homePageStyles.information}>
                 These values cannot be changed within a week of your appointment
               </Text>
-              <Text style={{ ...homePageStyles.information }}>
+              <Text style={homePageStyles.information}>
                 Please contact us if you'd like to cancel or book sheets or
                 towels
               </Text>
@@ -285,6 +264,8 @@ const EachAppointment = ({
               </View>
             </View>
           )}
+
+          {/* Key or code toggle */}
           <Text style={UserFormStyles.smallTitle}>
             Cleaner will get in with:
           </Text>
@@ -314,15 +295,16 @@ const EachAppointment = ({
               </RadioButton.Group>
             </View>
           </View>
+
+          {/* Code or key input */}
           {keyCodeToggle === "code" ? (
             <>
               <Text style={UserFormStyles.smallTitle}>
                 The code to get in is
               </Text>
-
               <TextInput
                 mode="outlined"
-                value={code ? code : ""}
+                value={code || ""}
                 onChangeText={handleKeyPadCode}
                 style={UserFormStyles.codeInput}
               />
@@ -339,7 +321,7 @@ const EachAppointment = ({
               </Text>
               <TextInput
                 mode="outlined"
-                value={key ? key : ""}
+                value={key || ""}
                 onChangeText={handleKeyLocation}
                 style={UserFormStyles.input}
               />
@@ -357,6 +339,7 @@ const EachAppointment = ({
             </>
           )}
 
+          {/* Submit button */}
           {code !== keyPadCode || key !== keyLocation ? (
             <Pressable onPress={handleSubmit}>
               <Text style={{ ...UserFormStyles.button, width: "100%" }}>
@@ -368,7 +351,7 @@ const EachAppointment = ({
           {error && <Text style={UserFormStyles.error}>{error}</Text>}
         </>
       )}
-    </View>
+    </Pressable>
   );
 };
 

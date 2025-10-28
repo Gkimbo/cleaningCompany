@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-native";
-import { View, Text, Pressable, Dimensions } from "react-native";
+import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
+import { useNavigate, useParams } from "react-router-native";
+import Appointment from "../../services/fetchRequests/AppointmentClass";
 import homePageStyles from "../../services/styles/HomePageStyles";
 import topBarStyles from "../../services/styles/TopBarStyles";
 import CalendarComponent from "../calender/CalendarComponent";
-import Icon from "react-native-vector-icons/FontAwesome";
-import Appointment from "../../services/fetchRequests/AppointmentClass";
 
 const DetailsComponent = ({ state, dispatch }) => {
   const { id } = useParams();
-  const [confirmationModalVisible, setConfirmationModalVisible] =
-    useState(false);
+  const [confirmationModalVisible, setConfirmationModalVisible] = useState(false);
   const [homeDetails, setHomeDetails] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [redirect, setRedirect] = useState(false);
@@ -19,6 +18,7 @@ const DetailsComponent = ({ state, dispatch }) => {
   const navigate = useNavigate();
 
   const onAppointmentDelete = async (date, cancellationFee) => {
+    if (!homeDetails) return;
     try {
       const homeId = homeDetails.id;
       const arrayOfAppointments = await Appointment.getHomeAppointments(homeId);
@@ -34,30 +34,21 @@ const DetailsComponent = ({ state, dispatch }) => {
             state.currentUser.token
           );
           dispatch({ type: "ADD_FEE", payload: cancellationFee });
-          dispatch({
-            type: "SUBTRACT_BILL",
-            payload: appointmentToDelete.price,
-          });
+          dispatch({ type: "SUBTRACT_BILL", payload: appointmentToDelete.price });
         } else {
           response = await Appointment.deleteAppointment(
             appointmentToDelete.id,
             0,
             state.currentUser.token
           );
-          dispatch({
-            type: "SUBTRACT_BILL",
-            payload: appointmentToDelete.price,
-          });
+          dispatch({ type: "SUBTRACT_BILL", payload: appointmentToDelete.price });
         }
         if (response.message === "Appointment Deleted") {
           const updatedAppointments = appointments.filter(
             (appointment) => appointment.date !== appointmentToDelete.date
           );
           setAppointments(updatedAppointments);
-          dispatch({
-            type: "USER_APPOINTMENTS",
-            payload: updatedAppointments,
-          });
+          dispatch({ type: "USER_APPOINTMENTS", payload: updatedAppointments });
         } else {
           console.error("Failed to delete appointment");
         }
@@ -68,6 +59,7 @@ const DetailsComponent = ({ state, dispatch }) => {
   };
 
   const onDatesSelected = async (datesOfCleaning) => {
+    if (!homeDetails) return;
     const infoObject = {
       dateArray: datesOfCleaning,
       homeId: homeDetails.id,
@@ -77,9 +69,7 @@ const DetailsComponent = ({ state, dispatch }) => {
     };
     const response = await Appointment.addAppointmentToDb(infoObject);
     if (response) {
-      const stateApp = datesOfCleaning.map((app) => {
-        return { ...app, homeId: homeDetails.id };
-      });
+      const stateApp = datesOfCleaning.map((app) => ({ ...app, homeId: homeDetails.id }));
       let apptTotal = 0;
       datesOfCleaning.forEach((date) => {
         apptTotal += date.price;
@@ -96,12 +86,14 @@ const DetailsComponent = ({ state, dispatch }) => {
 
   useEffect(() => {
     const idNeeded = Number(id);
-    const foundHome = state.homes.find((home) => home.id === idNeeded);
+    const foundHome = state.homes.find((home) => home.id === idNeeded) || null;
     setHomeDetails(foundHome);
+
     const filteredAppointments = state.appointments.filter(
       (appointment) => appointment.homeId === idNeeded
     );
     setAppointments(filteredAppointments);
+
     if (redirect) {
       navigate("/list-of-homes");
       setRedirect(false);
@@ -111,27 +103,23 @@ const DetailsComponent = ({ state, dispatch }) => {
   if (!homeDetails) {
     return (
       <View style={homePageStyles.container}>
-        <Text>Loading...</Text>
+        <Text style={homePageStyles.title}>Loading home details...</Text>
       </View>
     );
   }
 
   return (
-    <View
+    <ScrollView
       style={{
-        backgroundColor: confirmationModalVisible ? "grey" : "transparent",
+        backgroundColor: confirmationModalVisible ? "grey" : homePageStyles.container.backgroundColor,
       }}
+      contentContainerStyle={{ paddingBottom: 20 }}
     >
       <View style={homePageStyles.detailsContainer}>
-        <View style={homePageStyles.backButtonContainer}>
-          <Pressable style={homePageStyles.backButton} onPress={handlePress}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                padding: 10,
-              }}
-            >
+        {/* Back Button */}
+        <View style={{ marginVertical: 12 }}>
+          <Pressable style={homePageStyles.backButtonForm} onPress={handlePress}>
+            <View style={{ flexDirection: "row", alignItems: "center", padding: 10 }}>
               <Icon name="angle-left" size={iconSize} color="black" />
               <View style={{ marginLeft: 15 }}>
                 <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
@@ -139,86 +127,90 @@ const DetailsComponent = ({ state, dispatch }) => {
             </View>
           </Pressable>
         </View>
+
+        {/* Home Details */}
         <View
           style={{
-            ...homePageStyles.homeDetailsContainer,
-            backgroundColor: confirmationModalVisible ? "grey" : "#f0f0f0",
+            ...homePageStyles.homeTileContainer,
+            backgroundColor: confirmationModalVisible ? "grey" : "rgba(58, 141, 255, 0.1)",
           }}
         >
-          <Text style={homePageStyles.homeTileTitle}>
-            {homeDetails.address}
+          <Text style={homePageStyles.homeTileTitle}>{homeDetails.address}</Text>
+          <Text style={homePageStyles.homeTileAddress}>
+            {`${homeDetails.city}, ${homeDetails.zipcode}`}
           </Text>
-          <Text
-            style={homePageStyles.homeTileAddress}
-          >{`${homeDetails.city}, ${homeDetails.zipcode}`}</Text>
-          <Text
-            style={homePageStyles.homeTileContent}
-          >{`Beds: ${homeDetails.numBeds}, Baths: ${homeDetails.numBaths}`}</Text>
-          <Text
-            style={homePageStyles.homeTileContent}
-          >{`Time the cleaner will clean: ${
-            homeDetails.timeToBeCompleted === "anytime"
-              ? "Anytime"
-              : homeDetails.timeToBeCompleted === "10-3"
+          <Text style={homePageStyles.homeTileContent}>
+            {`Beds: ${homeDetails.numBeds}, Baths: ${homeDetails.numBaths}`}
+          </Text>
+          <Text style={homePageStyles.homeTileContent}>
+            {`Time the cleaner will clean: ${
+              homeDetails.timeToBeCompleted === "anytime"
+                ? "Anytime"
+                : homeDetails.timeToBeCompleted === "10-3"
                 ? "Between 10am and 3pm  (+ $30 per appointment)"
                 : homeDetails.timeToBeCompleted === "11-4"
-                  ? "Between 11am and 4pm  (+ $30 per appointment)"
-                  : homeDetails.timeToBeCompleted === "12-2"
-                    ? "Between 12pm and 2pm  (+ $500 per appointment)"
-                    : null
-          }`}</Text>
-          <Text
-            style={homePageStyles.homeTileContent}
-          >{`Sheets will be provided by the cleaner: ${
-            homeDetails.sheetsProvided === "yes"
-              ? "Yes  - You can change this after booking in your appointments details. Changing it to No will save you 25$ per appointment"
-              : "No  - You can change this after booking in your appointments details. Changing it to Yes will add 25$ to each appointment"
-          }`}</Text>
-          <Text
-            style={homePageStyles.homeTileContent}
-          >{`Towels will be provided by the cleaner: ${
-            homeDetails.towelsProvided === "yes"
-              ? "Yes  - You can change this after booking in your appointments details. Changing it to No will save you 25$ per appointment"
-              : "No  - You can change this after booking in your appointments details. Changing it to Yes will add 25$ to each appointment"
-          }`}</Text>
-          {homeDetails.keyPadCode ? (
-            <Text
-              style={homePageStyles.homeTileContent}
-            >{`Keypad Code: ${homeDetails.keyPadCode}`}</Text>
-          ) : null}
-          {homeDetails.keyLocation ? (
-            <Text
-              style={homePageStyles.homeTileContent}
-            >{`Key Location: ${homeDetails.keyLocation}`}</Text>
-          ) : null}
-          {homeDetails.recyclingLocation ? (
-            <Text
-              style={homePageStyles.homeTileContent}
-            >{`Recycling Location: ${homeDetails.recyclingLocation}`}</Text>
-          ) : null}
-          {homeDetails.compostLocation ? (
-            <Text
-              style={homePageStyles.homeTileContent}
-            >{`Compost Location: ${homeDetails.compostLocation}`}</Text>
-          ) : null}
-          <Text
-            style={homePageStyles.homeTileContent}
-          >{`Trash Location: ${homeDetails.trashLocation}`}</Text>
+                ? "Between 11am and 4pm  (+ $30 per appointment)"
+                : homeDetails.timeToBeCompleted === "12-2"
+                ? "Between 12pm and 2pm  (+ $500 per appointment)"
+                : null
+            }`}
+          </Text>
+          <Text style={homePageStyles.homeTileContent}>
+            {`Sheets provided: ${
+              homeDetails.sheetsProvided === "yes"
+                ? "Yes - changing to No will save $25 per appointment"
+                : "No - changing to Yes will add $25 per appointment"
+            }`}
+          </Text>
+          <Text style={homePageStyles.homeTileContent}>
+            {`Towels provided: ${
+              homeDetails.towelsProvided === "yes"
+                ? "Yes - changing to No will save $25 per appointment"
+                : "No - changing to Yes will add $25 per appointment"
+            }`}
+          </Text>
+          {homeDetails.keyPadCode && (
+            <Text style={homePageStyles.homeTileContent}>
+              {`Keypad Code: ${homeDetails.keyPadCode}`}
+            </Text>
+          )}
+          {homeDetails.keyLocation && (
+            <Text style={homePageStyles.homeTileContent}>
+              {`Key Location: ${homeDetails.keyLocation}`}
+            </Text>
+          )}
+          {homeDetails.recyclingLocation && (
+            <Text style={homePageStyles.homeTileContent}>
+              {`Recycling Location: ${homeDetails.recyclingLocation}`}
+            </Text>
+          )}
+          {homeDetails.compostLocation && (
+            <Text style={homePageStyles.homeTileContent}>
+              {`Compost Location: ${homeDetails.compostLocation}`}
+            </Text>
+          )}
+          <Text style={homePageStyles.homeTileContent}>
+            {`Trash Location: ${homeDetails.trashLocation}`}
+          </Text>
         </View>
-        <CalendarComponent
-          onDatesSelected={onDatesSelected}
-          numBeds={homeDetails.numBeds}
-          numBaths={homeDetails.numBaths}
-          appointments={appointments}
-          onAppointmentDelete={onAppointmentDelete}
-          confirmationModalVisible={confirmationModalVisible}
-          setConfirmationModalVisible={setConfirmationModalVisible}
-          sheets={homeDetails.sheetsProvided}
-          towels={homeDetails.towelsProvided}
-          timeToBeCompleted={homeDetails.timeToBeCompleted}
-        />
+
+        {/* Calendar Component */}
+        {homeDetails && (
+          <CalendarComponent
+            onDatesSelected={onDatesSelected}
+            numBeds={homeDetails.numBeds}
+            numBaths={homeDetails.numBaths}
+            appointments={appointments}
+            onAppointmentDelete={onAppointmentDelete}
+            confirmationModalVisible={confirmationModalVisible}
+            setConfirmationModalVisible={setConfirmationModalVisible}
+            sheets={homeDetails.sheetsProvided}
+            towels={homeDetails.towelsProvided}
+            timeToBeCompleted={homeDetails.timeToBeCompleted}
+          />
+        )}
       </View>
-    </View>
+    </ScrollView>
   );
 };
 

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { Pressable, View, Text, ScrollView, Dimensions } from "react-native";
-import { useNavigate } from "react-router-native";
-import homePageStyles from "../../services/styles/HomePageStyles";
-import HomeAppointmentTile from "../tiles/HomeAppointmentTile";
+import React, { useEffect, useState } from "react";
+import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import topBarStyles from "../../services/styles/TopBarStyles";
+import { useNavigate } from "react-router-native";
 import FetchData from "../../services/fetchRequests/fetchData";
+import homePageStyles from "../../services/styles/HomePageStyles";
+import topBarStyles from "../../services/styles/TopBarStyles";
+import HomeAppointmentTile from "../tiles/HomeAppointmentTile";
 
 const AppointmentList = ({ state, dispatch }) => {
   const [allHomes, setAllHomes] = useState([]);
@@ -56,44 +56,29 @@ const AppointmentList = ({ state, dispatch }) => {
   const handleBackPress = () => {
     setBackRedirect(true);
   };
- 
-  const usersHomes = state.homes.map((home) => {
-    return (
-      <View key={home.id}>
-        <HomeAppointmentTile
-          id={home.id}
-          nickName={home.nickName}
-          address={home.address}
-          city={home.city}
-          state={home.state}
-          zipcode={home.zipcode}
-          contact={home.contact}
-          allAppointments={allAppointments}
-          setChangesSubmitted={setChangesSubmitted}
-        />
-      </View>
-    );
-  });
+
+  const usersHomes = state.homes.map((home) => (
+    <View key={home.id} style={{ marginBottom: 16 }}>
+      <HomeAppointmentTile
+        id={home.id}
+        nickName={home.nickName}
+        address={home.address}
+        city={home.city}
+        state={home.state}
+        zipcode={home.zipcode}
+        contact={home.contact}
+        allAppointments={allAppointments}
+        setChangesSubmitted={setChangesSubmitted}
+      />
+    </View>
+  ));
 
   return (
-    <View
-      style={{
-        ...homePageStyles.container,
-        flexDirection: "column",
-      }}
-    >
+    <View style={{ ...homePageStyles.container, flex: 1, marginTop: 10 }}>
+      {/* Back Button */}
       <View style={homePageStyles.backButtonAppointmentList}>
-        <Pressable
-          style={homePageStyles.backButtonForm}
-          onPress={handleBackPress}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              padding: 10,
-            }}
-          >
+        <Pressable style={{...homePageStyles.backButtonForm, width: 10}} onPress={handleBackPress}>
+          <View style={{ flexDirection: "row", alignItems: "center", padding: 10 }}>
             <Icon name="angle-left" size={iconSize} color="black" />
             <View style={{ marginLeft: 15 }}>
               <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
@@ -101,17 +86,14 @@ const AppointmentList = ({ state, dispatch }) => {
           </View>
         </Pressable>
       </View>
-      <View>
+
+      {/* Scrollable List of Homes */}
+      <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
         {state.homes.length > 0 ? (
           <>
             {usersHomes}
-            <Pressable
-              style={homePageStyles.AddHomeButton}
-              onPress={handlePress}
-            >
-              <Text style={homePageStyles.AddHomeButtonText}>
-                Add another Home
-              </Text>
+            <Pressable style={homePageStyles.AddHomeButton} onPress={handlePress}>
+              <Text style={homePageStyles.AddHomeButtonText}>Add another Home</Text>
             </Pressable>
           </>
         ) : (
@@ -119,7 +101,7 @@ const AppointmentList = ({ state, dispatch }) => {
             <Text style={homePageStyles.AddHomeButtonText}>Add a Home</Text>
           </Pressable>
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 };

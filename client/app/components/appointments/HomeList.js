@@ -67,27 +67,24 @@ const HomeList = ({ state, dispatch }) => {
           style={homePageStyles.backButtonForm}
           onPress={handleBackPress}
         >
-          <View
-            style={{ flexDirection: "row", alignItems: "center", padding: 10 }}
+          <Icon name="angle-left" size={iconSize + 2} color="white" />
+          <Text
+            style={{
+              color: "white",
+              fontWeight: "700",
+              fontSize: width < 400 ? 14 : width < 800 ? 16 : 18,
+              marginLeft: 10,
+              letterSpacing: 0.5,
+              textShadowColor: "rgba(0,0,0,0.2)",
+              textShadowOffset: { width: 0, height: 1 },
+              textShadowRadius: 2,
+            }}
           >
-            <Icon name="angle-left" size={iconSize} color="black" />
-            <View style={{ marginLeft: 15 }}>
-              <Text
-                style={{
-                  color: "white",
-                  fontWeight: "bold",
-                  fontSize: width < 400 ? 12 : width < 800 ? 16 : 18,
-                  textShadowColor: "rgba(0,0,0,0.3)",
-                  textShadowOffset: { width: 1, height: 1 },
-                  textShadowRadius: 2,
-                }}
-              >
-                Back
-              </Text>
-            </View>
-          </View>
+            Back
+          </Text>
         </Pressable>
       </View>
+
       <View>
         {state.homes.length > 0 ? (
           <>

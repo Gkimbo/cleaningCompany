@@ -1,12 +1,11 @@
 import { Dimensions, StyleSheet } from "react-native";
 const { width } = Dimensions.get("window");
-const colors = ["red", "orange", "grey", "green"];
 
 const homePageStyles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: "row",
-    justifyContent: "center",
+    flexDirection: "column",
+    justifyContent: "flex-start",
     marginTop:
       width > 600
         ? "10%"
@@ -17,301 +16,193 @@ const homePageStyles = StyleSheet.create({
             : width > 340
               ? "25%"
               : "30%",
+    paddingHorizontal: 16,
+    backgroundColor: "#f0f4f8",
   },
+
+  // Titles
   title: {
     alignSelf: "center",
-    fontSize: width < 400 ? 15 : width < 800 ? 18 : 22,
+    fontSize: width < 400 ? 16 : width < 800 ? 20 : 24,
     fontWeight: "bold",
-    marginBottom: "5%",
+    marginBottom: 16,
+    color: "#1e3a8a",
   },
   smallTitle: {
     alignSelf: "center",
-    fontSize: width < 400 ? 13 : width < 800 ? 16 : 19,
-    fontWeight: "bold",
-    marginBottom: "3%",
-  },
-  information: {
-    alignSelf: "center",
-    fontSize: width < 400 ? 12 : width < 800 ? 15 : 18,
-    marginBottom: "5%",
-  },
-  image: {
-    width: width > 600 ? "35%" : "100%",
-    height: width > 600 ? "80%" : "100%",
-    borderRadius: 10,
-    marginTop: 20,
-  },
-  imageGuarantee: {
-    width: width > 600 ? "40%" : "100%",
-    height: width > 600 ? "80%" : "100%",
-    borderRadius: 10,
-    marginTop: 20,
-  },
-  parallaxImage: {
-    height: 600,
-    width: width,
-  },
-  backgroundImage: {
-    flex: 1,
-    resizeMode: "contain",
-    height: "100%",
-    width: "100%",
-  },
-  homePageParagraphSurround: {
-    flexDirection: width > 600 ? "row" : "column",
-    justifyContent: "space-between",
-    marginBottom: width > 600 ? "7%" : "7%",
-  },
-  reverseImage: {
-    width: "100%",
-    justifyContent: "space-between",
-    flexDirection: width > 600 ? "row" : "column-reverse",
-    marginTop:
-      width > 600
-        ? 0
-        : width > 540
-          ? "100%"
-          : width > 440
-            ? "135%"
-            : width > 340
-              ? "145%"
-              : "160%",
-  },
-  homePageParagraphText: {
-    flexDirection: "column",
-    width: width > 600 ? "45%" : "100%",
-  },
-  buttonText: {
-    color: "white",
-    fontSize: 18,
-    textAlign: "center",
-  },
-  buttonTextBill: {
-    fontSize: 18,
-    textAlign: "center",
+    fontSize: width < 400 ? 14 : width < 800 ? 18 : 20,
+    fontWeight: "600",
+    marginBottom: 12,
+    color: "#1e40af",
   },
 
-  topBarContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginRight: 1,
-    marginLeft: 1,
-    marginBottom: "10%",
-  },
-
-  logoutButton: {
-    backgroundColor: "red",
-    padding: 10,
-    borderRadius: 5,
-  },
-
-  logoutButtonText: {
-    color: "white",
-    fontSize: 16,
-  },
+  // Home tiles
   homeTileContainer: {
     alignSelf: "center",
-    margin: 16,
-    padding: 16,
-    backgroundColor: "#f0f0f0",
-    elevation: 5,
-    borderRadius: 8,
-    fontSize: width > 400 ? 18 : 7,
+    marginVertical: 14,
+    paddingVertical: 28, // increased vertical padding for longer tiles
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(58, 141, 255, 0.15)",
+    borderRadius: 22,
+    shadowColor: "#3a8dff",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
     width:
       width > 1000 ? "48%" : width > 700 ? "78%" : width > 500 ? "88%" : "95%",
-    shadowColor: "#000", // You can set the shadow color
-    shadowOffset: {
-      width: 3,
-      height: 3,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 3, // You can adjust the shadow radius as needed
+    borderWidth: 1,
+    borderColor: "rgba(58, 141, 255, 0.3)",
+    minHeight: 260, // 👈 ensures a longer tile, even with less content
+    justifyContent: "space-between",
   },
+  
   homeTileTitle: {
-    alignSelf: "center",
-    fontSize: width < 400 ? 15 : width < 800 ? 18 : 22,
+    fontSize: width < 400 ? 16 : width < 800 ? 20 : 22,
     fontWeight: "bold",
+    color: "#0f172a",
+    marginBottom: 6,
   },
   homeTileAddress: {
-    alignSelf: "center",
-    fontSize: width < 400 ? 13 : width < 800 ? 16 : 20,
-    marginBottom: "3%",
+    fontSize: width < 400 ? 12 : width < 800 ? 14 : 16,
+    color: "#334155",
+    marginBottom: 8,
   },
-  homeTileContent: {
-    fontSize: width < 400 ? 10 : width < 800 ? 14 : 18,
-    marginTop: "4%",
-  },
+
+  // Add Home button
   AddHomeButton: {
     alignSelf: "center",
-    backgroundColor: "#f9bc60",
-    padding: "1%",
-    borderRadius: 10,
-    width: width < 850 ? "40%" : "17%",
-    alignItems: "center",
+    backgroundColor: "rgba(58, 141, 255, 0.3)", // glass effect
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 25,
+    marginVertical: 16,
+    shadowColor: "#3a8dff",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8,
   },
   AddHomeButtonText: {
-    fontSize: width < 400 ? 8 : width < 800 ? 12 : 14,
-  },
-  detailsContainer: {
-    marginTop: 120,
-  },
-  homeDetailsContainer: {
-    alignSelf: "center",
-    width:
-      width > 1000 ? "48%" : width > 700 ? "78%" : width > 500 ? "88%" : "95%",
-    margin: 16,
-    padding: 16,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
-    fontSize: width > 400 ? 18 : 7,
+    fontSize: width < 400 ? 12 : width < 800 ? 16 : 18,
+    fontWeight: "600",
+    color: "#fff",
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.15)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
-  backButton: {
-    backgroundColor: "#f9bc60",
-    padding: 10,
-    borderRadius: 10,
-    height: "80%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  backButtonContainer: {
-    width: width < 450 ? "20%" : "15%",
-    height: "5%",
-    paddingLeft: "3%",
-  },
-
+  // Back button
   backButtonForm: {
-    backgroundColor: "rgba(58, 141, 255, 0.2)", // blue glass effect
+    backgroundColor: "rgba(58, 141, 255, 0.25)",
     borderRadius: 25,
     paddingVertical: 12,
-    paddingHorizontal: 25,
+    paddingHorizontal: 22,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#3a8dff",
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
     elevation: 8,
     borderWidth: 1,
     borderColor: "rgba(58, 141, 255, 0.4)",
-    minWidth: width > 800 ? 200 : width > 500 ? 160 : 140, // ensure enough space
+    minWidth: width > 800 ? 200 : width > 500 ? 160 : 140,
   },
-  backButtonContainerForm: {
-    width: "100%", // let the button itself handle width
-    marginLeft: 0,
-    marginVertical: 10,
-    alignItems: "flex-start", // align button to the left
-  },
-  
-  
   backButtonContainerList: {
     width: width > 800 ? "10%" : width > 600 ? "15%" : "25%",
-    height: "7%",
     marginLeft: "10%",
+    marginVertical: 12,
   },
-  backButtonAppointmentList: {
-    width: width > 800 ? "10%" : width > 600 ? "15%" : "25%",
-    height: 20,
-    marginLeft: "10%",
+
+  // Text inside buttons
+  buttonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: width < 400 ? 14 : width < 800 ? 16 : 18,
+    textAlign: "center",
   },
+
   bookButton: {
-    alignSelf: "center",
-    borderRadius: 10,
-    backgroundColor: "#3da9fc",
-    padding: "2%",
-    marginTop: "7%",
-    marginBottom: "3%",
-  },
-  appointmentListContainer: {
-    marginTop: 12,
-  },
-  eachAppointment: {
-    marginRight: 0,
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: "white",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  appointmentDate: {
-    fontSize: width > 800 ? 20 : width > 600 ? 18 : 14,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  appointmentBanner: {
-    fontSize: width > 800 ? 20 : width > 600 ? 18 : 14,
-    fontWeight: "bold",
-    marginBottom: 4,
-    color: "red",
-  },
-  appointmentContact: {
-    fontSize: width > 800 ? 18 : width > 600 ? 16 : 12,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  appointmentPrice: {
-    fontSize: width > 800 ? 20 : width > 600 ? 18 : 14,
-    color: "#555",
-    marginBottom: 4,
-  },
-  billContainer: {
-    backgroundColor: "#f9f9f9",
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    marginTop: 20,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 2,
-      height: 3,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 3.84,
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    backgroundColor: "rgba(58, 141, 255, 0.15)", // same glassy blue tone
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "rgba(58, 141, 255, 0.35)", // subtle blue border
+    shadowColor: "#3a8dff",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
     elevation: 5,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 16,
+  appointmentCard: {
+    alignSelf: "center",
+    marginVertical: 10,
+    padding: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.85)", // frosted glass look
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "rgba(58, 141, 255, 0.35)", // soft blue border
+    shadowColor: "#3a8dff",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    width: "94%",
   },
-  billDetails: {
-    marginBottom: 16,
+  
+  appointmentCardPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
   },
-  billRow: {
+  
+  appointmentHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  billLabel: {
+  
+  appointmentDate: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  
+  appointmentPrice: {
     fontSize: 16,
     fontWeight: "bold",
+    color: "#3a8dff",
   },
-  billValue: {
-    fontSize: 16,
-    color: "#3498db",
+  
+  appointmentStatus: {
+    fontSize: 14,
+    color: "#1e3a8a",
+    textAlign: "center",
+    marginTop: 4,
+    fontWeight: "500",
   },
-  billDivider: {
-    height: 1,
-    backgroundColor: "#ccc",
-    marginVertical: 8,
+  
+  appointmentStatusComplete: {
+    fontSize: 14,
+    color: "#16a34a",
+    textAlign: "center",
+    fontWeight: "600",
   },
-  billText: {
-    fontSize: 16,
-    marginBottom: 8,
+  
+  appointmentContact: {
+    fontSize: 13,
+    color: "#334155",
+    marginBottom: 6,
   },
-  button: {
-    backgroundColor: "#3498db",
-    padding: 14,
-    borderRadius: 8,
-    alignItems: "center",
-  },
+  
+  
 });
 
 export default homePageStyles;

@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 
-const API_BASE = "http://localhost:3000/api/v1"; // Update your backend URL
+const API_BASE = "http://localhost:3000/api/v1";
 
 const Bill = ({ state, dispatch }) => {
   const [amountToPay, setAmountToPay] = useState(0);
@@ -21,7 +21,6 @@ const Bill = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
-  // Total due & total paid
   const appointmentOverdue = state.appointments.reduce((total, appt) => {
     const apptDate = new Date(appt.date);
     const today = new Date();
@@ -29,7 +28,7 @@ const Bill = ({ state, dispatch }) => {
     return total;
   }, state.bill.cancellationFee);
 
-  const totalPaid = state.bill.totalPaid || 0; // Assuming your state tracks totalPaid
+  const totalPaid = state.bill.totalPaid || 0;
   const progressPercent = Math.min((totalPaid / appointmentOverdue) * 100, 100);
 
   useEffect(() => {
@@ -185,8 +184,6 @@ const Bill = ({ state, dispatch }) => {
     ]);
   };
 
-  console.log(!progressPercent);
-
   return (
     <ScrollView
       contentContainerStyle={{
@@ -242,11 +239,13 @@ const Bill = ({ state, dispatch }) => {
             }}
           />
         </View>
-        {progressPercent && (
-          <Text style={{ color: "#fff", marginTop: 5, fontWeight: "600" }}>
-            Paid: {progressPercent.toFixed(0)}%
-          </Text>
-        )}
+        
+        {typeof progressPercent === "number" &&
+          !Number.isNaN(progressPercent) && (
+            <Text style={{ color: "#fff", marginTop: 5, fontWeight: "600" }}>
+              Paid: {progressPercent.toFixed(0)}%
+            </Text>
+          )}
       </View>
 
       {/* Amount Input Card */}
@@ -289,7 +288,7 @@ const Bill = ({ state, dispatch }) => {
         )}
       </View>
 
-      {/* Cleaner Actions */}
+      {/* Customer Actions */}
       {state.account === null && (
         <>
           <Pressable
