@@ -6,15 +6,15 @@ import {
   Pressable,
   ScrollView,
   Text,
-  View
+  View,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
-import homePageStyles from "../../../services/styles/HomePageStyles";
 import RequestedTile from "../tiles/RequestedTile";
 
+// Haversine distance function
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371;
@@ -31,41 +31,37 @@ const MyRequests = ({ state }) => {
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
-  const [appointmentLocations, setAppointmentLocations] = useState(null);
+  const [appointmentLocations, setAppointmentLocations] = useState({});
   const [sortOption, setSortOption] = useState("distanceClosest");
   const [showSortPicker, setShowSortPicker] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [redirectToJobs, setRedirectToJobs] = useState(false);
 
   const { width } = Dimensions.get("window");
-  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
+  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 
-  // ✅ Function to open the calendar
-  const pressedSeeCalendar = () => {
-    navigate("/my-requests-calendar");
-  };
+  // Navigate to calendar
+  const pressedSeeCalendar = () => navigate("/my-requests-calendar");
 
-  // ✅ Function to toggle sort picker
-  const toggleSortPicker = () => setShowSortPicker((prev) => !prev);
-
+  // Fetch requests and user info
   useEffect(() => {
     const fetchRequests = async () => {
       try {
         const response = await FetchData.get(
           "/api/v1/users/appointments/employee",
-          state.currentUser.token
+          state?.currentUser?.token
         );
-        setAllRequests(response.requested || []);
+        setAllRequests(response?.requested || []);
       } catch (error) {
         console.error("Error fetching requests:", error);
+        setAllRequests([]);
       }
     };
 
     const fetchUser = async () => {
       try {
         const response = await getCurrentUser();
-        setUserId(response.user.id);
+        setUserId(response?.user?.id || null);
       } catch (error) {
         console.error("Error fetching user:", error);
       }
@@ -73,15 +69,16 @@ const MyRequests = ({ state }) => {
 
     fetchRequests();
     fetchUser();
-  }, []);
+  }, [state?.currentUser?.token]);
 
+  // Fetch locations for appointments
   useEffect(() => {
     const fetchLocations = async () => {
       try {
         const locations = await Promise.all(
-          allRequests.map(async (appointment) => {
-            const response = await FetchData.getLatAndLong(appointment.homeId);
-            return { [appointment.homeId]: response };
+          (allRequests || []).map(async (appointment) => {
+            const loc = await FetchData.getLatAndLong(appointment.homeId);
+            return { [appointment.homeId]: loc };
           })
         );
         setAppointmentLocations(Object.assign({}, ...locations));
@@ -93,40 +90,37 @@ const MyRequests = ({ state }) => {
     if (allRequests.length > 0) fetchLocations();
   }, [allRequests]);
 
+  // Get user location
   useEffect(() => {
-    if (navigator.geolocation) {
-      const watcher = navigator.geolocation.watchPosition(
-        (position) => {
-          setUserLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          setLoading(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-      return () => navigator.geolocation.clearWatch(watcher);
-    } else {
+    if (!navigator.geolocation) {
       setLoading(false);
+      return;
     }
+
+    const watcher = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        setLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watcher);
   }, []);
 
-  useEffect(() => {
-    if (redirectToJobs) {
-      navigate("/new-job-choice");
-      setRedirectToJobs(false);
-    }
-  }, [redirectToJobs]);
-
+  // Sort requests
   const sortedRequests = useMemo(() => {
-    const processed = allRequests.map((appointment) => {
+    const processed = (allRequests || []).map((appointment) => {
       let distance = null;
-      if (userLocation && appointmentLocations?.[appointment.homeId]) {
-        const loc = appointmentLocations[appointment.homeId];
+      const loc = appointmentLocations[appointment.homeId];
+      if (userLocation && loc) {
         distance = haversineDistance(
           userLocation.latitude,
           userLocation.longitude,
@@ -150,151 +144,141 @@ const MyRequests = ({ state }) => {
     });
   }, [allRequests, userLocation, appointmentLocations, sortOption]);
 
+  const requestsToRender = sortedRequests || [];
+
   return (
-    <View
-      style={{
-        ...homePageStyles.container,
-        flexDirection: "column",
-        marginTop: "27%",
-      }}
-    >
-  {/* First row: Back & Calendar */}
-<View style={{ flexDirection: "row", justifyContent: "space-around", marginHorizontal: 10, marginTop: 10 }}>
-  {/* Back Button */}
-  <Pressable
-    onPress={() => navigate("/")}
-    style={{
-      flex: 1,
-      marginRight: 5,
-      flexDirection: "row",
-      justifyContent: "center",
-      alignItems: "center",
-      paddingVertical: 10,
-      borderRadius: 15,
-      backgroundColor: "rgba(0,123,255,0.2)", // glassy blue
-      borderWidth: 1,
-      borderColor: "rgba(0,123,255,0.3)",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    }}
-  >
-    <Icon name="angle-left" size={18} color="#007BFF" />
-    <Text style={{ color: "#007BFF", fontWeight: "600", marginLeft: 8 }}>Back</Text>
-  </Pressable>
-
-  {/* Calendar Button */}
-  <Pressable
-    onPress={pressedSeeCalendar}
-    style={{
-      flex: 1,
-      marginLeft: 5,
-      flexDirection: "row",
-      justifyContent: "center",
-      alignItems: "center",
-      paddingVertical: 10,
-      borderRadius: 15,
-      backgroundColor: "rgba(0,123,255,0.2)", // glassy blue
-      borderWidth: 1,
-      borderColor: "rgba(0,123,255,0.3)",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    }}
-  >
-    <Text style={{ color: "#007BFF", fontWeight: "600", marginRight: 8 }}>Calendar</Text>
-    <Icon name="angle-right" size={18} color="#007BFF" />
-  </Pressable>
-</View>
-
-
-{/* Second row: Sort button */}
-<View
-  style={{
-    marginHorizontal: 20,
-    marginBottom: 15,
-  }}
->
-<Pressable
-  onPress={() => setShowSortPicker(!showSortPicker)}
-  style={{
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    marginHorizontal: 10,
-    marginTop: 10,
-    borderRadius: 15,
-    backgroundColor: "rgba(255,255,255,0.2)", // glass-like transparency
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.3)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  }}
->
-  <Text style={{ color: "#1E1E1E", fontWeight: "600" }}>
-    {sortOption === "distanceClosest"
-      ? "Distance (Closest)"
-      : sortOption === "distanceFurthest"
-      ? "Distance (Furthest)"
-      : sortOption === "priceLow"
-      ? "Price (Low to High)"
-      : "Price (High to Low)"}
-  </Text>
-  <Icon
-    name={showSortPicker ? "angle-up" : "angle-down"}
-    size={18} // slightly smaller
-    color="#1E1E1E"
-  />
-</Pressable>
-
-  {/* Picker beneath Sort button */}
-  {showSortPicker && (
-    <View
-      style={{
-        marginTop: 10,
-        borderRadius: 12,
-        backgroundColor: "#fff",
-        borderWidth: 1,
-        borderColor: "#ddd",
-        maxHeight: 200,
-        overflow: "hidden",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 4,
-      }}
-    >
-      <Picker
-        selectedValue={sortOption}
-        onValueChange={(itemValue) => {
-          setSortOption(itemValue);
-          setShowSortPicker(false);
+    <View style={{ flex: 1, flexDirection: "column", marginTop: "27%" }}>
+      {/* Top Row: Back + Calendar */}
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-around",
+          marginHorizontal: 10,
+          marginBottom: 10,
         }}
-        style={{ color: "#1E1E1E" }}
       >
-        <Picker.Item label="Distance (Closest)" value="distanceClosest" />
-        <Picker.Item label="Distance (Furthest)" value="distanceFurthest" />
-        <Picker.Item label="Price (Low to High)" value="priceLow" />
-        <Picker.Item label="Price (High to Low)" value="priceHigh" />
-      </Picker>
-    </View>
-  )}
-</View>
+        <Pressable
+          onPress={() => navigate("/")}
+          style={{
+            flex: 1,
+            marginRight: 5,
+            flexDirection: "row",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingVertical: 10,
+            borderRadius: 15,
+            backgroundColor: "rgba(0,123,255,0.2)",
+            borderWidth: 1,
+            borderColor: "rgba(0,123,255,0.3)",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+          }}
+        >
+          <Icon name="angle-left" size={18} color="#007BFF" />
+          <Text style={{ color: "#007BFF", fontWeight: "600", marginLeft: 8 }}>Back</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={pressedSeeCalendar}
+          style={{
+            flex: 1,
+            marginLeft: 5,
+            flexDirection: "row",
+            justifyContent: "center",
+            alignItems: "center",
+            paddingVertical: 10,
+            borderRadius: 15,
+            backgroundColor: "rgba(0,123,255,0.2)",
+            borderWidth: 1,
+            borderColor: "rgba(0,123,255,0.3)",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+          }}
+        >
+          <Text style={{ color: "#007BFF", fontWeight: "600", marginRight: 8 }}>Calendar</Text>
+          <Icon name="angle-right" size={18} color="#007BFF" />
+        </Pressable>
+      </View>
+
+      {/* Sort Picker */}
+      <View style={{ marginHorizontal: 20, marginBottom: 15 }}>
+        <Pressable
+          onPress={() => setShowSortPicker(!showSortPicker)}
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingVertical: 10,
+            paddingHorizontal: 15,
+            borderRadius: 15,
+            backgroundColor: "rgba(255,255,255,0.2)",
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.3)",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+          }}
+        >
+          <Text style={{ color: "#1E1E1E", fontWeight: "600" }}>
+            {sortOption === "distanceClosest"
+              ? "Distance (Closest)"
+              : sortOption === "distanceFurthest"
+              ? "Distance (Furthest)"
+              : sortOption === "priceLow"
+              ? "Price (Low to High)"
+              : "Price (High to Low)"}
+          </Text>
+          <Icon name={showSortPicker ? "angle-up" : "angle-down"} size={18} color="#1E1E1E" />
+        </Pressable>
+
+        {showSortPicker && (
+          <View
+            style={{
+              marginTop: 10,
+              borderRadius: 12,
+              backgroundColor: "#fff",
+              borderWidth: 1,
+              borderColor: "#ddd",
+              maxHeight: 200,
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+          >
+            <Picker
+              selectedValue={sortOption}
+              onValueChange={(itemValue) => {
+                setSortOption(itemValue);
+                setShowSortPicker(false);
+              }}
+              style={{ color: "#1E1E1E" }}
+            >
+              <Picker.Item label="Distance (Closest)" value="distanceClosest" />
+              <Picker.Item label="Distance (Furthest)" value="distanceFurthest" />
+              <Picker.Item label="Price (Low to High)" value="priceLow" />
+              <Picker.Item label="Price (High to Low)" value="priceHigh" />
+            </Picker>
+          </View>
+        )}
+      </View>
 
       {/* Requests List */}
       {loading ? (
-        <ActivityIndicator size="large" color="#0000ff" style={{ marginTop: 20 }} />
-      ) : sortedRequests.length === 0 ? (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color="#0000ff" />
+        </View>
+      ) : requestsToRender.length === 0 ? (
         <View style={{ marginTop: 50, alignItems: "center", padding: 20 }}>
           <Text style={{ fontSize: 18, fontWeight: "600", color: "#444", marginBottom: 10 }}>
             You have no jobs requested.
@@ -304,8 +288,8 @@ const MyRequests = ({ state }) => {
           </Text>
         </View>
       ) : (
-        <ScrollView>
-          {sortedRequests.map((appointment) => (
+        <ScrollView contentContainerStyle={{ paddingBottom: 50 }}>
+          {requestsToRender.map((appointment) => (
             <RequestedTile
               key={appointment.id}
               {...appointment}
@@ -314,9 +298,7 @@ const MyRequests = ({ state }) => {
               removeRequest={async (employeeId, appointmentId) => {
                 try {
                   await FetchData.removeRequest(employeeId, appointmentId);
-                  setAllRequests((prev) =>
-                    prev.filter((a) => a.id !== appointmentId)
-                  );
+                  setAllRequests((prev) => prev.filter((a) => a.id !== appointmentId));
                 } catch (error) {
                   console.error(error);
                 }
@@ -330,3 +312,5 @@ const MyRequests = ({ state }) => {
 };
 
 export default MyRequests;
+
+

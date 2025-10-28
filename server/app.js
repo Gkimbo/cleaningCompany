@@ -9,7 +9,6 @@ require("dotenv").config();
 require("./passport-config");
 
 const rootRouter = require("./routes/rootRouter");
-const paymentRouter = require("./routes/api/v1/payments/paymentRouter");
 
 const clientURL = "http://localhost:19006";
 const secretKey = process.env.SESSION_SECRET;
@@ -55,7 +54,6 @@ app.use(express.json());
 
 // Routes
 app.use(rootRouter);
-app.use("/api/v1/payments", paymentRouter);
 
 // Start server
 app.listen(port, () => {

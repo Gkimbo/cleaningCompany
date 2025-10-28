@@ -186,25 +186,30 @@ const homePageStyles = StyleSheet.create({
   },
 
   backButtonForm: {
-    backgroundColor: "#f9bc60",
-    borderRadius: 30,
-    paddingVertical: 5,
-    paddingHorizontal: 20,
-    marginHorizontal: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 5,
+    backgroundColor: "rgba(58, 141, 255, 0.2)", // blue glass effect
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 25,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#3a8dff",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(58, 141, 255, 0.4)",
+    minWidth: width > 800 ? 200 : width > 500 ? 160 : 140, // ensure enough space
   },
   backButtonContainerForm: {
-    width: width > 500 ? "15%" : "25%",
-    height: width > 600 ? "5%" : "7%",
-    marginLeft: "10%",
+    width: "100%", // let the button itself handle width
+    marginLeft: 0,
+    marginVertical: 10,
+    alignItems: "flex-start", // align button to the left
   },
+  
+  
   backButtonContainerList: {
     width: width > 800 ? "10%" : width > 600 ? "15%" : "25%",
     height: "7%",

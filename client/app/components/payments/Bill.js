@@ -9,10 +9,8 @@ import {
   View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
-import homePageStyles from "../../services/styles/HomePageStyles";
-import UserFormStyles from "../../services/styles/UserInputFormStyle";
 
-const API_BASE = "https://your-backend-url.com/api/v1"; // 🔹 Update to your backend URL
+const API_BASE = "http://localhost:3000/api/v1"; // Update your backend URL
 
 const Bill = ({ state, dispatch }) => {
   const [amountToPay, setAmountToPay] = useState(0);
@@ -23,33 +21,31 @@ const Bill = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
-  // Compute total due
-  let appointmentOverdue = 0 + state.bill.cancellationFee;
-  state.appointments.forEach((appt) => {
-    const appointmentDate = new Date(appt.date);
+  // Total due & total paid
+  const appointmentOverdue = state.appointments.reduce((total, appt) => {
+    const apptDate = new Date(appt.date);
     const today = new Date();
-    if (!appt.paid && appointmentDate <= today) {
-      appointmentOverdue += Number(appt.price);
-    }
-  });
+    if (!appt.paid && apptDate <= today) return total + Number(appt.price);
+    return total;
+  }, state.bill.cancellationFee);
+
+  const totalPaid = state.bill.totalPaid || 0; // Assuming your state tracks totalPaid
+  const progressPercent = Math.min((totalPaid / appointmentOverdue) * 100, 100);
 
   useEffect(() => {
-    setAmountToPay(appointmentOverdue);
-  }, [appointmentOverdue]);
+    setAmountToPay(appointmentOverdue - totalPaid);
+  }, [appointmentOverdue, totalPaid]);
 
   const handleAmountToPay = (amount) => {
     const regex = /^\d*(\.\d*)?$/;
     if (!regex.test(amount)) {
-      setError("Amount must be a number");
+      setError("Amount must be a valid number");
       return;
     }
     setError(null);
     setAmountToPay(amount);
   };
 
-  /**
-   * 🔹 Step 1: Create Payment Intent (Backend Handles Airbnb + Email)
-   */
   const createPaymentIntent = async () => {
     try {
       const response = await fetch(`${API_BASE}/payments/create-intent`, {
@@ -63,22 +59,17 @@ const Bill = ({ state, dispatch }) => {
           userName: state.currentUser.userName,
         }),
       });
-
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to create payment intent");
-
+      if (!response.ok)
+        throw new Error(data.error || "Failed to create payment intent");
       setAppointmentId(data.appointmentId);
       return data.clientSecret;
     } catch (err) {
-      console.error("❌ PaymentIntent Error:", err);
       Alert.alert("Error", err.message || "Could not start payment");
       return null;
     }
   };
 
-  /**
-   * 🔹 Step 2: Present Stripe Payment Sheet
-   */
   const openPaymentSheet = async () => {
     setIsProcessing(true);
     const clientSecret = await createPaymentIntent();
@@ -86,42 +77,33 @@ const Bill = ({ state, dispatch }) => {
       setIsProcessing(false);
       return;
     }
-
     const { error: initError } = await initPaymentSheet({
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: "Kleanr Inc.",
     });
-
     if (initError) {
       Alert.alert("Error", initError.message);
       setIsProcessing(false);
       return;
     }
-
     const { error: paymentError } = await presentPaymentSheet();
     setIsProcessing(false);
-
     if (paymentError) {
       Alert.alert("Error", paymentError.message);
     } else {
       Alert.alert("Success", "Payment authorized!");
       dispatch({
         type: "UPDATE_BILL",
-        payload: { totalDue: state.bill.totalDue + Number(amountToPay) },
+        payload: { totalPaid: totalPaid + Number(amountToPay) },
       });
-
-      // 🔹 Notify backend to sync with Airbnb and create cleaner job
       await syncAirbnbBooking();
       navigate("/");
     }
   };
 
-  /**
-   * 🔹 Step 3: Notify backend to sync Airbnb + Create Job for Cleaners
-   */
   const syncAirbnbBooking = async () => {
     try {
-      const res = await fetch(`${API_BASE}/airbnb/sync-booking`, {
+      await fetch(`${API_BASE}/airbnb/sync-booking`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -130,23 +112,19 @@ const Bill = ({ state, dispatch }) => {
           homeId: state.userHomeId,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Airbnb sync failed");
-      console.log("✅ Airbnb Booking Synced:", data);
     } catch (err) {
-      console.error("❌ Airbnb Sync Error:", err);
+      console.error("Airbnb Sync Error:", err);
     }
   };
 
-  /**
-   * 🔹 Step 4: Cleaner Captures Payment after Job Completion
-   */
   const handleCapturePayment = async () => {
     if (!appointmentId) {
-      Alert.alert("No Payment", "Please wait until client payment is confirmed.");
+      Alert.alert(
+        "No Payment",
+        "Please wait until client payment is confirmed."
+      );
       return;
     }
-
     Alert.alert("Release Payment", "Confirm job completion?", [
       { text: "Cancel" },
       {
@@ -163,13 +141,9 @@ const Bill = ({ state, dispatch }) => {
               }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to capture payment");
-
-            Alert.alert("✅ Success", "Funds released to cleaner!");
-            dispatch({
-              type: "UPDATE_APPOINTMENT",
-              payload: { appointmentId, status: "completed" },
-            });
+            if (!res.ok)
+              throw new Error(data.error || "Failed to capture payment");
+            Alert.alert("Success", "Funds released to cleaner!");
           } catch (err) {
             Alert.alert("Error", err.message);
           } finally {
@@ -180,15 +154,11 @@ const Bill = ({ state, dispatch }) => {
     ]);
   };
 
-  /**
-   * 🔹 Step 5: Refund / Cancel Payment
-   */
   const handleCancelOrRefund = async () => {
     if (!appointmentId) {
       Alert.alert("Error", "No active payment to cancel.");
       return;
     }
-
     Alert.alert("Cancel Payment", "Are you sure?", [
       { text: "No" },
       {
@@ -205,8 +175,7 @@ const Bill = ({ state, dispatch }) => {
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Refund failed");
-
-            Alert.alert("✅ Success", "Payment refunded successfully");
+            Alert.alert("Success", "Payment refunded successfully");
             setAppointmentId(null);
           } catch (err) {
             Alert.alert("Error", err.message);
@@ -216,69 +185,164 @@ const Bill = ({ state, dispatch }) => {
     ]);
   };
 
+  console.log(!progressPercent);
+
   return (
-    <ScrollView contentContainerStyle={homePageStyles.container}>
-      <View style={homePageStyles.billContainer}>
-        <Text style={homePageStyles.sectionTitle}>Your Bill</Text>
+    <ScrollView
+      contentContainerStyle={{
+        flexGrow: 1,
+        padding: 20,
+        backgroundColor: "#F0F4F7",
+      }}
+    >
+      {/* Total Due Card */}
+      <View
+        style={{
+          backgroundColor: "#007BFF",
+          borderRadius: 20,
+          padding: 25,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 6,
+          elevation: 6,
+          marginBottom: 15,
+        }}
+      >
+        <Text
+          style={{
+            color: "#fff",
+            fontSize: 20,
+            fontWeight: "600",
+            marginBottom: 5,
+          }}
+        >
+          Total Due
+        </Text>
+        <Text style={{ color: "#fff", fontSize: 36, fontWeight: "700" }}>
+          ${appointmentOverdue.toFixed(2)}
+        </Text>
 
-        <View style={homePageStyles.billDetails}>
-          <View style={homePageStyles.billRow}>
-            <Text style={homePageStyles.billLabel}>Total Due:</Text>
-            <Text style={homePageStyles.billValue}>${appointmentOverdue}</Text>
-          </View>
+        {/* Progress Bar */}
+        <View
+          style={{
+            marginTop: 20,
+            height: 15,
+            width: "100%",
+            backgroundColor: "#E0E0E0",
+            borderRadius: 10,
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: `${progressPercent}%`,
+              height: "100%",
+              backgroundColor: "#4CAF50",
+            }}
+          />
         </View>
+        {progressPercent && (
+          <Text style={{ color: "#fff", marginTop: 5, fontWeight: "600" }}>
+            Paid: {progressPercent.toFixed(0)}%
+          </Text>
+        )}
+      </View>
 
-        <Text style={UserFormStyles.smallTitle}>How much to pay:</Text>
+      {/* Amount Input Card */}
+      <View
+        style={{
+          backgroundColor: "#fff",
+          borderRadius: 15,
+          padding: 20,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.1,
+          shadowRadius: 5,
+          elevation: 4,
+          marginBottom: 25,
+        }}
+      >
+        <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 10 }}>
+          Enter Amount to Pay
+        </Text>
         <TextInput
           value={String(amountToPay)}
           onChangeText={handleAmountToPay}
-          style={UserFormStyles.input}
           keyboardType="numeric"
+          style={{
+            borderWidth: 1,
+            borderColor: "#ddd",
+            borderRadius: 12,
+            paddingHorizontal: 15,
+            paddingVertical: 12,
+            fontSize: 16,
+            backgroundColor: "#f9f9f9",
+          }}
         />
-
         {error && (
-          <Text style={{ color: "red", textAlign: "center" }}>{error}</Text>
-        )}
-
-        {/* CLIENT ACTIONS */}
-        {state.account === "client" && (
-          <>
-            <Pressable
-              style={[homePageStyles.button, isProcessing && { backgroundColor: "#aaa" }]}
-              onPress={!isProcessing ? openPaymentSheet : null}
-            >
-              <Text style={homePageStyles.buttonText}>
-                {isProcessing ? "Processing..." : "Pay Now"}
-              </Text>
-            </Pressable>
-
-            {appointmentId && (
-              <Pressable
-                style={[homePageStyles.button, { backgroundColor: "#FF6B6B", marginTop: 10 }]}
-                onPress={handleCancelOrRefund}
-              >
-                <Text style={homePageStyles.buttonText}>Cancel / Refund</Text>
-              </Pressable>
-            )}
-          </>
-        )}
-
-        {/* CLEANER ACTIONS */}
-        {state.account === "cleaner" && appointmentId && (
-          <Pressable
-            style={[
-              homePageStyles.button,
-              { backgroundColor: "#4CAF50", marginTop: 20 },
-              isCapturing && { opacity: 0.6 },
-            ]}
-            onPress={!isCapturing ? handleCapturePayment : null}
+          <Text
+            style={{ color: "#FF4D4F", textAlign: "center", marginTop: 10 }}
           >
-            <Text style={homePageStyles.buttonText}>
-              {isCapturing ? "Releasing..." : "Release Payment"}
-            </Text>
-          </Pressable>
+            {error}
+          </Text>
         )}
       </View>
+
+      {/* Cleaner Actions */}
+      {state.account === null && (
+        <>
+          <Pressable
+            onPress={!isProcessing ? openPaymentSheet : null}
+            style={{
+              backgroundColor: isProcessing ? "#aaa" : "#007BFF",
+              paddingVertical: 15,
+              borderRadius: 15,
+              alignItems: "center",
+              marginBottom: appointmentId ? 15 : 0,
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
+              {isProcessing ? "Processing..." : "Pay Now"}
+            </Text>
+          </Pressable>
+
+          {appointmentId && (
+            <Pressable
+              onPress={handleCancelOrRefund}
+              style={{
+                backgroundColor: "#FF6B6B",
+                paddingVertical: 15,
+                borderRadius: 15,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
+                Cancel / Refund
+              </Text>
+            </Pressable>
+          )}
+        </>
+      )}
+
+      {/* Cleaner Actions */}
+      {state.account === "cleaner" && appointmentId && (
+        <Pressable
+          onPress={!isCapturing ? handleCapturePayment : null}
+          style={{
+            backgroundColor: "#4CAF50",
+            paddingVertical: 15,
+            borderRadius: 15,
+            alignItems: "center",
+            opacity: isCapturing ? 0.6 : 1,
+            marginTop: 20,
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
+            {isCapturing ? "Releasing..." : "Release Payment"}
+          </Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 };

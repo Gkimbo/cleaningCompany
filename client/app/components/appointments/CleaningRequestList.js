@@ -1,20 +1,20 @@
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  Pressable,
-  View,
-  Text,
-  Dimensions,
-  ActivityIndicator,
-} from "react-native";
-import { useNavigate } from "react-router-native";
 import { Picker } from "@react-native-picker/picker";
-import homePageStyles from "../../services/styles/HomePageStyles";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import topBarStyles from "../../services/styles/TopBarStyles";
+import { useNavigate } from "react-router-native";
 import FetchData from "../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../services/fetchRequests/getCurrentUser";
-import RequestResponseTile from "./tiles/RequestResponseTile";
+import homePageStyles from "../../services/styles/HomePageStyles";
+import topBarStyles from "../../services/styles/TopBarStyles";
 import UserFormStyles from "../../services/styles/UserInputFormStyle";
+import RequestResponseTile from "./tiles/RequestResponseTile";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -31,26 +31,28 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 const CleaningRequestList = ({ state, dispatch }) => {
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
-  const [appointmentLocations, setAppointmentLocations] = useState(null);
+  const [appointmentLocations, setAppointmentLocations] = useState({});
   const [sortOption, setSortOption] = useState("dateNewest");
-  const [seeCalender, setSeeCalender] = useState(false);
+  const [seeCalendar, setSeeCalendar] = useState(false);
   const [loading, setLoading] = useState(true);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 
-  const appointmentArray = useMemo(() => {
-    return state.requests.length > 0
-      ? state.requests.flatMap((request) => request.appointment || [])
-      : [];
-  }, [state]);
-
   const navigate = useNavigate();
 
+  // Safely flatten appointments
+  const appointmentArray = useMemo(() => {
+    return (state.requests || []).flatMap(
+      (request) => request.appointment || []
+    );
+  }, [state.requests]);
+
+  // Fetch user ID
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const response = await getCurrentUser();
-        setUserId(response.user.id);
+        setUserId(response?.user?.id || null);
       } catch (error) {
         console.error("Error fetching user:", error);
       }
@@ -58,13 +60,14 @@ const CleaningRequestList = ({ state, dispatch }) => {
     fetchUser();
   }, []);
 
+  // Fetch appointment locations
   useEffect(() => {
     const fetchLocations = async () => {
       try {
         const locations = await Promise.all(
           appointmentArray.map(async (appointment) => {
-            const response = await FetchData.getLatAndLong(appointment.homeId);
-            return { [appointment.homeId]: response };
+            const loc = await FetchData.getLatAndLong(appointment.homeId);
+            return { [appointment.homeId]: loc };
           })
         );
         setAppointmentLocations(Object.assign({}, ...locations));
@@ -72,81 +75,71 @@ const CleaningRequestList = ({ state, dispatch }) => {
         console.error("Error fetching appointment locations:", error);
       }
     };
-
-    if (appointmentArray.length > 0) {
-      fetchLocations();
-    }
+    if (appointmentArray.length > 0) fetchLocations();
   }, [appointmentArray]);
 
+  // Get user geolocation
   useEffect(() => {
-    if (navigator.geolocation) {
-      const watcher = navigator.geolocation.watchPosition(
-        (position) => {
-          setUserLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          setLoading(false);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-
-      return () => navigator.geolocation.clearWatch(watcher);
-    } else {
+    if (!navigator.geolocation) {
       setLoading(false);
+      return;
     }
+
+    const watcher = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error getting location:", error);
+        setLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watcher);
   }, []);
 
+  // Navigate to calendar
   useEffect(() => {
-    if (seeCalender) {
+    if (seeCalendar) {
       navigate("/all-requests-calendar");
-      setSeeCalender(false);
+      setSeeCalendar(false);
     }
-  }, [seeCalender]);
+  }, [seeCalendar]);
 
-  const pressedSeeCalender = () => {
-    setSeeCalender(true);
-  };
+  const pressedSeeCalendar = () => setSeeCalendar(true);
 
+  // Sort and calculate distances
   const sortedRequests = useMemo(() => {
-    if (appointmentArray.length === 0) {
-      // Fix: Properly check for an empty array
-      return null;
-    }
-    let sorted = appointmentArray.map((appointment) => {
-      let distance = null;
+    if (!appointmentArray || appointmentArray.length === 0) return [];
 
-      if (
-        userLocation &&
-        appointmentLocations &&
-        appointmentLocations[appointment.homeId]
-      ) {
-        const loc = appointmentLocations[appointment.homeId];
+    const mapped = appointmentArray.map((appointment) => {
+      let distance = null;
+      const loc = appointmentLocations[appointment.homeId];
+      if (userLocation && loc) {
         distance = haversineDistance(
           userLocation.latitude,
           userLocation.longitude,
           loc.latitude,
           loc.longitude
         );
-        setLoading(false);
       }
-
       return { ...appointment, distance };
     });
 
     if (sortOption === "dateOldest") {
-      sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+      mapped.sort((a, b) => new Date(a.date) - new Date(b.date));
     } else if (sortOption === "dateNewest") {
-      sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
+      mapped.sort((a, b) => new Date(b.date) - new Date(a.date));
     }
 
-    return sorted;
+    return mapped;
   }, [appointmentArray, userLocation, appointmentLocations, sortOption]);
-  
+
   return (
     <View
       style={{
@@ -155,8 +148,9 @@ const CleaningRequestList = ({ state, dispatch }) => {
         marginTop: "27%",
       }}
     >
-      {sortedRequests ? (
+      {appointmentArray.length > 0 ? (
         <>
+          {/* Top buttons: Back + Calendar */}
           <View
             style={{
               ...homePageStyles.backButtonSelectNewJob,
@@ -181,9 +175,10 @@ const CleaningRequestList = ({ state, dispatch }) => {
                 </View>
               </View>
             </Pressable>
+
             <Pressable
               style={homePageStyles.backButtonForm}
-              onPress={pressedSeeCalender}
+              onPress={pressedSeeCalendar}
             >
               <View
                 style={{
@@ -193,13 +188,14 @@ const CleaningRequestList = ({ state, dispatch }) => {
                 }}
               >
                 <View style={{ marginRight: 15 }}>
-                  <Text style={topBarStyles.buttonTextSchedule}>Calender</Text>
+                  <Text style={topBarStyles.buttonTextSchedule}>Calendar</Text>
                 </View>
                 <Icon name="angle-right" size={iconSize} color="black" />
               </View>
             </Pressable>
           </View>
 
+          {/* Sort picker */}
           <View
             style={{
               margin: 10,
@@ -216,6 +212,8 @@ const CleaningRequestList = ({ state, dispatch }) => {
               <Picker.Item label="Sort by: Furthest Out" value="dateOldest" />
             </Picker>
           </View>
+
+          {/* Requests list */}
           {loading ? (
             <ActivityIndicator
               size="large"
@@ -225,122 +223,88 @@ const CleaningRequestList = ({ state, dispatch }) => {
           ) : (
             <View style={{ flex: 1 }}>
               {sortedRequests.map((appointment) => (
-                <View key={appointment.id}>
-                  <RequestResponseTile
-                    id={appointment.id}
-                    state={state}
-                    cleanerId={userId}
-                    date={appointment.date}
-                    price={appointment.price}
-                    homeId={appointment.homeId}
-                    hasBeenAssigned={appointment.hasBeenAssigned}
-                    bringSheets={appointment.bringSheets}
-                    bringTowels={appointment.bringTowels}
-                    completed={appointment.completed}
-                    keyPadCode={appointment.keyPadCode}
-                    keyLocation={appointment.keyLocation}
-                    distance={appointment.distance}
-                    approveRequest={async (
-                      employeeId,
-                      appointmentId,
-                      requestId
-                    ) => {
-                      try {
-                        dispatch({
-                          type: "UPDATE_REQUEST_STATUS",
-                          payload: {
-                            employeeId,
-                            appointmentId,
-                            status: "approved",
-                          },
-                        });
-                        await FetchData.approveRequest(requestId, true);
-                      } catch (error) {
-                        console.error("Error approving request:", error);
-                      }
-                    }}
-                    denyRequest={async (employeeId, appointmentId) => {
-                      try {
-                        dispatch({
-                          type: "UPDATE_REQUEST_STATUS",
-                          payload: {
-                            employeeId,
-                            appointmentId,
-                            status: "denied",
-                          },
-                        });
-                        await FetchData.denyRequest(employeeId, appointmentId);
-                      } catch (error) {
-                        console.error("Error denying request:", error);
-                      }
-                    }}
-                    undoRequest={async (employeeId, appointmentId) => {
-                      try {
-                        dispatch({
-                          type: "UPDATE_REQUEST_STATUS",
-                          payload: {
-                            employeeId,
-                            appointmentId,
-                            status: "pending",
-                          },
-                        });
-                        await FetchData.undoRequest(employeeId, appointmentId);
-                      } catch (error) {
-                        console.error("Error denying request:", error);
-                      }
-                    }}
-                  />
-                </View>
+                <RequestResponseTile
+                  key={appointment.id}
+                  id={appointment.id}
+                  state={state}
+                  cleanerId={userId}
+                  date={appointment.date}
+                  price={appointment.price}
+                  homeId={appointment.homeId}
+                  hasBeenAssigned={appointment.hasBeenAssigned}
+                  bringSheets={appointment.bringSheets}
+                  bringTowels={appointment.bringTowels}
+                  completed={appointment.completed}
+                  keyPadCode={appointment.keyPadCode}
+                  keyLocation={appointment.keyLocation}
+                  distance={appointment.distance}
+                  approveRequest={async (
+                    employeeId,
+                    appointmentId,
+                    requestId
+                  ) => {
+                    try {
+                      dispatch({
+                        type: "UPDATE_REQUEST_STATUS",
+                        payload: {
+                          employeeId,
+                          appointmentId,
+                          status: "approved",
+                        },
+                      });
+                      await FetchData.approveRequest(requestId, true);
+                    } catch (error) {
+                      console.error("Error approving request:", error);
+                    }
+                  }}
+                  denyRequest={async (employeeId, appointmentId) => {
+                    try {
+                      dispatch({
+                        type: "UPDATE_REQUEST_STATUS",
+                        payload: {
+                          employeeId,
+                          appointmentId,
+                          status: "denied",
+                        },
+                      });
+                      await FetchData.denyRequest(employeeId, appointmentId);
+                    } catch (error) {
+                      console.error("Error denying request:", error);
+                    }
+                  }}
+                  undoRequest={async (employeeId, appointmentId) => {
+                    try {
+                      dispatch({
+                        type: "UPDATE_REQUEST_STATUS",
+                        payload: {
+                          employeeId,
+                          appointmentId,
+                          status: "pending",
+                        },
+                      });
+                      await FetchData.undoRequest(employeeId, appointmentId);
+                    } catch (error) {
+                      console.error("Error undoing request:", error);
+                    }
+                  }}
+                />
               ))}
             </View>
           )}
         </>
       ) : (
-        <>
-          <View
-            style={{
-              ...homePageStyles.backButtonSelectNewJob,
-              flexDirection: "row",
-              justifyContent: "space-evenly",
-            }}
-          >
-            <Pressable
-              style={homePageStyles.backButtonForm}
-              onPress={() => navigate("/")}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  padding: 10,
-                }}
-              >
-                <Icon name="angle-left" size={iconSize} color="black" />
-                <View style={{ marginLeft: 15 }}>
-                  <Text style={topBarStyles.buttonTextSchedule}>Back</Text>
-                </View>
-              </View>
-            </Pressable>
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginLeft: 15,
-              }}
-            ></View>
-          </View>
-          <Text
-            style={{
-              ...UserFormStyles.error,
-              fontSize: 15,
-              marginTop: "70%",
-              marginBottom: "70%",
-            }}
-          >
-            You dont have any cleaning requests
-          </Text>
-        </>
+        <Text
+          style={{
+            ...UserFormStyles.error,
+            fontSize: 18, // slightly larger for readability
+            color: "#333", // dark text for contrast
+            marginVertical: 20, // reasonable spacing top and bottom
+            textAlign: "center", // center text
+            lineHeight: 24, // improves readability
+          }}
+        >
+          You don’t have any cleaning requests
+        </Text>
       )}
     </View>
   );

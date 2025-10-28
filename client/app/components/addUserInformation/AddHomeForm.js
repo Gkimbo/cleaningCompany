@@ -379,7 +379,7 @@ const UserHomeInfoForm = () => {
   };
 
   return (
-    <ScrollView style={UserFormStyles.container}>
+    <ScrollView contentContainerStyle={[UserFormStyles.container, { flexGrow: 1 }]}>
       <View style={homePageStyles.backButtonContainerForm}>
         <Pressable style={homePageStyles.backButtonForm} onPress={handlePress}>
           <View
@@ -392,357 +392,303 @@ const UserHomeInfoForm = () => {
           </View>
         </Pressable>
       </View>
-      <form onSubmit={handleSubmit}>
-        <View>
-          <Text style={UserFormStyles.title}>Add a home</Text>
-          <Text style={UserFormStyles.smallTitle}>Name Your Home:</Text>
+
+      <View style={UserFormStyles.container2}>
+        <Text style={UserFormStyles.title}>Add a home</Text>
+        <Text style={UserFormStyles.smallTitle}>Name Your Home:</Text>
+        <TextInput
+          mode="outlined"
+          value={userHomeInfo.home.nickName}
+          onChangeText={handleNameChange}
+          style={UserFormStyles.input}
+        />
+
+        <Text style={UserFormStyles.smallTitle}>Address:</Text>
+        <TextInput
+          mode="outlined"
+          value={userHomeInfo.home.address}
+          onChangeText={handleAddressChange}
+          style={UserFormStyles.input}
+        />
+
+        <Text style={UserFormStyles.smallTitle}>City:</Text>
+        <TextInput
+          mode="outlined"
+          value={userHomeInfo.home.city}
+          onChangeText={handleCityChange}
+          style={UserFormStyles.input}
+        />
+
+        <Text style={UserFormStyles.smallTitle}>State:</Text>
+        <TextInput
+          mode="outlined"
+          value={userHomeInfo.home.state}
+          onChangeText={handleStateChange}
+          style={UserFormStyles.input}
+        />
+
+        <Text style={UserFormStyles.smallTitle}>Zipcode:</Text>
+        <TextInput
+          mode="outlined"
+          value={userHomeInfo.home.zipcode}
+          onChangeText={handleZipCodeChange}
+          style={UserFormStyles.input}
+        />
+
+        <Text style={UserFormStyles.smallTitle}>Number of Beds:</Text>
+        <View style={UserFormStyles.inputSurround}>
           <TextInput
-            mode="outlined"
-            value={`${userHomeInfo.home.nickName}`}
-            onChangeText={handleNameChange}
+            value={userHomeInfo.home.numBeds}
+            onChangeText={handleNumBedsChange}
             style={UserFormStyles.input}
           />
-          <Text style={UserFormStyles.smallTitle}>Address:</Text>
-          <TextInput
-            mode="outlined"
-            value={`${userHomeInfo.home.address}`}
-            onChangeText={handleAddressChange}
-            style={UserFormStyles.input}
-          />
-          <Text style={UserFormStyles.smallTitle}>City:</Text>
-          <TextInput
-            mode="outlined"
-            value={userHomeInfo.home.city}
-            onChangeText={handleCityChange}
-            style={UserFormStyles.input}
-          />
-          <Text style={UserFormStyles.smallTitle}>State:</Text>
-          <TextInput
-            mode="outlined"
-            value={userHomeInfo.home.state}
-            onChangeText={handleStateChange}
-            style={UserFormStyles.input}
-          />
-          <Text style={UserFormStyles.smallTitle}>Zipcode:</Text>
-          <TextInput
-            mode="outlined"
-            value={userHomeInfo.home.zipcode}
-            onChangeText={handleZipCodeChange}
-            style={UserFormStyles.input}
-          />
-
-          <Text style={UserFormStyles.smallTitle}>Number of Beds:</Text>
-          <View style={UserFormStyles.inputSurround}>
-            <TextInput
-              value={userHomeInfo.home.numBeds}
-              onChangeText={handleNumBedsChange}
-              style={UserFormStyles.input}
-            />
-            <Text
-              style={{
-                paddingLeft: 3,
-                color: "#000",
-              }}
-            >
-              beds
-            </Text>
-          </View>
-          <Text style={UserFormStyles.smallTitle}>Number of Bathrooms:</Text>
-
-          <View style={UserFormStyles.inputSurround}>
-            <TextInput
-              value={userHomeInfo.home.numBaths}
-              onChangeText={handleNumBathsChange}
-              style={UserFormStyles.input}
-            />
-            <Text
-              style={{
-                paddingLeft: 3,
-                color: "#000",
-              }}
-            >
-              baths
-            </Text>
-          </View>
-          <Text style={UserFormStyles.smallTitle}>
-            What time do you need the home to be cleaned?
-          </Text>
-          <View style={{...UserFormStyles.radioButtonContainer, flexDirection: "column", }}>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleTimeToComplete}
-                value={userHomeInfo.home.timeToBeCompleted}
-              >
-                <RadioButton.Item label="Anytime" value="anytime" />
-              </RadioButton.Group>
-            </View>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleTimeToComplete}
-                value={userHomeInfo.home.timeToBeCompleted}
-              >
-                <RadioButton.Item label="Between 10am and 3pm" value="10-3" />
-              </RadioButton.Group>
-            </View>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleTimeToComplete}
-                value={userHomeInfo.home.timeToBeCompleted}
-              >
-                <RadioButton.Item label="Between 11am and 4pm" value="11-4" />
-              </RadioButton.Group>
-            </View>
-          </View>
-          <Text style={UserFormStyles.smallTitle}>
-            Do you need us to bring sheets?
-          </Text>
-          <View style={UserFormStyles.radioButtonContainer}>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleSheetsProvided}
-                value={userHomeInfo.home.sheetsProvided}
-              >
-                <RadioButton.Item label="Yes" value="yes" />
-              </RadioButton.Group>
-            </View>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleSheetsProvided}
-                value={userHomeInfo.home.sheetsProvided}
-              >
-                <RadioButton.Item label="No" value="no" />
-              </RadioButton.Group>
-            </View>
-          </View>
-          <View style={{ textAlign: "center", marginBottom: 20 }}>
-            <Text style={{ color: "grey", fontSize: 11 }}>
-              You can change this value after your appointment has been booked
-            </Text>
-          </View>
-          <Text style={UserFormStyles.smallTitle}>
-            Do you need us to bring towels?
-          </Text>
-          <View style={UserFormStyles.radioButtonContainer}>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleTowelsProvided}
-                value={userHomeInfo.home.towelsProvided}
-              >
-                <RadioButton.Item label="Yes" value="yes" />
-              </RadioButton.Group>
-            </View>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleTowelsProvided}
-                value={userHomeInfo.home.towelsProvided}
-              >
-                <RadioButton.Item label="No" value="no" />
-              </RadioButton.Group>
-            </View>
-          </View>
-          <View style={{ textAlign: "center", marginBottom: 20 }}>
-            <Text style={{ color: "grey", fontSize: 11 }}>
-              You can change this value after your appointment has been booked
-            </Text>
-          </View>
-          <Text style={UserFormStyles.smallTitle}>
-            Does the unit use a code or a key to get in?
-          </Text>
-          <View style={UserFormStyles.radioButtonContainer}>
-            <View>
-              <RadioButton.Group onValueChange={handleKeyToggle} value={key}>
-                <RadioButton.Item label="Key" value="key" />
-              </RadioButton.Group>
-            </View>
-            <View>
-              <RadioButton.Group onValueChange={handleKeyToggle} value={key}>
-                <RadioButton.Item label="Code" value="code" />
-              </RadioButton.Group>
-            </View>
-          </View>
-          {key === "code" ? (
-            <>
-              <Text style={UserFormStyles.smallTitle}>
-                What is the code the cleaners can use to get into the unit?
-              </Text>
-
-              <TextInput
-                mode="outlined"
-                value={userHomeInfo.home.keyPadCode}
-                onChangeText={handleKeyPadCode}
-                style={UserFormStyles.codeInput}
-              />
-              <View style={{ textAlign: "center", marginBottom: 20 }}>
-                <Text style={{ color: "grey", fontSize: 11 }}>
-                  You can change this code for each appointment after the
-                  appointment has been booked.
-                </Text>
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={UserFormStyles.smallTitle}>
-                Where is the key located that the cleaners can use to get into
-                the home?
-              </Text>
-
-              <TextInput
-                mode="outlined"
-                value={userHomeInfo.home.keyLocation}
-                onChangeText={handleKeyLocation}
-                style={UserFormStyles.input}
-              />
-              <View style={{ textAlign: "center", marginBottom: 20 }}>
-                <Text style={{ color: "grey", fontSize: 11 }}>
-                  Example: Under the fake rock to the right of the back door or
-                  to the right of the door in a lock box with code 5555#
-                </Text>
-              </View>
-            </>
-          )}
-
-          <Text style={UserFormStyles.smallTitle}>
-            Where does the cleaner get rid of trash?
-          </Text>
-          <TextInput
-            mode="outlined"
-            value={userHomeInfo.home.trashLocation}
-            onChangeText={handleTrashLocation}
-            style={UserFormStyles.input}
-          />
-          <View style={{ textAlign: "center", marginBottom: 20 }}>
-            <Text style={{ color: "grey", fontSize: 11 }}>
-              Example: In the red bin to the right side of the house when you're
-              facing the home.
-            </Text>
-          </View>
-
-          <Text style={UserFormStyles.smallTitle}>
-            Does the unit have recycling??
-          </Text>
-          <View style={UserFormStyles.radioButtonContainer}>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleRecyclingToggle}
-                value={recycle}
-              >
-                <RadioButton.Item label="Yes" value="yes" />
-              </RadioButton.Group>
-            </View>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleRecyclingToggle}
-                value={recycle}
-              >
-                <RadioButton.Item label="No" value="no" />
-              </RadioButton.Group>
-            </View>
-          </View>
-
-          {recycle === "yes" && (
-            <>
-              <Text style={UserFormStyles.smallTitle}>
-                Where does the cleaner get rid of recycling?
-              </Text>
-              <TextInput
-                mode="outlined"
-                value={userHomeInfo.home.recyclingLocation}
-                onChangeText={handleRecyclingLocation}
-                style={UserFormStyles.input}
-              />
-              <View style={{ textAlign: "center", marginBottom: 20 }}>
-                <Text style={{ color: "grey", fontSize: 11 }}>
-                  Example: In the red bin to the right side of the house when
-                  you're facing the home.
-                </Text>
-              </View>
-            </>
-          )}
-
-          <Text style={UserFormStyles.smallTitle}>
-            Does the unit have composting?
-          </Text>
-          <View style={UserFormStyles.radioButtonContainer}>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleCompostToggle}
-                value={compost}
-              >
-                <RadioButton.Item label="Yes" value="yes" />
-              </RadioButton.Group>
-            </View>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleCompostToggle}
-                value={compost}
-              >
-                <RadioButton.Item label="No" value="no" />
-              </RadioButton.Group>
-            </View>
-          </View>
-          {compost === "yes" && (
-            <>
-              <Text style={UserFormStyles.smallTitle}>
-                Where does the cleaner get rid of compost?
-              </Text>
-              <TextInput
-                mode="outlined"
-                value={userHomeInfo.home.compostLocation}
-                onChangeText={handleCompostLocation}
-                style={UserFormStyles.input}
-              />
-              <View style={{ textAlign: "center", marginBottom: 20 }}>
-                <Text style={{ color: "grey", fontSize: 11 }}>
-                  Example: In the small green bin to the right side of the house
-                  when you're facing the home
-                </Text>
-              </View>
-            </>
-          )}
-          <Text style={UserFormStyles.smallTitle}>
-            Please add a contact phone number.
-          </Text>
-
-          <TextInput
-            mode="outlined"
-            value={userHomeInfo.home.contact}
-            onChangeText={handleContactChange}
-            style={UserFormStyles.codeInput}
-            keyboardType="phone-pad"
-          />
-          <View style={{ textAlign: "center", marginBottom: 20 }}>
-            <Text style={{ color: "grey", fontSize: 11, marginBottom: 5 }}>
-              The cleaner will contact this number if they cannot get into the
-              home for any reason
-            </Text>
-            <Text style={{ color: "grey", fontSize: 11 }}>
-              If after contacting this number and the cleaner still cannot get
-              into the home to clean the person who booked the appointment will
-              be charged 50$.
-            </Text>
-          </View>
-          <Text style={UserFormStyles.smallTitle}>
-            Add any Special Requirements
-          </Text>
-
-          <TextInput
-            mode="outlined"
-            value={userHomeInfo.home.specialNotes}
-            onChangeText={handleSpecialNotesChange}
-            style={UserFormStyles.codeInput}
-          />
-          <View style={{ textAlign: "center", marginBottom: 20 }}>
-            <Text style={{ color: "grey", fontSize: 11 }}>
-              Example: Is there a dog? Is there a specific area the cleaner
-              should park?
-            </Text>
-          </View>
-          <Pressable onPress={handleSubmit}>
-            <Text style={UserFormStyles.button}>Submit</Text>
-          </Pressable>
+          <Text style={{ paddingLeft: 3, color: "#000" }}>beds</Text>
         </View>
-      </form>
-      {error && <Text style={UserFormStyles.error}>{error}</Text>}
+
+        <Text style={UserFormStyles.smallTitle}>Number of Bathrooms:</Text>
+        <View style={UserFormStyles.inputSurround}>
+          <TextInput
+            value={userHomeInfo.home.numBaths}
+            onChangeText={handleNumBathsChange}
+            style={UserFormStyles.input}
+          />
+          <Text style={{ paddingLeft: 3, color: "#000" }}>baths</Text>
+        </View>
+
+        <Text style={UserFormStyles.smallTitle}>
+          What time do you need the home to be cleaned?
+        </Text>
+        <View
+          style={{
+            ...UserFormStyles.radioButtonContainer,
+            flexDirection: "column",
+          }}
+        >
+          <RadioButton.Group
+            onValueChange={handleTimeToComplete}
+            value={userHomeInfo.home.timeToBeCompleted}
+          >
+            <RadioButton.Item label="Anytime" value="anytime" />
+            <RadioButton.Item label="Between 10am and 3pm" value="10-3" />
+            <RadioButton.Item label="Between 11am and 4pm" value="11-4" />
+          </RadioButton.Group>
+        </View>
+
+        <Text style={UserFormStyles.smallTitle}>
+          Do you need us to bring sheets?
+        </Text>
+        <View style={UserFormStyles.radioButtonContainer}>
+          <RadioButton.Group
+            onValueChange={handleSheetsProvided}
+            value={userHomeInfo.home.sheetsProvided}
+          >
+            <RadioButton.Item label="Yes" value="yes" />
+            <RadioButton.Item label="No" value="no" />
+          </RadioButton.Group>
+        </View>
+        <Text
+          style={{
+            color: "grey",
+            fontSize: 11,
+            textAlign: "center",
+            marginBottom: 20,
+          }}
+        >
+          You can change this value after your appointment has been booked
+        </Text>
+
+        <Text style={UserFormStyles.smallTitle}>
+          Do you need us to bring towels?
+        </Text>
+        <View style={UserFormStyles.radioButtonContainer}>
+          <RadioButton.Group
+            onValueChange={handleTowelsProvided}
+            value={userHomeInfo.home.towelsProvided}
+          >
+            <RadioButton.Item label="Yes" value="yes" />
+            <RadioButton.Item label="No" value="no" />
+          </RadioButton.Group>
+        </View>
+        <Text
+          style={{
+            color: "grey",
+            fontSize: 11,
+            textAlign: "center",
+            marginBottom: 20,
+          }}
+        >
+          You can change this value after your appointment has been booked
+        </Text>
+
+        <Text style={UserFormStyles.smallTitle}>
+          Does the unit use a code or a key to get in?
+        </Text>
+        <View style={UserFormStyles.radioButtonContainer}>
+          <RadioButton.Group onValueChange={handleKeyToggle} value={key}>
+            <RadioButton.Item label="Key" value="key" />
+            <RadioButton.Item label="Code" value="code" />
+          </RadioButton.Group>
+        </View>
+
+        {key === "code" ? (
+          <>
+            <Text style={UserFormStyles.smallTitle}>
+              What is the code the cleaners can use to get into the unit?
+            </Text>
+            <TextInput
+              mode="outlined"
+              value={userHomeInfo.home.keyPadCode}
+              onChangeText={handleKeyPadCode}
+              style={UserFormStyles.codeInput}
+            />
+            <Text
+              style={{
+                color: "grey",
+                fontSize: 11,
+                textAlign: "center",
+                marginBottom: 20,
+              }}
+            >
+              You can change this code for each appointment after booking.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={UserFormStyles.smallTitle}>
+              Where is the key located that the cleaners can use to get into the
+              home?
+            </Text>
+            <TextInput
+              mode="outlined"
+              value={userHomeInfo.home.keyLocation}
+              onChangeText={handleKeyLocation}
+              style={UserFormStyles.input}
+            />
+            <Text
+              style={{
+                color: "grey",
+                fontSize: 11,
+                textAlign: "center",
+                marginBottom: 20,
+              }}
+            >
+              Example: In a lock box to the right of the door with code 5555#
+            </Text>
+          </>
+        )}
+
+        <Text style={UserFormStyles.smallTitle}>
+          Where does the cleaner get rid of trash?
+        </Text>
+        <TextInput
+          mode="outlined"
+          value={userHomeInfo.home.trashLocation}
+          onChangeText={handleTrashLocation}
+          style={UserFormStyles.input}
+        />
+
+        <Text
+          style={{
+            color: "grey",
+            fontSize: 11,
+            textAlign: "center",
+            marginBottom: 20,
+          }}
+        >
+          Example: In the red bin to the right side of the house.
+        </Text>
+
+        <Text style={UserFormStyles.smallTitle}>
+          Does the unit have recycling?
+        </Text>
+        <View style={UserFormStyles.radioButtonContainer}>
+          <RadioButton.Group
+            onValueChange={handleRecyclingToggle}
+            value={recycle}
+          >
+            <RadioButton.Item label="Yes" value="yes" />
+            <RadioButton.Item label="No" value="no" />
+          </RadioButton.Group>
+        </View>
+
+        {recycle === "yes" && (
+          <>
+            <Text style={UserFormStyles.smallTitle}>
+              Where does the cleaner get rid of recycling?
+            </Text>
+            <TextInput
+              mode="outlined"
+              value={userHomeInfo.home.recyclingLocation}
+              onChangeText={handleRecyclingLocation}
+              style={UserFormStyles.input}
+            />
+          </>
+        )}
+
+        <Text style={UserFormStyles.smallTitle}>
+          Does the unit have composting?
+        </Text>
+        <View style={UserFormStyles.radioButtonContainer}>
+          <RadioButton.Group
+            onValueChange={handleCompostToggle}
+            value={compost}
+          >
+            <RadioButton.Item label="Yes" value="yes" />
+            <RadioButton.Item label="No" value="no" />
+          </RadioButton.Group>
+        </View>
+
+        {compost === "yes" && (
+          <>
+            <Text style={UserFormStyles.smallTitle}>
+              Where does the cleaner get rid of compost?
+            </Text>
+            <TextInput
+              mode="outlined"
+              value={userHomeInfo.home.compostLocation}
+              onChangeText={handleCompostLocation}
+              style={UserFormStyles.input}
+            />
+          </>
+        )}
+
+        <Text style={UserFormStyles.smallTitle}>
+          Please add a contact phone number.
+        </Text>
+        <TextInput
+          mode="outlined"
+          value={userHomeInfo.home.contact}
+          onChangeText={handleContactChange}
+          style={UserFormStyles.codeInput}
+          keyboardType="phone-pad"
+        />
+        <Text
+          style={{
+            color: "grey",
+            fontSize: 11,
+            textAlign: "center",
+            marginBottom: 20,
+          }}
+        >
+          The cleaner will contact this number if they cannot get into the home.
+        </Text>
+
+        <Text style={UserFormStyles.smallTitle}>
+          Add any Special Requirements
+        </Text>
+        <TextInput
+          mode="outlined"
+          value={userHomeInfo.home.specialNotes}
+          onChangeText={handleSpecialNotesChange}
+          style={UserFormStyles.codeInput}
+        />
+
+        <Pressable onPress={handleSubmit}>
+          <Text style={UserFormStyles.button}>Submit</Text>
+        </Pressable>
+
+        {error && <Text style={UserFormStyles.error}>{error}</Text>}
+      </View>
     </ScrollView>
   );
 };

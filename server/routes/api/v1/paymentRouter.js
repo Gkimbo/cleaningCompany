@@ -32,7 +32,8 @@ paymentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;
   try {
     const appointments = await UserAppointments.findAll({ where: { homeId } });
-    const serializedAppointments = AppointmentSerializer.serializeArray(appointments);
+    const serializedAppointments =
+      AppointmentSerializer.serializeArray(appointments);
     return res.status(200).json({ appointments: serializedAppointments });
   } catch (error) {
     console.error(error);
@@ -118,7 +119,8 @@ paymentRouter.post("/capture-payment", async (req, res) => {
 
   try {
     const appointment = await UserAppointments.findByPk(appointmentId);
-    if (!appointment) return res.status(404).json({ error: "Appointment not found" });
+    if (!appointment)
+      return res.status(404).json({ error: "Appointment not found" });
 
     if (!appointment.cleanerId)
       return res.status(400).json({ error: "Cannot charge without a cleaner" });
@@ -190,7 +192,10 @@ cron.schedule("0 7 * * *", async () => {
               `⚠️ Appointment ${appointment.id} cancelled — user notified (${user.email})`
             );
           } catch (err) {
-            console.error("❌ Failed to cancel appointment or send email:", err);
+            console.error(
+              "❌ Failed to cancel appointment or send email:",
+              err
+            );
           }
         }
       }
@@ -210,7 +215,8 @@ paymentRouter.post("/cancel-or-refund", async (req, res) => {
 
   try {
     const appointment = await UserAppointments.findByPk(appointmentId);
-    if (!appointment) return res.status(404).json({ error: "Appointment not found" });
+    if (!appointment)
+      return res.status(404).json({ error: "Appointment not found" });
 
     const paymentIntent = await stripe.paymentIntents.retrieve(
       appointment.paymentIntentId
@@ -221,10 +227,14 @@ paymentRouter.post("/cancel-or-refund", async (req, res) => {
       result = await stripe.paymentIntents.cancel(paymentIntent.id);
       await appointment.update({ status: "cancelled" });
     } else if (paymentIntent.status === "succeeded") {
-      result = await stripe.refunds.create({ payment_intent: paymentIntent.id });
+      result = await stripe.refunds.create({
+        payment_intent: paymentIntent.id,
+      });
       await appointment.update({ status: "refunded" });
     } else {
-      return res.status(400).json({ error: "Cannot cancel or refund this payment" });
+      return res
+        .status(400)
+        .json({ error: "Cannot cancel or refund this payment" });
     }
 
     console.log(`✅ Appointment ${appointmentId} ${appointment.status}`);
@@ -281,8 +291,6 @@ paymentRouter.post(
 );
 
 module.exports = paymentRouter;
-
-
 
 // const user = await User.findByPk(userId, {
 // 	include: [
