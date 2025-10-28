@@ -15,6 +15,7 @@ import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
 import ChooseNewJobButton from "./ChooseNewJobButton";
 import CleanerRequestsButton from "./CleanerRequestsButton";
+import EarningsButton from "./EarningsButton";
 import EditHomeButton from "./EditHomeButton";
 import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
 import HomeButton from "./HomeButton";
@@ -25,6 +26,7 @@ import SeeAllAppointments from "./SeeAllAppointmentsButton";
 import SignOutButton from "./SignoutButton";
 import UnassignedAppointmentsButton from "./UnassignedAppointmentsButton";
 import ViewApplicationsButton from "./ViewApplicationsButton";
+
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -98,6 +100,7 @@ const TopBar = ({ dispatch, state }) => {
                           <EmployeeAssignmentsButton closeModal={closeModal} />
                           <MyRequestsButton closeModal={closeModal} />
                           {/* <EmployeeShiftButton closeModal={closeModal} /> */}
+                          <EarningsButton closeModal={closeModal} />
                         </>
                       ) : (
                         <>

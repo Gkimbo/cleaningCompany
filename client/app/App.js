@@ -33,6 +33,7 @@ import SelectNewJobList from "./components/employeeAssignments/lists/SelectNewJo
 import HomePage from "./components/HomePage";
 import TopBar from "./components/navBar/TopBar";
 import Bill from "./components/payments/Bill";
+import Earnings from "./components/payments/Earnings";
 import AllCleanerReviewsList from "./components/reviews/AllCleanerReviewsList";
 import AllReviewsList from "./components/reviews/AllReviewsList";
 import SignIn from "./components/userAuthentication/SignIn";
@@ -211,6 +212,10 @@ export default function App() {
               <Route
                 path="/bill"
                 element={<Bill state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/earnings"
+                element={<Earnings state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/employee-assignments"
