@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useParams } from "react-router-native";
-import UserFormStyles from "../../../services/styles/UserInputFormStyle";
-import homePageStyles from "../../../services/styles/HomePageStyles";
 import FetchData from "../../../services/fetchRequests/fetchData";
+import homePageStyles from "../../../services/styles/HomePageStyles";
+import UserFormStyles from "../../../services/styles/UserInputFormStyle";
 import EmployeeShiftAssign from "./EmployeeShiftAssign";
 
 const AppointmentDetailsPage = ({ state }) => {
@@ -84,10 +84,10 @@ const AppointmentDetailsPage = ({ state }) => {
   };
 
   return (
-    <View style={UserFormStyles.container}>
+    <View style={{...UserFormStyles.container,  marginBottom: 20}}>
       {appointment && home ? (
-        <>
-          <View style={homePageStyles.homeTileContainer}>
+        <ScrollView>
+          <View style={{...homePageStyles.homeTileContainer}}>
             <Text style={homePageStyles.homeTileTitle}>{home.nickName}</Text>
             <Text style={{ ...homePageStyles.homeTileAddress, margin: 0 }}>
               {home.address}
@@ -121,7 +121,7 @@ const AppointmentDetailsPage = ({ state }) => {
             </View>
           </View>
           {employeeTiles}
-        </>
+        </ScrollView>
       ) : (
         <Text>The appointment information was not found.</Text>
       )}
