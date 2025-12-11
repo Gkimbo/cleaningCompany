@@ -1,6 +1,6 @@
-import { StripeProvider } from "@stripe/stripe-react-native"; // ✅ Import Stripe provider
+import { StripeProvider } from "@stripe/stripe-react-native";
 import React, { useEffect, useReducer, useState } from "react";
-import { ActivityIndicator, SafeAreaView, View } from "react-native";
+import { ActivityIndicator, SafeAreaView, Text, View } from "react-native";
 import { NativeRouter, Route, Routes } from "react-router-native";
 import { AuthProvider } from "./services/AuthContext";
 import getCurrentUser from "./services/fetchRequests/getCurrentUser";
@@ -40,25 +40,44 @@ import SignIn from "./components/userAuthentication/SignIn";
 import SignUp from "./components/userAuthentication/SignUp";
 import appStyles from "./services/styles/AppStyle";
 
+const API_BASE = "http://localhost:3000/api/v1";
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
+  const [stripePublishableKey, setStripePublishableKey] = useState(null);
   const [lastLoginTimestamp, setLastLoginTimestamp] = useState("0");
   const [employeeList, setEmployeeList] = useState([]);
   const [applicationList, setApplicationList] = useState([]);
   const [employeeDays, setEmployeeDays] = useState(null);
   const [state, dispatch] = useReducer(reducer, {
     account: null,
-    currentUser: { token: null },
-    bill: 0,
+    currentUser: { token: null, id: null },
+    bill: { cancellationFee: 0, totalPaid: 0 },
     homes: [],
     appointments: [],
     requests: [],
   });
 
+  const fetchStripeConfig = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/payments/config`);
+      const data = await response.json();
+      if (data.publishableKey) {
+        setStripePublishableKey(data.publishableKey);
+      }
+    } catch (err) {
+      console.error("Failed to fetch Stripe config:", err);
+    }
+  };
+
   const fetchCurrentUser = async () => {
     try {
       const user = await getCurrentUser();
       dispatch({ type: "CURRENT_USER", payload: user.token });
+      dispatch({ type: "SET_USER_ID", payload: user.user.id });
+      if (user.user.email) {
+        dispatch({ type: "SET_USER_EMAIL", payload: user.user.email });
+      }
       if (user.user.username === "manager1") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
       }
@@ -75,27 +94,39 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchCurrentUser();
-    setTimeout(() => {
+    const initialize = async () => {
+      await Promise.all([fetchStripeConfig(), fetchCurrentUser()]);
       setIsLoading(false);
-    }, 2000);
+    };
+    initialize();
   }, []);
 
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" />
+        <Text style={{ marginTop: 10, color: "#757575" }}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // If no Stripe key, show error
+  if (!stripePublishableKey) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 20 }}>
+        <Text style={{ color: "#F44336", textAlign: "center" }}>
+          Unable to initialize payment system. Please check server configuration.
+        </Text>
       </View>
     );
   }
 
   return (
     <AuthProvider>
-      {/* ✅ Stripe Provider wraps entire app */}
       <StripeProvider
-        publishableKey="pk_test_12345YourPublishableKeyHere"
-        merchantIdentifier="merchant.com.kleanr.app" // iOS required
-        urlScheme="kleanr" // optional for 3D Secure redirect
+        publishableKey={stripePublishableKey}
+        merchantIdentifier="merchant.com.kleanr.app"
+        urlScheme="kleanr"
       >
         <NativeRouter>
           <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>

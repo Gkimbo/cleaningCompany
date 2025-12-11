@@ -1,133 +1,75 @@
-import { useStripe } from "@stripe/stripe-react-native";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 
 const API_BASE = "http://localhost:3000/api/v1";
 
 const Earnings = ({ state, dispatch }) => {
-  const [amountToPay, setAmountToPay] = useState(0);
-  const [error, setError] = useState(null);
-  const [appointmentId, setAppointmentId] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [earnings, setEarnings] = useState({
+    totalEarnings: "0.00",
+    pendingEarnings: "0.00",
+    completedJobs: 0,
+  });
+  const [assignedAppointments, setAssignedAppointments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
-  const navigate = useNavigate();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const [refreshing, setRefreshing] = useState(false);
 
-  const cancellationFee = state?.bill?.cancellationFee || 0;
-  const appointmentOverdue = state?.appointments?.reduce((total, appt) => {
-    const apptDate = new Date(appt.date);
-    const today = new Date();
-    if (!appt.paid && apptDate <= today) return total + Number(appt.price || 0);
-    return total;
-  }, cancellationFee) || 0;
+  const fetchEarnings = async () => {
+    if (!state?.currentUser?.id) return;
+    try {
+      const res = await fetch(
+        `${API_BASE}/payments/earnings/${state.currentUser.id}`
+      );
+      const data = await res.json();
+      if (res.ok) {
+        setEarnings(data);
+      }
+    } catch (err) {
+      console.error("Error fetching earnings:", err);
+    }
+  };
 
-  const totalPaid = state?.bill?.totalPaid || 0;
-  const progressPercent = appointmentOverdue
-    ? Math.min((totalPaid / appointmentOverdue) * 100, 100)
-    : 0;
+  const fetchAssignedAppointments = async () => {
+    if (!state?.currentUser?.id) return;
+    try {
+      // Get appointments assigned to this cleaner
+      const myAppointments = (state?.appointments || []).filter(
+        (appt) =>
+          appt.employeesAssigned &&
+          appt.employeesAssigned.includes(String(state.currentUser.id))
+      );
+      setAssignedAppointments(myAppointments);
+    } catch (err) {
+      console.error("Error fetching appointments:", err);
+    }
+  };
+
+  const loadData = async () => {
+    setIsLoading(true);
+    await Promise.all([fetchEarnings(), fetchAssignedAppointments()]);
+    setIsLoading(false);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   useEffect(() => {
-    setAmountToPay(appointmentOverdue - totalPaid);
-  }, [appointmentOverdue, totalPaid]);
+    loadData();
+  }, [state?.currentUser?.id, state?.appointments]);
 
-  const handleAmountToPay = (amount) => {
-    const regex = /^\d*(\.\d*)?$/;
-    if (!regex.test(amount)) {
-      setError("Amount must be a valid number");
-      return;
-    }
-    setError(null);
-    setAmountToPay(amount);
-  };
-
-  const createPaymentIntent = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/payments/create-intent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: state.currentUser.token,
-          homeId: state.userHomeId || state.user?.homes?.[0]?.id,
-          amount: Math.round(amountToPay * 100),
-          userEmail: state.currentUser.email,
-          userName: state.currentUser.userName,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Failed to create payment intent");
-      setAppointmentId(data.appointmentId);
-      return data.clientSecret;
-    } catch (err) {
-      Alert.alert("Error", err.message || "Could not start payment");
-      return null;
-    }
-  };
-
-  const openPaymentSheet = async () => {
-    setIsProcessing(true);
-    const clientSecret = await createPaymentIntent();
-    if (!clientSecret) {
-      setIsProcessing(false);
-      return;
-    }
-    const { error: initError } = await initPaymentSheet({
-      paymentIntentClientSecret: clientSecret,
-      merchantDisplayName: "Kleanr Inc.",
-    });
-    if (initError) {
-      Alert.alert("Error", initError.message);
-      setIsProcessing(false);
-      return;
-    }
-    const { error: paymentError } = await presentPaymentSheet();
-    setIsProcessing(false);
-    if (paymentError) {
-      Alert.alert("Error", paymentError.message);
-    } else {
-      Alert.alert("Success", "Payment authorized!");
-      dispatch({
-        type: "UPDATE_BILL",
-        payload: { totalPaid: totalPaid + Number(amountToPay) },
-      });
-      await syncAirbnbBooking();
-      navigate("/");
-    }
-  };
-
-  const syncAirbnbBooking = async () => {
-    try {
-      await fetch(`${API_BASE}/airbnb/sync-booking`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: state.currentUser.token,
-          userEmail: state.currentUser.email,
-          homeId: state.userHomeId,
-        }),
-      });
-    } catch (err) {
-      console.error("Airbnb Sync Error:", err);
-    }
-  };
-
-  const handleCapturePayment = async () => {
-    if (!appointmentId) {
-      Alert.alert(
-        "No Payment",
-        "Please wait until client payment is confirmed."
-      );
-      return;
-    }
-    Alert.alert("Release Payment", "Confirm job completion?", [
+  const handleCapturePayment = async (appointmentId) => {
+    Alert.alert("Complete Job", "Mark this job as completed and release payment?", [
       { text: "Cancel" },
       {
         text: "Yes",
@@ -137,15 +79,13 @@ const Earnings = ({ state, dispatch }) => {
             const res = await fetch(`${API_BASE}/payments/capture`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                token: state.currentUser.token,
-                appointmentId,
-              }),
+              body: JSON.stringify({ appointmentId }),
             });
             const data = await res.json();
             if (!res.ok)
-              throw new Error(data.error || "Failed to capture payment");
-            Alert.alert("Success", "Funds released to cleaner!");
+              throw new Error(data.error || "Failed to complete job");
+            Alert.alert("Success", "Job completed! Payment captured.");
+            await loadData();
           } catch (err) {
             Alert.alert("Error", err.message);
           } finally {
@@ -156,36 +96,27 @@ const Earnings = ({ state, dispatch }) => {
     ]);
   };
 
-  const handleCancelOrRefund = async () => {
-    if (!appointmentId) {
-      Alert.alert("Error", "No active payment to cancel.");
-      return;
-    }
-    Alert.alert("Cancel Payment", "Are you sure?", [
-      { text: "No" },
-      {
-        text: "Yes",
-        onPress: async () => {
-          try {
-            const res = await fetch(`${API_BASE}/payments/refund`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                token: state.currentUser.token,
-                appointmentId,
-              }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Refund failed");
-            Alert.alert("Success", "Payment refunded successfully");
-            setAppointmentId(null);
-          } catch (err) {
-            Alert.alert("Error", err.message);
-          }
-        },
-      },
-    ]);
+  const getStatusBadge = (appt) => {
+    if (appt.completed) return { text: "Completed", color: "#4CAF50" };
+    if (appt.paid) return { text: "Paid - Awaiting Completion", color: "#2196F3" };
+    return { text: "Pending Payment", color: "#FFC107" };
   };
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#F0F4F7",
+        }}
+      >
+        <ActivityIndicator size="large" color="#007BFF" />
+        <Text style={{ marginTop: 10, color: "#757575" }}>Loading earnings...</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -194,11 +125,14 @@ const Earnings = ({ state, dispatch }) => {
         padding: 20,
         backgroundColor: "#F0F4F7",
       }}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
-      {/* Total Due Card */}
+      {/* Total Earnings Card */}
       <View
         style={{
-          backgroundColor: "#007BFF",
+          backgroundColor: "#4CAF50",
           borderRadius: 20,
           padding: 25,
           shadowColor: "#000",
@@ -212,43 +146,54 @@ const Earnings = ({ state, dispatch }) => {
         <Text
           style={{
             color: "#fff",
-            fontSize: 20,
+            fontSize: 16,
             fontWeight: "600",
             marginBottom: 5,
           }}
         >
-          Total Due
+          Total Earnings
         </Text>
         <Text style={{ color: "#fff", fontSize: 36, fontWeight: "700" }}>
-          ${appointmentOverdue.toFixed(2)}
+          ${earnings.totalEarnings}
         </Text>
-
-        {/* Progress Bar */}
-        <View
-          style={{
-            marginTop: 20,
-            height: 15,
-            width: "100%",
-            backgroundColor: "#E0E0E0",
-            borderRadius: 10,
-            overflow: "hidden",
-          }}
-        >
-          <View
-            style={{
-              width: `${progressPercent}%`,
-              height: "100%",
-              backgroundColor: "#4CAF50",
-            }}
-          />
-        </View>
-
-        <Text style={{ color: "#fff", marginTop: 5, fontWeight: "600" }}>
-          Paid: {isNaN(progressPercent) ? 0 : progressPercent.toFixed(0)}%
+        <Text style={{ color: "rgba(255,255,255,0.8)", marginTop: 5 }}>
+          {earnings.completedJobs} jobs completed
         </Text>
       </View>
 
-      {/* Amount Input Card */}
+      {/* Pending Earnings Card */}
+      <View
+        style={{
+          backgroundColor: "#2196F3",
+          borderRadius: 20,
+          padding: 25,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 6,
+          elevation: 6,
+          marginBottom: 20,
+        }}
+      >
+        <Text
+          style={{
+            color: "#fff",
+            fontSize: 16,
+            fontWeight: "600",
+            marginBottom: 5,
+          }}
+        >
+          Pending Earnings
+        </Text>
+        <Text style={{ color: "#fff", fontSize: 28, fontWeight: "700" }}>
+          ${earnings.pendingEarnings}
+        </Text>
+        <Text style={{ color: "rgba(255,255,255,0.8)", marginTop: 5 }}>
+          Jobs in progress
+        </Text>
+      </View>
+
+      {/* Assigned Appointments */}
       <View
         style={{
           backgroundColor: "#fff",
@@ -259,89 +204,101 @@ const Earnings = ({ state, dispatch }) => {
           shadowOpacity: 0.1,
           shadowRadius: 5,
           elevation: 4,
-          marginBottom: 25,
         }}
       >
-        <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 10 }}>
-          Enter Amount to Pay
+        <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 15 }}>
+          Your Assignments
         </Text>
-        <TextInput
-          value={String(amountToPay)}
-          onChangeText={handleAmountToPay}
-          keyboardType="numeric"
-          style={{
-            borderWidth: 1,
-            borderColor: "#ddd",
-            borderRadius: 12,
-            paddingHorizontal: 15,
-            paddingVertical: 12,
-            fontSize: 16,
-            backgroundColor: "#f9f9f9",
-          }}
-        />
-        {error && (
-          <Text
-            style={{ color: "#FF4D4F", textAlign: "center", marginTop: 10 }}
-          >
-            {error}
+
+        {assignedAppointments.length === 0 ? (
+          <Text style={{ color: "#757575", textAlign: "center", padding: 20 }}>
+            No assignments yet
           </Text>
+        ) : (
+          assignedAppointments.map((appt) => {
+            const status = getStatusBadge(appt);
+            return (
+              <View
+                key={appt.id}
+                style={{
+                  backgroundColor: "#F5F5F5",
+                  borderRadius: 12,
+                  padding: 15,
+                  marginBottom: 12,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: "600", fontSize: 16 }}>
+                      {new Date(appt.date).toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </Text>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginTop: 6,
+                      }}
+                    >
+                      <View
+                        style={{
+                          backgroundColor: status.color,
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontSize: 11,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {status.text}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <Text style={{ fontWeight: "700", fontSize: 18 }}>
+                    ${appt.price}
+                  </Text>
+                </View>
+
+                {/* Complete Job Button */}
+                {appt.paid && !appt.completed && (
+                  <Pressable
+                    onPress={() => handleCapturePayment(appt.id)}
+                    disabled={isCapturing}
+                    style={{
+                      backgroundColor: isCapturing ? "#aaa" : "#4CAF50",
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      alignItems: "center",
+                      marginTop: 12,
+                    }}
+                  >
+                    <Text
+                      style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}
+                    >
+                      {isCapturing ? "Processing..." : "Mark Complete"}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })
         )}
       </View>
-
-      {/* Customer Actions */}
-      {state.account === null && (
-        <>
-          <Pressable
-            onPress={!isProcessing ? openPaymentSheet : null}
-            style={{
-              backgroundColor: isProcessing ? "#aaa" : "#007BFF",
-              paddingVertical: 15,
-              borderRadius: 15,
-              alignItems: "center",
-              marginBottom: appointmentId ? 15 : 0,
-            }}
-          >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-              {isProcessing ? "Processing..." : "Pay Now"}
-            </Text>
-          </Pressable>
-
-          {appointmentId && (
-            <Pressable
-              onPress={handleCancelOrRefund}
-              style={{
-                backgroundColor: "#FF6B6B",
-                paddingVertical: 15,
-                borderRadius: 15,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-                Cancel / Refund
-              </Text>
-            </Pressable>
-          )}
-        </>
-      )}
-
-      {/* Cleaner Actions */}
-      {state.account === "cleaner" && appointmentId && (
-        <Pressable
-          onPress={!isCapturing ? handleCapturePayment : null}
-          style={{
-            backgroundColor: "#4CAF50",
-            paddingVertical: 15,
-            borderRadius: 15,
-            alignItems: "center",
-            opacity: isCapturing ? 0.6 : 1,
-            marginTop: 20,
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-            {isCapturing ? "Releasing..." : "Release Payment"}
-          </Text>
-        </Pressable>
-      )}
     </ScrollView>
   );
 };

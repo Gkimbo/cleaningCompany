@@ -1,7 +1,9 @@
 import { useStripe } from "@stripe/stripe-react-native";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  FlatList,
   Pressable,
   ScrollView,
   Text,
@@ -15,25 +17,55 @@ const API_BASE = "http://localhost:3000/api/v1";
 const Bill = ({ state, dispatch }) => {
   const [amountToPay, setAmountToPay] = useState(0);
   const [error, setError] = useState(null);
-  const [appointmentId, setAppointmentId] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [unpaidAppointments, setUnpaidAppointments] = useState([]);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const navigate = useNavigate();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
-  const appointmentOverdue = state.appointments.reduce((total, appt) => {
+  const cancellationFee = state?.bill?.cancellationFee || 0;
+  const appointmentOverdue = (state?.appointments || []).reduce((total, appt) => {
     const apptDate = new Date(appt.date);
     const today = new Date();
-    if (!appt.paid && apptDate <= today) return total + Number(appt.price);
+    if (!appt.paid && apptDate <= today) return total + Number(appt.price || 0);
     return total;
-  }, state.bill.cancellationFee);
+  }, cancellationFee);
 
-  const totalPaid = state.bill.totalPaid || 0;
-  const progressPercent = Math.min((totalPaid / appointmentOverdue) * 100, 100);
+  const totalPaid = state?.bill?.totalPaid || 0;
+  const progressPercent = appointmentOverdue > 0
+    ? Math.min((totalPaid / appointmentOverdue) * 100, 100)
+    : 0;
 
   useEffect(() => {
-    setAmountToPay(appointmentOverdue - totalPaid);
-  }, [appointmentOverdue, totalPaid]);
+    // Get unpaid appointments
+    const unpaid = (state?.appointments || []).filter((appt) => !appt.paid);
+    setUnpaidAppointments(unpaid);
+
+    // Calculate default amount
+    const defaultAmount = appointmentOverdue - totalPaid;
+    setAmountToPay(defaultAmount > 0 ? defaultAmount : 0);
+
+    // Fetch payment history
+    fetchPaymentHistory();
+  }, [state?.appointments, appointmentOverdue, totalPaid]);
+
+  const fetchPaymentHistory = async () => {
+    if (!state?.currentUser?.id) return;
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch(`${API_BASE}/payments/history/${state.currentUser.id}`);
+      const data = await res.json();
+      if (res.ok) {
+        setPaymentHistory(data.payments || []);
+      }
+    } catch (err) {
+      console.error("Error fetching payment history:", err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   const handleAmountToPay = (amount) => {
     const regex = /^\d*(\.\d*)?$/;
@@ -51,17 +83,13 @@ const Bill = ({ state, dispatch }) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token: state.currentUser.token,
-          homeId: state.userHomeId || state.user?.homes?.[0]?.id,
-          amount: Math.round(amountToPay * 100),
-          userEmail: state.currentUser.email,
-          userName: state.currentUser.userName,
+          amount: Math.round(Number(amountToPay) * 100),
+          email: state?.currentUser?.email,
         }),
       });
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || "Failed to create payment intent");
-      setAppointmentId(data.appointmentId);
       return data.clientSecret;
     } catch (err) {
       Alert.alert("Error", err.message || "Could not start payment");
@@ -70,6 +98,11 @@ const Bill = ({ state, dispatch }) => {
   };
 
   const openPaymentSheet = async () => {
+    if (Number(amountToPay) <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+
     setIsProcessing(true);
     const clientSecret = await createPaymentIntent();
     if (!clientSecret) {
@@ -79,6 +112,7 @@ const Bill = ({ state, dispatch }) => {
     const { error: initError } = await initPaymentSheet({
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: "Kleanr Inc.",
+      allowsDelayedPaymentMethods: true,
     });
     if (initError) {
       Alert.alert("Error", initError.message);
@@ -88,77 +122,25 @@ const Bill = ({ state, dispatch }) => {
     const { error: paymentError } = await presentPaymentSheet();
     setIsProcessing(false);
     if (paymentError) {
-      Alert.alert("Error", paymentError.message);
+      if (paymentError.code !== "Canceled") {
+        Alert.alert("Payment Error", paymentError.message);
+      }
     } else {
-      Alert.alert("Success", "Payment authorized!");
+      Alert.alert("Success", "Payment completed successfully!");
       dispatch({
         type: "UPDATE_BILL",
         payload: { totalPaid: totalPaid + Number(amountToPay) },
       });
-      await syncAirbnbBooking();
-      navigate("/");
+      fetchPaymentHistory();
     }
   };
 
-  const syncAirbnbBooking = async () => {
-    try {
-      await fetch(`${API_BASE}/airbnb/sync-booking`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: state.currentUser.token,
-          userEmail: state.currentUser.email,
-          homeId: state.userHomeId,
-        }),
-      });
-    } catch (err) {
-      console.error("Airbnb Sync Error:", err);
-    }
-  };
-
-  const handleCapturePayment = async () => {
+  const handleCancelOrRefund = async (appointmentId) => {
     if (!appointmentId) {
-      Alert.alert(
-        "No Payment",
-        "Please wait until client payment is confirmed."
-      );
+      Alert.alert("Error", "No payment selected to cancel.");
       return;
     }
-    Alert.alert("Release Payment", "Confirm job completion?", [
-      { text: "Cancel" },
-      {
-        text: "Yes",
-        onPress: async () => {
-          setIsCapturing(true);
-          try {
-            const res = await fetch(`${API_BASE}/payments/capture`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                token: state.currentUser.token,
-                appointmentId,
-              }),
-            });
-            const data = await res.json();
-            if (!res.ok)
-              throw new Error(data.error || "Failed to capture payment");
-            Alert.alert("Success", "Funds released to cleaner!");
-          } catch (err) {
-            Alert.alert("Error", err.message);
-          } finally {
-            setIsCapturing(false);
-          }
-        },
-      },
-    ]);
-  };
-
-  const handleCancelOrRefund = async () => {
-    if (!appointmentId) {
-      Alert.alert("Error", "No active payment to cancel.");
-      return;
-    }
-    Alert.alert("Cancel Payment", "Are you sure?", [
+    Alert.alert("Cancel Payment", "Are you sure you want to request a refund?", [
       { text: "No" },
       {
         text: "Yes",
@@ -167,21 +149,34 @@ const Bill = ({ state, dispatch }) => {
             const res = await fetch(`${API_BASE}/payments/refund`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                token: state.currentUser.token,
-                appointmentId,
-              }),
+              body: JSON.stringify({ appointmentId }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Refund failed");
-            Alert.alert("Success", "Payment refunded successfully");
-            setAppointmentId(null);
+            Alert.alert("Success", "Refund processed successfully");
+            fetchPaymentHistory();
           } catch (err) {
             Alert.alert("Error", err.message);
           }
         },
       },
     ]);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "succeeded":
+      case "captured":
+        return "#4CAF50";
+      case "pending":
+        return "#FFC107";
+      case "failed":
+        return "#F44336";
+      case "refunded":
+        return "#9E9E9E";
+      default:
+        return "#757575";
+    }
   };
 
   return (
@@ -324,24 +319,83 @@ const Bill = ({ state, dispatch }) => {
         </>
       )}
 
-      {/* Cleaner Actions */}
-      {state.account === "cleaner" && appointmentId && (
-        <Pressable
-          onPress={!isCapturing ? handleCapturePayment : null}
-          style={{
-            backgroundColor: "#4CAF50",
-            paddingVertical: 15,
-            borderRadius: 15,
-            alignItems: "center",
-            opacity: isCapturing ? 0.6 : 1,
-            marginTop: 20,
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
-            {isCapturing ? "Releasing..." : "Release Payment"}
+      {/* Payment History Section */}
+      <View
+        style={{
+          backgroundColor: "#fff",
+          borderRadius: 15,
+          padding: 20,
+          marginTop: 20,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.1,
+          shadowRadius: 5,
+          elevation: 4,
+        }}
+      >
+        <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 15 }}>
+          Payment History
+        </Text>
+
+        {isLoadingHistory ? (
+          <ActivityIndicator size="small" color="#007BFF" />
+        ) : paymentHistory.length === 0 ? (
+          <Text style={{ color: "#757575", textAlign: "center" }}>
+            No payment history yet
           </Text>
-        </Pressable>
-      )}
+        ) : (
+          paymentHistory.slice(0, 5).map((payment) => (
+            <View
+              key={payment.id}
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: "#E0E0E0",
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: "600" }}>
+                  {new Date(payment.date).toLocaleDateString()}
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginTop: 4,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: getStatusColor(payment.paymentStatus),
+                      marginRight: 6,
+                    }}
+                  />
+                  <Text style={{ color: "#757575", fontSize: 12 }}>
+                    {payment.paymentStatus || "pending"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontWeight: "700", fontSize: 16 }}>
+                ${payment.price}
+              </Text>
+              {payment.paymentStatus === "succeeded" && (
+                <Pressable
+                  onPress={() => handleCancelOrRefund(payment.id)}
+                  style={{ marginLeft: 10 }}
+                >
+                  <Text style={{ color: "#FF6B6B", fontSize: 12 }}>Refund</Text>
+                </Pressable>
+              )}
+            </View>
+          ))
+        )}
+      </View>
     </ScrollView>
   );
 };

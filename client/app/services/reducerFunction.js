@@ -8,7 +8,22 @@ const reducer = (state, action) => {
     case "CURRENT_USER":
       return {
         ...state,
-        currentUser: { token: action.payload },
+        currentUser: { ...state.currentUser, token: action.payload },
+      };
+    case "SET_USER_ID":
+      return {
+        ...state,
+        currentUser: { ...state.currentUser, id: action.payload },
+      };
+    case "SET_USER_EMAIL":
+      return {
+        ...state,
+        currentUser: { ...state.currentUser, email: action.payload },
+      };
+    case "UPDATE_BILL":
+      return {
+        ...state,
+        bill: { ...state.bill, ...action.payload },
       };
     case "USER_ACCOUNT":
       return {
