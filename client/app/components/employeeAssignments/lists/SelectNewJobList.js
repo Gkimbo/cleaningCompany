@@ -42,12 +42,12 @@ const SelectNewJobList = ({ state }) => {
   const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
 
-const sortLabelMap = {
-  distanceClosest: "Distance (Closest)",
-  distanceFurthest: "Distance (Furthest)",
-  priceLow: "Price (Low → High)",
-  priceHigh: "Price (High → Low)",
-};
+  const sortLabelMap = {
+    distanceClosest: "Distance (Closest)",
+    distanceFurthest: "Distance (Furthest)",
+    priceLow: "Price (Low → High)",
+    priceHigh: "Price (High → Low)",
+  };
 
   const requestsAndAppointments = useMemo(() => {
     const requestsWithFlag = allRequests.map((item) => ({
@@ -203,62 +203,67 @@ const sortLabelMap = {
           marginBottom: 25,
         }}
       >
-        <Pressable
-          style={styles.navButton}
-          onPress={() => navigate("/")}
-        >
+        <Pressable style={styles.navButton} onPress={() => navigate("/")}>
           <Icon name="angle-left" size={iconSize + 4} color="#007AFF" />
           <Text style={styles.navButtonText}>Back</Text>
         </Pressable>
-  
-        <Pressable
-          style={styles.navButton}
-          onPress={pressedSeeCalender}
-        >
+
+        <Pressable style={styles.navButton} onPress={pressedSeeCalender}>
           <Text style={styles.navButtonText}>Calendar</Text>
-          <Icon name="calendar" size={iconSize} color="#007AFF" style={{ marginLeft: 8 }} />
-        </Pressable>
-      </View>
-  
-   {/* --- Sort Button & Picker Modal --- */}
-<View style={styles.sortContainer}>
-  <Pressable style={styles.sortButton} onPress={() => setShowSortPicker(true)}>
-    <Icon name="sort" size={16} color="#3da9fc" />
-    <Text style={styles.sortButtonText}>
-      {sortLabelMap[sortOption] || "Sort Jobs"}
-    </Text>
-  </Pressable>
-
-  {showSortPicker && (
-  <View style={styles.pickerOverlay}>
-    <View style={styles.bottomSheet}>
-      <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>Sort Jobs By</Text>
-        <Pressable onPress={() => setShowSortPicker(false)}>
-          <Text style={styles.doneButtonText}>Done</Text>
+          <Icon
+            name="calendar"
+            size={iconSize}
+            color="#007AFF"
+            style={{ marginLeft: 8 }}
+          />
         </Pressable>
       </View>
 
-      <View style={styles.pickerContainer}>
-        <Picker
-          selectedValue={sortOption}
-          onValueChange={(itemValue) => setSortOption(itemValue)}
-          itemStyle={{ fontSize: 18, height: 150 }} // Makes it easier to scroll and tap
+      {/* --- Sort Button & Picker Modal --- */}
+      <View style={styles.sortContainer}>
+        <Pressable
+          style={styles.sortButton}
+          onPress={() => setShowSortPicker(true)}
         >
-          <Picker.Item label="Distance (Closest)" value="distanceClosest" />
-          <Picker.Item label="Distance (Furthest)" value="distanceFurthest" />
-          <Picker.Item label="Price (Low → High)" value="priceLow" />
-          <Picker.Item label="Price (High → Low)" value="priceHigh" />
-        </Picker>
+          <Icon name="sort" size={16} color="#3da9fc" />
+          <Text style={styles.sortButtonText}>
+            {sortLabelMap[sortOption] || "Sort Jobs"}
+          </Text>
+        </Pressable>
+
+        {showSortPicker && (
+          <View style={styles.pickerOverlay}>
+            <View style={styles.bottomSheet}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>Sort Jobs By</Text>
+                <Pressable onPress={() => setShowSortPicker(false)}>
+                  <Text style={styles.doneButtonText}>Done</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={sortOption}
+                  onValueChange={(itemValue) => setSortOption(itemValue)}
+                  itemStyle={{ fontSize: 18, height: 150 }} // Makes it easier to scroll and tap
+                >
+                  <Picker.Item
+                    label="Distance (Closest)"
+                    value="distanceClosest"
+                  />
+                  <Picker.Item
+                    label="Distance (Furthest)"
+                    value="distanceFurthest"
+                  />
+                  <Picker.Item label="Price (Low → High)" value="priceLow" />
+                  <Picker.Item label="Price (High → Low)" value="priceHigh" />
+                </Picker>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
-    </View>
-  </View>
-)}
 
-</View>
-
-
-  
       {/* --- Loading / Empty States --- */}
       {loading ? (
         <ActivityIndicator
@@ -289,7 +294,9 @@ const sortLabelMap = {
                     try {
                       await FetchData.removeRequest(employeeId, appointmentId);
                       setAllRequests((prev) => {
-                        const removed = prev.find((a) => a.id === appointmentId);
+                        const removed = prev.find(
+                          (a) => a.id === appointmentId
+                        );
                         if (!removed) return prev;
                         setAllAppointments((apps) => [...apps, removed]);
                         return prev.filter((a) => a.id !== appointmentId);
@@ -311,7 +318,9 @@ const sortLabelMap = {
                     try {
                       await FetchData.addEmployee(employeeId, appointmentId);
                       setAllAppointments((prev) => {
-                        const assigned = prev.find((a) => a.id === appointmentId);
+                        const assigned = prev.find(
+                          (a) => a.id === appointmentId
+                        );
                         if (!assigned) return prev;
                         setAllRequests((reqs) => [...reqs, assigned]);
                         return prev.filter((a) => a.id !== appointmentId);
@@ -347,7 +356,6 @@ const sortLabelMap = {
       )}
     </View>
   );
-  
 };
 const styles = {
   // --- NAVIGATION BUTTONS (Back / Calendar) ---
@@ -496,7 +504,5 @@ const styles = {
     fontSize: 14,
   },
 };
-
-
 
 export default SelectNewJobList;

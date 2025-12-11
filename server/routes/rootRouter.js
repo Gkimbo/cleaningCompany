@@ -7,6 +7,7 @@ const appointmentRouter = require("./api/v1/appointmentsRouter");
 const employeeInfoRouter = require("./api/v1/employeeInfoRouter");
 const applicationRouter = require("./api/v1/applicationRouter");
 const reviewsRouter = require("./api/v1/reviewsRouter");
+const paymentRouter = require("./api/v1/paymentRouter");
 
 const rootRouter = new express.Router();
 
@@ -15,8 +16,9 @@ rootRouter.use("/api/v1/users", usersRouter);
 rootRouter.use("/api/v1/user-info", userInfoRouter);
 rootRouter.use("/api/v1/employee-info", employeeInfoRouter);
 rootRouter.use("/api/v1/appointments", appointmentRouter);
-rootRouter.use("/api/v1/applications", applicationRouter)
-rootRouter.use("/api/v1/reviews", reviewsRouter)
+rootRouter.use("/api/v1/applications", applicationRouter);
+rootRouter.use("/api/v1/reviews", reviewsRouter);
+rootRouter.use("/api/v1/payments", paymentRouter);
 
 rootRouter.use("/", clientRouter);
 

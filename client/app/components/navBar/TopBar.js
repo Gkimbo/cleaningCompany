@@ -1,13 +1,13 @@
 import { Feather } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
-	Modal,
-	Platform,
-	Pressable,
-	StyleSheet,
-	Text,
-	TouchableWithoutFeedback,
-	View,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
 
@@ -15,9 +15,9 @@ import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
 import ChooseNewJobButton from "./ChooseNewJobButton";
 import CleanerRequestsButton from "./CleanerRequestsButton";
+import EarningsButton from "./EarningsButton";
 import EditHomeButton from "./EditHomeButton";
 import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
-import EmployeeShiftButton from "./EmployeeShiftButton";
 import HomeButton from "./HomeButton";
 import ManageEmployees from "./ManageEmployeeButton";
 import MyRequestsButton from "./MyRequestsButton";
@@ -26,6 +26,7 @@ import SeeAllAppointments from "./SeeAllAppointmentsButton";
 import SignOutButton from "./SignoutButton";
 import UnassignedAppointmentsButton from "./UnassignedAppointmentsButton";
 import ViewApplicationsButton from "./ViewApplicationsButton";
+
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -55,14 +56,13 @@ const TopBar = ({ dispatch, state }) => {
 
   return (
     <View style={styles.glassContainer}>
-      <View style={styles.headerContent}>
-        <Text style={styles.brand}>Kleanr</Text>
+      {state.currentUser.token ? (
+        <>
+          <View style={styles.headerContent}>
+            <Text style={styles.brand}>Kleanr</Text>
 
-        <View style={styles.rightSection}>
-          <HomeButton />
-
-          {state.currentUser.token ? (
-            <>
+            <View style={styles.rightSection}>
+              <HomeButton />
               <Pressable
                 style={({ pressed }) => [
                   styles.hamburgerButton,
@@ -99,7 +99,8 @@ const TopBar = ({ dispatch, state }) => {
                           <ChooseNewJobButton closeModal={closeModal} />
                           <EmployeeAssignmentsButton closeModal={closeModal} />
                           <MyRequestsButton closeModal={closeModal} />
-                          <EmployeeShiftButton closeModal={closeModal} />
+                          {/* <EmployeeShiftButton closeModal={closeModal} /> */}
+                          <EarningsButton closeModal={closeModal} />
                         </>
                       ) : (
                         <>
@@ -136,31 +137,37 @@ const TopBar = ({ dispatch, state }) => {
                   </View>
                 </TouchableWithoutFeedback>
               </Modal>
-            </>
-          ) : (
-            <>
-              <Pressable
-                style={styles.authButton}
-                onPress={() => setSignInRedirect(true)}
-              >
-                <Text style={styles.authButtonText}>Sign In</Text>
-              </Pressable>
-              <Pressable
-                style={styles.authButton}
-                onPress={() => setSignUpRedirect(true)}
-              >
-                <Text style={styles.authButtonText}>Sign Up</Text>
-              </Pressable>
-              <Pressable
-                style={styles.authButton}
-                onPress={() => setBecomeCleanerRedirect(true)}
-              >
-                <Text style={styles.authButtonText}>Become a Cleaner</Text>
-              </Pressable>
-            </>
-          )}
+            </View>
+          </View>
+        </>
+      ) : (
+        <View style={styles.unauthContainer}>
+          <View style={styles.authButtonsContainerTitle}>
+          <Text style={styles.brand}>Kleanr</Text>
+          <HomeButton />
+          </View>
+          <View style={styles.authButtonsContainer}>
+            <Pressable
+              style={styles.authButton}
+              onPress={() => setSignInRedirect(true)}
+            >
+              <Text style={styles.authButtonText}>Sign In</Text>
+            </Pressable>
+            <Pressable
+              style={styles.authButton}
+              onPress={() => setSignUpRedirect(true)}
+            >
+              <Text style={styles.authButtonText}>Sign Up</Text>
+            </Pressable>
+            <Pressable
+              style={styles.authButton}
+              onPress={() => setBecomeCleanerRedirect(true)}
+            >
+              <Text style={styles.authButtonText}>Become a Cleaner</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 };
@@ -336,6 +343,24 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  unauthContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+  },
+  unauthContainerTitle: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 20,
+  },
+
+  authButtonsContainer: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
   },
 });
 

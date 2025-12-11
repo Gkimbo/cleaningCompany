@@ -63,6 +63,19 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: false,
 		},
+		paymentIntentId: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		paymentStatus: {
+			type: DataTypes.STRING,
+			allowNull: true,
+			defaultValue: "pending",
+		},
+		amountPaid: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

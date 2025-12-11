@@ -1,12 +1,13 @@
+import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
 import {
-  View,
+  Alert,
+  Image,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
+  View,
 } from "react-native";
 import Application from "../../../services/fetchRequests/ApplicationClass";
 import ApplicationFormStyles from "../../../services/styles/ApplicationFormStyles";
@@ -18,52 +19,106 @@ const CleanerApplicationForm = () => {
     email: "",
     phone: "",
     experience: "",
-    availability: "",
     message: "",
+    idPhoto: null,
+    backgroundConsent: false,
   });
-  const [formError, setFormError] = useState(null)
+console.log(formData)
+  const [formError, setFormError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
-  const styles = ApplicationFormStyles
+  const styles = ApplicationFormStyles;
 
   const handleChange = (name, value) => {
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       [name]: value,
-    });
+    }));
   };
 
-  const validate = () => {
-		const validationErrors = [];
-		if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.experience || !formData.availability) {
-			validationErrors.push("All Fields must be filled out!");
-		}
+  // Handle ID upload
+  const handleIdUpload = async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert(
+        "Permission required",
+        "We need access to your photo library to upload your ID."
+      );
+      return;
+    }
 
-		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-		if (!emailRegex.test(formData.email)) {
-			validationErrors.push("Please enter a valid email address.");
-		}
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      quality: 0.8,
+    });
 
-		setFormError(validationErrors);
-		return validationErrors.length === 0;
-	};
-
-  const handleSubmit = async () => {
-    if (!validate()) {
-			return;
-		} else {
-      const submittedApplication = await Application.addApplicationToDb(formData)
-      console.log("Form submitted:", submittedApplication);
-      setSubmitted(true);
-      Alert.alert("Thank You", "Your application has been submitted successfully.");
+    if (!pickerResult.canceled && pickerResult.assets?.length > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        idPhoto: pickerResult.assets[0].uri,
+      }));
     }
   };
 
+  // Form validation
+  const validate = () => {
+    const errors = [];
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      experience,
+      idPhoto,
+      backgroundConsent,
+    } = formData;
+
+    if (!firstName || !lastName || !email || !phone || !experience) {
+      errors.push("All required fields must be filled out.");
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      errors.push("Please enter a valid email address.");
+    }
+
+    if (!idPhoto) {
+      errors.push("Please upload a valid photo ID.");
+    }
+
+    if (!backgroundConsent) {
+      errors.push("You must consent to a background check.");
+    }
+
+    setFormError(errors);
+    return errors.length === 0;
+  };
+
+  // Submit form
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    try {
+      const submittedApplication = await Application.addApplicationToDb(formData);
+      console.log("Form submitted:", submittedApplication);
+      setSubmitted(true);
+      Alert.alert(
+        "Thank You",
+        "Your application has been submitted successfully. We’ll review your information and get back to you soon."
+      );
+    } catch (error) {
+      Alert.alert("Error", "Something went wrong while submitting the form.");
+      console.error(error);
+    }
+  };
+
+  // Thank You Screen
   if (submitted) {
     return (
       <View style={styles.thankYouContainer}>
         <Text style={styles.thankYouTitle}>Thank You for Applying!</Text>
         <Text style={styles.thankYouMessage}>
-          Your application has been submitted successfully. We will review your
+          Your application has been submitted successfully. We’ll review your
           information and get back to you shortly.
         </Text>
       </View>
@@ -74,8 +129,9 @@ const CleanerApplicationForm = () => {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Cleaner Job Application</Text>
       <Text style={styles.description}>
-        Please fill out the form below to apply for a position as a cleaner with
-        our company.
+        Please fill out this form to apply for a cleaning position. For safety
+        and trust, all applicants must verify their identity and consent to a
+        background check.
       </Text>
 
       {/* Full Name */}
@@ -86,6 +142,7 @@ const CleanerApplicationForm = () => {
         value={formData.firstName}
         onChangeText={(text) => handleChange("firstName", text)}
       />
+
       <Text style={styles.label}>Last Name</Text>
       <TextInput
         style={styles.input}
@@ -98,7 +155,7 @@ const CleanerApplicationForm = () => {
       <Text style={styles.label}>Email Address</Text>
       <TextInput
         style={styles.input}
-        placeholder="Enter your email address"
+        placeholder="Enter your email"
         value={formData.email}
         onChangeText={(text) => handleChange("email", text)}
         keyboardType="email-address"
@@ -118,26 +175,50 @@ const CleanerApplicationForm = () => {
       <Text style={styles.label}>Experience</Text>
       <TextInput
         style={styles.input}
-        placeholder="E.g., No experience, 1-2 years"
+        placeholder="E.g., 2 years in residential cleaning"
         value={formData.experience}
         onChangeText={(text) => handleChange("experience", text)}
       />
 
-      {/* Availability */}
-      <Text style={styles.label}>Availability</Text>
-      <TextInput
-        style={styles.textArea}
-        placeholder="E.g., Mondays, Fridays, weekends only"
-        value={formData.availability}
-        onChangeText={(text) => handleChange("availability", text)}
-        multiline
-      />
+      {/* Upload ID */}
+      <Text style={styles.label}>Upload a Valid Photo ID</Text>
+      <TouchableOpacity style={styles.uploadButton} onPress={handleIdUpload}>
+        <Text style={styles.uploadButtonText}>
+          {formData.idPhoto ? "Change ID Photo" : "Select ID Photo"}
+        </Text>
+      </TouchableOpacity>
 
-      {/* Additional Message */}
+      {formData.idPhoto && (
+        <Image
+          source={{ uri: formData.idPhoto }}
+          style={styles.idPreview}
+          resizeMode="contain"
+        />
+      )}
+
+      {/* Consent to background check */}
+      <TouchableOpacity
+        style={styles.checkboxContainer}
+        onPress={() =>
+          handleChange("backgroundConsent", !formData.backgroundConsent)
+        }
+      >
+        <View
+          style={[
+            styles.checkbox,
+            formData.backgroundConsent && styles.checkboxChecked,
+          ]}
+        />
+        <Text style={styles.checkboxLabel}>
+          I consent to a background check and identity verification.
+        </Text>
+      </TouchableOpacity>
+
+      {/* Message */}
       <Text style={styles.label}>Why Do You Want to Work With Us?</Text>
       <TextInput
         style={styles.textArea}
-        placeholder="Tell us why you're interested in this job"
+        placeholder="Tell us a bit about yourself and why you want to join our team."
         value={formData.message}
         onChangeText={(text) => handleChange("message", text)}
         multiline
@@ -147,9 +228,17 @@ const CleanerApplicationForm = () => {
       <TouchableOpacity style={styles.button} onPress={handleSubmit}>
         <Text style={styles.buttonText}>Submit Application</Text>
       </TouchableOpacity>
-      {formError ? <View style={styles.errorContainer}>{formError.map((error, index) => (
-      <Text key={index} style={styles.errorText}>{error}</Text>
-    ))}</View> : null}
+
+      {/* Validation Errors */}
+      {formError && (
+        <View style={styles.errorContainer}>
+          {formError.map((error, index) => (
+            <Text key={index} style={styles.errorText}>
+              {error}
+            </Text>
+          ))}
+        </View>
+      )}
     </ScrollView>
   );
 };

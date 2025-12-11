@@ -1,7 +1,6 @@
-/* eslint-disable no-unused-vars */
+/* eslint-disable no-unused-vars */ 
 /* eslint-disable no-console */
 const express = require("express");
-const bodyParser = require("body-parser");
 const passport = require("passport");
 const cors = require("cors");
 const session = require("express-session");
@@ -10,14 +9,14 @@ require("dotenv").config();
 require("./passport-config");
 
 const rootRouter = require("./routes/rootRouter");
-const clientURL = "http://localhost:19006";
 
+const clientURL = "http://localhost:19006";
 const secretKey = process.env.SESSION_SECRET;
 
 const app = express();
 const port = 3000;
 
-// Middleware
+// CORS & headers
 app.use(
 	cors({
 		origin: clientURL,
@@ -32,25 +31,31 @@ app.use((req, res, next) => {
 	res.setHeader("Access-Control-Allow-Credentials", "true");
 	next();
 });
+
+// Session
 app.use(
 	session({
 		secret: secretKey,
 		resave: false,
 		saveUninitialized: false,
-		cookie: {
-			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days in milliseconds
-		},
+		cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }, // 30 days
 	})
 );
 
-app.use(bodyParser.json());
+// Passport
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Stripe Webhook needs raw body
+app.use("/api/v1/payments/webhook", express.raw({ type: "application/json" }));
+
+// Normal JSON parsing for other routes
+app.use(express.json());
 
 // Routes
 app.use(rootRouter);
 
-// Start the server
-const server = app.listen(port, () => {
-	console.log(`Server is running on port ${port}`);
+// Start server
+app.listen(port, () => {
+	console.log(`Server running on port ${port}`);
 });

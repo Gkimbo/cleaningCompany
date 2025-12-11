@@ -1,317 +1,400 @@
-import React, { useState, useEffect } from "react";
+import { useStripe } from "@stripe/stripe-react-native";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Alert,
+  FlatList,
   Pressable,
   ScrollView,
+  Text,
   TextInput,
-  Alert,
+  View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
-import { useStripe } from "@stripe/stripe-react-native";
-import homePageStyles from "../../services/styles/HomePageStyles";
-import UserFormStyles from "../../services/styles/UserInputFormStyle";
+
+const API_BASE = "http://localhost:3000/api/v1";
 
 const Bill = ({ state, dispatch }) => {
-  const [redirect, setRedirect] = useState(false);
   const [amountToPay, setAmountToPay] = useState(0);
   const [error, setError] = useState(null);
-  const [appointmentId, setAppointmentId] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [unpaidAppointments, setUnpaidAppointments] = useState([]);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const navigate = useNavigate();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
-  // total overdue logic
-  let appointmentOverdue = 0 + state.bill.cancellationFee;
-  state.appointments.forEach((appt) => {
-    const appointmentDate = new Date(appt.date);
+  const cancellationFee = state?.bill?.cancellationFee || 0;
+  const appointmentOverdue = (state?.appointments || []).reduce((total, appt) => {
+    const apptDate = new Date(appt.date);
     const today = new Date();
-    if (!appt.paid && appointmentDate <= today) {
-      appointmentOverdue += Number(appt.price);
+    if (!appt.paid && apptDate <= today) return total + Number(appt.price || 0);
+    return total;
+  }, cancellationFee);
+
+  const totalPaid = state?.bill?.totalPaid || 0;
+  const progressPercent = appointmentOverdue > 0
+    ? Math.min((totalPaid / appointmentOverdue) * 100, 100)
+    : 0;
+
+  useEffect(() => {
+    // Get unpaid appointments
+    const unpaid = (state?.appointments || []).filter((appt) => !appt.paid);
+    setUnpaidAppointments(unpaid);
+
+    // Calculate default amount
+    const defaultAmount = appointmentOverdue - totalPaid;
+    setAmountToPay(defaultAmount > 0 ? defaultAmount : 0);
+
+    // Fetch payment history
+    fetchPaymentHistory();
+  }, [state?.appointments, appointmentOverdue, totalPaid]);
+
+  const fetchPaymentHistory = async () => {
+    if (!state?.currentUser?.id) return;
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch(`${API_BASE}/payments/history/${state.currentUser.id}`);
+      const data = await res.json();
+      if (res.ok) {
+        setPaymentHistory(data.payments || []);
+      }
+    } catch (err) {
+      console.error("Error fetching payment history:", err);
+    } finally {
+      setIsLoadingHistory(false);
     }
-  });
+  };
 
   const handleAmountToPay = (amount) => {
-    const regex = /^\d*(\.\d*)?(\s*)?$/;
+    const regex = /^\d*(\.\d*)?$/;
     if (!regex.test(amount)) {
-      setError("Amount can only be a number!");
+      setError("Amount must be a valid number");
       return;
     }
-    if (amount === "") {
-      setError("Amount cannot be blank!");
-    } else {
-      setError(null);
-    }
+    setError(null);
     setAmountToPay(amount);
   };
 
-  useEffect(() => {
-    if (redirect) {
-      navigate("/");
-      setRedirect(false);
-    }
-    setAmountToPay(appointmentOverdue);
-  }, [redirect, appointmentOverdue]);
-
-  /**
-   * ------------------------------------------------------
-   *  Create PaymentIntent via backend (authorize only)
-   * ------------------------------------------------------
-   */
   const createPaymentIntent = async () => {
     try {
-      const response = await fetch(
-        "http://localhost:3000/api/v1/payments/create-payment-intent",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            token: state.currentUser.token,
-            homeId: state.userHomeId || state.user?.homes?.[0]?.id,
-            amount: Math.round(amountToPay * 100),
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE}/payments/create-intent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: Math.round(Number(amountToPay) * 100),
+          email: state?.currentUser?.email,
+        }),
+      });
       const data = await response.json();
-      if (!data.clientSecret) throw new Error("Missing clientSecret");
-      setAppointmentId(data.appointmentId);
+      if (!response.ok)
+        throw new Error(data.error || "Failed to create payment intent");
       return data.clientSecret;
     } catch (err) {
-      console.error(err);
-      setError("Failed to create payment intent.");
+      Alert.alert("Error", err.message || "Could not start payment");
       return null;
     }
   };
 
-  /**
-   * ------------------------------------------------------
-   *  Open Stripe Payment Sheet
-   * ------------------------------------------------------
-   */
   const openPaymentSheet = async () => {
+    if (Number(amountToPay) <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+
     setIsProcessing(true);
     const clientSecret = await createPaymentIntent();
     if (!clientSecret) {
       setIsProcessing(false);
       return;
     }
-
     const { error: initError } = await initPaymentSheet({
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: "Kleanr Inc.",
+      allowsDelayedPaymentMethods: true,
     });
-
     if (initError) {
       Alert.alert("Error", initError.message);
       setIsProcessing(false);
       return;
     }
-
     const { error: paymentError } = await presentPaymentSheet();
     setIsProcessing(false);
-
     if (paymentError) {
-      Alert.alert(`Error code: ${paymentError.code}`, paymentError.message);
+      if (paymentError.code !== "Canceled") {
+        Alert.alert("Payment Error", paymentError.message);
+      }
     } else {
-      Alert.alert("Success", "Payment authorized and held!");
+      Alert.alert("Success", "Payment completed successfully!");
       dispatch({
         type: "UPDATE_BILL",
-        payload: { totalDue: state.bill.totalDue + Number(amountToPay) },
+        payload: { totalPaid: totalPaid + Number(amountToPay) },
       });
-      setRedirect(true);
+      fetchPaymentHistory();
     }
   };
 
-  /**
-   * ------------------------------------------------------
-   *  Cleaner: Capture Payment After Job Completion
-   * ------------------------------------------------------
-   */
-  const handleCapturePayment = async () => {
+  const handleCancelOrRefund = async (appointmentId) => {
     if (!appointmentId) {
-      Alert.alert("No Payment Found", "Please ensure a client has paid first.");
+      Alert.alert("Error", "No payment selected to cancel.");
       return;
     }
-
-    Alert.alert(
-      "Release Payment",
-      "Confirm job completion and release held funds?",
-      [
-        { text: "No" },
-        {
-          text: "Yes, release",
-          onPress: async () => {
-            setIsCapturing(true);
-            try {
-              const response = await fetch(
-                "http://localhost:3000/api/v1/payments/capture-payment",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    token: state.currentUser.token,
-                    appointmentId,
-                  }),
-                }
-              );
-              const data = await response.json();
-              if (data.success) {
-                Alert.alert("✅ Success", "Funds released to cleaner!");
-                dispatch({
-                  type: "UPDATE_APPOINTMENT",
-                  payload: { appointmentId, status: "completed" },
-                });
-              } else {
-                Alert.alert("Error", data.error || "Unable to capture payment.");
-              }
-            } catch (err) {
-              console.error(err);
-              Alert.alert("Error", "Payment capture failed.");
-            } finally {
-              setIsCapturing(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  /**
-   * ------------------------------------------------------
-   *  Cancel or Refund Payment
-   * ------------------------------------------------------
-   */
-  const handleCancelOrRefund = async () => {
-    if (!appointmentId) {
-      Alert.alert("No Payment Found", "Please make a payment first.");
-      return;
-    }
-
-    Alert.alert("Cancel Payment", "Are you sure you want to cancel/refund?", [
+    Alert.alert("Cancel Payment", "Are you sure you want to request a refund?", [
       { text: "No" },
       {
         text: "Yes",
         onPress: async () => {
           try {
-            const response = await fetch(
-              "http://localhost:3000/api/v1/payments/cancel-or-refund",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  token: state.currentUser.token,
-                  appointmentId,
-                }),
-              }
-            );
-            const data = await response.json();
-            if (data.success) {
-              Alert.alert("Success", "Payment canceled/refunded successfully.");
-              setAppointmentId(null);
-              dispatch({
-                type: "UPDATE_BILL",
-                payload: { totalDue: state.bill.totalDue - Number(amountToPay) },
-              });
-            } else {
-              Alert.alert("Error", data.error || "Refund failed.");
-            }
+            const res = await fetch(`${API_BASE}/payments/refund`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ appointmentId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Refund failed");
+            Alert.alert("Success", "Refund processed successfully");
+            fetchPaymentHistory();
           } catch (err) {
-            console.error(err);
-            Alert.alert("Error", "Unable to process refund.");
+            Alert.alert("Error", err.message);
           }
         },
       },
     ]);
   };
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case "succeeded":
+      case "captured":
+        return "#4CAF50";
+      case "pending":
+        return "#FFC107";
+      case "failed":
+        return "#F44336";
+      case "refunded":
+        return "#9E9E9E";
+      default:
+        return "#757575";
+    }
+  };
+
   return (
-    <ScrollView contentContainerStyle={homePageStyles.container}>
-      <View style={homePageStyles.billContainer}>
-        <Text style={homePageStyles.sectionTitle}>Your Bill</Text>
+    <ScrollView
+      contentContainerStyle={{
+        flexGrow: 1,
+        padding: 20,
+        backgroundColor: "#F0F4F7",
+      }}
+    >
+      {/* Total Due Card */}
+      <View
+        style={{
+          backgroundColor: "#007BFF",
+          borderRadius: 20,
+          padding: 25,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 6,
+          elevation: 6,
+          marginBottom: 15,
+        }}
+      >
+        <Text
+          style={{
+            color: "#fff",
+            fontSize: 20,
+            fontWeight: "600",
+            marginBottom: 5,
+          }}
+        >
+          Total Due
+        </Text>
+        <Text style={{ color: "#fff", fontSize: 36, fontWeight: "700" }}>
+          ${appointmentOverdue.toFixed(2)}
+        </Text>
 
-        <View style={homePageStyles.billDetails}>
-          <View style={homePageStyles.billRow}>
-            <Text style={homePageStyles.billLabel}>Total Due today:</Text>
-            <Text style={homePageStyles.billValue}>${appointmentOverdue}</Text>
-          </View>
-
-          <View style={homePageStyles.billDivider} />
-          <Text style={homePageStyles.billText}>
-            Appointment Due: ${state.bill.appointmentDue}
-          </Text>
-          <Text style={homePageStyles.billText}>
-            Cancellation Fee: ${state.bill.cancellationFee}
-          </Text>
-          <View style={homePageStyles.billDivider} />
-          <Text style={homePageStyles.billText}>
-            Total for all appointments: ${state.bill.totalDue}
-          </Text>
-        </View>
-
-        <View style={{ flexDirection: "column" }}>
-          <Text style={UserFormStyles.smallTitle}>How much to pay:</Text>
-          <TextInput
-            value={String(amountToPay)}
-            onChangeText={handleAmountToPay}
-            style={UserFormStyles.input}
-            keyboardType="numeric"
+        {/* Progress Bar */}
+        <View
+          style={{
+            marginTop: 20,
+            height: 15,
+            width: "100%",
+            backgroundColor: "#E0E0E0",
+            borderRadius: 10,
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              width: `${progressPercent}%`,
+              height: "100%",
+              backgroundColor: "#4CAF50",
+            }}
           />
-
-          {error && (
-            <Text style={{ alignSelf: "center", color: "red", marginBottom: 20 }}>
-              {error}
+        </View>
+        
+        {typeof progressPercent === "number" &&
+          !Number.isNaN(progressPercent) && (
+            <Text style={{ color: "#fff", marginTop: 5, fontWeight: "600" }}>
+              Paid: {progressPercent.toFixed(0)}%
             </Text>
           )}
+      </View>
 
-          {/* CLIENT ACTIONS */}
-          {state.account === "client" && (
-            <>
-              <Pressable
-                style={[
-                  homePageStyles.button,
-                  isProcessing && { backgroundColor: "#aaa" },
-                ]}
-                onPress={!isProcessing ? openPaymentSheet : null}
-              >
-                <Text style={homePageStyles.buttonText}>
-                  {isProcessing ? "Processing..." : "Pay Now"}
-                </Text>
-              </Pressable>
+      {/* Amount Input Card */}
+      <View
+        style={{
+          backgroundColor: "#fff",
+          borderRadius: 15,
+          padding: 20,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.1,
+          shadowRadius: 5,
+          elevation: 4,
+          marginBottom: 25,
+        }}
+      >
+        <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 10 }}>
+          Enter Amount to Pay
+        </Text>
+        <TextInput
+          value={String(amountToPay)}
+          onChangeText={handleAmountToPay}
+          keyboardType="numeric"
+          style={{
+            borderWidth: 1,
+            borderColor: "#ddd",
+            borderRadius: 12,
+            paddingHorizontal: 15,
+            paddingVertical: 12,
+            fontSize: 16,
+            backgroundColor: "#f9f9f9",
+          }}
+        />
+        {error && (
+          <Text
+            style={{ color: "#FF4D4F", textAlign: "center", marginTop: 10 }}
+          >
+            {error}
+          </Text>
+        )}
+      </View>
 
-              {appointmentId && (
-                <Pressable
-                  style={[
-                    homePageStyles.button,
-                    { backgroundColor: "#FF6B6B", marginTop: 10 },
-                  ]}
-                  onPress={handleCancelOrRefund}
-                >
-                  <Text style={homePageStyles.buttonText}>Cancel / Refund</Text>
-                </Pressable>
-              )}
-            </>
-          )}
+      {/* Customer Actions */}
+      {state.account === null && (
+        <>
+          <Pressable
+            onPress={!isProcessing ? openPaymentSheet : null}
+            style={{
+              backgroundColor: isProcessing ? "#aaa" : "#007BFF",
+              paddingVertical: 15,
+              borderRadius: 15,
+              alignItems: "center",
+              marginBottom: appointmentId ? 15 : 0,
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
+              {isProcessing ? "Processing..." : "Pay Now"}
+            </Text>
+          </Pressable>
 
-          {/* CLEANER ACTION */}
-          {state.account === "cleaner" && appointmentId && (
+          {appointmentId && (
             <Pressable
-              style={[
-                homePageStyles.button,
-                {
-                  backgroundColor: "#4CAF50",
-                  marginTop: 20,
-                  opacity: isCapturing ? 0.7 : 1,
-                },
-              ]}
-              onPress={!isCapturing ? handleCapturePayment : null}
+              onPress={handleCancelOrRefund}
+              style={{
+                backgroundColor: "#FF6B6B",
+                paddingVertical: 15,
+                borderRadius: 15,
+                alignItems: "center",
+              }}
             >
-              <Text style={homePageStyles.buttonText}>
-                {isCapturing ? "Releasing..." : "Release Payment"}
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
+                Cancel / Refund
               </Text>
             </Pressable>
           )}
-        </View>
+        </>
+      )}
+
+      {/* Payment History Section */}
+      <View
+        style={{
+          backgroundColor: "#fff",
+          borderRadius: 15,
+          padding: 20,
+          marginTop: 20,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 3 },
+          shadowOpacity: 0.1,
+          shadowRadius: 5,
+          elevation: 4,
+        }}
+      >
+        <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 15 }}>
+          Payment History
+        </Text>
+
+        {isLoadingHistory ? (
+          <ActivityIndicator size="small" color="#007BFF" />
+        ) : paymentHistory.length === 0 ? (
+          <Text style={{ color: "#757575", textAlign: "center" }}>
+            No payment history yet
+          </Text>
+        ) : (
+          paymentHistory.slice(0, 5).map((payment) => (
+            <View
+              key={payment.id}
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: "#E0E0E0",
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontWeight: "600" }}>
+                  {new Date(payment.date).toLocaleDateString()}
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginTop: 4,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: getStatusColor(payment.paymentStatus),
+                      marginRight: 6,
+                    }}
+                  />
+                  <Text style={{ color: "#757575", fontSize: 12 }}>
+                    {payment.paymentStatus || "pending"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontWeight: "700", fontSize: 16 }}>
+                ${payment.price}
+              </Text>
+              {payment.paymentStatus === "succeeded" && (
+                <Pressable
+                  onPress={() => handleCancelOrRefund(payment.id)}
+                  style={{ marginLeft: 10 }}
+                >
+                  <Text style={{ color: "#FF6B6B", fontSize: 12 }}>Refund</Text>
+                </Pressable>
+              )}
+            </View>
+          ))
+        )}
       </View>
     </ScrollView>
   );

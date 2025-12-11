@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, Text, View, Animated } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
 import homePageStyles from "../../services/styles/HomePageStyles";
 
@@ -21,13 +21,12 @@ const HomeTile = ({
 	trashLocation,
 }) => {
 	const navigate = useNavigate();
-
 	const handleOnPress = () => {
 		navigate(`/details/${id}`);
 	};
 	return (
 		<Pressable onPress={handleOnPress}>
-			<View style={homePageStyles.homeTileContainer}>
+			<View style={{...homePageStyles.homeTileContainer}}>
 				<Text style={homePageStyles.homeTileTitle}>{nickName}</Text>
 				<Text
 					style={{
