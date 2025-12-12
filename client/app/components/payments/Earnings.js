@@ -8,15 +8,21 @@ import {
   Text,
   View,
 } from "react-native";
+import StripeConnectOnboarding from "./StripeConnectOnboarding";
+import PayoutHistory from "./PayoutHistory";
 
 const API_BASE = "http://localhost:3000/api/v1";
 
 const Earnings = ({ state, dispatch }) => {
+  const [activeTab, setActiveTab] = useState("overview");
   const [earnings, setEarnings] = useState({
     totalEarnings: "0.00",
     pendingEarnings: "0.00",
     completedJobs: 0,
+    platformFeePercent: 10,
+    cleanerPercent: 90,
   });
+  const [accountStatus, setAccountStatus] = useState(null);
   const [assignedAppointments, setAssignedAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -37,6 +43,21 @@ const Earnings = ({ state, dispatch }) => {
     }
   };
 
+  const fetchAccountStatus = async () => {
+    if (!state?.currentUser?.id) return;
+    try {
+      const res = await fetch(
+        `${API_BASE}/stripe-connect/account-status/${state.currentUser.id}`
+      );
+      const data = await res.json();
+      if (res.ok) {
+        setAccountStatus(data);
+      }
+    } catch (err) {
+      console.error("Error fetching account status:", err);
+    }
+  };
+
   const fetchAssignedAppointments = async () => {
     if (!state?.currentUser?.id) return;
     try {
@@ -54,7 +75,7 @@ const Earnings = ({ state, dispatch }) => {
 
   const loadData = async () => {
     setIsLoading(true);
-    await Promise.all([fetchEarnings(), fetchAssignedAppointments()]);
+    await Promise.all([fetchEarnings(), fetchAccountStatus(), fetchAssignedAppointments()]);
     setIsLoading(false);
   };
 
@@ -102,6 +123,14 @@ const Earnings = ({ state, dispatch }) => {
     return { text: "Pending Payment", color: "#FFC107" };
   };
 
+  // Calculate cleaner's 90% share for display
+  const calculateCleanerShare = (price, numCleaners = 1) => {
+    const gross = parseFloat(price) || 0;
+    const perCleaner = gross / numCleaners;
+    const cleanerShare = perCleaner * 0.9; // 90%
+    return cleanerShare.toFixed(2);
+  };
+
   if (isLoading) {
     return (
       <View
@@ -118,7 +147,19 @@ const Earnings = ({ state, dispatch }) => {
     );
   }
 
-  return (
+  // Render tab content
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case "account":
+        return <StripeConnectOnboarding state={state} dispatch={dispatch} />;
+      case "history":
+        return <PayoutHistory state={state} dispatch={dispatch} />;
+      default:
+        return renderOverview();
+    }
+  };
+
+  const renderOverview = () => (
     <ScrollView
       contentContainerStyle={{
         flexGrow: 1,
@@ -129,6 +170,28 @@ const Earnings = ({ state, dispatch }) => {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
+      {/* Account Status Banner */}
+      {accountStatus && !accountStatus.onboardingComplete && (
+        <Pressable
+          onPress={() => setActiveTab("account")}
+          style={{
+            backgroundColor: "#FFF3E0",
+            borderRadius: 10,
+            padding: 15,
+            marginBottom: 15,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "#E65100", flex: 1, fontWeight: "500" }}>
+            {accountStatus.hasAccount
+              ? "Complete your account setup to receive payouts"
+              : "Set up your payment account to receive earnings"}
+          </Text>
+          <Text style={{ color: "#E65100", fontWeight: "700" }}>→</Text>
+        </Pressable>
+      )}
+
       {/* Total Earnings Card */}
       <View
         style={{
@@ -151,7 +214,7 @@ const Earnings = ({ state, dispatch }) => {
             marginBottom: 5,
           }}
         >
-          Total Earnings
+          Total Earnings (90%)
         </Text>
         <Text style={{ color: "#fff", fontSize: 36, fontWeight: "700" }}>
           ${earnings.totalEarnings}
@@ -172,7 +235,7 @@ const Earnings = ({ state, dispatch }) => {
           shadowOpacity: 0.2,
           shadowRadius: 6,
           elevation: 6,
-          marginBottom: 20,
+          marginBottom: 15,
         }}
       >
         <Text
@@ -189,7 +252,23 @@ const Earnings = ({ state, dispatch }) => {
           ${earnings.pendingEarnings}
         </Text>
         <Text style={{ color: "rgba(255,255,255,0.8)", marginTop: 5 }}>
-          Jobs in progress
+          Jobs in progress (you'll receive 90%)
+        </Text>
+      </View>
+
+      {/* Earnings Info */}
+      <View
+        style={{
+          backgroundColor: "#E3F2FD",
+          borderRadius: 10,
+          padding: 15,
+          marginBottom: 20,
+        }}
+      >
+        <Text style={{ color: "#1565C0", fontSize: 13, lineHeight: 18 }}>
+          You receive 90% of each job. The 10% platform fee covers payment
+          processing and app maintenance. Payouts are automatic when you mark
+          jobs complete.
         </Text>
       </View>
 
@@ -217,6 +296,8 @@ const Earnings = ({ state, dispatch }) => {
         ) : (
           assignedAppointments.map((appt) => {
             const status = getStatusBadge(appt);
+            const numCleaners = appt.employeesAssigned?.length || 1;
+            const yourShare = calculateCleanerShare(appt.price, numCleaners);
             return (
               <View
                 key={appt.id}
@@ -269,18 +350,29 @@ const Earnings = ({ state, dispatch }) => {
                       </View>
                     </View>
                   </View>
-                  <Text style={{ fontWeight: "700", fontSize: 18 }}>
-                    ${appt.price}
-                  </Text>
+                  <View style={{ alignItems: "flex-end" }}>
+                    <Text style={{ fontWeight: "700", fontSize: 18, color: "#4CAF50" }}>
+                      ${yourShare}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: "#757575" }}>
+                      your 90%
+                    </Text>
+                  </View>
                 </View>
+
+                {numCleaners > 1 && (
+                  <Text style={{ fontSize: 11, color: "#757575", marginTop: 8 }}>
+                    Split between {numCleaners} cleaners (Job total: ${appt.price})
+                  </Text>
+                )}
 
                 {/* Complete Job Button */}
                 {appt.paid && !appt.completed && (
                   <Pressable
                     onPress={() => handleCapturePayment(appt.id)}
-                    disabled={isCapturing}
+                    disabled={isCapturing || !accountStatus?.onboardingComplete}
                     style={{
-                      backgroundColor: isCapturing ? "#aaa" : "#4CAF50",
+                      backgroundColor: isCapturing || !accountStatus?.onboardingComplete ? "#aaa" : "#4CAF50",
                       paddingVertical: 12,
                       borderRadius: 10,
                       alignItems: "center",
@@ -290,7 +382,15 @@ const Earnings = ({ state, dispatch }) => {
                     <Text
                       style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}
                     >
-                      {isCapturing ? "Processing..." : "Mark Complete"}
+                      {isCapturing ? "Processing..." : "Mark Complete & Get Paid"}
+                    </Text>
+                  </Pressable>
+                )}
+
+                {appt.paid && !appt.completed && !accountStatus?.onboardingComplete && (
+                  <Pressable onPress={() => setActiveTab("account")}>
+                    <Text style={{ color: "#E65100", fontSize: 12, textAlign: "center", marginTop: 8 }}>
+                      Set up payment account first →
                     </Text>
                   </Pressable>
                 )}
@@ -300,6 +400,52 @@ const Earnings = ({ state, dispatch }) => {
         )}
       </View>
     </ScrollView>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#F0F4F7" }}>
+      {/* Tab Navigation */}
+      <View
+        style={{
+          flexDirection: "row",
+          backgroundColor: "#fff",
+          paddingHorizontal: 10,
+          paddingTop: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: "#E0E0E0",
+        }}
+      >
+        {[
+          { key: "overview", label: "Overview" },
+          { key: "history", label: "Payouts" },
+          { key: "account", label: "Account" },
+        ].map((tab) => (
+          <Pressable
+            key={tab.key}
+            onPress={() => setActiveTab(tab.key)}
+            style={{
+              flex: 1,
+              paddingVertical: 12,
+              borderBottomWidth: 3,
+              borderBottomColor: activeTab === tab.key ? "#007BFF" : "transparent",
+            }}
+          >
+            <Text
+              style={{
+                textAlign: "center",
+                fontWeight: activeTab === tab.key ? "700" : "500",
+                color: activeTab === tab.key ? "#007BFF" : "#757575",
+              }}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Tab Content */}
+      {renderTabContent()}
+    </View>
   );
 };
 
