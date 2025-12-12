@@ -11,6 +11,7 @@ import homePageStyles from "../services/styles/HomePageStyles";
 import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
 import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
 import ReviewsOverview from "./reviews/ReviewsOverview";
+import GetHelpButton from "./messaging/GetHelpButton";
 
 const HomePage = ({ state, dispatch }) => {
   const [redirect, setRedirect] = useState(false);
@@ -202,6 +203,13 @@ const HomePage = ({ state, dispatch }) => {
           {todaysAppointment}
           {nextAppointment}
           <ReviewsOverview state={state} dispatch={dispatch} />
+          {/* Get Help Button for cleaners */}
+          <View style={{ marginTop: 20, alignItems: "center" }}>
+            <Text style={{ fontSize: 14, color: "#64748b", marginBottom: 10, textAlign: "center" }}>
+              Need assistance with a booking or have feedback?
+            </Text>
+            <GetHelpButton token={state.currentUser.token} />
+          </View>
         </View>
       ) : (
         <View style={{ flexDirection: "column" }}>
@@ -246,6 +254,17 @@ const HomePage = ({ state, dispatch }) => {
             <Text style={homePageStyles.smallTitle}>Cancellation Policy:</Text>
             <Text style={homePageStyles.information}>{cleaningCompany.cancellationPolicy.description}</Text>
           </View>
+
+          {/* Get Help Button for homeowners - only show when logged in */}
+          {state.currentUser.token && state.account !== "manager1" && (
+            <View style={{ ...cardStyle, alignItems: "center", backgroundColor: "#f0f9ff" }}>
+              <Text style={{ ...homePageStyles.smallTitle, marginBottom: 8 }}>Need Help?</Text>
+              <Text style={{ fontSize: 14, color: "#64748b", marginBottom: 16, textAlign: "center" }}>
+                Have questions about your booking, cleaning service, or want to provide feedback?
+              </Text>
+              <GetHelpButton token={state.currentUser.token} />
+            </View>
+          )}
         </View>
       )}
     </ScrollView>

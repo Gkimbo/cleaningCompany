@@ -293,7 +293,7 @@ const Bill = ({ state, dispatch }) => {
               paddingVertical: 15,
               borderRadius: 15,
               alignItems: "center",
-              marginBottom: appointmentId ? 15 : 0,
+              marginBottom: selectedAppointment ? 15 : 0,
             }}
           >
             <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>
@@ -301,9 +301,9 @@ const Bill = ({ state, dispatch }) => {
             </Text>
           </Pressable>
 
-          {appointmentId && (
+          {selectedAppointment && (
             <Pressable
-              onPress={handleCancelOrRefund}
+              onPress={() => handleCancelOrRefund(selectedAppointment)}
               style={{
                 backgroundColor: "#FF6B6B",
                 paddingVertical: 15,
