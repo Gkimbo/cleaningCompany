@@ -113,6 +113,7 @@ const Bill = ({ state, dispatch }) => {
       paymentIntentClientSecret: clientSecret,
       merchantDisplayName: "Kleanr Inc.",
       allowsDelayedPaymentMethods: true,
+      returnURL: "kleanr://stripe-redirect",
     });
     if (initError) {
       Alert.alert("Error", initError.message);
