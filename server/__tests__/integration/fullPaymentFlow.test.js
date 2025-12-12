@@ -88,6 +88,15 @@ jest.mock("../../models", () => ({
     }),
   },
   UserBills: {},
+  Payment: {
+    create: jest.fn().mockResolvedValue({ id: 1 }),
+    generateTransactionId: jest.fn(() => `txn_test_${Date.now()}`),
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  Payout: {
+    findByPk: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
+  },
 }));
 
 jest.mock("../../services/sendNotifications/EmailClass", () => ({

@@ -41,6 +41,10 @@ jest.mock("../../models", () => ({
   UserReviews: {
     findAll: jest.fn(),
   },
+  Payout: {
+    findOne: jest.fn(),
+    create: jest.fn().mockResolvedValue({ id: 1 }),
+  },
 }));
 
 // Mock services
@@ -306,6 +310,8 @@ describe("Appointment Routes", () => {
 
   describe("PATCH /approve-request", () => {
     it("should approve a cleaning request", async () => {
+      const { Payout } = require("../../models");
+
       UserPendingRequests.findOne.mockResolvedValue({
         dataValues: { employeeId: 2, appointmentId: 1 },
         destroy: jest.fn().mockResolvedValue(true),
@@ -314,9 +320,12 @@ describe("Appointment Routes", () => {
       UserCleanerAppointments.create.mockResolvedValue({ id: 1 });
 
       UserAppointments.findOne.mockResolvedValue({
-        dataValues: { employeesAssigned: [] },
+        dataValues: { employeesAssigned: [], price: "150" },
         update: jest.fn().mockResolvedValue(true),
       });
+
+      Payout.findOne.mockResolvedValue(null); // No existing payout
+      Payout.create.mockResolvedValue({ id: 1 });
 
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")

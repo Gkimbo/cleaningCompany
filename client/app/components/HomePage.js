@@ -12,6 +12,7 @@ import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
 import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
 import ReviewsOverview from "./reviews/ReviewsOverview";
 import GetHelpButton from "./messaging/GetHelpButton";
+import TaxFormsSection from "./tax/TaxFormsSection";
 
 const HomePage = ({ state, dispatch }) => {
   const [redirect, setRedirect] = useState(false);
@@ -210,6 +211,8 @@ const HomePage = ({ state, dispatch }) => {
             </Text>
             <GetHelpButton token={state.currentUser.token} />
           </View>
+          {/* Tax Forms Section for cleaners */}
+          <TaxFormsSection state={state} />
         </View>
       ) : (
         <View style={{ flexDirection: "column" }}>
@@ -265,6 +268,8 @@ const HomePage = ({ state, dispatch }) => {
               <GetHelpButton token={state.currentUser.token} />
             </View>
           )}
+          {/* Tax Forms Section for homeowners and managers */}
+          {state.currentUser.token && <TaxFormsSection state={state} />}
         </View>
       )}
     </ScrollView>

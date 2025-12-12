@@ -57,7 +57,12 @@ const {
   UserAppointments,
   StripeConnectAccount,
   Payout,
+  PlatformEarnings,
+  Payment,
 } = require("../../../models");
+
+// Import services
+const PlatformTaxService = require("../../../services/PlatformTaxService");
 
 const stripeConnectRouter = express.Router();
 
@@ -823,6 +828,24 @@ async function processCleanerPayout(appointment, cleanerId, totalCleaners) {
       status: PAYOUT_STATUS.COMPLETED,
       completedAt: new Date(),
     });
+
+    // Record platform earnings for tax purposes
+    try {
+      await PlatformTaxService.recordPlatformEarnings({
+        appointmentId: appointment.id,
+        paymentId: null, // Could be linked if we have the Payment record
+        payoutId: payout.id,
+        customerId: appointment.userId,
+        cleanerId: parseInt(cleanerId),
+        grossServiceAmount: perCleanerGross,
+        platformFeeAmount: platformFee,
+        stripeFeeAmount: 0, // Stripe fees handled separately
+      });
+      console.log(`[StripeConnect] Platform earnings recorded: $${(platformFee / 100).toFixed(2)} for appointment ${appointment.id}`);
+    } catch (earningsError) {
+      // Log but don't fail the payout
+      console.error(`[StripeConnect] Failed to record platform earnings:`, earningsError.message);
+    }
 
     console.log(`[StripeConnect] Transfer ${transfer.id} completed for cleaner ${cleanerId}: $${(netAmount / 100).toFixed(2)}`);
 

@@ -26,6 +26,7 @@ const {
   Payout,
 } = require("../../../models");
 const TaxDocumentService = require("../../../services/TaxDocumentService");
+const PlatformTaxService = require("../../../services/PlatformTaxService");
 
 const taxRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -812,6 +813,211 @@ taxRouter.get("/deadlines/:year", async (req, res) => {
 
   const deadlines = TaxDocumentService.getTaxDeadlines(taxYear);
   return res.json(deadlines);
+});
+
+// ============================================================================
+// PLATFORM/COMPANY TAX ROUTES
+// ============================================================================
+
+/**
+ * GET /platform/income-summary/:year
+ * Get annual income summary for the platform/company (admin endpoint)
+ */
+taxRouter.get("/platform/income-summary/:year", async (req, res) => {
+  const { year } = req.params;
+  const taxYear = parseInt(year);
+
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > new Date().getFullYear()) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  try {
+    const summary = await PlatformTaxService.getAnnualIncomeSummary(taxYear);
+    return res.json(summary);
+  } catch (error) {
+    console.error("[Tax] Error fetching platform income summary:", error);
+    return res.status(500).json({
+      error: "Failed to fetch income summary",
+      code: "FETCH_FAILED",
+    });
+  }
+});
+
+/**
+ * GET /platform/quarterly-tax/:year/:quarter
+ * Get quarterly estimated tax calculation (admin endpoint)
+ */
+taxRouter.get("/platform/quarterly-tax/:year/:quarter", async (req, res) => {
+  const { year, quarter } = req.params;
+  const taxYear = parseInt(year);
+  const taxQuarter = parseInt(quarter);
+
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > new Date().getFullYear()) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  if (isNaN(taxQuarter) || taxQuarter < 1 || taxQuarter > 4) {
+    return res.status(400).json({
+      error: "Invalid quarter (must be 1-4)",
+      code: "INVALID_QUARTER",
+    });
+  }
+
+  try {
+    const taxData = await PlatformTaxService.calculateQuarterlyEstimatedTax(taxYear, taxQuarter);
+    return res.json(taxData);
+  } catch (error) {
+    console.error("[Tax] Error calculating quarterly tax:", error);
+    return res.status(500).json({
+      error: "Failed to calculate quarterly tax",
+      code: "CALCULATION_FAILED",
+    });
+  }
+});
+
+/**
+ * GET /platform/schedule-c/:year
+ * Generate Schedule C data for tax filing (admin endpoint)
+ */
+taxRouter.get("/platform/schedule-c/:year", async (req, res) => {
+  const { year } = req.params;
+  const taxYear = parseInt(year);
+
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > new Date().getFullYear()) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  try {
+    const scheduleCData = await PlatformTaxService.generateScheduleCData(taxYear);
+    return res.json(scheduleCData);
+  } catch (error) {
+    console.error("[Tax] Error generating Schedule C:", error);
+    return res.status(500).json({
+      error: "Failed to generate Schedule C data",
+      code: "GENERATE_FAILED",
+    });
+  }
+});
+
+/**
+ * GET /platform/1099-k-expectation/:year
+ * Check if company should expect a 1099-K from Stripe (admin endpoint)
+ */
+taxRouter.get("/platform/1099-k-expectation/:year", async (req, res) => {
+  const { year } = req.params;
+  const taxYear = parseInt(year);
+
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > new Date().getFullYear()) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  try {
+    const expectation = await PlatformTaxService.generate1099KExpectation(taxYear);
+    return res.json(expectation);
+  } catch (error) {
+    console.error("[Tax] Error checking 1099-K expectation:", error);
+    return res.status(500).json({
+      error: "Failed to check 1099-K expectation",
+      code: "CHECK_FAILED",
+    });
+  }
+});
+
+/**
+ * GET /platform/deadlines/:year
+ * Get company tax filing deadlines (admin endpoint)
+ */
+taxRouter.get("/platform/deadlines/:year", async (req, res) => {
+  const { year } = req.params;
+  const taxYear = parseInt(year);
+
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > 2100) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  try {
+    const deadlines = PlatformTaxService.getTaxDeadlines(taxYear);
+    return res.json(deadlines);
+  } catch (error) {
+    console.error("[Tax] Error fetching platform deadlines:", error);
+    return res.status(500).json({
+      error: "Failed to fetch deadlines",
+      code: "FETCH_FAILED",
+    });
+  }
+});
+
+/**
+ * GET /platform/comprehensive-report/:year
+ * Get comprehensive tax report for the year (admin endpoint)
+ */
+taxRouter.get("/platform/comprehensive-report/:year", async (req, res) => {
+  const { year } = req.params;
+  const taxYear = parseInt(year);
+
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > new Date().getFullYear()) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  try {
+    const report = await PlatformTaxService.getComprehensiveTaxReport(taxYear);
+    return res.json(report);
+  } catch (error) {
+    console.error("[Tax] Error generating comprehensive report:", error);
+    return res.status(500).json({
+      error: "Failed to generate comprehensive report",
+      code: "GENERATE_FAILED",
+    });
+  }
+});
+
+/**
+ * GET /platform/monthly-breakdown/:year
+ * Get monthly earnings breakdown for the year (admin endpoint)
+ */
+taxRouter.get("/platform/monthly-breakdown/:year", async (req, res) => {
+  const { year } = req.params;
+  const taxYear = parseInt(year);
+
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > new Date().getFullYear()) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  try {
+    const { PlatformEarnings } = require("../../../models");
+    const breakdown = await PlatformEarnings.getMonthlyBreakdown(taxYear);
+    return res.json({
+      taxYear,
+      months: breakdown,
+    });
+  } catch (error) {
+    console.error("[Tax] Error fetching monthly breakdown:", error);
+    return res.status(500).json({
+      error: "Failed to fetch monthly breakdown",
+      code: "FETCH_FAILED",
+    });
+  }
 });
 
 module.exports = taxRouter;
