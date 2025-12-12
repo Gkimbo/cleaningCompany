@@ -248,7 +248,7 @@ Kleanr Support Team`,
           pass: process.env.EMAIL_PASS,
         },
       });
-      
+
       const formattedDate = (dateString) => {
         const options = {
           weekday: "long",
@@ -269,7 +269,7 @@ Kleanr Support Team`,
 A cleaner has removed their request to clean your home on ${formattedDate(appointmentDate)}.
 You do not need to do anything at this time.
 
-Best regards,  
+Best regards,
 Kleanr Support Team`,
       };
 
@@ -278,6 +278,80 @@ Kleanr Support Team`,
       return "✅ Email sent successfully:", info.response;
     } catch (error) {
       console.error("❌ Error sending email:", error);
+    }
+  }
+
+  static async sendNewMessageNotification(email, userName, senderName, messagePreview) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const truncatedMessage = messagePreview.length > 100
+        ? messagePreview.substring(0, 100) + '...'
+        : messagePreview;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "DO NOT REPLY: New Message Notification (Automated Message)",
+        text: `Dear ${userName},
+
+You have received a new message from ${senderName}:
+
+"${truncatedMessage}"
+
+Please log into the Kleanr app to view and respond to this message.
+
+Best regards,
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Message notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending message notification email:", error);
+    }
+  }
+
+  static async sendBroadcastNotification(email, userName, title, content) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `DO NOT REPLY: ${title} (Automated Message)`,
+        text: `Dear ${userName},
+
+${content}
+
+Please log into the Kleanr app for more details.
+
+Best regards,
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Broadcast email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending broadcast email:", error);
     }
   }
 }

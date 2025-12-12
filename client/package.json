@@ -47,7 +47,8 @@
     "react-native-screens": "~4.16.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
-    "react-router-native": "^6.30.0"
+    "react-router-native": "^6.30.0",
+    "socket.io-client": "^4.7.2"
   },
   "devDependencies": {
     "@testing-library/react-native": "^12.4.3",

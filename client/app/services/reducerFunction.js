@@ -114,6 +114,60 @@ const reducer = (state, action) => {
           totalDue: state.bill.totalDue - action.payload,
         },
       };
+    // Messaging actions
+    case "SET_CONVERSATIONS":
+      return {
+        ...state,
+        conversations: action.payload,
+      };
+    case "ADD_CONVERSATION":
+      return {
+        ...state,
+        conversations: [action.payload, ...state.conversations],
+      };
+    case "UPDATE_CONVERSATION":
+      return {
+        ...state,
+        conversations: state.conversations.map((conv) =>
+          conv.conversationId === action.payload.conversationId
+            ? { ...conv, ...action.payload }
+            : conv
+        ),
+      };
+    case "SET_CURRENT_MESSAGES":
+      return {
+        ...state,
+        currentMessages: action.payload,
+      };
+    case "ADD_MESSAGE":
+      return {
+        ...state,
+        currentMessages: [...state.currentMessages, action.payload],
+      };
+    case "SET_UNREAD_COUNT":
+      return {
+        ...state,
+        unreadCount: action.payload,
+      };
+    case "INCREMENT_UNREAD":
+      return {
+        ...state,
+        unreadCount: state.unreadCount + 1,
+      };
+    case "DECREMENT_UNREAD":
+      return {
+        ...state,
+        unreadCount: Math.max(0, state.unreadCount - action.payload),
+      };
+    case "UPDATE_CONVERSATION_UNREAD":
+      return {
+        ...state,
+        conversations: state.conversations.map((conv) =>
+          conv.conversationId === action.payload.conversationId
+            ? { ...conv, unreadCount: action.payload.unreadCount }
+            : conv
+        ),
+      };
     default:
       throw new Error();
   }

@@ -3,6 +3,7 @@ import React, { useEffect, useReducer, useState } from "react";
 import { ActivityIndicator, SafeAreaView, Text, View } from "react-native";
 import { NativeRouter, Route, Routes } from "react-router-native";
 import { AuthProvider } from "./services/AuthContext";
+import { SocketProvider } from "./services/SocketContext";
 import getCurrentUser from "./services/fetchRequests/getCurrentUser";
 import reducer from "./services/reducerFunction";
 
@@ -40,6 +41,11 @@ import SignIn from "./components/userAuthentication/SignIn";
 import SignUp from "./components/userAuthentication/SignUp";
 import appStyles from "./services/styles/AppStyle";
 
+// Messaging components
+import ConversationList from "./components/messaging/ConversationList";
+import ChatScreen from "./components/messaging/ChatScreen";
+import BroadcastForm from "./components/messaging/BroadcastForm";
+
 const API_BASE = "http://localhost:3000/api/v1";
 
 export default function App() {
@@ -56,6 +62,10 @@ export default function App() {
     homes: [],
     appointments: [],
     requests: [],
+    // Messaging state
+    conversations: [],
+    currentMessages: [],
+    unreadCount: 0,
   });
 
   const fetchStripeConfig = async () => {
@@ -128,10 +138,11 @@ export default function App() {
         merchantIdentifier="merchant.com.kleanr.app"
         urlScheme="kleanr"
       >
-        <NativeRouter>
-          <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
-            <TopBar dispatch={dispatch} state={state} />
-            <Routes>
+        <SocketProvider token={state.currentUser.token}>
+          <NativeRouter>
+            <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
+              <TopBar dispatch={dispatch} state={state} />
+              <Routes>
               <Route
                 path="/"
                 element={<HomePage dispatch={dispatch} state={state} />}
@@ -299,9 +310,23 @@ export default function App() {
                 path="/assign-cleaner/:id"
                 element={<AppointmentDetailsPage state={state} />}
               />
+              {/* Messaging routes */}
+              <Route
+                path="/messages"
+                element={<ConversationList state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/messages/:conversationId"
+                element={<ChatScreen state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/messages/broadcast"
+                element={<BroadcastForm state={state} />}
+              />
             </Routes>
-          </SafeAreaView>
-        </NativeRouter>
+            </SafeAreaView>
+          </NativeRouter>
+        </SocketProvider>
       </StripeProvider>
     </AuthProvider>
   );

@@ -26,6 +26,7 @@ import SeeAllAppointments from "./SeeAllAppointmentsButton";
 import SignOutButton from "./SignoutButton";
 import UnassignedAppointmentsButton from "./UnassignedAppointmentsButton";
 import ViewApplicationsButton from "./ViewApplicationsButton";
+import MessagesButton from "../messaging/MessagesButton";
 
 
 const TopBar = ({ dispatch, state }) => {
@@ -62,6 +63,7 @@ const TopBar = ({ dispatch, state }) => {
             <Text style={styles.brand}>Kleanr</Text>
 
             <View style={styles.rightSection}>
+              <MessagesButton state={state} dispatch={dispatch} />
               <HomeButton />
               <Pressable
                 style={({ pressed }) => [
