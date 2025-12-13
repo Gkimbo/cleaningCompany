@@ -14,6 +14,7 @@ const {
   Payout,
   StripeConnectAccount,
   Payment,
+  JobPhoto,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
@@ -508,10 +509,11 @@ paymentRouter.post("/capture-payment", async (req, res) => {
  * ------------------------------------------------------
  * Mark Job Complete & Process Payouts
  * Called when cleaner marks job as done (payment already captured)
+ * Requires before AND after photos to be uploaded first
  * ------------------------------------------------------
  */
 paymentRouter.post("/complete-job", async (req, res) => {
-  const { appointmentId } = req.body;
+  const { appointmentId, cleanerId } = req.body;
 
   try {
     const appointment = await UserAppointments.findByPk(appointmentId);
@@ -524,6 +526,43 @@ paymentRouter.post("/complete-job", async (req, res) => {
     if (appointment.completed)
       return res.status(400).json({ error: "Job already marked as complete" });
 
+    // Verify photos have been uploaded
+    const cleanerIdToCheck = cleanerId || (appointment.employeesAssigned && appointment.employeesAssigned[0]);
+
+    if (!cleanerIdToCheck) {
+      return res.status(400).json({ error: "No cleaner assigned to this job" });
+    }
+
+    const beforePhotos = await JobPhoto.count({
+      where: {
+        appointmentId,
+        cleanerId: cleanerIdToCheck,
+        photoType: "before"
+      },
+    });
+
+    const afterPhotos = await JobPhoto.count({
+      where: {
+        appointmentId,
+        cleanerId: cleanerIdToCheck,
+        photoType: "after"
+      },
+    });
+
+    if (beforePhotos === 0) {
+      return res.status(400).json({
+        error: "Before photos are required to complete the job",
+        missingPhotos: "before"
+      });
+    }
+
+    if (afterPhotos === 0) {
+      return res.status(400).json({
+        error: "After photos are required to complete the job",
+        missingPhotos: "after"
+      });
+    }
+
     // Mark as completed
     await appointment.update({ completed: true });
 
@@ -533,7 +572,11 @@ paymentRouter.post("/complete-job", async (req, res) => {
     return res.json({
       success: true,
       message: "Job completed and payouts processed",
-      payoutResults
+      payoutResults,
+      photosVerified: {
+        before: beforePhotos,
+        after: afterPhotos
+      }
     });
   } catch (error) {
     console.error("Complete job error:", error);

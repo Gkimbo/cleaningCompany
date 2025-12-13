@@ -104,8 +104,9 @@ app.use(passport.session());
 // Stripe Webhook needs raw body
 app.use("/api/v1/payments/webhook", express.raw({ type: "application/json" }));
 
-// Normal JSON parsing for other routes
-app.use(express.json());
+// Normal JSON parsing for other routes (increased limit for photo uploads)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Routes
 app.use(rootRouter);
