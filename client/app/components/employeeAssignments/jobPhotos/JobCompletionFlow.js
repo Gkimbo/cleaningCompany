@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { UserContext } from "../../../context/UserContext";
 import JobPhotoCapture from "./JobPhotoCapture";
+import CleaningChecklist from "./CleaningChecklist";
 import styles from "./JobCompletionFlowStyles";
 
 const baseURL = "http://localhost:3000";
@@ -32,6 +33,11 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   });
   const [allPhotos, setAllPhotos] = useState({ before: [], after: [] });
   const [completing, setCompleting] = useState(false);
+  const [checklistProgress, setChecklistProgress] = useState({
+    percent: 0,
+    completed: 0,
+    total: 0,
+  });
 
   useEffect(() => {
     checkPhotoStatus();
@@ -92,6 +98,14 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   };
 
   const handleStartAfterPhotos = () => {
+    setCurrentStep(STEPS.AFTER_PHOTOS);
+  };
+
+  const handleChecklistProgress = (percent, completed, total) => {
+    setChecklistProgress({ percent, completed, total });
+  };
+
+  const handleChecklistComplete = () => {
     setCurrentStep(STEPS.AFTER_PHOTOS);
   };
 
@@ -194,67 +208,11 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   };
 
   const renderCleaningStep = () => (
-    <View style={styles.cleaningContainer}>
-      <View style={styles.cleaningHeader}>
-        <Text style={styles.cleaningTitle}>Time to Clean!</Text>
-        <Text style={styles.cleaningSubtitle}>
-          Before photos have been captured. Now complete the cleaning job.
-        </Text>
-      </View>
-
-      <View style={styles.jobDetailsCard}>
-        <Text style={styles.jobDetailsTitle}>Job Details</Text>
-        <View style={styles.jobDetailRow}>
-          <Text style={styles.jobDetailLabel}>Address:</Text>
-          <Text style={styles.jobDetailValue}>
-            {home?.address}, {home?.city}
-          </Text>
-        </View>
-        <View style={styles.jobDetailRow}>
-          <Text style={styles.jobDetailLabel}>Beds:</Text>
-          <Text style={styles.jobDetailValue}>{home?.numBeds}</Text>
-        </View>
-        <View style={styles.jobDetailRow}>
-          <Text style={styles.jobDetailLabel}>Baths:</Text>
-          <Text style={styles.jobDetailValue}>{home?.numBaths}</Text>
-        </View>
-        {appointment.bringSheets === "Yes" && (
-          <View style={styles.reminderBadge}>
-            <Text style={styles.reminderText}>Remember: Bring Sheets</Text>
-          </View>
-        )}
-        {appointment.bringTowels === "Yes" && (
-          <View style={styles.reminderBadge}>
-            <Text style={styles.reminderText}>Remember: Bring Towels</Text>
-          </View>
-        )}
-        {home?.specialNotes && (
-          <View style={styles.specialNotesContainer}>
-            <Text style={styles.specialNotesLabel}>Special Notes:</Text>
-            <Text style={styles.specialNotesText}>{home.specialNotes}</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.photoStatusCard}>
-        <Text style={styles.photoStatusTitle}>Photo Status</Text>
-        <View style={styles.photoStatusRow}>
-          <Text style={styles.photoStatusLabel}>Before Photos:</Text>
-          <Text style={styles.photoStatusValue}>
-            {photoStatus.beforePhotosCount} captured
-          </Text>
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={styles.finishedButton}
-        onPress={handleStartAfterPhotos}
-      >
-        <Text style={styles.finishedButtonText}>
-          Finished Cleaning - Take After Photos
-        </Text>
-      </TouchableOpacity>
-    </View>
+    <CleaningChecklist
+      home={home}
+      onChecklistComplete={handleChecklistComplete}
+      onProgressUpdate={handleChecklistProgress}
+    />
   );
 
   const renderReviewStep = () => (

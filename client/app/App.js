@@ -46,6 +46,14 @@ import ConversationList from "./components/messaging/ConversationList";
 import ChatScreen from "./components/messaging/ChatScreen";
 import BroadcastForm from "./components/messaging/BroadcastForm";
 
+// Onboarding components
+import {
+  WelcomeScreen,
+  SignUpWizard,
+  HomeSetupWizard,
+  QuickBookFlow,
+} from "./components/onboarding";
+
 const API_BASE = "http://localhost:3000/api/v1";
 
 export default function App() {
@@ -154,6 +162,22 @@ export default function App() {
               <Route
                 path="/sign-up"
                 element={<SignUp state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/welcome"
+                element={<WelcomeScreen />}
+              />
+              <Route
+                path="/get-started"
+                element={<SignUpWizard dispatch={dispatch} />}
+              />
+              <Route
+                path="/setup-home"
+                element={<HomeSetupWizard state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/quick-book/:homeId"
+                element={<QuickBookFlow state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/apply"
