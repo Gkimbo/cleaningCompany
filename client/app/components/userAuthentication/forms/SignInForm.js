@@ -76,17 +76,19 @@ const SignInForm = ({ state, dispatch }) => {
 			)}
 			<TextInput
 				mode="outlined"
+				label="Username"
 				value={userName}
 				onChangeText={setUserName}
-				placeholder="User Name"
+				placeholder="Enter your username"
 				style={formStyles.input}
 			/>
 			<TextInput
 				mode="outlined"
+				label="Password"
 				secureTextEntry={!showPassword}
 				value={password}
 				onChangeText={setPassword}
-				placeholder="Password"
+				placeholder="Enter your password"
 				right={
 					<TextInput.Icon
 						icon={showPassword ? "eye-off" : "eye"}
@@ -95,8 +97,8 @@ const SignInForm = ({ state, dispatch }) => {
 				}
 				style={formStyles.input}
 			/>
-			<Pressable onPress={onSubmit}>
-				<Text style={formStyles.button}>Sign In</Text>
+			<Pressable style={formStyles.button} onPress={onSubmit}>
+				<Text style={formStyles.buttonText}>Sign In</Text>
 			</Pressable>
 		</View>
 	);

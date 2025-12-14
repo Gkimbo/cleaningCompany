@@ -4,6 +4,7 @@ import { ActivityIndicator, SafeAreaView, Text, View } from "react-native";
 import { NativeRouter, Route, Routes } from "react-router-native";
 import { AuthProvider } from "./services/AuthContext";
 import { SocketProvider } from "./services/SocketContext";
+import { UserContext } from "./context/UserContext";
 import getCurrentUser from "./services/fetchRequests/getCurrentUser";
 import reducer from "./services/reducerFunction";
 
@@ -53,6 +54,9 @@ import {
   HomeSetupWizard,
   QuickBookFlow,
 } from "./components/onboarding";
+
+// Calendar Sync
+import { CalendarSyncManager } from "./components/calendarSync";
 
 const API_BASE = "http://localhost:3000/api/v1";
 
@@ -147,6 +151,7 @@ export default function App() {
         urlScheme="kleanr"
       >
         <SocketProvider token={state.currentUser.token}>
+          <UserContext.Provider value={{ currentUser: state.currentUser }}>
           <NativeRouter>
             <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
               <TopBar dispatch={dispatch} state={state} />
@@ -236,6 +241,10 @@ export default function App() {
               <Route
                 path="/edit-home/:id"
                 element={<EditHomeForm state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/calendar-sync/:homeId"
+                element={<CalendarSyncManager state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/appointments"
@@ -350,6 +359,7 @@ export default function App() {
             </Routes>
             </SafeAreaView>
           </NativeRouter>
+          </UserContext.Provider>
         </SocketProvider>
       </StripeProvider>
     </AuthProvider>

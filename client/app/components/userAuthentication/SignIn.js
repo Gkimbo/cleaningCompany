@@ -1,21 +1,18 @@
 import { useTheme } from "@react-navigation/native";
 import {
-	Image,
 	KeyboardAvoidingView,
 	ScrollView,
 	Text,
 	Pressable,
 	View,
+	Platform,
 } from "react-native";
 import * as Animatable from "react-native-animatable";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 
-import formStyles from "../../services/styles/FormStyle";
 import LandingPageStyles from "../../services/styles/LandingPageStyle";
 import SignInForm from "./forms/SignInForm";
-
-// const logoImage = require("../../assets/landing-photo.png");
 
 const SignIn = ({ state, dispatch }) => {
 	const { colors } = useTheme();
@@ -27,57 +24,44 @@ const SignIn = ({ state, dispatch }) => {
 
 	return (
 		<KeyboardAvoidingView
-			style={LandingPageStyles.container}
-			behavior="padding"
+			style={LandingPageStyles.authContainer}
+			behavior={Platform.OS === "ios" ? "padding" : "height"}
 		>
-			{/* <Image source={logoImage} style={LandingPageStyles.logo} /> */}
-			<View style={LandingPageStyles.header}>
+			<ScrollView
+				contentContainerStyle={LandingPageStyles.authScrollContent}
+				keyboardShouldPersistTaps="handled"
+				showsVerticalScrollIndicator={false}
+			>
 				<Animatable.View
-					style={[
-						LandingPageStyles.footer,
-						{
-							backgroundColor: colors.background,
-						},
-					]}
-					animation="fadeInUpBig"
+					style={LandingPageStyles.authCard}
+					animation="fadeInUp"
+					duration={600}
 				>
-					<Text
-						style={[
-							LandingPageStyles.title,
-							{
-								color: colors.text,
-							},
-						]}
-					>
-						Sign In Here!
+					<Text style={LandingPageStyles.authTitle}>Welcome Back</Text>
+					<Text style={LandingPageStyles.authSubtitle}>
+						Sign in to your account
 					</Text>
-					<ScrollView contentContainerStyle={formStyles.container}>
-						<SignInForm state={state} dispatch={dispatch} />
-						<Text
-							style={LandingPageStyles.text}
-						>{`Don't have and account?`}</Text>
+
+					<SignInForm state={state} dispatch={dispatch} />
+
+					<View style={LandingPageStyles.authFooter}>
+						<Text style={LandingPageStyles.authFooterText}>
+							Don't have an account?
+						</Text>
 						<Pressable onPress={handlePress}>
-							<View style={LandingPageStyles.buttonContainer}>
-								<Text style={LandingPageStyles.textSign}>Sign Up Here</Text>
-								<View
-									style={{
-										flexDirection: "row",
-										alignItems: "center",
-										marginLeft: 10,
-									}}
-								>
-									<Icon
-										name="arrow-right"
-										size={20}
-										color="black"
-										style={{ marginRight: 10 }}
-									/>
-								</View>
+							<View style={LandingPageStyles.authLinkButton}>
+								<Text style={LandingPageStyles.authLinkText}>Sign Up</Text>
+								<Icon
+									name="arrow-right"
+									size={14}
+									color="#0d9488"
+									style={{ marginLeft: 6 }}
+								/>
 							</View>
 						</Pressable>
-					</ScrollView>
+					</View>
 				</Animatable.View>
-			</View>
+			</ScrollView>
 		</KeyboardAvoidingView>
 	);
 };

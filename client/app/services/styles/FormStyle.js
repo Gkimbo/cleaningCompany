@@ -57,16 +57,9 @@ const UserFormStyles = StyleSheet.create({
 
   // Standard input
   input: {
-    height: 52,
     width: "100%",
     backgroundColor: colors.neutral[0],
-    borderColor: colors.border.default,
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
 
   inputFocused: {
@@ -278,6 +271,23 @@ const UserFormStyles = StyleSheet.create({
 
   halfWidth: {
     flex: 1,
+  },
+
+  // Error container and text (used by auth forms)
+  errorContainer: {
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[200],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+
+  errorText: {
+    color: colors.error[600],
+    fontSize: typography.fontSize.sm,
+    textAlign: "center",
+    lineHeight: 20,
   },
 });
 

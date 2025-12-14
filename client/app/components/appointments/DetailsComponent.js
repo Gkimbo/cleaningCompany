@@ -192,6 +192,26 @@ const DetailsComponent = ({ state, dispatch }) => {
           <Text style={homePageStyles.homeTileContent}>
             {`Trash Location: ${homeDetails.trashLocation}`}
           </Text>
+
+          {/* Calendar Sync Button */}
+          <Pressable
+            style={{
+              marginTop: 16,
+              backgroundColor: "#4F46E5",
+              paddingVertical: 12,
+              paddingHorizontal: 20,
+              borderRadius: 8,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onPress={() => navigate(`/calendar-sync/${homeDetails.id}`)}
+          >
+            <Icon name="calendar" size={iconSize} color="white" style={{ marginRight: 8 }} />
+            <Text style={{ color: "white", fontWeight: "600", fontSize: 14 }}>
+              Connect Airbnb/VRBO Calendar
+            </Text>
+          </Pressable>
         </View>
 
         {/* Calendar Component */}

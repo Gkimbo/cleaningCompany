@@ -4,26 +4,24 @@ import { colors, spacing, radius, shadows, typography, screen, responsive } from
 const LandingPageStyles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
     backgroundColor: colors.primary[600],
   },
 
   header: {
-    flex: 2,
-    justifyContent: "center",
+    flex: 1,
+    justifyContent: "flex-end",
     alignItems: "center",
-    marginTop: responsive("30%", "15%", "10%"),
+    paddingBottom: spacing["3xl"],
   },
 
   footer: {
-    flex: 1,
+    flex: 3,
     backgroundColor: colors.neutral[0],
     borderTopLeftRadius: radius["3xl"],
     borderTopRightRadius: radius["3xl"],
     paddingVertical: spacing["3xl"],
-    paddingHorizontal: spacing.xl,
-    width: screen.height * 0.45,
+    paddingHorizontal: responsive(spacing.xl, spacing["3xl"], spacing["4xl"]),
+    width: "100%",
     ...shadows.lg,
   },
 
@@ -51,14 +49,14 @@ const LandingPageStyles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: typography.fontSize["3xl"],
     fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.xs,
-    alignSelf: "center",
+    marginBottom: spacing.lg,
+    textAlign: "center",
   },
 
   text: {
-    color: colors.text.tertiary,
-    marginTop: spacing.xs,
-    alignSelf: "center",
+    color: colors.text.secondary,
+    marginTop: spacing.xl,
+    textAlign: "center",
     fontSize: typography.fontSize.base,
   },
 
@@ -81,7 +79,12 @@ const LandingPageStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.md,
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    marginTop: spacing.md,
+    ...shadows.md,
   },
 
   signIn: {
@@ -97,7 +100,7 @@ const LandingPageStyles = StyleSheet.create({
 
   textSign: {
     color: colors.neutral[0],
-    fontWeight: typography.fontWeight.bold,
+    fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.base,
   },
 
@@ -159,6 +162,66 @@ const LandingPageStyles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
+  },
+
+  // Auth screens (SignIn/SignUp)
+  authContainer: {
+    flex: 1,
+    backgroundColor: colors.primary[600],
+  },
+
+  authScrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing["3xl"],
+  },
+
+  authCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius["2xl"],
+    paddingVertical: spacing["3xl"],
+    paddingHorizontal: spacing.xl,
+    ...shadows.xl,
+  },
+
+  authTitle: {
+    fontSize: typography.fontSize["3xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: spacing.sm,
+  },
+
+  authSubtitle: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing["2xl"],
+  },
+
+  authFooter: {
+    marginTop: spacing["2xl"],
+    alignItems: "center",
+  },
+
+  authFooterText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+
+  authLinkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+
+  authLinkText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
   },
 });
 
