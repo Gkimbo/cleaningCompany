@@ -219,14 +219,28 @@ appointmentRouter.post("/", async (req, res) => {
         const homeBeingScheduled = await UserHomes.findOne({
           where: { id: homeId },
         });
+        let bringSheets = date.bringSheets
+        let bringTowels = date.bringTowels
+        let paid = date.paid
+
+        if(!date.bringSheets){
+          bringSheets = "no"
+        }
+        if(!date.bringTowels){
+          bringTowels = "no"
+        }
+        if(!paid){
+          paid = false
+        }
+
         const newAppointment = await UserAppointments.create({
           userId,
           homeId,
           date: date.date,
           price: date.price,
-          paid: date.paid,
-          bringTowels: date.bringTowels,
-          bringSheets: date.bringSheets,
+          paid,
+          bringTowels,
+          bringSheets,
           keyPadCode,
           keyLocation,
           completed: false,

@@ -1,16 +1,16 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  ScrollView,
   Text,
   TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
+  View,
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
-import styles from "./OnboardingStyles";
 import { colors } from "../../services/styles/theme";
+import styles from "./OnboardingStyles";
 
 const QuickBookFlow = ({ state, dispatch }) => {
   const navigate = useNavigate();
@@ -146,7 +146,7 @@ const QuickBookFlow = ({ state, dispatch }) => {
       const infoObject = {
         dateArray: datesWithPrice,
         homeId: home.id,
-        token: user,
+        token: user.token,
         keyPadCode: home.keyPadCode,
         keyLocation: home.keyLocation,
       };

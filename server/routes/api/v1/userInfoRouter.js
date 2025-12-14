@@ -65,6 +65,7 @@ userInfoRouter.post("/home", async (req, res) => {
 		specialNotes,
 		timeToBeCompleted
 	} = req.body.home;
+	console.log(req)
 	try {
 		const decodedToken = jwt.verify(token, secretKey);
 		const userId = decodedToken.userId;

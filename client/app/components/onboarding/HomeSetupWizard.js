@@ -1,12 +1,12 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useContext, useState } from "react";
 import {
-  View,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
@@ -128,7 +128,7 @@ const HomeSetupWizard = ({ state, dispatch }) => {
     setIsLoading(true);
     try {
       const submitData = {
-        user: { token: user },
+        user: user,
         home: {
           nickName: homeData.nickName,
           address: homeData.address,
