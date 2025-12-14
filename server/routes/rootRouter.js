@@ -9,6 +9,10 @@ const applicationRouter = require("./api/v1/applicationRouter");
 const reviewsRouter = require("./api/v1/reviewsRouter");
 const paymentRouter = require("./api/v1/paymentRouter");
 const messageRouter = require("./api/v1/messageRouter");
+const stripeConnectRouter = require("./api/v1/stripeConnectRouter");
+const taxRouter = require("./api/v1/taxRouter");
+const jobPhotosRouter = require("./api/v1/jobPhotosRouter");
+const calendarSyncRouter = require("./api/v1/calendarSyncRouter");
 
 const rootRouter = new express.Router();
 
@@ -21,6 +25,10 @@ rootRouter.use("/api/v1/applications", applicationRouter);
 rootRouter.use("/api/v1/reviews", reviewsRouter);
 rootRouter.use("/api/v1/payments", paymentRouter);
 rootRouter.use("/api/v1/messages", messageRouter);
+rootRouter.use("/api/v1/stripe-connect", stripeConnectRouter);
+rootRouter.use("/api/v1/tax", taxRouter);
+rootRouter.use("/api/v1/job-photos", jobPhotosRouter);
+rootRouter.use("/api/v1/calendar-sync", calendarSyncRouter);
 
 rootRouter.use("/", clientRouter);
 

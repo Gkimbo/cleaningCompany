@@ -8,6 +8,7 @@ const {
   UserCleanerAppointments,
   UserPendingRequests,
   UserReviews,
+  Payout,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -218,14 +219,28 @@ appointmentRouter.post("/", async (req, res) => {
         const homeBeingScheduled = await UserHomes.findOne({
           where: { id: homeId },
         });
+        let bringSheets = date.bringSheets
+        let bringTowels = date.bringTowels
+        let paid = date.paid
+
+        if(!date.bringSheets){
+          bringSheets = "no"
+        }
+        if(!date.bringTowels){
+          bringTowels = "no"
+        }
+        if(!paid){
+          paid = false
+        }
+
         const newAppointment = await UserAppointments.create({
           userId,
           homeId,
           date: date.date,
           price: date.price,
-          paid: date.paid,
-          bringTowels: date.bringTowels,
-          bringSheets: date.bringSheets,
+          paid,
+          bringTowels,
+          bringSheets,
           keyPadCode,
           keyLocation,
           completed: false,
@@ -512,6 +527,52 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
         employeesAssigned: employees,
         hasBeenAssigned: true,
       });
+
+      // Create payout record for the approved cleaner
+      const cleanerId = request.dataValues.employeeId;
+      const appointmentId = request.dataValues.appointmentId;
+      const cleanerCount = employees.length;
+      const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+      const perCleanerGross = Math.round(priceInCents / cleanerCount);
+      const platformFee = Math.round(perCleanerGross * 0.10); // 10% platform fee
+      const netAmount = perCleanerGross - platformFee; // 90% to cleaner
+
+      // Check if payout record already exists
+      const existingPayout = await Payout.findOne({
+        where: { appointmentId, cleanerId },
+      });
+
+      if (!existingPayout) {
+        await Payout.create({
+          appointmentId,
+          cleanerId,
+          grossAmount: perCleanerGross,
+          platformFee,
+          netAmount,
+          status: "pending", // Will change to "held" when payment is captured
+        });
+      }
+
+      // Update existing payout records for other cleaners (recalculate split)
+      if (cleanerCount > 1) {
+        for (const empId of employees) {
+          if (String(empId) !== String(cleanerId)) {
+            const existingOtherPayout = await Payout.findOne({
+              where: { appointmentId, cleanerId: empId },
+            });
+            if (existingOtherPayout && existingOtherPayout.status === "pending") {
+              const updatedGross = Math.round(priceInCents / cleanerCount);
+              const updatedFee = Math.round(updatedGross * 0.10);
+              const updatedNet = updatedGross - updatedFee;
+              await existingOtherPayout.update({
+                grossAmount: updatedGross,
+                platformFee: updatedFee,
+                netAmount: updatedNet,
+              });
+            }
+          }
+        }
+      }
 
       await request.destroy();
 

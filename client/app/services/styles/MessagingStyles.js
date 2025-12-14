@@ -1,11 +1,11 @@
-import { Dimensions, StyleSheet } from "react-native";
-const { width, height } = Dimensions.get("window");
+import { StyleSheet } from "react-native";
+import { colors, spacing, radius, shadows, typography, screen, responsive } from "./theme";
 
 const messagingStyles = StyleSheet.create({
   // Main container
   container: {
     flex: 1,
-    backgroundColor: "#f0f4f8",
+    backgroundColor: colors.background.secondary,
   },
 
   // Header
@@ -13,258 +13,283 @@ const messagingStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "rgba(58, 141, 255, 0.15)",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.neutral[0],
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(58, 141, 255, 0.3)",
+    borderBottomColor: colors.border.light,
+    ...shadows.sm,
   },
+
   headerTitle: {
-    fontSize: width < 400 ? 18 : 22,
-    fontWeight: "bold",
-    color: "#1e3a8a",
+    fontSize: responsive(typography.fontSize.lg, typography.fontSize.xl, typography.fontSize["2xl"]),
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
 
   // Conversation list
   conversationList: {
     flex: 1,
-    paddingTop: 8,
+    paddingTop: spacing.sm,
   },
 
   // Conversation item (tile)
   conversationItem: {
     flexDirection: "row",
-    padding: 16,
-    marginHorizontal: 12,
-    marginVertical: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "rgba(58, 141, 255, 0.25)",
-    shadowColor: "#3a8dff",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    padding: spacing.lg,
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.xs,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    ...shadows.sm,
   },
+
   conversationItemUnread: {
-    backgroundColor: "rgba(58, 141, 255, 0.12)",
-    borderColor: "rgba(58, 141, 255, 0.4)",
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
   },
+
   conversationItemBroadcast: {
     borderLeftWidth: 4,
-    borderLeftColor: "#f59e0b",
+    borderLeftColor: colors.warning[500],
   },
 
   conversationContent: {
     flex: 1,
-    marginRight: 12,
+    marginRight: spacing.md,
   },
+
   conversationTitle: {
-    fontSize: width < 400 ? 14 : 16,
-    fontWeight: "600",
-    color: "#0f172a",
-    marginBottom: 4,
+    fontSize: responsive(typography.fontSize.sm, typography.fontSize.base, typography.fontSize.base),
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
   },
+
   conversationPreview: {
-    fontSize: width < 400 ? 12 : 14,
-    color: "#64748b",
-    numberOfLines: 2,
+    fontSize: responsive(typography.fontSize.xs, typography.fontSize.sm, typography.fontSize.sm),
+    color: colors.text.secondary,
   },
+
   conversationTime: {
-    fontSize: 11,
-    color: "#94a3b8",
-    marginTop: 4,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
   },
 
   // Unread badge
   unreadBadge: {
-    backgroundColor: "#ef4444",
-    borderRadius: 12,
+    backgroundColor: colors.error[500],
+    borderRadius: radius.full,
     minWidth: 24,
     height: 24,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.sm,
   },
+
   unreadBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "bold",
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
   },
 
   // Avatar/Icon
   avatarContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(58, 141, 255, 0.2)",
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[100],
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: spacing.md,
   },
+
   avatarText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#3a8dff",
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
   },
 
   // Chat screen
   chatContainer: {
     flex: 1,
-    backgroundColor: "#f0f4f8",
+    backgroundColor: colors.background.secondary,
   },
+
   chatHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "rgba(58, 141, 255, 0.15)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.neutral[0],
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(58, 141, 255, 0.3)",
+    borderBottomColor: colors.border.light,
+    ...shadows.sm,
   },
+
   chatHeaderTitle: {
     flex: 1,
-    fontSize: width < 400 ? 16 : 18,
-    fontWeight: "600",
-    color: "#1e3a8a",
-    marginLeft: 12,
+    fontSize: responsive(typography.fontSize.base, typography.fontSize.lg, typography.fontSize.lg),
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginLeft: spacing.md,
   },
 
   // Messages list
   messagesList: {
     flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
 
   // Message bubble
   messageBubble: {
-    maxWidth: "78%",
-    padding: 12,
-    borderRadius: 18,
-    marginVertical: 4,
+    maxWidth: "80%",
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    marginVertical: spacing.xs,
   },
+
   messageBubbleSent: {
-    backgroundColor: "#3a8dff",
+    backgroundColor: colors.primary[600],
     alignSelf: "flex-end",
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: radius.sm,
   },
+
   messageBubbleReceived: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.neutral[0],
     alignSelf: "flex-start",
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: radius.sm,
     borderWidth: 1,
-    borderColor: "rgba(58, 141, 255, 0.2)",
+    borderColor: colors.border.light,
   },
+
   messageBubbleBroadcast: {
-    backgroundColor: "#fef3c7",
+    backgroundColor: colors.warning[50],
     alignSelf: "center",
     maxWidth: "90%",
-    borderColor: "#f59e0b",
+    borderColor: colors.warning[300],
     borderWidth: 1,
+    borderRadius: radius.lg,
   },
 
   messageText: {
-    fontSize: width < 400 ? 14 : 15,
-    lineHeight: 20,
+    fontSize: typography.fontSize.base,
+    lineHeight: 22,
   },
+
   messageTextSent: {
-    color: "#ffffff",
+    color: colors.neutral[0],
   },
+
   messageTextReceived: {
-    color: "#0f172a",
+    color: colors.text.primary,
   },
 
   messageSender: {
-    fontSize: 11,
-    fontWeight: "600",
-    marginBottom: 4,
-    color: "#64748b",
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
+    color: colors.text.secondary,
   },
+
   messageTime: {
     fontSize: 10,
-    marginTop: 4,
+    marginTop: spacing.xs,
     alignSelf: "flex-end",
   },
+
   messageTimeSent: {
     color: "rgba(255, 255, 255, 0.7)",
   },
+
   messageTimeReceived: {
-    color: "#94a3b8",
+    color: colors.text.tertiary,
   },
 
   // Input area
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#ffffff",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.neutral[0],
     borderTopWidth: 1,
-    borderTopColor: "rgba(58, 141, 255, 0.2)",
+    borderTopColor: colors.border.light,
   },
+
   inputField: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: "#f0f4f8",
-    borderRadius: 20,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: "rgba(58, 141, 255, 0.3)",
-    fontSize: 15,
-    color: "#0f172a",
+    borderColor: colors.border.default,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
   },
+
   sendButton: {
-    marginLeft: 10,
-    backgroundColor: "#3a8dff",
-    borderRadius: 20,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    marginLeft: spacing.sm,
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     justifyContent: "center",
     alignItems: "center",
+    ...shadows.sm,
   },
+
   sendButtonDisabled: {
-    backgroundColor: "#94a3b8",
+    backgroundColor: colors.neutral[300],
   },
+
   sendButtonText: {
-    color: "#ffffff",
-    fontWeight: "600",
-    fontSize: 15,
+    color: colors.neutral[0],
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.base,
   },
 
   // Broadcast form
   broadcastContainer: {
     flex: 1,
-    padding: 16,
-    backgroundColor: "#f0f4f8",
+    padding: spacing.lg,
+    backgroundColor: colors.background.secondary,
   },
+
   broadcastTitle: {
-    fontSize: width < 400 ? 18 : 22,
-    fontWeight: "bold",
-    color: "#1e3a8a",
-    marginBottom: 20,
+    fontSize: responsive(typography.fontSize.lg, typography.fontSize.xl, typography.fontSize["2xl"]),
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xl,
     textAlign: "center",
   },
+
   broadcastLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#334155",
-    marginBottom: 8,
-    marginTop: 16,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.lg,
   },
+
   broadcastInput: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: "rgba(58, 141, 255, 0.3)",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: "#0f172a",
+    borderColor: colors.border.default,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
   },
+
   broadcastTextArea: {
     minHeight: 120,
     textAlignVertical: "top",
@@ -274,48 +299,48 @@ const messagingStyles = StyleSheet.create({
   audienceContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 8,
+    marginTop: spacing.sm,
+    gap: spacing.sm,
   },
+
   audienceOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: "#ffffff",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.xl,
+    backgroundColor: colors.neutral[0],
     borderWidth: 1.5,
-    borderColor: "rgba(58, 141, 255, 0.3)",
-    marginRight: 10,
-    marginBottom: 10,
+    borderColor: colors.border.default,
   },
+
   audienceOptionSelected: {
-    backgroundColor: "#3a8dff",
-    borderColor: "#3a8dff",
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
   },
+
   audienceOptionText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#334155",
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
   },
+
   audienceOptionTextSelected: {
-    color: "#ffffff",
+    color: colors.neutral[0],
   },
 
   // Broadcast button
   broadcastButton: {
-    backgroundColor: "#f59e0b",
-    borderRadius: 12,
-    paddingVertical: 14,
-    marginTop: 24,
+    backgroundColor: colors.warning[500],
+    borderRadius: radius.lg,
+    paddingVertical: spacing.lg,
+    marginTop: spacing.xl,
     alignItems: "center",
-    shadowColor: "#f59e0b",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    ...shadows.md,
   },
+
   broadcastButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "bold",
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
   },
 
   // Empty state
@@ -323,13 +348,14 @@ const messagingStyles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing["3xl"],
   },
+
   emptyText: {
-    fontSize: 16,
-    color: "#64748b",
+    fontSize: typography.fontSize.base,
+    color: colors.text.tertiary,
     textAlign: "center",
-    marginTop: 16,
+    marginTop: spacing.lg,
   },
 
   // Loading state
@@ -343,58 +369,63 @@ const messagingStyles = StyleSheet.create({
   messagesButtonContainer: {
     position: "relative",
   },
+
   messagesButton: {
-    padding: 8,
+    padding: spacing.sm,
   },
+
   navBadge: {
     position: "absolute",
     top: 0,
     right: 0,
-    backgroundColor: "#ef4444",
-    borderRadius: 10,
+    backgroundColor: colors.error[500],
+    borderRadius: radius.full,
     minWidth: 18,
     height: 18,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
   },
+
   navBadgeText: {
-    color: "#ffffff",
+    color: colors.neutral[0],
     fontSize: 10,
-    fontWeight: "bold",
+    fontWeight: typography.fontWeight.bold,
   },
 
   // Participants list
   participantsContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "rgba(58, 141, 255, 0.08)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.neutral[50],
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(58, 141, 255, 0.15)",
+    borderBottomColor: colors.border.light,
   },
+
   participantsText: {
-    fontSize: 12,
-    color: "#64748b",
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
   },
 
   // Date separator
   dateSeparator: {
     alignSelf: "center",
-    backgroundColor: "rgba(58, 141, 255, 0.1)",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginVertical: 12,
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    marginVertical: spacing.md,
   },
+
   dateSeparatorText: {
-    fontSize: 11,
-    color: "#64748b",
-    fontWeight: "500",
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
   },
 
   // Back button for chat
   backButton: {
-    padding: 8,
+    padding: spacing.sm,
   },
 });
 

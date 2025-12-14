@@ -12,6 +12,7 @@ require("dotenv").config();
 require("./passport-config");
 
 const rootRouter = require("./routes/rootRouter");
+const { startPeriodicSync } = require("./services/calendarSyncService");
 
 const clientURL = "http://localhost:19006";
 const secretKey = process.env.SESSION_SECRET;
@@ -104,8 +105,9 @@ app.use(passport.session());
 // Stripe Webhook needs raw body
 app.use("/api/v1/payments/webhook", express.raw({ type: "application/json" }));
 
-// Normal JSON parsing for other routes
-app.use(express.json());
+// Normal JSON parsing for other routes (increased limit for photo uploads)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Routes
 app.use(rootRouter);
@@ -113,4 +115,10 @@ app.use(rootRouter);
 // Start server (use http server for Socket.io)
 server.listen(port, () => {
 	console.log(`Server running on port ${port}`);
+
+	// Start periodic calendar sync (every hour)
+	// Only in non-test environment
+	if (process.env.NODE_ENV !== "test") {
+		startPeriodicSync(60 * 60 * 1000); // 1 hour
+	}
 });

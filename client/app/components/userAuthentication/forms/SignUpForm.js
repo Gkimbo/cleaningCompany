@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
-import { ScrollView, Text, Pressable, View } from "react-native";
+import { Text, Pressable, View } from "react-native";
 import { useNavigate } from "react-router-native";
 import { TextInput } from "react-native-paper";
 
@@ -81,7 +81,7 @@ const SignUpForm = ({ state, dispatch }) => {
 	}, [redirect]);
 
 	return (
-		<ScrollView contentContainerStyle={formStyles.container}>
+		<View>
 			{errors.length > 0 && (
 				<View style={formStyles.errorContainer}>
 					{errors.map((error, index) => (
@@ -94,17 +94,19 @@ const SignUpForm = ({ state, dispatch }) => {
 
 			<TextInput
 				mode="outlined"
-				placeholder="User Name"
+				label="Username"
+				placeholder="Enter your username"
 				style={formStyles.input}
 				value={userName}
 				onChangeText={setUserName}
 			/>
 			<TextInput
 				mode="outlined"
+				label="Password"
 				secureTextEntry={!showPassword}
 				value={password}
 				onChangeText={setPassword}
-				placeholder="Password"
+				placeholder="Enter your password"
 				right={
 					<TextInput.Icon
 						icon={showPassword ? "eye-off" : "eye"}
@@ -115,17 +117,19 @@ const SignUpForm = ({ state, dispatch }) => {
 			/>
 			<TextInput
 				mode="outlined"
-				placeholder="Email"
+				label="Email"
+				placeholder="Enter your email"
 				style={formStyles.input}
 				value={email}
 				onChangeText={setEmail}
 				keyboardType="email-address"
+				autoCapitalize="none"
 			/>
 
-			<Pressable onPress={onSubmit}>
-				<Text style={formStyles.button}>Register</Text>
+			<Pressable style={formStyles.button} onPress={onSubmit}>
+				<Text style={formStyles.buttonText}>Create Account</Text>
 			</Pressable>
-		</ScrollView>
+		</View>
 	);
 };
 

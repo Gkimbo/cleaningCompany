@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, Modal } from "react-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
+import JobCompletionFlow from "../jobPhotos/JobCompletionFlow";
+import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 
-const TodaysAppointment = ({ appointment }) => {
+const TodaysAppointment = ({ appointment, onJobCompleted }) => {
   const [home, setHome] = useState({
     address: "",
     city: "",
@@ -22,6 +24,7 @@ const TodaysAppointment = ({ appointment }) => {
     cleanersNeeded: "",
     timeToBeCompleted: "",
   });
+  const [showCompletionFlow, setShowCompletionFlow] = useState(false);
 
   const formatDate = (dateString) => {
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
@@ -37,70 +40,254 @@ const TodaysAppointment = ({ appointment }) => {
     });
   }, [appointment.homeId]);
 
+  const handleStartJob = () => {
+    setShowCompletionFlow(true);
+  };
+
+  const handleJobCompleted = (data) => {
+    setShowCompletionFlow(false);
+    if (onJobCompleted) {
+      onJobCompleted(data);
+    }
+  };
+
+  const handleCancelCompletion = () => {
+    setShowCompletionFlow(false);
+  };
+
   return (
-    <View style={styles.tileContainer}>
-      <Text style={styles.date}>{formatDate(appointment.date)}</Text>
-      <Text style={styles.location}>{home.address} - {home.city}</Text>
-      <Text style={styles.location}>{home.state}, {home.zipcode}</Text>
-      {home.keyPadCode && <Text style={styles.infoText}>Code to get in: {home.keyPadCode}</Text>}
-      {home.keyLocation && <Text style={styles.infoText}>Key Location: {home.keyLocation}</Text>}
-      <Text style={styles.infoText}>Contact: {home.contact}</Text>
-      <Text style={styles.infoText}>Beds: {home.numBeds}</Text>
-      <Text style={styles.infoText}>Bathrooms: {home.numBaths}</Text>
-      <Text style={styles.infoText}>Sheets needed: {appointment.bringSheets}</Text>
-      <Text style={styles.infoText}>Towels needed: {appointment.bringTowels}</Text>
-      <Text style={styles.amount}>Payout: ${correctedAmount}</Text>
-      {home.specialNotes && <Text style={styles.notes}>Notes: {home.specialNotes}</Text>}
-    </View>
+    <>
+      <View style={styles.tileContainer}>
+        <View style={styles.statusBadge}>
+          <Text style={styles.statusText}>
+            {appointment.completed ? "Completed" : "In Progress"}
+          </Text>
+        </View>
+
+        <Text style={styles.date}>{formatDate(appointment.date)}</Text>
+        <Text style={styles.location}>{home.address} - {home.city}</Text>
+        <Text style={styles.location}>{home.state}, {home.zipcode}</Text>
+
+        {home.keyPadCode && (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Code:</Text>
+            <Text style={styles.infoValue}>{home.keyPadCode}</Text>
+          </View>
+        )}
+        {home.keyLocation && (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Key Location:</Text>
+            <Text style={styles.infoValue}>{home.keyLocation}</Text>
+          </View>
+        )}
+
+        <View style={styles.divider} />
+
+        <View style={styles.detailsGrid}>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Contact</Text>
+            <Text style={styles.detailValue}>{home.contact}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Beds</Text>
+            <Text style={styles.detailValue}>{home.numBeds}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Baths</Text>
+            <Text style={styles.detailValue}>{home.numBaths}</Text>
+          </View>
+        </View>
+
+        <View style={styles.requirementsRow}>
+          {appointment.bringSheets === "Yes" && (
+            <View style={styles.requirementBadge}>
+              <Text style={styles.requirementText}>Bring Sheets</Text>
+            </View>
+          )}
+          {appointment.bringTowels === "Yes" && (
+            <View style={styles.requirementBadge}>
+              <Text style={styles.requirementText}>Bring Towels</Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={styles.amount}>Payout: ${correctedAmount.toFixed(2)}</Text>
+
+        {home.specialNotes && (
+          <View style={styles.notesContainer}>
+            <Text style={styles.notesLabel}>Special Notes:</Text>
+            <Text style={styles.notes}>{home.specialNotes}</Text>
+          </View>
+        )}
+
+        {!appointment.completed && (
+          <TouchableOpacity style={styles.startButton} onPress={handleStartJob}>
+            <Text style={styles.startButtonText}>Start Job</Text>
+          </TouchableOpacity>
+        )}
+
+        {appointment.completed && (
+          <View style={styles.completedBanner}>
+            <Text style={styles.completedText}>Job Completed</Text>
+          </View>
+        )}
+      </View>
+
+      <Modal
+        visible={showCompletionFlow}
+        animationType="slide"
+        presentationStyle="fullScreen"
+      >
+        <JobCompletionFlow
+          appointment={appointment}
+          home={home}
+          onJobCompleted={handleJobCompleted}
+          onCancel={handleCancelCompletion}
+        />
+      </Modal>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
   tileContainer: {
-    backgroundColor: "#ffffff",
-    padding: 18,
-    marginVertical: 10,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    padding: spacing.lg,
+    marginVertical: spacing.md,
+    borderRadius: radius.xl,
+    ...shadows.md,
+  },
+  statusBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.primary[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    marginBottom: spacing.md,
+  },
+  statusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
   },
   date: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2C3E50",
-    marginBottom: 6,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
     textAlign: "center",
   },
   location: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#34495E",
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
     textAlign: "center",
     marginBottom: 2,
   },
-  infoText: {
-    fontSize: 13,
-    color: "#7F8C8D",
-    textAlign: "center",
-    marginTop: 2,
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing.sm,
+  },
+  infoLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginRight: spacing.xs,
+  },
+  infoValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border.light,
+    marginVertical: spacing.lg,
+  },
+  detailsGrid: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    marginBottom: spacing.md,
+  },
+  detailItem: {
+    alignItems: "center",
+  },
+  detailLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xs,
+  },
+  detailValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  requirementsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  requirementBadge: {
+    backgroundColor: colors.warning[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+  },
+  requirementText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[800],
   },
   amount: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#2C3E50",
-    marginTop: 8,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
+    marginTop: spacing.sm,
     textAlign: "center",
   },
+  notesContainer: {
+    backgroundColor: colors.secondary[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginTop: spacing.md,
+  },
+  notesLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.secondary[700],
+    marginBottom: spacing.xs,
+  },
   notes: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#E67E22",
-    marginTop: 6,
-    textAlign: "center",
+    fontSize: typography.fontSize.sm,
+    color: colors.secondary[800],
+    lineHeight: 20,
+  },
+  startButton: {
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    marginTop: spacing.lg,
+    ...shadows.md,
+  },
+  startButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
+  completedBanner: {
+    backgroundColor: colors.success[100],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    marginTop: spacing.lg,
+  },
+  completedText: {
+    color: colors.success[700],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
   },
 });
 

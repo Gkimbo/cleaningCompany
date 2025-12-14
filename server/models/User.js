@@ -72,15 +72,27 @@ module.exports = (sequelize, DataTypes) => {
 		  foreignKey: "employeeId",
 		  as: "cleanerAppointments",
 		});
-	  
+
 		User.hasMany(models.UserReviews, {
 		  foreignKey: "userId",
 		  as: "reviews",
 		});
-	  
+
 		User.hasMany(models.UserReviews, {
 		  foreignKey: "reviewerId",
-		  as: "writtenReviews", 
+		  as: "writtenReviews",
+		});
+
+		// Stripe Connect account for cleaners
+		User.hasOne(models.StripeConnectAccount, {
+		  foreignKey: "userId",
+		  as: "stripeConnectAccount",
+		});
+
+		// Payouts received by cleaner
+		User.hasMany(models.Payout, {
+		  foreignKey: "cleanerId",
+		  as: "payouts",
 		});
 	  };
 	  
