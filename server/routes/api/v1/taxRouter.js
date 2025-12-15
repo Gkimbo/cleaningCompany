@@ -32,7 +32,8 @@ const taxRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
 // Encryption key for TIN storage (should be from environment in production)
-const ENCRYPTION_KEY = process.env.TAX_ENCRYPTION_KEY || crypto.randomBytes(32).toString("hex");
+const ENCRYPTION_KEY =
+  process.env.TAX_ENCRYPTION_KEY || crypto.randomBytes(32).toString("hex");
 const ENCRYPTION_IV_LENGTH = 16;
 
 // ============================================================================
@@ -85,7 +86,8 @@ function decrypt(text) {
  */
 function validateSSN(ssn) {
   const cleaned = ssn.replace(/\D/g, "");
-  if (cleaned.length !== 9) return { valid: false, error: "SSN must be 9 digits" };
+  if (cleaned.length !== 9)
+    return { valid: false, error: "SSN must be 9 digits" };
 
   const area = cleaned.substring(0, 3);
   const group = cleaned.substring(3, 5);
@@ -106,15 +108,73 @@ function validateSSN(ssn) {
  */
 function validateEIN(ein) {
   const cleaned = ein.replace(/\D/g, "");
-  if (cleaned.length !== 9) return { valid: false, error: "EIN must be 9 digits" };
+  if (cleaned.length !== 9)
+    return { valid: false, error: "EIN must be 9 digits" };
 
   const validPrefixes = [
-    "10", "12", "20", "27", "30", "32", "35", "36", "37", "38", "39",
-    "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51",
-    "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62",
-    "63", "64", "65", "66", "67", "68", "71", "72", "73", "74", "75",
-    "76", "77", "80", "81", "82", "83", "84", "85", "86", "87", "88",
-    "90", "91", "92", "93", "94", "95", "98", "99",
+    "10",
+    "12",
+    "20",
+    "27",
+    "30",
+    "32",
+    "35",
+    "36",
+    "37",
+    "38",
+    "39",
+    "40",
+    "41",
+    "42",
+    "43",
+    "44",
+    "45",
+    "46",
+    "47",
+    "48",
+    "50",
+    "51",
+    "52",
+    "53",
+    "54",
+    "55",
+    "56",
+    "57",
+    "58",
+    "59",
+    "60",
+    "61",
+    "62",
+    "63",
+    "64",
+    "65",
+    "66",
+    "67",
+    "68",
+    "71",
+    "72",
+    "73",
+    "74",
+    "75",
+    "76",
+    "77",
+    "80",
+    "81",
+    "82",
+    "83",
+    "84",
+    "85",
+    "86",
+    "87",
+    "88",
+    "90",
+    "91",
+    "92",
+    "93",
+    "94",
+    "95",
+    "98",
+    "99",
   ];
 
   const prefix = cleaned.substring(0, 2);
@@ -129,12 +189,62 @@ function validateEIN(ein) {
  * Validate US state abbreviation
  */
 const VALID_STATES = [
-  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
-  "DC", "PR", "VI", "GU", "AS", "MP",
+  "AL",
+  "AK",
+  "AZ",
+  "AR",
+  "CA",
+  "CO",
+  "CT",
+  "DE",
+  "FL",
+  "GA",
+  "HI",
+  "ID",
+  "IL",
+  "IN",
+  "IA",
+  "KS",
+  "KY",
+  "LA",
+  "ME",
+  "MD",
+  "MA",
+  "MI",
+  "MN",
+  "MS",
+  "MO",
+  "MT",
+  "NE",
+  "NV",
+  "NH",
+  "NJ",
+  "NM",
+  "NY",
+  "NC",
+  "ND",
+  "OH",
+  "OK",
+  "OR",
+  "PA",
+  "RI",
+  "SC",
+  "SD",
+  "TN",
+  "TX",
+  "UT",
+  "VT",
+  "VA",
+  "WA",
+  "WV",
+  "WI",
+  "WY",
+  "DC",
+  "PR",
+  "VI",
+  "GU",
+  "AS",
+  "MP",
 ];
 
 // ============================================================================
@@ -175,11 +285,27 @@ taxRouter.post("/submit-w9", async (req, res) => {
   const userId = decoded.userId;
 
   // Validate required fields
-  if (!legalName || !addressLine1 || !city || !state || !zipCode || !tin || !certificationSignature) {
+  if (
+    !legalName ||
+    !addressLine1 ||
+    !city ||
+    !state ||
+    !zipCode ||
+    !tin ||
+    !certificationSignature
+  ) {
     return res.status(400).json({
       error: "Missing required fields",
       code: "MISSING_FIELDS",
-      required: ["legalName", "addressLine1", "city", "state", "zipCode", "tin", "certificationSignature"],
+      required: [
+        "legalName",
+        "addressLine1",
+        "city",
+        "state",
+        "zipCode",
+        "tin",
+        "certificationSignature",
+      ],
     });
   }
 
@@ -285,6 +411,111 @@ taxRouter.post("/submit-w9", async (req, res) => {
     });
   }
 });
+/**
+ * GET /payment-history/:year
+ * Get homeowner payment history for a tax year
+ */
+const { Op } = require("sequelize");
+
+taxRouter.get("/payment-history/:year", async (req, res) => {
+  const { year } = req.params;
+  const taxYear = parseInt(year, 10);
+
+  // -----------------------------
+  // 1️⃣ Validate year
+  // -----------------------------
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > new Date().getFullYear()) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  // -----------------------------
+  // 2️⃣ Validate Authorization header
+  // -----------------------------
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      error: "Missing or malformed Authorization header",
+      code: "NO_AUTH_HEADER",
+    });
+  }
+
+  let decoded;
+  try {
+    const token = authHeader.split(" ")[1];
+    decoded = jwt.verify(token, secretKey);
+  } catch (err) {
+    return res.status(401).json({
+      error: "Invalid or expired token",
+      code: "INVALID_TOKEN",
+    });
+  }
+
+  const userId = decoded.userId;
+  if (!userId) {
+    return res.status(401).json({
+      error: "Unauthorized: user not found in token",
+      code: "UNAUTHORIZED",
+    });
+  }
+
+  // -----------------------------
+  // 3️⃣ Fetch payments safely
+  // -----------------------------
+  try {
+    // Use createdAt as fallback if taxYear column does not exist
+    const start = new Date(`${taxYear}-01-01T00:00:00Z`);
+    const end = new Date(`${taxYear + 1}-01-01T00:00:00Z`);
+
+    const payments = await Payment.findAll({
+      where: {
+        homeownerId: userId,
+        status: "succeeded",
+        createdAt: {
+          [Op.gte]: start,
+          [Op.lt]: end,
+        },
+      },
+      order: [["createdAt", "ASC"]],
+    });
+
+    if (!payments) {
+      return res.status(404).json({
+        error: "No payment records found",
+        code: "NO_PAYMENTS",
+      });
+    }
+
+    // Safely sum amounts, check for column existence
+    const totalPaidCents = payments.reduce((sum, p) => {
+      const amount = p.amountCents ?? p.amount ?? 0;
+      if (typeof amount !== "number") return sum;
+      return sum + amount;
+    }, 0);
+
+    return res.json({
+      taxYear,
+      totalPaidCents,
+      paymentCount: payments.length,
+    });
+  } catch (error) {
+    console.error("[Tax] Error fetching payment history:", error);
+
+    // Detect common Sequelize errors
+    let code = "FETCH_FAILED";
+    if (error.name === "SequelizeDatabaseError") {
+      code = "DB_ERROR";
+    }
+
+    return res.status(500).json({
+      error: "Failed to fetch payment history",
+      code,
+      details: error.message,
+    });
+  }
+});
 
 /**
  * GET /tax-info/:userId
@@ -305,9 +536,10 @@ taxRouter.get("/tax-info/:userId", async (req, res) => {
     }
 
     // Format masked TIN
-    const maskedTin = taxInfo.tinType === "ssn"
-      ? `XXX-XX-${taxInfo.tinLast4}`
-      : `XX-XXX${taxInfo.tinLast4}`;
+    const maskedTin =
+      taxInfo.tinType === "ssn"
+        ? `XXX-XX-${taxInfo.tinLast4}`
+        : `XX-XXX${taxInfo.tinLast4}`;
 
     return res.json({
       hasTaxInfo: true,
@@ -400,12 +632,14 @@ taxRouter.get("/earnings-summary/:userId/:year", async (req, res) => {
         amountDollars: "600.00",
         met: requires1099,
       },
-      monthlyBreakdown: Object.entries(monthlyBreakdown).map(([month, data]) => ({
-        month: parseInt(month),
-        count: data.count,
-        amountCents: data.amountCents,
-        amountDollars: (data.amountCents / 100).toFixed(2),
-      })),
+      monthlyBreakdown: Object.entries(monthlyBreakdown).map(
+        ([month, data]) => ({
+          month: parseInt(month),
+          count: data.count,
+          amountCents: data.amountCents,
+          amountDollars: (data.amountCents / 100).toFixed(2),
+        })
+      ),
       hasTaxInfoOnFile: !!taxInfo,
     });
   } catch (error) {
@@ -487,7 +721,9 @@ taxRouter.get("/1099/:userId/:year", async (req, res) => {
           taxInfo.addressLine1,
           taxInfo.addressLine2,
           `${taxInfo.city}, ${taxInfo.state} ${taxInfo.zipCode}`,
-        ].filter(Boolean).join("\n"),
+        ]
+          .filter(Boolean)
+          .join("\n"),
       },
 
       // Box 1: Nonemployee compensation
@@ -542,7 +778,8 @@ taxRouter.get("/1099-summary/:year", async (req, res) => {
   try {
     // Get all cleaners with reportable payments
     const { sequelize } = require("../../../models");
-    const [results] = await sequelize.query(`
+    const [results] = await sequelize.query(
+      `
       SELECT
         p."cleanerId",
         SUM(p.amount) as "totalAmountCents",
@@ -555,10 +792,12 @@ taxRouter.get("/1099-summary/:year", async (req, res) => {
       GROUP BY p."cleanerId"
       HAVING SUM(p.amount) >= 60000
       ORDER BY SUM(p.amount) DESC
-    `, {
-      replacements: { taxYear },
-      type: sequelize.QueryTypes.SELECT,
-    });
+    `,
+      {
+        replacements: { taxYear },
+        type: sequelize.QueryTypes.SELECT,
+      }
+    );
 
     // Enrich with user and tax info
     const cleanersRequiring1099 = await Promise.all(
@@ -617,7 +856,10 @@ taxRouter.get("/tax-documents/:userId", async (req, res) => {
   try {
     const documents = await TaxDocument.findAll({
       where: { userId },
-      order: [["taxYear", "DESC"], ["createdAt", "DESC"]],
+      order: [
+        ["taxYear", "DESC"],
+        ["createdAt", "DESC"],
+      ],
     });
 
     return res.json({
@@ -679,7 +921,10 @@ taxRouter.post("/generate-1099/:userId/:year", async (req, res) => {
     }
 
     // Generate form data
-    const formData = await TaxDocumentService.generate1099NECData(userId, taxYear);
+    const formData = await TaxDocumentService.generate1099NECData(
+      userId,
+      taxYear
+    );
 
     if (!formData.requires1099) {
       return res.json({
@@ -745,7 +990,9 @@ taxRouter.post("/generate-all-1099s/:year", async (req, res) => {
   }
 
   try {
-    const results = await TaxDocumentService.generateAll1099NECsForYear(taxYear);
+    const results = await TaxDocumentService.generateAll1099NECsForYear(
+      taxYear
+    );
 
     return res.json({
       success: true,
@@ -870,7 +1117,10 @@ taxRouter.get("/platform/quarterly-tax/:year/:quarter", async (req, res) => {
   }
 
   try {
-    const taxData = await PlatformTaxService.calculateQuarterlyEstimatedTax(taxYear, taxQuarter);
+    const taxData = await PlatformTaxService.calculateQuarterlyEstimatedTax(
+      taxYear,
+      taxQuarter
+    );
     return res.json(taxData);
   } catch (error) {
     console.error("[Tax] Error calculating quarterly tax:", error);
@@ -897,7 +1147,9 @@ taxRouter.get("/platform/schedule-c/:year", async (req, res) => {
   }
 
   try {
-    const scheduleCData = await PlatformTaxService.generateScheduleCData(taxYear);
+    const scheduleCData = await PlatformTaxService.generateScheduleCData(
+      taxYear
+    );
     return res.json(scheduleCData);
   } catch (error) {
     console.error("[Tax] Error generating Schedule C:", error);
@@ -924,7 +1176,9 @@ taxRouter.get("/platform/1099-k-expectation/:year", async (req, res) => {
   }
 
   try {
-    const expectation = await PlatformTaxService.generate1099KExpectation(taxYear);
+    const expectation = await PlatformTaxService.generate1099KExpectation(
+      taxYear
+    );
     return res.json(expectation);
   } catch (error) {
     console.error("[Tax] Error checking 1099-K expectation:", error);
