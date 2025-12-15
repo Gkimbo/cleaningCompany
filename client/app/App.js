@@ -58,6 +58,9 @@ import {
 // Calendar Sync
 import { CalendarSyncManager } from "./components/calendarSync";
 
+// Account Settings
+import AccountSettings from "./components/account/AccountSettings";
+
 const API_BASE = "http://localhost:3000/api/v1";
 
 export default function App() {
@@ -355,6 +358,11 @@ export default function App() {
               <Route
                 path="/messages/broadcast"
                 element={<BroadcastForm state={state} />}
+              />
+              {/* Account Settings */}
+              <Route
+                path="/account-settings"
+                element={<AccountSettings state={state} dispatch={dispatch} />}
               />
             </Routes>
             </SafeAreaView>

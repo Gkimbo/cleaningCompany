@@ -148,6 +148,8 @@ class FetchData {
           password: data.password,
           email: data.email,
           type: data.type,
+          firstName: data.firstName,
+          lastName: data.lastName,
         }),
       });
       if (!response.ok) {
@@ -492,6 +494,54 @@ class FetchData {
       return true;
     } catch (error) {
       return error;
+    }
+  }
+
+  static async updateUsername(token, username) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/users/update-username", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ username }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to update username" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error updating username:", error);
+      return { error: "Failed to update username" };
+    }
+  }
+
+  static async updatePassword(token, currentPassword, newPassword) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/users/update-password", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to update password" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error updating password:", error);
+      return { error: "Failed to update password" };
     }
   }
 }

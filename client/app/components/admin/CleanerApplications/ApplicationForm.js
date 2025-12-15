@@ -60,10 +60,8 @@ const CleanerApplicationForm = () => {
     previousEmploymentDuration: "",
     reasonForLeaving: "",
 
-    // Professional References (3 required)
+    // Professional Reference (1 required)
     references: [
-      { name: "", phone: "", relationship: "", company: "", yearsKnown: "" },
-      { name: "", phone: "", relationship: "", company: "", yearsKnown: "" },
       { name: "", phone: "", relationship: "", company: "", yearsKnown: "" },
     ],
 
@@ -85,7 +83,6 @@ const CleanerApplicationForm = () => {
 
     // Consents
     backgroundConsent: false,
-    drugTestConsent: false,
     referenceCheckConsent: false,
   });
 
@@ -95,17 +92,85 @@ const CleanerApplicationForm = () => {
   const totalSteps = 6;
   const styles = ApplicationFormStyles;
 
+  const formatPhoneNumber = (value) => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, "");
+
+    // Format as 555-555-5555
+    if (digits.length <= 3) {
+      return digits;
+    } else if (digits.length <= 6) {
+      return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    } else {
+      return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+    }
+  };
+
+  const formatDate = (value) => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, "");
+
+    // Format as MM/DD/YYYY
+    if (digits.length <= 2) {
+      return digits;
+    } else if (digits.length <= 4) {
+      return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    } else {
+      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+    }
+  };
+
+  const isValidDate = (dateString) => {
+    // Check format MM/DD/YYYY with 4-digit year
+    const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+    if (!dateRegex.test(dateString)) return false;
+
+    const [month, day, year] = dateString.split("/").map(Number);
+
+    // Validate year is 4 digits and reasonable (1900-2100)
+    if (year < 1900 || year > 2100) return false;
+
+    // Validate month
+    if (month < 1 || month > 12) return false;
+
+    // Validate day for the given month
+    const daysInMonth = new Date(year, month, 0).getDate();
+    if (day < 1 || day > daysInMonth) return false;
+
+    return true;
+  };
+
   const handleChange = (name, value) => {
+    // Auto-format phone number fields
+    const phoneFields = [
+      "phone",
+      "previousEmployerPhone",
+      "emergencyContactPhone",
+    ];
+
+    // Auto-format date fields
+    const dateFields = ["dateOfBirth", "availableStartDate"];
+
+    let formattedValue = value;
+    if (phoneFields.includes(name)) {
+      formattedValue = formatPhoneNumber(value);
+    } else if (dateFields.includes(name)) {
+      formattedValue = formatDate(value);
+    }
+
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: formattedValue,
     }));
   };
 
   const handleReferenceChange = (index, field, value) => {
+    // Auto-format phone number for reference phone fields
+    const formattedValue = field === "phone" ? formatPhoneNumber(value) : value;
+
     setFormData((prev) => {
       const updatedRefs = [...prev.references];
-      updatedRefs[index] = { ...updatedRefs[index], [field]: value };
+      updatedRefs[index] = { ...updatedRefs[index], [field]: formattedValue };
       return { ...prev, references: updatedRefs };
     });
   };
@@ -154,16 +219,21 @@ const CleanerApplicationForm = () => {
         if (!formData.lastName.trim()) errors.push("Last name is required.");
         if (!formData.email.trim()) errors.push("Email is required.");
         if (!formData.phone.trim()) errors.push("Phone number is required.");
-        if (!formData.dateOfBirth) errors.push("Date of birth is required.");
+        if (!formData.dateOfBirth) {
+          errors.push("Date of birth is required.");
+        } else if (!isValidDate(formData.dateOfBirth)) {
+          errors.push("Please enter a valid date of birth (MM/DD/YYYY with 4-digit year).");
+        }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (formData.email && !emailRegex.test(formData.email)) {
           errors.push("Please enter a valid email address.");
         }
 
-        const phoneRegex = /^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/;
-        if (formData.phone && !phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
-          errors.push("Please enter a valid phone number.");
+        // Phone is auto-formatted as 555-555-5555, so just check length
+        const phoneDigits = formData.phone.replace(/\D/g, "");
+        if (formData.phone && phoneDigits.length !== 10) {
+          errors.push("Please enter a valid 10-digit phone number.");
         }
         break;
 
@@ -194,8 +264,8 @@ const CleanerApplicationForm = () => {
         const validRefs = formData.references.filter(
           (ref) => ref.name.trim() && ref.phone.trim() && ref.relationship.trim()
         );
-        if (validRefs.length < 3) {
-          errors.push("Please provide at least 3 professional references with name, phone, and relationship.");
+        if (validRefs.length < 1) {
+          errors.push("Please provide at least 1 professional reference with name, phone, and relationship.");
         }
         break;
 
@@ -217,9 +287,6 @@ const CleanerApplicationForm = () => {
       case 6: // Consents & Availability
         if (!formData.backgroundConsent) {
           errors.push("You must consent to a background check.");
-        }
-        if (!formData.drugTestConsent) {
-          errors.push("You must consent to drug testing.");
         }
         if (!formData.referenceCheckConsent) {
           errors.push("You must consent to reference checks.");
@@ -359,6 +426,8 @@ const CleanerApplicationForm = () => {
         placeholder="MM/DD/YYYY"
         value={formData.dateOfBirth}
         onChangeText={(text) => handleChange("dateOfBirth", text)}
+        keyboardType="number-pad"
+        maxLength={10}
       />
       <Text style={styles.helperText}>You must be at least 18 years old to apply.</Text>
     </>
@@ -549,10 +618,10 @@ const CleanerApplicationForm = () => {
   // Step 4: Professional References
   const renderStep4 = () => (
     <>
-      <Text style={styles.sectionTitle}>Professional References</Text>
+      <Text style={styles.sectionTitle}>Professional Reference</Text>
       <Text style={styles.description}>
-        Please provide 3 professional references who can speak to your work ethic,
-        reliability, and trustworthiness. References should NOT be family members.
+        Please provide 1 professional reference who can speak to your work ethic,
+        reliability, and trustworthiness. Reference should NOT be a family member.
       </Text>
 
       {formData.references.map((ref, index) => (
@@ -678,6 +747,8 @@ const CleanerApplicationForm = () => {
         placeholder="MM/DD/YYYY"
         value={formData.availableStartDate}
         onChangeText={(text) => handleChange("availableStartDate", text)}
+        keyboardType="number-pad"
+        maxLength={10}
       />
 
       <Text style={styles.label}>Days Available to Work <Text style={styles.requiredLabel}>*</Text></Text>
@@ -726,12 +797,6 @@ const CleanerApplicationForm = () => {
         checked={formData.backgroundConsent}
         onPress={() => handleChange("backgroundConsent", !formData.backgroundConsent)}
         label="I consent to a comprehensive background check, including criminal history, identity verification, and employment history. *"
-      />
-
-      <Checkbox
-        checked={formData.drugTestConsent}
-        onPress={() => handleChange("drugTestConsent", !formData.drugTestConsent)}
-        label="I consent to pre-employment and random drug testing. *"
       />
 
       <Checkbox

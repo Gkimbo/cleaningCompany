@@ -43,6 +43,8 @@ const CreateNewEmployeeForm = ({id, firstName, lastName, email, setApplicationsL
 				password,
 				email,
 				type,
+				firstName,
+				lastName,
 			};
 			const response = await FetchData.makeNewEmployee(data);
 			if (

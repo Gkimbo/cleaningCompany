@@ -27,6 +27,7 @@ import SignOutButton from "./SignoutButton";
 import UnassignedAppointmentsButton from "./UnassignedAppointmentsButton";
 import ViewApplicationsButton from "./ViewApplicationsButton";
 import MessagesButton from "../messaging/MessagesButton";
+import AccountSettingsButton from "./AccountSettingsButton";
 
 
 const TopBar = ({ dispatch, state }) => {
@@ -103,6 +104,7 @@ const TopBar = ({ dispatch, state }) => {
                           <MyRequestsButton closeModal={closeModal} />
                           {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                           <EarningsButton closeModal={closeModal} />
+                          <AccountSettingsButton closeModal={closeModal} />
                         </>
                       ) : (
                         <>

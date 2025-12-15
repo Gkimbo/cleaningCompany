@@ -1,162 +1,361 @@
 import React, { useEffect, useState } from "react";
 import {
-	Animated,
-	Dimensions,
-	Easing,
-	ScrollView,
-	Text,
-	View
+  ActivityIndicator,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-import { useNavigate } from "react-router-native";
 import Application from "../../../services/fetchRequests/ApplicationClass";
 import FetchData from "../../../services/fetchRequests/fetchData";
+import { colors, spacing, radius, typography, shadows } from "../../../services/styles/theme";
 import ApplicationTile from "./ApplicationTile";
-import CreateNewEmployeeForm from "./CreateNewEmployeeForm";
+
+const { width } = Dimensions.get("window");
+
+// Status configuration
+const STATUS_CONFIG = {
+  pending: { label: "Pending", color: colors.warning[500], bgColor: colors.warning[50] },
+  under_review: { label: "Under Review", color: colors.primary[500], bgColor: colors.primary[50] },
+  background_check: { label: "Background Check", color: colors.secondary[500], bgColor: colors.secondary[50] },
+  approved: { label: "Approved", color: colors.success[500], bgColor: colors.success[50] },
+  rejected: { label: "Rejected", color: colors.error[500], bgColor: colors.error[50] },
+};
 
 const ListOfApplications = () => {
-  const [listApplications, setApplicationsList] = useState([]);
-  const [deleteAnimation] = useState(new Animated.Value(0));
-  const [deleteConfirmation, setDeleteConfirmation] = useState({});
-  const { width } = Dimensions.get("window");
-  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
-  const navigate = useNavigate();
+  const [applications, setApplications] = useState([]);
+  const [filteredApplications, setFilteredApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [stats, setStats] = useState({});
 
   useEffect(() => {
-    FetchData.getApplicationsFromBackend().then((response) => {
-      setApplicationsList(response.serializedApplications);
-    });
+    fetchApplications();
   }, []);
 
-  const onDeleteApplication = async (id) => {
+  useEffect(() => {
+    filterApplications();
+  }, [applications, searchQuery, selectedStatus]);
+
+  const fetchApplications = async () => {
+    setLoading(true);
+    try {
+      const response = await FetchData.getApplicationsFromBackend();
+      const apps = response.serializedApplications || [];
+      setApplications(apps);
+      calculateStats(apps);
+    } catch (error) {
+      console.error("Error fetching applications:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateStats = (apps) => {
+    const counts = {
+      total: apps.length,
+      pending: 0,
+      under_review: 0,
+      background_check: 0,
+      approved: 0,
+      rejected: 0,
+    };
+    apps.forEach((app) => {
+      const status = app.status || "pending";
+      if (counts[status] !== undefined) counts[status]++;
+    });
+    setStats(counts);
+  };
+
+  const filterApplications = () => {
+    let filtered = [...applications];
+
+    // Filter by status
+    if (selectedStatus !== "all") {
+      filtered = filtered.filter((app) => (app.status || "pending") === selectedStatus);
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (app) =>
+          app.firstName?.toLowerCase().includes(query) ||
+          app.lastName?.toLowerCase().includes(query) ||
+          app.email?.toLowerCase().includes(query) ||
+          app.phone?.includes(query)
+      );
+    }
+
+    setFilteredApplications(filtered);
+  };
+
+  const handleDeleteApplication = async (id) => {
     try {
       await Application.deleteApplication(id);
-      const response = await FetchData.getApplicationsFromBackend();
-      setApplicationsList(response.serializedApplications);
+      await fetchApplications();
     } catch (error) {
       console.error("Error deleting application:", error);
     }
   };
 
-  const handleDeletePress = (applicationId) => {
-    setDeleteConfirmation((prev) => ({
-      [applicationId]: !prev[applicationId],
-    }));
-
-    if (deleteConfirmation[applicationId]) {
-      Animated.timing(deleteAnimation, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }).start(() => {
-        onDeleteApplication(applicationId);
-        setDeleteConfirmation((prev) => ({
-          ...prev,
-          [applicationId]: false,
-        }));
-      });
-    } else {
-      Animated.timing(deleteAnimation, {
-        toValue: 1,
-        duration: 300,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }).start();
+  const handleUpdateStatus = async (id, newStatus) => {
+    try {
+      await Application.updateApplicationStatus(id, newStatus);
+      await fetchApplications();
+    } catch (error) {
+      console.error("Error updating status:", error);
     }
   };
 
-  const handleNoPress = (applicationId) => {
-    setDeleteConfirmation((prev) => ({
-      [applicationId]: !prev[applicationId],
-    }));
+  const StatusFilterButton = ({ status, label, count }) => {
+    const isSelected = selectedStatus === status;
+    const config = status === "all" ? { color: colors.text.primary, bgColor: colors.neutral[100] } : STATUS_CONFIG[status];
+
+    return (
+      <Pressable
+        onPress={() => setSelectedStatus(status)}
+        style={[
+          styles.filterButton,
+          isSelected && { backgroundColor: config.bgColor, borderColor: config.color },
+        ]}
+      >
+        <Text style={[styles.filterButtonText, isSelected && { color: config.color }]}>
+          {label}
+        </Text>
+        <View style={[styles.filterBadge, { backgroundColor: isSelected ? config.color : colors.neutral[200] }]}>
+          <Text style={[styles.filterBadgeText, { color: isSelected ? colors.neutral[0] : colors.text.secondary }]}>
+            {count}
+          </Text>
+        </View>
+      </Pressable>
+    );
   };
 
-  const usersApplications = listApplications.map((application) => (
-    <View key={application.id} style={styles.cardContainer}>
-      <ApplicationTile
-        id={application.id}
-        firstName={application.firstName}
-        lastName={application.lastName}
-        email={application.email}
-        phone={application.phone}
-        experience={application.experience}
-        message={application.message}
-        idPhoto={application.idPhoto}
-        backgroundConsent={application.backgroundConsent}
-        handleDeletePress={handleDeletePress}
-        deleteAnimation={deleteAnimation}
-        deleteConfirmation={deleteConfirmation}
-        setDeleteConfirmation={setDeleteConfirmation}
-        handleNoPress={handleNoPress}
-        CreateNewEmployeeForm={CreateNewEmployeeForm}
-        setApplicationsList={setApplicationsList}
-      />
-    </View>
-  ));
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={styles.loadingText}>Loading applications...</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.headerText}>Applications</Text>
-        <View style={styles.headerLine} />
+    <View style={styles.container}>
+      {/* Header with Search */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Text style={styles.headerTitle}>Applications</Text>
+          <View style={styles.headerBadge}>
+            <Text style={styles.headerBadgeText}>{stats.total}</Text>
+          </View>
+        </View>
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name, email, or phone..."
+            placeholderTextColor={colors.text.tertiary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery("")} style={styles.clearButton}>
+              <Text style={styles.clearButtonText}>Clear</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* Status Filters */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersContent}
+        >
+          <StatusFilterButton status="all" label="All" count={stats.total} />
+          <StatusFilterButton status="pending" label="Pending" count={stats.pending || 0} />
+          <StatusFilterButton status="under_review" label="Review" count={stats.under_review || 0} />
+          <StatusFilterButton status="background_check" label="Background" count={stats.background_check || 0} />
+          <StatusFilterButton status="approved" label="Approved" count={stats.approved || 0} />
+          <StatusFilterButton status="rejected" label="Rejected" count={stats.rejected || 0} />
+        </ScrollView>
       </View>
 
-      <View style={styles.listWrapper}>
-        {listApplications.length > 0 ? (
-          usersApplications
+      {/* Applications List */}
+      <ScrollView
+        style={styles.listContainer}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {filteredApplications.length > 0 ? (
+          filteredApplications.map((application) => (
+            <ApplicationTile
+              key={application.id}
+              application={application}
+              onDelete={handleDeleteApplication}
+              onUpdateStatus={handleUpdateStatus}
+              onRefresh={fetchApplications}
+              statusConfig={STATUS_CONFIG}
+            />
+          ))
         ) : (
-          <Text style={styles.noData}>No applications found.</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>No Applications Found</Text>
+            <Text style={styles.emptyStateText}>
+              {searchQuery || selectedStatus !== "all"
+                ? "Try adjusting your filters or search query."
+                : "New applications will appear here."}
+            </Text>
+          </View>
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fb",
-    paddingHorizontal: 20,
-    paddingTop: 40,
+    backgroundColor: colors.background.tertiary,
   },
-  headerContainer: {
-    marginBottom: 20,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background.tertiary,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+  },
+
+  // Header
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.neutral[0],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  headerTitle: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  headerBadge: {
+    backgroundColor: colors.primary[500],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+  },
+  headerBadgeText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
+
+  // Search
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  clearButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  clearButtonText: {
+    color: colors.primary[600],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Filters
+  filtersContent: {
+    gap: spacing.sm,
+    flexDirection: "row",
+    paddingBottom: spacing.xs,
+  },
+  filterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.border.light,
+    backgroundColor: colors.neutral[0],
+    gap: spacing.sm,
+  },
+  filterButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  filterBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    minWidth: 24,
     alignItems: "center",
   },
-  headerText: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1E1E1E",
-    marginBottom: 8,
-    letterSpacing: 0.5,
+  filterBadgeText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
   },
-  headerLine: {
-    width: 80,
-    height: 3,
-    backgroundColor: "#f9bc60",
-    borderRadius: 2,
+
+  // List
+  listContainer: {
+    flex: 1,
   },
-  listWrapper: {
-    paddingBottom: 40,
+  listContent: {
+    padding: spacing.lg,
+    gap: spacing.lg,
   },
-  cardContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: spacing["4xl"],
+    paddingHorizontal: spacing.xl,
   },
-  noData: {
+  emptyStateTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  emptyStateText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.tertiary,
     textAlign: "center",
-    color: "#777",
-    fontSize: 16,
-    marginTop: 40,
-    fontWeight: "500",
   },
-};
+});
 
 export default ListOfApplications;

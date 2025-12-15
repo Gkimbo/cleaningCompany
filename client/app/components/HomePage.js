@@ -13,6 +13,7 @@ import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
 import ReviewsOverview from "./reviews/ReviewsOverview";
 import GetHelpButton from "./messaging/GetHelpButton";
 import TaxFormsSection from "./tax/TaxFormsSection";
+import ManagerDashboard from "./manager/ManagerDashboard";
 
 const HomePage = ({ state, dispatch }) => {
   const [redirect, setRedirect] = useState(false);
@@ -190,6 +191,11 @@ const HomePage = ({ state, dispatch }) => {
     elevation: 3,
   };
 
+  // Show Manager Dashboard for managers
+  if (state.account === "manager1" && state.currentUser.token) {
+    return <ManagerDashboard state={state} />;
+  }
+
   return (
     <ScrollView
       contentContainerStyle={{
@@ -259,7 +265,7 @@ const HomePage = ({ state, dispatch }) => {
           </View>
 
           {/* Get Help Button for homeowners - only show when logged in */}
-          {state.currentUser.token && state.account !== "manager1" && (
+          {state.currentUser.token && (
             <View style={{ ...cardStyle, alignItems: "center", backgroundColor: "#f0f9ff" }}>
               <Text style={{ ...homePageStyles.smallTitle, marginBottom: 8 }}>Need Help?</Text>
               <Text style={{ fontSize: 14, color: "#64748b", marginBottom: 16, textAlign: "center" }}>
@@ -268,7 +274,7 @@ const HomePage = ({ state, dispatch }) => {
               <GetHelpButton token={state.currentUser.token} />
             </View>
           )}
-          {/* Tax Forms Section for homeowners and managers */}
+          {/* Tax Forms Section for homeowners */}
           {state.currentUser.token && <TaxFormsSection state={state} />}
         </View>
       )}

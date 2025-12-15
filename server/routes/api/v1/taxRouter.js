@@ -471,7 +471,7 @@ taxRouter.get("/payment-history/:year", async (req, res) => {
 
     const payments = await Payment.findAll({
       where: {
-        homeownerId: userId,
+        userId: userId,
         status: "succeeded",
         createdAt: {
           [Op.gte]: start,
@@ -512,6 +512,79 @@ taxRouter.get("/payment-history/:year", async (req, res) => {
     return res.status(500).json({
       error: "Failed to fetch payment history",
       code,
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * GET /contractor/tax-summary/:year
+ * Get tax summary for a cleaner (contractor) - uses JWT for userId
+ */
+taxRouter.get("/contractor/tax-summary/:year", async (req, res) => {
+  const { year } = req.params;
+  const taxYear = parseInt(year);
+
+  if (isNaN(taxYear) || taxYear < 2020 || taxYear > new Date().getFullYear()) {
+    return res.status(400).json({
+      error: "Invalid tax year",
+      code: "INVALID_YEAR",
+    });
+  }
+
+  // Get userId from JWT token
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      error: "Authentication required",
+      code: "UNAUTHORIZED",
+    });
+  }
+
+  let userId;
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    userId = decoded.userId;
+  } catch (err) {
+    return res.status(401).json({
+      error: "Invalid token",
+      code: "UNAUTHORIZED",
+    });
+  }
+
+  try {
+    const start = new Date(`${taxYear}-01-01T00:00:00Z`);
+    const end = new Date(`${taxYear + 1}-01-01T00:00:00Z`);
+
+    // Get all completed payouts for the cleaner in the year
+    const payments = await Payment.findAll({
+      where: {
+        cleanerId: userId,
+        type: "payout",
+        status: "succeeded",
+        createdAt: {
+          [Op.gte]: start,
+          [Op.lt]: end,
+        },
+      },
+      order: [["createdAt", "ASC"]],
+    });
+
+    const totalEarningsCents = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const jobCount = payments.length;
+
+    return res.json({
+      taxYear,
+      totalEarningsCents,
+      jobCount,
+      requires1099: totalEarningsCents >= 60000, // $600 threshold
+    });
+  } catch (error) {
+    console.error("[Tax] Error fetching contractor tax summary:", error);
+    return res.status(500).json({
+      error: "Failed to fetch tax summary",
+      code: "FETCH_FAILED",
       details: error.message,
     });
   }

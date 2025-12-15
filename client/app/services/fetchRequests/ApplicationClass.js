@@ -63,6 +63,45 @@ class Application {
     }
   }
 
+  static async updateApplicationStatus(id, status) {
+    try {
+      const response = await fetch(baseURL + `/api/v1/applications/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`${response.status} (${response.statusText})`);
+      }
+      const responseData = await response.json();
+      return responseData;
+    } catch (err) {
+      console.error("Failed to update application status:", err);
+      throw err;
+    }
+  }
+
+  static async updateApplicationNotes(id, adminNotes) {
+    try {
+      const response = await fetch(baseURL + `/api/v1/applications/${id}/notes`, {
+        method: "PATCH",
+        body: JSON.stringify({ adminNotes }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`${response.status} (${response.statusText})`);
+      }
+      const responseData = await response.json();
+      return responseData;
+    } catch (err) {
+      console.error("Failed to update application notes:", err);
+      throw err;
+    }
+  }
 }
 
 export default Application;

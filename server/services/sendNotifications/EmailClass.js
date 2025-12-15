@@ -143,22 +143,21 @@ class Email {
       const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
-        subject:
-          "DO NOT REPLY: Employment Notification (Automated Message)",
+        subject: "Welcome to Kleanr - Your Login Credentials",
         text: `Dear ${firstName} ${lastName},
 
-Congragulations! You have been selected to be a cleaner for Kleanr!
-You can login to the app using the following username and password.
+Congratulations! You have been hired as a cleaner for Kleanr!
 
+You can login to the app using the following credentials:
 
-- Username: ${username}
-
-- Password: ${password}
-
+Username: ${username}
+Password: ${password}
 
 Please log into the app to find cleaning jobs you'd like to take on!
 
-Best regards,  
+For security, we recommend changing your password after your first login.
+
+Best regards,
 Kleanr Support Team`,
       };
 

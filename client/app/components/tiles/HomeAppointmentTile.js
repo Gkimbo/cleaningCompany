@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Dimensions, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
 import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
-import homePageStyles from "../../services/styles/HomePageStyles";
 import EachAppointment from "./EachAppointment";
+import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const HomeAppointmentTile = ({
   id,
@@ -23,7 +23,6 @@ const HomeAppointmentTile = ({
   });
 
   const navigate = useNavigate();
-  const { width } = Dimensions.get("window");
 
   useEffect(() => {
     setAppointments(allAppointments);
@@ -98,7 +97,12 @@ const HomeAppointmentTile = ({
     .filter((appointment) => appointment.homeId === id)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  const allAppointmentsFiltered = filteredAppointments.map((appointment, index) => {
+  // Group appointments by status
+  const needsPayment = filteredAppointments.filter((a) => a.completed && !a.paid);
+  const upcoming = filteredAppointments.filter((a) => !a.completed);
+  const completed = filteredAppointments.filter((a) => a.completed && a.paid);
+
+  const renderAppointment = (appointment, index) => {
     const isDisabled = isWithinOneWeek(appointment.date);
     return (
       <EachAppointment
@@ -124,92 +128,254 @@ const HomeAppointmentTile = ({
         timeToBeCompleted={appointment.timeToBeCompleted}
       />
     );
-  });
+  };
 
   const handleOnPress = () => {
     navigate(`/details/${id}`);
   };
 
-  return (
-    <View
-      style={{
-        ...homePageStyles.homeTileContainer,
-        padding: 16,
-        marginVertical: 10,
-        backgroundColor: "#ffffff",
-        borderRadius: 20,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 6,
-      }}
-    >
-      {/* Header */}
-      <Text style={homePageStyles.homeTileTitle}>{nickName}</Text>
-      <Text style={{ ...homePageStyles.homeTileAddress, marginVertical: 2 }}>{address}</Text>
-      <Text style={{ ...homePageStyles.homeTileAddress, marginBottom: 8 }}>
-        {`${city}, ${state} ${zipcode}`}
-      </Text>
+  const totalAppointments = filteredAppointments.length;
+  const upcomingCount = upcoming.length;
 
-      {/* Book Button */}
-      <Pressable onPress={handleOnPress}>
-        <View
-          style={{
-            ...homePageStyles.bookButton,
-            marginBottom: 12,
-            backgroundColor: "#3a8dff",
-            borderRadius: 12,
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "600", textAlign: "center" }}>
-            Book or cancel a cleaning
-          </Text>
+  return (
+    <View style={styles.container}>
+      {/* Header Section */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>{nickName}</Text>
+          <Text style={styles.address}>{address}</Text>
+          <Text style={styles.address}>{`${city}, ${state} ${zipcode}`}</Text>
         </View>
+
+        {/* Stats Badge */}
+        {totalAppointments > 0 && (
+          <View style={styles.statsBadge}>
+            <Text style={styles.statsNumber}>{upcomingCount}</Text>
+            <Text style={styles.statsLabel}>Upcoming</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Action Button */}
+      <Pressable
+        onPress={handleOnPress}
+        style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
+      >
+        <Text style={styles.actionButtonText}>Book or Cancel Cleaning</Text>
       </Pressable>
 
-      {/* Scrollable Appointments */}
+      {/* Appointments Section */}
       <ScrollView
-        style={{
-          maxHeight: 220,
-          borderTopWidth: 1,
-          borderTopColor: "#e2e8f0",
-          marginTop: 4,
-          paddingTop: 8,
-        }}
-        contentContainerStyle={{ paddingBottom: 8 }}
+        style={styles.appointmentsContainer}
+        contentContainerStyle={styles.appointmentsContent}
         nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
       >
-        {allAppointmentsFiltered.length > 0 ? (
-          allAppointmentsFiltered
+        {totalAppointments === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>No Appointments</Text>
+            <Text style={styles.emptyStateText}>
+              Tap "Book or Cancel Cleaning" to schedule your first cleaning.
+            </Text>
+          </View>
         ) : (
-          <Text style={{ color: "#64748b", textAlign: "center", marginTop: 10 }}>
-            No appointments scheduled yet.
-          </Text>
+          <>
+            {/* Needs Payment Section */}
+            {needsPayment.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={[styles.sectionDot, styles.sectionDotWarning]} />
+                  <Text style={styles.sectionTitle}>Payment Required</Text>
+                  <View style={styles.sectionCount}>
+                    <Text style={styles.sectionCountText}>{needsPayment.length}</Text>
+                  </View>
+                </View>
+                {needsPayment.map((appointment, index) => renderAppointment(appointment, index))}
+              </View>
+            )}
+
+            {/* Upcoming Section */}
+            {upcoming.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={[styles.sectionDot, styles.sectionDotPrimary]} />
+                  <Text style={styles.sectionTitle}>Upcoming</Text>
+                  <View style={styles.sectionCount}>
+                    <Text style={styles.sectionCountText}>{upcoming.length}</Text>
+                  </View>
+                </View>
+                {upcoming.map((appointment, index) => renderAppointment(appointment, index))}
+              </View>
+            )}
+
+            {/* Completed Section */}
+            {completed.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={[styles.sectionDot, styles.sectionDotSuccess]} />
+                  <Text style={styles.sectionTitle}>Completed</Text>
+                  <View style={styles.sectionCount}>
+                    <Text style={styles.sectionCountText}>{completed.length}</Text>
+                  </View>
+                </View>
+                {completed.map((appointment, index) => renderAppointment(appointment, index))}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
-
-      {/* Bottom Button */}
-      <Pressable onPress={handleOnPress}>
-        <View
-          style={{
-            ...homePageStyles.bookButton,
-            marginTop: 12,
-            backgroundColor: "#3a8dff",
-            borderRadius: 12,
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "600", textAlign: "center" }}>
-            Book or cancel a cleaning for this home
-          </Text>
-        </View>
-      </Pressable>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius["2xl"],
+    marginVertical: spacing.md,
+    padding: spacing.lg,
+    ...shadows.lg,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+  },
+
+  // Header
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.md,
+  },
+  headerContent: {
+    flex: 1,
+  },
+  title: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  address: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: 20,
+  },
+
+  // Stats Badge
+  statsBadge: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+  },
+  statsNumber: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
+  },
+  statsLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    marginTop: 2,
+  },
+
+  // Action Button
+  actionButton: {
+    backgroundColor: colors.secondary[500],
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  actionButtonPressed: {
+    backgroundColor: colors.secondary[600],
+    transform: [{ scale: 0.98 }],
+  },
+  actionButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    textAlign: "center",
+  },
+
+  // Appointments Container
+  appointmentsContainer: {
+    maxHeight: 500,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+    marginTop: spacing.xs,
+    paddingTop: spacing.md,
+  },
+  appointmentsContent: {
+    paddingBottom: spacing.md,
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: spacing["2xl"],
+  },
+  emptyStateTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  emptyStateText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    paddingHorizontal: spacing.xl,
+    lineHeight: 20,
+  },
+
+  // Section
+  section: {
+    marginBottom: spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  sectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: spacing.sm,
+  },
+  sectionDotPrimary: {
+    backgroundColor: colors.primary[500],
+  },
+  sectionDotWarning: {
+    backgroundColor: colors.warning[500],
+  },
+  sectionDotSuccess: {
+    backgroundColor: colors.success[500],
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    flex: 1,
+  },
+  sectionCount: {
+    backgroundColor: colors.neutral[100],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  sectionCountText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+});
 
 export default HomeAppointmentTile;

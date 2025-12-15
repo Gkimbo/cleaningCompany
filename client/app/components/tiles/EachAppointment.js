@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { RadioButton, TextInput } from "react-native-paper";
+import { Pressable, Text, View, StyleSheet } from "react-native";
+import { SegmentedButtons, TextInput } from "react-native-paper";
 import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
-import homePageStyles from "../../services/styles/HomePageStyles";
-import UserFormStyles from "../../services/styles/UserInputFormStyle";
+import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const EachAppointment = ({
   id,
@@ -32,6 +31,7 @@ const EachAppointment = ({
   const [keyCodeToggle, setKeyCodeToggle] = useState("");
   const [error, setError] = useState(null);
   const [redirect, setRedirect] = useState(false);
+  const [showAccessDetails, setShowAccessDetails] = useState(false);
   const navigate = useNavigate();
 
   // Handle code and key inputs
@@ -116,243 +116,537 @@ const EachAppointment = ({
     setRedirect(true);
   };
 
-  // --- Render ---
+  // Format time display
+  const getTimeDisplay = () => {
+    switch (timeToBeCompleted) {
+      case "anytime":
+        return "Anytime";
+      case "10-3":
+        return "10am - 3pm";
+      case "11-4":
+        return "11am - 4pm";
+      case "12-2":
+        return "12pm - 2pm";
+      default:
+        return "Anytime";
+    }
+  };
+
+  // Get card status style
+  const getCardStatusStyle = () => {
+    if (completed && paid) return styles.cardComplete;
+    if (completed && !paid) return styles.cardNeedsPay;
+    if (isDisabled) return styles.cardUpcoming;
+    return styles.cardScheduled;
+  };
+
+  // --- Render Completed States ---
+  if (completed && !paid) {
+    return (
+      <Pressable onPress={handleRedirectToBill} style={({ pressed }) => [styles.card, styles.cardNeedsPay, pressed && styles.cardPressed]}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.dateText}>{formatDate(date)}</Text>
+            <View style={[styles.badge, styles.badgeWarning]}>
+              <Text style={[styles.badgeText, styles.badgeTextWarning]}>Payment Due</Text>
+            </View>
+          </View>
+          <Text style={styles.priceText}>${price}</Text>
+        </View>
+        <View style={styles.paymentPrompt}>
+          <Text style={styles.paymentPromptText}>Cleaning complete - Tap to pay</Text>
+        </View>
+      </Pressable>
+    );
+  }
+
+  if (completed && paid) {
+    return (
+      <View style={[styles.card, styles.cardComplete]}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.dateText}>{formatDate(date)}</Text>
+            <View style={[styles.badge, styles.badgeSuccess]}>
+              <Text style={[styles.badgeText, styles.badgeTextSuccess]}>Completed</Text>
+            </View>
+          </View>
+          <Text style={[styles.priceText, styles.priceComplete]}>${price}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // --- Render Active Appointment ---
   return (
-    <Pressable
-      onPress={completed && !paid ? handleRedirectToBill : null}
-      style={({ pressed }) => [
-        homePageStyles.appointmentCard,
-        pressed && homePageStyles.appointmentCardPressed,
-      ]}
-    >
-      <View style={homePageStyles.appointmentHeader}>
-        <Text style={homePageStyles.appointmentDate}>{formatDate(date)}</Text>
-        <Text style={homePageStyles.appointmentPrice}>${price}</Text>
+    <View style={[styles.card, getCardStatusStyle()]}>
+      {/* Header with Date & Price */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.dateText}>{formatDate(date)}</Text>
+          {isDisabled ? (
+            <View style={[styles.badge, styles.badgePrimary]}>
+              <Text style={[styles.badgeText, styles.badgeTextPrimary]}>Coming Soon</Text>
+            </View>
+          ) : (
+            <View style={[styles.badge, styles.badgeDefault]}>
+              <Text style={[styles.badgeText, styles.badgeTextDefault]}>Scheduled</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.priceText}>${price}</Text>
       </View>
 
-      {completed && !paid ? (
-        <Text style={homePageStyles.appointmentStatus}>
-          Cleaning complete — tap to pay
-        </Text>
-      ) : completed && paid ? (
-        <Text style={homePageStyles.appointmentStatusComplete}>Complete!</Text>
-      ) : (
-        <>
-          <Text style={homePageStyles.appointmentContact}>
-            Point of contact: {contact}
-          </Text>
+      {/* Quick Info Row */}
+      <View style={styles.infoRow}>
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>Time</Text>
+          <Text style={styles.infoValue}>{getTimeDisplay()}</Text>
+        </View>
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>Contact</Text>
+          <Text style={styles.infoValue}>{contact}</Text>
+        </View>
+      </View>
 
-          <View style={{ marginBottom: 10 }}>
-            <Text style={{ color: "grey", fontSize: 11, textAlign: "center" }}>
-              This can be changed by editing your home.
+      <View style={styles.divider} />
+
+      {/* Services Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Add-on Services</Text>
+
+        {/* Sheets Toggle */}
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleLabelContainer}>
+            <Text style={styles.toggleLabel}>Bring Sheets</Text>
+            <Text style={styles.togglePrice}>+$25</Text>
+          </View>
+          {isDisabled ? (
+            <View style={[styles.lockedValue, bringSheets === "yes" && styles.lockedValueActive]}>
+              <Text style={[styles.lockedValueText, bringSheets === "yes" && styles.lockedValueTextActive]}>
+                {bringSheets === "yes" ? "Yes" : "No"}
+              </Text>
+            </View>
+          ) : (
+            <SegmentedButtons
+              value={bringSheets}
+              onValueChange={(value) => handleSheetsToggle(value, id)}
+              buttons={[
+                { value: "no", label: "No" },
+                { value: "yes", label: "Yes" },
+              ]}
+              style={styles.segmentedButton}
+              density="small"
+            />
+          )}
+        </View>
+
+        {/* Towels Toggle */}
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleLabelContainer}>
+            <Text style={styles.toggleLabel}>Bring Towels</Text>
+            <Text style={styles.togglePrice}>+$25</Text>
+          </View>
+          {isDisabled ? (
+            <View style={[styles.lockedValue, bringTowels === "yes" && styles.lockedValueActive]}>
+              <Text style={[styles.lockedValueText, bringTowels === "yes" && styles.lockedValueTextActive]}>
+                {bringTowels === "yes" ? "Yes" : "No"}
+              </Text>
+            </View>
+          ) : (
+            <SegmentedButtons
+              value={bringTowels}
+              onValueChange={(value) => handleTowelToggle(value, id)}
+              buttons={[
+                { value: "no", label: "No" },
+                { value: "yes", label: "Yes" },
+              ]}
+              style={styles.segmentedButton}
+              density="small"
+            />
+          )}
+        </View>
+
+        {isDisabled && (
+          <View style={styles.lockedNotice}>
+            <Text style={styles.lockedNoticeText}>
+              Changes locked within 1 week of appointment. Contact us for modifications.
             </Text>
           </View>
+        )}
+      </View>
 
-          {/* Cleaning time */}
-          <Text style={UserFormStyles.smallTitle}>Time of cleaning:</Text>
-          <Text
-            style={{
-              ...UserFormStyles.radioButtonContainer,
-              justifyContent: "center",
-              alignItems: "center",
-              textAlign: "center",
-              paddingVertical: 10,
-            }}
-          >
-            {timeToBeCompleted === "anytime"
-              ? `Anytime on ${formatDate(date)}`
-              : timeToBeCompleted === "10-3"
-              ? `10am to 3pm on ${formatDate(date)}`
-              : timeToBeCompleted === "11-4"
-              ? `11am to 4pm on ${formatDate(date)}`
-              : timeToBeCompleted === "12-2"
-              ? `12pm to 2pm on ${formatDate(date)}`
-              : null}
-          </Text>
+      <View style={styles.divider} />
 
-          {/* Sheets toggle */}
-          <Text style={UserFormStyles.smallTitle}>
-            Cleaner is bringing sheets:
-          </Text>
-          {isDisabled ? (
-            <View
-              style={{
-                ...UserFormStyles.radioButtonContainer,
-                width: "15%",
-                padding: 5,
-              }}
-            >
-              <Text>{bringSheets}</Text>
-            </View>
-          ) : (
-            <View style={UserFormStyles.radioButtonContainer}>
-              <View>
-                <RadioButton.Group
-                  onValueChange={() => handleSheetsToggle("yes", id)}
-                  value={bringSheets}
-                >
-                  <RadioButton.Item
-                    label="Yes"
-                    value="yes"
-                    labelStyle={{ fontSize: 10 }}
-                  />
-                </RadioButton.Group>
-              </View>
-              <View>
-                <RadioButton.Group
-                  onValueChange={() => handleSheetsToggle("no", id)}
-                  value={bringSheets}
-                >
-                  <RadioButton.Item
-                    label="No"
-                    value="no"
-                    labelStyle={{ fontSize: 10 }}
-                  />
-                </RadioButton.Group>
-              </View>
-            </View>
-          )}
+      {/* Access Details Section - Collapsible */}
+      <Pressable onPress={() => setShowAccessDetails(!showAccessDetails)} style={styles.collapsibleHeader}>
+        <Text style={styles.sectionTitle}>Access Instructions</Text>
+        <Text style={styles.chevron}>{showAccessDetails ? "−" : "+"}</Text>
+      </Pressable>
 
-          {/* Towels toggle */}
-          <Text style={UserFormStyles.smallTitle}>
-            Cleaner is bringing towels:
-          </Text>
-          {isDisabled ? (
-            <>
-              <View
-                style={{
-                  ...UserFormStyles.radioButtonContainer,
-                  width: "15%",
-                  padding: 5,
-                }}
-              >
-                <Text>{bringTowels}</Text>
-              </View>
-              <Text style={homePageStyles.information}>
-                These values cannot be changed within a week of your appointment
-              </Text>
-              <Text style={homePageStyles.information}>
-                Please contact us if you'd like to cancel or book sheets or
-                towels
-              </Text>
-            </>
-          ) : (
-            <View style={UserFormStyles.radioButtonContainer}>
-              <View>
-                <RadioButton.Group
-                  onValueChange={() => handleTowelToggle("yes", id)}
-                  value={bringTowels}
-                >
-                  <RadioButton.Item
-                    label="Yes"
-                    value="yes"
-                    labelStyle={{ fontSize: 10 }}
-                  />
-                </RadioButton.Group>
-              </View>
-              <View>
-                <RadioButton.Group
-                  onValueChange={() => handleTowelToggle("no", id)}
-                  value={bringTowels}
-                >
-                  <RadioButton.Item
-                    label="No"
-                    value="no"
-                    labelStyle={{ fontSize: 10 }}
-                  />
-                </RadioButton.Group>
-              </View>
-            </View>
-          )}
-
-          {/* Key or code toggle */}
-          <Text style={UserFormStyles.smallTitle}>
-            Cleaner will get in with:
-          </Text>
-          <View style={UserFormStyles.radioButtonContainer}>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleKeyToggle}
-                value={keyCodeToggle}
-              >
-                <RadioButton.Item
-                  label="Key"
-                  value="key"
-                  labelStyle={{ fontSize: 10 }}
-                />
-              </RadioButton.Group>
-            </View>
-            <View>
-              <RadioButton.Group
-                onValueChange={handleKeyToggle}
-                value={keyCodeToggle}
-              >
-                <RadioButton.Item
-                  label="Code"
-                  value="code"
-                  labelStyle={{ fontSize: 10 }}
-                />
-              </RadioButton.Group>
-            </View>
+      {showAccessDetails && (
+        <View style={styles.accessSection}>
+          {/* Access Method Toggle */}
+          <View style={styles.accessMethodRow}>
+            <SegmentedButtons
+              value={keyCodeToggle}
+              onValueChange={handleKeyToggle}
+              buttons={[
+                { value: "key", label: "Key Location" },
+                { value: "code", label: "Door Code" },
+              ]}
+              style={styles.accessToggle}
+            />
           </View>
 
-          {/* Code or key input */}
-          {keyCodeToggle === "code" ? (
-            <>
-              <Text style={UserFormStyles.smallTitle}>
-                The code to get in is
-              </Text>
+          {/* Code Input */}
+          {keyCodeToggle === "code" && (
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Door Code</Text>
               <TextInput
                 mode="outlined"
                 value={code || ""}
                 onChangeText={handleKeyPadCode}
-                style={UserFormStyles.codeInput}
+                style={styles.codeInput}
+                placeholder="1234#"
+                keyboardType="numeric"
+                outlineColor={colors.border.default}
+                activeOutlineColor={colors.primary[500]}
               />
-              {changeNotification.appointment === id && (
-                <Text style={UserFormStyles.changeNotification}>
-                  {changeNotification.message}
-                </Text>
-              )}
-            </>
-          ) : (
-            <>
-              <Text style={UserFormStyles.smallTitle}>
-                The location of the key is
-              </Text>
+            </View>
+          )}
+
+          {/* Key Location Input */}
+          {keyCodeToggle === "key" && (
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Key Location</Text>
               <TextInput
                 mode="outlined"
                 value={key || ""}
                 onChangeText={handleKeyLocation}
-                style={UserFormStyles.input}
+                style={styles.keyInput}
+                placeholder="Under the mat by the back door..."
+                multiline
+                outlineColor={colors.border.default}
+                activeOutlineColor={colors.primary[500]}
               />
-              <View style={{ textAlign: "center", marginBottom: 20 }}>
-                <Text style={{ color: "grey", fontSize: 10 }}>
-                  Example: Under the fake rock to the right of the back door or
-                  to the right of the door in a lock box with code 5555#
-                </Text>
-              </View>
-              {changeNotification.appointment === id && (
-                <Text style={UserFormStyles.changeNotification}>
-                  {changeNotification.message}
-                </Text>
-              )}
-            </>
+              <Text style={styles.inputHint}>
+                Be specific - include landmarks or details to help find it easily.
+              </Text>
+            </View>
           )}
 
-          {/* Submit button */}
-          {code !== keyPadCode || key !== keyLocation ? (
-            <Pressable onPress={handleSubmit}>
-              <Text style={{ ...UserFormStyles.button, width: "100%" }}>
-                Submit change
-              </Text>
-            </Pressable>
-          ) : null}
+          {/* Change Notification */}
+          {changeNotification.appointment === id && (
+            <View style={styles.successNotice}>
+              <Text style={styles.successNoticeText}>{changeNotification.message}</Text>
+            </View>
+          )}
 
-          {error && <Text style={UserFormStyles.error}>{error}</Text>}
-        </>
+          {/* Submit Button */}
+          {(code !== keyPadCode || key !== keyLocation) && (
+            <Pressable onPress={handleSubmit} style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed]}>
+              <Text style={styles.submitButtonText}>Save Changes</Text>
+            </Pressable>
+          )}
+
+          {error && (
+            <View style={styles.errorNotice}>
+              <Text style={styles.errorNoticeText}>{error}</Text>
+            </View>
+          )}
+        </View>
       )}
-    </Pressable>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    ...shadows.md,
+  },
+  cardScheduled: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[400],
+  },
+  cardUpcoming: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[600],
+  },
+  cardNeedsPay: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning[500],
+    backgroundColor: colors.warning[50],
+  },
+  cardComplete: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.success[500],
+    backgroundColor: colors.success[50],
+    opacity: 0.85,
+  },
+  cardPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+
+  // Header
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.md,
+  },
+  dateText: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  priceText: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.secondary[600],
+  },
+  priceComplete: {
+    color: colors.success[600],
+  },
+
+  // Badges
+  badge: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    alignSelf: "flex-start",
+  },
+  badgeDefault: {
+    backgroundColor: colors.neutral[100],
+  },
+  badgePrimary: {
+    backgroundColor: colors.primary[100],
+  },
+  badgeSuccess: {
+    backgroundColor: colors.success[100],
+  },
+  badgeWarning: {
+    backgroundColor: colors.warning[100],
+  },
+  badgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  badgeTextDefault: {
+    color: colors.text.secondary,
+  },
+  badgeTextPrimary: {
+    color: colors.primary[700],
+  },
+  badgeTextSuccess: {
+    color: colors.success[700],
+  },
+  badgeTextWarning: {
+    color: colors.warning[700],
+  },
+
+  // Payment Prompt
+  paymentPrompt: {
+    backgroundColor: colors.warning[100],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginTop: spacing.sm,
+  },
+  paymentPromptText: {
+    color: colors.warning[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    textAlign: "center",
+  },
+
+  // Info Row
+  infoRow: {
+    flexDirection: "row",
+    gap: spacing.xl,
+  },
+  infoItem: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // Divider
+  divider: {
+    height: 1,
+    backgroundColor: colors.border.light,
+    marginVertical: spacing.md,
+  },
+
+  // Section
+  section: {
+    marginBottom: spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+
+  // Toggle Row
+  toggleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  toggleLabelContainer: {
+    flex: 1,
+  },
+  toggleLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+  },
+  togglePrice: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  segmentedButton: {
+    width: 120,
+  },
+  lockedValue: {
+    backgroundColor: colors.neutral[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+  },
+  lockedValueActive: {
+    backgroundColor: colors.primary[100],
+  },
+  lockedValueText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  lockedValueTextActive: {
+    color: colors.primary[700],
+  },
+
+  // Locked Notice
+  lockedNotice: {
+    backgroundColor: colors.neutral[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginTop: spacing.xs,
+  },
+  lockedNoticeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    textAlign: "center",
+  },
+
+  // Collapsible
+  collapsibleHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  chevron: {
+    fontSize: typography.fontSize.xl,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.light,
+  },
+
+  // Access Section
+  accessSection: {
+    marginTop: spacing.sm,
+  },
+  accessMethodRow: {
+    marginBottom: spacing.md,
+  },
+  accessToggle: {
+    width: "100%",
+  },
+
+  // Inputs
+  inputContainer: {
+    marginBottom: spacing.md,
+  },
+  inputLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  codeInput: {
+    backgroundColor: colors.neutral[0],
+    fontSize: typography.fontSize.lg,
+    textAlign: "center",
+    letterSpacing: 4,
+  },
+  keyInput: {
+    backgroundColor: colors.neutral[0],
+    minHeight: 80,
+  },
+  inputHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
+  },
+
+  // Notices
+  successNotice: {
+    backgroundColor: colors.success[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+    marginBottom: spacing.md,
+  },
+  successNoticeText: {
+    color: colors.success[700],
+    fontSize: typography.fontSize.sm,
+    textAlign: "center",
+  },
+  errorNotice: {
+    backgroundColor: colors.error[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+    marginTop: spacing.sm,
+  },
+  errorNoticeText: {
+    color: colors.error[700],
+    fontSize: typography.fontSize.sm,
+    textAlign: "center",
+  },
+
+  // Submit Button
+  submitButton: {
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    ...shadows.sm,
+  },
+  submitButtonPressed: {
+    backgroundColor: colors.primary[700],
+  },
+  submitButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    textAlign: "center",
+  },
+});
 
 export default EachAppointment;
