@@ -18,6 +18,8 @@ const SignUpWizard = ({ dispatch }) => {
   const { login } = useContext(AuthContext);
 
   const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
     email: "",
     username: "",
     password: "",
@@ -60,6 +62,14 @@ const SignUpWizard = ({ dispatch }) => {
   const validateForm = () => {
     const newErrors = {};
 
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = "First name is required";
+    }
+
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = "Last name is required";
+    }
+
     if (!formData.email) {
       newErrors.email = "Email is required";
     } else if (!validateEmail(formData.email)) {
@@ -97,6 +107,8 @@ const SignUpWizard = ({ dispatch }) => {
     setIsLoading(true);
     try {
       const response = await FetchData.makeNewUser({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
         userName: formData.username,
         password: formData.password,
         email: formData.email,
@@ -148,6 +160,62 @@ const SignUpWizard = ({ dispatch }) => {
                 <Text style={styles.errorText}>{errors.submit}</Text>
               </View>
             )}
+
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, styles.inputHalf]}>
+                <Text style={styles.inputLabel}>
+                  First Name <Text style={styles.inputRequired}>*</Text>
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    focusedField === "firstName" && styles.inputFocused,
+                    errors.firstName && styles.inputError,
+                  ]}
+                  placeholder="First name"
+                  placeholderTextColor="#94a3b8"
+                  value={formData.firstName}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, firstName: text })
+                  }
+                  onFocus={() => setFocusedField("firstName")}
+                  onBlur={() => setFocusedField(null)}
+                  autoCapitalize="words"
+                />
+                {errors.firstName && (
+                  <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+                    {errors.firstName}
+                  </Text>
+                )}
+              </View>
+
+              <View style={[styles.inputGroup, styles.inputHalf]}>
+                <Text style={styles.inputLabel}>
+                  Last Name <Text style={styles.inputRequired}>*</Text>
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    focusedField === "lastName" && styles.inputFocused,
+                    errors.lastName && styles.inputError,
+                  ]}
+                  placeholder="Last name"
+                  placeholderTextColor="#94a3b8"
+                  value={formData.lastName}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, lastName: text })
+                  }
+                  onFocus={() => setFocusedField("lastName")}
+                  onBlur={() => setFocusedField(null)}
+                  autoCapitalize="words"
+                />
+                {errors.lastName && (
+                  <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+                    {errors.lastName}
+                  </Text>
+                )}
+              </View>
+            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>

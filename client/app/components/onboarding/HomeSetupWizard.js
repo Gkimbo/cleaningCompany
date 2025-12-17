@@ -161,6 +161,10 @@ const HomeSetupWizard = ({ state, dispatch }) => {
       } else if (response.error) {
         setErrors({ submit: response.error });
       } else {
+        // Update state with the new home so it shows immediately
+        if (dispatch && response.home) {
+          dispatch({ type: "ADD_HOME", payload: response.home });
+        }
         navigate("/");
       }
     } catch (error) {

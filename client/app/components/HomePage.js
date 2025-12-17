@@ -14,6 +14,7 @@ import ReviewsOverview from "./reviews/ReviewsOverview";
 import GetHelpButton from "./messaging/GetHelpButton";
 import TaxFormsSection from "./tax/TaxFormsSection";
 import ManagerDashboard from "./manager/ManagerDashboard";
+import ClientDashboard from "./client/ClientDashboard";
 
 const HomePage = ({ state, dispatch }) => {
   const [redirect, setRedirect] = useState(false);
@@ -194,6 +195,11 @@ const HomePage = ({ state, dispatch }) => {
   // Show Manager Dashboard for managers
   if (state.account === "manager1" && state.currentUser.token) {
     return <ManagerDashboard state={state} />;
+  }
+
+  // Show Client Dashboard for logged-in homeowners (not cleaner, not manager)
+  if (state.currentUser.token && state.account !== "cleaner") {
+    return <ClientDashboard state={state} dispatch={dispatch} />;
   }
 
   return (

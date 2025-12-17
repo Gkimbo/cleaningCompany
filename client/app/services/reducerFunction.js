@@ -68,6 +68,11 @@ const reducer = (state, action) => {
         ...state,
         appointments: [...state.appointments, ...action.payload],
       };
+    case "ADD_HOME":
+      return {
+        ...state,
+        homes: [...state.homes, action.payload],
+      };
     case "DELETE_HOME":
       return {
         ...state,

@@ -84,7 +84,7 @@ userInfoRouter.post("/home", async (req, res) => {
 
 		let cleanersNeeded = getCleanersNeeded(numBeds, numBaths);
 
-		const userInfo = await UserInfo.addHomeToDB({
+		const newHome = await UserInfo.addHomeToDB({
 			nickName,
 			userId,
 			address,
@@ -109,6 +109,7 @@ userInfoRouter.post("/home", async (req, res) => {
 
 		return res.status(201).json({
 			user,
+			home: newHome,
 			outsideServiceArea,
 			serviceAreaMessage: outsideServiceArea
 				? "This home is outside our current service area. It has been saved to your profile, but you won't be able to book appointments until we expand to this area."

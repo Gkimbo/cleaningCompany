@@ -24,7 +24,7 @@ class UserInfoClass {
     timeToBeCompleted,
     outsideServiceArea = false,
   }) {
-    await UserHomes.create({
+    const newHome = await UserHomes.create({
       userId,
       nickName,
       address,
@@ -46,6 +46,7 @@ class UserInfoClass {
       timeToBeCompleted,
       outsideServiceArea,
     });
+    return newHome;
   }
 
   static async editHomeInDB({

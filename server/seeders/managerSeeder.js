@@ -17,6 +17,8 @@ module.exports = {
       // Insert a manager account into the Users table
       await queryInterface.bulkInsert("Users", [
         {
+          firstName: "Manager",
+          lastName: "One",
           username: "manager1",
           email: "manager1CleaningCo@gmail.com",
           type: "manager",

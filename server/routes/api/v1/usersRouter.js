@@ -19,13 +19,15 @@ const usersRouter = express.Router();
 
 usersRouter.post("/", async (req, res) => {
   try {
-    const { username, password, email } = req.body;
+    const { firstName, lastName, username, password, email } = req.body;
     let existingUser = null;
     existingUser = await User.findOne({ where: { email } });
     if (!existingUser) {
       existingUser = await User.findOne({ where: { username } });
       if (!existingUser) {
         const newUser = await User.create({
+          firstName,
+          lastName,
           username,
           password,
           email,
@@ -62,6 +64,8 @@ usersRouter.post("/new-employee", async (req, res) => {
       existingUser = await User.findOne({ where: { username } });
       if (!existingUser) {
         const newUser = await User.create({
+          firstName: firstName || "",
+          lastName: lastName || "",
           username,
           password,
           email,

@@ -115,6 +115,8 @@ class FetchData {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          firstName: data.firstName,
+          lastName: data.lastName,
           username: data.userName,
           password: data.password,
           email: data.email,

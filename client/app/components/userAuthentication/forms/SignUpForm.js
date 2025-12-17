@@ -8,17 +8,29 @@ import formStyles from "../../../services/styles/FormStyle";
 import { AuthContext } from "../../../services/AuthContext";
 
 const SignUpForm = ({ state, dispatch }) => {
+	const [firstName, setFirstName] = useState("");
+	const [lastName, setLastName] = useState("");
 	const [userName, setUserName] = useState("");
 	const [password, setPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
 	const [email, setEmail] = useState("");
 	const [redirect, setRedirect] = useState(false);
 	const [showPassword, setShowPassword] = useState(false);
+	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const navigate = useNavigate();
 	const { login } = useContext(AuthContext);
 
 	const validate = () => {
 		const validationErrors = [];
+
+		if (!firstName.trim()) {
+			validationErrors.push("First name is required.");
+		}
+
+		if (!lastName.trim()) {
+			validationErrors.push("Last name is required.");
+		}
 
 		if (userName.length < 4 || userName.length > 12) {
 			validationErrors.push("Username must be between 4 and 12 characters.");
@@ -41,6 +53,10 @@ const SignUpForm = ({ state, dispatch }) => {
 			);
 		}
 
+		if (password !== confirmPassword) {
+			validationErrors.push("Passwords do not match.");
+		}
+
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 		if (!emailRegex.test(email)) {
 			validationErrors.push("Please enter a valid email address.");
@@ -55,12 +71,13 @@ const SignUpForm = ({ state, dispatch }) => {
 			return;
 		} else {
 			const data = {
+				firstName,
+				lastName,
 				userName,
 				password,
 				email,
 			};
 			const response = await FetchData.makeNewUser(data);
-			console.log("response")
 			if (
 				response === "An account already has this email" ||
 				response === "Username already exists"
@@ -92,21 +109,53 @@ const SignUpForm = ({ state, dispatch }) => {
 				</View>
 			)}
 
+			<View style={{ flexDirection: "row", gap: 8 }}>
+				<TextInput
+					mode="outlined"
+					label="First Name *"
+					placeholder="First name"
+					style={[formStyles.input, { flex: 1 }]}
+					value={firstName}
+					onChangeText={setFirstName}
+				/>
+				<TextInput
+					mode="outlined"
+					label="Last Name *"
+					placeholder="Last name"
+					style={[formStyles.input, { flex: 1 }]}
+					value={lastName}
+					onChangeText={setLastName}
+				/>
+			</View>
+
 			<TextInput
 				mode="outlined"
-				label="Username"
-				placeholder="Enter your username"
+				label="Username *"
+				placeholder="Choose a username (4-12 characters)"
 				style={formStyles.input}
 				value={userName}
 				onChangeText={setUserName}
+				autoCapitalize="none"
 			/>
+
 			<TextInput
 				mode="outlined"
-				label="Password"
+				label="Email *"
+				placeholder="Enter your email"
+				style={formStyles.input}
+				value={email}
+				onChangeText={setEmail}
+				keyboardType="email-address"
+				autoCapitalize="none"
+			/>
+
+			<TextInput
+				mode="outlined"
+				label="Password *"
 				secureTextEntry={!showPassword}
 				value={password}
 				onChangeText={setPassword}
-				placeholder="Enter your password"
+				placeholder="Create a password"
 				right={
 					<TextInput.Icon
 						icon={showPassword ? "eye-off" : "eye"}
@@ -115,16 +164,26 @@ const SignUpForm = ({ state, dispatch }) => {
 				}
 				style={formStyles.input}
 			/>
+
 			<TextInput
 				mode="outlined"
-				label="Email"
-				placeholder="Enter your email"
+				label="Confirm Password *"
+				secureTextEntry={!showConfirmPassword}
+				value={confirmPassword}
+				onChangeText={setConfirmPassword}
+				placeholder="Confirm your password"
+				right={
+					<TextInput.Icon
+						icon={showConfirmPassword ? "eye-off" : "eye"}
+						onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+					/>
+				}
 				style={formStyles.input}
-				value={email}
-				onChangeText={setEmail}
-				keyboardType="email-address"
-				autoCapitalize="none"
 			/>
+
+			<Text style={{ fontSize: 12, color: "#64748b", marginBottom: 16, marginTop: -8 }}>
+				Password must be at least 8 characters with 2 uppercase, 2 lowercase, and 2 special characters.
+			</Text>
 
 			<Pressable style={formStyles.button} onPress={onSubmit}>
 				<Text style={formStyles.buttonText}>Create Account</Text>
