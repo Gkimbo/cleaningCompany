@@ -100,6 +100,10 @@ const SignInForm = ({ state, dispatch }) => {
 			<Pressable style={formStyles.button} onPress={onSubmit}>
 				<Text style={formStyles.buttonText}>Sign In</Text>
 			</Pressable>
+
+			<Pressable style={formStyles.linkButton} onPress={() => navigate("/forgot-credentials")}>
+				<Text style={formStyles.linkButtonText}>Forgot username or password?</Text>
+			</Pressable>
 		</View>
 	);
 };

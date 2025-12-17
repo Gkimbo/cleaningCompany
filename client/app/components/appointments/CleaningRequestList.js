@@ -40,11 +40,11 @@ const CleaningRequestList = ({ state, dispatch }) => {
 
   const navigate = useNavigate();
 
-  // Safely flatten appointments
+  // Safely extract appointments (each request has a single appointment object, not an array)
   const appointmentArray = useMemo(() => {
-    return (state.requests || []).flatMap(
-      (request) => request.appointment || []
-    );
+    return (state.requests || [])
+      .map((request) => request.appointment)
+      .filter((appointment) => appointment && typeof appointment === 'object' && !Array.isArray(appointment));
   }, [state.requests]);
 
   // Fetch user ID
@@ -145,7 +145,7 @@ const CleaningRequestList = ({ state, dispatch }) => {
       style={{
         ...homePageStyles.container,
         flexDirection: "column",
-        marginTop: "27%",
+        paddingTop: 20,
       }}
     >
       {appointmentArray.length > 0 ? (

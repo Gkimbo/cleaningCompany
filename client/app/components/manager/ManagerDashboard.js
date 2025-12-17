@@ -11,7 +11,13 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import ManagerDashboardService from "../../services/fetchRequests/ManagerDashboardService";
-import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../services/styles/theme";
 import TaxFormsSection from "../tax/TaxFormsSection";
 
 const { width } = Dimensions.get("window");
@@ -27,7 +33,8 @@ const BarChart = ({ data, maxValue, label, color = colors.primary[500] }) => {
       <View style={styles.chartArea}>
         <View style={styles.barsContainer}>
           {data.map((item, index) => {
-            const barHeight = maxValue > 0 ? (item.value / maxValue) * chartHeight : 0;
+            const barHeight =
+              maxValue > 0 ? (item.value / maxValue) * chartHeight : 0;
             return (
               <View key={index} style={styles.barWrapper}>
                 <View
@@ -51,7 +58,14 @@ const BarChart = ({ data, maxValue, label, color = colors.primary[500] }) => {
 };
 
 // Stat Card Component
-const StatCard = ({ title, value, subtitle, icon, color = colors.primary[500], onPress }) => (
+const StatCard = ({
+  title,
+  value,
+  subtitle,
+  icon,
+  color = colors.primary[500],
+  onPress,
+}) => (
   <Pressable
     onPress={onPress}
     style={({ pressed }) => [
@@ -203,10 +217,12 @@ const ManagerDashboard = ({ state }) => {
   }
 
   // Prepare chart data
-  const monthlyEarningsData = (financialData?.monthly || []).slice(-6).map((m) => ({
-    label: new Date(m.month).toLocaleDateString("en-US", { month: "short" }),
-    value: m.earningsCents || 0,
-  }));
+  const monthlyEarningsData = (financialData?.monthly || [])
+    .slice(-6)
+    .map((m) => ({
+      label: new Date(m.month).toLocaleDateString("en-US", { month: "short" }),
+      value: m.earningsCents || 0,
+    }));
 
   const maxEarnings = Math.max(...monthlyEarningsData.map((d) => d.value), 1);
 
@@ -308,13 +324,16 @@ const ManagerDashboard = ({ state }) => {
             <View style={styles.balanceDivider} />
             <View>
               <Text style={styles.balanceLabel}>Net Earnings (YTD)</Text>
-              <Text style={[styles.balanceValue, { color: colors.success[600] }]}>
+              <Text
+                style={[styles.balanceValue, { color: colors.success[600] }]}
+              >
                 {formatCurrency(financialData?.current?.yearNetCents)}
               </Text>
             </View>
           </View>
           <Text style={styles.balanceNote}>
-            {financialData?.current?.transactionCount || 0} transactions this year
+            {financialData?.current?.transactionCount || 0} transactions this
+            year
           </Text>
         </View>
 
@@ -384,7 +403,12 @@ const ManagerDashboard = ({ state }) => {
         />
 
         <View style={styles.analyticsGrid}>
-          <View style={[styles.analyticsCard, { borderLeftColor: colors.primary[500] }]}>
+          <View
+            style={[
+              styles.analyticsCard,
+              { borderLeftColor: colors.primary[500] },
+            ]}
+          >
             <Text style={styles.analyticsValue}>
               {getActiveUserCount("cleaners")}
             </Text>
@@ -393,7 +417,12 @@ const ManagerDashboard = ({ state }) => {
               of {userAnalytics?.totals?.cleaners || 0} total
             </Text>
           </View>
-          <View style={[styles.analyticsCard, { borderLeftColor: colors.secondary[500] }]}>
+          <View
+            style={[
+              styles.analyticsCard,
+              { borderLeftColor: colors.secondary[500] },
+            ]}
+          >
             <Text style={styles.analyticsValue}>
               {getActiveUserCount("homeowners")}
             </Text>
@@ -402,7 +431,12 @@ const ManagerDashboard = ({ state }) => {
               of {userAnalytics?.totals?.homeowners || 0} total
             </Text>
           </View>
-          <View style={[styles.analyticsCard, { borderLeftColor: colors.success[500] }]}>
+          <View
+            style={[
+              styles.analyticsCard,
+              { borderLeftColor: colors.success[500] },
+            ]}
+          >
             <Text style={styles.analyticsValue}>
               {getActiveUserCount("combined")}
             </Text>
@@ -422,6 +456,46 @@ const ManagerDashboard = ({ state }) => {
             color={colors.primary[500]}
           />
         )}
+      </View>
+
+      {/* Platform Overview Section */}
+      <View style={styles.section}>
+        <SectionHeader title="Platform Overview" />
+        <View style={styles.platformOverviewGrid}>
+          <View
+            style={[
+              styles.platformOverviewCard,
+              { borderLeftColor: colors.primary[500] },
+            ]}
+          >
+            <Text style={styles.platformOverviewValue}>
+              {userAnalytics?.totals?.cleaners || 0}
+            </Text>
+            <Text style={styles.platformOverviewLabel}>Cleaners</Text>
+          </View>
+          <View
+            style={[
+              styles.platformOverviewCard,
+              { borderLeftColor: colors.secondary[500] },
+            ]}
+          >
+            <Text style={styles.platformOverviewValue}>
+              {userAnalytics?.totals?.homeowners || 0}
+            </Text>
+            <Text style={styles.platformOverviewLabel}>Homeowners</Text>
+          </View>
+          <View
+            style={[
+              styles.platformOverviewCard,
+              { borderLeftColor: colors.success[500] },
+            ]}
+          >
+            <Text style={styles.platformOverviewValue}>
+              {userAnalytics?.totals?.homes || 0}
+            </Text>
+            <Text style={styles.platformOverviewLabel}>Homes</Text>
+          </View>
+        </View>
       </View>
 
       {/* Tax Section */}
@@ -488,6 +562,30 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   headerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
+
+  // Platform Overview
+  platformOverviewGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  platformOverviewCard: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderLeftWidth: 4,
+    alignItems: "center",
+  },
+  platformOverviewValue: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  platformOverviewLabel: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     marginTop: spacing.xs,

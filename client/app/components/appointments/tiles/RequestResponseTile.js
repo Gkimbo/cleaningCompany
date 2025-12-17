@@ -37,7 +37,7 @@ const RequestResponseTile = ({
   });
 
   const requestArray = useMemo(
-    () => state.requests.map((request) => request.request) || [],
+    () => (state.requests || []).map((request) => request.request).filter(Boolean),
     [state]
   );
 
@@ -70,10 +70,12 @@ const RequestResponseTile = ({
     }
     const uniqueEmployees = new Map();
     state.requests.forEach((request) => {
-      uniqueEmployees.set(
-        request.employeeRequesting.id,
-        request.employeeRequesting
-      );
+      if (request.employeeRequesting && request.employeeRequesting.id) {
+        uniqueEmployees.set(
+          request.employeeRequesting.id,
+          request.employeeRequesting
+        );
+      }
     });
     return Array.from(uniqueEmployees.values());
   }, [state]);

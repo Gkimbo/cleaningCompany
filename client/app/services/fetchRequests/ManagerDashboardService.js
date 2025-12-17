@@ -41,7 +41,7 @@ class ManagerDashboardService {
       `${baseURL}/api/v1/manager-dashboard/user-analytics`,
       token,
       {
-        totals: { cleaners: 0, homeowners: 0, managers: 0, total: 0 },
+        totals: { cleaners: 0, homeowners: 0, managers: 0, homes: 0, total: 0 },
         active: {
           cleaners: { day: 0, week: 0, month: 0, year: 0, allTime: 0 },
           homeowners: { day: 0, week: 0, month: 0, year: 0, allTime: 0 },

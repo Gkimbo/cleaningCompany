@@ -367,4 +367,51 @@ usersRouter.patch("/update-password", async (req, res) => {
   }
 });
 
+// PATCH: Update email
+usersRouter.patch("/update-email", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+    const { email } = req.body;
+
+    // Validate email format
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Please enter a valid email address" });
+    }
+
+    // Check if email is already taken by another user
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser && existingUser.id !== userId) {
+      return res.status(409).json({ error: "This email is already associated with another account" });
+    }
+
+    // Find and update user
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await user.update({ email });
+    console.log(`✅ Email updated for user ${userId}: ${email}`);
+
+    return res.status(200).json({ message: "Email updated successfully", email });
+  } catch (error) {
+    console.error("Error updating email:", error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+    return res.status(500).json({ error: "Failed to update email" });
+  }
+});
+
 module.exports = usersRouter;

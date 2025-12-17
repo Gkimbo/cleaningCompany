@@ -149,7 +149,10 @@ const AddHomeForm = ({ state, dispatch }) => {
       const response = await FetchData.addHomeInfo(submitData);
 
       if (response === "Cannot find zipcode") {
-        setErrors({ submit: "We don't service this area yet. Please check the zip code." });
+        setErrors({ submit: "We couldn't verify this zip code. Please check and try again." });
+        setCurrentStep(STEPS.BASICS);
+      } else if (response.error === "outside_service_area") {
+        setErrors({ submit: response.message || "We don't currently service this area." });
         setCurrentStep(STEPS.BASICS);
       } else if (response.error) {
         setErrors({ submit: response.error });

@@ -11,6 +11,7 @@ const {
   Payment,
   PlatformEarnings,
   UserAppointments,
+  UserHomes,
   Message,
   Conversation,
   sequelize,
@@ -194,6 +195,7 @@ managerDashboardRouter.get("/user-analytics", verifyManager, async (req, res) =>
       },
     }).catch(() => 0);
     const totalManagers = await User.count({ where: { type: "manager1" } }).catch(() => 0);
+    const totalHomes = await UserHomes.count().catch(() => 0);
 
     // Active users (logged in within time period)
     const getActiveUsers = async (since, userType) => {
@@ -271,6 +273,7 @@ managerDashboardRouter.get("/user-analytics", verifyManager, async (req, res) =>
         cleaners: totalCleaners,
         homeowners: totalHomeowners,
         managers: totalManagers,
+        homes: totalHomes,
         total: totalCleaners + totalHomeowners + totalManagers,
       },
       active: {

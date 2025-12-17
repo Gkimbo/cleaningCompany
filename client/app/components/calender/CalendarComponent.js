@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, Button, Pressable, Modal } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import { View, Text, Pressable, Modal, StyleSheet } from "react-native";
 import { Calendar } from "react-native-calendars";
-import calenderStyles from "../../services/styles/CalenderSyles";
 import Icon from "react-native-vector-icons/FontAwesome";
-import UserFormStyles from "../../services/styles/UserInputFormStyle";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
 
@@ -70,7 +68,7 @@ const CalendarComponent = ({
       selectedDate.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000;
 
     if (isWithinWeek) {
-      setError("Cannot book appointments within a week of the todays date.");
+      setError("Cannot book appointments within a week of today's date.");
     } else {
       setError(null);
       const updatedDates = { ...selectedDates };
@@ -176,149 +174,488 @@ const CalendarComponent = ({
     }
   }, [redirectToBill]);
 
-  const renderDay = ({ date }) => {
-    const selectedStyle = {
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: confirmationModalVisible
-        ? "grey"
-        : isDateBooked(date)
-          ? "#28A745"
-          : "#3498db",
-      borderRadius: 50,
-      padding: 10,
-    };
+  const renderDay = useCallback(({ date }) => {
+    const isPast = isDateDisabled(date);
+    const isBooked = isDateBooked(date);
+    const isSelected = selectedDates[date.dateString];
+    const isPastUnpaid = isDatePastAndNotPaid(date);
+    const price = isBooked ? priceOfBooking(date) : calculatePrice();
 
-    const dayStyle = {
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 10,
-      opacity: confirmationModalVisible
-        ? "grey"
-        : isDateDisabled(date)
-          ? 0.5
-          : 1,
-    };
+    // Determine the style based on state
+    let containerStyle = [styles.dayContainer];
+    let textStyle = [styles.dayText];
+    let priceTextStyle = [styles.priceText];
 
-    const pastDate = {
-      backgroundColor: confirmationModalVisible
-        ? "red"
-        : isDateBooked(date)
-          ? "red"
-          : "#3498db",
-      borderRadius: 50,
-      padding: 10,
-    };
+    if (isPastUnpaid) {
+      containerStyle.push(styles.dayPastUnpaid);
+      textStyle.push(styles.dayTextLight);
+      priceTextStyle.push(styles.priceTextLight);
+    } else if (isPast) {
+      containerStyle.push(styles.dayDisabled);
+      textStyle.push(styles.dayTextDisabled);
+      priceTextStyle.push(styles.priceTextDisabled);
+    } else if (isBooked) {
+      containerStyle.push(styles.dayBooked);
+      textStyle.push(styles.dayTextLight);
+      priceTextStyle.push(styles.priceTextLight);
+    } else if (isSelected) {
+      containerStyle.push(styles.daySelected);
+      textStyle.push(styles.dayTextLight);
+      priceTextStyle.push(styles.priceTextLight);
+    } else {
+      containerStyle.push(styles.dayAvailable);
+    }
 
-    const selectedPriceStyle = {
-      fontSize: 12,
-      color: "black",
-    };
-
-    const priceStyle = {
-      fontSize: 12,
-      color: "gray",
+    const handlePress = () => {
+      if (isPastUnpaid) {
+        handleRedirectToBill();
+      } else if (isBooked && !isPast) {
+        handleRemoveBooking(date);
+      } else if (!isPast) {
+        handleDateSelect(date);
+      }
     };
 
     return (
-      <>
-        {isDatePastAndNotPaid(date) ? (
-          <Pressable style={pastDate} onPress={() => handleRedirectToBill()}>
-            <Text>{date.day}</Text>
-            <Text style={selectedPriceStyle}>${priceOfBooking(date)}</Text>
-          </Pressable>
-        ) : isDateDisabled(date) ? (
-          <View style={dayStyle}>
-            <Text>{date.day}</Text>
-          </View>
-        ) : isDateBooked(date) ? (
-          <Pressable
-            style={selectedStyle}
-            onPress={() => handleRemoveBooking(date)}
-          >
-            <Text>{date.day}</Text>
-            <Text style={selectedPriceStyle}>${priceOfBooking(date)}</Text>
-          </Pressable>
-        ) : selectedDates[date.dateString] ? (
-          <Pressable
-            style={selectedStyle}
-            onPress={() => handleDateSelect(date)}
-          >
-            <Text>{date.day}</Text>
-            <Text style={selectedPriceStyle}>${calculatePrice()}</Text>
-          </Pressable>
-        ) : (
-          <Pressable style={dayStyle} onPress={() => handleDateSelect(date)}>
-            <Text>{date.day}</Text>
-            <Text style={priceStyle}>${calculatePrice()}</Text>
-          </Pressable>
+      <Pressable
+        style={containerStyle}
+        onPress={handlePress}
+        disabled={isPast && !isPastUnpaid}
+      >
+        <Text style={textStyle}>{date.day}</Text>
+        {!isPast && <Text style={priceTextStyle}>${price}</Text>}
+        {isBooked && !isPast && (
+          <Icon name="check" size={10} color="#fff" style={styles.checkIcon} />
         )}
-      </>
+      </Pressable>
     );
-  };
+  }, [selectedDates, appointments, confirmationModalVisible]);
+
+  const selectedCount = Object.keys(selectedDates).length;
+  const totalPrice = Object.values(selectedDates).reduce((sum, d) => sum + d.price, 0);
+
   return (
-    <>
-      <View style={calenderStyles.container}>
-        {error && <Text style={UserFormStyles.error}>{error}</Text>}
-        <Text style={calenderStyles.title}>Select Dates</Text>
+    <View style={styles.wrapper}>
+      {/* Calendar Card */}
+      <View style={styles.calendarCard}>
+        <Text style={styles.title}>Schedule Cleanings</Text>
+        <Text style={styles.subtitle}>
+          Tap dates to schedule or manage appointments
+        </Text>
+
+        {error && (
+          <View style={styles.errorContainer}>
+            <Icon name="exclamation-circle" size={16} color="#dc2626" />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
+        {/* Legend */}
+        <View style={styles.legend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: "#3b82f6" }]} />
+            <Text style={styles.legendText}>Selected</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: "#10b981" }]} />
+            <Text style={styles.legendText}>Booked</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: "#ef4444" }]} />
+            <Text style={styles.legendText}>Unpaid</Text>
+          </View>
+        </View>
+
         <Calendar
           current={currentMonth.toISOString().split("T")[0]}
           onMonthChange={handleMonthChange}
           renderArrow={(direction) => (
-            <View>
-              {direction === "left" ? (
-                <Icon name="chevron-left" size={15} color="#3498db" />
-              ) : (
-                <Icon name="chevron-right" size={15} color="#3498db" />
-              )}
+            <View style={styles.arrowContainer}>
+              <Icon
+                name={direction === "left" ? "chevron-left" : "chevron-right"}
+                size={16}
+                color="#3b82f6"
+              />
             </View>
           )}
           dayComponent={renderDay}
+          theme={{
+            backgroundColor: "transparent",
+            calendarBackground: "transparent",
+            monthTextColor: "#1e293b",
+            textMonthFontWeight: "700",
+            textMonthFontSize: 18,
+          }}
         />
-        <Button
-          title="Book Cleanings!"
-          onPress={handleSubmit}
-          disabled={Object.keys(selectedDates).length === 0}
-        />
-      </View>
-      <View style={calenderStyles.datesContainer}>
-        {Object.keys(selectedDates).length > 0 && (
-          <View style={calenderStyles.selectedDatesContainer}>
-            <Text style={calenderStyles.selectedDatesText}>
-              Selected Dates: {Object.keys(selectedDates).join(", ")}
-            </Text>
+
+        {/* Selected Dates Summary */}
+        {selectedCount > 0 && (
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Selected Dates</Text>
+              <Text style={styles.summaryValue}>{selectedCount}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total</Text>
+              <Text style={styles.summaryPrice}>${totalPrice}</Text>
+            </View>
+            <View style={styles.selectedDatesList}>
+              {Object.keys(selectedDates).map((dateStr) => {
+                const dateObj = new Date(dateStr + "T00:00:00");
+                const formatted = dateObj.toLocaleDateString("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                });
+                return (
+                  <View key={dateStr} style={styles.dateChip}>
+                    <Text style={styles.dateChipText}>{formatted}</Text>
+                    <Pressable
+                      onPress={() => handleDateSelect({ dateString: dateStr })}
+                      hitSlop={8}
+                    >
+                      <Icon name="times" size={12} color="#64748b" />
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         )}
+
+        {/* Book Button */}
+        <Pressable
+          style={[
+            styles.bookButton,
+            selectedCount === 0 && styles.bookButtonDisabled,
+          ]}
+          onPress={handleSubmit}
+          disabled={selectedCount === 0}
+        >
+          <Icon name="calendar-check-o" size={18} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.bookButtonText}>
+            {selectedCount === 0
+              ? "Select dates to book"
+              : `Book ${selectedCount} Cleaning${selectedCount > 1 ? "s" : ""}`}
+          </Text>
+        </Pressable>
+
+        <Text style={styles.helpText}>
+          Tap a green date to cancel an existing appointment
+        </Text>
       </View>
+
+      {/* Cancellation Modal */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={confirmationModalVisible}
         onRequestClose={() => setConfirmationModalVisible(false)}
       >
-        <View style={calenderStyles.modalContainer}>
-          <View style={calenderStyles.modalContent}>
-            <Text style={calenderStyles.modalText}>
-              Are you sure you want to delete this appointment? A $25
-              cancellation fee will be charged.
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconContainer}>
+              <Icon name="exclamation-triangle" size={32} color="#f59e0b" />
+            </View>
+            <Text style={styles.modalTitle}>Cancel Appointment?</Text>
+            <Text style={styles.modalText}>
+              This appointment is within 7 days. A{" "}
+              <Text style={styles.modalFee}>$25 cancellation fee</Text> will be
+              charged to your account.
             </Text>
-            <View style={calenderStyles.modalButtons}>
-              <Pressable onPress={() => handleConfirmation(true)}>
-                <View style={calenderStyles.deleteButton}>
-                  <Text style={calenderStyles.buttonText}>Delete</Text>
-                </View>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={styles.keepButton}
+                onPress={() => handleConfirmation(false)}
+              >
+                <Text style={styles.keepButtonText}>Keep Appointment</Text>
               </Pressable>
-              <Pressable onPress={() => handleConfirmation(false)}>
-                <View style={calenderStyles.keepButton}>
-                  <Text style={calenderStyles.buttonText}>Keep</Text>
-                </View>
+              <Pressable
+                style={styles.deleteButton}
+                onPress={() => handleConfirmation(true)}
+              >
+                <Text style={styles.deleteButtonText}>Cancel Anyway</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  calendarCard: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1e293b",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef2f2",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    color: "#dc2626",
+    fontSize: 14,
+    flex: 1,
+  },
+  legend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 20,
+    marginBottom: 16,
+    paddingVertical: 10,
+    backgroundColor: "#f8fafc",
+    borderRadius: 10,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "500",
+  },
+  dayContainer: {
+    width: 44,
+    height: 52,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 10,
+    margin: 2,
+  },
+  dayAvailable: {
+    backgroundColor: "#f1f5f9",
+  },
+  daySelected: {
+    backgroundColor: "#3b82f6",
+  },
+  dayBooked: {
+    backgroundColor: "#10b981",
+  },
+  dayDisabled: {
+    backgroundColor: "transparent",
+    opacity: 0.4,
+  },
+  dayPastUnpaid: {
+    backgroundColor: "#ef4444",
+  },
+  dayText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  dayTextLight: {
+    color: "#fff",
+  },
+  dayTextDisabled: {
+    color: "#94a3b8",
+  },
+  priceText: {
+    fontSize: 10,
+    color: "#64748b",
+    marginTop: 2,
+  },
+  priceTextLight: {
+    color: "rgba(255,255,255,0.9)",
+  },
+  priceTextDisabled: {
+    color: "#cbd5e1",
+  },
+  checkIcon: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+  },
+  arrowContainer: {
+    padding: 10,
+    backgroundColor: "#eff6ff",
+    borderRadius: 10,
+  },
+  summaryCard: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: "#64748b",
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  summaryPrice: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#3b82f6",
+  },
+  selectedDatesList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  dateChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  dateChipText: {
+    fontSize: 13,
+    color: "#334155",
+  },
+  bookButton: {
+    backgroundColor: "#3b82f6",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    borderRadius: 14,
+    marginTop: 20,
+    shadowColor: "#3b82f6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bookButtonDisabled: {
+    backgroundColor: "#94a3b8",
+    shadowOpacity: 0,
+  },
+  bookButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  helpText: {
+    textAlign: "center",
+    fontSize: 12,
+    color: "#94a3b8",
+    marginTop: 12,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fef3c7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalFee: {
+    fontWeight: "700",
+    color: "#ef4444",
+  },
+  modalButtons: {
+    width: "100%",
+    gap: 12,
+  },
+  keepButton: {
+    backgroundColor: "#10b981",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  keepButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  deleteButton: {
+    backgroundColor: "#fee2e2",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  deleteButtonText: {
+    color: "#dc2626",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+});
 
 export default CalendarComponent;

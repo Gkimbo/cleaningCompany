@@ -111,6 +111,7 @@ const TopBar = ({ dispatch, state }) => {
                           <ScheduleCleaningButton closeModal={closeModal} />
                           <EditHomeButton closeModal={closeModal} />
                           <CleanerRequestsButton closeModal={closeModal} />
+                          <AccountSettingsButton closeModal={closeModal} />
                         </>
                       )}
 

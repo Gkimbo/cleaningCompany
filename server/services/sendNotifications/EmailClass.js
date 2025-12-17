@@ -353,6 +353,82 @@ Kleanr Support Team`,
       console.error("❌ Error sending broadcast email:", error);
     }
   }
+
+  static async sendUsernameRecovery(email, username) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "DO NOT REPLY: Username Recovery (Automated Message)",
+        text: `Hello,
+
+You requested to recover your username for your Kleanr account.
+
+Your username is: ${username}
+
+If you did not request this, please ignore this email.
+
+Best regards,
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Username recovery email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending username recovery email:", error);
+      throw error;
+    }
+  }
+
+  static async sendPasswordReset(email, username, temporaryPassword) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "DO NOT REPLY: Password Reset (Automated Message)",
+        text: `Hello ${username},
+
+You requested to reset your password for your Kleanr account.
+
+Your temporary password is: ${temporaryPassword}
+
+Please log in with this temporary password and change it immediately in your Account Settings for security.
+
+If you did not request this password reset, please contact support immediately.
+
+Best regards,
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Password reset email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending password reset email:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Email;

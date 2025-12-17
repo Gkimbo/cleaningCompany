@@ -40,6 +40,7 @@ import AllCleanerReviewsList from "./components/reviews/AllCleanerReviewsList";
 import AllReviewsList from "./components/reviews/AllReviewsList";
 import SignIn from "./components/userAuthentication/SignIn";
 import SignUp from "./components/userAuthentication/SignUp";
+import ForgotCredentials from "./components/userAuthentication/ForgotCredentials";
 import appStyles from "./services/styles/AppStyle";
 
 // Messaging components
@@ -170,6 +171,10 @@ export default function App() {
               <Route
                 path="/sign-up"
                 element={<SignUp state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/forgot-credentials"
+                element={<ForgotCredentials />}
               />
               <Route
                 path="/welcome"

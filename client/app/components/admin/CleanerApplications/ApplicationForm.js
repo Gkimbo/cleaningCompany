@@ -21,10 +21,6 @@ const US_STATES = [
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"
 ];
 
-const DAYS_OF_WEEK = [
-  "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
-];
-
 const CleanerApplicationForm = () => {
   const [formData, setFormData] = useState({
     // Basic Information
@@ -51,14 +47,8 @@ const CleanerApplicationForm = () => {
     hasValidDriversLicense: false,
     hasReliableTransportation: false,
 
-    // Experience
+    // Experience (optional)
     experience: "",
-
-    // Previous Employment
-    previousEmployer: "",
-    previousEmployerPhone: "",
-    previousEmploymentDuration: "",
-    reasonForLeaving: "",
 
     // Professional Reference (1 required)
     references: [
@@ -73,10 +63,6 @@ const CleanerApplicationForm = () => {
     emergencyContactName: "",
     emergencyContactPhone: "",
     emergencyContactRelation: "",
-
-    // Availability
-    availableStartDate: "",
-    availableDays: [],
 
     // Personal Statement
     message: "",
@@ -144,12 +130,11 @@ const CleanerApplicationForm = () => {
     // Auto-format phone number fields
     const phoneFields = [
       "phone",
-      "previousEmployerPhone",
       "emergencyContactPhone",
     ];
 
     // Auto-format date fields
-    const dateFields = ["dateOfBirth", "availableStartDate"];
+    const dateFields = ["dateOfBirth"];
 
     let formattedValue = value;
     if (phoneFields.includes(name)) {
@@ -172,15 +157,6 @@ const CleanerApplicationForm = () => {
       const updatedRefs = [...prev.references];
       updatedRefs[index] = { ...updatedRefs[index], [field]: formattedValue };
       return { ...prev, references: updatedRefs };
-    });
-  };
-
-  const toggleDay = (day) => {
-    setFormData((prev) => {
-      const days = prev.availableDays.includes(day)
-        ? prev.availableDays.filter((d) => d !== day)
-        : [...prev.availableDays, day];
-      return { ...prev, availableDays: days };
     });
   };
 
@@ -255,9 +231,7 @@ const CleanerApplicationForm = () => {
         if (!formData.hasReliableTransportation) {
           errors.push("Reliable transportation is required for this position.");
         }
-        if (!formData.experience.trim()) {
-          errors.push("Please describe your cleaning experience.");
-        }
+        // Experience is optional - no validation needed
         break;
 
       case 4: // References
@@ -284,15 +258,12 @@ const CleanerApplicationForm = () => {
         }
         break;
 
-      case 6: // Consents & Availability
+      case 6: // Consents
         if (!formData.backgroundConsent) {
           errors.push("You must consent to a background check.");
         }
         if (!formData.referenceCheckConsent) {
           errors.push("You must consent to reference checks.");
-        }
-        if (formData.availableDays.length === 0) {
-          errors.push("Please select at least one day you are available to work.");
         }
         if (!formData.message.trim()) {
           errors.push("Please tell us why you want to work with us.");
@@ -563,7 +534,7 @@ const CleanerApplicationForm = () => {
 
       <View style={styles.sectionDivider} />
 
-      <Text style={styles.label}>Cleaning Experience <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>Cleaning Experience (Optional)</Text>
       <TextInput
         style={styles.textArea}
         placeholder="Describe your cleaning experience (years, types of cleaning, skills)"
@@ -572,46 +543,7 @@ const CleanerApplicationForm = () => {
         multiline
         numberOfLines={4}
       />
-
-      <View style={styles.sectionDivider} />
-
-      <Text style={styles.sectionTitle}>Previous Employment</Text>
-      <Text style={styles.helperText}>Most recent employer in the cleaning industry (if applicable)</Text>
-
-      <Text style={styles.label}>Previous Employer Name</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Company name"
-        value={formData.previousEmployer}
-        onChangeText={(text) => handleChange("previousEmployer", text)}
-      />
-
-      <Text style={styles.label}>Employer Phone Number</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="(555) 555-5555"
-        value={formData.previousEmployerPhone}
-        onChangeText={(text) => handleChange("previousEmployerPhone", text)}
-        keyboardType="phone-pad"
-      />
-
-      <Text style={styles.label}>How Long Did You Work There?</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g., 2 years, 6 months"
-        value={formData.previousEmploymentDuration}
-        onChangeText={(text) => handleChange("previousEmploymentDuration", text)}
-      />
-
-      <Text style={styles.label}>Reason for Leaving</Text>
-      <TextInput
-        style={styles.textArea}
-        placeholder="Why did you leave this position?"
-        value={formData.reasonForLeaving}
-        onChangeText={(text) => handleChange("reasonForLeaving", text)}
-        multiline
-        numberOfLines={3}
-      />
+      <Text style={styles.helperText}>No experience is fine.</Text>
     </>
   );
 
@@ -736,46 +668,9 @@ const CleanerApplicationForm = () => {
     </>
   );
 
-  // Step 6: Availability & Consents
+  // Step 6: Consents
   const renderStep6 = () => (
     <>
-      <Text style={styles.sectionTitle}>Availability</Text>
-
-      <Text style={styles.label}>Earliest Start Date</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="MM/DD/YYYY"
-        value={formData.availableStartDate}
-        onChangeText={(text) => handleChange("availableStartDate", text)}
-        keyboardType="number-pad"
-        maxLength={10}
-      />
-
-      <Text style={styles.label}>Days Available to Work <Text style={styles.requiredLabel}>*</Text></Text>
-      <View style={styles.daysContainer}>
-        {DAYS_OF_WEEK.map((day) => (
-          <TouchableOpacity
-            key={day}
-            style={[
-              styles.dayChip,
-              formData.availableDays.includes(day) && styles.dayChipSelected,
-            ]}
-            onPress={() => toggleDay(day)}
-          >
-            <Text
-              style={[
-                styles.dayChipText,
-                formData.availableDays.includes(day) && styles.dayChipTextSelected,
-              ]}
-            >
-              {day.substring(0, 3)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.sectionDivider} />
-
       <Text style={styles.label}>Why Do You Want to Work With Us? <Text style={styles.requiredLabel}>*</Text></Text>
       <TextInput
         style={styles.textArea}

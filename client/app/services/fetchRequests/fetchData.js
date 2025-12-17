@@ -544,6 +544,76 @@ class FetchData {
       return { error: "Failed to update password" };
     }
   }
+
+  static async updateEmail(token, email) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/users/update-email", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to update email" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error updating email:", error);
+      return { error: "Failed to update email" };
+    }
+  }
+
+  static async forgotUsername(email) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/user-sessions/forgot-username", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to process request" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error in forgot username:", error);
+      return { error: "Failed to process request. Please try again." };
+    }
+  }
+
+  static async forgotPassword(email) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/user-sessions/forgot-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to process request" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error in forgot password:", error);
+      return { error: "Failed to process request. Please try again." };
+    }
+  }
 }
 
 export default FetchData;

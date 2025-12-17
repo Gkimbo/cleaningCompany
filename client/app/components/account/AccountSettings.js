@@ -14,6 +14,7 @@ import { colors, spacing, radius, typography, shadows } from "../../services/sty
 
 const AccountSettings = ({ state, dispatch }) => {
   const [username, setUsername] = useState(state.currentUser.user?.username || "");
+  const [email, setEmail] = useState(state.currentUser.user?.email || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -48,6 +49,18 @@ const AccountSettings = ({ state, dispatch }) => {
     }
     if (newPassword !== confirmPassword) {
       validationErrors.push("New passwords do not match.");
+    }
+    return validationErrors;
+  };
+
+  const validateEmail = () => {
+    const validationErrors = [];
+    if (!email) {
+      validationErrors.push("Email is required.");
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      validationErrors.push("Please enter a valid email address.");
     }
     return validationErrors;
   };
@@ -119,6 +132,40 @@ const AccountSettings = ({ state, dispatch }) => {
     }
   };
 
+  const handleUpdateEmail = async () => {
+    setErrors([]);
+    setSuccessMessage("");
+
+    const validationErrors = validateEmail();
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await FetchData.updateEmail(
+        state.currentUser.token,
+        email
+      );
+
+      if (response.error) {
+        setErrors([response.error]);
+      } else {
+        setSuccessMessage("Email updated successfully!");
+        // Update local state
+        dispatch({
+          type: "UPDATE_USER",
+          payload: { ...state.currentUser.user, email },
+        });
+      }
+    } catch (error) {
+      setErrors(["Failed to update email. Please try again."]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Text style={styles.title}>Account Settings</Text>
@@ -169,6 +216,36 @@ const AccountSettings = ({ state, dispatch }) => {
         >
           <Text style={styles.primaryButtonText}>
             {loading ? "Updating..." : "Update Username"}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Email Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Change Email</Text>
+        <Text style={styles.sectionDescription}>
+          Update the email address associated with your account.
+        </Text>
+
+        <Text style={styles.label}>New Email Address</Text>
+        <TextInput
+          style={styles.input}
+          value={email}
+          onChangeText={setEmail}
+          placeholder="Enter new email address"
+          placeholderTextColor={colors.text.tertiary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="email-address"
+        />
+
+        <Pressable
+          style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
+          onPress={handleUpdateEmail}
+          disabled={loading}
+        >
+          <Text style={styles.primaryButtonText}>
+            {loading ? "Updating..." : "Update Email"}
           </Text>
         </Pressable>
       </View>
