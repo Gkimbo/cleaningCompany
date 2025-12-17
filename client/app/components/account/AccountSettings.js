@@ -191,64 +191,68 @@ const AccountSettings = ({ state, dispatch }) => {
         </View>
       )}
 
-      {/* Username Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Change Username</Text>
-        <Text style={styles.sectionDescription}>
-          Your username is used to log into your account.
-        </Text>
-
-        <Text style={styles.label}>New Username</Text>
-        <TextInput
-          style={styles.input}
-          value={username}
-          onChangeText={setUsername}
-          placeholder="Enter new username"
-          placeholderTextColor={colors.text.tertiary}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <Pressable
-          style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
-          onPress={handleUpdateUsername}
-          disabled={loading}
-        >
-          <Text style={styles.primaryButtonText}>
-            {loading ? "Updating..." : "Update Username"}
+      {/* Username Section - hidden for managers */}
+      {state.account !== "manager1" && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Change Username</Text>
+          <Text style={styles.sectionDescription}>
+            Your username is used to log into your account.
           </Text>
-        </Pressable>
-      </View>
 
-      {/* Email Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Change Email</Text>
-        <Text style={styles.sectionDescription}>
-          Update the email address associated with your account.
-        </Text>
+          <Text style={styles.label}>New Username</Text>
+          <TextInput
+            style={styles.input}
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Enter new username"
+            placeholderTextColor={colors.text.tertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-        <Text style={styles.label}>New Email Address</Text>
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Enter new email address"
-          placeholderTextColor={colors.text.tertiary}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-        />
+          <Pressable
+            style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
+            onPress={handleUpdateUsername}
+            disabled={loading}
+          >
+            <Text style={styles.primaryButtonText}>
+              {loading ? "Updating..." : "Update Username"}
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
-        <Pressable
-          style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
-          onPress={handleUpdateEmail}
-          disabled={loading}
-        >
-          <Text style={styles.primaryButtonText}>
-            {loading ? "Updating..." : "Update Email"}
+      {/* Email Section - hidden for managers */}
+      {state.account !== "manager1" && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Change Email</Text>
+          <Text style={styles.sectionDescription}>
+            Update the email address associated with your account.
           </Text>
-        </Pressable>
-      </View>
+
+          <Text style={styles.label}>New Email Address</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="Enter new email address"
+            placeholderTextColor={colors.text.tertiary}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+          />
+
+          <Pressable
+            style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
+            onPress={handleUpdateEmail}
+            disabled={loading}
+          >
+            <Text style={styles.primaryButtonText}>
+              {loading ? "Updating..." : "Update Email"}
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Password Section */}
       <View style={styles.section}>

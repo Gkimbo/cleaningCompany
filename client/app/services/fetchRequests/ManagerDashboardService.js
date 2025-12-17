@@ -88,6 +88,40 @@ class ManagerDashboardService {
       }
     );
   }
+
+  static async getServiceAreas(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/manager-dashboard/service-areas`,
+      token,
+      {
+        config: { enabled: false, cities: [], states: [], zipcodes: [] },
+        stats: { totalHomes: 0, homesOutsideArea: 0, homesInArea: 0 },
+      }
+    );
+  }
+
+  static async recheckServiceAreas(token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/manager-dashboard/recheck-service-areas`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { success: false, error: errorData.error || "Failed to recheck service areas" };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[ManagerDashboard] recheckServiceAreas failed:", error.message);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
 }
 
 export default ManagerDashboardService;

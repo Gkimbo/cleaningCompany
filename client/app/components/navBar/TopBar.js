@@ -103,14 +103,12 @@ const TopBar = ({ dispatch, state }) => {
                           <MyRequestsButton closeModal={closeModal} />
                           {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                           <EarningsButton closeModal={closeModal} />
-                          <AccountSettingsButton closeModal={closeModal} />
                         </>
                       ) : (
                         <>
                           <ScheduleCleaningButton closeModal={closeModal} />
                           <EditHomeButton closeModal={closeModal} />
                           {/* <CleanerRequestsButton closeModal={closeModal} /> */}
-                          <AccountSettingsButton closeModal={closeModal} />
                         </>
                       )}
 
@@ -123,6 +121,7 @@ const TopBar = ({ dispatch, state }) => {
                         </>
                       )}
 
+                      <AccountSettingsButton closeModal={closeModal} />
                       <SignOutButton
                         dispatch={dispatch}
                         closeModal={closeModal}

@@ -127,6 +127,9 @@ const ManagerDashboard = ({ state }) => {
   const [messagesSummary, setMessagesSummary] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState("week");
   const [error, setError] = useState(null);
+  const [serviceAreaData, setServiceAreaData] = useState(null);
+  const [recheckLoading, setRecheckLoading] = useState(false);
+  const [recheckResult, setRecheckResult] = useState(null);
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -143,11 +146,12 @@ const ManagerDashboard = ({ state }) => {
     setError(null);
 
     try {
-      const [financial, users, stats, messages] = await Promise.all([
+      const [financial, users, stats, messages, serviceAreas] = await Promise.all([
         ManagerDashboardService.getFinancialSummary(state.currentUser.token),
         ManagerDashboardService.getUserAnalytics(state.currentUser.token),
         ManagerDashboardService.getQuickStats(state.currentUser.token),
         ManagerDashboardService.getMessagesSummary(state.currentUser.token),
+        ManagerDashboardService.getServiceAreas(state.currentUser.token),
       ]);
 
       // Set data even if some endpoints return fallback values
@@ -155,6 +159,7 @@ const ManagerDashboard = ({ state }) => {
       setUserAnalytics(users);
       setQuickStats(stats);
       setMessagesSummary(messages);
+      setServiceAreaData(serviceAreas);
     } catch (err) {
       console.error("[ManagerDashboard] Error fetching data:", err);
       setError("Failed to load dashboard data");
@@ -195,6 +200,22 @@ const ManagerDashboard = ({ state }) => {
     { label: "Year", value: "year" },
     { label: "All", value: "allTime" },
   ];
+
+  const handleRecheckServiceAreas = async () => {
+    setRecheckLoading(true);
+    setRecheckResult(null);
+    try {
+      const result = await ManagerDashboardService.recheckServiceAreas(state.currentUser.token);
+      setRecheckResult(result);
+      // Refresh service area data after recheck
+      const updatedServiceAreas = await ManagerDashboardService.getServiceAreas(state.currentUser.token);
+      setServiceAreaData(updatedServiceAreas);
+    } catch (err) {
+      setRecheckResult({ success: false, error: "Failed to recheck service areas" });
+    } finally {
+      setRecheckLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -527,6 +548,105 @@ const ManagerDashboard = ({ state }) => {
             </View>
           </View>
         </View>
+      </View>
+
+      {/* Service Area Section */}
+      <View style={styles.section}>
+        <SectionHeader title="Service Area Management" />
+
+        {/* Current Stats */}
+        <View style={styles.serviceAreaStats}>
+          <View style={styles.serviceAreaStatCard}>
+            <Text style={styles.serviceAreaStatValue}>
+              {serviceAreaData?.stats?.totalHomes || 0}
+            </Text>
+            <Text style={styles.serviceAreaStatLabel}>Total Homes</Text>
+          </View>
+          <View style={[styles.serviceAreaStatCard, { backgroundColor: colors.success[50] }]}>
+            <Text style={[styles.serviceAreaStatValue, { color: colors.success[700] }]}>
+              {serviceAreaData?.stats?.homesInArea || 0}
+            </Text>
+            <Text style={[styles.serviceAreaStatLabel, { color: colors.success[600] }]}>In Service Area</Text>
+          </View>
+          <View style={[styles.serviceAreaStatCard, { backgroundColor: colors.warning[50] }]}>
+            <Text style={[styles.serviceAreaStatValue, { color: colors.warning[700] }]}>
+              {serviceAreaData?.stats?.homesOutsideArea || 0}
+            </Text>
+            <Text style={[styles.serviceAreaStatLabel, { color: colors.warning[600] }]}>Outside Area</Text>
+          </View>
+        </View>
+
+        {/* Service Area Config Info */}
+        {serviceAreaData?.config?.enabled && (
+          <View style={styles.serviceAreaConfig}>
+            <Text style={styles.serviceAreaConfigTitle}>Current Service Areas</Text>
+            {serviceAreaData?.config?.cities?.length > 0 && (
+              <Text style={styles.serviceAreaConfigText}>
+                Cities: {serviceAreaData.config.cities.join(", ")}
+              </Text>
+            )}
+            {serviceAreaData?.config?.states?.length > 0 && (
+              <Text style={styles.serviceAreaConfigText}>
+                States: {serviceAreaData.config.states.join(", ")}
+              </Text>
+            )}
+            {serviceAreaData?.config?.zipcodes?.length > 0 && (
+              <Text style={styles.serviceAreaConfigText}>
+                Zipcodes: {serviceAreaData.config.zipcodes.join(", ")}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Recheck Button */}
+        <Pressable
+          style={[
+            styles.recheckButton,
+            recheckLoading && styles.recheckButtonDisabled,
+          ]}
+          onPress={handleRecheckServiceAreas}
+          disabled={recheckLoading}
+        >
+          {recheckLoading ? (
+            <ActivityIndicator size="small" color={colors.neutral[0]} />
+          ) : (
+            <Text style={styles.recheckButtonText}>
+              Recheck All Homes Against Service Area
+            </Text>
+          )}
+        </Pressable>
+
+        {/* Recheck Results */}
+        {recheckResult && (
+          <View style={[
+            styles.recheckResult,
+            recheckResult.success ? styles.recheckResultSuccess : styles.recheckResultError,
+          ]}>
+            {recheckResult.success ? (
+              <>
+                <Text style={styles.recheckResultTitle}>
+                  Service Area Check Complete
+                </Text>
+                <Text style={styles.recheckResultText}>
+                  {recheckResult.message}
+                </Text>
+                {recheckResult.updated > 0 && recheckResult.results && (
+                  <View style={styles.recheckResultsList}>
+                    {recheckResult.results.map((item, index) => (
+                      <Text key={index} style={styles.recheckResultItem}>
+                        {item.nickName || "Home"} ({item.city}, {item.state}): {item.previousStatus} → {item.newStatus}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+              </>
+            ) : (
+              <Text style={styles.recheckResultErrorText}>
+                {recheckResult.error || "An error occurred"}
+              </Text>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Tax Section */}
@@ -914,6 +1034,104 @@ const styles = StyleSheet.create({
   analyticsTotal: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
+  },
+
+  // Service Area Section
+  serviceAreaStats: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  serviceAreaStatCard: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  serviceAreaStatValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  serviceAreaStatLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  serviceAreaConfig: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  serviceAreaConfigTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  serviceAreaConfigText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginBottom: 4,
+  },
+  recheckButton: {
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  recheckButtonDisabled: {
+    opacity: 0.6,
+  },
+  recheckButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  recheckResult: {
+    marginTop: spacing.md,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  recheckResultSuccess: {
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  recheckResultError: {
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  recheckResultTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+    marginBottom: spacing.xs,
+  },
+  recheckResultText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+  },
+  recheckResultsList: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.success[200],
+  },
+  recheckResultItem: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[700],
+    marginBottom: 4,
+  },
+  recheckResultErrorText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[600],
   },
 });
 
