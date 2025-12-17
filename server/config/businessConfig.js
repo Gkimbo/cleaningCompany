@@ -22,17 +22,25 @@ const businessConfig = {
 
     // Cities we service (case-insensitive matching)
     cities: [
-      "Los Angeles",
-      "Santa Monica",
-      "Beverly Hills",
-      "West Hollywood",
-      "Culver City",
+      "Barnstable",
+      "Centerville",
+      "Cotuit",
+      "Craigville",
+      "Cummaquid",
+      "Hyannis",
+      "Hyannis Port",
+      "Marstons Mills",
+      "Osterville",
+      "Santuit",
+      "West Barnstable",
+      "West Hyannis Port",
+      "Wianno",
       // Add more cities here
     ],
 
     // States we service (use 2-letter abbreviations)
     states: [
-      "CA",
+      "MA",
       // Add more states here
     ],
 
@@ -45,7 +53,8 @@ const businessConfig = {
     ],
 
     // Error message shown when address is outside service area
-    outsideAreaMessage: "We don't currently service this area. We're expanding soon!",
+    outsideAreaMessage:
+      "We don't currently service this area. We're expanding soon!",
   },
 
   /**
@@ -54,7 +63,7 @@ const businessConfig = {
   pricing: {
     // Time window surcharges
     timeWindows: {
-      "anytime": 0,
+      anytime: 0,
       "10-3": 30,
       "11-4": 30,
       "12-2": 50,
@@ -169,14 +178,22 @@ function getTimeWindowSurcharge(timeWindow) {
  * @param {object} EmailClass - Email class for sending notifications (optional)
  * @returns {object} { updated: number, results: Array }
  */
-async function updateAllHomesServiceAreaStatus(UserHomes, User = null, EmailClass = null) {
+async function updateAllHomesServiceAreaStatus(
+  UserHomes,
+  User = null,
+  EmailClass = null
+) {
   try {
     // Include user association if User model is provided
-    const includeOptions = User ? [{
-      model: User,
-      as: "user",
-      attributes: ["id", "username", "email", "notifications"],
-    }] : [];
+    const includeOptions = User
+      ? [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "username", "email", "notifications"],
+          },
+        ]
+      : [];
 
     const allHomes = await UserHomes.findAll({ include: includeOptions });
     const results = [];
@@ -194,7 +211,7 @@ async function updateAllHomesServiceAreaStatus(UserHomes, User = null, EmailClas
         updatedCount++;
 
         const homeAddress = `${address}, ${city}, ${state} ${zipcode}`;
-        const statusChange = shouldBeOutside ? 'now_outside' : 'now_inside';
+        const statusChange = shouldBeOutside ? "now_outside" : "now_inside";
 
         results.push({
           homeId: home.dataValues.id,
@@ -202,25 +219,30 @@ async function updateAllHomesServiceAreaStatus(UserHomes, User = null, EmailClas
           city,
           state,
           zipcode,
-          previousStatus: wasOutside ? 'outside' : 'inside',
-          newStatus: shouldBeOutside ? 'outside' : 'inside',
+          previousStatus: wasOutside ? "outside" : "inside",
+          newStatus: shouldBeOutside ? "outside" : "inside",
         });
 
         // Send notifications if User model and home has user association
         if (User && home.user) {
           const user = home.user;
-          const userName = user.username || 'Valued Customer';
+          const userName = user.username || "Valued Customer";
 
           // Create in-app notification
           const notification = {
-            id: Date.now().toString() + '-' + home.dataValues.id,
-            type: statusChange === 'now_inside' ? 'service_area_expanded' : 'service_area_reduced',
-            title: statusChange === 'now_inside'
-              ? 'Great News - Your Home is Now in Our Service Area!'
-              : 'Service Area Update for Your Home',
-            message: statusChange === 'now_inside'
-              ? `Your home "${nickName}" at ${homeAddress} is now within our service area! You can now book cleaning appointments.`
-              : `Your home "${nickName}" at ${homeAddress} is currently outside our service area. You won't be able to book new appointments for this property until we expand to this area.`,
+            id: Date.now().toString() + "-" + home.dataValues.id,
+            type:
+              statusChange === "now_inside"
+                ? "service_area_expanded"
+                : "service_area_reduced",
+            title:
+              statusChange === "now_inside"
+                ? "Great News - Your Home is Now in Our Service Area!"
+                : "Service Area Update for Your Home",
+            message:
+              statusChange === "now_inside"
+                ? `Your home "${nickName}" at ${homeAddress} is now within our service area! You can now book cleaning appointments.`
+                : `Your home "${nickName}" at ${homeAddress} is currently outside our service area. You won't be able to book new appointments for this property until we expand to this area.`,
             homeId: home.dataValues.id,
             homeName: nickName,
             read: false,
@@ -236,7 +258,7 @@ async function updateAllHomesServiceAreaStatus(UserHomes, User = null, EmailClas
           // Send email notification
           if (EmailClass && user.email) {
             try {
-              if (statusChange === 'now_inside') {
+              if (statusChange === "now_inside") {
                 await EmailClass.sendHomeNowInServiceArea(
                   user.email,
                   userName,
@@ -252,7 +274,10 @@ async function updateAllHomesServiceAreaStatus(UserHomes, User = null, EmailClas
                 );
               }
             } catch (emailError) {
-              console.error("Error sending service area notification email:", emailError);
+              console.error(
+                "Error sending service area notification email:",
+                emailError
+              );
             }
           }
         }
