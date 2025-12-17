@@ -83,7 +83,12 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: false,
 		},
-	}); 
+		outsideServiceArea: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+	});
 
 	// Define the one-to-many relationship with User
 	UserHomes.associate = (models) => {

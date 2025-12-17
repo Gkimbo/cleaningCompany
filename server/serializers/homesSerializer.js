@@ -18,7 +18,8 @@ class HomeSerializer {
 		"contact",
 		"specialNotes",
 		"cleanersNeeded",
-		"timeToBeCompleted"
+		"timeToBeCompleted",
+		"outsideServiceArea"
 	];
 
 	static serializeOne(home) {

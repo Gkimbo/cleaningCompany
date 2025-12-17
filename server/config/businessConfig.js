@@ -161,9 +161,119 @@ function getTimeWindowSurcharge(timeWindow) {
   return businessConfig.pricing.timeWindows[timeWindow] || 0;
 }
 
+/**
+ * Update service area status for all homes in the database
+ * Call this function after modifying service area configuration
+ * @param {object} UserHomes - Sequelize model for UserHomes
+ * @param {object} User - Sequelize model for User (optional, for notifications)
+ * @param {object} EmailClass - Email class for sending notifications (optional)
+ * @returns {object} { updated: number, results: Array }
+ */
+async function updateAllHomesServiceAreaStatus(UserHomes, User = null, EmailClass = null) {
+  try {
+    // Include user association if User model is provided
+    const includeOptions = User ? [{
+      model: User,
+      as: "user",
+      attributes: ["id", "username", "email", "notifications"],
+    }] : [];
+
+    const allHomes = await UserHomes.findAll({ include: includeOptions });
+    const results = [];
+    let updatedCount = 0;
+
+    for (const home of allHomes) {
+      const { city, state, zipcode, address, nickName } = home.dataValues;
+      const { isServiceable } = isInServiceArea(city, state, zipcode);
+      const shouldBeOutside = !isServiceable;
+      const wasOutside = home.dataValues.outsideServiceArea;
+
+      // Only update if the status has changed
+      if (wasOutside !== shouldBeOutside) {
+        await home.update({ outsideServiceArea: shouldBeOutside });
+        updatedCount++;
+
+        const homeAddress = `${address}, ${city}, ${state} ${zipcode}`;
+        const statusChange = shouldBeOutside ? 'now_outside' : 'now_inside';
+
+        results.push({
+          homeId: home.dataValues.id,
+          nickName,
+          city,
+          state,
+          zipcode,
+          previousStatus: wasOutside ? 'outside' : 'inside',
+          newStatus: shouldBeOutside ? 'outside' : 'inside',
+        });
+
+        // Send notifications if User model and home has user association
+        if (User && home.user) {
+          const user = home.user;
+          const userName = user.username || 'Valued Customer';
+
+          // Create in-app notification
+          const notification = {
+            id: Date.now().toString() + '-' + home.dataValues.id,
+            type: statusChange === 'now_inside' ? 'service_area_expanded' : 'service_area_reduced',
+            title: statusChange === 'now_inside'
+              ? 'Great News - Your Home is Now in Our Service Area!'
+              : 'Service Area Update for Your Home',
+            message: statusChange === 'now_inside'
+              ? `Your home "${nickName}" at ${homeAddress} is now within our service area! You can now book cleaning appointments.`
+              : `Your home "${nickName}" at ${homeAddress} is currently outside our service area. You won't be able to book new appointments for this property until we expand to this area.`,
+            homeId: home.dataValues.id,
+            homeName: nickName,
+            read: false,
+            createdAt: new Date().toISOString(),
+          };
+
+          // Update user's notifications array
+          const currentNotifications = user.notifications || [];
+          await user.update({
+            notifications: [...currentNotifications, notification],
+          });
+
+          // Send email notification
+          if (EmailClass && user.email) {
+            try {
+              if (statusChange === 'now_inside') {
+                await EmailClass.sendHomeNowInServiceArea(
+                  user.email,
+                  userName,
+                  nickName,
+                  homeAddress
+                );
+              } else {
+                await EmailClass.sendHomeNowOutsideServiceArea(
+                  user.email,
+                  userName,
+                  nickName,
+                  homeAddress
+                );
+              }
+            } catch (emailError) {
+              console.error("Error sending service area notification email:", emailError);
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      totalHomes: allHomes.length,
+      updated: updatedCount,
+      results,
+    };
+  } catch (error) {
+    console.error("Error updating homes service area status:", error);
+    throw error;
+  }
+}
+
 module.exports = {
   businessConfig,
   isInServiceArea,
   getCleanersNeeded,
   getTimeWindowSurcharge,
+  updateAllHomesServiceAreaStatus,
 };

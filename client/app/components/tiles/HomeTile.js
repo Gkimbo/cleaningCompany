@@ -22,6 +22,7 @@ const HomeTile = ({
 	trashLocation,
 	pendingRequestCount = 0,
 	onRequestsPress,
+	outsideServiceArea = false,
 }) => {
 	const navigate = useNavigate();
 
@@ -31,6 +32,7 @@ const HomeTile = ({
 
 	const handleQuickBook = (e) => {
 		e.stopPropagation();
+		if (outsideServiceArea) return; // Don't allow booking if outside service area
 		navigate(`/quick-book/${id}`);
 	};
 
@@ -42,7 +44,7 @@ const HomeTile = ({
 	};
 
 	return (
-		<View style={styles.container}>
+		<View style={[styles.container, outsideServiceArea && styles.containerOutsideArea]}>
 			{pendingRequestCount > 0 && (
 				<TouchableOpacity
 					style={styles.notificationBubble}
@@ -53,6 +55,13 @@ const HomeTile = ({
 						{pendingRequestCount > 99 ? "99+" : pendingRequestCount}
 					</Text>
 				</TouchableOpacity>
+			)}
+			{outsideServiceArea && (
+				<View style={styles.serviceAreaWarning}>
+					<Text style={styles.serviceAreaWarningText}>
+						Outside Service Area - Booking unavailable
+					</Text>
+				</View>
 			)}
 			<Pressable onPress={pendingRequestCount > 0 ? handleRequestsPress : handleViewDetails}>
 				<View style={styles.header}>
@@ -103,10 +112,13 @@ const HomeTile = ({
 				</TouchableOpacity>
 
 				<TouchableOpacity
-					style={styles.bookButton}
+					style={[styles.bookButton, outsideServiceArea && styles.bookButtonDisabled]}
 					onPress={handleQuickBook}
+					disabled={outsideServiceArea}
 				>
-					<Text style={styles.bookButtonText}>Book Cleaning</Text>
+					<Text style={[styles.bookButtonText, outsideServiceArea && styles.bookButtonTextDisabled]}>
+						{outsideServiceArea ? "Unavailable" : "Book Cleaning"}
+					</Text>
 				</TouchableOpacity>
 			</View>
 		</View>
@@ -123,6 +135,24 @@ const styles = StyleSheet.create({
 		borderLeftWidth: 4,
 		borderLeftColor: colors.primary[500],
 		position: "relative",
+	},
+	containerOutsideArea: {
+		borderLeftColor: colors.warning[500],
+		opacity: 0.9,
+	},
+	serviceAreaWarning: {
+		backgroundColor: colors.warning[50],
+		borderRadius: radius.md,
+		padding: spacing.sm,
+		marginBottom: spacing.md,
+		borderWidth: 1,
+		borderColor: colors.warning[200],
+	},
+	serviceAreaWarningText: {
+		fontSize: typography.fontSize.xs,
+		fontWeight: typography.fontWeight.medium,
+		color: colors.warning[700],
+		textAlign: "center",
 	},
 	notificationBubble: {
 		position: "absolute",
@@ -241,10 +271,17 @@ const styles = StyleSheet.create({
 		alignItems: "center",
 		...shadows.sm,
 	},
+	bookButtonDisabled: {
+		backgroundColor: colors.neutral[200],
+		...shadows.none,
+	},
 	bookButtonText: {
 		fontSize: typography.fontSize.sm,
 		fontWeight: typography.fontWeight.bold,
 		color: colors.neutral[0],
+	},
+	bookButtonTextDisabled: {
+		color: colors.text.tertiary,
 	},
 });
 

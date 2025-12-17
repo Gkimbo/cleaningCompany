@@ -80,9 +80,7 @@ userInfoRouter.post("/home", async (req, res) => {
 
 		// Check if address is within service area
 		const serviceAreaCheck = isInServiceArea(city, state, zipcode);
-		if (!serviceAreaCheck.isServiceable) {
-			return res.status(400).json({ error: "outside_service_area", message: serviceAreaCheck.message });
-		}
+		const outsideServiceArea = !serviceAreaCheck.isServiceable;
 
 		let cleanersNeeded = getCleanersNeeded(numBeds, numBaths);
 
@@ -105,10 +103,17 @@ userInfoRouter.post("/home", async (req, res) => {
 			contact,
 			specialNotes,
 			cleanersNeeded,
-			timeToBeCompleted
+			timeToBeCompleted,
+			outsideServiceArea
 		});
 
-		return res.status(201).json({ user });
+		return res.status(201).json({
+			user,
+			outsideServiceArea,
+			serviceAreaMessage: outsideServiceArea
+				? "This home is outside our current service area. It has been saved to your profile, but you won't be able to book appointments until we expand to this area."
+				: null
+		});
 	} catch (error) {
 		console.log(error);
 		return res.status(401).json({ error: "Invalid or expired token" });
@@ -145,9 +150,7 @@ userInfoRouter.patch("/home", async (req, res) => {
 
 		// Check if address is within service area
 		const serviceAreaCheck = isInServiceArea(city, state, zipcode);
-		if (!serviceAreaCheck.isServiceable) {
-			return res.status(400).json({ error: "outside_service_area", message: serviceAreaCheck.message });
-		}
+		const outsideServiceArea = !serviceAreaCheck.isServiceable;
 
 		let cleanersNeeded = getCleanersNeeded(numBeds, numBaths);
 
@@ -170,10 +173,15 @@ userInfoRouter.patch("/home", async (req, res) => {
 			contact,
 			specialNotes,
 			cleanersNeeded,
-			timeToBeCompleted
+			timeToBeCompleted,
+			outsideServiceArea
 		});
 
-		return res.status(200).json({ user: userInfo });
+		return res.status(200).json({
+			user: userInfo,
+			outsideServiceArea,
+			serviceAreaMessage: outsideServiceArea ? serviceAreaCheck.message : null
+		});
 	} catch (error) {
 		console.error(error);
 

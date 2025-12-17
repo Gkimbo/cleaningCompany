@@ -525,6 +525,80 @@ Kleanr Support Team`,
       console.error("❌ Error sending request denied email:", error);
     }
   }
+
+  static async sendHomeNowInServiceArea(email, userName, homeName, homeAddress) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "DO NOT REPLY: Great News - Your Home is Now in Our Service Area! (Automated Message)",
+        text: `Dear ${userName},
+
+Great news! We've expanded our service area, and your home "${homeName}" at ${homeAddress} is now within our coverage!
+
+You can now book cleaning appointments for this property through the Kleanr app.
+
+Log in today to schedule your first cleaning!
+
+Best regards,
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Home now in service area email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending service area email:", error);
+    }
+  }
+
+  static async sendHomeNowOutsideServiceArea(email, userName, homeName, homeAddress) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "DO NOT REPLY: Service Area Update for Your Home (Automated Message)",
+        text: `Dear ${userName},
+
+We wanted to let you know about a change to our service coverage. Unfortunately, your home "${homeName}" at ${homeAddress} is currently outside our service area.
+
+Your home will remain saved in your profile, but you won't be able to book new appointments for this property until we expand back to this area.
+
+Any existing confirmed appointments will still be honored.
+
+We apologize for any inconvenience and are working hard to expand our coverage. We'll notify you as soon as service becomes available again in your area.
+
+Best regards,
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Home now outside service area email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending service area email:", error);
+    }
+  }
 }
 
 module.exports = Email;

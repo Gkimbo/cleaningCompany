@@ -1,13 +1,16 @@
 import React, { useContext, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { colors, spacing, radius, typography } from "../../services/styles/theme";
 import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
@@ -34,6 +37,8 @@ const AddHomeForm = ({ state, dispatch }) => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
+  const [showServiceAreaWarning, setShowServiceAreaWarning] = useState(false);
+  const [serviceAreaMessage, setServiceAreaMessage] = useState("");
 
   const [homeData, setHomeData] = useState({
     nickName: "",
@@ -151,22 +156,30 @@ const AddHomeForm = ({ state, dispatch }) => {
       if (response === "Cannot find zipcode") {
         setErrors({ submit: "We couldn't verify this zip code. Please check and try again." });
         setCurrentStep(STEPS.BASICS);
-      } else if (response.error === "outside_service_area") {
-        setErrors({ submit: response.message || "We don't currently service this area." });
-        setCurrentStep(STEPS.BASICS);
       } else if (response.error) {
         setErrors({ submit: response.error });
       } else {
         if (dispatch) {
           dispatch({ type: "ADD_HOME", payload: response.home || homeData });
         }
-        navigate("/edit-home");
+        // Check if the home is outside service area and show warning
+        if (response.outsideServiceArea) {
+          setServiceAreaMessage(response.serviceAreaMessage);
+          setShowServiceAreaWarning(true);
+        } else {
+          navigate("/list-of-homes");
+        }
       }
     } catch (error) {
       setErrors({ submit: "Something went wrong. Please try again." });
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDismissWarning = () => {
+    setShowServiceAreaWarning(false);
+    navigate("/list-of-homes");
   };
 
   const renderStepIndicator = () => (
@@ -765,8 +778,88 @@ const AddHomeForm = ({ state, dispatch }) => {
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showServiceAreaWarning}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleDismissWarning}
+      >
+        <View style={localStyles.modalOverlay}>
+          <View style={localStyles.modalContent}>
+            <View style={localStyles.warningIconContainer}>
+              <Text style={localStyles.warningIcon}>⚠️</Text>
+            </View>
+            <Text style={localStyles.modalTitle}>Home Saved</Text>
+            <Text style={localStyles.modalMessage}>{serviceAreaMessage}</Text>
+            <TouchableOpacity
+              style={localStyles.modalButton}
+              onPress={handleDismissWarning}
+            >
+              <Text style={localStyles.modalButtonText}>Got It</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
+
+const localStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    width: "100%",
+    maxWidth: 340,
+    alignItems: "center",
+  },
+  warningIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+  },
+  warningIcon: {
+    fontSize: 32,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: spacing.xl,
+  },
+  modalButton: {
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing["3xl"],
+    borderRadius: radius.lg,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+  },
+});
 
 export default AddHomeForm;

@@ -14,7 +14,13 @@ import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import styles from "../onboarding/OnboardingStyles";
-import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import {
+  colors,
+  spacing,
+  radius,
+  shadows,
+  typography,
+} from "../../services/styles/theme";
 
 const STEPS = {
   BASICS: 0,
@@ -24,7 +30,11 @@ const STEPS = {
 };
 
 const TIME_OPTIONS = [
-  { value: "anytime", label: "Anytime", description: "Most flexible, best pricing" },
+  {
+    value: "anytime",
+    label: "Anytime",
+    description: "Most flexible, best pricing",
+  },
   { value: "10-3", label: "10am - 3pm", description: "+$30 per cleaning" },
   { value: "11-4", label: "11am - 4pm", description: "+$30 per cleaning" },
   { value: "12-2", label: "12pm - 2pm", description: "+$50 per cleaning" },
@@ -41,6 +51,8 @@ const EditHomeForm = ({ state, dispatch }) => {
   const [focusedField, setFocusedField] = useState(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleteFee, setDeleteFee] = useState(0);
+  const [showServiceAreaWarning, setShowServiceAreaWarning] = useState(false);
+  const [serviceAreaMessage, setServiceAreaMessage] = useState("");
 
   const [homeData, setHomeData] = useState({
     id: "",
@@ -89,15 +101,20 @@ const EditHomeForm = ({ state, dispatch }) => {
   const formatPhoneNumber = (text) => {
     const cleaned = text.replace(/\D/g, "");
     if (cleaned.length <= 3) return cleaned;
-    if (cleaned.length <= 6) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
-    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+    if (cleaned.length <= 6)
+      return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(
+      6,
+      10
+    )}`;
   };
 
   const validateStep = (step) => {
     const newErrors = {};
 
     if (step === STEPS.BASICS) {
-      if (!homeData.nickName?.trim()) newErrors.nickName = "Give your home a name";
+      if (!homeData.nickName?.trim())
+        newErrors.nickName = "Give your home a name";
       if (!homeData.address?.trim()) newErrors.address = "Address is required";
       if (!homeData.city?.trim()) newErrors.city = "City is required";
       if (!homeData.state) newErrors.state = "Select a state";
@@ -156,7 +173,9 @@ const EditHomeForm = ({ state, dispatch }) => {
         keyPadCode: homeData.accessType === "code" ? homeData.keyPadCode : "",
         keyLocation: homeData.accessType === "key" ? homeData.keyLocation : "",
         trashLocation: homeData.trashLocation,
-        recyclingLocation: homeData.hasRecycling ? homeData.recyclingLocation : "",
+        recyclingLocation: homeData.hasRecycling
+          ? homeData.recyclingLocation
+          : "",
         compostLocation: homeData.hasCompost ? homeData.compostLocation : "",
         timeToBeCompleted: homeData.timeToBeCompleted,
         sheetsProvided: homeData.sheetsProvided,
@@ -166,30 +185,49 @@ const EditHomeForm = ({ state, dispatch }) => {
       };
 
       const response = await FetchData.editHomeInfo(submitData, user);
-
-      if (response === "Cannot find zipcode" || response?.error === "Cannot find zipcode") {
-        setErrors({ submit: "We couldn't verify this zip code. Please check and try again." });
-        setCurrentStep(STEPS.BASICS);
-      } else if (response.error === "outside_service_area") {
-        setErrors({ submit: response.message || "We don't currently service this area." });
+      console.log(response);
+      if (
+        response === "Cannot find zipcode" ||
+        response?.error === "Cannot find zipcode"
+      ) {
+        setErrors({
+          submit:
+            "We couldn't verify this zip code. Please check and try again.",
+        });
         setCurrentStep(STEPS.BASICS);
       } else if (response.error) {
         setErrors({ submit: response.error });
       } else {
+        // Include outsideServiceArea flag in the updated home data
+        const updatedHomeData = {
+          ...submitData,
+          outsideServiceArea: response.outsideServiceArea || false,
+        };
         dispatch({
           type: "UPDATE_HOME",
           payload: {
             id: homeData.id,
-            updatedHome: submitData,
+            updatedHome: updatedHomeData,
           },
         });
-        navigate("/edit-home");
+        // Check if the home is outside service area and show warning
+        if (response.outsideServiceArea) {
+          setServiceAreaMessage(response.serviceAreaMessage || "This home is outside our current service area. It has been saved to your profile, but you won't be able to book appointments until we expand to this area.");
+          setShowServiceAreaWarning(true);
+        } else {
+          navigate("/list-of-homes");
+        }
       }
     } catch (error) {
       setErrors({ submit: "Something went wrong. Please try again." });
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDismissServiceAreaWarning = () => {
+    setShowServiceAreaWarning(false);
+    navigate("/list-of-homes");
   };
 
   const checkAppointmentsWithinWeek = async (homeId) => {
@@ -200,8 +238,10 @@ const EditHomeForm = ({ state, dispatch }) => {
     if (appointments?.appointments) {
       appointments.appointments.forEach((appt) => {
         const date = new Date(appt.date);
-        if (date.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000 &&
-            date.getTime() - currentDate.getTime() >= 0) {
+        if (
+          date.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000 &&
+          date.getTime() - currentDate.getTime() >= 0
+        ) {
           fee += 25;
         }
       });
@@ -212,7 +252,9 @@ const EditHomeForm = ({ state, dispatch }) => {
   };
 
   const handleDeletePress = async () => {
-    const hasUpcomingAppointments = await checkAppointmentsWithinWeek(homeData.id);
+    const hasUpcomingAppointments = await checkAppointmentsWithinWeek(
+      homeData.id
+    );
     setDeleteModalVisible(true);
   };
 
@@ -234,13 +276,17 @@ const EditHomeForm = ({ state, dispatch }) => {
           dispatch({ type: "SUBTRACT_BILL", payload: priceOfAppointments });
 
           const filteredAppointments = state.appointments.filter(
-            (appointment) => !appointments.appointments.some((a) => a.id === appointment.id)
+            (appointment) =>
+              !appointments.appointments.some((a) => a.id === appointment.id)
           );
-          dispatch({ type: "USER_APPOINTMENTS", payload: filteredAppointments });
+          dispatch({
+            type: "USER_APPOINTMENTS",
+            payload: filteredAppointments,
+          });
         }
 
         dispatch({ type: "DELETE_HOME", payload: homeData.id });
-        navigate("/edit-home");
+        navigate("/list-of-homes");
       }
     } catch (error) {
       setErrors({ submit: "Failed to delete home. Please try again." });
@@ -298,7 +344,9 @@ const EditHomeForm = ({ state, dispatch }) => {
           onBlur={() => setFocusedField(null)}
         />
         {errors.nickName && (
-          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.nickName}</Text>
+          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+            {errors.nickName}
+          </Text>
         )}
       </View>
 
@@ -320,7 +368,9 @@ const EditHomeForm = ({ state, dispatch }) => {
           onBlur={() => setFocusedField(null)}
         />
         {errors.address && (
-          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.address}</Text>
+          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+            {errors.address}
+          </Text>
         )}
       </View>
 
@@ -357,7 +407,9 @@ const EditHomeForm = ({ state, dispatch }) => {
             placeholder="CA"
             placeholderTextColor="#94a3b8"
             value={homeData.state}
-            onChangeText={(text) => updateField("state", text.toUpperCase().slice(0, 2))}
+            onChangeText={(text) =>
+              updateField("state", text.toUpperCase().slice(0, 2))
+            }
             onFocus={() => setFocusedField("state")}
             onBlur={() => setFocusedField(null)}
             maxLength={2}
@@ -380,14 +432,18 @@ const EditHomeForm = ({ state, dispatch }) => {
           placeholder="12345"
           placeholderTextColor="#94a3b8"
           value={homeData.zipcode}
-          onChangeText={(text) => updateField("zipcode", text.replace(/\D/g, "").slice(0, 5))}
+          onChangeText={(text) =>
+            updateField("zipcode", text.replace(/\D/g, "").slice(0, 5))
+          }
           onFocus={() => setFocusedField("zipcode")}
           onBlur={() => setFocusedField(null)}
           keyboardType="number-pad"
           maxLength={5}
         />
         {errors.zipcode && (
-          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.zipcode}</Text>
+          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+            {errors.zipcode}
+          </Text>
         )}
       </View>
 
@@ -405,7 +461,9 @@ const EditHomeForm = ({ state, dispatch }) => {
             placeholder="3"
             placeholderTextColor="#94a3b8"
             value={String(homeData.numBeds || "")}
-            onChangeText={(text) => updateField("numBeds", text.replace(/\D/g, ""))}
+            onChangeText={(text) =>
+              updateField("numBeds", text.replace(/\D/g, ""))
+            }
             onFocus={() => setFocusedField("numBeds")}
             onBlur={() => setFocusedField(null)}
             keyboardType="number-pad"
@@ -425,7 +483,9 @@ const EditHomeForm = ({ state, dispatch }) => {
             placeholder="2"
             placeholderTextColor="#94a3b8"
             value={String(homeData.numBaths || "")}
-            onChangeText={(text) => updateField("numBaths", text.replace(/\D/g, ""))}
+            onChangeText={(text) =>
+              updateField("numBaths", text.replace(/\D/g, ""))
+            }
             onFocus={() => setFocusedField("numBaths")}
             onBlur={() => setFocusedField(null)}
             keyboardType="number-pad"
@@ -456,7 +516,8 @@ const EditHomeForm = ({ state, dispatch }) => {
             <Text
               style={[
                 styles.choiceButtonText,
-                homeData.accessType === "code" && styles.choiceButtonTextSelected,
+                homeData.accessType === "code" &&
+                  styles.choiceButtonTextSelected,
               ]}
             >
               Door Code
@@ -473,7 +534,8 @@ const EditHomeForm = ({ state, dispatch }) => {
             <Text
               style={[
                 styles.choiceButtonText,
-                homeData.accessType === "key" && styles.choiceButtonTextSelected,
+                homeData.accessType === "key" &&
+                  styles.choiceButtonTextSelected,
               ]}
             >
               Hidden Key
@@ -500,9 +562,13 @@ const EditHomeForm = ({ state, dispatch }) => {
             onFocus={() => setFocusedField("keyPadCode")}
             onBlur={() => setFocusedField(null)}
           />
-          <Text style={styles.inputHelper}>You can update this before each appointment</Text>
+          <Text style={styles.inputHelper}>
+            You can update this before each appointment
+          </Text>
           {errors.keyPadCode && (
-            <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.keyPadCode}</Text>
+            <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+              {errors.keyPadCode}
+            </Text>
           )}
         </View>
       ) : (
@@ -526,7 +592,9 @@ const EditHomeForm = ({ state, dispatch }) => {
             multiline
           />
           {errors.keyLocation && (
-            <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.keyLocation}</Text>
+            <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+              {errors.keyLocation}
+            </Text>
           )}
         </View>
       )}
@@ -549,27 +617,47 @@ const EditHomeForm = ({ state, dispatch }) => {
           onBlur={() => setFocusedField(null)}
         />
         {errors.trashLocation && (
-          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.trashLocation}</Text>
+          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+            {errors.trashLocation}
+          </Text>
         )}
       </View>
 
       <TouchableOpacity
-        style={[styles.toggleCard, homeData.hasRecycling && styles.toggleCardActive]}
+        style={[
+          styles.toggleCard,
+          homeData.hasRecycling && styles.toggleCardActive,
+        ]}
         onPress={() => updateField("hasRecycling", !homeData.hasRecycling)}
       >
         <View style={styles.toggleCardContent}>
           <Text style={styles.toggleCardTitle}>Recycling Available</Text>
-          <Text style={styles.toggleCardDescription}>Does your home have recycling bins?</Text>
+          <Text style={styles.toggleCardDescription}>
+            Does your home have recycling bins?
+          </Text>
         </View>
-        <View style={[styles.toggleSwitch, homeData.hasRecycling && styles.toggleSwitchActive]}>
-          <View style={[styles.toggleKnob, homeData.hasRecycling && styles.toggleKnobActive]} />
+        <View
+          style={[
+            styles.toggleSwitch,
+            homeData.hasRecycling && styles.toggleSwitchActive,
+          ]}
+        >
+          <View
+            style={[
+              styles.toggleKnob,
+              homeData.hasRecycling && styles.toggleKnobActive,
+            ]}
+          />
         </View>
       </TouchableOpacity>
 
       {homeData.hasRecycling && (
         <View style={styles.inputGroup}>
           <TextInput
-            style={[styles.input, focusedField === "recyclingLocation" && styles.inputFocused]}
+            style={[
+              styles.input,
+              focusedField === "recyclingLocation" && styles.inputFocused,
+            ]}
             placeholder="Where is the recycling bin?"
             placeholderTextColor="#94a3b8"
             value={homeData.recyclingLocation}
@@ -581,22 +669,40 @@ const EditHomeForm = ({ state, dispatch }) => {
       )}
 
       <TouchableOpacity
-        style={[styles.toggleCard, homeData.hasCompost && styles.toggleCardActive]}
+        style={[
+          styles.toggleCard,
+          homeData.hasCompost && styles.toggleCardActive,
+        ]}
         onPress={() => updateField("hasCompost", !homeData.hasCompost)}
       >
         <View style={styles.toggleCardContent}>
           <Text style={styles.toggleCardTitle}>Compost Available</Text>
-          <Text style={styles.toggleCardDescription}>Does your home have compost bins?</Text>
+          <Text style={styles.toggleCardDescription}>
+            Does your home have compost bins?
+          </Text>
         </View>
-        <View style={[styles.toggleSwitch, homeData.hasCompost && styles.toggleSwitchActive]}>
-          <View style={[styles.toggleKnob, homeData.hasCompost && styles.toggleKnobActive]} />
+        <View
+          style={[
+            styles.toggleSwitch,
+            homeData.hasCompost && styles.toggleSwitchActive,
+          ]}
+        >
+          <View
+            style={[
+              styles.toggleKnob,
+              homeData.hasCompost && styles.toggleKnobActive,
+            ]}
+          />
         </View>
       </TouchableOpacity>
 
       {homeData.hasCompost && (
         <View style={styles.inputGroup}>
           <TextInput
-            style={[styles.input, focusedField === "compostLocation" && styles.inputFocused]}
+            style={[
+              styles.input,
+              focusedField === "compostLocation" && styles.inputFocused,
+            ]}
             placeholder="Where is the compost bin?"
             placeholderTextColor="#94a3b8"
             value={homeData.compostLocation}
@@ -620,15 +726,21 @@ const EditHomeForm = ({ state, dispatch }) => {
           placeholder="555-123-4567"
           placeholderTextColor="#94a3b8"
           value={homeData.contact}
-          onChangeText={(text) => updateField("contact", formatPhoneNumber(text))}
+          onChangeText={(text) =>
+            updateField("contact", formatPhoneNumber(text))
+          }
           onFocus={() => setFocusedField("contact")}
           onBlur={() => setFocusedField(null)}
           keyboardType="phone-pad"
           maxLength={12}
         />
-        <Text style={styles.inputHelper}>We'll call this number if there's an issue</Text>
+        <Text style={styles.inputHelper}>
+          We'll call this number if there's an issue
+        </Text>
         {errors.contact && (
-          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.contact}</Text>
+          <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
+            {errors.contact}
+          </Text>
         )}
       </View>
     </View>
@@ -649,24 +761,29 @@ const EditHomeForm = ({ state, dispatch }) => {
               key={option.value}
               style={[
                 styles.toggleCard,
-                homeData.timeToBeCompleted === option.value && styles.toggleCardActive,
+                homeData.timeToBeCompleted === option.value &&
+                  styles.toggleCardActive,
               ]}
               onPress={() => updateField("timeToBeCompleted", option.value)}
             >
               <View style={styles.toggleCardContent}>
                 <Text style={styles.toggleCardTitle}>{option.label}</Text>
-                <Text style={styles.toggleCardDescription}>{option.description}</Text>
+                <Text style={styles.toggleCardDescription}>
+                  {option.description}
+                </Text>
               </View>
               <View
                 style={[
                   styles.toggleSwitch,
-                  homeData.timeToBeCompleted === option.value && styles.toggleSwitchActive,
+                  homeData.timeToBeCompleted === option.value &&
+                    styles.toggleSwitchActive,
                 ]}
               >
                 <View
                   style={[
                     styles.toggleKnob,
-                    homeData.timeToBeCompleted === option.value && styles.toggleKnobActive,
+                    homeData.timeToBeCompleted === option.value &&
+                      styles.toggleKnobActive,
                   ]}
                 />
               </View>
@@ -676,9 +793,15 @@ const EditHomeForm = ({ state, dispatch }) => {
       </View>
 
       <TouchableOpacity
-        style={[styles.toggleCard, homeData.sheetsProvided === "yes" && styles.toggleCardActive]}
+        style={[
+          styles.toggleCard,
+          homeData.sheetsProvided === "yes" && styles.toggleCardActive,
+        ]}
         onPress={() =>
-          updateField("sheetsProvided", homeData.sheetsProvided === "yes" ? "no" : "yes")
+          updateField(
+            "sheetsProvided",
+            homeData.sheetsProvided === "yes" ? "no" : "yes"
+          )
         }
       >
         <View style={styles.toggleCardContent}>
@@ -703,9 +826,15 @@ const EditHomeForm = ({ state, dispatch }) => {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.toggleCard, homeData.towelsProvided === "yes" && styles.toggleCardActive]}
+        style={[
+          styles.toggleCard,
+          homeData.towelsProvided === "yes" && styles.toggleCardActive,
+        ]}
         onPress={() =>
-          updateField("towelsProvided", homeData.towelsProvided === "yes" ? "no" : "yes")
+          updateField(
+            "towelsProvided",
+            homeData.towelsProvided === "yes" ? "no" : "yes"
+          )
         }
       >
         <View style={styles.toggleCardContent}>
@@ -778,7 +907,10 @@ const EditHomeForm = ({ state, dispatch }) => {
             : `Key: ${homeData.keyLocation}`}
           {"\n\n"}
           <Text style={{ fontWeight: "bold" }}>Preferred Time: </Text>
-          {TIME_OPTIONS.find((o) => o.value === homeData.timeToBeCompleted)?.label}
+          {
+            TIME_OPTIONS.find((o) => o.value === homeData.timeToBeCompleted)
+              ?.label
+          }
           {"\n\n"}
           <Text style={{ fontWeight: "bold" }}>Contact: </Text>
           {homeData.contact}
@@ -799,10 +931,21 @@ const EditHomeForm = ({ state, dispatch }) => {
         }}
         onPress={handleDeletePress}
       >
-        <Text style={{ color: colors.error[700], fontWeight: typography.fontWeight.semibold }}>
+        <Text
+          style={{
+            color: colors.error[700],
+            fontWeight: typography.fontWeight.semibold,
+          }}
+        >
           Delete This Home
         </Text>
-        <Text style={{ color: colors.error[600], fontSize: typography.fontSize.xs, marginTop: spacing.xs }}>
+        <Text
+          style={{
+            color: colors.error[600],
+            fontSize: typography.fontSize.xs,
+            marginTop: spacing.xs,
+          }}
+        >
           This will cancel all upcoming appointments
         </Text>
       </TouchableOpacity>
@@ -826,9 +969,7 @@ const EditHomeForm = ({ state, dispatch }) => {
               {currentStep === STEPS.SERVICES && "Preferences"}
               {currentStep === STEPS.REVIEW && "Review & Save"}
             </Text>
-            <Text style={styles.subtitle}>
-              Step {currentStep + 1} of 4
-            </Text>
+            <Text style={styles.subtitle}>Step {currentStep + 1} of 4</Text>
           </View>
 
           {renderStepIndicator()}
@@ -840,19 +981,28 @@ const EditHomeForm = ({ state, dispatch }) => {
             {currentStep === STEPS.REVIEW && renderReviewStep()}
 
             <View style={styles.buttonRow}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={handleBack}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handleBack}
+              >
                 <Text style={styles.secondaryButtonText}>
                   {currentStep === STEPS.BASICS ? "Cancel" : "Back"}
                 </Text>
               </TouchableOpacity>
 
               {currentStep < STEPS.REVIEW ? (
-                <TouchableOpacity style={styles.primaryButton} onPress={handleNext}>
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={handleNext}
+                >
                   <Text style={styles.primaryButtonText}>Continue</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
-                  style={[styles.primaryButton, isLoading && styles.buttonDisabled]}
+                  style={[
+                    styles.primaryButton,
+                    isLoading && styles.buttonDisabled,
+                  ]}
                   onPress={handleSubmit}
                   disabled={isLoading}
                 >
@@ -872,37 +1022,45 @@ const EditHomeForm = ({ state, dispatch }) => {
         visible={deleteModalVisible}
         onRequestClose={() => setDeleteModalVisible(false)}
       >
-        <View style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "rgba(0,0,0,0.5)",
-        }}>
-          <View style={{
-            backgroundColor: colors.neutral[0],
-            borderRadius: radius["2xl"],
-            padding: spacing.xl,
-            margin: spacing.xl,
-            ...shadows.lg,
-            maxWidth: 400,
-            width: "90%",
-          }}>
-            <Text style={{
-              fontSize: typography.fontSize.lg,
-              fontWeight: typography.fontWeight.bold,
-              color: colors.text.primary,
-              marginBottom: spacing.md,
-              textAlign: "center",
-            }}>
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.5)",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.neutral[0],
+              borderRadius: radius["2xl"],
+              padding: spacing.xl,
+              margin: spacing.xl,
+              ...shadows.lg,
+              maxWidth: 400,
+              width: "90%",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.bold,
+                color: colors.text.primary,
+                marginBottom: spacing.md,
+                textAlign: "center",
+              }}
+            >
               Delete Home?
             </Text>
-            <Text style={{
-              fontSize: typography.fontSize.base,
-              color: colors.text.secondary,
-              marginBottom: spacing.lg,
-              textAlign: "center",
-              lineHeight: 24,
-            }}>
+            <Text
+              style={{
+                fontSize: typography.fontSize.base,
+                color: colors.text.secondary,
+                marginBottom: spacing.lg,
+                textAlign: "center",
+                lineHeight: 24,
+              }}
+            >
               {deleteFee > 0
                 ? `This will cancel all appointments. A $${deleteFee} cancellation fee will be charged for appointments within the next 7 days.`
                 : "This will permanently delete this home and all associated data."}
@@ -924,11 +1082,101 @@ const EditHomeForm = ({ state, dispatch }) => {
                 }}
                 onPress={handleConfirmDelete}
               >
-                <Text style={{ color: colors.neutral[0], fontWeight: typography.fontWeight.bold }}>
+                <Text
+                  style={{
+                    color: colors.neutral[0],
+                    fontWeight: typography.fontWeight.bold,
+                  }}
+                >
                   Delete
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showServiceAreaWarning}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleDismissServiceAreaWarning}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: spacing.lg,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.neutral[0],
+              borderRadius: radius.xl,
+              padding: spacing.xl,
+              width: "100%",
+              maxWidth: 340,
+              alignItems: "center",
+            }}
+          >
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                backgroundColor: colors.warning[100],
+                justifyContent: "center",
+                alignItems: "center",
+                marginBottom: spacing.lg,
+              }}
+            >
+              <Text style={{ fontSize: 32 }}>⚠️</Text>
+            </View>
+            <Text
+              style={{
+                fontSize: typography.fontSize.xl,
+                fontWeight: typography.fontWeight.bold,
+                color: colors.text.primary,
+                marginBottom: spacing.sm,
+                textAlign: "center",
+              }}
+            >
+              Changes Saved
+            </Text>
+            <Text
+              style={{
+                fontSize: typography.fontSize.base,
+                color: colors.text.secondary,
+                textAlign: "center",
+                lineHeight: 22,
+                marginBottom: spacing.xl,
+              }}
+            >
+              {serviceAreaMessage}
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: colors.primary[600],
+                paddingVertical: spacing.md,
+                paddingHorizontal: spacing["3xl"],
+                borderRadius: radius.lg,
+                width: "100%",
+                alignItems: "center",
+              }}
+              onPress={handleDismissServiceAreaWarning}
+            >
+              <Text
+                style={{
+                  fontSize: typography.fontSize.base,
+                  fontWeight: typography.fontWeight.bold,
+                  color: colors.neutral[0],
+                }}
+              >
+                Got It
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

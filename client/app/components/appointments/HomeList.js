@@ -104,6 +104,7 @@ const HomeList = ({ state, dispatch }) => {
                 trashLocation={home.trashLocation}
                 pendingRequestCount={requestCounts[home.id] || 0}
                 onRequestsPress={handleRequestsPress}
+                outsideServiceArea={home.outsideServiceArea || false}
               />
             ))}
           </View>

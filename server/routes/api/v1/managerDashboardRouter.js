@@ -16,6 +16,11 @@ const {
   Conversation,
   sequelize,
 } = require("../../../models");
+const {
+  businessConfig,
+  updateAllHomesServiceAreaStatus,
+} = require("../../../config/businessConfig");
+const EmailClass = require("../../../services/sendNotifications/EmailClass");
 
 const managerDashboardRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -481,6 +486,94 @@ managerDashboardRouter.get("/quick-stats", verifyManager, async (req, res) => {
   } catch (error) {
     console.error("[Manager Dashboard] Quick stats error:", error);
     res.status(500).json({ error: "Failed to fetch quick stats" });
+  }
+});
+
+/**
+ * GET /service-areas
+ * Get current service area configuration
+ */
+managerDashboardRouter.get("/service-areas", verifyManager, async (req, res) => {
+  try {
+    // Get count of homes outside service area
+    const homesOutsideArea = await UserHomes.count({
+      where: { outsideServiceArea: true },
+    }).catch(() => 0);
+
+    const totalHomes = await UserHomes.count().catch(() => 0);
+
+    res.json({
+      config: businessConfig.serviceAreas,
+      stats: {
+        totalHomes,
+        homesOutsideArea,
+        homesInArea: totalHomes - homesOutsideArea,
+      },
+    });
+  } catch (error) {
+    console.error("[Manager Dashboard] Service areas error:", error);
+    res.status(500).json({ error: "Failed to fetch service areas" });
+  }
+});
+
+/**
+ * POST /recheck-service-areas
+ * Re-check all homes against current service area configuration
+ * Call this after modifying the service area settings
+ * Sends email and in-app notifications to homeowners when status changes
+ */
+managerDashboardRouter.post("/recheck-service-areas", verifyManager, async (req, res) => {
+  try {
+    const result = await updateAllHomesServiceAreaStatus(UserHomes, User, EmailClass);
+
+    res.json({
+      success: true,
+      message: `Service area check complete. ${result.updated} home(s) updated. Notifications sent to affected homeowners.`,
+      ...result,
+    });
+  } catch (error) {
+    console.error("[Manager Dashboard] Recheck service areas error:", error);
+    res.status(500).json({ error: "Failed to recheck service areas" });
+  }
+});
+
+/**
+ * GET /homes-outside-service-area
+ * Get list of homes currently outside the service area
+ */
+managerDashboardRouter.get("/homes-outside-service-area", verifyManager, async (req, res) => {
+  try {
+    const homes = await UserHomes.findAll({
+      where: { outsideServiceArea: true },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "username", "email"],
+        },
+      ],
+      attributes: ["id", "nickName", "address", "city", "state", "zipcode"],
+    });
+
+    res.json({
+      count: homes.length,
+      homes: homes.map((h) => ({
+        id: h.id,
+        nickName: h.nickName,
+        address: h.address,
+        city: h.city,
+        state: h.state,
+        zipcode: h.zipcode,
+        owner: h.user ? {
+          id: h.user.id,
+          username: h.user.username,
+          email: h.user.email,
+        } : null,
+      })),
+    });
+  } catch (error) {
+    console.error("[Manager Dashboard] Homes outside area error:", error);
+    res.status(500).json({ error: "Failed to fetch homes outside service area" });
   }
 });
 
