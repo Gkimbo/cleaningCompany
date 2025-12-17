@@ -496,6 +496,37 @@ const ManagerDashboard = ({ state }) => {
             <Text style={styles.platformOverviewLabel}>Homes</Text>
           </View>
         </View>
+
+        {/* Applications Overview */}
+        <View style={styles.applicationsSection}>
+          <Text style={styles.applicationsSectionTitle}>Applications</Text>
+          <View style={styles.applicationsGrid}>
+            <View style={styles.applicationCard}>
+              <Text style={styles.applicationValue}>
+                {userAnalytics?.applications?.total || 0}
+              </Text>
+              <Text style={styles.applicationLabel}>Total</Text>
+            </View>
+            <View style={[styles.applicationCard, { backgroundColor: colors.warning[50] }]}>
+              <Text style={[styles.applicationValue, { color: colors.warning[700] }]}>
+                {userAnalytics?.applications?.pending || 0}
+              </Text>
+              <Text style={[styles.applicationLabel, { color: colors.warning[600] }]}>Pending</Text>
+            </View>
+            <View style={[styles.applicationCard, { backgroundColor: colors.success[50] }]}>
+              <Text style={[styles.applicationValue, { color: colors.success[700] }]}>
+                {userAnalytics?.applications?.approved || 0}
+              </Text>
+              <Text style={[styles.applicationLabel, { color: colors.success[600] }]}>Approved</Text>
+            </View>
+            <View style={[styles.applicationCard, { backgroundColor: colors.error[50] }]}>
+              <Text style={[styles.applicationValue, { color: colors.error[700] }]}>
+                {userAnalytics?.applications?.rejected || 0}
+              </Text>
+              <Text style={[styles.applicationLabel, { color: colors.error[600] }]}>Rejected</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       {/* Tax Section */}
@@ -589,6 +620,43 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     marginTop: spacing.xs,
+  },
+
+  // Applications Section
+  applicationsSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  applicationsSectionTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
+  applicationsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  applicationCard: {
+    flex: 1,
+    minWidth: 70,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  applicationValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  applicationLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
   },
 
   // Quick Stats

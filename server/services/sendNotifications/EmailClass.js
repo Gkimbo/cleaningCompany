@@ -599,6 +599,45 @@ Kleanr Support Team`,
       console.error("❌ Error sending service area email:", error);
     }
   }
+
+  static async sendNewApplicationNotification(managerEmail, applicantName, applicantEmail, experience) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: managerEmail,
+        subject: "DO NOT REPLY: New Cleaner Application Received (Automated Message)",
+        text: `Hello Manager,
+
+A new cleaner application has been submitted and requires your review.
+
+Applicant Details:
+- Name: ${applicantName}
+- Email: ${applicantEmail}
+- Experience: ${experience}
+
+Please log into the Kleanr manager dashboard to review this application and take appropriate action.
+
+Best regards,
+Kleanr System`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ New application notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending new application notification email:", error);
+    }
+  }
 }
 
 module.exports = Email;

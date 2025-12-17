@@ -1,7 +1,9 @@
 const express = require("express");
+const { Op } = require("sequelize");
 const ApplicationInfoClass = require("../../../services/ApplicationInfoClass");
 const ApplicationSerializer = require("../../../serializers/ApplicationSerializer");
-const { UserApplications } = require("../../../models");
+const { UserApplications, User } = require("../../../models");
+const Email = require("../../../services/sendNotifications/EmailClass");
 
 const applicationRouter = express.Router();
 
@@ -92,6 +94,56 @@ applicationRouter.post("/submitted", async (req, res) => {
       drugTestConsent,
       referenceCheckConsent,
     });
+
+    // Notify managers about the new application
+    try {
+      const managers = await User.findAll({
+        where: {
+          [Op.or]: [{ type: "manager" }, { type: "manager1" }],
+        },
+      });
+
+      const applicantName = `${firstName} ${lastName}`;
+
+      for (const manager of managers) {
+        // Send email notification
+        if (manager.email) {
+          await Email.sendNewApplicationNotification(
+            manager.email,
+            applicantName,
+            email,
+            experience
+          );
+        }
+
+        // Add in-app notification
+        const notification = {
+          id: Date.now().toString() + "-" + manager.id,
+          type: "new_application",
+          title: "New Cleaner Application",
+          message: `${applicantName} has submitted a new cleaner application. Review it in the manager dashboard.`,
+          applicantName,
+          applicantEmail: email,
+          read: false,
+          createdAt: new Date().toISOString(),
+        };
+
+        const currentNotifications = manager.notifications || [];
+        // Handle case where notifications might be stored as strings
+        const notificationsArray = Array.isArray(currentNotifications)
+          ? currentNotifications
+          : [];
+
+        await manager.update({
+          notifications: [...notificationsArray, JSON.stringify(notification)],
+        });
+      }
+
+      console.log(`✅ Notified ${managers.length} manager(s) about new application`);
+    } catch (notifyError) {
+      console.error("Error notifying managers:", notifyError);
+      // Don't fail the application submission if notifications fail
+    }
 
     return res.status(201).json({ applicationInfo });
   } catch (error) {
