@@ -429,6 +429,102 @@ Kleanr Support Team`,
       throw error;
     }
   }
+
+  static async sendRequestApproved(email, cleanerName, homeownerName, address, appointmentDate) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const formattedDate = (dateString) => {
+        const options = {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        };
+        return new Date(dateString).toLocaleDateString(undefined, options);
+      };
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "DO NOT REPLY: Cleaning Request Approved! (Automated Message)",
+        text: `Dear ${cleanerName},
+
+Great news! Your request to clean has been approved by ${homeownerName}.
+
+Appointment Details:
+- Address: ${address.street}, ${address.city}, ${address.state}, ${address.zipcode}
+- Date: ${formattedDate(appointmentDate)}
+
+Please log into the Kleanr app to view the full details of your upcoming appointment.
+
+Thank you for being a part of the Kleanr team!
+
+Best regards,
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Request approved email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending request approved email:", error);
+    }
+  }
+
+  static async sendRequestDenied(email, cleanerName, appointmentDate) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      const formattedDate = (dateString) => {
+        const options = {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        };
+        return new Date(dateString).toLocaleDateString(undefined, options);
+      };
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "DO NOT REPLY: Cleaning Request Update (Automated Message)",
+        text: `Dear ${cleanerName},
+
+We wanted to let you know that your request to clean on ${formattedDate(appointmentDate)} was not approved by the homeowner.
+
+Don't worry - there are plenty of other cleaning opportunities available! Please log into the Kleanr app to browse and request other available appointments.
+
+Thank you for being a part of the Kleanr team!
+
+Best regards,
+Kleanr Support Team`,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Request denied email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending request denied email:", error);
+    }
+  }
 }
 
 module.exports = Email;

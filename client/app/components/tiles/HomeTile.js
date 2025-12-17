@@ -20,6 +20,8 @@ const HomeTile = ({
 	recyclingLocation,
 	compostLocation,
 	trashLocation,
+	pendingRequestCount = 0,
+	onRequestsPress,
 }) => {
 	const navigate = useNavigate();
 
@@ -32,9 +34,27 @@ const HomeTile = ({
 		navigate(`/quick-book/${id}`);
 	};
 
+	const handleRequestsPress = (e) => {
+		e.stopPropagation();
+		if (onRequestsPress) {
+			onRequestsPress(id);
+		}
+	};
+
 	return (
 		<View style={styles.container}>
-			<Pressable onPress={handleViewDetails}>
+			{pendingRequestCount > 0 && (
+				<TouchableOpacity
+					style={styles.notificationBubble}
+					onPress={handleRequestsPress}
+					activeOpacity={0.8}
+				>
+					<Text style={styles.notificationText}>
+						{pendingRequestCount > 99 ? "99+" : pendingRequestCount}
+					</Text>
+				</TouchableOpacity>
+			)}
+			<Pressable onPress={pendingRequestCount > 0 ? handleRequestsPress : handleViewDetails}>
 				<View style={styles.header}>
 					<Text style={styles.title}>{nickName}</Text>
 					<View style={styles.badge}>
@@ -102,6 +122,28 @@ const styles = StyleSheet.create({
 		...shadows.md,
 		borderLeftWidth: 4,
 		borderLeftColor: colors.primary[500],
+		position: "relative",
+	},
+	notificationBubble: {
+		position: "absolute",
+		top: -8,
+		right: -8,
+		backgroundColor: colors.error[500],
+		borderRadius: radius.full,
+		minWidth: 24,
+		height: 24,
+		paddingHorizontal: 6,
+		alignItems: "center",
+		justifyContent: "center",
+		zIndex: 10,
+		...shadows.md,
+		borderWidth: 2,
+		borderColor: colors.neutral[0],
+	},
+	notificationText: {
+		color: colors.neutral[0],
+		fontSize: typography.fontSize.xs,
+		fontWeight: typography.fontWeight.bold,
 	},
 	header: {
 		flexDirection: "row",

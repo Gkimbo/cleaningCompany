@@ -1,11 +1,35 @@
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { ScrollView, Text, View, TouchableOpacity, StyleSheet } from "react-native";
 import { useNavigate } from "react-router-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import HomeTile from "../tiles/HomeTile";
+import HomeRequestsModal from "./HomeRequestsModal";
+import FetchData from "../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 
 const HomeList = ({ state, dispatch }) => {
   const navigate = useNavigate();
+  const [requestCounts, setRequestCounts] = useState({});
+  const [selectedHomeId, setSelectedHomeId] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [token, setToken] = useState(null);
+
+  const fetchRequestCounts = useCallback(async () => {
+    try {
+      const storedToken = await AsyncStorage.getItem("token");
+      setToken(storedToken);
+      if (storedToken) {
+        const response = await FetchData.getRequestCountsByHome(storedToken);
+        setRequestCounts(response.requestCountsByHome || {});
+      }
+    } catch (error) {
+      console.error("Error fetching request counts:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRequestCounts();
+  }, [fetchRequestCounts]);
 
   const handleAddHome = () => {
     navigate("/setup-home");
@@ -14,6 +38,23 @@ const HomeList = ({ state, dispatch }) => {
   const handleBack = () => {
     navigate("/");
   };
+
+  const handleRequestsPress = (homeId) => {
+    setSelectedHomeId(homeId);
+    setModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedHomeId(null);
+  };
+
+  const handleRequestUpdate = () => {
+    // Refresh request counts after approve/deny
+    fetchRequestCounts();
+  };
+
+  const totalPendingRequests = Object.values(requestCounts).reduce((sum, count) => sum + count, 0);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -24,6 +65,17 @@ const HomeList = ({ state, dispatch }) => {
         <Text style={styles.title}>My Homes</Text>
         <View style={styles.headerSpacer} />
       </View>
+
+      {totalPendingRequests > 0 && (
+        <View style={styles.pendingBanner}>
+          <Text style={styles.pendingBannerText}>
+            You have {totalPendingRequests} pending cleaner {totalPendingRequests === 1 ? "request" : "requests"}
+          </Text>
+          <Text style={styles.pendingBannerSubtext}>
+            Tap on a home with a red badge to view and respond
+          </Text>
+        </View>
+      )}
 
       {state.homes.length > 0 ? (
         <>
@@ -50,6 +102,8 @@ const HomeList = ({ state, dispatch }) => {
                 recyclingLocation={home.recyclingLocation}
                 compostLocation={home.compostLocation}
                 trashLocation={home.trashLocation}
+                pendingRequestCount={requestCounts[home.id] || 0}
+                onRequestsPress={handleRequestsPress}
               />
             ))}
           </View>
@@ -72,6 +126,14 @@ const HomeList = ({ state, dispatch }) => {
           </TouchableOpacity>
         </View>
       )}
+
+      <HomeRequestsModal
+        visible={modalVisible}
+        homeId={selectedHomeId}
+        token={token}
+        onClose={handleCloseModal}
+        onRequestUpdate={handleRequestUpdate}
+      />
     </ScrollView>
   );
 };
@@ -107,6 +169,24 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 60,
+  },
+  pendingBanner: {
+    backgroundColor: colors.secondary[50],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.secondary[500],
+  },
+  pendingBannerText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.secondary[700],
+    marginBottom: spacing.xs,
+  },
+  pendingBannerSubtext: {
+    fontSize: typography.fontSize.sm,
+    color: colors.secondary[600],
   },
   subtitle: {
     fontSize: typography.fontSize.sm,

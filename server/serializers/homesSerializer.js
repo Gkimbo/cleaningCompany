@@ -1,29 +1,39 @@
 class HomeSerializer {
+	static allowedAttributes = [
+		"id",
+		"nickName",
+		"address",
+		"city",
+		"state",
+		"zipcode",
+		"numBeds",
+		"numBaths",
+		"sheetsProvided",
+		"towelsProvided",
+		"keyPadCode",
+		"keyLocation",
+		"recyclingLocation",
+		"compostLocation",
+		"trashLocation",
+		"contact",
+		"specialNotes",
+		"cleanersNeeded",
+		"timeToBeCompleted"
+	];
+
+	static serializeOne(home) {
+		if (!home) return null;
+		const newHome = {};
+		for (const attribute of this.allowedAttributes) {
+			newHome[attribute] = home.dataValues[attribute];
+		}
+		return newHome;
+	}
+
 	static serializeArray(homeArray) {
-		const allowedAttributes = [
-			"id",
-			"nickName",
-			"address",
-			"city",
-			"state",
-			"zipcode",
-			"numBeds",
-			"numBaths",
-			"sheetsProvided",
-			"towelsProvided",
-			"keyPadCode",
-			"keyLocation",
-			"recyclingLocation",
-			"compostLocation",
-			"trashLocation",
-			"contact",
-			"specialNotes",
-			"cleanersNeeded",
-			"timeToBeCompleted"
-		];
 		const serializedHome = homeArray.map((home) => {
 			const newHome = {};
-			for (const attribute of allowedAttributes) {
+			for (const attribute of this.allowedAttributes) {
 				newHome[attribute] = home.dataValues[attribute];
 			}
 			return newHome;

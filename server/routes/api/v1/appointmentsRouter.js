@@ -141,6 +141,137 @@ appointmentRouter.get("/my-requests", async (req, res) => {
   }
 });
 
+// Get pending request counts grouped by home for homeowner
+appointmentRouter.get("/requests-by-home", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Get all appointments for this homeowner
+    const existingAppointments = await UserAppointments.findAll({
+      where: { userId },
+    });
+
+    if (!existingAppointments.length) {
+      return res.status(200).json({ requestCountsByHome: {} });
+    }
+
+    const appointmentIds = existingAppointments.map((apt) => apt.id);
+
+    // Get all pending requests for these appointments
+    const pendingRequests = await UserPendingRequests.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        status: "pending"
+      },
+    });
+
+    // Group counts by homeId
+    const requestCountsByHome = {};
+    pendingRequests.forEach((request) => {
+      const appointment = existingAppointments.find(
+        (apt) => apt.id === request.appointmentId
+      );
+      if (appointment) {
+        const homeId = appointment.homeId;
+        requestCountsByHome[homeId] = (requestCountsByHome[homeId] || 0) + 1;
+      }
+    });
+
+    return res.status(200).json({ requestCountsByHome });
+  } catch (error) {
+    console.error("Error fetching requests by home:", error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+// Get pending requests for a specific home
+appointmentRouter.get("/requests-for-home/:homeId", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+    const { homeId } = req.params;
+
+    // Verify the home belongs to this user
+    const home = await UserHomes.findOne({
+      where: { id: homeId, userId },
+    });
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Get all appointments for this home
+    const appointments = await UserAppointments.findAll({
+      where: { homeId, userId },
+    });
+
+    if (!appointments.length) {
+      return res.status(200).json({ requests: [] });
+    }
+
+    const appointmentIds = appointments.map((apt) => apt.id);
+
+    // Get all pending requests for these appointments
+    const pendingRequests = await UserPendingRequests.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        status: "pending"
+      },
+    });
+
+    if (!pendingRequests.length) {
+      return res.status(200).json({ requests: [] });
+    }
+
+    // Build response with appointment and cleaner details
+    const requests = await Promise.all(
+      pendingRequests.map(async (request) => {
+        const appointment = appointments.find(
+          (apt) => apt.id === request.appointmentId
+        );
+
+        const cleaner = await User.findOne({
+          where: { id: request.employeeId },
+          include: [
+            {
+              model: UserReviews,
+              as: "reviews",
+            },
+          ],
+        });
+
+        const serializedAppointment = AppointmentSerializer.serializeOne(appointment);
+        const serializedCleaner = UserSerializer.serializeOne(cleaner);
+        const serializedRequest = RequestSerializer.serializeOne(request);
+
+        return {
+          request: serializedRequest,
+          appointment: serializedAppointment,
+          cleaner: serializedCleaner,
+        };
+      })
+    );
+
+    return res.status(200).json({ requests, home: HomeSerializer.serializeOne(home) });
+  } catch (error) {
+    console.error("Error fetching requests for home:", error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
 appointmentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;
   try {
@@ -567,6 +698,39 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
         }
       }
 
+      // Send email and in-app notification to the cleaner
+      const cleaner = await User.findByPk(cleanerId);
+      const homeowner = await User.findByPk(appointment.dataValues.userId);
+      const home = await UserHomes.findByPk(appointment.dataValues.homeId);
+
+      if (cleaner && homeowner && home) {
+        // Send email notification
+        const address = {
+          street: home.dataValues.address,
+          city: home.dataValues.city,
+          state: home.dataValues.state,
+          zipcode: home.dataValues.zipcode,
+        };
+        await Email.sendRequestApproved(
+          cleaner.dataValues.email,
+          cleaner.dataValues.username,
+          homeowner.dataValues.username,
+          address,
+          appointment.dataValues.date
+        );
+
+        // Add in-app notification
+        const notifications = cleaner.dataValues.notifications || [];
+        const formattedDate = new Date(appointment.dataValues.date).toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+        notifications.unshift(`Your cleaning request for ${formattedDate} at ${home.dataValues.address} has been approved!`);
+        await cleaner.update({ notifications: notifications.slice(0, 50) }); // Keep last 50 notifications
+      }
+
       await request.destroy();
 
       return res.status(200).json({ message: "Cleaner assigned successfully" });
@@ -609,11 +773,24 @@ appointmentRouter.patch("/deny-request", async (req, res) => {
     const removedRequestData = request.get();
     await request.destroy();
 
-    await Email.removeRequestEmail(
-      client.dataValues.email,
-      client.dataValues.username,
+    // Send denial notification to the cleaner (not the homeowner)
+    await Email.sendRequestDenied(
+      cleaner.dataValues.email,
+      cleaner.dataValues.username,
       appointment.dataValues.date
     );
+
+    // Add in-app notification to cleaner
+    const home = await UserHomes.findByPk(appointment.dataValues.homeId);
+    const notifications = cleaner.dataValues.notifications || [];
+    const formattedDate = new Date(appointment.dataValues.date).toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    notifications.unshift(`Your cleaning request for ${formattedDate} was not approved. Check out other available appointments!`);
+    await cleaner.update({ notifications: notifications.slice(0, 50) });
 
     return res.status(200).json({
       message: "Request removed",

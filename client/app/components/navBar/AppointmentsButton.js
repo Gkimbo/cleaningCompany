@@ -4,31 +4,31 @@ import { useNavigate } from "react-router-native";
 import ButtonStyles from "../../services/styles/ButtonStyles";
 
 const AppointmentsButton = ({ closeModal }) => {
-	const [redirect, setRedirect] = useState(false);
-	const navigate = useNavigate();
+  const [redirect, setRedirect] = useState(false);
+  const navigate = useNavigate();
 
-	useEffect(() => {
-		if (redirect) {
-			navigate("/appointments");
-			setRedirect(false);
-		}
-	}, [redirect]);
+  useEffect(() => {
+    if (redirect) {
+      navigate("/appointments");
+      setRedirect(false);
+    }
+  }, [redirect]);
 
-	const handlePress = () => {
-		closeModal();
-		setRedirect(true);
-	};
+  const handlePress = () => {
+    closeModal();
+    setRedirect(true);
+  };
 
- return (
-	<Pressable
-	  style={({ pressed }) => [
-		ButtonStyles.glassButton,
-		pressed && { backgroundColor: "rgba(255,255,255,0.25)" },
-	  ]}
-	  onPress={handlePress}
-	>
-	  <Text style={ButtonStyles.buttonText}>Your Appointments</Text>
-	</Pressable>
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        ButtonStyles.glassButton,
+        pressed && { backgroundColor: "rgba(255,255,255,0.25)" },
+      ]}
+      onPress={handlePress}
+    >
+      <Text style={ButtonStyles.buttonText}>Edit Appointments</Text>
+    </Pressable>
   );
 };
 

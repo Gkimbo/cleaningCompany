@@ -29,7 +29,6 @@ import ViewApplicationsButton from "./ViewApplicationsButton";
 import MessagesButton from "../messaging/MessagesButton";
 import AccountSettingsButton from "./AccountSettingsButton";
 
-
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [signInRedirect, setSignInRedirect] = useState(false);
@@ -110,7 +109,7 @@ const TopBar = ({ dispatch, state }) => {
                         <>
                           <ScheduleCleaningButton closeModal={closeModal} />
                           <EditHomeButton closeModal={closeModal} />
-                          <CleanerRequestsButton closeModal={closeModal} />
+                          {/* <CleanerRequestsButton closeModal={closeModal} /> */}
                           <AccountSettingsButton closeModal={closeModal} />
                         </>
                       )}
@@ -148,8 +147,8 @@ const TopBar = ({ dispatch, state }) => {
       ) : (
         <View style={styles.unauthContainer}>
           <View style={styles.authButtonsContainerTitle}>
-          <Text style={styles.brand}>Kleanr</Text>
-          <HomeButton />
+            <Text style={styles.brand}>Kleanr</Text>
+            <HomeButton />
           </View>
           <View style={styles.authButtonsContainer}>
             <Pressable

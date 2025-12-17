@@ -614,6 +614,62 @@ class FetchData {
       return { error: "Failed to process request. Please try again." };
     }
   }
+
+  static async getRequestCountsByHome(token) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/appointments/requests-by-home", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch request counts");
+      }
+
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching request counts:", error);
+      return { requestCountsByHome: {} };
+    }
+  }
+
+  static async getRequestsForHome(token, homeId) {
+    try {
+      const response = await fetch(baseURL + `/api/v1/appointments/requests-for-home/${homeId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch requests for home");
+      }
+
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching requests for home:", error);
+      return { requests: [] };
+    }
+  }
+
+  static async getCleanerProfile(cleanerId) {
+    try {
+      const response = await fetch(baseURL + `/api/v1/employee-info/cleaner/${cleanerId}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch cleaner profile");
+      }
+
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching cleaner profile:", error);
+      return { cleaner: null };
+    }
+  }
 }
 
 export default FetchData;
