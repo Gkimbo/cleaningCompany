@@ -23,6 +23,7 @@ const businessConfig = {
     // Cities we service (case-insensitive matching)
     cities: [
       "Barnstable",
+      "West Barnstable",
       "Centerville",
       "Cotuit",
       "Craigville",
