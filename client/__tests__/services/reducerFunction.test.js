@@ -1,4 +1,4 @@
-import reducer from "../../app/services/reducerFunction";
+import reducer from "../../src/services/reducerFunction";
 
 describe("Reducer Function", () => {
   const initialState = {
@@ -287,6 +287,122 @@ describe("Reducer Function", () => {
 
       expect(newState.bill.appointmentDue).toBe(100);
       expect(newState.bill.totalDue).toBe(150);
+    });
+  });
+
+  describe("Messaging Actions", () => {
+    it("should handle SET_CONVERSATIONS action", () => {
+      const conversations = [
+        { conversationId: 1, title: "Chat 1" },
+        { conversationId: 2, title: "Chat 2" },
+      ];
+      const action = { type: "SET_CONVERSATIONS", payload: conversations };
+      const stateWithMessaging = { ...initialState, conversations: [], currentMessages: [], unreadCount: 0 };
+      const newState = reducer(stateWithMessaging, action);
+
+      expect(newState.conversations).toEqual(conversations);
+    });
+
+    it("should handle ADD_CONVERSATION action", () => {
+      const stateWithConvos = {
+        ...initialState,
+        conversations: [{ conversationId: 1, title: "Existing" }],
+        currentMessages: [],
+        unreadCount: 0,
+      };
+      const newConvo = { conversationId: 2, title: "New Chat" };
+      const action = { type: "ADD_CONVERSATION", payload: newConvo };
+      const newState = reducer(stateWithConvos, action);
+
+      expect(newState.conversations).toHaveLength(2);
+      expect(newState.conversations[0]).toEqual(newConvo);
+    });
+
+    it("should handle UPDATE_CONVERSATION action", () => {
+      const stateWithConvos = {
+        ...initialState,
+        conversations: [{ conversationId: 1, title: "Old Title" }],
+        currentMessages: [],
+        unreadCount: 0,
+      };
+      const action = {
+        type: "UPDATE_CONVERSATION",
+        payload: { conversationId: 1, title: "New Title" },
+      };
+      const newState = reducer(stateWithConvos, action);
+
+      expect(newState.conversations[0].title).toBe("New Title");
+    });
+
+    it("should handle SET_CURRENT_MESSAGES action", () => {
+      const messages = [{ id: 1, content: "Hello" }];
+      const stateWithMessaging = { ...initialState, conversations: [], currentMessages: [], unreadCount: 0 };
+      const action = { type: "SET_CURRENT_MESSAGES", payload: messages };
+      const newState = reducer(stateWithMessaging, action);
+
+      expect(newState.currentMessages).toEqual(messages);
+    });
+
+    it("should handle ADD_MESSAGE action", () => {
+      const stateWithMessages = {
+        ...initialState,
+        conversations: [],
+        currentMessages: [{ id: 1, content: "Hello" }],
+        unreadCount: 0,
+      };
+      const newMessage = { id: 2, content: "World" };
+      const action = { type: "ADD_MESSAGE", payload: newMessage };
+      const newState = reducer(stateWithMessages, action);
+
+      expect(newState.currentMessages).toHaveLength(2);
+    });
+
+    it("should handle SET_UNREAD_COUNT action", () => {
+      const stateWithMessaging = { ...initialState, conversations: [], currentMessages: [], unreadCount: 0 };
+      const action = { type: "SET_UNREAD_COUNT", payload: 5 };
+      const newState = reducer(stateWithMessaging, action);
+
+      expect(newState.unreadCount).toBe(5);
+    });
+
+    it("should handle INCREMENT_UNREAD action", () => {
+      const stateWithUnread = { ...initialState, conversations: [], currentMessages: [], unreadCount: 3 };
+      const action = { type: "INCREMENT_UNREAD" };
+      const newState = reducer(stateWithUnread, action);
+
+      expect(newState.unreadCount).toBe(4);
+    });
+
+    it("should handle DECREMENT_UNREAD action", () => {
+      const stateWithUnread = { ...initialState, conversations: [], currentMessages: [], unreadCount: 3 };
+      const action = { type: "DECREMENT_UNREAD", payload: 2 };
+      const newState = reducer(stateWithUnread, action);
+
+      expect(newState.unreadCount).toBe(1);
+    });
+
+    it("should not go below 0 for DECREMENT_UNREAD", () => {
+      const stateWithUnread = { ...initialState, conversations: [], currentMessages: [], unreadCount: 1 };
+      const action = { type: "DECREMENT_UNREAD", payload: 5 };
+      const newState = reducer(stateWithUnread, action);
+
+      expect(newState.unreadCount).toBe(0);
+    });
+
+    it("should handle UPDATE_CONVERSATION_UNREAD action", () => {
+      const stateWithConvos = {
+        ...initialState,
+        conversations: [{ conversationId: 1, unreadCount: 5 }],
+        currentMessages: [],
+        unreadCount: 5,
+      };
+      const action = {
+        type: "UPDATE_CONVERSATION_UNREAD",
+        payload: { conversationId: 1, unreadCount: 0 },
+      };
+      const newState = reducer(stateWithConvos, action);
+
+      expect(newState.conversations[0].unreadCount).toBe(0);
     });
   });
 
