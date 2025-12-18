@@ -5,8 +5,10 @@ const passport = require("passport");
 const { User } = require("../../../models");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const UserSerializer = require("../../../serializers/userSerializer");
 const authenticateToken = require("../../../middleware/authenticatedToken");
+const Email = require("../../../services/sendNotifications/EmailClass");
 
 const sessionRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -69,6 +71,78 @@ sessionRouter.post("/logout", (req, res) => {
 	req.session.destroy();
 	res.clearCookie("token");
 	res.status(200).json({ message: "Logout successful" });
+});
+
+// POST: Forgot Username - sends username to email
+sessionRouter.post("/forgot-username", async (req, res) => {
+	const { email } = req.body;
+
+	if (!email) {
+		return res.status(400).json({ error: "Email is required" });
+	}
+
+	try {
+		const user = await User.findOne({ where: { email } });
+
+		if (!user) {
+			// Return success even if user not found for security (don't reveal if email exists)
+			return res.status(200).json({
+				message: "If an account with that email exists, we've sent the username to it."
+			});
+		}
+
+		// Send username recovery email
+		await Email.sendUsernameRecovery(email, user.username);
+		console.log(`✅ Username recovery email sent to ${email}`);
+
+		return res.status(200).json({
+			message: "If an account with that email exists, we've sent the username to it."
+		});
+	} catch (error) {
+		console.error("Error in forgot username:", error);
+		return res.status(500).json({ error: "Failed to process request. Please try again." });
+	}
+});
+
+// POST: Forgot Password - generates temporary password and sends to email
+sessionRouter.post("/forgot-password", async (req, res) => {
+	const { email } = req.body;
+
+	if (!email) {
+		return res.status(400).json({ error: "Email is required" });
+	}
+
+	try {
+		const user = await User.findOne({ where: { email } });
+
+		if (!user) {
+			// Return success even if user not found for security
+			return res.status(200).json({
+				message: "If an account with that email exists, we've sent password reset instructions to it."
+			});
+		}
+
+		// Generate a temporary password (12 characters)
+		const temporaryPassword = crypto.randomBytes(6).toString("hex");
+
+		// Hash the temporary password
+		const salt = await bcrypt.genSalt(10);
+		const hashedPassword = await bcrypt.hash(temporaryPassword, salt);
+
+		// Update user's password
+		await user.update({ password: hashedPassword });
+
+		// Send password reset email
+		await Email.sendPasswordReset(email, user.username, temporaryPassword);
+		console.log(`✅ Password reset email sent to ${email}`);
+
+		return res.status(200).json({
+			message: "If an account with that email exists, we've sent password reset instructions to it."
+		});
+	} catch (error) {
+		console.error("Error in forgot password:", error);
+		return res.status(500).json({ error: "Failed to process request. Please try again." });
+	}
 });
 
 module.exports = sessionRouter;

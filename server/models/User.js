@@ -3,6 +3,14 @@ const bcrypt = require("bcrypt");
 module.exports = (sequelize, DataTypes) => {
 	// Define the User model
 	const User = sequelize.define("User", {
+		firstName: {
+			type: DataTypes.STRING,
+			allowNull: false,
+		},
+		lastName: {
+			type: DataTypes.STRING,
+			allowNull: false,
+		},
 		username: {
 			type: DataTypes.STRING,
 			allowNull: false,
@@ -29,8 +37,17 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 		},
 		notifications: {
-			type:  DataTypes.ARRAY(DataTypes.STRING),
+			type:  DataTypes.ARRAY(DataTypes.TEXT),
 			allowNull: true,
+		},
+		stripeCustomerId: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		hasPaymentMethod: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
 		},
 	});
 

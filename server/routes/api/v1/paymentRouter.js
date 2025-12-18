@@ -240,6 +240,197 @@ paymentRouter.get("/:homeId", async (req, res) => {
 
 /**
  * ------------------------------------------------------
+ * PAYMENT METHOD SETUP FOR HOMEOWNERS
+ * Ensures homeowners have a valid payment method before booking
+ * ------------------------------------------------------
+ */
+
+/**
+ * Create a SetupIntent for adding a payment method
+ * This allows the client to save a card for future payments
+ */
+paymentRouter.post("/setup-intent", async (req, res) => {
+  const { token } = req.body;
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Create or get Stripe Customer
+    let stripeCustomerId = user.stripeCustomerId;
+
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        metadata: { userId: userId.toString() },
+      });
+      stripeCustomerId = customer.id;
+      await user.update({ stripeCustomerId });
+    }
+
+    // Create SetupIntent
+    const setupIntent = await stripe.setupIntents.create({
+      customer: stripeCustomerId,
+      payment_method_types: ["card"],
+      metadata: { userId: userId.toString() },
+    });
+
+    return res.json({
+      clientSecret: setupIntent.client_secret,
+      customerId: stripeCustomerId,
+    });
+  } catch (error) {
+    console.error("Error creating setup intent:", error);
+    return res.status(400).json({ error: "Failed to create setup intent" });
+  }
+});
+
+/**
+ * Confirm payment method was saved successfully
+ * Called after the client successfully completes the SetupIntent
+ */
+paymentRouter.post("/confirm-payment-method", async (req, res) => {
+  const { token, setupIntentId } = req.body;
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Verify the SetupIntent was successful
+    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+
+    if (setupIntent.status !== "succeeded") {
+      return res.status(400).json({ error: "Payment method setup not completed" });
+    }
+
+    // Set the payment method as the default for the customer
+    if (setupIntent.payment_method) {
+      await stripe.customers.update(user.stripeCustomerId, {
+        invoice_settings: {
+          default_payment_method: setupIntent.payment_method,
+        },
+      });
+    }
+
+    // Update user record
+    await user.update({ hasPaymentMethod: true });
+
+    return res.json({
+      success: true,
+      message: "Payment method saved successfully",
+      hasPaymentMethod: true,
+    });
+  } catch (error) {
+    console.error("Error confirming payment method:", error);
+    return res.status(400).json({ error: "Failed to confirm payment method" });
+  }
+});
+
+/**
+ * Get payment method status for a user
+ */
+paymentRouter.get("/payment-method-status", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    let paymentMethods = [];
+    let hasValidPaymentMethod = user.hasPaymentMethod;
+
+    // If user has a Stripe customer ID, verify payment methods exist
+    if (user.stripeCustomerId) {
+      try {
+        const methods = await stripe.paymentMethods.list({
+          customer: user.stripeCustomerId,
+          type: "card",
+        });
+        paymentMethods = methods.data.map((pm) => ({
+          id: pm.id,
+          brand: pm.card.brand,
+          last4: pm.card.last4,
+          expMonth: pm.card.exp_month,
+          expYear: pm.card.exp_year,
+        }));
+        hasValidPaymentMethod = methods.data.length > 0;
+
+        // Update user if status changed
+        if (user.hasPaymentMethod !== hasValidPaymentMethod) {
+          await user.update({ hasPaymentMethod: hasValidPaymentMethod });
+        }
+      } catch (stripeError) {
+        console.error("Error fetching payment methods:", stripeError);
+      }
+    }
+
+    return res.json({
+      hasPaymentMethod: hasValidPaymentMethod,
+      paymentMethods,
+    });
+  } catch (error) {
+    console.error("Error getting payment method status:", error);
+    return res.status(400).json({ error: "Failed to get payment method status" });
+  }
+});
+
+/**
+ * Remove a payment method
+ */
+paymentRouter.delete("/payment-method/:paymentMethodId", async (req, res) => {
+  const { paymentMethodId } = req.params;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Detach the payment method from the customer
+    await stripe.paymentMethods.detach(paymentMethodId);
+
+    // Check if user still has other payment methods
+    const methods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: "card",
+    });
+
+    const hasPaymentMethod = methods.data.length > 0;
+    await user.update({ hasPaymentMethod });
+
+    return res.json({
+      success: true,
+      hasPaymentMethod,
+    });
+  } catch (error) {
+    console.error("Error removing payment method:", error);
+    return res.status(400).json({ error: "Failed to remove payment method" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
  * 2️⃣ Create Payment Intent (Authorize Only)
  * Used when booking an appointment
  * ------------------------------------------------------

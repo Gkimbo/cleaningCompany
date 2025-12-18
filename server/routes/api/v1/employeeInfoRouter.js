@@ -97,6 +97,57 @@ employeeInfoRouter.get("/employeeSchedule", async (req, res) => {
   }
 });
 
+// Get cleaner profile with reviews by ID
+employeeInfoRouter.get("/cleaner/:id", async (req, res) => {
+  const { id } = req.params;
+  const { UserReviews } = require("../../../models");
+
+  try {
+    const cleaner = await User.findByPk(id, {
+      include: [
+        {
+          model: UserReviews,
+          as: "reviews",
+        },
+        {
+          model: UserCleanerAppointments,
+          as: "cleanerAppointments",
+        },
+      ],
+    });
+
+    if (!cleaner) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    // Count total completed appointments
+    const completedAppointments = await UserAppointments.count({
+      where: {
+        completed: true,
+        employeesAssigned: {
+          [Op.contains]: [String(id)],
+        },
+      },
+    });
+
+    const serializedCleaner = {
+      id: cleaner.id,
+      username: cleaner.username,
+      type: cleaner.type,
+      daysWorking: cleaner.daysWorking || [],
+      reviews: cleaner.reviews || [],
+      completedJobs: completedAppointments,
+      totalReviews: cleaner.reviews?.length || 0,
+      memberSince: cleaner.createdAt,
+    };
+
+    return res.status(200).json({ cleaner: serializedCleaner });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 employeeInfoRouter.post("/shifts", async (req, res) => {
   const { token } = req.body.user;
   const daysArray = req.body.days;

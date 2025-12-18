@@ -22,8 +22,9 @@ class UserInfoClass {
     specialNotes,
     cleanersNeeded,
     timeToBeCompleted,
+    outsideServiceArea = false,
   }) {
-    await UserHomes.create({
+    const newHome = await UserHomes.create({
       userId,
       nickName,
       address,
@@ -43,7 +44,9 @@ class UserInfoClass {
       specialNotes,
       cleanersNeeded,
       timeToBeCompleted,
+      outsideServiceArea,
     });
+    return newHome;
   }
 
   static async editHomeInDB({
@@ -66,6 +69,7 @@ class UserInfoClass {
     specialNotes,
     cleanersNeeded,
     timeToBeCompleted,
+    outsideServiceArea = false,
   }) {
     const existingHome = await UserHomes.findOne({
       where: { id },
@@ -94,6 +98,7 @@ class UserInfoClass {
       specialNotes,
       cleanersNeeded,
       timeToBeCompleted,
+      outsideServiceArea,
     });
 
     return existingHome;

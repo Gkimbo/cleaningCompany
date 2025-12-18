@@ -5,13 +5,16 @@ class UserSerializer {
 	static serializeOne(user) {
 		const allowedAttributes = [
 			"id",
+			"firstName",
+			"lastName",
 			"email",
 			"username",
 			"lastLogin",
 			"type",
 			"daysWorking",
 			"notifications",
-			"reviews"
+			"reviews",
+			"hasPaymentMethod"
 		];
 
 		const serializedUser = {};
@@ -42,11 +45,14 @@ class UserSerializer {
 	static login(user) {
 		const allowedAttributes = [
 			"id",
+			"firstName",
+			"lastName",
 			"email",
 			"username",
 			"lastLogin",
 			"type",
 			"daysWorking",
+			"hasPaymentMethod",
 		];
 		const serializedUser = {};
 

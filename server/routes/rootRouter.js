@@ -13,6 +13,7 @@ const stripeConnectRouter = require("./api/v1/stripeConnectRouter");
 const taxRouter = require("./api/v1/taxRouter");
 const jobPhotosRouter = require("./api/v1/jobPhotosRouter");
 const calendarSyncRouter = require("./api/v1/calendarSyncRouter");
+const managerDashboardRouter = require("./api/v1/managerDashboardRouter");
 
 const rootRouter = new express.Router();
 
@@ -29,6 +30,7 @@ rootRouter.use("/api/v1/stripe-connect", stripeConnectRouter);
 rootRouter.use("/api/v1/tax", taxRouter);
 rootRouter.use("/api/v1/job-photos", jobPhotosRouter);
 rootRouter.use("/api/v1/calendar-sync", calendarSyncRouter);
+rootRouter.use("/api/v1/manager-dashboard", managerDashboardRouter);
 
 rootRouter.use("/", clientRouter);
 

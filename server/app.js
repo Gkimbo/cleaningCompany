@@ -14,7 +14,19 @@ require("./passport-config");
 const rootRouter = require("./routes/rootRouter");
 const { startPeriodicSync } = require("./services/calendarSyncService");
 
-const clientURL = "http://localhost:19006";
+// Allow multiple origins for web, iOS simulator, and Android emulator
+const allowedOrigins = [
+	"http://localhost:19006",
+	"http://localhost:8081",
+	"http://localhost:8082",
+	"http://localhost:8083",
+	"http://localhost:8084",
+	"http://localhost:8085",
+	"http://localhost:19000",
+	"http://10.0.2.2:8081", // Android emulator
+];
+
+const clientURL = "http://localhost:19006"; // Default for backwards compatibility
 const secretKey = process.env.SESSION_SECRET;
 
 const app = express();
@@ -24,7 +36,7 @@ const port = 3000;
 const server = http.createServer(app);
 const io = new Server(server, {
 	cors: {
-		origin: clientURL,
+		origin: allowedOrigins,
 		credentials: true,
 	},
 });
@@ -75,13 +87,23 @@ app.set("io", io);
 // CORS & headers
 app.use(
 	cors({
-		origin: clientURL,
+		origin: function (origin, callback) {
+			// Allow requests with no origin (mobile apps, curl, etc.)
+			if (!origin) return callback(null, true);
+			if (allowedOrigins.includes(origin)) {
+				return callback(null, true);
+			}
+			return callback(new Error("Not allowed by CORS"));
+		},
 		credentials: true,
 	})
 );
 
 app.use((req, res, next) => {
-	res.setHeader("Access-Control-Allow-Origin", clientURL);
+	const origin = req.headers.origin;
+	if (allowedOrigins.includes(origin)) {
+		res.setHeader("Access-Control-Allow-Origin", origin);
+	}
 	res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
 	res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 	res.setHeader("Access-Control-Allow-Credentials", "true");
