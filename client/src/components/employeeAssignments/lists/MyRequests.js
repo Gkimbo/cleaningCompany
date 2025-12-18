@@ -1,10 +1,11 @@
-import { Picker } from "@react-native-picker/picker";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
+  Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -13,8 +14,14 @@ import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import RequestedTile from "../tiles/RequestedTile";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../../services/styles/theme";
 
-// Haversine distance function
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371;
@@ -27,56 +34,63 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
+const sortOptions = [
+  { value: "dateNewest", label: "Date (Soonest)", icon: "calendar" },
+  { value: "dateOldest", label: "Date (Latest)", icon: "calendar-o" },
+  { value: "distanceClosest", label: "Distance (Closest)", icon: "location-arrow" },
+  { value: "distanceFurthest", label: "Distance (Furthest)", icon: "location-arrow" },
+  { value: "priceLow", label: "Price (Low to High)", icon: "dollar" },
+  { value: "priceHigh", label: "Price (High to Low)", icon: "dollar" },
+];
+
 const MyRequests = ({ state }) => {
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState({});
-  const [sortOption, setSortOption] = useState("distanceClosest");
-  const [showSortPicker, setShowSortPicker] = useState(false);
+  const [sortOption, setSortOption] = useState("dateNewest");
+  const [showSortModal, setShowSortModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { width } = Dimensions.get("window");
   const navigate = useNavigate();
-  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
-
-  // Navigate to calendar
-  const pressedSeeCalendar = () => navigate("/my-requests-calendar");
 
   // Fetch requests and user info
-  useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const response = await FetchData.get(
-          "/api/v1/users/appointments/employee",
-          state?.currentUser?.token
-        );
-        setAllRequests(response?.requested || []);
-      } catch (error) {
-        console.error("Error fetching requests:", error);
-        setAllRequests([]);
-      }
-    };
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
 
-    const fetchUser = async () => {
-      try {
-        const response = await getCurrentUser();
-        setUserId(response?.user?.id || null);
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      }
-    };
+    try {
+      const [response, userResponse] = await Promise.all([
+        FetchData.get("/api/v1/users/appointments/employee", state?.currentUser?.token),
+        getCurrentUser(),
+      ]);
 
-    fetchRequests();
-    fetchUser();
+      const now = new Date();
+      const isUpcoming = (item) => new Date(item.date) >= new Date(now.toDateString());
+
+      setAllRequests((response?.requested || []).filter(isUpcoming));
+      setUserId(userResponse?.user?.id || null);
+    } catch (error) {
+      console.error("Error fetching requests:", error);
+      setAllRequests([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [state?.currentUser?.token]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // Fetch locations for appointments
   useEffect(() => {
     const fetchLocations = async () => {
+      if (allRequests.length === 0) return;
+
       try {
         const locations = await Promise.all(
-          (allRequests || []).map(async (appointment) => {
+          allRequests.map(async (appointment) => {
             const loc = await FetchData.getLatAndLong(appointment.homeId);
             return { [appointment.homeId]: loc };
           })
@@ -87,15 +101,12 @@ const MyRequests = ({ state }) => {
       }
     };
 
-    if (allRequests.length > 0) fetchLocations();
+    fetchLocations();
   }, [allRequests]);
 
   // Get user location
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setLoading(false);
-      return;
-    }
+    if (!navigator.geolocation) return;
 
     const watcher = navigator.geolocation.watchPosition(
       (position) => {
@@ -103,17 +114,21 @@ const MyRequests = ({ state }) => {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         });
-        setLoading(false);
       },
       (error) => {
         console.error("Error getting location:", error);
-        setLoading(false);
+        setUserLocation({ latitude: 0, longitude: 0 });
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
 
     return () => navigator.geolocation.clearWatch(watcher);
   }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData(true);
+  }, [fetchData]);
 
   // Sort requests
   const sortedRequests = useMemo(() => {
@@ -131,186 +146,488 @@ const MyRequests = ({ state }) => {
       return { ...appointment, distance };
     });
 
-    const sortFn = {
-      distanceClosest: (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity),
-      distanceFurthest: (a, b) => (b.distance ?? 0) - (a.distance ?? 0),
-      priceLow: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
-      priceHigh: (a, b) => (Number(b.price) || 0) - (Number(a.price) || 0),
-    };
-
     return [...processed].sort((a, b) => {
-      const primary = sortFn[sortOption]?.(a, b) ?? 0;
-      return primary === 0 ? (a.id > b.id ? 1 : -1) : primary;
+      switch (sortOption) {
+        case "dateNewest":
+          return new Date(a.date) - new Date(b.date);
+        case "dateOldest":
+          return new Date(b.date) - new Date(a.date);
+        case "distanceClosest":
+          return (a.distance ?? Infinity) - (b.distance ?? Infinity);
+        case "distanceFurthest":
+          return (b.distance ?? 0) - (a.distance ?? 0);
+        case "priceLow":
+          return (Number(a.price) || 0) - (Number(b.price) || 0);
+        case "priceHigh":
+          return (Number(b.price) || 0) - (Number(a.price) || 0);
+        default:
+          return 0;
+      }
     });
   }, [allRequests, userLocation, appointmentLocations, sortOption]);
 
-  const requestsToRender = sortedRequests || [];
+  // Calculate stats
+  const totalEarnings = sortedRequests.reduce(
+    (sum, r) => sum + (Number(r.price) || 0),
+    0
+  );
+
+  const currentSortLabel =
+    sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={styles.loadingText}>Loading your requests...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={{ flex: 1, flexDirection: "column", marginTop: "27%" }}>
-      {/* Top Row: Back + Calendar */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-around",
-          marginHorizontal: 10,
-          marginBottom: 10,
-        }}
-      >
-        <Pressable
-          onPress={() => navigate("/")}
-          style={{
-            flex: 1,
-            marginRight: 5,
-            flexDirection: "row",
-            justifyContent: "center",
-            alignItems: "center",
-            paddingVertical: 10,
-            borderRadius: 15,
-            backgroundColor: "rgba(0,123,255,0.2)",
-            borderWidth: 1,
-            borderColor: "rgba(0,123,255,0.3)",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3,
-          }}
-        >
-          <Icon name="angle-left" size={18} color="#007BFF" />
-          <Text style={{ color: "#007BFF", fontWeight: "600", marginLeft: 8 }}>Back</Text>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => navigate("/")}>
+          <Icon name="angle-left" size={20} color={colors.primary[600]} />
+          <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
-
+        <Text style={styles.title}>My Requests</Text>
         <Pressable
-          onPress={pressedSeeCalendar}
-          style={{
-            flex: 1,
-            marginLeft: 5,
-            flexDirection: "row",
-            justifyContent: "center",
-            alignItems: "center",
-            paddingVertical: 10,
-            borderRadius: 15,
-            backgroundColor: "rgba(0,123,255,0.2)",
-            borderWidth: 1,
-            borderColor: "rgba(0,123,255,0.3)",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3,
-          }}
+          style={styles.calendarButton}
+          onPress={() => navigate("/my-requests-calendar")}
         >
-          <Text style={{ color: "#007BFF", fontWeight: "600", marginRight: 8 }}>Calendar</Text>
-          <Icon name="angle-right" size={18} color="#007BFF" />
+          <Icon name="calendar" size={18} color={colors.primary[600]} />
         </Pressable>
       </View>
 
-      {/* Sort Picker */}
-      <View style={{ marginHorizontal: 20, marginBottom: 15 }}>
-        <Pressable
-          onPress={() => setShowSortPicker(!showSortPicker)}
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingVertical: 10,
-            paddingHorizontal: 15,
-            borderRadius: 15,
-            backgroundColor: "rgba(255,255,255,0.2)",
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.3)",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3,
-          }}
-        >
-          <Text style={{ color: "#1E1E1E", fontWeight: "600" }}>
-            {sortOption === "distanceClosest"
-              ? "Distance (Closest)"
-              : sortOption === "distanceFurthest"
-              ? "Distance (Furthest)"
-              : sortOption === "priceLow"
-              ? "Price (Low to High)"
-              : "Price (High to Low)"}
-          </Text>
-          <Icon name={showSortPicker ? "angle-up" : "angle-down"} size={18} color="#1E1E1E" />
-        </Pressable>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary[500]]}
+            tintColor={colors.primary[500]}
+          />
+        }
+      >
+        {/* Stats Summary */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, styles.statCardHighlight]}>
+            <Text style={[styles.statValue, styles.statValueHighlight]}>
+              {sortedRequests.length}
+            </Text>
+            <Text style={[styles.statLabel, styles.statLabelHighlight]}>
+              Pending
+            </Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>${totalEarnings.toFixed(0)}</Text>
+            <Text style={styles.statLabel}>Potential</Text>
+          </View>
+        </View>
 
-        {showSortPicker && (
-          <View
-            style={{
-              marginTop: 10,
-              borderRadius: 12,
-              backgroundColor: "#fff",
-              borderWidth: 1,
-              borderColor: "#ddd",
-              maxHeight: 200,
-              overflow: "hidden",
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.2,
-              shadowRadius: 4,
-              elevation: 4,
-            }}
-          >
-            <Picker
-              selectedValue={sortOption}
-              onValueChange={(itemValue) => {
-                setSortOption(itemValue);
-                setShowSortPicker(false);
-              }}
-              style={{ color: "#1E1E1E" }}
+        {/* Info Card */}
+        <View style={styles.infoCard}>
+          <Icon name="clock-o" size={18} color={colors.warning[600]} />
+          <Text style={styles.infoText}>
+            These are jobs you've requested. Once approved by the homeowner, they'll
+            move to your "My Jobs" page.
+          </Text>
+        </View>
+
+        {sortedRequests.length > 0 ? (
+          <>
+            {/* Sort Button */}
+            <Pressable
+              style={styles.sortButton}
+              onPress={() => setShowSortModal(true)}
             >
-              <Picker.Item label="Distance (Closest)" value="distanceClosest" />
-              <Picker.Item label="Distance (Furthest)" value="distanceFurthest" />
-              <Picker.Item label="Price (Low to High)" value="priceLow" />
-              <Picker.Item label="Price (High to Low)" value="priceHigh" />
-            </Picker>
+              <Icon name="sort" size={14} color={colors.primary[600]} />
+              <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
+              <Icon name="chevron-down" size={12} color={colors.primary[600]} />
+            </Pressable>
+
+            {/* Requests Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <View style={styles.sectionBadge}>
+                    <Icon name="clock-o" size={12} color={colors.warning[600]} />
+                  </View>
+                  <Text style={styles.sectionTitle}>Pending Approval</Text>
+                </View>
+                <Text style={styles.sectionCount}>{sortedRequests.length}</Text>
+              </View>
+
+              {sortedRequests.map((appointment) => (
+                <View key={appointment.id} style={styles.tileWrapper}>
+                  <RequestedTile
+                    {...appointment}
+                    cleanerId={userId}
+                    distance={appointment.distance}
+                    removeRequest={async (employeeId, appointmentId) => {
+                      try {
+                        await FetchData.removeRequest(employeeId, appointmentId);
+                        setAllRequests((prev) =>
+                          prev.filter((a) => a.id !== appointmentId)
+                        );
+                      } catch (error) {
+                        console.error("Error removing request:", error);
+                      }
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
+          </>
+        ) : (
+          /* Empty State */
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Icon name="clock-o" size={40} color={colors.primary[300]} />
+            </View>
+            <Text style={styles.emptyTitle}>No Pending Requests</Text>
+            <Text style={styles.emptyText}>
+              You haven't requested any jobs yet. Browse available jobs and request
+              the ones you'd like to work on!
+            </Text>
+            <Pressable
+              style={styles.findJobsButton}
+              onPress={() => navigate("/new-job-choice")}
+            >
+              <Icon name="search" size={14} color={colors.neutral[0]} />
+              <Text style={styles.findJobsButtonText}>Find Jobs</Text>
+            </Pressable>
           </View>
         )}
-      </View>
 
-      {/* Requests List */}
-      {loading ? (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color="#0000ff" />
-        </View>
-      ) : requestsToRender.length === 0 ? (
-        <View style={{ marginTop: 50, alignItems: "center", padding: 20 }}>
-          <Text style={{ fontSize: 18, fontWeight: "600", color: "#444", marginBottom: 10 }}>
-            You have no jobs requested.
-          </Text>
-          <Text style={{ fontSize: 16, color: "#666", textAlign: "center", lineHeight: 22 }}>
-            Request jobs <Text style={{ color: "#007AFF", fontWeight: "700" }}>HERE!</Text>
-          </Text>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 50 }}>
-          {requestsToRender.map((appointment) => (
-            <RequestedTile
-              key={appointment.id}
-              {...appointment}
-              cleanerId={userId}
-              distance={appointment.distance}
-              removeRequest={async (employeeId, appointmentId) => {
-                try {
-                  await FetchData.removeRequest(employeeId, appointmentId);
-                  setAllRequests((prev) => prev.filter((a) => a.id !== appointmentId));
-                } catch (error) {
-                  console.error(error);
-                }
-              }}
-            />
-          ))}
-        </ScrollView>
-      )}
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSortModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort Requests By</Text>
+              <Pressable onPress={() => setShowSortModal(false)}>
+                <Icon name="times" size={20} color={colors.text.secondary} />
+              </Pressable>
+            </View>
+            {sortOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.sortOption,
+                  sortOption === option.value && styles.sortOptionActive,
+                ]}
+                onPress={() => {
+                  setSortOption(option.value);
+                  setShowSortModal(false);
+                }}
+              >
+                <Icon
+                  name={option.icon}
+                  size={16}
+                  color={
+                    sortOption === option.value
+                      ? colors.primary[600]
+                      : colors.text.secondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    sortOption === option.value && styles.sortOptionTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {sortOption === option.value && (
+                  <Icon name="check" size={16} color={colors.primary[600]} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+  },
+
+  // Header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing["3xl"],
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background.secondary,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  backButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  title: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  calendarButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: "row",
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  statCardHighlight: {
+    backgroundColor: colors.warning[50],
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  statValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  statValueHighlight: {
+    color: colors.warning[700],
+  },
+  statLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  statLabelHighlight: {
+    color: colors.warning[600],
+  },
+
+  // Info Card
+  infoCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[700],
+    lineHeight: 20,
+  },
+
+  // Sort Button
+  sortButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    ...shadows.sm,
+  },
+  sortButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // Section
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  sectionBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.warning[100],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sectionCount: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // Tile Wrapper
+  tileWrapper: {
+    marginBottom: spacing.sm,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    backgroundColor: colors.neutral[0],
+    ...shadows.sm,
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing["4xl"],
+    paddingHorizontal: spacing.xl,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  emptyText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: spacing.xl,
+  },
+  findJobsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  findJobsButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.glass.overlay,
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: colors.neutral[0],
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
+    paddingBottom: spacing["3xl"],
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  sortOptionActive: {
+    backgroundColor: colors.primary[50],
+  },
+  sortOptionText: {
+    flex: 1,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  sortOptionTextActive: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  bottomSpacer: {
+    height: spacing["4xl"],
+  },
+});
+
 export default MyRequests;
-
-

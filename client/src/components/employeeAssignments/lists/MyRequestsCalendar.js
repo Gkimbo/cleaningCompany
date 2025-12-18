@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
+  Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -12,9 +14,14 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
-import calenderStyles from "../../../services/styles/CalenderSyles";
-import topBarStyles from "../../../services/styles/TopBarStyles";
 import RequestedTile from "../tiles/RequestedTile";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../../services/styles/theme";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -28,6 +35,13 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
+const sortOptions = [
+  { value: "distanceClosest", label: "Distance (Closest)", icon: "location-arrow" },
+  { value: "distanceFurthest", label: "Distance (Furthest)", icon: "location-arrow" },
+  { value: "priceLow", label: "Price (Low to High)", icon: "dollar" },
+  { value: "priceHigh", label: "Price (High to Low)", icon: "dollar" },
+];
+
 const MyRequestsCalendar = ({ state }) => {
   const [requests, setRequests] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -36,32 +50,38 @@ const MyRequestsCalendar = ({ state }) => {
   const [appointmentLocations, setAppointmentLocations] = useState({});
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [sortOption, setSortOption] = useState("distanceClosest");
-  const [showSortPicker, setShowSortPicker] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const navigate = useNavigate();
-  const { width } = Dimensions.get("window");
-  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 
   // Fetch requests
-  useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const res = await FetchData.get(
-          "/api/v1/users/appointments/employee",
-          state.currentUser.token
-        );
-        setRequests(res.requested || []);
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
 
-        const user = await getCurrentUser();
-        setUserId(user.user.id);
-      } catch (error) {
-        console.error("Error fetching requests:", error);
-      }
-    };
+    try {
+      const [res, user] = await Promise.all([
+        FetchData.get("/api/v1/users/appointments/employee", state.currentUser.token),
+        getCurrentUser(),
+      ]);
 
-    if (state.currentUser?.token) fetchRequests();
+      const now = new Date();
+      const isUpcoming = (item) => new Date(item.date) >= new Date(now.toDateString());
+
+      setRequests((res.requested || []).filter(isUpcoming));
+      setUserId(user.user.id);
+    } catch (error) {
+      console.error("Error fetching requests:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [state.currentUser?.token]);
+
+  useEffect(() => {
+    if (state.currentUser?.token) fetchData();
+  }, [state.currentUser?.token, fetchData]);
 
   // Get location
   useEffect(() => {
@@ -86,10 +106,7 @@ const MyRequestsCalendar = ({ state }) => {
   // Fetch distances
   useEffect(() => {
     const fetchDistances = async () => {
-      if (!userLocation || requests.length === 0) {
-        setLoading(false);
-        return;
-      }
+      if (!userLocation || requests.length === 0) return;
 
       const locations = await Promise.all(
         requests.map(async (r) => {
@@ -105,367 +122,776 @@ const MyRequestsCalendar = ({ state }) => {
         })
       );
       setAppointmentLocations(Object.assign({}, ...locations.filter(Boolean)));
-      setLoading(false);
     };
 
     fetchDistances();
   }, [userLocation, requests]);
 
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData(true);
+  }, [fetchData]);
+
   // Sort helper
-  const sortRequests = (list) => {
-    return [...list].sort((a, b) => {
-      const getDistance = (r) =>
-        appointmentLocations[r.homeId]?.distance || Infinity;
-      const getPrice = (r) => Number(r.price) || 0;
+  const sortRequests = useCallback(
+    (list) => {
+      return [...list].sort((a, b) => {
+        const getDistance = (r) =>
+          appointmentLocations[r.homeId]?.distance || Infinity;
+        const getPrice = (r) => Number(r.price) || 0;
 
-      switch (sortOption) {
-        case "distanceClosest":
-          return getDistance(a) - getDistance(b);
-        case "distanceFurthest":
-          return getDistance(b) - getDistance(a);
-        case "priceLow":
-          return getPrice(a) - getPrice(b);
-        case "priceHigh":
-          return getPrice(b) - getPrice(a);
-        default:
-          return 0;
-      }
-    });
-  };
+        switch (sortOption) {
+          case "distanceClosest":
+            return getDistance(a) - getDistance(b);
+          case "distanceFurthest":
+            return getDistance(b) - getDistance(a);
+          case "priceLow":
+            return getPrice(a) - getPrice(b);
+          case "priceHigh":
+            return getPrice(b) - getPrice(a);
+          default:
+            return 0;
+        }
+      });
+    },
+    [appointmentLocations, sortOption]
+  );
 
-  const handleDateSelect = (date) => {
-    setSelectedDate(date.dateString);
+  const handleDateSelect = useCallback(
+    (date) => {
+      const dateString = date.dateString || date;
+      setSelectedDate(dateString);
 
-    const filtered = requests
-      .filter((r) => r.date === date.dateString)
-      .map((r) => ({
-        ...r,
-        distance: appointmentLocations[r.homeId]?.distance || null,
-      }));
+      const filtered = requests
+        .filter((r) => r.date === dateString)
+        .map((r) => ({
+          ...r,
+          distance: appointmentLocations[r.homeId]?.distance || null,
+        }));
 
-    setFilteredRequests(sortRequests(filtered));
-  };
+      setFilteredRequests(sortRequests(filtered));
+    },
+    [requests, appointmentLocations, sortRequests]
+  );
 
   useEffect(() => {
-    if (selectedDate) handleDateSelect({ dateString: selectedDate });
+    if (selectedDate) handleDateSelect(selectedDate);
   }, [sortOption]);
 
+  const formatSelectedDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString + "T00:00:00");
+    const options = { weekday: "long", month: "long", day: "numeric" };
+    return date.toLocaleDateString("en-US", options);
+  };
+
+  // Calculate stats
+  const totalRequests = requests.length;
+  const totalEarnings = requests.reduce(
+    (sum, r) => sum + (Number(r.price) || 0),
+    0
+  );
+
+  const currentSortLabel =
+    sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
+
+  // Calendar day render
   const renderDay = useCallback(
     ({ date }) => {
       const today = new Date();
       const dayDate = new Date(date.dateString);
       const isPast = dayDate < new Date(today.toDateString());
 
-      const hasData = requests.some((r) => r.date === date.dateString);
+      const requestCount = requests.filter((r) => r.date === date.dateString).length;
+      const hasData = requestCount > 0;
       const isSelected = selectedDate === date.dateString;
 
       return (
         <Pressable
-          disabled={isPast || !hasData}
-          style={{
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 10,
-            borderRadius: 20,
-            backgroundColor: isSelected
-              ? "#3498db"
-              : hasData && !isPast
-              ? "rgba(52,152,219,0.2)"
-              : "transparent",
-            opacity: isPast ? 0.4 : 1,
-          }}
-          onPress={() => !isPast && hasData && handleDateSelect(date)}
+          disabled={isPast && !hasData}
+          style={[
+            styles.dayContainer,
+            isSelected && styles.dayContainerSelected,
+            hasData && !isPast && !isSelected && styles.dayContainerHasData,
+            isPast && styles.dayContainerPast,
+          ]}
+          onPress={() => hasData && handleDateSelect(date)}
         >
-          <Text style={{ color: isPast ? "#999" : "#000" }}>{date.day}</Text>
+          <Text
+            style={[
+              styles.dayText,
+              isSelected && styles.dayTextSelected,
+              isPast && !hasData && styles.dayTextPast,
+            ]}
+          >
+            {date.day}
+          </Text>
+          {hasData && (
+            <View style={[styles.dayBadge, isSelected && styles.dayBadgeSelected]}>
+              <Text
+                style={[styles.dayBadgeText, isSelected && styles.dayBadgeTextSelected]}
+              >
+                {requestCount}
+              </Text>
+            </View>
+          )}
         </Pressable>
       );
     },
-    [requests, selectedDate]
+    [requests, selectedDate, handleDateSelect]
   );
 
-  return (
-    <ScrollView style={{ flex: 1, paddingBottom: 30 }}>
-      {/* Top Buttons */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "center",
-          marginTop: 40,
-          marginBottom: 20,
-          gap: 20,
-        }}
-      >
-        <Pressable
-          style={{
-            backgroundColor: "rgba(52,152,219,0.15)",
-            paddingVertical: 12,
-            paddingHorizontal: 20,
-            borderRadius: 14,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 5,
-          }}
-          onPress={() => navigate("/")}
-        >
-          <Icon name="angle-left" size={iconSize} color="#3498db" />
-          <Text
-            style={{
-              ...topBarStyles.buttonTextSchedule,
-              color: "#3498db",
-              fontWeight: "600",
-              marginLeft: 10,
-            }}
-          >
-            Home
-          </Text>
-        </Pressable>
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={styles.loadingText}>Loading your requests...</Text>
+      </View>
+    );
+  }
 
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => navigate("/")}>
+          <Icon name="angle-left" size={20} color={colors.primary[600]} />
+          <Text style={styles.backButtonText}>Back</Text>
+        </Pressable>
+        <Text style={styles.title}>Requests Calendar</Text>
         <Pressable
-          style={{
-            backgroundColor: "rgba(52,152,219,0.15)",
-            paddingVertical: 12,
-            paddingHorizontal: 20,
-            borderRadius: 14,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 5,
-          }}
+          style={styles.listButton}
           onPress={() => navigate("/my-requests")}
         >
-          <Text
-            style={{
-              ...topBarStyles.buttonTextSchedule,
-              color: "#3498db",
-              fontWeight: "600",
-              marginRight: 10,
-            }}
-          >
-            List
-          </Text>
-          <Icon name="angle-right" size={iconSize} color="#3498db" />
+          <Icon name="list" size={18} color={colors.primary[600]} />
         </Pressable>
       </View>
 
-      <Text style={calenderStyles.title}>Tap a date to view your requests</Text>
-
-      <Calendar
-        current={new Date().toISOString().split("T")[0]}
-        onDayPress={handleDateSelect}
-        dayComponent={renderDay}
-        renderArrow={(direction) => (
-          <Icon
-            name={direction === "left" ? "chevron-left" : "chevron-right"}
-            size={15}
-            color="#3498db"
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary[500]]}
+            tintColor={colors.primary[500]}
           />
-        )}
-      />
-
-      {/* Sort Picker */}
-      <Pressable
-        onPress={() => setShowSortPicker(!showSortPicker)}
-        style={{
-          margin: 10,
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-          borderRadius: 12,
-          backgroundColor: "rgba(52,152,219,0.15)",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.1,
-          shadowRadius: 5,
-        }}
+        }
       >
-        <Text style={{ fontWeight: "600", color: "#3498db" }}>
-          Sort by:{" "}
-          {sortOption === "distanceClosest"
-            ? "Distance (Closest)"
-            : sortOption === "distanceFurthest"
-            ? "Distance (Furthest)"
-            : sortOption === "priceLow"
-            ? "Price (Low)"
-            : "Price (High)"}
-        </Text>
-        <Icon
-          name={showSortPicker ? "angle-up" : "angle-down"}
-          size={16}
-          color="#3498db"
-        />
-      </Pressable>
+        {/* Stats Summary */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, styles.statCardHighlight]}>
+            <Text style={[styles.statValue, styles.statValueHighlight]}>
+              {totalRequests}
+            </Text>
+            <Text style={[styles.statLabel, styles.statLabelHighlight]}>
+              Pending
+            </Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>${totalEarnings.toFixed(0)}</Text>
+            <Text style={styles.statLabel}>Potential</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{filteredRequests.length}</Text>
+            <Text style={styles.statLabel}>Selected</Text>
+          </View>
+        </View>
 
-      {showSortPicker && (
-        <View
-          style={{
-            marginHorizontal: 10,
-            marginBottom: 10,
-            backgroundColor: "rgba(52,152,219,0.15)",
-            borderRadius: 12,
-            paddingVertical: 8,
-          }}
-        >
-          {[
-            { label: "Distance (Closest)", value: "distanceClosest" },
-            { label: "Distance (Furthest)", value: "distanceFurthest" },
-            { label: "Price (Low to High)", value: "priceLow" },
-            { label: "Price (High to Low)", value: "priceHigh" },
-          ].map((item) => (
+        {/* Instructions */}
+        <View style={styles.instructionCard}>
+          <Icon name="hand-pointer-o" size={18} color={colors.warning[600]} />
+          <Text style={styles.instructionText}>
+            Tap a highlighted date to see your pending requests for that day
+          </Text>
+        </View>
+
+        {/* Calendar */}
+        <View style={styles.calendarContainer}>
+          <Calendar
+            current={new Date().toISOString().split("T")[0]}
+            onDayPress={handleDateSelect}
+            dayComponent={renderDay}
+            renderArrow={(direction) => (
+              <View style={styles.arrowContainer}>
+                <Icon
+                  name={direction === "left" ? "chevron-left" : "chevron-right"}
+                  size={14}
+                  color={colors.primary[600]}
+                />
+              </View>
+            )}
+            theme={{
+              backgroundColor: colors.neutral[0],
+              calendarBackground: colors.neutral[0],
+              textSectionTitleColor: colors.text.secondary,
+              monthTextColor: colors.text.primary,
+              textMonthFontWeight: typography.fontWeight.semibold,
+              textMonthFontSize: typography.fontSize.lg,
+            }}
+          />
+        </View>
+
+        {/* Legend */}
+        <View style={styles.legend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.warning[100] }]} />
+            <Text style={styles.legendText}>Has Requests</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.primary[500] }]} />
+            <Text style={styles.legendText}>Selected</Text>
+          </View>
+        </View>
+
+        {/* Selected Date Section */}
+        {selectedDate && (
+          <View style={styles.selectedDateSection}>
+            <View style={styles.selectedDateHeader}>
+              <View>
+                <Text style={styles.selectedDateLabel}>Requests for</Text>
+                <Text style={styles.selectedDateText}>
+                  {formatSelectedDate(selectedDate)}
+                </Text>
+              </View>
+              {filteredRequests.length > 0 && (
+                <Pressable
+                  style={styles.sortButton}
+                  onPress={() => setShowSortModal(true)}
+                >
+                  <Icon name="sort" size={14} color={colors.primary[600]} />
+                  <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {filteredRequests.length === 0 ? (
+              <View style={styles.noRequestsCard}>
+                <Icon name="calendar-times-o" size={32} color={colors.text.tertiary} />
+                <Text style={styles.noRequestsTitle}>No Requests</Text>
+                <Text style={styles.noRequestsText}>
+                  You don't have any pending requests for this date.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={styles.sectionBadge}>
+                      <Icon name="clock-o" size={12} color={colors.warning[600]} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Pending Approval</Text>
+                  </View>
+                  <Text style={styles.sectionCount}>{filteredRequests.length}</Text>
+                </View>
+                {filteredRequests.map((req) => (
+                  <View key={req.id} style={styles.tileWrapper}>
+                    <RequestedTile
+                      {...req}
+                      cleanerId={userId}
+                      removeRequest={async (employeeId, appointmentId) => {
+                        try {
+                          await FetchData.removeRequest(employeeId, appointmentId);
+                          setRequests((prev) =>
+                            prev.filter((r) => r.id !== appointmentId)
+                          );
+                          setFilteredRequests((prev) =>
+                            prev.filter((r) => r.id !== appointmentId)
+                          );
+                        } catch (err) {
+                          console.error("Error removing request:", err);
+                        }
+                      }}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Empty State when no date selected */}
+        {!selectedDate && requests.length > 0 && (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Icon name="calendar" size={40} color={colors.warning[300]} />
+            </View>
+            <Text style={styles.emptyTitle}>Select a Date</Text>
+            <Text style={styles.emptyText}>
+              Tap on a highlighted date in the calendar above to view your pending
+              requests for that day.
+            </Text>
+          </View>
+        )}
+
+        {/* No Requests at all */}
+        {requests.length === 0 && (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Icon name="clock-o" size={40} color={colors.primary[300]} />
+            </View>
+            <Text style={styles.emptyTitle}>No Pending Requests</Text>
+            <Text style={styles.emptyText}>
+              You haven't requested any jobs yet. Browse available jobs and request
+              the ones you'd like to work on!
+            </Text>
             <Pressable
-              key={item.value}
-              onPress={() => {
-                setSortOption(item.value);
-                setShowSortPicker(false);
-              }}
+              style={styles.findJobsButton}
+              onPress={() => navigate("/new-job-choice")}
             >
-              <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>
-                {item.label}
-              </Text>
+              <Icon name="search" size={14} color={colors.neutral[0]} />
+              <Text style={styles.findJobsButtonText}>Find Jobs</Text>
             </Pressable>
-          ))}
-        </View>
-      )}
+          </View>
+        )}
 
-      {/* Display filtered requests */}
-      {!selectedDate ? (
-        <View
-          style={{
-            marginTop: 60,
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-            backgroundColor: "rgba(52,152,219,0.05)",
-            borderRadius: 16,
-            marginHorizontal: 20,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
-          }}
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSortModal(false)}
         >
-          <Icon
-            name="calendar"
-            size={36}
-            color="#3498db"
-            style={{ marginBottom: 15, opacity: 0.9 }}
-          />
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "700",
-              color: "#2c3e50",
-              marginBottom: 8,
-              textAlign: "center",
-            }}
-          >
-            Select a date to see your requests
-          </Text>
-          <Text
-            style={{
-              fontSize: 16,
-              color: "#666",
-              textAlign: "center",
-              lineHeight: 22,
-              maxWidth: 300,
-            }}
-          >
-            Tap any highlighted date on the calendar to view pending job
-            requests.
-          </Text>
-        </View>
-      ) : loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#3498db"
-          style={{ marginTop: 30 }}
-        />
-      ) : filteredRequests.length === 0 ? (
-        <View
-          style={{
-            marginTop: 60,
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-            backgroundColor: "rgba(52,152,219,0.05)",
-            borderRadius: 16,
-            marginHorizontal: 20,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
-          }}
-        >
-          <Icon
-            name="calendar-times-o"
-            size={36}
-            color="#999"
-            style={{ marginBottom: 15, opacity: 0.8 }}
-          />
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "700",
-              color: "#444",
-              marginBottom: 8,
-              textAlign: "center",
-            }}
-          >
-            No requests for this date
-          </Text>
-          <Text
-            style={{
-              fontSize: 16,
-              color: "#666",
-              textAlign: "center",
-              lineHeight: 22,
-              maxWidth: 300,
-            }}
-          >
-            Try selecting a different date or check back later for updates.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 60 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text style={calenderStyles.sectionTitle}>
-            Requested Appointments
-          </Text>
-          {filteredRequests.map((req) => (
-            <RequestedTile
-              key={req.id}
-              {...req}
-              cleanerId={userId}
-              removeRequest={async (employeeId, appointmentId) => {
-                try {
-                  await FetchData.removeRequest(employeeId, appointmentId);
-                  setRequests((prev) =>
-                    prev.filter((r) => r.id !== appointmentId)
-                  );
-                  setFilteredRequests((prev) =>
-                    prev.filter((r) => r.id !== appointmentId)
-                  );
-                } catch (err) {
-                  console.error("Error removing request:", err);
-                }
-              }}
-            />
-          ))}
-        </ScrollView>
-      )}
-    </ScrollView>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort Requests By</Text>
+              <Pressable onPress={() => setShowSortModal(false)}>
+                <Icon name="times" size={20} color={colors.text.secondary} />
+              </Pressable>
+            </View>
+            {sortOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.sortOption,
+                  sortOption === option.value && styles.sortOptionActive,
+                ]}
+                onPress={() => {
+                  setSortOption(option.value);
+                  setShowSortModal(false);
+                }}
+              >
+                <Icon
+                  name={option.icon}
+                  size={16}
+                  color={
+                    sortOption === option.value
+                      ? colors.primary[600]
+                      : colors.text.secondary
+                  }
+                />
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    sortOption === option.value && styles.sortOptionTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {sortOption === option.value && (
+                  <Icon name="check" size={16} color={colors.primary[600]} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+
+  // Header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing["3xl"],
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background.secondary,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  backButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  title: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  listButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  statCardHighlight: {
+    backgroundColor: colors.warning[50],
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  statValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  statValueHighlight: {
+    color: colors.warning[700],
+  },
+  statLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  statLabelHighlight: {
+    color: colors.warning[600],
+  },
+
+  // Instruction Card
+  instructionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[700],
+  },
+
+  // Calendar
+  calendarContainer: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    ...shadows.md,
+  },
+  arrowContainer: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+
+  // Day Styles
+  dayContainer: {
+    width: 36,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+  },
+  dayContainerSelected: {
+    backgroundColor: colors.primary[500],
+  },
+  dayContainerHasData: {
+    backgroundColor: colors.warning[100],
+  },
+  dayContainerPast: {
+    opacity: 0.4,
+  },
+  dayText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  dayTextSelected: {
+    color: colors.neutral[0],
+    fontWeight: typography.fontWeight.bold,
+  },
+  dayTextPast: {
+    color: colors.text.tertiary,
+  },
+  dayBadge: {
+    marginTop: 2,
+    backgroundColor: colors.warning[500],
+    borderRadius: radius.full,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 16,
+    alignItems: "center",
+  },
+  dayBadgeSelected: {
+    backgroundColor: colors.neutral[0],
+  },
+  dayBadgeText: {
+    fontSize: 9,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+  },
+  dayBadgeTextSelected: {
+    color: colors.primary[600],
+  },
+
+  // Legend
+  legend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.xl,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+
+  // Selected Date Section
+  selectedDateSection: {
+    paddingHorizontal: spacing.lg,
+  },
+  selectedDateHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  selectedDateLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  selectedDateText: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sortButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+    ...shadows.sm,
+  },
+  sortButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // No Requests Card
+  noRequestsCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  noRequestsTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  noRequestsText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+
+  // Sections
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  sectionBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.warning[100],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sectionCount: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // Tile Wrapper
+  tileWrapper: {
+    marginBottom: spacing.sm,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    backgroundColor: colors.neutral[0],
+    ...shadows.sm,
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing["4xl"],
+    paddingHorizontal: spacing.xl,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.warning[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  emptyText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: spacing.xl,
+  },
+  findJobsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  findJobsButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.glass.overlay,
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: colors.neutral[0],
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
+    paddingBottom: spacing["3xl"],
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  sortOptionActive: {
+    backgroundColor: colors.primary[50],
+  },
+  sortOptionText: {
+    flex: 1,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  sortOptionTextActive: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  bottomSpacer: {
+    height: spacing["4xl"],
+  },
+});
 
 export default MyRequestsCalendar;

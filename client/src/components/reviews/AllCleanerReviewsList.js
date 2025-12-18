@@ -7,8 +7,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   Dimensions,
+  Alert,
 } from "react-native";
-import { useNavigate, useParams } from "react-router-native";
+import { useNavigate, useParams, useLocation } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
@@ -17,10 +18,16 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
   const [cleaner, setCleaner] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortOption, setSortOption] = useState("newest");
+  const [isProcessing, setIsProcessing] = useState(false);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 16 : width < 800 ? 20 : 24;
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
+
+  // Get request context from navigation state
+  const requestContext = location.state || {};
+  const { fromRequests, requestId, appointmentId, homeId, cleanerId } = requestContext;
 
   useEffect(() => {
     fetchCleanerProfile();
@@ -54,7 +61,57 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
   };
 
   const handleBack = () => {
-    navigate(-1);
+    if (fromRequests) {
+      // Go back to homes list where they can view requests
+      navigate("/list-of-homes");
+    } else {
+      navigate(-1);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!requestId) return;
+    setIsProcessing(true);
+    try {
+      await FetchData.approveRequest(requestId, true);
+      Alert.alert("Success", "Cleaner has been approved for this appointment!", [
+        { text: "OK", onPress: () => navigate("/list-of-homes") }
+      ]);
+    } catch (error) {
+      console.error("Error approving request:", error);
+      Alert.alert("Error", "Failed to approve the request. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeny = async () => {
+    if (!cleanerId || !appointmentId) return;
+    Alert.alert(
+      "Deny Request",
+      "Are you sure you want to deny this cleaner's request?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Deny",
+          style: "destructive",
+          onPress: async () => {
+            setIsProcessing(true);
+            try {
+              await FetchData.denyRequest(cleanerId, appointmentId);
+              Alert.alert("Request Denied", "The cleaner's request has been denied.", [
+                { text: "OK", onPress: () => navigate("/list-of-homes") }
+              ]);
+            } catch (error) {
+              console.error("Error denying request:", error);
+              Alert.alert("Error", "Failed to deny the request. Please try again.");
+            } finally {
+              setIsProcessing(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const reviews = cleaner?.reviews || [];
@@ -218,6 +275,46 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
           </View>
         )}
       </View>
+
+      {/* Approve/Deny Buttons - Only show when coming from requests */}
+      {fromRequests && requestId && (
+        <View style={styles.actionCard}>
+          <Text style={styles.actionTitle}>Cleaning Request</Text>
+          <Text style={styles.actionSubtitle}>
+            Would you like this cleaner to clean your home?
+          </Text>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={handleApprove}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <ActivityIndicator size="small" color={colors.neutral[0]} />
+              ) : (
+                <>
+                  <Icon name="check" size={18} color={colors.neutral[0]} />
+                  <Text style={styles.approveButtonText}>Approve</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.denyButton]}
+              onPress={handleDeny}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <ActivityIndicator size="small" color={colors.neutral[0]} />
+              ) : (
+                <>
+                  <Icon name="times" size={18} color={colors.neutral[0]} />
+                  <Text style={styles.denyButtonText}>Deny</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* Rating Distribution */}
       {reviews.length > 0 && (
@@ -620,6 +717,59 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   backButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+  // Action card styles for approve/deny
+  actionCard: {
+    backgroundColor: colors.neutral[0],
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    ...shadows.md,
+    borderWidth: 2,
+    borderColor: colors.primary[200],
+  },
+  actionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: spacing.xs,
+  },
+  actionSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    textAlign: "center",
+    marginBottom: spacing.lg,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.lg,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  approveButton: {
+    backgroundColor: colors.success[500],
+  },
+  approveButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+  denyButton: {
+    backgroundColor: colors.error[500],
+  },
+  denyButtonText: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.neutral[0],

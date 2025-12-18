@@ -1,10 +1,11 @@
-import { Picker } from "@react-native-picker/picker";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
+  Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -14,6 +15,13 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import RequestedTile from "../tiles/RequestedTile";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../../services/styles/theme";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -27,27 +35,27 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
+const sortOptions = [
+  { value: "distanceClosest", label: "Distance (Closest)", icon: "location-arrow" },
+  { value: "distanceFurthest", label: "Distance (Furthest)", icon: "location-arrow" },
+  { value: "priceLow", label: "Price (Low to High)", icon: "dollar" },
+  { value: "priceHigh", label: "Price (High to Low)", icon: "dollar" },
+  { value: "dateNewest", label: "Date (Soonest)", icon: "calendar" },
+  { value: "dateOldest", label: "Date (Latest)", icon: "calendar" },
+];
+
 const SelectNewJobList = ({ state }) => {
   const [allAppointments, setAllAppointments] = useState([]);
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
-  const [sortOption, setSortOption] = useState("distanceClosest");
-  const [seeCalender, setSeeCalender] = useState(false);
+  const [sortOption, setSortOption] = useState("dateNewest");
   const [loading, setLoading] = useState(true);
-  const [showSortPicker, setShowSortPicker] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
 
-  const { width } = Dimensions.get("window");
-  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
-
-  const sortLabelMap = {
-    distanceClosest: "Distance (Closest)",
-    distanceFurthest: "Distance (Furthest)",
-    priceLow: "Price (Low → High)",
-    priceHigh: "Price (High → Low)",
-  };
 
   const requestsAndAppointments = useMemo(() => {
     const requestsWithFlag = allRequests.map((item) => ({
@@ -61,39 +69,38 @@ const SelectNewJobList = ({ state }) => {
     return [...requestsWithFlag, ...appointmentsWithFlag];
   }, [allRequests, allAppointments]);
 
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+
+    try {
+      const [appointmentResponse, userResponse] = await Promise.all([
+        FetchData.get("/api/v1/users/appointments/employee", state.currentUser.token),
+        getCurrentUser(),
+      ]);
+
+      const now = new Date();
+      const isUpcoming = (item) => new Date(item.date) >= now;
+
+      // Filter out jobs that have already been assigned to anyone (including yourself)
+      // Those should only show on the "My Jobs" page
+      const availableAppointments = (appointmentResponse.appointments || [])
+        .filter(isUpcoming)
+        .filter((appt) => !appt.hasBeenAssigned);
+
+      setAllAppointments(availableAppointments);
+      setAllRequests((appointmentResponse.requested || []).filter(isUpcoming));
+      setUserId(userResponse.user.id);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [state.currentUser.token]);
+
   useEffect(() => {
-    const fetchAppointments = async () => {
-      try {
-        const response = await FetchData.get(
-          "/api/v1/users/appointments/employee",
-          state.currentUser.token
-        );
-        const now = new Date();
-
-        const isUpcoming = (item) => {
-          const itemDate = new Date(item.date);
-          return itemDate >= now;
-        };
-
-        setAllAppointments((response.appointments || []).filter(isUpcoming));
-        setAllRequests((response.requested || []).filter(isUpcoming));
-      } catch (error) {
-        console.error("Error fetching appointments:", error);
-      }
-    };
-
-    const fetchUser = async () => {
-      try {
-        const response = await getCurrentUser();
-        setUserId(response.user.id);
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      }
-    };
-
-    fetchAppointments();
-    fetchUser();
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -106,7 +113,7 @@ const SelectNewJobList = ({ state }) => {
         );
         setAppointmentLocations(Object.assign({}, ...locations));
       } catch (error) {
-        console.error("Error fetching appointment locations:", error);
+        console.error("Error fetching locations:", error);
       }
     };
 
@@ -123,38 +130,27 @@ const SelectNewJobList = ({ state }) => {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           });
-          setLoading(false);
         },
         (error) => {
           console.error("Error getting location:", error);
-          setLoading(false);
+          setUserLocation({ latitude: 0, longitude: 0 });
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
 
       return () => navigator.geolocation.clearWatch(watcher);
-    } else {
-      setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    if (seeCalender) {
-      navigate("/appointment-calender");
-      setSeeCalender(false);
-    }
-  }, [seeCalender]);
-
-  const pressedSeeCalender = () => setSeeCalender(true);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData(true);
+  }, [fetchData]);
 
   const sortedData = useMemo(() => {
     const processed = requestsAndAppointments.map((appointment) => {
       let distance = null;
-      if (
-        userLocation &&
-        appointmentLocations &&
-        appointmentLocations[appointment.homeId]
-      ) {
+      if (userLocation && appointmentLocations?.[appointment.homeId]) {
         const loc = appointmentLocations[appointment.homeId];
         distance = haversineDistance(
           userLocation.latitude,
@@ -167,342 +163,501 @@ const SelectNewJobList = ({ state }) => {
     });
 
     const sortFn = {
-      distanceClosest: (a, b) =>
-        (a.distance ?? Infinity) - (b.distance ?? Infinity),
+      distanceClosest: (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity),
       distanceFurthest: (a, b) => (b.distance ?? 0) - (a.distance ?? 0),
       priceLow: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
       priceHigh: (a, b) => (Number(b.price) || 0) - (Number(a.price) || 0),
+      dateNewest: (a, b) => new Date(a.date) - new Date(b.date),
+      dateOldest: (a, b) => new Date(b.date) - new Date(a.date),
     };
 
-    const sorted = [...processed].sort((a, b) => {
+    return [...processed].sort((a, b) => {
       const primary = sortFn[sortOption]?.(a, b) ?? 0;
-      if (primary === 0) {
-        return a.id > b.id ? 1 : -1; // Stable fallback using ID
-      }
+      if (primary === 0) return a.id > b.id ? 1 : -1;
       return primary;
     });
-
-    return sorted;
   }, [requestsAndAppointments, userLocation, appointmentLocations, sortOption]);
 
+  const availableJobs = sortedData.filter((item) => !item.isRequest);
+  const requestedJobs = sortedData.filter((item) => item.isRequest);
+
+  const currentSortLabel = sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={styles.loadingText}>Finding available jobs...</Text>
+      </View>
+    );
+  }
+
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "#f8f9fa",
-        paddingHorizontal: 16,
-        paddingTop: 30, // more space from top bar
-      }}
-    >
-      {/* --- Top Navigation Buttons --- */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 25,
-        }}
-      >
-        <Pressable style={styles.navButton} onPress={() => navigate("/")}>
-          <Icon name="angle-left" size={iconSize + 4} color="#007AFF" />
-          <Text style={styles.navButtonText}>Back</Text>
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => navigate("/")}>
+          <Icon name="angle-left" size={20} color={colors.primary[600]} />
+          <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
-
-        <Pressable style={styles.navButton} onPress={pressedSeeCalender}>
-          <Text style={styles.navButtonText}>Calendar</Text>
-          <Icon
-            name="calendar"
-            size={iconSize}
-            color="#007AFF"
-            style={{ marginLeft: 8 }}
-          />
+        <Text style={styles.title}>Find Jobs</Text>
+        <Pressable style={styles.calendarButton} onPress={() => navigate("/appointment-calender")}>
+          <Icon name="calendar" size={18} color={colors.primary[600]} />
         </Pressable>
       </View>
 
-      {/* --- Sort Button & Picker Modal --- */}
-      <View style={styles.sortContainer}>
-        <Pressable
-          style={styles.sortButton}
-          onPress={() => setShowSortPicker(true)}
-        >
-          <Icon name="sort" size={16} color="#3da9fc" />
-          <Text style={styles.sortButtonText}>
-            {sortLabelMap[sortOption] || "Sort Jobs"}
-          </Text>
-        </Pressable>
-
-        {showSortPicker && (
-          <View style={styles.pickerOverlay}>
-            <View style={styles.bottomSheet}>
-              <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>Sort Jobs By</Text>
-                <Pressable onPress={() => setShowSortPicker(false)}>
-                  <Text style={styles.doneButtonText}>Done</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={sortOption}
-                  onValueChange={(itemValue) => setSortOption(itemValue)}
-                  itemStyle={{ fontSize: 18, height: 150 }} // Makes it easier to scroll and tap
-                >
-                  <Picker.Item
-                    label="Distance (Closest)"
-                    value="distanceClosest"
-                  />
-                  <Picker.Item
-                    label="Distance (Furthest)"
-                    value="distanceFurthest"
-                  />
-                  <Picker.Item label="Price (Low → High)" value="priceLow" />
-                  <Picker.Item label="Price (High → Low)" value="priceHigh" />
-                </Picker>
-              </View>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* --- Loading / Empty States --- */}
-      {loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#007AFF"
-          style={{ marginTop: 30 }}
-        />
-      ) : sortedData.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No appointments yet</Text>
-          <Text style={styles.emptyText}>
-            Check back later to see upcoming jobs or new requests.
-          </Text>
+      {/* Stats Summary */}
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{availableJobs.length}</Text>
+          <Text style={styles.statLabel}>Available</Text>
         </View>
-      ) : (
-        /* --- Scrollable Job List --- */
-        <ScrollView
-          style={{ marginTop: 10 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {sortedData.map((appointment) => (
-            <View key={appointment.id} style={styles.tileWrapper}>
-              {appointment.isRequest ? (
-                <RequestedTile
-                  {...appointment}
-                  cleanerId={userId}
-                  removeRequest={async (employeeId, appointmentId) => {
-                    try {
-                      await FetchData.removeRequest(employeeId, appointmentId);
-                      setAllRequests((prev) => {
-                        const removed = prev.find(
-                          (a) => a.id === appointmentId
-                        );
-                        if (!removed) return prev;
-                        setAllAppointments((apps) => [...apps, removed]);
-                        return prev.filter((a) => a.id !== appointmentId);
-                      });
-                    } catch (err) {
-                      console.error("Error removing request:", err);
-                    }
-                  }}
-                />
-              ) : (
-                <EmployeeAssignmentTile
-                  {...appointment}
-                  cleanerId={userId}
-                  assigned={
-                    appointment.employeesAssigned?.includes(String(userId)) ||
-                    false
-                  }
-                  addEmployee={async (employeeId, appointmentId) => {
-                    try {
-                      await FetchData.addEmployee(employeeId, appointmentId);
-                      setAllAppointments((prev) => {
-                        const assigned = prev.find(
-                          (a) => a.id === appointmentId
-                        );
-                        if (!assigned) return prev;
-                        setAllRequests((reqs) => [...reqs, assigned]);
-                        return prev.filter((a) => a.id !== appointmentId);
-                      });
-                    } catch (err) {
-                      console.error("Error adding employee:", err);
-                    }
-                  }}
-                  removeEmployee={async (employeeId, appointmentId) => {
-                    try {
-                      await FetchData.removeEmployee(employeeId, appointmentId);
-                      setAllAppointments((prev) =>
-                        prev.map((a) =>
-                          a.id === appointmentId
-                            ? {
-                                ...a,
-                                employeesAssigned: a.employeesAssigned?.filter(
-                                  (id) => id !== String(employeeId)
-                                ),
-                              }
-                            : a
-                        )
-                      );
-                    } catch (err) {
-                      console.error("Error removing employee:", err);
-                    }
-                  }}
-                />
-              )}
+        <View style={[styles.statCard, styles.statCardHighlight]}>
+          <Text style={[styles.statValue, styles.statValueHighlight]}>{requestedJobs.length}</Text>
+          <Text style={[styles.statLabel, styles.statLabelHighlight]}>Requested</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{sortedData.length}</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+      </View>
+
+      {/* Sort Button */}
+      <Pressable style={styles.sortButton} onPress={() => setShowSortModal(true)}>
+        <Icon name="sort" size={14} color={colors.primary[600]} />
+        <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
+        <Icon name="angle-down" size={14} color={colors.primary[600]} />
+      </Pressable>
+
+      {/* Job List */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary[500]]}
+            tintColor={colors.primary[500]}
+          />
+        }
+      >
+        {sortedData.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Icon name="briefcase" size={40} color={colors.primary[300]} />
             </View>
-          ))}
-        </ScrollView>
-      )}
+            <Text style={styles.emptyTitle}>No Jobs Available</Text>
+            <Text style={styles.emptyText}>
+              Check back later to see new cleaning opportunities in your area.
+            </Text>
+            <Pressable style={styles.refreshButton} onPress={onRefresh}>
+              <Icon name="refresh" size={14} color={colors.neutral[0]} />
+              <Text style={styles.refreshButtonText}>Refresh</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {/* Requested Jobs Section */}
+            {requestedJobs.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={styles.sectionBadge}>
+                      <Icon name="clock-o" size={12} color={colors.warning[600]} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Pending Requests</Text>
+                  </View>
+                  <Text style={styles.sectionCount}>{requestedJobs.length}</Text>
+                </View>
+                {requestedJobs.map((appointment) => (
+                  <View key={appointment.id} style={styles.tileWrapper}>
+                    <RequestedTile
+                      {...appointment}
+                      cleanerId={userId}
+                      removeRequest={async (employeeId, appointmentId) => {
+                        try {
+                          await FetchData.removeRequest(employeeId, appointmentId);
+                          setAllRequests((prev) => {
+                            const removed = prev.find((a) => a.id === appointmentId);
+                            if (removed) setAllAppointments((apps) => [...apps, removed]);
+                            return prev.filter((a) => a.id !== appointmentId);
+                          });
+                        } catch (err) {
+                          console.error("Error removing request:", err);
+                        }
+                      }}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Available Jobs Section */}
+            {availableJobs.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={[styles.sectionBadge, styles.sectionBadgeAvailable]}>
+                      <Icon name="check" size={12} color={colors.success[600]} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Available Jobs</Text>
+                  </View>
+                  <Text style={styles.sectionCount}>{availableJobs.length}</Text>
+                </View>
+                {availableJobs.map((appointment) => (
+                  <View key={appointment.id} style={styles.tileWrapper}>
+                    <EmployeeAssignmentTile
+                      {...appointment}
+                      cleanerId={userId}
+                      assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
+                      addEmployee={async (employeeId, appointmentId) => {
+                        try {
+                          await FetchData.addEmployee(employeeId, appointmentId);
+                          setAllAppointments((prev) => {
+                            const assigned = prev.find((a) => a.id === appointmentId);
+                            if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
+                            return prev.filter((a) => a.id !== appointmentId);
+                          });
+                        } catch (err) {
+                          console.error("Error adding employee:", err);
+                        }
+                      }}
+                      removeEmployee={async (employeeId, appointmentId) => {
+                        try {
+                          await FetchData.removeEmployee(employeeId, appointmentId);
+                          setAllAppointments((prev) =>
+                            prev.map((a) =>
+                              a.id === appointmentId
+                                ? {
+                                    ...a,
+                                    employeesAssigned: a.employeesAssigned?.filter(
+                                      (id) => id !== String(employeeId)
+                                    ),
+                                  }
+                                : a
+                            )
+                          );
+                        } catch (err) {
+                          console.error("Error removing employee:", err);
+                        }
+                      }}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowSortModal(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort Jobs By</Text>
+              <Pressable onPress={() => setShowSortModal(false)}>
+                <Icon name="times" size={20} color={colors.text.secondary} />
+              </Pressable>
+            </View>
+            {sortOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.sortOption,
+                  sortOption === option.value && styles.sortOptionActive,
+                ]}
+                onPress={() => {
+                  setSortOption(option.value);
+                  setShowSortModal(false);
+                }}
+              >
+                <Icon
+                  name={option.icon}
+                  size={16}
+                  color={sortOption === option.value ? colors.primary[600] : colors.text.secondary}
+                />
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    sortOption === option.value && styles.sortOptionTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {sortOption === option.value && (
+                  <Icon name="check" size={16} color={colors.primary[600]} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
-const styles = {
-  // --- NAVIGATION BUTTONS (Back / Calendar) ---
-  navButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(0,122,255,0.1)",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    backdropFilter: "blur(10px)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
   },
-  navButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#007AFF",
-    marginLeft: 8,
-    letterSpacing: 0.4,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
   },
 
-  // --- SORT BUTTON / DROPDOWN ---
-  sortContainer: {
-    alignItems: "flex-end",
-    marginBottom: 15,
-    marginRight: 15,
+  // Header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing["3xl"],
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background.secondary,
   },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  backButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  title: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  calendarButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  statCardHighlight: {
+    backgroundColor: colors.warning[50],
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  statValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  statValueHighlight: {
+    color: colors.warning[700],
+  },
+  statLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  statLabelHighlight: {
+    color: colors.warning[600],
+  },
+
+  // Sort Button
   sortButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(61,169,252,0.15)",
-    borderColor: "rgba(255,255,255,0.25)",
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    elevation: 3,
+    alignSelf: "flex-end",
+    marginRight: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+    ...shadows.sm,
   },
   sortButtonText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: "#3da9fc",
-    fontWeight: "700",
-    letterSpacing: 0.3,
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
   },
 
-  // --- PICKER MODAL / BOTTOM SHEET ---
-  pickerOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
+  // Scroll View
+  scrollView: {
+    flex: 1,
   },
-  bottomSheet: {
-    backgroundColor: "rgba(255,255,255,0.95)",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 30,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 10,
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
   },
-  sheetHeader: {
+
+  // Sections
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
   },
-  sheetTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#222",
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
-  doneButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#3da9fc",
-  },
-  pickerContainer: {
-    backgroundColor: "#fff",
+  sectionBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.warning[100],
+    alignItems: "center",
     justifyContent: "center",
   },
+  sectionBadgeAvailable: {
+    backgroundColor: colors.success[100],
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sectionCount: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
 
-  // --- EMPTY STATE ---
+  // Tile Wrapper
+  tileWrapper: {
+    marginBottom: spacing.sm,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    backgroundColor: colors.neutral[0],
+    ...shadows.sm,
+  },
+
+  // Empty State
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 50,
-    padding: 20,
+    paddingVertical: spacing["4xl"],
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#222",
-    marginBottom: 10,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
   },
   emptyText: {
-    fontSize: 15,
-    color: "#555",
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
     textAlign: "center",
     lineHeight: 22,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
   },
-
-  // --- TILE WRAPPER (for job/request cards) ---
-  tileWrapper: {
-    marginBottom: 15,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#fff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-
-  // --- CLOSE BUTTON / CONFIRM ACTION ---
-  closeButton: {
-    backgroundColor: "#3da9fc",
-    marginTop: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+  refreshButton: {
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
   },
-  closeButtonText: {
-    color: "white",
-    fontWeight: "600",
-    fontSize: 14,
+  refreshButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
   },
-};
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.glass.overlay,
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: colors.neutral[0],
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
+    paddingBottom: spacing["3xl"],
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  sortOptionActive: {
+    backgroundColor: colors.primary[50],
+  },
+  sortOptionText: {
+    flex: 1,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  sortOptionTextActive: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  bottomSpacer: {
+    height: spacing["4xl"],
+  },
+});
 
 export default SelectNewJobList;

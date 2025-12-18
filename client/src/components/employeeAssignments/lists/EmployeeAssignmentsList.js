@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
+  Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +14,13 @@ import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../../services/styles/theme";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -21,32 +29,58 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) *
-      Math.cos(toRad(lat2)) *
-      Math.sin(dLon / 2) ** 2;
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
+
+const sortOptions = [
+  { value: "dateNewest", label: "Date (Soonest)", icon: "calendar" },
+  { value: "dateOldest", label: "Date (Latest)", icon: "calendar" },
+  { value: "distanceClosest", label: "Distance (Closest)", icon: "location-arrow" },
+  { value: "distanceFurthest", label: "Distance (Furthest)", icon: "location-arrow" },
+  { value: "priceLow", label: "Price (Low to High)", icon: "dollar" },
+  { value: "priceHigh", label: "Price (High to Low)", icon: "dollar" },
+];
 
 const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [allAppointments, setAllAppointments] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState(null);
-  const [sortOption, setSortOption] = useState("distanceClosest");
-  const [showSortPicker, setShowSortPicker] = useState(false);
+  const [sortOption, setSortOption] = useState("dateNewest");
+  const [showSortModal, setShowSortModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [redirectToJobs, setRedirectToJobs] = useState(false);
-  const [refresh, setRefresh] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState(null);
 
-  const { width } = Dimensions.get("window");
-  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
   const navigate = useNavigate();
 
-  const fetchUser = async () => {
-    const response = await getCurrentUser();
-    setUserId(response.user.id);
-  };
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+
+    try {
+      const [appointmentResponse, userResponse] = await Promise.all([
+        FetchData.get("/api/v1/employee-info", state.currentUser.token),
+        getCurrentUser(),
+      ]);
+
+      const appointments = appointmentResponse.employee?.cleanerAppointments || [];
+      dispatch({ type: "USER_APPOINTMENTS", payload: appointments });
+      setAllAppointments(appointments);
+      setUserId(userResponse.user.id);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [state.currentUser.token, dispatch]);
+
+  useEffect(() => {
+    if (state.currentUser.token) {
+      fetchData();
+    }
+  }, [state.currentUser.token, fetchData]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -59,38 +93,13 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
         },
         (error) => {
           console.error("Error getting location:", error);
-          setLoading(false);
+          setUserLocation({ latitude: 0, longitude: 0 });
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
       return () => navigator.geolocation.clearWatch(watcher);
     }
   }, []);
-
-  useEffect(() => {
-    if (state.currentUser.token) {
-      FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
-        (response) => {
-          const appointments = response.employee.cleanerAppointments;
-          dispatch({
-            type: "USER_APPOINTMENTS",
-            payload: appointments,
-          });
-          setAllAppointments(appointments);
-        }
-      );
-    }
-    fetchUser();
-
-    if (refresh) setRefresh(false);
-  }, [state.currentUser.token, refresh]);
-
-  useEffect(() => {
-    if (redirectToJobs) {
-      navigate("/new-job-choice");
-      setRedirectToJobs(false);
-    }
-  }, [redirectToJobs]);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -109,24 +118,34 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     if (allAppointments.length > 0) fetchLocations();
   }, [allAppointments]);
 
-  // Fix spinner for empty appointments
-  useEffect(() => {
-    if (allAppointments.length === 0) setLoading(false);
-  }, [allAppointments]);
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData(true);
+  }, [fetchData]);
 
-  useEffect(() => {
-    if (allAppointments.length > 0 && userLocation && appointmentLocations)
-      setLoading(false);
-  }, [userLocation, appointmentLocations, allAppointments]);
+  const removeEmployee = async (employeeId, appointmentId) => {
+    await FetchData.removeEmployee(employeeId, appointmentId);
+    setAllAppointments((prev) => prev.filter((a) => a.id !== appointmentId));
+  };
 
+  const addEmployee = async (employeeId, appointmentId) => {
+    await FetchData.addEmployee(employeeId, appointmentId);
+    fetchData(true);
+  };
+
+  // Filter to only show assigned appointments
+  const assignedAppointments = useMemo(() => {
+    if (!userId) return [];
+    return allAppointments.filter((appointment) =>
+      appointment.employeesAssigned?.includes(String(userId))
+    );
+  }, [allAppointments, userId]);
+
+  // Sort appointments
   const sortedAppointments = useMemo(() => {
-    let sorted = allAppointments.map((appointment) => {
+    let sorted = assignedAppointments.map((appointment) => {
       let distance = null;
-      if (
-        userLocation &&
-        appointmentLocations &&
-        appointmentLocations[appointment.homeId]
-      ) {
+      if (userLocation && appointmentLocations?.[appointment.homeId]) {
         const loc = appointmentLocations[appointment.homeId];
         distance = haversineDistance(
           userLocation.latitude,
@@ -138,170 +157,554 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
       return { ...appointment, distance };
     });
 
-    if (sortOption === "distanceClosest") {
-      sorted.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
-    } else if (sortOption === "distanceFurthest") {
-      sorted.sort((a, b) => (b.distance || 0) - (a.distance || 0));
-    } else if (sortOption === "priceLow") {
-      sorted.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
-    } else if (sortOption === "priceHigh") {
-      sorted.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
-    }
+    const sortFn = {
+      dateNewest: (a, b) => new Date(a.date) - new Date(b.date),
+      dateOldest: (a, b) => new Date(b.date) - new Date(a.date),
+      distanceClosest: (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity),
+      distanceFurthest: (a, b) => (b.distance ?? 0) - (a.distance ?? 0),
+      priceLow: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
+      priceHigh: (a, b) => (Number(b.price) || 0) - (Number(a.price) || 0),
+    };
 
-    return sorted;
-  }, [allAppointments, userLocation, appointmentLocations, sortOption]);
+    return sorted.sort((a, b) => {
+      const primary = sortFn[sortOption]?.(a, b) ?? 0;
+      if (primary === 0) return a.id > b.id ? 1 : -1;
+      return primary;
+    });
+  }, [assignedAppointments, userLocation, appointmentLocations, sortOption]);
 
-  const removeEmployee = async (employeeId, appointmentId) => {
-    await FetchData.removeEmployee(employeeId, appointmentId);
-    setRefresh(true);
-  };
+  // Separate upcoming and completed
+  const now = new Date();
+  const upcomingJobs = sortedAppointments.filter(
+    (a) => new Date(a.date) >= new Date(now.toDateString()) && !a.completed
+  );
+  const completedJobs = sortedAppointments.filter((a) => a.completed);
 
-  const addEmployee = async (employeeId, appointmentId) => {
-    await FetchData.addEmployee(employeeId, appointmentId);
-    setRefresh(true);
-  };
+  const totalEarnings = sortedAppointments.reduce(
+    (sum, a) => sum + (Number(a.price) || 0),
+    0
+  );
 
-  const assignedAppointments = sortedAppointments
-    .filter((appointment) =>
-      appointment.employeesAssigned.includes(String(userId))
-    )
-    .map((appointment) => (
-      <View key={appointment.id}>
-        <EmployeeAssignmentTile
-          id={appointment.id}
-          cleanerId={userId}
-          date={appointment.date}
-          price={appointment.price}
-          homeId={appointment.homeId}
-          hasBeenAssigned={appointment.hasBeenAssigned}
-          bringSheets={appointment.bringSheets}
-          bringTowels={appointment.bringTowels}
-          completed={appointment.completed}
-          keyPadCode={appointment.keyPadCode}
-          keyLocation={appointment.keyLocation}
-          addEmployee={addEmployee}
-          removeEmployee={removeEmployee}
-          assigned={true}
-          distance={appointment.distance}
-          timeToBeCompleted={appointment.timeToBeCompleted}
-        />
+  const currentSortLabel = sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={styles.loadingText}>Loading your jobs...</Text>
       </View>
-    ));
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Top Buttons */}
-      <View style={styles.topButtonRow}>
-        <Pressable style={styles.glassButton} onPress={() => navigate("/")}>
-          <Icon name="angle-left" size={iconSize} color="#007AFF" />
-          <Text style={styles.glassButtonText}>Back</Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => navigate("/")}>
+          <Icon name="angle-left" size={20} color={colors.primary[600]} />
+          <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
-
+        <Text style={styles.title}>My Jobs</Text>
         <Pressable
-          style={styles.glassButton}
+          style={styles.calendarButton}
           onPress={() => navigate("/my-appointment-calender")}
         >
-          <Text style={styles.glassButtonText}>Calendar</Text>
-          <Icon name="angle-right" size={iconSize} color="#007AFF" />
+          <Icon name="calendar" size={18} color={colors.primary[600]} />
         </Pressable>
       </View>
 
+      {/* Stats Summary */}
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{upcomingJobs.length}</Text>
+          <Text style={styles.statLabel}>Upcoming</Text>
+        </View>
+        <View style={[styles.statCard, styles.statCardHighlight]}>
+          <Text style={[styles.statValue, styles.statValueHighlight]}>
+            ${totalEarnings.toFixed(0)}
+          </Text>
+          <Text style={[styles.statLabel, styles.statLabelHighlight]}>Earnings</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{completedJobs.length}</Text>
+          <Text style={styles.statLabel}>Completed</Text>
+        </View>
+      </View>
+
       {/* Sort Button */}
-      <Pressable
-        style={styles.sortButton}
-        onPress={() => setShowSortPicker(!showSortPicker)}
+      {sortedAppointments.length > 0 && (
+        <Pressable style={styles.sortButton} onPress={() => setShowSortModal(true)}>
+          <Icon name="sort" size={14} color={colors.primary[600]} />
+          <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
+          <Icon name="angle-down" size={14} color={colors.primary[600]} />
+        </Pressable>
+      )}
+
+      {/* Job List */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary[500]]}
+            tintColor={colors.primary[500]}
+          />
+        }
       >
-        <Text style={styles.sortText}>
-          Sort by:{" "}
-          {sortOption === "distanceClosest"
-            ? "Distance (Closest)"
-            : sortOption === "distanceFurthest"
-            ? "Distance (Furthest)"
-            : sortOption === "priceLow"
-            ? "Price (Low to High)"
-            : "Price (High to Low)"}
-        </Text>
-        <Icon
-          name={showSortPicker ? "angle-up" : "angle-down"}
-          size={20}
-          color="#007AFF"
-        />
-      </Pressable>
+        {sortedAppointments.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Icon name="clipboard" size={40} color={colors.primary[300]} />
+            </View>
+            <Text style={styles.emptyTitle}>No Jobs Yet</Text>
+            <Text style={styles.emptyText}>
+              You haven't been assigned to any cleaning jobs yet. Browse available jobs to get started!
+            </Text>
+            <Pressable
+              style={styles.findJobsButton}
+              onPress={() => navigate("/new-job-choice")}
+            >
+              <Icon name="search" size={14} color={colors.neutral[0]} />
+              <Text style={styles.findJobsButtonText}>Find Jobs</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            {/* Upcoming Jobs */}
+            {upcomingJobs.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={styles.sectionBadge}>
+                      <Icon name="clock-o" size={12} color={colors.primary[600]} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Upcoming Jobs</Text>
+                  </View>
+                  <Text style={styles.sectionCount}>{upcomingJobs.length}</Text>
+                </View>
+                {upcomingJobs.map((appointment) => (
+                  <View key={appointment.id} style={styles.tileWrapper}>
+                    <EmployeeAssignmentTile
+                      id={appointment.id}
+                      cleanerId={userId}
+                      date={appointment.date}
+                      price={appointment.price}
+                      homeId={appointment.homeId}
+                      hasBeenAssigned={appointment.hasBeenAssigned}
+                      bringSheets={appointment.bringSheets}
+                      bringTowels={appointment.bringTowels}
+                      completed={appointment.completed}
+                      keyPadCode={appointment.keyPadCode}
+                      keyLocation={appointment.keyLocation}
+                      addEmployee={addEmployee}
+                      removeEmployee={removeEmployee}
+                      assigned={true}
+                      distance={appointment.distance}
+                      timeToBeCompleted={appointment.timeToBeCompleted}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
 
-      {showSortPicker && (
-        <View style={styles.sortOptions}>
-          <Pressable onPress={() => setSortOption("distanceClosest")} style={styles.option}>
-            <Text>Distance (Closest)</Text>
-          </Pressable>
-          <Pressable onPress={() => setSortOption("distanceFurthest")} style={styles.option}>
-            <Text>Distance (Furthest)</Text>
-          </Pressable>
-          <Pressable onPress={() => setSortOption("priceLow")} style={styles.option}>
-            <Text>Price (Low to High)</Text>
-          </Pressable>
-          <Pressable onPress={() => setSortOption("priceHigh")} style={styles.option}>
-            <Text>Price (High to Low)</Text>
-          </Pressable>
-        </View>
-      )}
+            {/* Completed Jobs */}
+            {completedJobs.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={[styles.sectionBadge, styles.sectionBadgeCompleted]}>
+                      <Icon name="check" size={12} color={colors.success[600]} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Completed</Text>
+                  </View>
+                  <Text style={styles.sectionCount}>{completedJobs.length}</Text>
+                </View>
+                {completedJobs.map((appointment) => (
+                  <View key={appointment.id} style={styles.tileWrapper}>
+                    <EmployeeAssignmentTile
+                      id={appointment.id}
+                      cleanerId={userId}
+                      date={appointment.date}
+                      price={appointment.price}
+                      homeId={appointment.homeId}
+                      hasBeenAssigned={appointment.hasBeenAssigned}
+                      bringSheets={appointment.bringSheets}
+                      bringTowels={appointment.bringTowels}
+                      completed={appointment.completed}
+                      keyPadCode={appointment.keyPadCode}
+                      keyLocation={appointment.keyLocation}
+                      addEmployee={addEmployee}
+                      removeEmployee={removeEmployee}
+                      assigned={true}
+                      distance={appointment.distance}
+                      timeToBeCompleted={appointment.timeToBeCompleted}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
 
-      {/* Appointments List */}
-      {loading ? (
-        <ActivityIndicator size="large" color="#007AFF" style={{ marginTop: 40 }} />
-      ) : assignedAppointments.length > 0 ? (
-        <ScrollView style={{ marginTop: 10 }}>{assignedAppointments}</ScrollView>
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>You have no jobs scheduled.</Text>
-          <Pressable onPress={() => setRedirectToJobs(true)}>
-            <Text style={styles.linkText}>Schedule jobs HERE!</Text>
-          </Pressable>
-        </View>
-      )}
+            {/* Find More Jobs Card */}
+            <Pressable
+              style={styles.findMoreCard}
+              onPress={() => navigate("/new-job-choice")}
+            >
+              <View style={styles.findMoreContent}>
+                <Icon name="plus-circle" size={24} color={colors.primary[600]} />
+                <View style={styles.findMoreTextContainer}>
+                  <Text style={styles.findMoreTitle}>Find More Jobs</Text>
+                  <Text style={styles.findMoreSubtitle}>
+                    Browse available cleaning opportunities
+                  </Text>
+                </View>
+              </View>
+              <Icon name="chevron-right" size={16} color={colors.primary[600]} />
+            </Pressable>
+          </>
+        )}
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowSortModal(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort Jobs By</Text>
+              <Pressable onPress={() => setShowSortModal(false)}>
+                <Icon name="times" size={20} color={colors.text.secondary} />
+              </Pressable>
+            </View>
+            {sortOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.sortOption,
+                  sortOption === option.value && styles.sortOptionActive,
+                ]}
+                onPress={() => {
+                  setSortOption(option.value);
+                  setShowSortModal(false);
+                }}
+              >
+                <Icon
+                  name={option.icon}
+                  size={16}
+                  color={sortOption === option.value ? colors.primary[600] : colors.text.secondary}
+                />
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    sortOption === option.value && styles.sortOptionTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {sortOption === option.value && (
+                  <Icon name="check" size={16} color={colors.primary[600]} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 15, backgroundColor: "#F8F9FB" },
-  topButtonRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 30, marginBottom: 15 },
-  glassButton: {
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+
+  // Header
+  header: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(0,122,255,0.1)",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(0,122,255,0.3)",
-    gap: 8,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing["3xl"],
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background.secondary,
   },
-  glassButtonText: { color: "#007AFF", fontWeight: "600", fontSize: 16 },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  backButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  title: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  calendarButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  statCardHighlight: {
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  statValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  statValueHighlight: {
+    color: colors.success[700],
+  },
+  statLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  statLabelHighlight: {
+    color: colors.success[600],
+  },
+
+  // Sort Button
   sortButton: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "rgba(0,122,255,0.1)",
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(0,122,255,0.3)",
-    marginBottom: 10,
+    alignSelf: "flex-end",
+    marginRight: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+    ...shadows.sm,
   },
-  sortText: { color: "#007AFF", fontWeight: "600", fontSize: 15 },
-  sortOptions: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    paddingVertical: 5,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
+  sortButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
   },
-  option: { paddingVertical: 10, paddingHorizontal: 15 },
-  emptyContainer: { alignItems: "center", marginTop: 50 },
-  emptyText: { fontSize: 18, fontWeight: "600", marginBottom: 10, color: "#1E1E1E" },
-  linkText: { fontSize: 16, color: "#007AFF", fontWeight: "700" },
+
+  // Scroll View
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+  },
+
+  // Sections
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  sectionBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionBadgeCompleted: {
+    backgroundColor: colors.success[100],
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sectionCount: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // Tile Wrapper
+  tileWrapper: {
+    marginBottom: spacing.sm,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    backgroundColor: colors.neutral[0],
+    ...shadows.sm,
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing["4xl"],
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  emptyText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  findJobsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  findJobsButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+
+  // Find More Card
+  findMoreCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 2,
+    borderColor: colors.primary[200],
+    borderStyle: "dashed",
+    marginBottom: spacing.lg,
+  },
+  findMoreContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  findMoreTextContainer: {
+    flex: 1,
+  },
+  findMoreTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  findMoreSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.glass.overlay,
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: colors.neutral[0],
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
+    paddingBottom: spacing["3xl"],
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  sortOptionActive: {
+    backgroundColor: colors.primary[50],
+  },
+  sortOptionText: {
+    flex: 1,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  sortOptionTextActive: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  bottomSpacer: {
+    height: spacing["4xl"],
+  },
 });
 
 export default EmployeeAssignmentsList;
-

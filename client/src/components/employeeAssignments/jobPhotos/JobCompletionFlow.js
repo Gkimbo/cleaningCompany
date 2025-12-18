@@ -274,9 +274,6 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         <Text style={styles.payoutAmount}>
           ${(Number(appointment.price) * 0.9).toFixed(2)}
         </Text>
-        <Text style={styles.payoutNote}>
-          (90% of ${appointment.price} job total)
-        </Text>
       </View>
 
       <TouchableOpacity

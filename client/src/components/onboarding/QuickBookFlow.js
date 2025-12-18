@@ -285,49 +285,60 @@ const QuickBookFlow = ({ state, dispatch }) => {
       <View style={[styles.container, { justifyContent: "center", alignItems: "center", padding: 20 }]}>
         <View style={{
           backgroundColor: "#fef3c7",
-          borderRadius: 16,
-          padding: 24,
+          borderRadius: 12,
+          padding: 20,
           borderWidth: 1,
           borderColor: "#fcd34d",
           alignItems: "center",
-          maxWidth: 400,
+          maxWidth: 340,
+          width: "100%",
         }}>
           <Text style={{
-            fontSize: 40,
-            marginBottom: 16,
+            fontSize: 28,
+            marginBottom: 12,
           }}>
             💳
           </Text>
           <Text style={{
-            fontSize: 20,
-            fontWeight: "700",
+            fontSize: 16,
+            fontWeight: "600",
             color: "#92400e",
             textAlign: "center",
-            marginBottom: 8,
+            marginBottom: 6,
           }}>
             Payment Method Required
           </Text>
           <Text style={{
-            fontSize: 14,
+            fontSize: 13,
             color: "#a16207",
             textAlign: "center",
-            lineHeight: 22,
-            marginBottom: 20,
+            lineHeight: 19,
+            marginBottom: 16,
           }}>
-            You need to add a payment method before you can book cleaning appointments.
-            Your card will be charged 3 days before each scheduled cleaning.
+            Add a payment method before booking. Your card will be charged 3 days before each cleaning.
           </Text>
           <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: "#3b82f6" }]}
+            style={{
+              backgroundColor: "#3b82f6",
+              paddingVertical: 10,
+              paddingHorizontal: 20,
+              borderRadius: 8,
+              width: "100%",
+              alignItems: "center",
+            }}
             onPress={() => navigate("/payment-setup")}
           >
-            <Text style={styles.primaryButtonText}>Set Up Payment Method</Text>
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>Set Up Payment</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.secondaryButton, { marginTop: 12 }]}
+            style={{
+              marginTop: 10,
+              paddingVertical: 8,
+              paddingHorizontal: 16,
+            }}
             onPress={() => navigate("/list-of-homes")}
           >
-            <Text style={styles.secondaryButtonText}>Back to My Homes</Text>
+            <Text style={{ color: "#92400e", fontWeight: "500", fontSize: 13 }}>Back to My Homes</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -74,9 +74,17 @@ const HomeRequestsModal = ({ visible, homeId, token, onClose, onRequestUpdate })
     }
   };
 
-  const handleViewCleanerReviews = (cleanerId) => {
+  const handleViewCleanerReviews = (cleanerId, requestId, appointmentId) => {
     onClose();
-    navigate(`/all-cleaner-reviews/${cleanerId}`);
+    navigate(`/all-cleaner-reviews/${cleanerId}`, {
+      state: {
+        fromRequests: true,
+        requestId,
+        appointmentId,
+        homeId,
+        cleanerId,
+      },
+    });
   };
 
   const formatDate = (dateString) => {
@@ -190,7 +198,7 @@ const HomeRequestsModal = ({ visible, homeId, token, onClose, onRequestUpdate })
                       <View key={request.id} style={styles.requestCard}>
                         <TouchableOpacity
                           style={styles.cleanerInfo}
-                          onPress={() => handleViewCleanerReviews(cleaner.id)}
+                          onPress={() => handleViewCleanerReviews(cleaner.id, request.id, appointment.id)}
                           activeOpacity={0.7}
                         >
                           <View style={styles.cleanerHeader}>

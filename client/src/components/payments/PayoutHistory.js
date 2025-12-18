@@ -108,8 +108,7 @@ const PayoutHistory = ({ state, dispatch }) => {
       {/* Info Banner */}
       <View style={styles.infoBanner}>
         <Text style={styles.infoBannerText}>
-          You receive 90% of each job. Payouts are processed automatically when
-          you mark a job as complete.
+          Payouts are processed automatically when you mark a job as complete.
         </Text>
       </View>
 
@@ -144,20 +143,8 @@ const PayoutHistory = ({ state, dispatch }) => {
                 </View>
 
                 <View style={styles.payoutDetails}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Job Total:</Text>
-                    <Text style={styles.detailValue}>
-                      {formatCurrency(payout.grossAmount)}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Platform Fee (10%):</Text>
-                    <Text style={styles.detailValueNegative}>
-                      -{formatCurrency(payout.platformFee)}
-                    </Text>
-                  </View>
                   <View style={[styles.detailRow, styles.netRow]}>
-                    <Text style={styles.netLabel}>Your Earnings (90%):</Text>
+                    <Text style={styles.netLabel}>Your Earnings:</Text>
                     <Text style={styles.netValue}>
                       {formatCurrency(payout.netAmount)}
                     </Text>

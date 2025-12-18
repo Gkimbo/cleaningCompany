@@ -191,6 +191,97 @@ appointmentRouter.get("/requests-by-home", async (req, res) => {
   }
 });
 
+// Get all pending requests for a client (homeowner) with details
+appointmentRouter.get("/client-pending-requests", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Get all homes for this user
+    const homes = await UserHomes.findAll({
+      where: { userId },
+    });
+
+    if (!homes.length) {
+      return res.status(200).json({ totalCount: 0, requestsByHome: [] });
+    }
+
+    // Get all appointments for this user
+    const existingAppointments = await UserAppointments.findAll({
+      where: { userId },
+    });
+
+    if (!existingAppointments.length) {
+      return res.status(200).json({ totalCount: 0, requestsByHome: [] });
+    }
+
+    const appointmentIds = existingAppointments.map((apt) => apt.id);
+
+    // Get all pending requests for these appointments
+    const pendingRequests = await UserPendingRequests.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        status: "pending"
+      },
+    });
+
+    if (!pendingRequests.length) {
+      return res.status(200).json({ totalCount: 0, requestsByHome: [] });
+    }
+
+    // Group requests by home with full details
+    const homeMap = {};
+    for (const home of homes) {
+      homeMap[home.id] = {
+        home: HomeSerializer.serializeOne(home),
+        requests: [],
+      };
+    }
+
+    for (const request of pendingRequests) {
+      const appointment = existingAppointments.find(
+        (apt) => apt.id === request.appointmentId
+      );
+      if (appointment && homeMap[appointment.homeId]) {
+        const cleaner = await User.findOne({
+          where: { id: request.employeeId },
+          include: [
+            {
+              model: UserReviews,
+              as: "reviews",
+            },
+          ],
+        });
+
+        homeMap[appointment.homeId].requests.push({
+          request: RequestSerializer.serializeOne(request),
+          appointment: AppointmentSerializer.serializeOne(appointment),
+          cleaner: UserSerializer.serializeOne(cleaner),
+        });
+      }
+    }
+
+    // Filter out homes with no requests and convert to array
+    const requestsByHome = Object.values(homeMap).filter(
+      (item) => item.requests.length > 0
+    );
+
+    return res.status(200).json({
+      totalCount: pendingRequests.length,
+      requestsByHome,
+    });
+  } catch (error) {
+    console.error("Error fetching client pending requests:", error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
 // Get pending requests for a specific home
 appointmentRouter.get("/requests-for-home/:homeId", async (req, res) => {
   try {

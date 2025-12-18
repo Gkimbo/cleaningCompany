@@ -189,11 +189,10 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
-        <Icon name="credit-card" size={40} color={colors.primary[500]} />
+        <Icon name="credit-card" size={28} color={colors.primary[500]} />
         <Text style={styles.title}>Payment Method</Text>
         <Text style={styles.subtitle}>
-          Add a payment method to book cleaning appointments. Your card will be
-          charged 3 days before each scheduled cleaning.
+          Add a payment method to book cleaning appointments.
         </Text>
       </View>
 
@@ -239,11 +238,13 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
       {/* No Payment Method Warning */}
       {!hasPaymentMethod && (
         <View style={styles.warningBox}>
-          <Icon name="exclamation-triangle" size={24} color={colors.warning[600]} />
-          <Text style={styles.warningTitle}>Payment Method Required</Text>
-          <Text style={styles.warningText}>
-            You need to add a payment method before you can book cleaning appointments.
-          </Text>
+          <Icon name="exclamation-triangle" size={20} color={colors.warning[600]} style={{ marginRight: spacing.sm }} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.warningTitle}>Payment Method Required</Text>
+            <Text style={styles.warningText}>
+              Add a payment method to book cleaning appointments.
+            </Text>
+          </View>
         </View>
       )}
 
@@ -315,21 +316,21 @@ const styles = StyleSheet.create({
   // Header
   header: {
     alignItems: "center",
-    marginBottom: spacing.xl,
-    paddingTop: spacing.xl,
+    marginBottom: spacing.lg,
+    paddingTop: spacing.md,
   },
   title: {
-    fontSize: typography.fontSize["2xl"],
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   subtitle: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     textAlign: "center",
-    marginTop: spacing.sm,
-    lineHeight: 22,
+    marginTop: spacing.xs,
+    lineHeight: 20,
   },
 
   // Section
@@ -379,24 +380,24 @@ const styles = StyleSheet.create({
   // Warning Box
   warningBox: {
     backgroundColor: colors.warning[50],
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderColor: colors.warning[200],
   },
   warningTitle: {
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.warning[800],
-    marginTop: spacing.sm,
+    marginBottom: 2,
   },
   warningText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.xs,
     color: colors.warning[700],
-    textAlign: "center",
-    marginTop: spacing.xs,
+    lineHeight: 16,
   },
 
   // Error Box
@@ -421,20 +422,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.lg,
-    borderRadius: radius.lg,
-    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
     ...shadows.sm,
   },
   buttonDisabled: {
     backgroundColor: colors.neutral[400],
   },
   buttonIcon: {
-    marginRight: spacing.sm,
+    marginRight: spacing.xs,
   },
   addButtonText: {
     color: colors.neutral[0],
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
   },
 
@@ -443,15 +444,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.lg,
-    borderRadius: radius.lg,
-    marginTop: spacing.md,
-    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
     ...shadows.sm,
   },
   continueButtonText: {
     color: colors.neutral[0],
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
   },
 

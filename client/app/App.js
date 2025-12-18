@@ -25,6 +25,7 @@ import AppointmentList from "../src/components/appointments/AppointmentList";
 import CleaningRequestList from "../src/components/appointments/CleaningRequestList";
 import DetailsComponent from "../src/components/appointments/DetailsComponent";
 import HomeList from "../src/components/appointments/HomeList";
+import ScheduleCleaningList from "../src/components/appointments/ScheduleCleaningList";
 import EditHomeForm from "../src/components/editHome/EditHomeForm";
 import EditHomeList from "../src/components/editHome/EditHomeList";
 import AppointmentCalendar from "../src/components/employeeAssignments/lists/AppointmentCalendar";
@@ -63,6 +64,9 @@ import { CalendarSyncManager } from "../src/components/calendarSync";
 
 // Account Settings
 import AccountSettings from "../src/components/account/AccountSettings";
+
+// Client components
+import ClientRequestsList from "../src/components/client/ClientRequestsList";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -233,6 +237,10 @@ export default function App() {
                 path="/list-of-homes"
                 element={<HomeList state={state} dispatch={dispatch} />}
               />
+              <Route
+                path="/schedule-cleaning"
+                element={<ScheduleCleaningList state={state} dispatch={dispatch} />}
+              />
               <Route path="/add-home" element={<AddHomeForm />} />
               <Route
                 path="/details/:id"
@@ -368,6 +376,11 @@ export default function App() {
               <Route
                 path="/account-settings"
                 element={<AccountSettings state={state} dispatch={dispatch} />}
+              />
+              {/* Client Requests */}
+              <Route
+                path="/client-requests"
+                element={<ClientRequestsList state={state} dispatch={dispatch} />}
               />
             </Routes>
             </SafeAreaView>

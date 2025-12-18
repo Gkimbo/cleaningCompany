@@ -160,7 +160,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
           </Text>
         ) : (
           <Text style={styles.infoText}>
-            Set up your payment account to receive 90% of your earnings directly
+            Set up your payment account to receive your earnings directly
             deposited to your bank account.
           </Text>
         )}
@@ -184,19 +184,8 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
         <View style={styles.infoItem}>
           <Text style={styles.infoNumber}>3</Text>
           <Text style={styles.infoItemText}>
-            After you complete the job, 90% is automatically transferred to you
+            After you complete the job, your earnings are automatically transferred to you
           </Text>
-        </View>
-        <View style={styles.splitInfo}>
-          <Text style={styles.splitTitle}>Earnings Split</Text>
-          <View style={styles.splitRow}>
-            <Text style={styles.splitLabel}>You receive:</Text>
-            <Text style={styles.splitValue}>90%</Text>
-          </View>
-          <View style={styles.splitRow}>
-            <Text style={styles.splitLabel}>Platform fee:</Text>
-            <Text style={styles.splitValue}>10%</Text>
-          </View>
         </View>
       </View>
 

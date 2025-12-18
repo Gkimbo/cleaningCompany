@@ -47,6 +47,17 @@ class ClientDashboardService {
       }
     );
   }
+
+  static async getPendingRequestsForClient(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/appointments/client-pending-requests`,
+      token,
+      {
+        totalCount: 0,
+        requestsByHome: [],
+      }
+    );
+  }
 }
 
 export default ClientDashboardService;

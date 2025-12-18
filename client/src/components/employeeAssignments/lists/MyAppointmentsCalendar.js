@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useMemo } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
+  Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -12,10 +14,14 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
-import calenderStyles from "../../../services/styles/CalenderSyles";
-import topBarStyles from "../../../services/styles/TopBarStyles";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
-import RequestedTile from "../tiles/RequestedTile";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../../services/styles/theme";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -29,45 +35,56 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const AppointmentCalendar = ({ state }) => {
+const sortOptions = [
+  { value: "distanceClosest", label: "Distance (Closest)", icon: "location-arrow" },
+  { value: "distanceFurthest", label: "Distance (Furthest)", icon: "location-arrow" },
+  { value: "priceLow", label: "Price (Low to High)", icon: "dollar" },
+  { value: "priceHigh", label: "Price (High to Low)", icon: "dollar" },
+];
+
+const MyAppointmentsCalendar = ({ state }) => {
   const [appointments, setAppointments] = useState([]);
-  const [requests, setRequests] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [appointmentLocations, setAppointmentLocations] = useState({});
   const [filteredAppointments, setFilteredAppointments] = useState([]);
-  const [filteredRequests, setFilteredRequests] = useState([]);
   const [sortOption, setSortOption] = useState("distanceClosest");
-  const [showSortPicker, setShowSortPicker] = useState(false);
+  const [showSortModal, setShowSortModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [refresh, setRefresh] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const navigate = useNavigate();
-  const { width } = Dimensions.get("window");
-  const iconSize = width < 400 ? 12 : width < 800 ? 16 : 20;
 
-  // Fetch appointments and user
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const appointmentData = await FetchData.get(
-          "/api/v1/users/appointments/employee",
-          state.currentUser.token
-        );
-        setAppointments(appointmentData.appointments || []);
-        setRequests(appointmentData.requested || []);
+  // Fetch data
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
 
-        const userData = await getCurrentUser();
-        setUserId(userData.user.id);
-      } catch (error) {
-        console.error("Fetch error:", error);
-        setLoading(false);
-      }
-    };
+    try {
+      const [appointmentData, userData] = await Promise.all([
+        FetchData.get("/api/v1/employee-info", state.currentUser.token),
+        getCurrentUser(),
+      ]);
 
-    if (state.currentUser?.token) fetchData();
+      const cleanerAppointments = appointmentData.employee?.cleanerAppointments || [];
+      setUserId(userData.user.id);
+
+      // Filter to only show appointments assigned to this user
+      const assignedAppointments = cleanerAppointments.filter((appt) =>
+        appt.employeesAssigned?.includes(String(userData.user.id))
+      );
+      setAppointments(assignedAppointments);
+    } catch (error) {
+      console.error("Fetch error:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [state.currentUser?.token]);
+
+  useEffect(() => {
+    if (state.currentUser?.token) fetchData();
+  }, [state.currentUser?.token, fetchData]);
 
   // Get user location
   useEffect(() => {
@@ -89,20 +106,15 @@ const AppointmentCalendar = ({ state }) => {
     }
   }, []);
 
-  // Fetch distances for sorting
+  // Fetch distances
   useEffect(() => {
     const fetchDistances = async () => {
-      if (
-        !userLocation ||
-        (appointments.length === 0 && requests.length === 0)
-      ) {
-        setLoading(false);
+      if (!userLocation || appointments.length === 0) {
         return;
       }
 
-      const all = [...appointments, ...requests];
       const locations = await Promise.all(
-        all.map(async (appt) => {
+        appointments.map(async (appt) => {
           const loc = await FetchData.getLatAndLong(appt.homeId);
           if (!loc) return null;
           const distance = haversineDistance(
@@ -115,61 +127,81 @@ const AppointmentCalendar = ({ state }) => {
         })
       );
       setAppointmentLocations(Object.assign({}, ...locations.filter(Boolean)));
-      setLoading(false);
     };
 
     fetchDistances();
-    if (refresh) {
-      setRefresh(false);
-    }
-  }, [userLocation, appointments, requests, refresh]);
+  }, [userLocation, appointments]);
 
   // Sorting helper
-  const sortAppointments = (list) => {
-    return [...list].sort((a, b) => {
-      const getDistance = (appt) =>
-        appointmentLocations[appt.homeId]?.distance || Infinity;
-      const getPrice = (appt) => Number(appt.price) || 0;
+  const sortAppointments = useCallback(
+    (list) => {
+      return [...list].sort((a, b) => {
+        const getDistance = (appt) =>
+          appointmentLocations[appt.homeId]?.distance || Infinity;
+        const getPrice = (appt) => Number(appt.price) || 0;
 
-      switch (sortOption) {
-        case "distanceClosest":
-          return getDistance(a) - getDistance(b);
-        case "distanceFurthest":
-          return getDistance(b) - getDistance(a);
-        case "priceLow":
-          return getPrice(a) - getPrice(b);
-        case "priceHigh":
-          return getPrice(b) - getPrice(a);
-        default:
-          return 0;
-      }
-    });
-  };
+        switch (sortOption) {
+          case "distanceClosest":
+            return getDistance(a) - getDistance(b);
+          case "distanceFurthest":
+            return getDistance(b) - getDistance(a);
+          case "priceLow":
+            return getPrice(a) - getPrice(b);
+          case "priceHigh":
+            return getPrice(b) - getPrice(a);
+          default:
+            return 0;
+        }
+      });
+    },
+    [appointmentLocations, sortOption]
+  );
 
   // Filter by date
-  const handleDateSelect = (date, appts = appointments, reqs = requests) => {
-    setSelectedDate(date.dateString);
+  const handleDateSelect = useCallback(
+    (date) => {
+      const dateString = date.dateString || date;
+      setSelectedDate(dateString);
 
-    const sameDay = (appt) => appt.date === date.dateString;
+      const sameDay = (appt) => appt.date === dateString;
 
-    const updatedAppointments = appts.filter(sameDay).map((a) => ({
-      ...a,
-      distance: appointmentLocations[a.homeId]?.distance || null,
-    }));
+      const updatedAppointments = appointments.filter(sameDay).map((a) => ({
+        ...a,
+        distance: appointmentLocations[a.homeId]?.distance || null,
+      }));
 
-    const updatedRequests = reqs.filter(sameDay).map((r) => ({
-      ...r,
-      distance: appointmentLocations[r.homeId]?.distance || null,
-    }));
-
-    setFilteredAppointments(sortAppointments(updatedAppointments));
-    setFilteredRequests(sortAppointments(updatedRequests));
-  };
+      setFilteredAppointments(sortAppointments(updatedAppointments));
+    },
+    [appointments, appointmentLocations, sortAppointments]
+  );
 
   // Update filtering when sort changes
   useEffect(() => {
-    if (selectedDate) handleDateSelect({ dateString: selectedDate });
+    if (selectedDate) {
+      handleDateSelect(selectedDate);
+    }
   }, [sortOption]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchData(true);
+  }, [fetchData]);
+
+  const formatSelectedDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString + "T00:00:00");
+    const options = { weekday: "long", month: "long", day: "numeric" };
+    return date.toLocaleDateString("en-US", options);
+  };
+
+  // Calculate stats
+  const now = new Date();
+  const upcomingCount = appointments.filter(
+    (a) => new Date(a.date) >= new Date(now.toDateString()) && !a.completed
+  ).length;
+  const completedCount = appointments.filter((a) => a.completed).length;
+
+  const currentSortLabel = sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
 
   // Calendar day render
   const renderDay = useCallback(
@@ -178,394 +210,686 @@ const AppointmentCalendar = ({ state }) => {
       const dayDate = new Date(date.dateString);
       const isPast = dayDate < new Date(today.toDateString());
 
-      const hasData =
-        appointments.some((a) => a.date === date.dateString) ||
-        requests.some((r) => r.date === date.dateString);
-
+      const appointmentCount = appointments.filter((a) => a.date === date.dateString).length;
+      const hasData = appointmentCount > 0;
       const isSelected = selectedDate === date.dateString;
 
       return (
         <Pressable
-          disabled={isPast || !hasData}
-          style={{
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 10,
-            borderRadius: 20,
-            backgroundColor: isSelected
-              ? "#3498db"
-              : hasData && !isPast
-              ? "rgba(52,152,219,0.2)"
-              : "transparent",
-            opacity: isPast ? 0.4 : 1,
-          }}
-          onPress={() => !isPast && hasData && handleDateSelect(date)}
+          disabled={isPast && !hasData}
+          style={[
+            styles.dayContainer,
+            isSelected && styles.dayContainerSelected,
+            hasData && !isPast && !isSelected && styles.dayContainerHasData,
+            isPast && styles.dayContainerPast,
+          ]}
+          onPress={() => hasData && handleDateSelect(date)}
         >
-          <Text style={{ color: isPast ? "#999" : "#000" }}>{date.day}</Text>
+          <Text
+            style={[
+              styles.dayText,
+              isSelected && styles.dayTextSelected,
+              isPast && !hasData && styles.dayTextPast,
+            ]}
+          >
+            {date.day}
+          </Text>
+          {hasData && (
+            <View style={[styles.dayBadge, isSelected && styles.dayBadgeSelected]}>
+              <Text style={[styles.dayBadgeText, isSelected && styles.dayBadgeTextSelected]}>
+                {appointmentCount}
+              </Text>
+            </View>
+          )}
         </Pressable>
       );
     },
-    [appointments, requests, selectedDate]
+    [appointments, selectedDate, handleDateSelect]
   );
 
-  return (
-    <ScrollView style={{ flex: 1, paddingBottom: 30 }}>
-      {/* Top Buttons */}
-      <View
-        style={{
-          flexDirection: "row",
-          justifyContent: "center",
-          marginTop: 40,
-          marginBottom: 20,
-          gap: 20,
-        }}
-      >
-        <Pressable
-          style={{
-            backgroundColor: "rgba(52,152,219,0.15)",
-            paddingVertical: 12,
-            paddingHorizontal: 20,
-            borderRadius: 14,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 5,
-          }}
-          onPress={() => navigate("/")}
-        >
-          <Icon name="angle-left" size={iconSize} color="#3498db" />
-          <Text
-            style={{
-              ...topBarStyles.buttonTextSchedule,
-              color: "#3498db",
-              fontWeight: "600",
-              marginLeft: 10,
-            }}
-          >
-            Home
-          </Text>
-        </Pressable>
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={styles.loadingText}>Loading your calendar...</Text>
+      </View>
+    );
+  }
 
-        <Pressable
-          style={{
-            backgroundColor: "rgba(52,152,219,0.15)",
-            paddingVertical: 12,
-            paddingHorizontal: 20,
-            borderRadius: 14,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.1,
-            shadowRadius: 5,
-          }}
-          onPress={() => navigate("/new-job-choice")}
-        >
-          <Text
-            style={{
-              ...topBarStyles.buttonTextSchedule,
-              color: "#3498db",
-              fontWeight: "600",
-              marginRight: 10,
-            }}
-          >
-            List
-          </Text>
-          <Icon name="angle-right" size={iconSize} color="#3498db" />
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => navigate("/")}>
+          <Icon name="angle-left" size={20} color={colors.primary[600]} />
+          <Text style={styles.backButtonText}>Back</Text>
+        </Pressable>
+        <Text style={styles.title}>My Calendar</Text>
+        <Pressable style={styles.listButton} onPress={() => navigate("/employee-assignments")}>
+          <Icon name="list" size={18} color={colors.primary[600]} />
         </Pressable>
       </View>
 
-      <Text style={calenderStyles.title}>Tap a date to view appointments</Text>
-
-      {/* Calendar */}
-      <Calendar
-        current={new Date().toISOString().split("T")[0]}
-        onDayPress={handleDateSelect}
-        dayComponent={renderDay}
-        renderArrow={(direction) => (
-          <Icon
-            name={direction === "left" ? "chevron-left" : "chevron-right"}
-            size={15}
-            color="#3498db"
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary[500]]}
+            tintColor={colors.primary[500]}
           />
-        )}
-      />
-
-      {/* Sort Picker */}
-      <Pressable
-        onPress={() => setShowSortPicker(!showSortPicker)}
-        style={{
-          margin: 10,
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-          borderRadius: 12,
-          backgroundColor: "rgba(52,152,219,0.15)",
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.1,
-          shadowRadius: 5,
-        }}
+        }
       >
-        <Text style={{ fontWeight: "600", color: "#3498db" }}>
-          Sort by:{" "}
-          {sortOption === "distanceClosest"
-            ? "Distance (Closest)"
-            : sortOption === "distanceFurthest"
-            ? "Distance (Furthest)"
-            : sortOption === "priceLow"
-            ? "Price (Low)"
-            : "Price (High)"}
-        </Text>
-        <Icon
-          name={showSortPicker ? "angle-up" : "angle-down"}
-          size={16}
-          color="#3498db"
-        />
-      </Pressable>
+        {/* Stats Summary */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{upcomingCount}</Text>
+            <Text style={styles.statLabel}>Upcoming</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{appointments.length}</Text>
+            <Text style={styles.statLabel}>Total Jobs</Text>
+          </View>
+          <View style={[styles.statCard, styles.statCardHighlight]}>
+            <Text style={[styles.statValue, styles.statValueHighlight]}>{completedCount}</Text>
+            <Text style={[styles.statLabel, styles.statLabelHighlight]}>Completed</Text>
+          </View>
+        </View>
 
-      {showSortPicker && (
-        <View
-          style={{
-            marginHorizontal: 10,
-            marginBottom: 10,
-            backgroundColor: "rgba(52,152,219,0.15)",
-            borderRadius: 12,
-            paddingVertical: 8,
-          }}
-        >
-          {[
-            { label: "Distance (Closest)", value: "distanceClosest" },
-            { label: "Distance (Furthest)", value: "distanceFurthest" },
-            { label: "Price (Low to High)", value: "priceLow" },
-            { label: "Price (High to Low)", value: "priceHigh" },
-          ].map((item) => (
+        {/* Instructions */}
+        <View style={styles.instructionCard}>
+          <Icon name="hand-pointer-o" size={18} color={colors.primary[600]} />
+          <Text style={styles.instructionText}>
+            Tap a highlighted date to see your scheduled jobs
+          </Text>
+        </View>
+
+        {/* Calendar */}
+        <View style={styles.calendarContainer}>
+          <Calendar
+            current={new Date().toISOString().split("T")[0]}
+            onDayPress={handleDateSelect}
+            dayComponent={renderDay}
+            renderArrow={(direction) => (
+              <View style={styles.arrowContainer}>
+                <Icon
+                  name={direction === "left" ? "chevron-left" : "chevron-right"}
+                  size={14}
+                  color={colors.primary[600]}
+                />
+              </View>
+            )}
+            theme={{
+              backgroundColor: colors.neutral[0],
+              calendarBackground: colors.neutral[0],
+              textSectionTitleColor: colors.text.secondary,
+              monthTextColor: colors.text.primary,
+              textMonthFontWeight: typography.fontWeight.semibold,
+              textMonthFontSize: typography.fontSize.lg,
+            }}
+          />
+        </View>
+
+        {/* Legend */}
+        <View style={styles.legend}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.primary[100] }]} />
+            <Text style={styles.legendText}>Has Jobs</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.primary[500] }]} />
+            <Text style={styles.legendText}>Selected</Text>
+          </View>
+        </View>
+
+        {/* Selected Date Section */}
+        {selectedDate && (
+          <View style={styles.selectedDateSection}>
+            <View style={styles.selectedDateHeader}>
+              <View>
+                <Text style={styles.selectedDateLabel}>Jobs for</Text>
+                <Text style={styles.selectedDateText}>{formatSelectedDate(selectedDate)}</Text>
+              </View>
+              {filteredAppointments.length > 0 && (
+                <Pressable style={styles.sortButton} onPress={() => setShowSortModal(true)}>
+                  <Icon name="sort" size={14} color={colors.primary[600]} />
+                  <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {filteredAppointments.length === 0 ? (
+              <View style={styles.noJobsCard}>
+                <Icon name="calendar-times-o" size={32} color={colors.text.tertiary} />
+                <Text style={styles.noJobsTitle}>No Jobs Scheduled</Text>
+                <Text style={styles.noJobsText}>
+                  You don't have any jobs scheduled for this date.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={styles.sectionBadge}>
+                      <Icon name="briefcase" size={12} color={colors.primary[600]} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Scheduled Jobs</Text>
+                  </View>
+                  <Text style={styles.sectionCount}>{filteredAppointments.length}</Text>
+                </View>
+                {filteredAppointments.map((appt) => (
+                  <View key={appt.id} style={styles.tileWrapper}>
+                    <EmployeeAssignmentTile
+                      id={appt.id}
+                      cleanerId={userId}
+                      date={appt.date}
+                      price={appt.price}
+                      homeId={appt.homeId}
+                      hasBeenAssigned={appt.hasBeenAssigned}
+                      bringSheets={appt.bringSheets}
+                      bringTowels={appt.bringTowels}
+                      completed={appt.completed}
+                      keyPadCode={appt.keyPadCode}
+                      keyLocation={appt.keyLocation}
+                      assigned={true}
+                      distance={appt.distance}
+                      timeToBeCompleted={appt.timeToBeCompleted}
+                      addEmployee={async () => {}}
+                      removeEmployee={async (employeeId, appointmentId) => {
+                        try {
+                          await FetchData.removeEmployee(employeeId, appointmentId);
+                          setAppointments((prev) =>
+                            prev.filter((a) => a.id !== appointmentId)
+                          );
+                          setFilteredAppointments((prev) =>
+                            prev.filter((a) => a.id !== appointmentId)
+                          );
+                        } catch (err) {
+                          console.error("Error removing:", err);
+                        }
+                      }}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Empty State when no date selected */}
+        {!selectedDate && (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Icon name="calendar" size={40} color={colors.primary[300]} />
+            </View>
+            <Text style={styles.emptyTitle}>Select a Date</Text>
+            <Text style={styles.emptyText}>
+              Tap on a highlighted date in the calendar above to view your scheduled cleaning jobs.
+            </Text>
+          </View>
+        )}
+
+        {/* No Jobs at all */}
+        {appointments.length === 0 && (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Icon name="clipboard" size={40} color={colors.primary[300]} />
+            </View>
+            <Text style={styles.emptyTitle}>No Jobs Yet</Text>
+            <Text style={styles.emptyText}>
+              You haven't been assigned to any cleaning jobs yet. Browse available jobs to get started!
+            </Text>
             <Pressable
-              key={item.value}
-              onPress={() => {
-                setSortOption(item.value);
-                setShowSortPicker(false);
-              }}
+              style={styles.findJobsButton}
+              onPress={() => navigate("/new-job-choice")}
             >
-              <Text style={{ padding: 8, color: "#3498db", fontWeight: "500" }}>
-                {item.label}
-              </Text>
+              <Icon name="search" size={14} color={colors.neutral[0]} />
+              <Text style={styles.findJobsButtonText}>Find Jobs</Text>
             </Pressable>
-          ))}
-        </View>
-      )}
+          </View>
+        )}
 
-      {/* Display filtered appointments/requests only */}
-      {!selectedDate ? (
-        <View
-          pointerEvents="none"
-          style={{
-            marginTop: 60,
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-            backgroundColor: "rgba(52,152,219,0.05)",
-            borderRadius: 16,
-            marginHorizontal: 20,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
-          }}
-        >
-          <Icon
-            name="calendar"
-            size={36}
-            color="#3498db"
-            style={{ marginBottom: 15, opacity: 0.9 }}
-          />
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "700",
-              color: "#2c3e50",
-              marginBottom: 8,
-              textAlign: "center",
-            }}
-          >
-            Select a date to see appointments
-          </Text>
-          <Text
-            style={{
-              fontSize: 16,
-              color: "#666",
-              textAlign: "center",
-              lineHeight: 22,
-              maxWidth: 300,
-            }}
-          >
-            Tap any highlighted date on the calendar to view available or
-            requested jobs.
-          </Text>
-        </View>
-      ) : loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#3498db"
-          style={{ marginTop: 30 }}
-        />
-      ) : filteredRequests.length === 0 && filteredAppointments.length === 0 ? (
-        <View
-          style={{
-            marginTop: 60,
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-            backgroundColor: "rgba(52,152,219,0.05)",
-            borderRadius: 16,
-            marginHorizontal: 20,
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.08,
-            shadowRadius: 4,
-          }}
-        >
-          <Icon
-            name="calendar-times-o"
-            size={36}
-            color="#999"
-            style={{ marginBottom: 15, opacity: 0.8 }}
-          />
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "700",
-              color: "#444",
-              marginBottom: 8,
-              textAlign: "center",
-            }}
-          >
-            No appointments available
-          </Text>
-          <Text
-            style={{
-              fontSize: 16,
-              color: "#666",
-              textAlign: "center",
-              lineHeight: 22,
-              maxWidth: 300,
-            }}
-          >
-            Try selecting a different date or check back later for new requests.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          style={{ flex: 1, zIndex: 1 }}
-          contentContainerStyle={{ paddingBottom: 60, paddingHorizontal: 10 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {filteredRequests.length > 0 && (
-            <View style={{ marginBottom: 20 }}>
-              <Text style={calenderStyles.sectionTitle}>
-                Requested Appointments
-              </Text>
-              {filteredRequests.map((appt) => (
-                <RequestedTile
-                  key={appt.id}
-                  {...appt}
-                  cleanerId={userId}
-                  removeRequest={async (employeeId, appointmentId) => {
-                    try {
-                      await FetchData.removeRequest(employeeId, appointmentId);
-                      setRequests((prev) => {
-                        const removed = prev.find(
-                          (r) => r.id === appointmentId
-                        );
-                        if (removed) {
-                          setAppointments((appsPrev) => {
-                            const exists = appsPrev.some(
-                              (a) => a.id === appointmentId
-                            );
-                            return exists ? appsPrev : [...appsPrev, removed];
-                          });
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
 
-                          setFilteredAppointments((appsPrev) => {
-                            const exists = appsPrev.some(
-                              (a) => a.id === appointmentId
-                            );
-                            return exists ? appsPrev : [...appsPrev, removed];
-                          });
-                        }
-
-                        return prev.filter((r) => r.id !== appointmentId);
-                      });
-
-                      setFilteredRequests((prev) =>
-                        prev.filter((r) => r.id !== appointmentId)
-                      );
-                    } catch (err) {
-                      console.error("Error removing request:", err);
-                    }
-                  }}
-                />
-              ))}
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowSortModal(false)}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort Jobs By</Text>
+              <Pressable onPress={() => setShowSortModal(false)}>
+                <Icon name="times" size={20} color={colors.text.secondary} />
+              </Pressable>
             </View>
-          )}
-
-          {filteredAppointments.length > 0 && (
-            <View style={{ marginBottom: 20 }}>
-              <Text style={calenderStyles.sectionTitle}>
-                Available Appointments
-              </Text>
-              {filteredAppointments.map((appt) => (
-                <EmployeeAssignmentTile
-                  key={appt.id}
-                  {...appt}
-                  cleanerId={userId}
-                  assigned={appt.employeesAssigned?.includes(String(userId))}
-                  addEmployee={async (employeeId, appointmentId) => {
-                    try {
-                      await FetchData.addEmployee(employeeId, appointmentId);
-                      setAppointments((prev) => {
-                        const appointment = prev.find(
-                          (r) => r.id === appointmentId
-                        );
-                        if (appointment) {
-                          setRequests((reqPrev) => {
-                            const exists = reqPrev.some(
-                              (r) => r.id === appointmentId
-                            );
-                            return exists ? reqPrev : [...reqPrev, appointment];
-                          });
-                          setFilteredRequests((reqPrev) => {
-                            const exists = reqPrev.some(
-                              (r) => r.id === appointmentId
-                            );
-                            return exists ? reqPrev : [...reqPrev, appointment];
-                          });
-                        }
-                        return prev.filter((r) => r.id !== appointmentId);
-                      });
-                      setFilteredAppointments((prev) =>
-                        prev.filter((r) => r.id !== appointmentId)
-                      );
-                      setRefresh(true);
-                    } catch (err) {
-                      console.error("Error sending request:", err);
-                    }
-                  }}
-                  removeEmployee={async () => {}}
+            {sortOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.sortOption,
+                  sortOption === option.value && styles.sortOptionActive,
+                ]}
+                onPress={() => {
+                  setSortOption(option.value);
+                  setShowSortModal(false);
+                }}
+              >
+                <Icon
+                  name={option.icon}
+                  size={16}
+                  color={sortOption === option.value ? colors.primary[600] : colors.text.secondary}
                 />
-              ))}
-            </View>
-          )}
-        </ScrollView>
-      )}
-    </ScrollView>
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    sortOption === option.value && styles.sortOptionTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                {sortOption === option.value && (
+                  <Icon name="check" size={16} color={colors.primary[600]} />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
   );
 };
 
-export default AppointmentCalendar;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+
+  // Header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing["3xl"],
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background.secondary,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  backButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  title: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  listButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  statCardHighlight: {
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  statValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  statValueHighlight: {
+    color: colors.success[700],
+  },
+  statLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  statLabelHighlight: {
+    color: colors.success[600],
+  },
+
+  // Instruction Card
+  instructionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+  },
+
+  // Calendar
+  calendarContainer: {
+    marginHorizontal: spacing.lg,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    ...shadows.md,
+  },
+  arrowContainer: {
+    padding: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+
+  // Day Styles
+  dayContainer: {
+    width: 36,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.md,
+  },
+  dayContainerSelected: {
+    backgroundColor: colors.primary[500],
+  },
+  dayContainerHasData: {
+    backgroundColor: colors.primary[50],
+  },
+  dayContainerPast: {
+    opacity: 0.4,
+  },
+  dayText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  dayTextSelected: {
+    color: colors.neutral[0],
+    fontWeight: typography.fontWeight.bold,
+  },
+  dayTextPast: {
+    color: colors.text.tertiary,
+  },
+  dayBadge: {
+    marginTop: 2,
+    backgroundColor: colors.primary[500],
+    borderRadius: radius.full,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    minWidth: 16,
+    alignItems: "center",
+  },
+  dayBadgeSelected: {
+    backgroundColor: colors.neutral[0],
+  },
+  dayBadgeText: {
+    fontSize: 9,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+  },
+  dayBadgeTextSelected: {
+    color: colors.primary[600],
+  },
+
+  // Legend
+  legend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.xl,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  legendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  legendText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+
+  // Selected Date Section
+  selectedDateSection: {
+    paddingHorizontal: spacing.lg,
+  },
+  selectedDateHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  selectedDateLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  selectedDateText: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sortButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+    ...shadows.sm,
+  },
+  sortButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // No Jobs Card
+  noJobsCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  noJobsTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  noJobsText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+
+  // Sections
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  sectionBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sectionCount: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // Tile Wrapper
+  tileWrapper: {
+    marginBottom: spacing.sm,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    backgroundColor: colors.neutral[0],
+    ...shadows.sm,
+  },
+
+  // Empty State
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing["4xl"],
+    paddingHorizontal: spacing.xl,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  emptyText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: spacing.xl,
+  },
+  findJobsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  findJobsButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.glass.overlay,
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: colors.neutral[0],
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
+    paddingBottom: spacing["3xl"],
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  sortOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  sortOptionActive: {
+    backgroundColor: colors.primary[50],
+  },
+  sortOptionText: {
+    flex: 1,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  sortOptionTextActive: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  bottomSpacer: {
+    height: spacing["4xl"],
+  },
+});
+
+export default MyAppointmentsCalendar;

@@ -247,45 +247,44 @@ const DetailsComponent = ({ state, dispatch }) => {
         {homeDetails && !homeDetails.outsideServiceArea && !checkingPayment && !hasPaymentMethod && (
           <View style={{
             backgroundColor: "#fef3c7",
-            borderRadius: 16,
-            padding: 24,
+            borderRadius: 10,
+            padding: 16,
             marginHorizontal: 16,
-            marginTop: 20,
+            marginTop: 16,
             borderWidth: 1,
             borderColor: "#fcd34d",
+            flexDirection: "row",
             alignItems: "center",
           }}>
-            <Icon name="credit-card" size={40} color="#f59e0b" style={{ marginBottom: 16 }} />
-            <Text style={{
-              fontSize: 18,
-              fontWeight: "700",
-              color: "#92400e",
-              textAlign: "center",
-              marginBottom: 8,
-            }}>
-              Payment Method Required
-            </Text>
-            <Text style={{
-              fontSize: 14,
-              color: "#a16207",
-              textAlign: "center",
-              lineHeight: 22,
-            }}>
-              You need to add a payment method before you can book cleaning appointments.
-              Your card will be charged 3 days before each scheduled cleaning.
-            </Text>
+            <Icon name="credit-card" size={24} color="#f59e0b" style={{ marginRight: 12 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={{
+                fontSize: 14,
+                fontWeight: "600",
+                color: "#92400e",
+                marginBottom: 4,
+              }}>
+                Payment Method Required
+              </Text>
+              <Text style={{
+                fontSize: 12,
+                color: "#a16207",
+                lineHeight: 17,
+              }}>
+                Add a payment method to book cleanings.
+              </Text>
+            </View>
             <Pressable
               style={{
-                marginTop: 20,
                 backgroundColor: "#3b82f6",
-                paddingVertical: 12,
-                paddingHorizontal: 24,
-                borderRadius: 10,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 6,
               }}
               onPress={() => navigate("/payment-setup")}
             >
-              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
-                Set Up Payment Method
+              <Text style={{ color: "#fff", fontWeight: "600", fontSize: 12 }}>
+                Set Up
               </Text>
             </Pressable>
           </View>

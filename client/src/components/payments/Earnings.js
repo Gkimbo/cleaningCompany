@@ -122,11 +122,11 @@ const Earnings = ({ state, dispatch }) => {
     return { text: "Pending Payment", color: "#FFC107" };
   };
 
-  // Calculate cleaner's 90% share for display
+  // Calculate cleaner's share for display
   const calculateCleanerShare = (price, numCleaners = 1) => {
     const gross = parseFloat(price) || 0;
     const perCleaner = gross / numCleaners;
-    const cleanerShare = perCleaner * 0.9; // 90%
+    const cleanerShare = perCleaner * 0.9;
     return cleanerShare.toFixed(2);
   };
 
@@ -213,7 +213,7 @@ const Earnings = ({ state, dispatch }) => {
             marginBottom: 5,
           }}
         >
-          Total Earnings (90%)
+          Total Earnings
         </Text>
         <Text style={{ color: "#fff", fontSize: 36, fontWeight: "700" }}>
           ${earnings.totalEarnings}
@@ -251,7 +251,7 @@ const Earnings = ({ state, dispatch }) => {
           ${earnings.pendingEarnings}
         </Text>
         <Text style={{ color: "rgba(255,255,255,0.8)", marginTop: 5 }}>
-          Jobs in progress (you'll receive 90%)
+          Jobs in progress
         </Text>
       </View>
 
@@ -265,9 +265,7 @@ const Earnings = ({ state, dispatch }) => {
         }}
       >
         <Text style={{ color: "#1565C0", fontSize: 13, lineHeight: 18 }}>
-          You receive 90% of each job. The 10% platform fee covers payment
-          processing and app maintenance. Payouts are automatic when you mark
-          jobs complete.
+          Payouts are automatic when you mark jobs complete.
         </Text>
       </View>
 
@@ -354,7 +352,7 @@ const Earnings = ({ state, dispatch }) => {
                       ${yourShare}
                     </Text>
                     <Text style={{ fontSize: 11, color: "#757575" }}>
-                      your 90%
+                      your earnings
                     </Text>
                   </View>
                 </View>

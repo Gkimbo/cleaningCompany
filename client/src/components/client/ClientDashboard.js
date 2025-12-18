@@ -30,6 +30,8 @@ const StatCard = ({
   subtitle,
   color = colors.primary[500],
   onPress,
+  showBadge = false,
+  badgeCount = 0,
 }) => (
   <Pressable
     onPress={onPress}
@@ -39,6 +41,13 @@ const StatCard = ({
       pressed && onPress && styles.statCardPressed,
     ]}
   >
+    {showBadge && badgeCount > 0 && (
+      <View style={styles.notificationBadge}>
+        <Text style={styles.notificationBadgeText}>
+          {badgeCount > 99 ? "99+" : badgeCount}
+        </Text>
+      </View>
+    )}
     <Text style={styles.statValue}>{value}</Text>
     <Text style={styles.statTitle}>{title}</Text>
     {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
@@ -155,6 +164,7 @@ const ClientDashboard = ({ state, dispatch }) => {
   const [bill, setBill] = useState(null);
   const [firstName, setFirstName] = useState("");
   const [error, setError] = useState(null);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -171,9 +181,11 @@ const ClientDashboard = ({ state, dispatch }) => {
     setError(null);
 
     try {
-      const dashboardData = await ClientDashboardService.getDashboardSummary(
-        state.currentUser.token
-      );
+      // Fetch dashboard data and pending requests in parallel
+      const [dashboardData, requestsData] = await Promise.all([
+        ClientDashboardService.getDashboardSummary(state.currentUser.token),
+        ClientDashboardService.getPendingRequestsForClient(state.currentUser.token),
+      ]);
 
       if (dashboardData.user) {
         setHomes(dashboardData.user.homes || []);
@@ -190,6 +202,9 @@ const ClientDashboard = ({ state, dispatch }) => {
           }
         }
       }
+
+      // Set pending requests count
+      setPendingRequestsCount(requestsData.totalCount || 0);
     } catch (err) {
       console.error("[ClientDashboard] Error fetching data:", err);
       setError("Failed to load dashboard data");
@@ -288,7 +303,7 @@ const ClientDashboard = ({ state, dispatch }) => {
         >
           <QuickActionButton
             title="Schedule Cleaning"
-            onPress={() => navigate("/new-job-choice")}
+            onPress={() => navigate("/schedule-cleaning")}
             color={colors.primary[600]}
           />
           <QuickActionButton
@@ -317,11 +332,13 @@ const ClientDashboard = ({ state, dispatch }) => {
           onPress={() => navigate("/appointments")}
         />
         <StatCard
-          title="My Homes"
-          value={homes.length}
-          subtitle="registered"
-          color={colors.secondary[500]}
-          onPress={() => navigate("/list-of-homes")}
+          title="Requests"
+          value={pendingRequestsCount}
+          subtitle={pendingRequestsCount === 1 ? "pending" : "pending"}
+          color={pendingRequestsCount > 0 ? colors.warning[500] : colors.neutral[400]}
+          onPress={() => navigate("/client-requests")}
+          showBadge={true}
+          badgeCount={pendingRequestsCount}
         />
         <StatCard
           title="Balance"
@@ -354,7 +371,7 @@ const ClientDashboard = ({ state, dispatch }) => {
             <Text style={styles.emptyText}>No upcoming appointments</Text>
             <Pressable
               style={styles.emptyAction}
-              onPress={() => navigate("/new-job-choice")}
+              onPress={() => navigate("/schedule-cleaning")}
             >
               <Text style={styles.emptyActionText}>Schedule a Cleaning</Text>
             </Pressable>
@@ -611,6 +628,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.md,
     borderLeftWidth: 4,
+    position: "relative",
     ...shadows.sm,
   },
   statCardPressed: {
@@ -629,6 +647,26 @@ const styles = StyleSheet.create({
   statSubtitle: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    backgroundColor: colors.error[500],
+    borderRadius: radius.full,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+    borderWidth: 2,
+    borderColor: colors.neutral[0],
+    zIndex: 1,
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
   },
 
   // Sections
