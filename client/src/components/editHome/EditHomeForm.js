@@ -185,7 +185,7 @@ const EditHomeForm = ({ state, dispatch }) => {
       };
 
       const response = await FetchData.editHomeInfo(submitData, user);
-      console.log(response);
+
       if (
         response === "Cannot find zipcode" ||
         response?.error === "Cannot find zipcode"
@@ -212,7 +212,10 @@ const EditHomeForm = ({ state, dispatch }) => {
         });
         // Check if the home is outside service area and show warning
         if (response.outsideServiceArea) {
-          setServiceAreaMessage(response.serviceAreaMessage || "This home is outside our current service area. It has been saved to your profile, but you won't be able to book appointments until we expand to this area.");
+          setServiceAreaMessage(
+            response.serviceAreaMessage ||
+              "This home is outside our current service area. It has been saved to your profile, but you won't be able to book appointments until we expand to this area."
+          );
           setShowServiceAreaWarning(true);
         } else {
           navigate("/list-of-homes");

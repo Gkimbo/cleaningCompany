@@ -16,7 +16,6 @@ class TaxService {
           },
         }
       );
-      console.log(response);
       if (!response.ok) {
         const errorData = await response.json();
         return { error: true, ...errorData };
@@ -106,7 +105,7 @@ class TaxService {
           },
         }
       );
-      console.log(response);
+
       if (!response.ok) {
         const errorData = await response.json();
         return { error: true, ...errorData };

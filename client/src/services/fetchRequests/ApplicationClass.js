@@ -44,7 +44,6 @@ class Application {
         throw new Error(`${response.status} (${response.statusText})`);
       }
       const responseData = await response.json();
-      console.log(responseData)
       return responseData;
     } catch (err) {
       console.log(err);
@@ -67,13 +66,16 @@ class Application {
 
   static async updateApplicationStatus(id, status) {
     try {
-      const response = await fetch(baseURL + `/api/v1/applications/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        baseURL + `/api/v1/applications/${id}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
       if (!response.ok) {
         throw new Error(`${response.status} (${response.statusText})`);
       }
@@ -87,13 +89,16 @@ class Application {
 
   static async updateApplicationNotes(id, adminNotes) {
     try {
-      const response = await fetch(baseURL + `/api/v1/applications/${id}/notes`, {
-        method: "PATCH",
-        body: JSON.stringify({ adminNotes }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        baseURL + `/api/v1/applications/${id}/notes`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ adminNotes }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
       if (!response.ok) {
         throw new Error(`${response.status} (${response.statusText})`);
       }
