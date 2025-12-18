@@ -32,6 +32,7 @@ jest.mock("../../serializers/userSerializer", () => ({
 }));
 
 jest.mock("../../middleware/authenticatedToken", () => {
+  const jsonwebtoken = require("jsonwebtoken");
   return (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -39,7 +40,7 @@ jest.mock("../../middleware/authenticatedToken", () => {
     }
     try {
       const token = authHeader.split(" ")[1];
-      const decoded = jwt.verify(token, process.env.SESSION_SECRET || "test_secret");
+      const decoded = jsonwebtoken.verify(token, process.env.SESSION_SECRET || "test_secret");
       req.userId = decoded.userId;
       next();
     } catch (error) {

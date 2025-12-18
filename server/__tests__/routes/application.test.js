@@ -324,6 +324,8 @@ describe("Application Router", () => {
     };
 
     beforeEach(() => {
+      mockApplication.update.mockReset();
+      mockApplication.update.mockResolvedValue(true);
       UserApplications.findByPk.mockResolvedValue(mockApplication);
     });
 

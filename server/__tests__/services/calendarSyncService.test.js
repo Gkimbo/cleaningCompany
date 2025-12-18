@@ -278,7 +278,12 @@ describe("Calendar Sync Service", () => {
       });
       getCheckoutDates.mockResolvedValue([]);
 
-      const result = await syncAllCalendars();
+      const resultPromise = syncAllCalendars();
+
+      // Advance timers to handle the delay between syncs
+      await jest.runAllTimersAsync();
+
+      const result = await resultPromise;
 
       expect(result.totalSyncs).toBe(2);
       expect(result.results).toHaveLength(2);
@@ -331,7 +336,12 @@ describe("Calendar Sync Service", () => {
       });
       getCheckoutDates.mockResolvedValue([]);
 
-      const result = await syncAllCalendars();
+      const resultPromise = syncAllCalendars();
+
+      // Advance timers to handle the delay between syncs
+      await jest.runAllTimersAsync();
+
+      const result = await resultPromise;
 
       expect(result.successful).toBe(1);
       expect(result.failed).toBe(1);
@@ -382,7 +392,12 @@ describe("Calendar Sync Service", () => {
         { checkoutDate: "2025-03-15", uid: "uid2", summary: "Reserved" },
       ]);
 
-      const result = await syncAllCalendars();
+      const resultPromise = syncAllCalendars();
+
+      // Advance timers to handle the delay between syncs
+      await jest.runAllTimersAsync();
+
+      const result = await resultPromise;
 
       expect(result.totalAppointmentsCreated).toBe(2);
     });
