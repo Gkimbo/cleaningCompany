@@ -14,6 +14,99 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 
+// Review Card component with multi-aspect support
+const ReviewCardWithAspects = ({ review, renderStars, formatDate }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  const rating = review.review || review.rating || 0;
+  const hasAspectRatings =
+    review.cleaningQuality ||
+    review.punctuality ||
+    review.professionalism ||
+    review.communication;
+
+  const renderAspectRow = (label, value) => {
+    if (value === null || value === undefined) return null;
+    return (
+      <View style={styles.aspectRow}>
+        <Text style={styles.aspectLabel}>{label}</Text>
+        <View style={styles.aspectStars}>{renderStars(value, 12)}</View>
+        <Text style={styles.aspectValue}>{value.toFixed(1)}</Text>
+      </View>
+    );
+  };
+
+  return (
+    <TouchableOpacity
+      style={styles.reviewCard}
+      onPress={() => hasAspectRatings && setExpanded(!expanded)}
+      activeOpacity={hasAspectRatings ? 0.7 : 1}
+    >
+      <View style={styles.reviewHeader}>
+        <View style={styles.reviewStars}>{renderStars(rating, 16)}</View>
+        <Text style={styles.reviewDate}>{formatDate(review.createdAt)}</Text>
+      </View>
+      <Text style={styles.reviewRating}>{rating.toFixed(1)} / 5.0</Text>
+      {(review.reviewComment || review.comment) && (
+        <Text style={styles.reviewComment}>
+          "{review.reviewComment || review.comment}"
+        </Text>
+      )}
+
+      {hasAspectRatings && (
+        <View style={styles.expandRow}>
+          <Text style={styles.expandText}>
+            {expanded ? "Hide Details" : "Show Rating Details"}
+          </Text>
+          <Icon
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={12}
+            color={colors.primary[600]}
+          />
+        </View>
+      )}
+
+      {expanded && hasAspectRatings && (
+        <View style={styles.aspectsContainer}>
+          {renderAspectRow("Cleaning Quality", review.cleaningQuality)}
+          {renderAspectRow("Punctuality", review.punctuality)}
+          {renderAspectRow("Professionalism", review.professionalism)}
+          {renderAspectRow("Communication", review.communication)}
+          {review.wouldRecommend !== null &&
+            review.wouldRecommend !== undefined && (
+              <View style={styles.recommendRow}>
+                <Text style={styles.aspectLabel}>Would Recommend</Text>
+                <View style={styles.recommendBadge}>
+                  <Icon
+                    name={review.wouldRecommend ? "thumbs-up" : "thumbs-down"}
+                    size={14}
+                    color={
+                      review.wouldRecommend
+                        ? colors.success[500]
+                        : colors.error[500]
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.recommendText,
+                      {
+                        color: review.wouldRecommend
+                          ? colors.success[600]
+                          : colors.error[600],
+                      },
+                    ]}
+                  >
+                    {review.wouldRecommend ? "Yes" : "No"}
+                  </Text>
+                </View>
+              </View>
+            )}
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
 const AllCleanerReviewsList = ({ state, dispatch }) => {
   const [cleaner, setCleaner] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -372,24 +465,12 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
           </View>
         ) : (
           sortedReviews.map((review, index) => (
-            <View key={review.id || index} style={styles.reviewCard}>
-              <View style={styles.reviewHeader}>
-                <View style={styles.reviewStars}>
-                  {renderStars(review.review || review.rating, 16)}
-                </View>
-                <Text style={styles.reviewDate}>
-                  {formatDate(review.createdAt)}
-                </Text>
-              </View>
-              <Text style={styles.reviewRating}>
-                {(review.review || review.rating || 0).toFixed(1)} / 5.0
-              </Text>
-              {(review.reviewComment || review.comment) && (
-                <Text style={styles.reviewComment}>
-                  "{review.reviewComment || review.comment}"
-                </Text>
-              )}
-            </View>
+            <ReviewCardWithAspects
+              key={review.id || index}
+              review={review}
+              renderStars={renderStars}
+              formatDate={formatDate}
+            />
           ))
         )}
       </View>
@@ -706,6 +787,66 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontStyle: "italic",
     lineHeight: 20,
+  },
+  expandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: spacing.md,
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+    gap: spacing.xs,
+  },
+  expandText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  aspectsContainer: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  aspectRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.xs,
+  },
+  aspectLabel: {
+    flex: 1,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  aspectStars: {
+    flexDirection: "row",
+    marginHorizontal: spacing.sm,
+    gap: 1,
+  },
+  aspectValue: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    minWidth: 24,
+    textAlign: "right",
+  },
+  recommendRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  recommendBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  recommendText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
   },
   bottomSpacer: {
     height: spacing["4xl"],

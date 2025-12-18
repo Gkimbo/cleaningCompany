@@ -41,6 +41,7 @@ import Earnings from "../src/components/payments/Earnings";
 import PaymentSetup from "../src/components/payments/PaymentSetup";
 import AllCleanerReviewsList from "../src/components/reviews/AllCleanerReviewsList";
 import AllReviewsList from "../src/components/reviews/AllReviewsList";
+import PendingReviewsList from "../src/components/reviews/PendingReviewsList";
 import SignIn from "../src/components/userAuthentication/SignIn";
 import SignUp from "../src/components/userAuthentication/SignUp";
 import ForgotCredentials from "../src/components/userAuthentication/ForgotCredentials";
@@ -215,6 +216,12 @@ export default function App() {
                 path="/all-cleaner-reviews/:id"
                 element={
                   <AllCleanerReviewsList state={state} dispatch={dispatch} />
+                }
+              />
+              <Route
+                path="/pending-reviews"
+                element={
+                  <PendingReviewsList state={state} dispatch={dispatch} />
                 }
               />
               <Route
