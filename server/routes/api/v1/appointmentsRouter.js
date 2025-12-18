@@ -311,6 +311,37 @@ appointmentRouter.post("/", async (req, res) => {
   let appointmentTotal = 0;
   const home = await UserHomes.findOne({ where: { id: homeId } });
 
+  // Check if home exists
+  if (!home) {
+    return res.status(404).json({ error: "Home not found" });
+  }
+
+  // Check if home is outside service area
+  if (home.dataValues.outsideServiceArea) {
+    return res.status(403).json({
+      error: "Booking is not available for homes outside our service area"
+    });
+  }
+
+  // Verify user has a payment method set up
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.hasPaymentMethod) {
+      return res.status(403).json({
+        error: "Payment method required. Please add a payment method before booking appointments."
+      });
+    }
+  } catch (tokenError) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+
   dateArray.forEach((date) => {
     const price = calculatePrice(
       date.bringSheets,

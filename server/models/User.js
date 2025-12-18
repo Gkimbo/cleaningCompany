@@ -37,8 +37,17 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 		},
 		notifications: {
-			type:  DataTypes.ARRAY(DataTypes.STRING),
+			type:  DataTypes.ARRAY(DataTypes.TEXT),
 			allowNull: true,
+		},
+		stripeCustomerId: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		hasPaymentMethod: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
 		},
 	});
 

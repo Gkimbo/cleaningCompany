@@ -1,52 +1,54 @@
-import { StripeProvider } from "@stripe/stripe-react-native";
+import { StripeProvider } from "../src/services/stripe";
 import React, { useEffect, useReducer, useState } from "react";
 import { ActivityIndicator, SafeAreaView, Text, View } from "react-native";
 import { NativeRouter, Route, Routes } from "react-router-native";
-import { AuthProvider } from "./services/AuthContext";
-import { SocketProvider } from "./services/SocketContext";
-import { UserContext } from "./context/UserContext";
-import getCurrentUser from "./services/fetchRequests/getCurrentUser";
-import reducer from "./services/reducerFunction";
+import { AuthProvider } from "../src/services/AuthContext";
+import { SocketProvider } from "../src/services/SocketContext";
+import { UserContext } from "../src/context/UserContext";
+import getCurrentUser from "../src/services/fetchRequests/getCurrentUser";
+import reducer from "../src/services/reducerFunction";
+import { API_BASE } from "../src/services/config";
 
 // Import components
-import AddHomeForm from "./components/addUserInformation/AddHomeForm";
-import AddEmployee from "./components/admin/AddEmployee";
-import AllAppointments from "./components/admin/AllAppointments";
-import AppointmentDetailsPage from "./components/admin/AssignAppointments/AppointmentDetailsPage";
-import CleanerApplicationForm from "./components/admin/CleanerApplications/ApplicationForm";
-import ListOfApplications from "./components/admin/CleanerApplications/ListOfApplications";
-import NewCleanerInformationPage from "./components/admin/CleanerApplications/NewCleanerInformationPage";
-import EditEmployeeForm from "./components/admin/forms/EditEmployeeForm";
-import EmployeeShiftForm from "./components/admin/forms/employee/EmployeeShiftForm";
-import UnassignedAppointments from "./components/admin/UnassignedAppointments";
-import AllRequestsCalendar from "./components/appointments/AllRequestsCalendar";
-import AppointmentList from "./components/appointments/AppointmentList";
-import CleaningRequestList from "./components/appointments/CleaningRequestList";
-import DetailsComponent from "./components/appointments/DetailsComponent";
-import HomeList from "./components/appointments/HomeList";
-import EditHomeForm from "./components/editHome/EditHomeForm";
-import EditHomeList from "./components/editHome/EditHomeList";
-import AppointmentCalendar from "./components/employeeAssignments/lists/AppointmentCalendar";
-import EmployeeAssignmentsList from "./components/employeeAssignments/lists/EmployeeAssignmentsList";
-import MyAppointmentsCalendar from "./components/employeeAssignments/lists/MyAppointmentsCalendar";
-import MyRequests from "./components/employeeAssignments/lists/MyRequests";
-import MyRequestsCalendar from "./components/employeeAssignments/lists/MyRequestsCalendar";
-import SelectNewJobList from "./components/employeeAssignments/lists/SelectNewJobList";
-import HomePage from "./components/HomePage";
-import TopBar from "./components/navBar/TopBar";
-import Bill from "./components/payments/Bill";
-import Earnings from "./components/payments/Earnings";
-import AllCleanerReviewsList from "./components/reviews/AllCleanerReviewsList";
-import AllReviewsList from "./components/reviews/AllReviewsList";
-import SignIn from "./components/userAuthentication/SignIn";
-import SignUp from "./components/userAuthentication/SignUp";
-import ForgotCredentials from "./components/userAuthentication/ForgotCredentials";
-import appStyles from "./services/styles/AppStyle";
+import AddHomeForm from "../src/components/addUserInformation/AddHomeForm";
+import AddEmployee from "../src/components/admin/AddEmployee";
+import AllAppointments from "../src/components/admin/AllAppointments";
+import AppointmentDetailsPage from "../src/components/admin/AssignAppointments/AppointmentDetailsPage";
+import CleanerApplicationForm from "../src/components/admin/CleanerApplications/ApplicationForm";
+import ListOfApplications from "../src/components/admin/CleanerApplications/ListOfApplications";
+import NewCleanerInformationPage from "../src/components/admin/CleanerApplications/NewCleanerInformationPage";
+import EditEmployeeForm from "../src/components/admin/forms/EditEmployeeForm";
+import EmployeeShiftForm from "../src/components/admin/forms/employee/EmployeeShiftForm";
+import UnassignedAppointments from "../src/components/admin/UnassignedAppointments";
+import AllRequestsCalendar from "../src/components/appointments/AllRequestsCalendar";
+import AppointmentList from "../src/components/appointments/AppointmentList";
+import CleaningRequestList from "../src/components/appointments/CleaningRequestList";
+import DetailsComponent from "../src/components/appointments/DetailsComponent";
+import HomeList from "../src/components/appointments/HomeList";
+import EditHomeForm from "../src/components/editHome/EditHomeForm";
+import EditHomeList from "../src/components/editHome/EditHomeList";
+import AppointmentCalendar from "../src/components/employeeAssignments/lists/AppointmentCalendar";
+import EmployeeAssignmentsList from "../src/components/employeeAssignments/lists/EmployeeAssignmentsList";
+import MyAppointmentsCalendar from "../src/components/employeeAssignments/lists/MyAppointmentsCalendar";
+import MyRequests from "../src/components/employeeAssignments/lists/MyRequests";
+import MyRequestsCalendar from "../src/components/employeeAssignments/lists/MyRequestsCalendar";
+import SelectNewJobList from "../src/components/employeeAssignments/lists/SelectNewJobList";
+import HomePage from "../src/components/HomePage";
+import TopBar from "../src/components/navBar/TopBar";
+import Bill from "../src/components/payments/Bill";
+import Earnings from "../src/components/payments/Earnings";
+import PaymentSetup from "../src/components/payments/PaymentSetup";
+import AllCleanerReviewsList from "../src/components/reviews/AllCleanerReviewsList";
+import AllReviewsList from "../src/components/reviews/AllReviewsList";
+import SignIn from "../src/components/userAuthentication/SignIn";
+import SignUp from "../src/components/userAuthentication/SignUp";
+import ForgotCredentials from "../src/components/userAuthentication/ForgotCredentials";
+import appStyles from "../src/services/styles/AppStyle";
 
 // Messaging components
-import ConversationList from "./components/messaging/ConversationList";
-import ChatScreen from "./components/messaging/ChatScreen";
-import BroadcastForm from "./components/messaging/BroadcastForm";
+import ConversationList from "../src/components/messaging/ConversationList";
+import ChatScreen from "../src/components/messaging/ChatScreen";
+import BroadcastForm from "../src/components/messaging/BroadcastForm";
 
 // Onboarding components
 import {
@@ -54,15 +56,13 @@ import {
   SignUpWizard,
   HomeSetupWizard,
   QuickBookFlow,
-} from "./components/onboarding";
+} from "../src/components/onboarding";
 
 // Calendar Sync
-import { CalendarSyncManager } from "./components/calendarSync";
+import { CalendarSyncManager } from "../src/components/calendarSync";
 
 // Account Settings
-import AccountSettings from "./components/account/AccountSettings";
-
-const API_BASE = "http://localhost:3000/api/v1";
+import AccountSettings from "../src/components/account/AccountSettings";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -149,11 +149,7 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <StripeProvider
-        publishableKey={stripePublishableKey}
-        merchantIdentifier="merchant.com.kleanr.app"
-        urlScheme="kleanr"
-      >
+      <StripeProvider publishableKey={stripePublishableKey}>
         <SocketProvider token={state.currentUser.token}>
           <UserContext.Provider value={{ currentUser: state.currentUser }}>
           <NativeRouter>
@@ -295,6 +291,10 @@ export default function App() {
               <Route
                 path="/bill"
                 element={<Bill state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/payment-setup"
+                element={<PaymentSetup state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/earnings"

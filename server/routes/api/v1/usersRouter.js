@@ -20,6 +20,12 @@ const usersRouter = express.Router();
 usersRouter.post("/", async (req, res) => {
   try {
     const { firstName, lastName, username, password, email } = req.body;
+
+    // Validate username doesn't contain "manager"
+    if (username && username.toLowerCase().includes("manager")) {
+      return res.status(400).json("Username cannot contain the word 'manager'");
+    }
+
     let existingUser = null;
     existingUser = await User.findOne({ where: { email } });
     if (!existingUser) {
@@ -294,6 +300,11 @@ usersRouter.patch("/update-username", async (req, res) => {
 
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       return res.status(400).json({ error: "Username can only contain letters, numbers, and underscores" });
+    }
+
+    // Check if username contains "manager" (restricted word)
+    if (username.toLowerCase().includes("manager")) {
+      return res.status(400).json({ error: "Username cannot contain the word 'manager'" });
     }
 
     // Check if username is already taken
