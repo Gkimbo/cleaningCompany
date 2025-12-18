@@ -81,10 +81,12 @@ const QuickActionButton = ({ title, onPress, color = colors.primary[600] }) => (
 );
 
 // Appointment Card Component
-const AppointmentCard = ({ appointment, onPress }) => {
+const AppointmentCard = ({ homes, appointment, onPress }) => {
   const appointmentDate = new Date(appointment.date);
   const today = new Date();
   const isToday = appointmentDate.toDateString() === today.toDateString();
+
+  const home = homes.find((h) => Number(h.id) === Number(appointment.homeId));
 
   const formatDate = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
@@ -116,12 +118,19 @@ const AppointmentCard = ({ appointment, onPress }) => {
       </View>
       <View style={styles.appointmentDetails}>
         <Text style={styles.appointmentHome} numberOfLines={1}>
-          {appointment.home?.nickName || appointment.nickName || "Home"}
+          {appointment.home?.nickName ||
+            appointment.nickName ||
+            home.nickName ||
+            ""}
         </Text>
         {appointment.time && (
-          <Text style={styles.appointmentTime}>{formatTime(appointment.time)}</Text>
+          <Text style={styles.appointmentTime}>
+            {formatTime(appointment.time)}
+          </Text>
         )}
-        <Text style={styles.appointmentPrice}>${Number(appointment.price).toFixed(2)}</Text>
+        <Text style={styles.appointmentPrice}>
+          ${Number(appointment.price).toFixed(2)}
+        </Text>
       </View>
     </Pressable>
   );
@@ -131,10 +140,7 @@ const AppointmentCard = ({ appointment, onPress }) => {
 const HomeCard = ({ home, onPress }) => (
   <Pressable
     onPress={onPress}
-    style={({ pressed }) => [
-      styles.homeCard,
-      pressed && styles.cardPressed,
-    ]}
+    style={({ pressed }) => [styles.homeCard, pressed && styles.cardPressed]}
   >
     <Text style={styles.homeNickname} numberOfLines={1}>
       {home.nickName || "My Home"}
@@ -184,7 +190,9 @@ const ClientDashboard = ({ state, dispatch }) => {
       // Fetch dashboard data and pending requests in parallel
       const [dashboardData, requestsData] = await Promise.all([
         ClientDashboardService.getDashboardSummary(state.currentUser.token),
-        ClientDashboardService.getPendingRequestsForClient(state.currentUser.token),
+        ClientDashboardService.getPendingRequestsForClient(
+          state.currentUser.token
+        ),
       ]);
 
       if (dashboardData.user) {
@@ -195,8 +203,14 @@ const ClientDashboard = ({ state, dispatch }) => {
 
         // Update global state
         if (dispatch) {
-          dispatch({ type: "USER_HOME", payload: dashboardData.user.homes || [] });
-          dispatch({ type: "USER_APPOINTMENTS", payload: dashboardData.user.appointments || [] });
+          dispatch({
+            type: "USER_HOME",
+            payload: dashboardData.user.homes || [],
+          });
+          dispatch({
+            type: "USER_APPOINTMENTS",
+            payload: dashboardData.user.appointments || [],
+          });
           if (dashboardData.user.bill) {
             dispatch({ type: "DB_BILL", payload: dashboardData.user.bill });
           }
@@ -268,7 +282,10 @@ const ClientDashboard = ({ state, dispatch }) => {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
-        <Pressable style={styles.retryButton} onPress={() => fetchDashboardData()}>
+        <Pressable
+          style={styles.retryButton}
+          onPress={() => fetchDashboardData()}
+        >
           <Text style={styles.retryButtonText}>Try Again</Text>
         </Pressable>
       </View>
@@ -335,7 +352,9 @@ const ClientDashboard = ({ state, dispatch }) => {
           title="Requests"
           value={pendingRequestsCount}
           subtitle={pendingRequestsCount === 1 ? "pending" : "pending"}
-          color={pendingRequestsCount > 0 ? colors.warning[500] : colors.neutral[400]}
+          color={
+            pendingRequestsCount > 0 ? colors.warning[500] : colors.neutral[400]
+          }
           onPress={() => navigate("/client-requests")}
           showBadge={true}
           badgeCount={pendingRequestsCount}
@@ -361,6 +380,7 @@ const ClientDashboard = ({ state, dispatch }) => {
             {upcomingAppointments.map((apt, index) => (
               <AppointmentCard
                 key={apt.id || index}
+                homes={homes}
                 appointment={apt}
                 onPress={() => navigate("/appointments")}
               />
@@ -380,7 +400,7 @@ const ClientDashboard = ({ state, dispatch }) => {
       </View>
 
       {/* Request a Cleaning Section */}
-      {homes.filter(h => !h.outsideServiceArea).length > 0 && (
+      {homes.filter((h) => !h.outsideServiceArea).length > 0 && (
         <View style={styles.section}>
           <SectionHeader title="Request a Cleaning" />
           <View style={styles.requestCleaningCard}>
@@ -388,36 +408,40 @@ const ClientDashboard = ({ state, dispatch }) => {
               Schedule a cleaning for one of your homes
             </Text>
             <View style={styles.quickBookList}>
-              {homes.filter(h => !h.outsideServiceArea).slice(0, 3).map((home, index) => (
-                <Pressable
-                  key={home.id || index}
-                  style={({ pressed }) => [
-                    styles.quickBookItem,
-                    pressed && styles.cardPressed,
-                  ]}
-                  onPress={() => navigate(`/quick-book/${home.id}`)}
-                >
-                  <View style={styles.quickBookInfo}>
-                    <Text style={styles.quickBookName} numberOfLines={1}>
-                      {home.nickName || "My Home"}
-                    </Text>
-                    <Text style={styles.quickBookAddress} numberOfLines={1}>
-                      {home.city}, {home.state}
-                    </Text>
-                  </View>
-                  <View style={styles.quickBookButton}>
-                    <Text style={styles.quickBookButtonText}>Book</Text>
-                  </View>
-                </Pressable>
-              ))}
+              {homes
+                .filter((h) => !h.outsideServiceArea)
+                .slice(0, 3)
+                .map((home, index) => (
+                  <Pressable
+                    key={home.id || index}
+                    style={({ pressed }) => [
+                      styles.quickBookItem,
+                      pressed && styles.cardPressed,
+                    ]}
+                    onPress={() => navigate(`/quick-book/${home.id}`)}
+                  >
+                    <View style={styles.quickBookInfo}>
+                      <Text style={styles.quickBookName} numberOfLines={1}>
+                        {home.nickName || "My Home"}
+                      </Text>
+                      <Text style={styles.quickBookAddress} numberOfLines={1}>
+                        {home.city}, {home.state}
+                      </Text>
+                    </View>
+                    <View style={styles.quickBookButton}>
+                      <Text style={styles.quickBookButtonText}>Book</Text>
+                    </View>
+                  </Pressable>
+                ))}
             </View>
-            {homes.filter(h => !h.outsideServiceArea).length > 3 && (
+            {homes.filter((h) => !h.outsideServiceArea).length > 3 && (
               <Pressable
                 style={styles.viewAllHomesButton}
                 onPress={() => navigate("/list-of-homes")}
               >
                 <Text style={styles.viewAllHomesText}>
-                  View all {homes.filter(h => !h.outsideServiceArea).length} homes
+                  View all {homes.filter((h) => !h.outsideServiceArea).length}{" "}
+                  homes
                 </Text>
               </Pressable>
             )}
@@ -479,7 +503,9 @@ const ClientDashboard = ({ state, dispatch }) => {
           )}
           <View style={[styles.billingRow, styles.billingTotal]}>
             <Text style={styles.billingTotalLabel}>Total Due</Text>
-            <Text style={styles.billingTotalValue}>{formatCurrency(totalDue)}</Text>
+            <Text style={styles.billingTotalValue}>
+              {formatCurrency(totalDue)}
+            </Text>
           </View>
           {bill?.totalPaid > 0 && (
             <View style={styles.billingPaid}>

@@ -16,7 +16,7 @@ class TaxService {
           },
         }
       );
-      console.log(response)
+      console.log(response);
       if (!response.ok) {
         const errorData = await response.json();
         return { error: true, ...errorData };
@@ -97,7 +97,6 @@ class TaxService {
    * Get payment history for a user (homeowner)
    */
   static async getPaymentHistory(token, taxYear) {
-    console.log(token, taxYear)
     try {
       const response = await fetch(
         `${baseURL}/api/v1/tax/payment-history/${taxYear}`,
@@ -107,7 +106,7 @@ class TaxService {
           },
         }
       );
-      console.log(response)
+      console.log(response);
       if (!response.ok) {
         const errorData = await response.json();
         return { error: true, ...errorData };
