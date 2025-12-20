@@ -49,6 +49,19 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		accountFrozen: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		accountFrozenAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+		},
+		accountFrozenReason: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
 	});
 
 	// Hash the password before saving the user

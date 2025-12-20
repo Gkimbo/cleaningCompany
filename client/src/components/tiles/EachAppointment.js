@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, Text, View, StyleSheet } from "react-native";
+import { Pressable, Text, View, StyleSheet, ActivityIndicator } from "react-native";
 import { SegmentedButtons, TextInput } from "react-native-paper";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
+import FetchData from "../../services/fetchRequests/fetchData";
+import CancellationWarningModal from "../modals/CancellationWarningModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const EachAppointment = ({
@@ -27,6 +29,8 @@ const EachAppointment = ({
   completed,
   timeToBeCompleted,
   cleanerName,
+  token,
+  onCancel,
 }) => {
   const [code, setCode] = useState("");
   const [key, setKeyLocation] = useState("");
@@ -35,6 +39,10 @@ const EachAppointment = ({
   const [redirect, setRedirect] = useState(false);
   const [showAccessDetails, setShowAccessDetails] = useState(false);
   const [showAddons, setShowAddons] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellationInfo, setCancellationInfo] = useState(null);
+  const [loadingCancellation, setLoadingCancellation] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
   const navigate = useNavigate();
 
   // Handle code and key inputs
@@ -147,6 +155,49 @@ const EachAppointment = ({
   };
 
   const daysUntil = getDaysUntil();
+
+  // Handle opening cancellation modal
+  const handleCancelPress = async () => {
+    if (!token) {
+      setError("Authentication required to cancel");
+      return;
+    }
+    setLoadingCancellation(true);
+    try {
+      const info = await FetchData.getCancellationInfo(id, token);
+      if (info.error) {
+        setError(info.error);
+        return;
+      }
+      setCancellationInfo(info);
+      setShowCancelModal(true);
+    } catch (err) {
+      setError("Failed to load cancellation info");
+    } finally {
+      setLoadingCancellation(false);
+    }
+  };
+
+  // Handle confirming cancellation
+  const handleConfirmCancel = async () => {
+    setCancelLoading(true);
+    try {
+      const result = await FetchData.cancelAsHomeowner(id, token);
+      if (result.error) {
+        setError(result.error);
+        setCancelLoading(false);
+        return;
+      }
+      setShowCancelModal(false);
+      if (onCancel) {
+        onCancel(id, result);
+      }
+    } catch (err) {
+      setError("Failed to cancel appointment");
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   // --- Render Completed States ---
   if (completed && !paid) {
@@ -442,6 +493,39 @@ const EachAppointment = ({
           )}
         </View>
       )}
+
+      {/* Cancel Appointment Section */}
+      {!completed && (
+        <View style={styles.cancelSection}>
+          <Pressable
+            onPress={handleCancelPress}
+            disabled={loadingCancellation}
+            style={({ pressed }) => [
+              styles.cancelButton,
+              pressed && styles.cancelButtonPressed,
+              loadingCancellation && styles.cancelButtonDisabled,
+            ]}
+          >
+            {loadingCancellation ? (
+              <ActivityIndicator size="small" color={colors.error[600]} />
+            ) : (
+              <>
+                <Icon name="times-circle" size={14} color={colors.error[600]} />
+                <Text style={styles.cancelButtonText}>Cancel Appointment</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      )}
+
+      {/* Cancellation Warning Modal */}
+      <CancellationWarningModal
+        visible={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={handleConfirmCancel}
+        cancellationInfo={cancellationInfo}
+        loading={cancelLoading}
+      />
     </View>
   );
 };
@@ -830,6 +914,36 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Cancel Section
+  cancelSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  cancelButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.error[50],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  cancelButtonPressed: {
+    backgroundColor: colors.error[100],
+  },
+  cancelButtonDisabled: {
+    opacity: 0.6,
+  },
+  cancelButtonText: {
+    color: colors.error[600],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
   },

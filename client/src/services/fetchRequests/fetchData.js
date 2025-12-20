@@ -675,6 +675,83 @@ class FetchData {
       return { cleaner: null };
     }
   }
+
+  // Cancellation API methods
+  static async getCancellationInfo(appointmentId, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/appointments/cancellation-info/${appointmentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { error: errorData.error || "Failed to get cancellation info" };
+      }
+
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      console.error("Error getting cancellation info:", error);
+      return { error: "Failed to get cancellation info" };
+    }
+  }
+
+  static async cancelAsHomeowner(appointmentId, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/appointments/${appointmentId}/cancel-homeowner`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to cancel appointment" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error cancelling appointment as homeowner:", error);
+      return { error: "Failed to cancel appointment" };
+    }
+  }
+
+  static async cancelAsCleaner(appointmentId, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/appointments/${appointmentId}/cancel-cleaner`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to cancel job" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error cancelling job as cleaner:", error);
+      return { error: "Failed to cancel job" };
+    }
+  }
 }
 
 export default FetchData;
