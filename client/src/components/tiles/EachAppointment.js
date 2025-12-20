@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, Text, View, StyleSheet } from "react-native";
 import { SegmentedButtons, TextInput } from "react-native-paper";
+import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
@@ -25,6 +26,7 @@ const EachAppointment = ({
   paid,
   completed,
   timeToBeCompleted,
+  cleanerName,
 }) => {
   const [code, setCode] = useState("");
   const [key, setKeyLocation] = useState("");
@@ -32,6 +34,7 @@ const EachAppointment = ({
   const [error, setError] = useState(null);
   const [redirect, setRedirect] = useState(false);
   const [showAccessDetails, setShowAccessDetails] = useState(false);
+  const [showAddons, setShowAddons] = useState(false);
   const navigate = useNavigate();
 
   // Handle code and key inputs
@@ -132,29 +135,42 @@ const EachAppointment = ({
     }
   };
 
-  // Get card status style
-  const getCardStatusStyle = () => {
-    if (completed && paid) return styles.cardComplete;
-    if (completed && !paid) return styles.cardNeedsPay;
-    if (isDisabled) return styles.cardUpcoming;
-    return styles.cardScheduled;
+  // Get days until appointment
+  const getDaysUntil = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(date);
+    appointmentDate.setHours(0, 0, 0, 0);
+    const diffTime = appointmentDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
   };
+
+  const daysUntil = getDaysUntil();
 
   // --- Render Completed States ---
   if (completed && !paid) {
     return (
       <Pressable onPress={handleRedirectToBill} style={({ pressed }) => [styles.card, styles.cardNeedsPay, pressed && styles.cardPressed]}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.dateText}>{formatDate(date)}</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.dateRow}>
+              <Icon name="calendar" size={14} color={colors.warning[600]} />
+              <Text style={styles.dateText}>{formatDate(date)}</Text>
+            </View>
             <View style={[styles.badge, styles.badgeWarning]}>
+              <Icon name="credit-card" size={10} color={colors.warning[700]} />
               <Text style={[styles.badgeText, styles.badgeTextWarning]}>Payment Due</Text>
             </View>
           </View>
-          <Text style={styles.priceText}>${price}</Text>
+          <View style={styles.priceContainer}>
+            <Text style={[styles.priceText, styles.priceWarning]}>${price}</Text>
+          </View>
         </View>
         <View style={styles.paymentPrompt}>
+          <Icon name="hand-pointer-o" size={14} color={colors.warning[700]} />
           <Text style={styles.paymentPromptText}>Cleaning complete - Tap to pay</Text>
+          <Icon name="chevron-right" size={12} color={colors.warning[600]} />
         </View>
       </Pressable>
     );
@@ -164,28 +180,47 @@ const EachAppointment = ({
     return (
       <View style={[styles.card, styles.cardComplete]}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.dateText}>{formatDate(date)}</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.dateRow}>
+              <Icon name="calendar-check-o" size={14} color={colors.success[600]} />
+              <Text style={[styles.dateText, styles.dateTextComplete]}>{formatDate(date)}</Text>
+            </View>
             <View style={[styles.badge, styles.badgeSuccess]}>
-              <Text style={[styles.badgeText, styles.badgeTextSuccess]}>Completed</Text>
+              <Icon name="check" size={10} color={colors.success[700]} />
+              <Text style={[styles.badgeText, styles.badgeTextSuccess]}>Completed & Paid</Text>
             </View>
           </View>
-          <Text style={[styles.priceText, styles.priceComplete]}>${price}</Text>
+          <View style={styles.priceContainer}>
+            <Text style={[styles.priceText, styles.priceComplete]}>${price}</Text>
+            <Icon name="check-circle" size={16} color={colors.success[500]} />
+          </View>
         </View>
+        {cleanerName && (
+          <View style={styles.cleanerInfo}>
+            <Icon name="user" size={12} color={colors.text.tertiary} />
+            <Text style={styles.cleanerName}>Cleaned by {cleanerName}</Text>
+          </View>
+        )}
       </View>
     );
   }
 
   // --- Render Active Appointment ---
   return (
-    <View style={[styles.card, getCardStatusStyle()]}>
+    <View style={[styles.card, isDisabled ? styles.cardUpcoming : styles.cardScheduled]}>
       {/* Header with Date & Price */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.dateText}>{formatDate(date)}</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.dateRow}>
+            <Icon name="calendar" size={14} color={colors.primary[500]} />
+            <Text style={styles.dateText}>{formatDate(date)}</Text>
+          </View>
           {isDisabled ? (
             <View style={[styles.badge, styles.badgePrimary]}>
-              <Text style={[styles.badgeText, styles.badgeTextPrimary]}>Coming Soon</Text>
+              <Icon name="clock-o" size={10} color={colors.primary[700]} />
+              <Text style={[styles.badgeText, styles.badgeTextPrimary]}>
+                {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `In ${daysUntil} days`}
+              </Text>
             </View>
           ) : (
             <View style={[styles.badge, styles.badgeDefault]}>
@@ -193,94 +228,133 @@ const EachAppointment = ({
             </View>
           )}
         </View>
-        <Text style={styles.priceText}>${price}</Text>
-      </View>
-
-      {/* Quick Info Row */}
-      <View style={styles.infoRow}>
-        <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>Time</Text>
-          <Text style={styles.infoValue}>{getTimeDisplay()}</Text>
-        </View>
-        <View style={styles.infoItem}>
-          <Text style={styles.infoLabel}>Contact</Text>
-          <Text style={styles.infoValue}>{contact}</Text>
+        <View style={styles.priceContainer}>
+          <Text style={styles.priceLabel}>Total</Text>
+          <Text style={styles.priceText}>${price}</Text>
         </View>
       </View>
 
-      <View style={styles.divider} />
-
-      {/* Services Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Add-on Services</Text>
-
-        {/* Sheets Toggle */}
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleLabelContainer}>
-            <Text style={styles.toggleLabel}>Bring Sheets</Text>
-            <Text style={styles.togglePrice}>+$25</Text>
+      {/* Quick Info Cards */}
+      <View style={styles.infoCards}>
+        <View style={styles.infoCard}>
+          <Icon name="clock-o" size={14} color={colors.primary[500]} />
+          <View>
+            <Text style={styles.infoCardLabel}>Time Window</Text>
+            <Text style={styles.infoCardValue}>{getTimeDisplay()}</Text>
           </View>
-          {isDisabled ? (
-            <View style={[styles.lockedValue, bringSheets === "yes" && styles.lockedValueActive]}>
-              <Text style={[styles.lockedValueText, bringSheets === "yes" && styles.lockedValueTextActive]}>
-                {bringSheets === "yes" ? "Yes" : "No"}
+        </View>
+        <View style={styles.infoCard}>
+          <Icon name="phone" size={14} color={colors.primary[500]} />
+          <View>
+            <Text style={styles.infoCardLabel}>Contact</Text>
+            <Text style={styles.infoCardValue}>{contact}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Add-ons Section - Collapsible */}
+      <Pressable onPress={() => setShowAddons(!showAddons)} style={styles.collapsibleHeader}>
+        <View style={styles.collapsibleTitleRow}>
+          <Icon name="plus-circle" size={14} color={colors.secondary[500]} />
+          <Text style={styles.collapsibleTitle}>Add-on Services</Text>
+          {(bringSheets === "yes" || bringTowels === "yes") && (
+            <View style={styles.addonIndicator}>
+              <Text style={styles.addonIndicatorText}>
+                {[bringSheets === "yes" && "Sheets", bringTowels === "yes" && "Towels"].filter(Boolean).join(", ")}
               </Text>
             </View>
-          ) : (
-            <SegmentedButtons
-              value={bringSheets}
-              onValueChange={(value) => handleSheetsToggle(value, id)}
-              buttons={[
-                { value: "no", label: "No" },
-                { value: "yes", label: "Yes" },
-              ]}
-              style={styles.segmentedButton}
-              density="small"
-            />
           )}
         </View>
+        <Icon name={showAddons ? "chevron-up" : "chevron-down"} size={12} color={colors.text.tertiary} />
+      </Pressable>
 
-        {/* Towels Toggle */}
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleLabelContainer}>
-            <Text style={styles.toggleLabel}>Bring Towels</Text>
-            <Text style={styles.togglePrice}>+$25</Text>
+      {showAddons && (
+        <View style={styles.addonsSection}>
+          {/* Sheets Toggle */}
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleInfo}>
+              <View style={styles.toggleIconContainer}>
+                <Icon name="bed" size={14} color={colors.secondary[500]} />
+              </View>
+              <View>
+                <Text style={styles.toggleLabel}>Fresh Sheets</Text>
+                <Text style={styles.togglePrice}>+$50</Text>
+              </View>
+            </View>
+            {isDisabled ? (
+              <View style={[styles.lockedValue, bringSheets === "yes" && styles.lockedValueActive]}>
+                <Text style={[styles.lockedValueText, bringSheets === "yes" && styles.lockedValueTextActive]}>
+                  {bringSheets === "yes" ? "Included" : "Not included"}
+                </Text>
+              </View>
+            ) : (
+              <SegmentedButtons
+                value={bringSheets}
+                onValueChange={(value) => handleSheetsToggle(value, id)}
+                buttons={[
+                  { value: "no", label: "No" },
+                  { value: "yes", label: "Yes" },
+                ]}
+                style={styles.segmentedButton}
+                density="small"
+              />
+            )}
           </View>
-          {isDisabled ? (
-            <View style={[styles.lockedValue, bringTowels === "yes" && styles.lockedValueActive]}>
-              <Text style={[styles.lockedValueText, bringTowels === "yes" && styles.lockedValueTextActive]}>
-                {bringTowels === "yes" ? "Yes" : "No"}
+
+          {/* Towels Toggle */}
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleInfo}>
+              <View style={styles.toggleIconContainer}>
+                <Icon name="bath" size={14} color={colors.secondary[500]} />
+              </View>
+              <View>
+                <Text style={styles.toggleLabel}>Fresh Towels</Text>
+                <Text style={styles.togglePrice}>+$50</Text>
+              </View>
+            </View>
+            {isDisabled ? (
+              <View style={[styles.lockedValue, bringTowels === "yes" && styles.lockedValueActive]}>
+                <Text style={[styles.lockedValueText, bringTowels === "yes" && styles.lockedValueTextActive]}>
+                  {bringTowels === "yes" ? "Included" : "Not included"}
+                </Text>
+              </View>
+            ) : (
+              <SegmentedButtons
+                value={bringTowels}
+                onValueChange={(value) => handleTowelToggle(value, id)}
+                buttons={[
+                  { value: "no", label: "No" },
+                  { value: "yes", label: "Yes" },
+                ]}
+                style={styles.segmentedButton}
+                density="small"
+              />
+            )}
+          </View>
+
+          {isDisabled && (
+            <View style={styles.lockedNotice}>
+              <Icon name="lock" size={12} color={colors.text.tertiary} />
+              <Text style={styles.lockedNoticeText}>
+                Changes locked within 1 week of appointment
               </Text>
             </View>
-          ) : (
-            <SegmentedButtons
-              value={bringTowels}
-              onValueChange={(value) => handleTowelToggle(value, id)}
-              buttons={[
-                { value: "no", label: "No" },
-                { value: "yes", label: "Yes" },
-              ]}
-              style={styles.segmentedButton}
-              density="small"
-            />
           )}
         </View>
-
-        {isDisabled && (
-          <View style={styles.lockedNotice}>
-            <Text style={styles.lockedNoticeText}>
-              Changes locked within 1 week of appointment. Contact us for modifications.
-            </Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.divider} />
+      )}
 
       {/* Access Details Section - Collapsible */}
       <Pressable onPress={() => setShowAccessDetails(!showAccessDetails)} style={styles.collapsibleHeader}>
-        <Text style={styles.sectionTitle}>Access Instructions</Text>
-        <Text style={styles.chevron}>{showAccessDetails ? "−" : "+"}</Text>
+        <View style={styles.collapsibleTitleRow}>
+          <Icon name="key" size={14} color={colors.primary[500]} />
+          <Text style={styles.collapsibleTitle}>Access Instructions</Text>
+          {(code || key) && (
+            <View style={styles.accessIndicator}>
+              <Icon name="check-circle" size={12} color={colors.success[500]} />
+            </View>
+          )}
+        </View>
+        <Icon name={showAccessDetails ? "chevron-up" : "chevron-down"} size={12} color={colors.text.tertiary} />
       </Pressable>
 
       {showAccessDetails && (
@@ -291,8 +365,8 @@ const EachAppointment = ({
               value={keyCodeToggle}
               onValueChange={handleKeyToggle}
               buttons={[
-                { value: "key", label: "Key Location" },
-                { value: "code", label: "Door Code" },
+                { value: "key", label: "Key Location", icon: "key" },
+                { value: "code", label: "Door Code", icon: "lock" },
               ]}
               style={styles.accessToggle}
             />
@@ -301,7 +375,10 @@ const EachAppointment = ({
           {/* Code Input */}
           {keyCodeToggle === "code" && (
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Door Code</Text>
+              <View style={styles.inputLabelRow}>
+                <Icon name="lock" size={12} color={colors.text.secondary} />
+                <Text style={styles.inputLabel}>Door Code</Text>
+              </View>
               <TextInput
                 mode="outlined"
                 value={code || ""}
@@ -318,7 +395,10 @@ const EachAppointment = ({
           {/* Key Location Input */}
           {keyCodeToggle === "key" && (
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Key Location</Text>
+              <View style={styles.inputLabelRow}>
+                <Icon name="map-marker" size={12} color={colors.text.secondary} />
+                <Text style={styles.inputLabel}>Key Location</Text>
+              </View>
               <TextInput
                 mode="outlined"
                 value={key || ""}
@@ -329,15 +409,19 @@ const EachAppointment = ({
                 outlineColor={colors.border.default}
                 activeOutlineColor={colors.primary[500]}
               />
-              <Text style={styles.inputHint}>
-                Be specific - include landmarks or details to help find it easily.
-              </Text>
+              <View style={styles.inputHintRow}>
+                <Icon name="info-circle" size={10} color={colors.text.tertiary} />
+                <Text style={styles.inputHint}>
+                  Be specific - include landmarks or details
+                </Text>
+              </View>
             </View>
           )}
 
           {/* Change Notification */}
           {changeNotification.appointment === id && (
             <View style={styles.successNotice}>
+              <Icon name="check-circle" size={14} color={colors.success[600]} />
               <Text style={styles.successNoticeText}>{changeNotification.message}</Text>
             </View>
           )}
@@ -345,12 +429,14 @@ const EachAppointment = ({
           {/* Submit Button */}
           {(code !== keyPadCode || key !== keyLocation) && (
             <Pressable onPress={handleSubmit} style={({ pressed }) => [styles.submitButton, pressed && styles.submitButtonPressed]}>
+              <Icon name="save" size={14} color={colors.neutral[0]} />
               <Text style={styles.submitButtonText}>Save Changes</Text>
             </Pressable>
           )}
 
           {error && (
             <View style={styles.errorNotice}>
+              <Icon name="exclamation-triangle" size={14} color={colors.error[600]} />
               <Text style={styles.errorNoticeText}>{error}</Text>
             </View>
           )}
@@ -377,6 +463,7 @@ const styles = StyleSheet.create({
   cardUpcoming: {
     borderLeftWidth: 4,
     borderLeftColor: colors.primary[600],
+    backgroundColor: colors.primary[50],
   },
   cardNeedsPay: {
     borderLeftWidth: 4,
@@ -387,7 +474,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: colors.success[500],
     backgroundColor: colors.success[50],
-    opacity: 0.85,
   },
   cardPressed: {
     transform: [{ scale: 0.98 }],
@@ -401,16 +487,38 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: spacing.md,
   },
+  headerLeft: {
+    flex: 1,
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   dateText: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+  },
+  dateTextComplete: {
+    color: colors.success[700],
+  },
+  priceContainer: {
+    alignItems: "flex-end",
+  },
+  priceLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 2,
   },
   priceText: {
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.secondary[600],
+  },
+  priceWarning: {
+    color: colors.warning[700],
   },
   priceComplete: {
     color: colors.success[600],
@@ -418,6 +526,9 @@ const styles = StyleSheet.create({
 
   // Badges
   badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.full,
@@ -452,55 +563,103 @@ const styles = StyleSheet.create({
     color: colors.warning[700],
   },
 
+  // Cleaner Info
+  cleanerInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.success[200],
+  },
+  cleanerName: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+
   // Payment Prompt
   paymentPrompt: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
     backgroundColor: colors.warning[100],
     padding: spacing.md,
     borderRadius: radius.lg,
     marginTop: spacing.sm,
   },
   paymentPromptText: {
+    flex: 1,
     color: colors.warning[700],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     textAlign: "center",
   },
 
-  // Info Row
-  infoRow: {
+  // Info Cards
+  infoCards: {
     flexDirection: "row",
-    gap: spacing.xl,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  infoItem: {
+  infoCard: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.neutral[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
   },
-  infoLabel: {
+  infoCardLabel: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
-    marginBottom: 2,
   },
-  infoValue: {
+  infoCardValue: {
     fontSize: typography.fontSize.sm,
     color: colors.text.primary,
     fontWeight: typography.fontWeight.medium,
   },
 
-  // Divider
-  divider: {
-    height: 1,
-    backgroundColor: colors.border.light,
-    marginVertical: spacing.md,
+  // Collapsible
+  collapsibleHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
   },
-
-  // Section
-  section: {
-    marginBottom: spacing.xs,
+  collapsibleTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
-  sectionTitle: {
+  collapsibleTitle: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+  },
+  addonIndicator: {
+    backgroundColor: colors.secondary[100],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  addonIndicatorText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.secondary[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  accessIndicator: {
+    marginLeft: spacing.xs,
+  },
+
+  // Add-ons Section
+  addonsSection: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
 
   // Toggle Row
@@ -509,17 +668,32 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
   },
-  toggleLabelContainer: {
-    flex: 1,
+  toggleInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  toggleIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.secondary[50],
+    alignItems: "center",
+    justifyContent: "center",
   },
   toggleLabel: {
     fontSize: typography.fontSize.sm,
     color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
   },
   togglePrice: {
     fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+    color: colors.secondary[600],
+    fontWeight: typography.fontWeight.semibold,
   },
   segmentedButton: {
     width: 120,
@@ -531,19 +705,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   lockedValueActive: {
-    backgroundColor: colors.primary[100],
+    backgroundColor: colors.secondary[100],
   },
   lockedValueText: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.xs,
     color: colors.text.secondary,
   },
   lockedValueTextActive: {
-    color: colors.primary[700],
+    color: colors.secondary[700],
+    fontWeight: typography.fontWeight.medium,
   },
 
   // Locked Notice
   lockedNotice: {
-    backgroundColor: colors.neutral[50],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.neutral[100],
     padding: spacing.sm,
     borderRadius: radius.md,
     marginTop: spacing.xs,
@@ -551,25 +730,12 @@ const styles = StyleSheet.create({
   lockedNoticeText: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
-    textAlign: "center",
-  },
-
-  // Collapsible
-  collapsibleHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing.xs,
-  },
-  chevron: {
-    fontSize: typography.fontSize.xl,
-    color: colors.text.tertiary,
-    fontWeight: typography.fontWeight.light,
   },
 
   // Access Section
   accessSection: {
-    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   accessMethodRow: {
     marginBottom: spacing.md,
@@ -582,10 +748,16 @@ const styles = StyleSheet.create({
   inputContainer: {
     marginBottom: spacing.md,
   },
+  inputLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
   inputLabel: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-    marginBottom: spacing.xs,
+    fontWeight: typography.fontWeight.medium,
   },
   codeInput: {
     backgroundColor: colors.neutral[0],
@@ -597,42 +769,57 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     minHeight: 80,
   },
+  inputHintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
   inputHint: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
-    marginTop: spacing.xs,
   },
 
   // Notices
   successNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     backgroundColor: colors.success[50],
-    padding: spacing.sm,
-    borderRadius: radius.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.success[200],
     marginBottom: spacing.md,
   },
   successNoticeText: {
+    flex: 1,
     color: colors.success[700],
     fontSize: typography.fontSize.sm,
-    textAlign: "center",
   },
   errorNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
     backgroundColor: colors.error[50],
-    padding: spacing.sm,
-    borderRadius: radius.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.error[200],
     marginTop: spacing.sm,
   },
   errorNoticeText: {
+    flex: 1,
     color: colors.error[700],
     fontSize: typography.fontSize.sm,
-    textAlign: "center",
   },
 
   // Submit Button
   submitButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
     backgroundColor: colors.primary[600],
     paddingVertical: spacing.md,
     borderRadius: radius.lg,
@@ -645,7 +832,6 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    textAlign: "center",
   },
 });
 

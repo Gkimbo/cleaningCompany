@@ -185,10 +185,10 @@ const MyRequestsCalendar = ({ state }) => {
     return date.toLocaleDateString("en-US", options);
   };
 
-  // Calculate stats
+  // Calculate stats (cleaners receive 90% of appointment price)
   const totalRequests = requests.length;
   const totalEarnings = requests.reduce(
-    (sum, r) => sum + (Number(r.price) || 0),
+    (sum, r) => sum + (Number(r.price) || 0) * 0.9,
     0
   );
 

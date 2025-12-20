@@ -617,7 +617,7 @@ const AddHomeForm = ({ state, dispatch }) => {
         <View style={styles.toggleCardContent}>
           <Text style={styles.toggleCardTitle}>Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
-            +$25 per cleaning - We'll bring and put on fresh sheets
+            +$50 per cleaning - We'll bring and put on fresh sheets
           </Text>
         </View>
         <View
@@ -644,7 +644,7 @@ const AddHomeForm = ({ state, dispatch }) => {
         <View style={styles.toggleCardContent}>
           <Text style={styles.toggleCardTitle}>Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
-            +$25 per cleaning - We'll bring and hang fresh towels
+            +$50 per cleaning - We'll bring and hang fresh towels
           </Text>
         </View>
         <View

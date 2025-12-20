@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View, StyleSheet } from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import EachAppointment from "./EachAppointment";
@@ -102,6 +103,10 @@ const HomeAppointmentTile = ({
   const upcoming = filteredAppointments.filter((a) => !a.completed);
   const completed = filteredAppointments.filter((a) => a.completed && a.paid);
 
+  // Calculate totals
+  const totalDue = needsPayment.reduce((sum, a) => sum + Number(a.price || 0), 0);
+  const upcomingTotal = upcoming.reduce((sum, a) => sum + Number(a.price || 0), 0);
+
   const renderAppointment = (appointment, index) => {
     const isDisabled = isWithinOneWeek(appointment.date);
     return (
@@ -126,6 +131,7 @@ const HomeAppointmentTile = ({
         paid={appointment.paid}
         completed={appointment.completed}
         timeToBeCompleted={appointment.timeToBeCompleted}
+        cleanerName={appointment.cleanerName}
       />
     );
   };
@@ -141,27 +147,52 @@ const HomeAppointmentTile = ({
     <View style={styles.container}>
       {/* Header Section */}
       <View style={styles.header}>
+        <View style={styles.headerIcon}>
+          <Icon name="home" size={20} color={colors.primary[600]} />
+        </View>
         <View style={styles.headerContent}>
           <Text style={styles.title}>{nickName}</Text>
-          <Text style={styles.address}>{address}</Text>
-          <Text style={styles.address}>{`${city}, ${state} ${zipcode}`}</Text>
-        </View>
-
-        {/* Stats Badge */}
-        {totalAppointments > 0 && (
-          <View style={styles.statsBadge}>
-            <Text style={styles.statsNumber}>{upcomingCount}</Text>
-            <Text style={styles.statsLabel}>Upcoming</Text>
+          <View style={styles.addressRow}>
+            <Icon name="map-marker" size={12} color={colors.text.tertiary} />
+            <Text style={styles.address}>{address}</Text>
           </View>
-        )}
+          <Text style={styles.addressSecondary}>{`${city}, ${state} ${zipcode}`}</Text>
+        </View>
       </View>
+
+      {/* Stats Row */}
+      {totalAppointments > 0 && (
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, upcomingCount > 0 && styles.statCardPrimary]}>
+            <Icon name="calendar" size={14} color={upcomingCount > 0 ? colors.primary[600] : colors.text.tertiary} />
+            <Text style={[styles.statNumber, upcomingCount > 0 && styles.statNumberPrimary]}>{upcomingCount}</Text>
+            <Text style={styles.statLabel}>Upcoming</Text>
+          </View>
+          {needsPayment.length > 0 && (
+            <View style={[styles.statCard, styles.statCardWarning]}>
+              <Icon name="credit-card" size={14} color={colors.warning[600]} />
+              <Text style={[styles.statNumber, styles.statNumberWarning]}>${totalDue}</Text>
+              <Text style={styles.statLabel}>Due</Text>
+            </View>
+          )}
+          {upcomingTotal > 0 && (
+            <View style={styles.statCard}>
+              <Icon name="dollar" size={14} color={colors.text.tertiary} />
+              <Text style={styles.statNumber}>${upcomingTotal}</Text>
+              <Text style={styles.statLabel}>Scheduled</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Action Button */}
       <Pressable
         onPress={handleOnPress}
         style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
       >
+        <Icon name="calendar-plus-o" size={16} color={colors.neutral[0]} />
         <Text style={styles.actionButtonText}>Book or Cancel Cleaning</Text>
+        <Icon name="chevron-right" size={12} color={colors.neutral[0]} />
       </Pressable>
 
       {/* Appointments Section */}
@@ -173,9 +204,12 @@ const HomeAppointmentTile = ({
       >
         {totalAppointments === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>No Appointments</Text>
+            <View style={styles.emptyIcon}>
+              <Icon name="calendar-o" size={32} color={colors.primary[300]} />
+            </View>
+            <Text style={styles.emptyStateTitle}>No Appointments Yet</Text>
             <Text style={styles.emptyStateText}>
-              Tap "Book or Cancel Cleaning" to schedule your first cleaning.
+              Tap the button above to schedule your first cleaning for this home.
             </Text>
           </View>
         ) : (
@@ -183,11 +217,13 @@ const HomeAppointmentTile = ({
             {/* Needs Payment Section */}
             {needsPayment.length > 0 && (
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionDot, styles.sectionDotWarning]} />
-                  <Text style={styles.sectionTitle}>Payment Required</Text>
-                  <View style={styles.sectionCount}>
-                    <Text style={styles.sectionCountText}>{needsPayment.length}</Text>
+                <View style={[styles.sectionHeader, styles.sectionHeaderWarning]}>
+                  <View style={styles.sectionTitleRow}>
+                    <Icon name="exclamation-circle" size={14} color={colors.warning[600]} />
+                    <Text style={[styles.sectionTitle, styles.sectionTitleWarning]}>Payment Required</Text>
+                  </View>
+                  <View style={[styles.sectionCount, styles.sectionCountWarning]}>
+                    <Text style={[styles.sectionCountText, styles.sectionCountTextWarning]}>{needsPayment.length}</Text>
                   </View>
                 </View>
                 {needsPayment.map((appointment, index) => renderAppointment(appointment, index))}
@@ -198,8 +234,10 @@ const HomeAppointmentTile = ({
             {upcoming.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionDot, styles.sectionDotPrimary]} />
-                  <Text style={styles.sectionTitle}>Upcoming</Text>
+                  <View style={styles.sectionTitleRow}>
+                    <Icon name="clock-o" size={14} color={colors.primary[500]} />
+                    <Text style={styles.sectionTitle}>Upcoming Cleanings</Text>
+                  </View>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{upcoming.length}</Text>
                   </View>
@@ -212,8 +250,10 @@ const HomeAppointmentTile = ({
             {completed.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <View style={[styles.sectionDot, styles.sectionDotSuccess]} />
-                  <Text style={styles.sectionTitle}>Completed</Text>
+                  <View style={styles.sectionTitleRow}>
+                    <Icon name="check-circle" size={14} color={colors.success[500]} />
+                    <Text style={styles.sectionTitle}>Completed</Text>
+                  </View>
                   <View style={styles.sectionCount}>
                     <Text style={styles.sectionCountText}>{completed.length}</Text>
                   </View>
@@ -237,60 +277,100 @@ const styles = StyleSheet.create({
     ...shadows.lg,
     borderWidth: 1,
     borderColor: colors.border.light,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary[500],
   },
 
   // Header
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  headerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
   },
   headerContent: {
     flex: 1,
   },
   title: {
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     marginBottom: spacing.xs,
   },
+  addressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
   address: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-    lineHeight: 20,
+  },
+  addressSecondary: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginLeft: spacing.lg,
   },
 
-  // Stats Badge
-  statsBadge: {
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.lg,
+  // Stats Row
+  statsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.neutral[50],
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    alignItems: "center",
+    borderRadius: radius.lg,
+  },
+  statCardPrimary: {
+    backgroundColor: colors.primary[50],
     borderWidth: 1,
     borderColor: colors.primary[100],
   },
-  statsNumber: {
-    fontSize: typography.fontSize.xl,
+  statCardWarning: {
+    backgroundColor: colors.warning[50],
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  statNumber: {
+    fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  statNumberPrimary: {
     color: colors.primary[600],
   },
-  statsLabel: {
+  statNumberWarning: {
+    color: colors.warning[700],
+  },
+  statLabel: {
     fontSize: typography.fontSize.xs,
-    color: colors.primary[600],
-    marginTop: 2,
+    color: colors.text.tertiary,
   },
 
   // Action Button
   actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
     backgroundColor: colors.secondary[500],
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     ...shadows.sm,
   },
   actionButtonPressed: {
@@ -301,15 +381,15 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+    flex: 1,
     textAlign: "center",
   },
 
   // Appointments Container
   appointmentsContainer: {
-    maxHeight: 500,
+    maxHeight: 600,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
-    marginTop: spacing.xs,
     paddingTop: spacing.md,
   },
   appointmentsContent: {
@@ -319,10 +399,19 @@ const styles = StyleSheet.create({
   // Empty State
   emptyState: {
     alignItems: "center",
-    paddingVertical: spacing["2xl"],
+    paddingVertical: spacing["3xl"],
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
   },
   emptyStateTitle: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.secondary,
     marginBottom: spacing.xs,
@@ -342,39 +431,47 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.sm,
+    justifyContent: "space-between",
+    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
   },
-  sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: spacing.sm,
+  sectionHeaderWarning: {
+    backgroundColor: colors.warning[50],
   },
-  sectionDotPrimary: {
-    backgroundColor: colors.primary[500],
-  },
-  sectionDotWarning: {
-    backgroundColor: colors.warning[500],
-  },
-  sectionDotSuccess: {
-    backgroundColor: colors.success[500],
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   sectionTitle: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
-    flex: 1,
+    color: colors.text.primary,
+  },
+  sectionTitleWarning: {
+    color: colors.warning[700],
   },
   sectionCount: {
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.neutral[200],
     paddingVertical: 2,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.full,
+    minWidth: 24,
+    alignItems: "center",
+  },
+  sectionCountWarning: {
+    backgroundColor: colors.warning[200],
   },
   sectionCountText: {
     fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
+    fontWeight: typography.fontWeight.bold,
     color: colors.text.secondary,
+  },
+  sectionCountTextWarning: {
+    color: colors.warning[700],
   },
 });
 

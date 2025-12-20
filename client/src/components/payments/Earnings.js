@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import StripeConnectOnboarding from "./StripeConnectOnboarding";
 import PayoutHistory from "./PayoutHistory";
+import EarningsChart from "./EarningsChart";
 import { API_BASE } from "../../services/config";
 
 const Earnings = ({ state, dispatch }) => {
@@ -254,6 +255,12 @@ const Earnings = ({ state, dispatch }) => {
           Jobs in progress
         </Text>
       </View>
+
+      {/* Earnings Chart */}
+      <EarningsChart
+        appointments={state?.appointments || []}
+        currentUserId={state?.currentUser?.id}
+      />
 
       {/* Earnings Info */}
       <View
