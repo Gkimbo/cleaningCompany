@@ -128,6 +128,7 @@ const ManagerDashboard = ({ state }) => {
   const [selectedPeriod, setSelectedPeriod] = useState("week");
   const [error, setError] = useState(null);
   const [serviceAreaData, setServiceAreaData] = useState(null);
+  const [appUsageData, setAppUsageData] = useState(null);
   const [recheckLoading, setRecheckLoading] = useState(false);
   const [recheckResult, setRecheckResult] = useState(null);
 
@@ -146,12 +147,13 @@ const ManagerDashboard = ({ state }) => {
     setError(null);
 
     try {
-      const [financial, users, stats, messages, serviceAreas] = await Promise.all([
+      const [financial, users, stats, messages, serviceAreas, appUsage] = await Promise.all([
         ManagerDashboardService.getFinancialSummary(state.currentUser.token),
         ManagerDashboardService.getUserAnalytics(state.currentUser.token),
         ManagerDashboardService.getQuickStats(state.currentUser.token),
         ManagerDashboardService.getMessagesSummary(state.currentUser.token),
         ManagerDashboardService.getServiceAreas(state.currentUser.token),
+        ManagerDashboardService.getAppUsageAnalytics(state.currentUser.token),
       ]);
 
       // Set data even if some endpoints return fallback values
@@ -160,6 +162,7 @@ const ManagerDashboard = ({ state }) => {
       setQuickStats(stats);
       setMessagesSummary(messages);
       setServiceAreaData(serviceAreas);
+      setAppUsageData(appUsage);
     } catch (err) {
       console.error("[ManagerDashboard] Error fetching data:", err);
       setError("Failed to load dashboard data");
@@ -476,6 +479,236 @@ const ManagerDashboard = ({ state }) => {
             label="New User Signups"
             color={colors.primary[500]}
           />
+        )}
+      </View>
+
+      {/* App Usage Analytics Section */}
+      <View style={styles.section}>
+        <SectionHeader title="App Usage Analytics" />
+
+        {/* Signups Overview */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>User Signups</Text>
+          <View style={styles.appUsageGrid}>
+            <View style={[styles.appUsageCard, styles.appUsageCardHighlight]}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.signups?.allTime || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>All Time</Text>
+            </View>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.signups?.thisYear || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>This Year</Text>
+            </View>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.signups?.thisMonth || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>This Month</Text>
+            </View>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.signups?.thisWeek || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>This Week</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Visits / Sessions */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>App Visits</Text>
+          <View style={styles.appUsageGrid}>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.sessions?.allTime || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>Total Sessions</Text>
+            </View>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.sessions?.thisMonth || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>This Month</Text>
+            </View>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.sessions?.uniqueVisitorsMonth || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>Unique Visitors (Month)</Text>
+            </View>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.sessions?.today || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>Today</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Page Views */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Page Views</Text>
+          <View style={styles.appUsageGrid}>
+            <View style={[styles.appUsageCard, styles.appUsageCardWide]}>
+              <Text style={styles.appUsageValueLarge}>
+                {appUsageData?.pageViews?.allTime || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>Total Page Views</Text>
+            </View>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.pageViews?.thisMonth || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>This Month</Text>
+            </View>
+            <View style={styles.appUsageCard}>
+              <Text style={styles.appUsageValue}>
+                {appUsageData?.pageViews?.thisWeek || 0}
+              </Text>
+              <Text style={styles.appUsageLabel}>This Week</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Engagement Metrics */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Engagement</Text>
+          <View style={styles.engagementGrid}>
+            <View style={styles.engagementCard}>
+              <Text style={styles.engagementValue}>
+                {Math.floor((appUsageData?.engagement?.averageSessionDuration || 0) / 60)}m{" "}
+                {(appUsageData?.engagement?.averageSessionDuration || 0) % 60}s
+              </Text>
+              <Text style={styles.engagementLabel}>Avg. Time on App</Text>
+            </View>
+            <View style={styles.engagementCard}>
+              <Text style={styles.engagementValue}>
+                {(appUsageData?.engagement?.averagePagesPerSession || 0).toFixed(1)}
+              </Text>
+              <Text style={styles.engagementLabel}>Pages per Session</Text>
+            </View>
+            <View style={styles.engagementCard}>
+              <Text style={styles.engagementValue}>
+                {(appUsageData?.engagement?.returningUserRate || 0).toFixed(0)}%
+              </Text>
+              <Text style={styles.engagementLabel}>Returning Users</Text>
+            </View>
+            <View style={styles.engagementCard}>
+              <Text style={styles.engagementValue}>
+                {(appUsageData?.engagement?.bounceRate || 0).toFixed(0)}%
+              </Text>
+              <Text style={styles.engagementLabel}>Bounce Rate</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* User Retention */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>User Retention</Text>
+          <View style={styles.retentionContainer}>
+            <View style={styles.retentionBar}>
+              <View style={styles.retentionLabels}>
+                <Text style={styles.retentionLabel}>Day 1</Text>
+                <Text style={styles.retentionLabel}>Day 7</Text>
+                <Text style={styles.retentionLabel}>Day 30</Text>
+              </View>
+              <View style={styles.retentionBars}>
+                <View style={styles.retentionBarTrack}>
+                  <View
+                    style={[
+                      styles.retentionBarFill,
+                      {
+                        width: `${Math.min(appUsageData?.retention?.day1 || 0, 100)}%`,
+                        backgroundColor: colors.success[500],
+                      },
+                    ]}
+                  />
+                  <Text style={styles.retentionPercent}>
+                    {(appUsageData?.retention?.day1 || 0).toFixed(0)}%
+                  </Text>
+                </View>
+                <View style={styles.retentionBarTrack}>
+                  <View
+                    style={[
+                      styles.retentionBarFill,
+                      {
+                        width: `${Math.min(appUsageData?.retention?.day7 || 0, 100)}%`,
+                        backgroundColor: colors.primary[500],
+                      },
+                    ]}
+                  />
+                  <Text style={styles.retentionPercent}>
+                    {(appUsageData?.retention?.day7 || 0).toFixed(0)}%
+                  </Text>
+                </View>
+                <View style={styles.retentionBarTrack}>
+                  <View
+                    style={[
+                      styles.retentionBarFill,
+                      {
+                        width: `${Math.min(appUsageData?.retention?.day30 || 0, 100)}%`,
+                        backgroundColor: colors.secondary[500],
+                      },
+                    ]}
+                  />
+                  <Text style={styles.retentionPercent}>
+                    {(appUsageData?.retention?.day30 || 0).toFixed(0)}%
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Device Breakdown */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Device Breakdown</Text>
+          <View style={styles.deviceGrid}>
+            <View style={[styles.deviceCard, { borderLeftColor: colors.primary[500] }]}>
+              <Text style={styles.deviceIcon}>📱</Text>
+              <Text style={styles.deviceValue}>
+                {appUsageData?.deviceBreakdown?.mobile || 0}%
+              </Text>
+              <Text style={styles.deviceLabel}>Mobile</Text>
+            </View>
+            <View style={[styles.deviceCard, { borderLeftColor: colors.secondary[500] }]}>
+              <Text style={styles.deviceIcon}>💻</Text>
+              <Text style={styles.deviceValue}>
+                {appUsageData?.deviceBreakdown?.desktop || 0}%
+              </Text>
+              <Text style={styles.deviceLabel}>Desktop</Text>
+            </View>
+            <View style={[styles.deviceCard, { borderLeftColor: colors.success[500] }]}>
+              <Text style={styles.deviceIcon}>📲</Text>
+              <Text style={styles.deviceValue}>
+                {appUsageData?.deviceBreakdown?.tablet || 0}%
+              </Text>
+              <Text style={styles.deviceLabel}>Tablet</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Top Pages */}
+        {appUsageData?.pageViews?.topPages?.length > 0 && (
+          <View style={styles.appUsageSubsection}>
+            <Text style={styles.appUsageSubtitle}>Top Pages</Text>
+            <View style={styles.topPagesContainer}>
+              {appUsageData.pageViews.topPages.slice(0, 5).map((page, index) => (
+                <View key={index} style={styles.topPageRow}>
+                  <View style={styles.topPageRank}>
+                    <Text style={styles.topPageRankText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.topPageName} numberOfLines={1}>
+                    {page.name || page.path}
+                  </Text>
+                  <Text style={styles.topPageViews}>{page.views} views</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         )}
       </View>
 
@@ -1132,6 +1365,198 @@ const styles = StyleSheet.create({
   recheckResultErrorText: {
     fontSize: typography.fontSize.sm,
     color: colors.error[600],
+  },
+
+  // App Usage Analytics Styles
+  appUsageSubsection: {
+    marginBottom: spacing.lg,
+  },
+  appUsageSubtitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  appUsageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  appUsageCard: {
+    flex: 1,
+    minWidth: (width - 80) / 2 - spacing.sm,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  appUsageCardHighlight: {
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  appUsageCardWide: {
+    minWidth: "100%",
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  appUsageValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  appUsageValueLarge: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
+  },
+  appUsageLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 4,
+    textAlign: "center",
+  },
+
+  // Engagement Grid
+  engagementGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  engagementCard: {
+    flex: 1,
+    minWidth: (width - 80) / 2 - spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary[400],
+  },
+  engagementValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  engagementLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    marginTop: 4,
+    textAlign: "center",
+  },
+
+  // Retention Styles
+  retentionContainer: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  retentionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  retentionLabels: {
+    width: 60,
+    gap: spacing.md,
+  },
+  retentionLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  retentionBars: {
+    flex: 1,
+    gap: spacing.md,
+  },
+  retentionBarTrack: {
+    height: 24,
+    backgroundColor: colors.neutral[200],
+    borderRadius: radius.full,
+    overflow: "hidden",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  retentionBarFill: {
+    height: "100%",
+    borderRadius: radius.full,
+    minWidth: 2,
+  },
+  retentionPercent: {
+    position: "absolute",
+    right: spacing.sm,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+
+  // Device Breakdown
+  deviceGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  deviceCard: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    borderLeftWidth: 4,
+  },
+  deviceIcon: {
+    fontSize: 24,
+    marginBottom: spacing.xs,
+  },
+  deviceValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  deviceLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+
+  // Top Pages
+  topPagesContainer: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+  },
+  topPageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  topPageRank: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.sm,
+  },
+  topPageRankText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  topPageName: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+  },
+  topPageViews: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
   },
 });
 
