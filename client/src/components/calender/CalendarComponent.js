@@ -15,7 +15,9 @@ const CalendarComponent = ({
   setConfirmationModalVisible,
   sheets,
   towels,
-  timeToBeCompleted
+  timeToBeCompleted,
+  bedConfigurations,
+  bathroomConfigurations,
 }) => {
   const [selectedDates, setSelectedDates] = useState({});
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -26,6 +28,8 @@ const CalendarComponent = ({
 
   const calculatePrice = () => {
     let price = 0;
+
+    // Time window surcharge
     if (timeToBeCompleted === "anytime") {
       price += 0;
     } else if (timeToBeCompleted === "10-3") {
@@ -35,12 +39,33 @@ const CalendarComponent = ({
     } else if (timeToBeCompleted === "12-2") {
       price += 50;
     }
+
+    // Linen pricing with new configuration-based pricing
     if (sheets === "yes") {
-      price += 50;
+      if (bedConfigurations && Array.isArray(bedConfigurations) && bedConfigurations.length > 0) {
+        // $30 per bed that needs sheets
+        const bedsNeedingSheets = bedConfigurations.filter((b) => b.needsSheets).length;
+        price += bedsNeedingSheets * 30;
+      } else {
+        // Fallback: charge for all beds
+        price += Number(numBeds) * 30;
+      }
     }
+
     if (towels === "yes") {
-      price += 50;
+      if (bathroomConfigurations && Array.isArray(bathroomConfigurations) && bathroomConfigurations.length > 0) {
+        // $10 per towel, $5 per face cloth
+        bathroomConfigurations.forEach((bath) => {
+          price += (bath.towels || 0) * 10;
+          price += (bath.faceCloths || 0) * 5;
+        });
+      } else {
+        // Fallback: default 2 towels + 1 face cloth per bathroom
+        price += Number(numBaths) * (2 * 10 + 1 * 5);
+      }
     }
+
+    // Base price calculation
     if (Number(numBeds) === 1 && Number(numBaths) === 1) {
       price = price + 150;
       return price;
@@ -94,6 +119,8 @@ const CalendarComponent = ({
         paid: false,
         bringTowels: towels,
         bringSheets: sheets,
+        sheetConfigurations: sheets === "yes" ? bedConfigurations : null,
+        towelConfigurations: towels === "yes" ? bathroomConfigurations : null,
       };
     });
 

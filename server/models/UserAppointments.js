@@ -76,6 +76,17 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		// Per-appointment sheet/towel configurations (overrides home defaults)
+		// sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }, ...]
+		sheetConfigurations: {
+			type: DataTypes.JSON,
+			allowNull: true,
+		},
+		// towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }, ...]
+		towelConfigurations: {
+			type: DataTypes.JSON,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

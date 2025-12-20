@@ -23,6 +23,13 @@ class UserInfoClass {
     cleanersNeeded,
     timeToBeCompleted,
     outsideServiceArea = false,
+    // New fields for sheets/towels details
+    cleanSheetsLocation,
+    dirtySheetsLocation,
+    cleanTowelsLocation,
+    dirtyTowelsLocation,
+    bedConfigurations,
+    bathroomConfigurations,
   }) {
     const newHome = await UserHomes.create({
       userId,
@@ -45,6 +52,12 @@ class UserInfoClass {
       cleanersNeeded,
       timeToBeCompleted,
       outsideServiceArea,
+      cleanSheetsLocation,
+      dirtySheetsLocation,
+      cleanTowelsLocation,
+      dirtyTowelsLocation,
+      bedConfigurations,
+      bathroomConfigurations,
     });
     return newHome;
   }
@@ -70,6 +83,13 @@ class UserInfoClass {
     cleanersNeeded,
     timeToBeCompleted,
     outsideServiceArea = false,
+    // New fields for sheets/towels details
+    cleanSheetsLocation,
+    dirtySheetsLocation,
+    cleanTowelsLocation,
+    dirtyTowelsLocation,
+    bedConfigurations,
+    bathroomConfigurations,
   }) {
     const existingHome = await UserHomes.findOne({
       where: { id },
@@ -99,6 +119,12 @@ class UserInfoClass {
       cleanersNeeded,
       timeToBeCompleted,
       outsideServiceArea,
+      cleanSheetsLocation,
+      dirtySheetsLocation,
+      cleanTowelsLocation,
+      dirtyTowelsLocation,
+      bedConfigurations,
+      bathroomConfigurations,
     });
 
     return existingHome;
@@ -280,6 +306,59 @@ class UserInfoClass {
       await existingAppointment.update({
         keyLocation,
         keyPadCode,
+      });
+
+      return existingAppointment;
+    } catch (error) {
+      throw new Error(error);
+    }
+  }
+
+  static async editAppointmentLinensInDB({
+    id,
+    sheetConfigurations,
+    towelConfigurations,
+    bringSheets,
+    bringTowels,
+    newPrice,
+  }) {
+    const existingAppointment = await UserAppointments.findOne({
+      where: { id },
+    });
+
+    if (!existingAppointment) {
+      return "Appointment not found for editing";
+    }
+
+    const userId = existingAppointment.dataValues.userId;
+    const oldPrice = Number(existingAppointment.dataValues.price);
+    const priceDifference = newPrice - oldPrice;
+
+    const existingBill = await UserBills.findOne({
+      where: { userId },
+    });
+
+    try {
+      // Update bill if price changed
+      if (priceDifference !== 0 && existingBill) {
+        const totalAppointmentPrice =
+          Number(existingBill.dataValues.appointmentDue) + priceDifference;
+        const totalOverallPrice =
+          Number(existingBill.dataValues.totalDue) + priceDifference;
+
+        await existingBill.update({
+          appointmentDue: totalAppointmentPrice,
+          totalDue: totalOverallPrice,
+        });
+      }
+
+      // Update appointment
+      await existingAppointment.update({
+        sheetConfigurations,
+        towelConfigurations,
+        bringSheets,
+        bringTowels,
+        price: newPrice,
       });
 
       return existingAppointment;

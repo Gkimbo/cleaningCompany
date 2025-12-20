@@ -303,6 +303,8 @@ const DetailsComponent = ({ state, dispatch }) => {
             sheets={homeDetails.sheetsProvided}
             towels={homeDetails.towelsProvided}
             timeToBeCompleted={homeDetails.timeToBeCompleted}
+            bedConfigurations={homeDetails.bedConfigurations}
+            bathroomConfigurations={homeDetails.bathroomConfigurations}
           />
         )}
 

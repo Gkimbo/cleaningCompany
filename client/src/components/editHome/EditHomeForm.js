@@ -40,6 +40,15 @@ const TIME_OPTIONS = [
   { value: "12-2", label: "12pm - 2pm", description: "+$50 per cleaning" },
 ];
 
+const BED_SIZE_OPTIONS = [
+  { value: "long_twin", label: "Long Twin" },
+  { value: "twin", label: "Twin" },
+  { value: "full", label: "Full" },
+  { value: "queen", label: "Queen" },
+  { value: "king", label: "King" },
+  { value: "california_king", label: "California King" },
+];
+
 const EditHomeForm = ({ state, dispatch }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -76,6 +85,13 @@ const EditHomeForm = ({ state, dispatch }) => {
     towelsProvided: "no",
     contact: "",
     specialNotes: "",
+    // New fields for sheets/towels details
+    cleanSheetsLocation: "",
+    dirtySheetsLocation: "",
+    cleanTowelsLocation: "",
+    dirtyTowelsLocation: "",
+    bedConfigurations: [],
+    bathroomConfigurations: [],
   });
 
   useEffect(() => {
@@ -87,6 +103,12 @@ const EditHomeForm = ({ state, dispatch }) => {
         accessType: foundHome.keyPadCode ? "code" : "key",
         hasRecycling: !!foundHome.recyclingLocation,
         hasCompost: !!foundHome.compostLocation,
+        cleanSheetsLocation: foundHome.cleanSheetsLocation || "",
+        dirtySheetsLocation: foundHome.dirtySheetsLocation || "",
+        cleanTowelsLocation: foundHome.cleanTowelsLocation || "",
+        dirtyTowelsLocation: foundHome.dirtyTowelsLocation || "",
+        bedConfigurations: foundHome.bedConfigurations || [],
+        bathroomConfigurations: foundHome.bathroomConfigurations || [],
       });
     }
   }, [id, state.homes]);
@@ -95,6 +117,86 @@ const EditHomeForm = ({ state, dispatch }) => {
     setHomeData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
+    }
+  };
+
+  // Initialize bed configurations when numBeds changes and sheets = "yes"
+  const initializeBedConfigurations = (numBeds) => {
+    const beds = parseInt(numBeds) || 0;
+    const configs = [];
+    for (let i = 1; i <= beds; i++) {
+      configs.push({ bedNumber: i, size: "queen", needsSheets: true });
+    }
+    return configs;
+  };
+
+  // Initialize bathroom configurations when numBaths changes and towels = "yes"
+  const initializeBathroomConfigurations = (numBaths) => {
+    const baths = parseInt(numBaths) || 0;
+    const configs = [];
+    for (let i = 1; i <= baths; i++) {
+      configs.push({ bathroomNumber: i, towels: 2, faceCloths: 1 });
+    }
+    return configs;
+  };
+
+  // Update a specific bed configuration
+  const updateBedConfig = (bedNumber, field, value) => {
+    setHomeData((prev) => {
+      const updatedConfigs = prev.bedConfigurations.map((bed) =>
+        bed.bedNumber === bedNumber ? { ...bed, [field]: value } : bed
+      );
+      return { ...prev, bedConfigurations: updatedConfigs };
+    });
+  };
+
+  // Update a specific bathroom configuration
+  const updateBathroomConfig = (bathroomNumber, field, value) => {
+    setHomeData((prev) => {
+      const updatedConfigs = prev.bathroomConfigurations.map((bath) =>
+        bath.bathroomNumber === bathroomNumber ? { ...bath, [field]: value } : bath
+      );
+      return { ...prev, bathroomConfigurations: updatedConfigs };
+    });
+  };
+
+  // Handle sheets toggle
+  const handleSheetsToggle = () => {
+    const newValue = homeData.sheetsProvided === "yes" ? "no" : "yes";
+    if (newValue === "yes" && homeData.numBeds) {
+      setHomeData((prev) => ({
+        ...prev,
+        sheetsProvided: newValue,
+        bedConfigurations:
+          prev.bedConfigurations.length > 0
+            ? prev.bedConfigurations
+            : initializeBedConfigurations(prev.numBeds),
+      }));
+    } else {
+      setHomeData((prev) => ({
+        ...prev,
+        sheetsProvided: newValue,
+      }));
+    }
+  };
+
+  // Handle towels toggle
+  const handleTowelsToggle = () => {
+    const newValue = homeData.towelsProvided === "yes" ? "no" : "yes";
+    if (newValue === "yes" && homeData.numBaths) {
+      setHomeData((prev) => ({
+        ...prev,
+        towelsProvided: newValue,
+        bathroomConfigurations:
+          prev.bathroomConfigurations.length > 0
+            ? prev.bathroomConfigurations
+            : initializeBathroomConfigurations(prev.numBaths),
+      }));
+    } else {
+      setHomeData((prev) => ({
+        ...prev,
+        towelsProvided: newValue,
+      }));
     }
   };
 
@@ -182,6 +284,13 @@ const EditHomeForm = ({ state, dispatch }) => {
         towelsProvided: homeData.towelsProvided,
         contact: homeData.contact,
         specialNotes: homeData.specialNotes,
+        // New fields for sheets/towels details
+        cleanSheetsLocation: homeData.sheetsProvided === "no" ? homeData.cleanSheetsLocation : "",
+        dirtySheetsLocation: homeData.sheetsProvided === "no" ? homeData.dirtySheetsLocation : "",
+        cleanTowelsLocation: homeData.towelsProvided === "no" ? homeData.cleanTowelsLocation : "",
+        dirtyTowelsLocation: homeData.towelsProvided === "no" ? homeData.dirtyTowelsLocation : "",
+        bedConfigurations: homeData.sheetsProvided === "yes" ? homeData.bedConfigurations : null,
+        bathroomConfigurations: homeData.towelsProvided === "yes" ? homeData.bathroomConfigurations : null,
       };
 
       const response = await FetchData.editHomeInfo(submitData, user);
@@ -795,22 +904,20 @@ const EditHomeForm = ({ state, dispatch }) => {
         </View>
       </View>
 
+      {/* Sheets Section */}
       <TouchableOpacity
         style={[
           styles.toggleCard,
           homeData.sheetsProvided === "yes" && styles.toggleCardActive,
         ]}
-        onPress={() =>
-          updateField(
-            "sheetsProvided",
-            homeData.sheetsProvided === "yes" ? "no" : "yes"
-          )
-        }
+        onPress={handleSheetsToggle}
       >
         <View style={styles.toggleCardContent}>
-          <Text style={styles.toggleCardTitle}>Bring Fresh Sheets</Text>
+          <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
-            +$50 per cleaning - We'll bring and put on fresh sheets
+            {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0
+              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * 30} - $30 per bed`
+              : "Select to configure sheets for each bed"}
           </Text>
         </View>
         <View
@@ -828,22 +935,90 @@ const EditHomeForm = ({ state, dispatch }) => {
         </View>
       </TouchableOpacity>
 
+      {/* Sheets = YES: Show bed size selectors */}
+      {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0 && (
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Select bed sizes:</Text>
+          {homeData.bedConfigurations.map((bed) => (
+            <View key={bed.bedNumber} style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 14, color: "#555", marginBottom: 6 }}>
+                Bed {bed.bedNumber}
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {BED_SIZE_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      {
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: bed.size === option.value ? "#3b82f6" : "#e2e8f0",
+                        backgroundColor: bed.size === option.value ? "#eff6ff" : "#fff",
+                      },
+                    ]}
+                    onPress={() => updateBedConfig(bed.bedNumber, "size", option.value)}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: bed.size === option.value ? "#3b82f6" : "#64748b",
+                        fontWeight: bed.size === option.value ? "600" : "400",
+                      }}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Sheets = NO: Show location fields */}
+      {homeData.sheetsProvided === "no" && (
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Where can cleaners find clean sheets?</Text>
+          <TextInput
+            style={[styles.input, focusedField === "cleanSheetsLocation" && styles.inputFocused]}
+            placeholder="e.g., Hall closet, top shelf"
+            placeholderTextColor="#94a3b8"
+            value={homeData.cleanSheetsLocation}
+            onChangeText={(text) => updateField("cleanSheetsLocation", text)}
+            onFocus={() => setFocusedField("cleanSheetsLocation")}
+            onBlur={() => setFocusedField(null)}
+          />
+          <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+            Where should cleaners put dirty sheets?
+          </Text>
+          <TextInput
+            style={[styles.input, focusedField === "dirtySheetsLocation" && styles.inputFocused]}
+            placeholder="e.g., Laundry room basket"
+            placeholderTextColor="#94a3b8"
+            value={homeData.dirtySheetsLocation}
+            onChangeText={(text) => updateField("dirtySheetsLocation", text)}
+            onFocus={() => setFocusedField("dirtySheetsLocation")}
+            onBlur={() => setFocusedField(null)}
+          />
+        </View>
+      )}
+
+      {/* Towels Section */}
       <TouchableOpacity
         style={[
           styles.toggleCard,
           homeData.towelsProvided === "yes" && styles.toggleCardActive,
         ]}
-        onPress={() =>
-          updateField(
-            "towelsProvided",
-            homeData.towelsProvided === "yes" ? "no" : "yes"
-          )
-        }
+        onPress={handleTowelsToggle}
       >
         <View style={styles.toggleCardContent}>
-          <Text style={styles.toggleCardTitle}>Bring Fresh Towels</Text>
+          <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
-            +$50 per cleaning - We'll bring and hang fresh towels
+            {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
+              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * 10 + (b.faceCloths || 0) * 5, 0)} - $10/towel, $5/face cloth`
+              : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -860,6 +1035,140 @@ const EditHomeForm = ({ state, dispatch }) => {
           />
         </View>
       </TouchableOpacity>
+
+      {/* Towels = YES: Show bathroom config */}
+      {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0 && (
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Configure towels per bathroom:</Text>
+          {homeData.bathroomConfigurations.map((bath) => (
+            <View
+              key={bath.bathroomNumber}
+              style={{
+                marginBottom: 16,
+                padding: 12,
+                backgroundColor: "#f8fafc",
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 12 }}>
+                Bathroom {bath.bathroomNumber}
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+                <Text style={{ flex: 1, color: "#555" }}>Towels ($10 each):</Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <TouchableOpacity
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: "#e2e8f0",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                    onPress={() =>
+                      updateBathroomConfig(bath.bathroomNumber, "towels", Math.max(0, bath.towels - 1))
+                    }
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: "bold" }}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={{ width: 40, textAlign: "center", fontSize: 16, fontWeight: "600" }}>
+                    {bath.towels}
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: "#3b82f6",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                    onPress={() =>
+                      updateBathroomConfig(bath.bathroomNumber, "towels", Math.min(10, bath.towels + 1))
+                    }
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: "bold", color: "#fff" }}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={{ flex: 1, color: "#555" }}>Face cloths ($5 each):</Text>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <TouchableOpacity
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: "#e2e8f0",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                    onPress={() =>
+                      updateBathroomConfig(
+                        bath.bathroomNumber,
+                        "faceCloths",
+                        Math.max(0, bath.faceCloths - 1)
+                      )
+                    }
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: "bold" }}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={{ width: 40, textAlign: "center", fontSize: 16, fontWeight: "600" }}>
+                    {bath.faceCloths}
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: "#3b82f6",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                    onPress={() =>
+                      updateBathroomConfig(
+                        bath.bathroomNumber,
+                        "faceCloths",
+                        Math.min(10, bath.faceCloths + 1)
+                      )
+                    }
+                  >
+                    <Text style={{ fontSize: 18, fontWeight: "bold", color: "#fff" }}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Towels = NO: Show location fields */}
+      {homeData.towelsProvided === "no" && (
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Where can cleaners find clean towels?</Text>
+          <TextInput
+            style={[styles.input, focusedField === "cleanTowelsLocation" && styles.inputFocused]}
+            placeholder="e.g., Linen closet in hallway"
+            placeholderTextColor="#94a3b8"
+            value={homeData.cleanTowelsLocation}
+            onChangeText={(text) => updateField("cleanTowelsLocation", text)}
+            onFocus={() => setFocusedField("cleanTowelsLocation")}
+            onBlur={() => setFocusedField(null)}
+          />
+          <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+            Where should cleaners put dirty towels?
+          </Text>
+          <TextInput
+            style={[styles.input, focusedField === "dirtyTowelsLocation" && styles.inputFocused]}
+            placeholder="e.g., Laundry basket in bathroom"
+            placeholderTextColor="#94a3b8"
+            value={homeData.dirtyTowelsLocation}
+            onChangeText={(text) => updateField("dirtyTowelsLocation", text)}
+            onFocus={() => setFocusedField("dirtyTowelsLocation")}
+            onBlur={() => setFocusedField(null)}
+          />
+        </View>
+      )}
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Special Instructions (Optional)</Text>

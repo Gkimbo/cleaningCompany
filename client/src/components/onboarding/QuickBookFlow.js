@@ -88,11 +88,32 @@ const QuickBookFlow = ({ state, dispatch }) => {
     // Time window surcharge
     if (home.timeToBeCompleted === "10-3" || home.timeToBeCompleted === "11-4") {
       basePrice += 30;
+    } else if (home.timeToBeCompleted === "12-2") {
+      basePrice += 50;
     }
 
-    // Sheets/towels
-    if (home.sheetsProvided === "yes") basePrice += 50;
-    if (home.towelsProvided === "yes") basePrice += 50;
+    // Sheets pricing: $30 per bed
+    if (home.sheetsProvided === "yes") {
+      if (home.bedConfigurations && Array.isArray(home.bedConfigurations) && home.bedConfigurations.length > 0) {
+        const bedsNeedingSheets = home.bedConfigurations.filter((b) => b.needsSheets).length;
+        basePrice += bedsNeedingSheets * 30;
+      } else {
+        basePrice += beds * 30;
+      }
+    }
+
+    // Towels pricing: $10 per towel, $5 per face cloth
+    if (home.towelsProvided === "yes") {
+      if (home.bathroomConfigurations && Array.isArray(home.bathroomConfigurations) && home.bathroomConfigurations.length > 0) {
+        home.bathroomConfigurations.forEach((bath) => {
+          basePrice += (bath.towels || 0) * 10;
+          basePrice += (bath.faceCloths || 0) * 5;
+        });
+      } else {
+        // Fallback: 2 towels + 1 face cloth per bathroom
+        basePrice += baths * (2 * 10 + 1 * 5);
+      }
+    }
 
     return basePrice;
   };
@@ -168,6 +189,10 @@ const QuickBookFlow = ({ state, dispatch }) => {
       const datesWithPrice = selectedDates.map((date) => ({
         date,
         price: pricePerCleaning,
+        bringSheets: home.sheetsProvided,
+        bringTowels: home.towelsProvided,
+        sheetConfigurations: home.sheetsProvided === "yes" ? home.bedConfigurations : null,
+        towelConfigurations: home.towelsProvided === "yes" ? home.bathroomConfigurations : null,
       }));
 
       const infoObject = {

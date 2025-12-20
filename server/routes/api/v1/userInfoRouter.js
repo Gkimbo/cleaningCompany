@@ -68,6 +68,13 @@ userInfoRouter.post("/home", async (req, res) => {
     contact,
     specialNotes,
     timeToBeCompleted,
+    // New fields for sheets/towels details
+    cleanSheetsLocation,
+    dirtySheetsLocation,
+    cleanTowelsLocation,
+    dirtyTowelsLocation,
+    bedConfigurations,
+    bathroomConfigurations,
   } = req.body.home;
   try {
     const decodedToken = jwt.verify(token, secretKey);
@@ -107,6 +114,12 @@ userInfoRouter.post("/home", async (req, res) => {
       cleanersNeeded,
       timeToBeCompleted,
       outsideServiceArea,
+      cleanSheetsLocation,
+      dirtySheetsLocation,
+      cleanTowelsLocation,
+      dirtyTowelsLocation,
+      bedConfigurations,
+      bathroomConfigurations,
     });
 
     return res.status(201).json({
@@ -143,6 +156,13 @@ userInfoRouter.patch("/home", async (req, res) => {
     contact,
     specialNotes,
     timeToBeCompleted,
+    // New fields for sheets/towels details
+    cleanSheetsLocation,
+    dirtySheetsLocation,
+    cleanTowelsLocation,
+    dirtyTowelsLocation,
+    bedConfigurations,
+    bathroomConfigurations,
   } = req.body;
 
   try {
@@ -178,6 +198,12 @@ userInfoRouter.patch("/home", async (req, res) => {
       cleanersNeeded,
       timeToBeCompleted,
       outsideServiceArea,
+      cleanSheetsLocation,
+      dirtySheetsLocation,
+      cleanTowelsLocation,
+      dirtyTowelsLocation,
+      bedConfigurations,
+      bathroomConfigurations,
     });
 
     return res.status(200).json({

@@ -88,6 +88,34 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		// Location fields for when homeowner provides linens (cleaner changes them)
+		cleanSheetsLocation: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		dirtySheetsLocation: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		cleanTowelsLocation: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		dirtyTowelsLocation: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		// Configuration for when company brings linens
+		// bedConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }, ...]
+		bedConfigurations: {
+			type: DataTypes.JSON,
+			allowNull: true,
+		},
+		// bathroomConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }, ...]
+		bathroomConfigurations: {
+			type: DataTypes.JSON,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

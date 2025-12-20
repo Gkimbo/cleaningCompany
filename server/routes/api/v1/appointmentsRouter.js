@@ -434,14 +434,22 @@ appointmentRouter.post("/", async (req, res) => {
   }
 
   dateArray.forEach((date) => {
+    // Use configurations if provided, otherwise fall back to home defaults
+    const sheetConfigs = date.sheetConfigurations || home.dataValues.bedConfigurations;
+    const towelConfigs = date.towelConfigurations || home.dataValues.bathroomConfigurations;
+
     const price = calculatePrice(
       date.bringSheets,
       date.bringTowels,
       home.dataValues.numBeds,
       home.dataValues.numBaths,
-      home.dataValues.timeToBeCompleted
+      home.dataValues.timeToBeCompleted,
+      sheetConfigs,
+      towelConfigs
     );
     date.price = price;
+    date.sheetConfigurations = sheetConfigs;
+    date.towelConfigurations = towelConfigs;
     appointmentTotal += price;
   });
   try {
@@ -493,6 +501,8 @@ appointmentRouter.post("/", async (req, res) => {
           hasBeenAssigned: false,
           empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded,
           timeToBeCompleted: homeBeingScheduled.dataValues.timeToBeCompleted,
+          sheetConfigurations: date.sheetConfigurations || null,
+          towelConfigurations: date.towelConfigurations || null,
         });
         const appointmentId = newAppointment.dataValues.id;
 
@@ -515,6 +525,73 @@ appointmentRouter.post("/", async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+// Update appointment linens
+appointmentRouter.patch("/:id/linens", async (req, res) => {
+  const { id } = req.params;
+  const {
+    sheetConfigurations,
+    towelConfigurations,
+    bringSheets,
+    bringTowels,
+  } = req.body;
+
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const appointment = await UserAppointments.findOne({
+      where: { id },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user owns this appointment
+    if (appointment.dataValues.userId !== userId) {
+      return res.status(403).json({ error: "Not authorized to update this appointment" });
+    }
+
+    // Get home info to recalculate price
+    const home = await UserHomes.findOne({
+      where: { id: appointment.dataValues.homeId },
+    });
+
+    // Calculate new price
+    const newPrice = calculatePrice(
+      bringSheets,
+      bringTowels,
+      home.dataValues.numBeds,
+      home.dataValues.numBaths,
+      appointment.dataValues.timeToBeCompleted,
+      sheetConfigurations,
+      towelConfigurations
+    );
+
+    // Update appointment and bill using the service method
+    const updatedAppointment = await UserInfo.editAppointmentLinensInDB({
+      id,
+      sheetConfigurations,
+      towelConfigurations,
+      bringSheets,
+      bringTowels,
+      newPrice,
+    });
+
+    const serializedAppointment = AppointmentSerializer.serializeOne(updatedAppointment);
+    return res.status(200).json({ appointment: serializedAppointment });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Failed to update appointment linens" });
   }
 });
 

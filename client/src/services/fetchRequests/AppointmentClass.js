@@ -188,6 +188,31 @@ class Appointment {
       return error;
     }
   }
+
+  static async updateAppointmentLinens(appointmentId, data, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/appointments/${appointmentId}/linens`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(data),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update linens");
+      }
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      console.error("Error updating appointment linens:", error);
+      throw error;
+    }
+  }
 }
 
 export default Appointment;
