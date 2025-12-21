@@ -16,7 +16,6 @@ import AllAppointments from "../src/components/admin/AllAppointments";
 import AppointmentDetailsPage from "../src/components/admin/AssignAppointments/AppointmentDetailsPage";
 import CleanerApplicationForm from "../src/components/admin/CleanerApplications/ApplicationForm";
 import ListOfApplications from "../src/components/admin/CleanerApplications/ListOfApplications";
-import NewCleanerInformationPage from "../src/components/admin/CleanerApplications/NewCleanerInformationPage";
 import EditEmployeeForm from "../src/components/admin/forms/EditEmployeeForm";
 import EmployeeShiftForm from "../src/components/admin/forms/employee/EmployeeShiftForm";
 import UnassignedAppointments from "../src/components/admin/UnassignedAppointments";
@@ -205,15 +204,6 @@ export default function App() {
               />
               <Route
                 path="/apply"
-                element={
-                  <NewCleanerInformationPage
-                    state={state}
-                    dispatch={dispatch}
-                  />
-                }
-              />
-              <Route
-                path="/application-form"
                 element={
                   <CleanerApplicationForm state={state} dispatch={dispatch} />
                 }

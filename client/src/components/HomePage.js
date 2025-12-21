@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Dimensions, Image, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Dimensions,
+  Image,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  Platform,
+} from "react-native";
 import { useNavigate } from "react-router-native";
 import { cleaningCompany } from "../services/data/companyInfo";
 import FetchData from "../services/fetchRequests/fetchData";
@@ -8,6 +16,14 @@ import image2 from "../services/photos/clean-laptop.jpg";
 import image3 from "../services/photos/cleaning-tech.png";
 import image4 from "../services/photos/cleaning_supplies_on_floor.jpg";
 import homePageStyles from "../services/styles/HomePageStyles";
+import {
+  colors,
+  spacing,
+  radius,
+  shadows,
+  typography,
+  responsive,
+} from "../services/styles/theme";
 import NextAppointment from "./employeeAssignments/tiles/NextAppointment";
 import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
 import ReviewsOverview from "./reviews/ReviewsOverview";
@@ -52,15 +68,22 @@ const HomePage = ({ state, dispatch }) => {
       FetchData.get("/api/v1/user-info", state.currentUser.token).then(
         (response) => {
           dispatch({ type: "USER_HOME", payload: response.user.homes });
-          dispatch({ type: "USER_APPOINTMENTS", payload: response.user.appointments });
+          dispatch({
+            type: "USER_APPOINTMENTS",
+            payload: response.user.appointments,
+          });
           dispatch({ type: "DB_BILL", payload: response.user.bill });
         }
       );
-      FetchData.get("/api/v1/appointments/my-requests", state.currentUser.token).then(
-        (response) => {
-          dispatch({ type: "CLEANING_REQUESTS", payload: response.pendingRequestsEmployee });
-        }
-      );
+      FetchData.get(
+        "/api/v1/appointments/my-requests",
+        state.currentUser.token
+      ).then((response) => {
+        dispatch({
+          type: "CLEANING_REQUESTS",
+          payload: response.pendingRequestsEmployee,
+        });
+      });
     }
   }, []);
 
@@ -141,7 +164,9 @@ const HomePage = ({ state, dispatch }) => {
   if (!foundToday && !nextAppointment) {
     nextAppointment = (
       <View style={{ marginVertical: 20, alignItems: "center" }}>
-        <Text style={{ ...homePageStyles.title, fontSize: 18 }}>No appointments scheduled.</Text>
+        <Text style={{ ...homePageStyles.title, fontSize: 18 }}>
+          No appointments scheduled.
+        </Text>
         <Pressable
           onPress={handlePressToJobsList}
           style={{
@@ -166,8 +191,17 @@ const HomePage = ({ state, dispatch }) => {
   } else if (!foundToday) {
     todaysAppointment = (
       <View style={{ marginVertical: 20, alignItems: "center" }}>
-        <Text style={{ ...homePageStyles.homeTileTitle }}>Expected payout:</Text>
-        <Text style={{ ...homePageStyles.homeTileTitle, fontSize: 28, fontStyle: "italic", marginVertical: 5 }}>
+        <Text style={{ ...homePageStyles.homeTileTitle }}>
+          Expected payout:
+        </Text>
+        <Text
+          style={{
+            ...homePageStyles.homeTileTitle,
+            fontSize: 28,
+            fontStyle: "italic",
+            marginVertical: 5,
+          }}
+        >
           ${upcomingPayment.toFixed(2)}
         </Text>
         <Text style={{ ...homePageStyles.homeTileTitle, marginBottom: 20 }}>
@@ -208,88 +242,728 @@ const HomePage = ({ state, dispatch }) => {
     return <ClientDashboard state={state} dispatch={dispatch} />;
   }
 
+  // Landing page for unauthenticated users
+  const features = [
+    {
+      icon: "calendar",
+      title: "Easy Booking",
+      description:
+        "Schedule cleanings up to 1 weeks in advance with our simple booking system",
+    },
+    {
+      icon: "clock",
+      title: "Flexible Scheduling",
+      description:
+        "Available daily 10am-4pm to fit your guests' check-out times",
+    },
+    {
+      icon: "star",
+      title: "Professional Team",
+      description: "Trusted, vetted cleaners who treat your property with care",
+    },
+  ];
+
+  const stats = [
+    { value: "500+", label: "Happy Clients" },
+    { value: "2,000+", label: "Cleanings Done" },
+    { value: "4.9", label: "Average Rating" },
+    { value: "24hr", label: "Guarantee" },
+  ];
+
+  const testimonials = [
+    {
+      text: "The best cleaning service we've used for our vacation rental. Our guests always leave 5-star reviews about cleanliness!",
+      author: "Sarah M.",
+      role: "Property Owner",
+    },
+    {
+      text: "Reliable, thorough, and so easy to work with. They've made managing my Airbnb so much simpler.",
+      author: "Michael R.",
+      role: "Vacation Rental Host",
+    },
+  ];
+
+  const FeatureIcon = ({ icon }) => {
+    const iconMap = {
+      calendar: "📅",
+      shield: "🛡️",
+      clock: "⏰",
+      star: "⭐",
+    };
+    return (
+      <View
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: colors.primary[100],
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: spacing.md,
+        }}
+      >
+        <Text style={{ fontSize: 24 }}>{iconMap[icon]}</Text>
+      </View>
+    );
+  };
+
   return (
     <ScrollView
-      contentContainerStyle={{
-        paddingTop: 40, // More space from top bar
-        paddingHorizontal: 20,
-        backgroundColor: "#f5f5f5",
-        paddingBottom: 50,
-      }}
+      style={{ flex: 1, backgroundColor: colors.neutral[0] }}
+      contentContainerStyle={{ paddingBottom: spacing["4xl"] }}
+      showsVerticalScrollIndicator={false}
     >
-      {state.account === "cleaner" ? (
-        <View style={{ flexDirection: "column" }}>
-          {todaysAppointment}
-          {nextAppointment}
-          <ReviewsOverview state={state} dispatch={dispatch} />
-          {/* Get Help Button for cleaners */}
-          <View style={{ marginTop: 20, alignItems: "center" }}>
-            <Text style={{ fontSize: 14, color: "#64748b", marginBottom: 10, textAlign: "center" }}>
-              Need assistance with a booking or have feedback?
+      {/* Hero Section */}
+      <View
+        style={{
+          backgroundColor: colors.primary[600],
+          paddingTop: Platform.OS === "ios" ? 60 : 40,
+          paddingBottom: spacing["4xl"],
+          paddingHorizontal: spacing.xl,
+          borderBottomLeftRadius: 32,
+          borderBottomRightRadius: 32,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: responsive(28, 36, 44),
+            fontWeight: typography.fontWeight.bold,
+            color: colors.neutral[0],
+            textAlign: "center",
+            marginBottom: spacing.md,
+            lineHeight: responsive(34, 44, 52),
+          }}
+        >
+          Sparkling Clean{"\n"}Vacation Rentals
+        </Text>
+        <Text
+          style={{
+            fontSize: responsive(16, 18, 20),
+            color: colors.primary[100],
+            textAlign: "center",
+            marginBottom: spacing["2xl"],
+            lineHeight: 26,
+          }}
+        >
+          Professional cleaning services for short-term rentals in{" "}
+          {cleaningCompany.location}
+        </Text>
+
+        {/* CTA Buttons */}
+        <View
+          style={{
+            flexDirection: width > 400 ? "row" : "column",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: spacing.md,
+          }}
+        >
+          <Pressable
+            onPress={() => navigate("/sign-up")}
+            style={({ pressed }) => ({
+              backgroundColor: colors.secondary[500],
+              paddingVertical: spacing.lg,
+              paddingHorizontal: spacing["2xl"],
+              borderRadius: radius.xl,
+              ...shadows.lg,
+              opacity: pressed ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.98 : 1 }],
+              minWidth: 160,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.neutral[0],
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.bold,
+                textAlign: "center",
+              }}
+            >
+              Get Started
             </Text>
-            <GetHelpButton token={state.currentUser.token} />
-          </View>
-          {/* Tax Forms Section for cleaners */}
-          <TaxFormsSection state={state} />
+          </Pressable>
+          <Pressable
+            onPress={() => navigate("/sign-in")}
+            style={({ pressed }) => ({
+              backgroundColor: "transparent",
+              borderWidth: 2,
+              borderColor: colors.neutral[0],
+              paddingVertical: spacing.lg - 2,
+              paddingHorizontal: spacing["2xl"],
+              borderRadius: radius.xl,
+              opacity: pressed ? 0.8 : 1,
+              minWidth: 160,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.neutral[0],
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.semibold,
+                textAlign: "center",
+              }}
+            >
+              Sign In
+            </Text>
+          </Pressable>
         </View>
-      ) : (
-        <View style={{ flexDirection: "column" }}>
-          <Text style={{ ...homePageStyles.title, marginBottom: 20, textAlign: "center" }}>
-            Welcome to Cleaning Services!
-          </Text>
+      </View>
 
-          {/* About Service */}
-          <View style={cardStyle}>
-            <Text style={homePageStyles.smallTitle}>About Our Service:</Text>
-            <Text style={homePageStyles.information}>{cleaningCompany.aboutService.description}</Text>
-            <Image source={image3} style={{ width: "100%", height: 150, borderRadius: 12, marginTop: 10 }} />
+      {/* Stats Section
+      <View style={{
+        flexDirection: "row",
+        flexWrap: "wrap",
+        justifyContent: "space-around",
+        paddingVertical: spacing["2xl"],
+        paddingHorizontal: spacing.lg,
+        marginTop: -spacing["2xl"],
+        marginHorizontal: spacing.lg,
+        backgroundColor: colors.neutral[0],
+        borderRadius: radius["2xl"],
+        ...shadows.lg,
+      }}>
+        {stats.map((stat, index) => (
+          <View key={index} style={{
+            alignItems: "center",
+            minWidth: 70,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.sm,
+          }}>
+            <Text style={{
+              fontSize: responsive(20, 24, 28),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.primary[600],
+            }}>
+              {stat.value}
+            </Text>
+            <Text style={{
+              fontSize: typography.fontSize.xs,
+              color: colors.text.tertiary,
+              marginTop: spacing.xs,
+              textAlign: "center",
+            }}>
+              {stat.label}
+            </Text>
           </View>
+        ))}
+      </View> */}
 
-          {/* Booking Info */}
-          <View style={{ ...cardStyle, flexDirection: width > 600 ? "row" : "column", alignItems: "center" }}>
-            <Image source={image2} style={{ width: width > 600 ? 120 : "100%", height: 120, borderRadius: 12, marginRight: width > 600 ? 15 : 0, marginBottom: width > 600 ? 0 : 10 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={homePageStyles.smallTitle}>Booking Information:</Text>
-              <Text style={homePageStyles.information}>{cleaningCompany.bookingInfo.description}</Text>
-            </View>
-          </View>
+      {/* Hero Image */}
+      <View
+        style={{ paddingHorizontal: spacing.lg, marginTop: spacing["2xl"] }}
+      >
+        <Image
+          source={image1}
+          style={{
+            width: "100%",
+            height: responsive(180, 220, 280),
+            borderRadius: radius["2xl"],
+          }}
+          resizeMode="cover"
+        />
+      </View>
 
-          {/* Special Considerations */}
-          <View style={cardStyle}>
-            <Text style={homePageStyles.smallTitle}>Special Considerations:</Text>
-            <Text style={homePageStyles.information}>{cleaningCompany.specialConsiderations.description}</Text>
-            <Image source={image4} style={{ width: "100%", height: 150, borderRadius: 12, marginTop: 10 }} />
-          </View>
+      {/* Features Section */}
+      <View
+        style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
+      >
+        <Text
+          style={{
+            fontSize: responsive(22, 26, 30),
+            fontWeight: typography.fontWeight.bold,
+            color: colors.text.primary,
+            textAlign: "center",
+            marginBottom: spacing.sm,
+          }}
+        >
+          Why Choose Us
+        </Text>
+        <Text
+          style={{
+            fontSize: typography.fontSize.base,
+            color: colors.text.secondary,
+            textAlign: "center",
+            marginBottom: spacing["2xl"],
+          }}
+        >
+          Everything you need for hassle-free rental turnovers
+        </Text>
 
-          {/* Worry-Free Guarantee */}
-          <View style={{ ...cardStyle, flexDirection: width > 600 ? "row" : "column", alignItems: "center" }}>
-            <Image source={image1} style={{ width: width > 600 ? 120 : "100%", height: 120, borderRadius: 12, marginRight: width > 600 ? 15 : 0, marginBottom: width > 600 ? 0 : 10 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={homePageStyles.smallTitle}>Our Worry-Free Guarantee:</Text>
-              <Text style={homePageStyles.information}>{cleaningCompany.ourWorryFreeGuarantee.description}</Text>
-            </View>
-          </View>
-
-          {/* Cancellation Policy */}
-          <View style={cardStyle}>
-            <Text style={homePageStyles.smallTitle}>Cancellation Policy:</Text>
-            <Text style={homePageStyles.information}>{cleaningCompany.cancellationPolicy.description}</Text>
-          </View>
-
-          {/* Get Help Button for homeowners - only show when logged in */}
-          {state.currentUser.token && (
-            <View style={{ ...cardStyle, alignItems: "center", backgroundColor: "#f0f9ff" }}>
-              <Text style={{ ...homePageStyles.smallTitle, marginBottom: 8 }}>Need Help?</Text>
-              <Text style={{ fontSize: 14, color: "#64748b", marginBottom: 16, textAlign: "center" }}>
-                Have questions about your booking, cleaning service, or want to provide feedback?
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+          }}
+        >
+          {features.map((feature, index) => (
+            <View
+              key={index}
+              style={{
+                width: width > 600 ? "48%" : "100%",
+                backgroundColor: colors.neutral[50],
+                borderRadius: radius.xl,
+                padding: spacing.xl,
+                marginBottom: spacing.lg,
+                borderWidth: 1,
+                borderColor: colors.border.light,
+              }}
+            >
+              <FeatureIcon icon={feature.icon} />
+              <Text
+                style={{
+                  fontSize: typography.fontSize.lg,
+                  fontWeight: typography.fontWeight.semibold,
+                  color: colors.text.primary,
+                  marginBottom: spacing.sm,
+                }}
+              >
+                {feature.title}
               </Text>
-              <GetHelpButton token={state.currentUser.token} />
+              <Text
+                style={{
+                  fontSize: typography.fontSize.sm,
+                  color: colors.text.secondary,
+                  lineHeight: 22,
+                }}
+              >
+                {feature.description}
+              </Text>
             </View>
-          )}
-          {/* Tax Forms Section for homeowners */}
-          {state.currentUser.token && <TaxFormsSection state={state} />}
+          ))}
         </View>
-      )}
+      </View>
+
+      {/* How It Works Section */}
+      <View
+        style={{
+          backgroundColor: colors.primary[50],
+          marginTop: spacing["2xl"],
+          paddingVertical: spacing["3xl"],
+          paddingHorizontal: spacing.lg,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: responsive(22, 26, 30),
+            fontWeight: typography.fontWeight.bold,
+            color: colors.text.primary,
+            textAlign: "center",
+            marginBottom: spacing["2xl"],
+          }}
+        >
+          How It Works
+        </Text>
+
+        <View
+          style={{
+            flexDirection: width > 600 ? "row" : "column",
+            justifyContent: "space-around",
+          }}
+        >
+          {[
+            {
+              step: "1",
+              title: "Sign Up",
+              desc: "Create your account in minutes",
+            },
+            {
+              step: "2",
+              title: "Add Property",
+              desc: "Enter your rental details",
+            },
+            {
+              step: "3",
+              title: "Book Cleaning",
+              desc: "Schedule with a few taps",
+            },
+          ].map((item, index) => (
+            <View
+              key={index}
+              style={{
+                alignItems: "center",
+                marginBottom: width > 600 ? 0 : spacing.xl,
+                flex: width > 600 ? 1 : undefined,
+              }}
+            >
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: colors.primary[600],
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: spacing.md,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.neutral[0],
+                    fontSize: typography.fontSize.xl,
+                    fontWeight: typography.fontWeight.bold,
+                  }}
+                >
+                  {item.step}
+                </Text>
+              </View>
+              <Text
+                style={{
+                  fontSize: typography.fontSize.lg,
+                  fontWeight: typography.fontWeight.semibold,
+                  color: colors.text.primary,
+                  marginBottom: spacing.xs,
+                }}
+              >
+                {item.title}
+              </Text>
+              <Text
+                style={{
+                  fontSize: typography.fontSize.sm,
+                  color: colors.text.secondary,
+                  textAlign: "center",
+                }}
+              >
+                {item.desc}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Pricing Preview */}
+      <View
+        style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
+      >
+        <Text
+          style={{
+            fontSize: responsive(22, 26, 30),
+            fontWeight: typography.fontWeight.bold,
+            color: colors.text.primary,
+            textAlign: "center",
+            marginBottom: spacing.sm,
+          }}
+        >
+          Simple, Transparent Pricing
+        </Text>
+        <Text
+          style={{
+            fontSize: typography.fontSize.base,
+            color: colors.text.secondary,
+            textAlign: "center",
+            marginBottom: spacing["2xl"],
+          }}
+        >
+          No hidden fees, no surprises
+        </Text>
+
+        <View
+          style={{
+            backgroundColor: colors.neutral[0],
+            borderRadius: radius["2xl"],
+            padding: spacing["2xl"],
+            borderWidth: 2,
+            borderColor: colors.primary[500],
+            ...shadows.lg,
+          }}
+        >
+          <View style={{ alignItems: "center", marginBottom: spacing.xl }}>
+            <Text
+              style={{
+                fontSize: typography.fontSize.sm,
+                color: colors.text.tertiary,
+                textTransform: "uppercase",
+                letterSpacing: 1,
+              }}
+            >
+              Starting at
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+              <Text
+                style={{
+                  fontSize: typography.fontSize.xl,
+                  color: colors.text.primary,
+                  marginTop: 8,
+                }}
+              >
+                $
+              </Text>
+              <Text
+                style={{
+                  fontSize: responsive(48, 56, 64),
+                  fontWeight: typography.fontWeight.bold,
+                  color: colors.primary[600],
+                }}
+              >
+                {cleaningCompany.basePrice}
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontSize: typography.fontSize.sm,
+                color: colors.text.secondary,
+              }}
+            >
+              per cleaning
+            </Text>
+          </View>
+
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: colors.border.light,
+              paddingTop: spacing.lg,
+            }}
+          >
+            {[
+              "1 bed / 1 bath base rate",
+              `+$${cleaningCompany.extraBedBathFee} per additional bed or bath`,
+              `Sheet service available (+$${cleaningCompany.sheetCleaningFee})`,
+              "Flexible 10am-4pm scheduling",
+            ].map((item, index) => (
+              <View
+                key={index}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: spacing.md,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: colors.success[500],
+                    marginRight: spacing.md,
+                  }}
+                >
+                  ✓
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.sm,
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {item}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <Pressable
+            onPress={() => navigate("/sign-up")}
+            style={({ pressed }) => ({
+              backgroundColor: colors.primary[600],
+              paddingVertical: spacing.lg,
+              borderRadius: radius.xl,
+              marginTop: spacing.lg,
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.neutral[0],
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.bold,
+                textAlign: "center",
+              }}
+            >
+              Start Booking Today
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Testimonials
+      <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}>
+        <Text style={{
+          fontSize: responsive(22, 26, 30),
+          fontWeight: typography.fontWeight.bold,
+          color: colors.text.primary,
+          textAlign: "center",
+          marginBottom: spacing["2xl"],
+        }}>
+          What Our Clients Say
+        </Text>
+
+        {testimonials.map((testimonial, index) => (
+          <View key={index} style={{
+            backgroundColor: colors.neutral[50],
+            borderRadius: radius.xl,
+            padding: spacing.xl,
+            marginBottom: spacing.lg,
+            borderLeftWidth: 4,
+            borderLeftColor: colors.secondary[500],
+          }}>
+            <Text style={{
+              fontSize: typography.fontSize.base,
+              color: colors.text.primary,
+              lineHeight: 24,
+              fontStyle: "italic",
+              marginBottom: spacing.lg,
+            }}>
+              "{testimonial.text}"
+            </Text>
+            <View>
+              <Text style={{
+                fontSize: typography.fontSize.sm,
+                fontWeight: typography.fontWeight.semibold,
+                color: colors.text.primary,
+              }}>
+                {testimonial.author}
+              </Text>
+              <Text style={{
+                fontSize: typography.fontSize.xs,
+                color: colors.text.tertiary,
+              }}>
+                {testimonial.role}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View> */}
+
+      {/* Guarantee Section */}
+      <View
+        style={{
+          marginHorizontal: spacing.lg,
+          marginTop: spacing["2xl"],
+          backgroundColor: colors.success[50],
+          borderRadius: radius["2xl"],
+          padding: spacing["2xl"],
+          borderWidth: 1,
+          borderColor: colors.success[200],
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: spacing.md,
+          }}
+        >
+          <Text style={{ fontSize: 28, marginRight: spacing.md }}>🛡️</Text>
+          <Text
+            style={{
+              fontSize: typography.fontSize.xl,
+              fontWeight: typography.fontWeight.bold,
+              color: colors.success[700],
+            }}
+          >
+            Our Worry-Free Guarantee
+          </Text>
+        </View>
+        <Text
+          style={{
+            fontSize: typography.fontSize.sm,
+            color: colors.text.secondary,
+            lineHeight: 22,
+            marginBottom: spacing.md,
+          }}
+        >
+          When you trust your property to our team, you can rest easy knowing
+          every turnover is handled with care and precision. We understand how
+          important five-star reviews, on-time check-ins, and consistent
+          cleanliness are to your success. You deserve the confidence that each
+          guest will walk into a spotless, guest-ready space—every single time.
+        </Text>
+        <Text
+          style={{
+            fontSize: typography.fontSize.sm,
+            color: colors.text.secondary,
+            lineHeight: 22,
+          }}
+        >
+          We provide the peace of mind you're looking for with reliable,
+          detail-driven turnover cleanings performed by friendly, trustworthy
+          professionals. Our Worry-Free Guarantee reflects our commitment to
+          going the extra mile so your rental always feels welcoming and
+          professionally maintained.
+        </Text>
+      </View>
+
+      {/* Final CTA */}
+      <View
+        style={{
+          marginTop: spacing["3xl"],
+          marginHorizontal: spacing.lg,
+          backgroundColor: colors.primary[600],
+          borderRadius: radius["2xl"],
+          padding: spacing["2xl"],
+          alignItems: "center",
+        }}
+      >
+        <Text
+          style={{
+            fontSize: responsive(20, 24, 28),
+            fontWeight: typography.fontWeight.bold,
+            color: colors.neutral[0],
+            textAlign: "center",
+            marginBottom: spacing.sm,
+          }}
+        >
+          Ready to Get Started?
+        </Text>
+        <Text
+          style={{
+            fontSize: typography.fontSize.base,
+            color: colors.primary[100],
+            textAlign: "center",
+            marginBottom: spacing.xl,
+          }}
+        >
+          Join hundreds of property owners who trust us with their rentals
+        </Text>
+        <Pressable
+          onPress={() => navigate("/sign-up")}
+          style={({ pressed }) => ({
+            backgroundColor: colors.secondary[500],
+            paddingVertical: spacing.lg,
+            paddingHorizontal: spacing["3xl"],
+            borderRadius: radius.xl,
+            ...shadows.lg,
+            opacity: pressed ? 0.9 : 1,
+          })}
+        >
+          <Text
+            style={{
+              color: colors.neutral[0],
+              fontSize: typography.fontSize.lg,
+              fontWeight: typography.fontWeight.bold,
+            }}
+          >
+            Create Free Account
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Footer Info */}
+      <View
+        style={{
+          marginTop: spacing["3xl"],
+          paddingHorizontal: spacing.lg,
+          alignItems: "center",
+        }}
+      >
+        <Text
+          style={{
+            fontSize: typography.fontSize.sm,
+            color: colors.text.tertiary,
+            textAlign: "center",
+          }}
+        >
+          Serving {cleaningCompany.location} and surrounding areas
+        </Text>
+        <Text
+          style={{
+            fontSize: typography.fontSize.xs,
+            color: colors.text.tertiary,
+            marginTop: spacing.sm,
+          }}
+        >
+          Available daily
+        </Text>
+      </View>
     </ScrollView>
   );
 };
