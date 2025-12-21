@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-340_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-482_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -97,6 +97,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Broadcast messages
 - Process applications
 - Tax reporting
+- Terms & Conditions editor
 - Service area mgmt
 
 </td>
@@ -139,9 +140,12 @@ client/
 │   │   ├── payments/             # Stripe integration
 │   │   ├── reviews/              # Review components
 │   │   ├── tax/                  # Tax documents
+│   │   ├── terms/                # Terms & Conditions
+│   │   │   ├── TermsModal.js     # Terms acceptance modal
+│   │   │   └── TermsAcceptanceScreen.js
 │   │   ├── tiles/                # Reusable UI tiles
 │   │   ├── userAuthentication/   # Login/registration
-│   │   └── HomePage.js           # Main dashboard
+│   │   └── HomePage.js           # Landing page & dashboard
 │   │
 │   └── services/
 │       ├── fetchRequests/        # API service classes
@@ -161,6 +165,9 @@ client/
 │   │   ├── CleaningChecklist.test.js
 │   │   ├── Earnings.test.js
 │   │   ├── Bill.test.js
+│   │   ├── TermsModal.test.js
+│   │   ├── TermsEditor.test.js
+│   │   ├── SignUpForm.test.js
 │   │   └── ...
 │   └── services/                 # Service tests
 │       ├── TaxService.test.js
@@ -403,7 +410,9 @@ npm test -- CleaningChecklist.test.js
 | ReviewComponents | 54 | Review forms & display |
 | EarningsComponents | 12 | Earnings calculations |
 | AuthContext | 18 | Authentication flow |
-| **Total** | **340** | - |
+| TermsComponents | 85 | Terms modal, editor, acceptance |
+| SignUpForm | 42 | Registration with terms |
+| **Total** | **482** | - |
 
 ### Example Test
 

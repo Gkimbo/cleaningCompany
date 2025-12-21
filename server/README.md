@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-568_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-649_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -121,7 +121,8 @@ server/
 │   │   ├── messages.test.js
 │   │   ├── payments.test.js
 │   │   ├── reviews.test.js
-│   │   └── tax.test.js
+│   │   ├── tax.test.js
+│   │   └── terms.test.js
 │   └── services/                   # Service tests
 │       └── calendarSyncService.test.js
 │
@@ -149,6 +150,8 @@ server/
 │   ├── TaxDocument.js
 │   ├── Conversation.js
 │   ├── Message.js
+│   ├── TermsAndConditions.js
+│   ├── UserTermsAcceptance.js
 │   └── index.js
 │
 ├── routes/api/v1/
@@ -163,7 +166,8 @@ server/
 │   ├── messageRouter.js            # Messaging
 │   ├── managerDashboardRouter.js   # Manager features
 │   ├── applicationRouter.js        # Job applications
-│   └── jobPhotosRouter.js          # Photo uploads
+│   ├── jobPhotosRouter.js          # Photo uploads
+│   └── termsRouter.js              # Terms & Conditions
 │
 ├── services/
 │   ├── calendarSyncService.js      # iCal parsing & sync
@@ -304,6 +308,19 @@ server/
 | `POST` | `/api/v1/messages/broadcast` | Broadcast message | Manager |
 | `GET` | `/api/v1/messages/unread-count` | Get unread count | Yes |
 | `PATCH` | `/api/v1/messages/mark-read/:id` | Mark as read | Yes |
+
+### Terms & Conditions
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/terms/current/:type` | Get current terms (public) | No |
+| `GET` | `/api/v1/terms/check` | Check if user needs to accept | Yes |
+| `POST` | `/api/v1/terms/accept` | Accept terms | Yes |
+| `GET` | `/api/v1/terms/user/history` | Get user's acceptance history | Yes |
+| `POST` | `/api/v1/terms` | Create new terms version | Manager |
+| `GET` | `/api/v1/terms/history/:type` | Get version history | Manager |
+| `GET` | `/api/v1/terms/:id` | Get specific version | Manager |
+| `PATCH` | `/api/v1/terms/:id/publish` | Publish terms version | Manager |
 
 ---
 
@@ -524,7 +541,7 @@ Configure these webhooks in your Stripe dashboard:
 ## Testing
 
 ```bash
-# Run all tests (568 tests)
+# Run all tests (649 tests)
 npm test
 
 # Run specific test file
@@ -553,8 +570,10 @@ npm test -- __tests__/integration/
 | Reviews | 32 | Create, read, summaries |
 | Messaging | 21 | Conversations, send, broadcast |
 | Manager Features | 28 | Dashboard, applications |
+| Terms & Conditions | 54 | Version management, acceptance tracking |
+| Models | 27 | TermsAndConditions, UserTermsAcceptance |
 | Integration | 27 | Full payment flows |
-| **Total** | **568** | - |
+| **Total** | **649** | - |
 
 ---
 

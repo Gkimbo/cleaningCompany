@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-907_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-1131_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service management platform for short-term rental properties**
 
@@ -60,6 +60,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - Platform tax reporting (Schedule C)
 - Quarterly estimated tax calculations
 - Service area management
+- Terms & Conditions management
 
 </td>
 </tr>
@@ -75,6 +76,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Tax Management** | Automated 1099-NEC generation for cleaners, platform income tracking, Schedule C data, and quarterly tax estimates. |
 | **Photo Documentation** | Before/after photo capture for quality assurance. Room-by-room photo organization with notes. |
 | **Review System** | Multi-aspect reviews for cleaners covering quality, timeliness, and communication. |
+| **Terms & Conditions** | Version-controlled T&C management with PDF/text support, user acceptance tracking, and legal compliance snapshots. |
 
 ---
 
@@ -205,12 +207,13 @@ kleanr/
 │   │   │   ├── messaging/          # Real-time chat
 │   │   │   ├── payments/           # Stripe payment UI
 │   │   │   ├── reviews/            # Review system
-│   │   │   └── tax/                # Tax document views
+│   │   │   ├── tax/                # Tax document views
+│   │   │   └── terms/              # Terms & Conditions UI
 │   │   └── services/
 │   │       ├── fetchRequests/      # API service classes
 │   │       ├── AuthContext.js      # Authentication state
 │   │       └── SocketContext.js    # WebSocket provider
-│   ├── __tests__/                  # 340 client tests
+│   ├── __tests__/                  # 482 client tests
 │   └── package.json
 │
 ├── server/                         # Express.js API Server
@@ -221,14 +224,15 @@ kleanr/
 │   │   ├── stripeConnectRouter.js  # Cleaner payouts
 │   │   ├── messageRouter.js        # Messaging endpoints
 │   │   ├── taxRouter.js            # Tax documents
-│   │   └── reviewsRouter.js        # Review system
+│   │   ├── reviewsRouter.js        # Review system
+│   │   └── termsRouter.js          # Terms & Conditions
 │   ├── services/
 │   │   ├── calendarSyncService.js  # iCal parsing & sync
 │   │   ├── TaxDocumentService.js   # 1099-NEC generation
 │   │   └── PlatformTaxService.js   # Platform tax reports
 │   ├── models/                     # Sequelize models
 │   ├── migrations/                 # Database migrations
-│   ├── __tests__/                  # 568 server tests
+│   ├── __tests__/                  # 649 server tests
 │   └── package.json
 │
 └── README.md
@@ -239,10 +243,10 @@ kleanr/
 ## Testing
 
 ```bash
-# Run all server tests (568 tests)
+# Run all server tests (649 tests)
 cd server && npm test
 
-# Run all client tests (340 tests)
+# Run all client tests (482 tests)
 cd client && npm test
 
 # Run with coverage
@@ -315,6 +319,16 @@ npm test -- --coverage
 | `POST` | `/api/v1/tax/submit-w9` | Submit W-9 data |
 | `GET` | `/api/v1/tax/contractor/1099-nec/:year` | Get 1099-NEC |
 | `GET` | `/api/v1/tax/platform/comprehensive-report/:year` | Platform tax report |
+
+### Terms & Conditions
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/terms/current/:type` | Get current terms (public) |
+| `GET` | `/api/v1/terms/check` | Check if user needs to accept terms |
+| `POST` | `/api/v1/terms/accept` | Accept terms |
+| `POST` | `/api/v1/terms` | Create new terms version (Manager) |
+| `GET` | `/api/v1/terms/history/:type` | Get version history (Manager) |
 
 ---
 
