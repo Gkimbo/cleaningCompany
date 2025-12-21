@@ -4,7 +4,7 @@
 global.fetch = jest.fn();
 
 // Import after mocking
-const TaxService = require("../../app/services/fetchRequests/TaxService").default;
+const TaxService = require("../../src/services/fetchRequests/TaxService").default;
 
 describe("TaxService", () => {
   const mockToken = "test_token_123";

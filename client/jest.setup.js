@@ -60,7 +60,8 @@ console.warn = (...args) => {
   originalWarn.apply(console, args);
 };
 
-// Mock Alert
-jest.mock("react-native/Libraries/Alert/Alert", () => ({
-  alert: jest.fn(),
-}));
+// Mock Alert - assign directly to make it mockable/spyable
+const { Alert } = require("react-native");
+if (Alert) {
+  Alert.alert = jest.fn();
+}

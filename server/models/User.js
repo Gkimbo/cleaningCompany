@@ -49,6 +49,23 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		accountFrozen: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		accountFrozenAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+		},
+		accountFrozenReason: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		termsAcceptedVersion: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 	});
 
 	// Hash the password before saving the user
@@ -110,6 +127,12 @@ module.exports = (sequelize, DataTypes) => {
 		User.hasMany(models.Payout, {
 		  foreignKey: "cleanerId",
 		  as: "payouts",
+		});
+
+		// Terms acceptances
+		User.hasMany(models.UserTermsAcceptance, {
+		  foreignKey: "userId",
+		  as: "termsAcceptances",
 		});
 	  };
 	  

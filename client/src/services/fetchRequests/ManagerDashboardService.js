@@ -102,6 +102,54 @@ class ManagerDashboardService {
     );
   }
 
+  static async getAppUsageAnalytics(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/manager-dashboard/app-usage-analytics`,
+      token,
+      {
+        signups: {
+          today: 0,
+          thisWeek: 0,
+          thisMonth: 0,
+          thisYear: 0,
+          allTime: 0,
+        },
+        sessions: {
+          today: 0,
+          thisWeek: 0,
+          thisMonth: 0,
+          allTime: 0,
+          uniqueVisitorsToday: 0,
+          uniqueVisitorsWeek: 0,
+          uniqueVisitorsMonth: 0,
+        },
+        engagement: {
+          averageSessionDuration: 0, // in seconds
+          averagePagesPerSession: 0,
+          bounceRate: 0, // percentage
+          returningUserRate: 0, // percentage
+        },
+        pageViews: {
+          today: 0,
+          thisWeek: 0,
+          thisMonth: 0,
+          allTime: 0,
+          topPages: [],
+        },
+        deviceBreakdown: {
+          mobile: 0,
+          desktop: 0,
+          tablet: 0,
+        },
+        retention: {
+          day1: 0,
+          day7: 0,
+          day30: 0,
+        },
+      }
+    );
+  }
+
   static async recheckServiceAreas(token) {
     try {
       const response = await fetch(

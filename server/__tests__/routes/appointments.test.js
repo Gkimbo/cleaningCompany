@@ -191,6 +191,11 @@ describe("Appointment Routes", () => {
     it("should create new appointments", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        hasPaymentMethod: true,
+      });
+
       UserHomes.findOne.mockResolvedValue({
         dataValues: {
           id: 1,
@@ -198,6 +203,7 @@ describe("Appointment Routes", () => {
           numBaths: 2,
           timeToBeCompleted: "3",
           cleanersNeeded: 1,
+          outsideServiceArea: false,
         },
       });
 

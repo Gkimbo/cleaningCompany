@@ -77,25 +77,43 @@ const QuickBookFlow = ({ state, dispatch }) => {
   const calculatePrice = () => {
     if (!home) return 0;
 
-    let basePrice = 0;
-    const beds = parseInt(home.numBeds) || 0;
-    const baths = parseInt(home.numBaths) || 0;
-    const rooms = beds + baths;
+    let basePrice = 150; // Base price for 1 bed 1 bath
+    const beds = parseInt(home.numBeds) || 1;
+    const baths = parseInt(home.numBaths) || 1;
 
-    if (rooms <= 3) basePrice = 100;
-    else if (rooms <= 5) basePrice = 150;
-    else if (rooms <= 7) basePrice = 200;
-    else if (rooms <= 9) basePrice = 250;
-    else basePrice = 300;
+    // Add $50 for each additional bed and bath
+    if (beds > 1) basePrice += (beds - 1) * 50;
+    if (baths > 1) basePrice += (baths - 1) * 50;
 
     // Time window surcharge
     if (home.timeToBeCompleted === "10-3" || home.timeToBeCompleted === "11-4") {
       basePrice += 30;
+    } else if (home.timeToBeCompleted === "12-2") {
+      basePrice += 50;
     }
 
-    // Sheets/towels
-    if (home.sheetsProvided === "yes") basePrice += 25;
-    if (home.towelsProvided === "yes") basePrice += 25;
+    // Sheets pricing: $30 per bed
+    if (home.sheetsProvided === "yes") {
+      if (home.bedConfigurations && Array.isArray(home.bedConfigurations) && home.bedConfigurations.length > 0) {
+        const bedsNeedingSheets = home.bedConfigurations.filter((b) => b.needsSheets).length;
+        basePrice += bedsNeedingSheets * 30;
+      } else {
+        basePrice += beds * 30;
+      }
+    }
+
+    // Towels pricing: $10 per towel, $5 per face cloth
+    if (home.towelsProvided === "yes") {
+      if (home.bathroomConfigurations && Array.isArray(home.bathroomConfigurations) && home.bathroomConfigurations.length > 0) {
+        home.bathroomConfigurations.forEach((bath) => {
+          basePrice += (bath.towels || 0) * 10;
+          basePrice += (bath.faceCloths || 0) * 5;
+        });
+      } else {
+        // Fallback: 2 towels + 1 face cloth per bathroom
+        basePrice += baths * (2 * 10 + 1 * 5);
+      }
+    }
 
     return basePrice;
   };
@@ -171,6 +189,10 @@ const QuickBookFlow = ({ state, dispatch }) => {
       const datesWithPrice = selectedDates.map((date) => ({
         date,
         price: pricePerCleaning,
+        bringSheets: home.sheetsProvided,
+        bringTowels: home.towelsProvided,
+        sheetConfigurations: home.sheetsProvided === "yes" ? home.bedConfigurations : null,
+        towelConfigurations: home.towelsProvided === "yes" ? home.bathroomConfigurations : null,
       }));
 
       const infoObject = {
@@ -532,7 +554,7 @@ const QuickBookFlow = ({ state, dispatch }) => {
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 style={styles.secondaryButton}
-                onPress={() => navigate(`/homes/${homeId}`)}
+                onPress={() => navigate(`/details/${homeId}`)}
               >
                 <Text style={styles.secondaryButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -552,7 +574,7 @@ const QuickBookFlow = ({ state, dispatch }) => {
         {selectedDates.length === 0 && (
           <TouchableOpacity
             style={[styles.secondaryButton, { marginTop: 16 }]}
-            onPress={() => navigate(`/homes/${homeId}`)}
+            onPress={() => navigate(`/details/${homeId}`)}
           >
             <Text style={styles.secondaryButtonText}>Back to Home Details</Text>
           </TouchableOpacity>

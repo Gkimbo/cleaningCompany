@@ -166,9 +166,9 @@ const MyRequests = ({ state }) => {
     });
   }, [allRequests, userLocation, appointmentLocations, sortOption]);
 
-  // Calculate stats
+  // Calculate stats (cleaners receive 90% of appointment price)
   const totalEarnings = sortedRequests.reduce(
-    (sum, r) => sum + (Number(r.price) || 0),
+    (sum, r) => sum + (Number(r.price) || 0) * 0.9,
     0
   );
 

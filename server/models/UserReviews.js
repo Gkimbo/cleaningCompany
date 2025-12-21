@@ -19,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     reviewType: {
-      type: DataTypes.ENUM("homeowner_to_cleaner", "cleaner_to_homeowner"),
+      type: DataTypes.ENUM("homeowner_to_cleaner", "cleaner_to_homeowner", "system_cancellation_penalty"),
       allowNull: true,
     },
     isPublished: {

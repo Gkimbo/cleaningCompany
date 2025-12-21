@@ -58,7 +58,6 @@ applicationRouter.post("/submitted", async (req, res) => {
   } = req.body;
 
   try {
-    console.log(req.body);
     const applicationInfo = await ApplicationInfoClass.addApplicationToDB({
       firstName,
       lastName,
@@ -139,7 +138,9 @@ applicationRouter.post("/submitted", async (req, res) => {
         });
       }
 
-      console.log(`✅ Notified ${managers.length} manager(s) about new application`);
+      console.log(
+        `✅ Notified ${managers.length} manager(s) about new application`
+      );
     } catch (notifyError) {
       console.error("Error notifying managers:", notifyError);
       // Don't fail the application submission if notifications fail
@@ -155,8 +156,8 @@ applicationRouter.post("/submitted", async (req, res) => {
 applicationRouter.get("/all-applications", async (req, res) => {
   try {
     const applications = await UserApplications.findAll({});
-    console.log(applications)
-    const serializedApplications = ApplicationSerializer.serializeArray(applications);
+    const serializedApplications =
+      ApplicationSerializer.serializeArray(applications);
     return res.status(200).json({ serializedApplications });
   } catch (error) {
     console.error(error);
@@ -169,7 +170,9 @@ applicationRouter.delete("/:id", async (req, res) => {
   const { id } = req.params;
   try {
     await UserApplications.destroy({ where: { id } });
-    return res.status(200).json({ message: "Application deleted successfully" });
+    return res
+      .status(200)
+      .json({ message: "Application deleted successfully" });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Failed to delete application" });
@@ -181,7 +184,13 @@ applicationRouter.patch("/:id/status", async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
-  const validStatuses = ["pending", "under_review", "background_check", "approved", "rejected"];
+  const validStatuses = [
+    "pending",
+    "under_review",
+    "background_check",
+    "approved",
+    "rejected",
+  ];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ error: "Invalid status value" });
   }
@@ -193,7 +202,9 @@ applicationRouter.patch("/:id/status", async (req, res) => {
     }
 
     await application.update({ status });
-    return res.status(200).json({ message: "Status updated successfully", status });
+    return res
+      .status(200)
+      .json({ message: "Status updated successfully", status });
   } catch (error) {
     console.error("Error updating application status:", error);
     return res.status(500).json({ error: "Failed to update status" });

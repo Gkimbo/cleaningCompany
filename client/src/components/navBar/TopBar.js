@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
+import { colors, spacing, radius, shadows } from "../../services/styles/theme";
 
 import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
@@ -176,7 +177,7 @@ const TopBar = ({ dispatch, state }) => {
 };
 
 const styles = StyleSheet.create({
-  // Top bar container with vibrant multi-color glass effect
+  // Top bar container - dark slate that complements teal
   glassContainer: {
     marginTop: Platform.OS === "ios" ? 10 : 5,
     paddingVertical: 14,
@@ -185,17 +186,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-    shadowColor: "#FF69B4",
+    borderColor: colors.neutral[700],
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
     elevation: 5,
-    backdropFilter: "blur(12px)", // web
-    backgroundColor: "rgba(30, 144, 255, 0.35)",
-    // Multi-color gradient for web fallback
-    background:
-      "linear-gradient(90deg, #1E90FF, #7B68EE, #FF69B4, #FFB347, #00CED1)",
+    backgroundColor: colors.neutral[800],
   },
 
   // Container for brand and right section
@@ -211,23 +208,15 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.8,
     textAlign: "center",
-    color: "#facc15", // warm amber-gold that pairs beautifully with blue
+    color: colors.primary[400], // Teal accent for brand
     fontFamily: Platform.select({
       ios: "AvenirNext-Bold",
       android: "Roboto-Bold",
       default: "Poppins-Bold",
     }),
-
-    // Light shadow for clarity, not drama
-    textShadowColor: "rgba(0, 0, 0, 0.25)",
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-
-    // Small glow for subtle prominence on glassy backgrounds
-    shadowColor: "rgba(250, 189, 21, 0.4)",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 3,
   },
 
   // Right section (buttons)
@@ -240,112 +229,91 @@ const styles = StyleSheet.create({
   // Hamburger menu button
   hamburgerButton: {
     padding: 8,
-    borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    shadowColor: "#FF69B4",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[700],
   },
 
   // Auth buttons (Sign In / Sign Up / Become Cleaner)
   authButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    shadowColor: "#FFD700",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+    backgroundColor: colors.neutral[700],
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.neutral[600],
   },
   authButtonText: {
-    color: "#fff",
-    fontWeight: "700",
+    color: colors.neutral[100],
+    fontWeight: "600",
     fontSize: 14,
-    textShadowColor: "rgba(0,0,0,0.3)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
 
   // Overlay behind modal
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     flexDirection: "row",
     justifyContent: "flex-end",
-    paddingTop: 60, // pushes sidebar down so header is visible
+    paddingTop: 60,
   },
 
   // Sidebar modal container
   glassSidebar: {
-    width: 230,
+    width: 250,
     height: "100%",
-    backgroundColor: "rgba(123, 104, 238, 0.35)", // purple-tinted glass
+    backgroundColor: colors.neutral[800],
     borderLeftWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: colors.neutral[700],
     padding: 20,
-    backdropFilter: "blur(15px)",
-    shadowColor: "#FF69B4",
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
 
   // Modal header text
   sidebarHeader: {
-    color: "#fff",
+    color: colors.primary[400],
     fontSize: 20,
     fontWeight: "700",
-    marginBottom: 16,
+    marginBottom: 20,
     textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.4)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[700],
   },
 
   // Close button inside modal
   closeButton: {
-    marginTop: 20,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    paddingVertical: 8,
-    borderRadius: 10,
+    marginTop: 24,
+    backgroundColor: colors.primary[600],
+    paddingVertical: 12,
+    borderRadius: radius.lg,
     alignItems: "center",
-    shadowColor: "#FFD700",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
   },
   closeButtonText: {
-    color: "#fff",
-    fontWeight: "600",
+    color: colors.neutral[0],
+    fontWeight: "700",
+    fontSize: 16,
     textAlign: "center",
   },
 
   // General glass buttons (Sign Out / My Requests / Home)
   glassButton: {
-    marginVertical: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
-    borderRadius: 50,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    marginVertical: 6,
+    backgroundColor: colors.neutral[700],
+    borderRadius: radius.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-    shadowColor: "#FF4500",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
+    borderColor: colors.neutral[600],
   },
   glassButtonText: {
-    color: "#fff",
+    color: colors.neutral[100],
     fontWeight: "600",
-    fontSize: 16,
-    textShadowColor: "rgba(0,0,0,0.35)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    fontSize: 15,
   },
   unauthContainer: {
     flex: 1,
@@ -364,6 +332,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginTop: 8,
+  },
+  authButtonsContainerTitle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
 });
 

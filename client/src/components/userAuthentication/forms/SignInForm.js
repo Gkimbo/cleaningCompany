@@ -11,6 +11,7 @@ const SignInForm = ({ state, dispatch }) => {
 	const [userName, setUserName] = useState("");
 	const [password, setPassword] = useState("");
 	const [redirect, setRedirect] = useState(false);
+	const [redirectToTerms, setRedirectToTerms] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const [showPassword, setShowPassword] = useState(false);
 	const navigate = useNavigate();
@@ -52,7 +53,13 @@ const SignInForm = ({ state, dispatch }) => {
 					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
 				}
 				login(response.token);
-				setRedirect(true);
+
+				// Check if user needs to accept updated terms
+				if (response.requiresTermsAcceptance) {
+					setRedirectToTerms(true);
+				} else {
+					setRedirect(true);
+				}
 			}
 		}
 	};
@@ -62,6 +69,12 @@ const SignInForm = ({ state, dispatch }) => {
 			navigate("/");
 		}
 	}, [redirect]);
+
+	useEffect(() => {
+		if (redirectToTerms) {
+			navigate("/terms-acceptance");
+		}
+	}, [redirectToTerms]);
 
 	return (
 		<View>

@@ -1,12 +1,15 @@
 <div align="center">
 
-# Kleanr Client
+# Kleanr Mobile App
 
-![React Native](https://img.shields.io/badge/React%20Native-0.76-blue)
-![Expo](https://img.shields.io/badge/Expo-SDK%2052-000020)
-![Tests](https://img.shields.io/badge/tests-92%20passing-brightgreen)
+![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
+![TypeScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![Tests](https://img.shields.io/badge/Tests-482_Passing-brightgreen?style=for-the-badge)
 
-**React Native mobile application for the Kleanr cleaning service platform**
+**Cross-platform mobile application for the Kleanr cleaning service platform**
+
+[Getting Started](#-getting-started) | [Features](#-features) | [Architecture](#-architecture) | [Testing](#-testing)
 
 </div>
 
@@ -14,7 +17,9 @@
 
 ## Overview
 
-The Kleanr client is a cross-platform mobile application built with React Native and Expo. It provides interfaces for homeowners to book cleanings, cleaners to manage their schedules, and managers to oversee operations.
+The Kleanr mobile app is a React Native application built with Expo that provides a seamless experience for homeowners to book cleanings, cleaners to manage their schedules and earnings, and managers to oversee platform operations.
+
+---
 
 ## Getting Started
 
@@ -24,6 +29,7 @@ The Kleanr client is a cross-platform mobile application built with React Native
 - npm or yarn
 - Expo CLI (`npm install -g expo-cli`)
 - iOS Simulator (Mac) or Android Emulator
+- Expo Go app (for physical device testing)
 
 ### Installation
 
@@ -37,219 +43,465 @@ npm start
 
 ### Running the App
 
-After starting the development server, press:
+| Key | Platform | Description |
+|-----|----------|-------------|
+| `w` | Web | Open in browser |
+| `i` | iOS | Open in iOS Simulator |
+| `a` | Android | Open in Android Emulator |
 
-| Key | Platform |
-|-----|----------|
-| `w` | Open in web browser |
-| `i` | Open in iOS Simulator |
-| `a` | Open in Android Emulator |
+Or scan the QR code with **Expo Go** on your device.
 
-Or scan the QR code with the Expo Go app on your device.
+### Environment Setup
 
-## Project Structure
+Update the API base URL in `src/services/config.js`:
+
+```javascript
+export const API_BASE = "http://localhost:3000/api/v1";
+```
+
+---
+
+## Features
+
+### By User Type
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+#### Homeowners
+- Book cleaning appointments
+- Manage multiple properties
+- Calendar sync (Airbnb, VRBO)
+- Secure Stripe payments
+- Real-time messaging
+- Payment history & receipts
+
+</td>
+<td width="33%" valign="top">
+
+#### Cleaners
+- View assigned jobs
+- Photo documentation
+- Digital checklists
+- Earnings dashboard
+- Stripe Connect payouts
+- 1099-NEC tax access
+
+</td>
+<td width="33%" valign="top">
+
+#### Managers
+- Assign cleaners to jobs
+- Platform overview
+- Broadcast messages
+- Process applications
+- Tax reporting
+- Terms & Conditions editor
+- Service area mgmt
+
+</td>
+</tr>
+</table>
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Calendar Sync** | Connect Airbnb, VRBO, Booking.com calendars. Auto-create cleanings after checkouts. |
+| **Photo Documentation** | Before/after photos with room-by-room organization |
+| **Cleaning Checklists** | Digital task lists with progress tracking |
+| **Real-time Messaging** | WebSocket-powered chat with push notifications |
+| **Stripe Payments** | Apple Pay, Google Pay, and card payments |
+| **Review System** | Multi-aspect cleaner reviews |
+
+---
+
+## Architecture
+
+### Project Structure
 
 ```
 client/
-├── app/
+├── src/
 │   ├── components/
-│   │   ├── addUserInformation/   # User profile forms
-│   │   ├── admin/                # Manager dashboard
-│   │   ├── appointments/         # Appointment management
-│   │   ├── calender/             # Calendar views
-│   │   ├── editHome/             # Property editing
-│   │   ├── employeeAssignments/  # Cleaner assignments
-│   │   ├── messaging/            # Chat & messaging
-│   │   ├── navBar/               # Navigation components
-│   │   ├── payments/             # Payment UI & Stripe
-│   │   ├── reviews/              # Review system
-│   │   ├── tax/                  # Tax documents section
-│   │   ├── tiles/                # Reusable tile components
+│   │   ├── account/              # Account settings
+│   │   ├── appointments/         # Booking & scheduling
+│   │   ├── calendarSync/         # iCal integration
+│   │   ├── cleaner/              # Cleaner dashboard
+│   │   ├── client/               # Homeowner views
+│   │   ├── employeeAssignments/  # Job photos & checklists
+│   │   │   └── jobPhotos/
+│   │   │       └── CleaningChecklist.js
+│   │   ├── manager/              # Manager dashboard
+│   │   ├── messaging/            # Chat system
+│   │   ├── navBar/               # Navigation
+│   │   ├── onboarding/           # User onboarding flow
+│   │   ├── payments/             # Stripe integration
+│   │   ├── reviews/              # Review components
+│   │   ├── tax/                  # Tax documents
+│   │   ├── terms/                # Terms & Conditions
+│   │   │   ├── TermsModal.js     # Terms acceptance modal
+│   │   │   └── TermsAcceptanceScreen.js
+│   │   ├── tiles/                # Reusable UI tiles
 │   │   ├── userAuthentication/   # Login/registration
-│   │   └── HomePage.js           # Main dashboard
+│   │   └── HomePage.js           # Landing page & dashboard
 │   │
 │   └── services/
 │       ├── fetchRequests/        # API service classes
-│       │   ├── fetchData.js      # General API calls
+│       │   ├── fetchData.js      # General API
 │       │   ├── MessageService.js # Messaging API
 │       │   ├── PaymentService.js # Payment API
-│       │   └── TaxService.js     # Tax documents API
-│       ├── styles/               # StyleSheet definitions
-│       ├── data/                 # Static data
-│       └── SocketContext.js      # WebSocket provider
+│       │   └── TaxService.js     # Tax API
+│       ├── styles/
+│       │   └── theme.js          # Design system
+│       ├── AuthContext.js        # Auth state provider
+│       ├── SocketContext.js      # WebSocket provider
+│       └── config.js             # App configuration
 │
 ├── __tests__/
 │   ├── components/               # Component tests
-│   │   ├── Bill.test.js
+│   │   ├── CalendarSyncManager.test.js
+│   │   ├── CleaningChecklist.test.js
 │   │   ├── Earnings.test.js
-│   │   └── TaxFormsSection.test.js
+│   │   ├── Bill.test.js
+│   │   ├── TermsModal.test.js
+│   │   ├── TermsEditor.test.js
+│   │   ├── SignUpForm.test.js
+│   │   └── ...
 │   └── services/                 # Service tests
-│       ├── reducerFunction.test.js
-│       └── TaxService.test.js
+│       ├── TaxService.test.js
+│       ├── AuthContext.test.js
+│       └── reducerFunction.test.js
 │
-├── assets/                       # Images and fonts
+├── assets/                       # Images, fonts
 ├── jest.config.js                # Jest configuration
 ├── jest.setup.js                 # Test setup
 └── package.json
 ```
 
-## Key Components
+### State Management
 
-### HomePage
-Main dashboard that displays different content based on user type:
-- **Cleaners**: Today's appointments, upcoming jobs, earnings, reviews, tax documents
-- **Homeowners**: Service information, booking options, payment history, tax documents
-- **Managers**: Platform overview, tax reports, quarterly estimates
+The app uses React's `useReducer` with Context for global state:
 
-### TaxFormsSection
-Displays tax-related information at the bottom of the home page:
-- Cleaners see 1099-NEC summary and total earnings
-- Homeowners see payment history
-- Managers see platform income and quarterly tax estimates
+```javascript
+const initialState = {
+  currentUser: {
+    token: null,
+    id: null,
+    email: null,
+    type: null,        // 'cleaner', 'manager1', or null (homeowner)
+  },
+  homes: [],           // User's properties
+  appointments: [],    // Scheduled cleanings
+  bill: {},           // Current billing info
+  cleaningRequests: [], // Pending job requests
+};
 
-### Messaging
-Real-time chat system with Socket.io:
-- Appointment-based conversations
-- Support chat with managers
-- Broadcast announcements
-- Unread message indicators
+// Actions
+dispatch({ type: 'SET_USER', payload: user });
+dispatch({ type: 'ADD_HOME', payload: home });
+dispatch({ type: 'UPDATE_APPOINTMENT', payload: appointment });
+```
 
-### Payments
-Stripe integration for secure payments:
-- Payment sheet with Apple Pay / Google Pay
-- Payment history view
-- Cleaner earnings tracking
+### Navigation
+
+React Router Native handles navigation:
+
+```javascript
+import { NativeRouter, Route, Routes } from 'react-router-native';
+
+<NativeRouter>
+  <Routes>
+    <Route path="/" element={<HomePage />} />
+    <Route path="/details/:homeId" element={<PropertyDetails />} />
+    <Route path="/calendar-sync/:homeId" element={<CalendarSyncManager />} />
+    <Route path="/messages" element={<MessagingHub />} />
+    <Route path="/earnings" element={<EarningsDashboard />} />
+  </Routes>
+</NativeRouter>
+```
+
+---
 
 ## API Services
 
-### FetchData
-General-purpose API service for user data, appointments, and homes.
-
-```javascript
-import FetchData from './services/fetchRequests/fetchData';
-
-// Get user info
-const userInfo = await FetchData.get('/api/v1/user-info', token);
-
-// Login
-const response = await FetchData.login({ userName, password });
-```
-
 ### TaxService
-Tax document and reporting API.
 
 ```javascript
 import TaxService from './services/fetchRequests/TaxService';
 
-// Get cleaner tax summary
+// Cleaner: Get tax summary
 const summary = await TaxService.getCleanerTaxSummary(token, 2024);
 
-// Get platform tax report (manager)
+// Cleaner: Get 1099-NEC data
+const form = await TaxService.get1099NECData(token, 2024);
+
+// Manager: Get platform tax report
 const report = await TaxService.getPlatformTaxReport(token, 2024);
 
-// Get payment history (homeowner)
+// Homeowner: Get payment history
 const history = await TaxService.getPaymentHistory(token, 2024);
 ```
 
 ### MessageService
-Real-time messaging API.
 
 ```javascript
 import MessageService from './services/fetchRequests/MessageService';
 
-// Get conversations
+// Get all conversations
 const conversations = await MessageService.getConversations(token);
 
-// Send message
+// Get messages in a conversation
+const messages = await MessageService.getMessages(token, conversationId);
+
+// Send a message
 await MessageService.sendMessage(token, conversationId, content);
+
+// Create support conversation
+await MessageService.createSupportConversation(token);
 ```
 
+### PaymentService
+
+```javascript
+import PaymentService from './services/fetchRequests/PaymentService';
+
+// Create payment intent
+const intent = await PaymentService.createPaymentIntent(token, {
+  amount: 15000, // $150.00
+  appointmentId: 123,
+});
+
+// Get payment history
+const history = await PaymentService.getPaymentHistory(token);
+
+// Get cleaner earnings
+const earnings = await PaymentService.getEarnings(token);
+```
+
+---
+
+## Key Components
+
+### CalendarSyncManager
+
+Manages iCal sync connections with vacation rental platforms:
+
+```javascript
+<CalendarSyncManager
+  homeId={homeId}
+  onSyncComplete={(results) => console.log(results)}
+/>
+```
+
+**Features:**
+- Connect Airbnb, VRBO, Booking.com calendars
+- Auto-create appointments from checkout dates
+- Manual sync trigger
+- Sync status and error display
+
+### CleaningChecklist
+
+Digital checklist for cleaners with progress tracking:
+
+```javascript
+<CleaningChecklist
+  home={homeData}
+  onProgressUpdate={(percent, completed, total) => {
+    console.log(`${percent}% complete (${completed}/${total})`);
+  }}
+  onChecklistComplete={() => console.log('All tasks done!')}
+/>
+```
+
+**Sections:**
+- Kitchen (15 tasks)
+- Bathrooms (18 tasks)
+- Bedrooms (15 tasks)
+- Living Areas (15 tasks)
+- General (10 tasks)
+
+### EarningsDashboard
+
+Cleaner earnings and payout management:
+
+```javascript
+<EarningsDashboard
+  cleanerId={userId}
+  showPayoutButton={true}
+/>
+```
+
+---
+
+## Styling
+
+### Theme System
+
+```javascript
+import { colors, spacing, radius, shadows, typography } from './services/styles/theme';
+
+const styles = StyleSheet.create({
+  container: {
+    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    ...shadows.md,
+  },
+  title: {
+    ...typography.h2,
+    color: colors.text.primary,
+  },
+});
+```
+
+### Design Tokens
+
+```javascript
+export const colors = {
+  primary: '#4A90A4',
+  secondary: '#2ECC71',
+  background: '#F8F9FA',
+  card: '#FFFFFF',
+  text: {
+    primary: '#1A1A2E',
+    secondary: '#6C757D',
+  },
+  status: {
+    success: '#28A745',
+    warning: '#FFC107',
+    error: '#DC3545',
+  },
+};
+
+export const spacing = {
+  xs: 4, sm: 8, md: 16, lg: 24, xl: 32,
+};
+```
+
+---
+
 ## Testing
+
+### Running Tests
 
 ```bash
 # Run all tests
 npm test
 
-# Run tests in watch mode
+# Watch mode
 npm test -- --watch
 
-# Run with coverage
+# Coverage report
 npm test -- --coverage
+
+# Run specific test file
+npm test -- CleaningChecklist.test.js
 ```
 
-### Test Structure
+### Test Coverage
 
-| Test File | Coverage |
-|-----------|----------|
-| `TaxFormsSection.test.js` | Tax UI logic, user type detection, API calls |
-| `TaxService.test.js` | All tax API methods, error handling |
-| `Earnings.test.js` | Earnings calculations, payment capture |
-| `Bill.test.js` | Billing display, payment status |
-| `reducerFunction.test.js` | State management logic |
+| Test Suite | Tests | Coverage |
+|------------|-------|----------|
+| CalendarSyncManager | 73 | Calendar sync UI, API calls |
+| CleaningChecklist | 42 | Checklist interactions |
+| TaxService | 24 | All tax API methods |
+| ReviewComponents | 54 | Review forms & display |
+| EarningsComponents | 12 | Earnings calculations |
+| AuthContext | 18 | Authentication flow |
+| TermsComponents | 85 | Terms modal, editor, acceptance |
+| SignUpForm | 42 | Registration with terms |
+| **Total** | **482** | - |
 
-## State Management
-
-The app uses React's `useReducer` for state management with the following structure:
-
-```javascript
-const initialState = {
-  currentUser: { token: null, id: null, email: null },
-  account: null,           // 'cleaner', 'manager1', or null (homeowner)
-  appointments: [],
-  homes: [],
-  bill: {},
-  cleaningRequests: [],
-};
-```
-
-## Environment Configuration
-
-The API base URL is configured in `fetchData.js`:
+### Example Test
 
 ```javascript
-const baseURL = "http://localhost:3000";
-```
+describe('CleaningChecklist Component', () => {
+  it('should update progress when tasks are checked', async () => {
+    const mockOnProgressUpdate = jest.fn();
+    const { getByText } = render(
+      <CleaningChecklist
+        home={mockHome}
+        onProgressUpdate={mockOnProgressUpdate}
+      />
+    );
 
-For production, update this to your deployed server URL.
+    fireEvent.press(getByText(/Clean all countertops/));
 
-## Styling
-
-Components use React Native's `StyleSheet.create()` with responsive design:
-
-```javascript
-import { Dimensions, StyleSheet } from 'react-native';
-const { width } = Dimensions.get('window');
-
-const styles = StyleSheet.create({
-  container: {
-    padding: width < 400 ? 10 : 20,
-    // Responsive styling based on screen width
-  },
+    await waitFor(() => {
+      const callWithCompleted = mockOnProgressUpdate.mock.calls.find(
+        call => call[1] > 0
+      );
+      expect(callWithCompleted[1]).toBe(1);
+    });
+  });
 });
 ```
 
+---
+
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `expo` | Development platform |
-| `react-native` | Mobile framework |
-| `react-router-native` | Navigation |
-| `@stripe/stripe-react-native` | Payment UI |
-| `socket.io-client` | Real-time messaging |
-| `react-native-calendars` | Calendar views |
-| `react-native-paper` | UI components |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `expo` | ~52.0.0 | Development platform |
+| `react-native` | 0.76.x | Mobile framework |
+| `react-router-native` | ^6.x | Navigation |
+| `@stripe/stripe-react-native` | ^0.38.x | Payment UI |
+| `socket.io-client` | ^4.x | Real-time messaging |
+| `react-native-calendars` | ^1.x | Calendar views |
+| `react-native-paper` | ^5.x | UI components |
+| `@testing-library/react-native` | ^12.x | Testing utilities |
+
+---
 
 ## Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm start` | Start Expo development server |
+| `npm start` | Start Expo dev server |
 | `npm test` | Run Jest tests |
 | `npm run android` | Run on Android |
 | `npm run ios` | Run on iOS |
-| `npm run web` | Run in web browser |
+| `npm run web` | Run in browser |
+| `npm run lint` | Run ESLint |
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+**Metro bundler cache issues:**
+```bash
+npx expo start --clear
+```
+
+**iOS Simulator not launching:**
+```bash
+# Reset simulator
+xcrun simctl shutdown all
+xcrun simctl erase all
+```
+
+**Android build issues:**
+```bash
+cd android && ./gradlew clean
+```
+
+---
 
 ## Contributing
 
 See the main [README](../README.md) for contribution guidelines.
+
+---
+
+<div align="center">
+
+**Part of the Kleanr Platform**
+
+[Main Documentation](../README.md) | [Server Documentation](../server/README.md)
+
+</div>

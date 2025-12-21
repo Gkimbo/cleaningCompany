@@ -16,7 +16,6 @@ import AllAppointments from "../src/components/admin/AllAppointments";
 import AppointmentDetailsPage from "../src/components/admin/AssignAppointments/AppointmentDetailsPage";
 import CleanerApplicationForm from "../src/components/admin/CleanerApplications/ApplicationForm";
 import ListOfApplications from "../src/components/admin/CleanerApplications/ListOfApplications";
-import NewCleanerInformationPage from "../src/components/admin/CleanerApplications/NewCleanerInformationPage";
 import EditEmployeeForm from "../src/components/admin/forms/EditEmployeeForm";
 import EmployeeShiftForm from "../src/components/admin/forms/employee/EmployeeShiftForm";
 import UnassignedAppointments from "../src/components/admin/UnassignedAppointments";
@@ -68,6 +67,12 @@ import AccountSettings from "../src/components/account/AccountSettings";
 
 // Client components
 import ClientRequestsList from "../src/components/client/ClientRequestsList";
+
+// Manager components
+import TermsEditor from "../src/components/manager/TermsEditor";
+
+// Terms and Conditions
+import { TermsAcceptanceScreen } from "../src/components/terms";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -178,6 +183,10 @@ export default function App() {
                 element={<ForgotCredentials />}
               />
               <Route
+                path="/terms-acceptance"
+                element={<TermsAcceptanceScreen state={state} dispatch={dispatch} />}
+              />
+              <Route
                 path="/welcome"
                 element={<WelcomeScreen />}
               />
@@ -195,15 +204,6 @@ export default function App() {
               />
               <Route
                 path="/apply"
-                element={
-                  <NewCleanerInformationPage
-                    state={state}
-                    dispatch={dispatch}
-                  />
-                }
-              />
-              <Route
-                path="/application-form"
                 element={
                   <CleanerApplicationForm state={state} dispatch={dispatch} />
                 }
@@ -388,6 +388,11 @@ export default function App() {
               <Route
                 path="/client-requests"
                 element={<ClientRequestsList state={state} dispatch={dispatch} />}
+              />
+              {/* Manager Terms Editor */}
+              <Route
+                path="/manager/terms"
+                element={<TermsEditor state={state} />}
               />
             </Routes>
             </SafeAreaView>

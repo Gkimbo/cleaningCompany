@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
+import CleanerCancellationWarningModal from "../../modals/CleanerCancellationWarningModal";
 
 const EmployeeAssignmentTile = ({
   id,
@@ -19,6 +20,8 @@ const EmployeeAssignmentTile = ({
   assigned,
   distance,
   timeToBeCompleted,
+  token,
+  onCancelComplete,
 }) => {
   const navigate = useNavigate();
   const [expandWindow, setExpandWindow] = useState(false);
@@ -31,6 +34,11 @@ const EmployeeAssignmentTile = ({
     numBeds: "",
     cleanersNeeded: "",
   });
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellationInfo, setCancellationInfo] = useState(null);
+  const [loadingCancellation, setLoadingCancellation] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const amount = Number(price) * 0.9;
 
@@ -67,6 +75,62 @@ const EmployeeAssignmentTile = ({
   };
 
   const formattedTime = timeOptions[timeToBeCompleted] || null;
+
+  // Handle opening cancellation modal
+  const handleCancelPress = async () => {
+    if (!token) {
+      // Fall back to old behavior if no token
+      removeEmployee(cleanerId, id);
+      return;
+    }
+    setLoadingCancellation(true);
+    setError(null);
+    try {
+      const info = await FetchData.getCancellationInfo(id, token);
+      if (info.error) {
+        setError(info.error);
+        setLoadingCancellation(false);
+        return;
+      }
+      setCancellationInfo(info);
+      setShowCancelModal(true);
+    } catch (err) {
+      setError("Failed to load cancellation info");
+    } finally {
+      setLoadingCancellation(false);
+    }
+  };
+
+  // Handle confirming cancellation
+  const handleConfirmCancel = async () => {
+    setCancelLoading(true);
+    try {
+      const result = await FetchData.cancelAsCleaner(id, token);
+      if (result.error) {
+        setError(result.error);
+        setCancelLoading(false);
+        return;
+      }
+      setShowCancelModal(false);
+
+      // Show account frozen alert if applicable
+      if (result.accountFrozen) {
+        setError("Your account has been frozen due to too many cancellations. Please contact support.");
+      }
+
+      // Call the callback to remove from list
+      if (onCancelComplete) {
+        onCancelComplete(id, result);
+      } else {
+        // Fall back to removeEmployee if no callback provided
+        removeEmployee(cleanerId, id);
+      }
+    } catch (err) {
+      setError("Failed to cancel job");
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   return (
     <View style={styles.tileContainer}>
@@ -123,19 +187,39 @@ const EmployeeAssignmentTile = ({
 
       {assigned ? (
         <Pressable
-          style={[styles.button, { backgroundColor: "#E74C3C" }]}
-          onPress={() => removeEmployee(cleanerId, id)}
+          style={[styles.button, styles.cancelButton, loadingCancellation && styles.buttonDisabled]}
+          onPress={handleCancelPress}
+          disabled={loadingCancellation}
         >
-          <Text style={styles.buttonText}>I no longer want to clean this home!</Text>
+          {loadingCancellation ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>I no longer want to clean this home!</Text>
+          )}
         </Pressable>
       ) : (
         <Pressable
-          style={[styles.button, { backgroundColor: "#2ECC71" }]}
+          style={[styles.button, styles.acceptButton]}
           onPress={() => addEmployee(cleanerId, id)}
         >
           <Text style={styles.buttonText}>I want to clean this home!</Text>
         </Pressable>
       )}
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {/* Cleaner Cancellation Warning Modal */}
+      <CleanerCancellationWarningModal
+        visible={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onConfirm={handleConfirmCancel}
+        cancellationInfo={cancellationInfo}
+        loading={cancelLoading}
+      />
     </View>
   );
 };
@@ -223,10 +307,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     minWidth: "80%",
   },
+  cancelButton: {
+    backgroundColor: "#E74C3C",
+  },
+  acceptButton: {
+    backgroundColor: "#2ECC71",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   buttonText: {
     fontSize: 15,
     fontWeight: "600",
     color: "#fff",
+    textAlign: "center",
+  },
+  errorContainer: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#FDECEA",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#F5C6CB",
+  },
+  errorText: {
+    color: "#C0392B",
+    fontSize: 13,
     textAlign: "center",
   },
   timeContainer: {

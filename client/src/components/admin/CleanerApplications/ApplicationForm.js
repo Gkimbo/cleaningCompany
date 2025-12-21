@@ -2,9 +2,11 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
 import {
   Alert,
+  Dimensions,
   Image,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,16 +14,73 @@ import {
 } from "react-native";
 import Application from "../../../services/fetchRequests/ApplicationClass";
 import ApplicationFormStyles from "../../../services/styles/ApplicationFormStyles";
+import { TermsModal } from "../../terms";
+import {
+  colors,
+  spacing,
+  radius,
+  shadows,
+  typography,
+  responsive,
+} from "../../../services/styles/theme";
 
 const US_STATES = [
-  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"
+  "AL",
+  "AK",
+  "AZ",
+  "AR",
+  "CA",
+  "CO",
+  "CT",
+  "DE",
+  "FL",
+  "GA",
+  "HI",
+  "ID",
+  "IL",
+  "IN",
+  "IA",
+  "KS",
+  "KY",
+  "LA",
+  "ME",
+  "MD",
+  "MA",
+  "MI",
+  "MN",
+  "MS",
+  "MO",
+  "MT",
+  "NE",
+  "NV",
+  "NH",
+  "NJ",
+  "NM",
+  "NY",
+  "NC",
+  "ND",
+  "OH",
+  "OK",
+  "OR",
+  "PA",
+  "RI",
+  "SC",
+  "SD",
+  "TN",
+  "TX",
+  "UT",
+  "VT",
+  "VA",
+  "WA",
+  "WV",
+  "WI",
+  "WY",
 ];
 
+const { width } = Dimensions.get("window");
+
 const CleanerApplicationForm = () => {
+  const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     // Basic Information
     firstName: "",
@@ -70,11 +129,14 @@ const CleanerApplicationForm = () => {
     // Consents
     backgroundConsent: false,
     referenceCheckConsent: false,
+    termsAccepted: false,
+    termsId: null,
   });
 
   const [formError, setFormError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const totalSteps = 6;
   const styles = ApplicationFormStyles;
 
@@ -88,7 +150,10 @@ const CleanerApplicationForm = () => {
     } else if (digits.length <= 6) {
       return `${digits.slice(0, 3)}-${digits.slice(3)}`;
     } else {
-      return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+      return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(
+        6,
+        10
+      )}`;
     }
   };
 
@@ -102,7 +167,10 @@ const CleanerApplicationForm = () => {
     } else if (digits.length <= 4) {
       return `${digits.slice(0, 2)}/${digits.slice(2)}`;
     } else {
-      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(
+        4,
+        8
+      )}`;
     }
   };
 
@@ -128,10 +196,7 @@ const CleanerApplicationForm = () => {
 
   const handleChange = (name, value) => {
     // Auto-format phone number fields
-    const phoneFields = [
-      "phone",
-      "emergencyContactPhone",
-    ];
+    const phoneFields = ["phone", "emergencyContactPhone"];
 
     // Auto-format date fields
     const dateFields = ["dateOfBirth"];
@@ -162,7 +227,8 @@ const CleanerApplicationForm = () => {
 
   // Handle ID upload
   const handleIdUpload = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
       Alert.alert(
         "Permission required",
@@ -198,7 +264,9 @@ const CleanerApplicationForm = () => {
         if (!formData.dateOfBirth) {
           errors.push("Date of birth is required.");
         } else if (!isValidDate(formData.dateOfBirth)) {
-          errors.push("Please enter a valid date of birth (MM/DD/YYYY with 4-digit year).");
+          errors.push(
+            "Please enter a valid date of birth (MM/DD/YYYY with 4-digit year)."
+          );
         }
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -214,7 +282,8 @@ const CleanerApplicationForm = () => {
         break;
 
       case 2: // Address & Identity
-        if (!formData.streetAddress.trim()) errors.push("Street address is required.");
+        if (!formData.streetAddress.trim())
+          errors.push("Street address is required.");
         if (!formData.city.trim()) errors.push("City is required.");
         if (!formData.state.trim()) errors.push("State is required.");
         if (!formData.zipCode.trim()) errors.push("ZIP code is required.");
@@ -236,10 +305,13 @@ const CleanerApplicationForm = () => {
 
       case 4: // References
         const validRefs = formData.references.filter(
-          (ref) => ref.name.trim() && ref.phone.trim() && ref.relationship.trim()
+          (ref) =>
+            ref.name.trim() && ref.phone.trim() && ref.relationship.trim()
         );
         if (validRefs.length < 1) {
-          errors.push("Please provide at least 1 professional reference with name, phone, and relationship.");
+          errors.push(
+            "Please provide at least 1 professional reference with name, phone, and relationship."
+          );
         }
         break;
 
@@ -253,7 +325,10 @@ const CleanerApplicationForm = () => {
         if (!formData.emergencyContactRelation.trim()) {
           errors.push("Emergency contact relationship is required.");
         }
-        if (formData.hasCriminalHistory && !formData.criminalHistoryExplanation.trim()) {
+        if (
+          formData.hasCriminalHistory &&
+          !formData.criminalHistoryExplanation.trim()
+        ) {
           errors.push("Please explain your criminal history.");
         }
         break;
@@ -264,6 +339,9 @@ const CleanerApplicationForm = () => {
         }
         if (!formData.referenceCheckConsent) {
           errors.push("You must consent to reference checks.");
+        }
+        if (!formData.termsAccepted) {
+          errors.push("You must accept the Terms and Conditions.");
         }
         if (!formData.message.trim()) {
           errors.push("Please tell us why you want to work with us.");
@@ -289,6 +367,16 @@ const CleanerApplicationForm = () => {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
+  // Handle terms acceptance
+  const handleTermsAccepted = (acceptedTermsId) => {
+    setFormData((prev) => ({
+      ...prev,
+      termsAccepted: true,
+      termsId: acceptedTermsId,
+    }));
+    setShowTermsModal(false);
+  };
+
   // Submit form
   const handleSubmit = async () => {
     const errors = validateStep(currentStep);
@@ -298,7 +386,9 @@ const CleanerApplicationForm = () => {
     }
 
     try {
-      const submittedApplication = await Application.addApplicationToDb(formData);
+      const submittedApplication = await Application.addApplicationToDb(
+        formData
+      );
       console.log("Form submitted:", submittedApplication);
       setSubmitted(true);
       Alert.alert(
@@ -315,9 +405,16 @@ const CleanerApplicationForm = () => {
   const renderProgressBar = () => (
     <View style={styles.progressContainer}>
       <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${(currentStep / totalSteps) * 100}%` }]} />
+        <View
+          style={[
+            styles.progressFill,
+            { width: `${(currentStep / totalSteps) * 100}%` },
+          ]}
+        />
       </View>
-      <Text style={styles.progressText}>Step {currentStep} of {totalSteps}</Text>
+      <Text style={styles.progressText}>
+        Step {currentStep} of {totalSteps}
+      </Text>
     </View>
   );
 
@@ -340,14 +437,738 @@ const CleanerApplicationForm = () => {
         </View>
         <Text style={styles.thankYouTitle}>Application Submitted!</Text>
         <Text style={styles.thankYouMessage}>
-          Thank you for applying to join our cleaning team. Your application is now under review.
+          Thank you for applying to join our cleaning team. Your application is
+          now under review.
           {"\n\n"}
-          We will conduct a thorough background check and verify your references.
-          This process typically takes 5-7 business days.
+          We will conduct a thorough background check and verify your
+          references. This process typically takes 5-7 business days.
           {"\n\n"}
-          You will receive an email at {formData.email} once your application has been processed.
+          You will receive an email at {formData.email} once your application
+          has been processed.
         </Text>
       </View>
+    );
+  }
+
+  // Benefits data
+  const benefits = [
+    {
+      icon: "👑",
+      title: "Be Your Own Boss",
+      description:
+        "You decide when and where you work. No micromanaging, no office politics.",
+    },
+    {
+      icon: "🕐",
+      title: "Set Your Own Hours",
+      description:
+        "Work mornings, afternoons, or weekends. Build a schedule that fits your life.",
+    },
+    {
+      icon: "💰",
+      title: "Earn Great Money",
+      description:
+        "Earn $100-$125 per house cleaned. Average cleaners make $1,500+ per week.",
+    },
+    {
+      icon: "📈",
+      title: "Grow Your Income",
+      description:
+        "The more you work, the more you earn. No caps, no limits on your potential.",
+    },
+  ];
+
+  const perks = [
+    { icon: "✓", text: "Get paid as soon as you finish each cleaning" },
+    { icon: "✓", text: "Flexible scheduling - you choose your jobs" },
+    { icon: "✓", text: "No experience necessary" },
+    { icon: "✓", text: "Work independently, no supervisor hovering" },
+  ];
+
+  // Hero Landing Page
+  if (!showForm) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.neutral[0] }}
+        contentContainerStyle={{ paddingBottom: spacing["4xl"] }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero Section */}
+        <View
+          style={{
+            backgroundColor: colors.secondary[500],
+            paddingTop: Platform.OS === "ios" ? 60 : 40,
+            paddingBottom: spacing["4xl"],
+            paddingHorizontal: spacing.xl,
+            borderBottomLeftRadius: 32,
+            borderBottomRightRadius: 32,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: responsive(14, 16, 18),
+              color: colors.secondary[100],
+              textAlign: "center",
+              textTransform: "uppercase",
+              letterSpacing: 2,
+              marginBottom: spacing.sm,
+              fontWeight: typography.fontWeight.semibold,
+            }}
+          >
+            Now Hiring
+          </Text>
+          <Text
+            style={{
+              fontSize: responsive(28, 36, 44),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.neutral[0],
+              textAlign: "center",
+              marginBottom: spacing.md,
+              lineHeight: responsive(34, 44, 52),
+            }}
+          >
+            Earn $100-$125{"\n"}Per House Cleaned
+          </Text>
+          <Text
+            style={{
+              fontSize: responsive(16, 18, 20),
+              color: colors.secondary[100],
+              textAlign: "center",
+              marginBottom: spacing["2xl"],
+              lineHeight: 26,
+            }}
+          >
+            Join Kleanr and start earning great money doing what you love
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => setShowForm(true)}
+            style={{
+              backgroundColor: colors.neutral[0],
+              paddingVertical: spacing.lg,
+              paddingHorizontal: spacing["2xl"],
+              borderRadius: radius.xl,
+              alignSelf: "center",
+              ...shadows.lg,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.secondary[600],
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.bold,
+                textAlign: "center",
+              }}
+            >
+              Apply Now - It's Free
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Income Highlight */}
+        <View
+          style={{
+            marginTop: -spacing["2xl"],
+            marginHorizontal: spacing.lg,
+            backgroundColor: colors.neutral[0],
+            borderRadius: radius["2xl"],
+            padding: spacing.xl,
+            ...shadows.lg,
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={{
+              fontSize: typography.fontSize.sm,
+              color: colors.text.tertiary,
+              textTransform: "uppercase",
+              letterSpacing: 1,
+              marginBottom: spacing.xs,
+            }}
+          >
+            Average Weekly Earnings
+          </Text>
+          <Text
+            style={{
+              fontSize: responsive(40, 48, 56),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.success[600],
+            }}
+          >
+            $1,500+
+          </Text>
+          <Text
+            style={{
+              fontSize: typography.fontSize.sm,
+              color: colors.text.secondary,
+              textAlign: "center",
+            }}
+          >
+            Based on 3 houses/day, 5 days/week
+          </Text>
+        </View>
+
+        {/* Benefits Grid */}
+        <View
+          style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
+        >
+          <Text
+            style={{
+              fontSize: responsive(22, 26, 30),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.text.primary,
+              textAlign: "center",
+              marginBottom: spacing.sm,
+            }}
+          >
+            Why Join Kleanr?
+          </Text>
+          <Text
+            style={{
+              fontSize: typography.fontSize.base,
+              color: colors.text.secondary,
+              textAlign: "center",
+              marginBottom: spacing["2xl"],
+            }}
+          >
+            Take control of your career and your life
+          </Text>
+
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              justifyContent: "space-between",
+            }}
+          >
+            {benefits.map((benefit, index) => (
+              <View
+                key={index}
+                style={{
+                  width: width > 600 ? "48%" : "100%",
+                  backgroundColor: colors.primary[50],
+                  borderRadius: radius.xl,
+                  padding: spacing.xl,
+                  marginBottom: spacing.lg,
+                  borderWidth: 1,
+                  borderColor: colors.primary[100],
+                }}
+              >
+                <Text style={{ fontSize: 32, marginBottom: spacing.md }}>
+                  {benefit.icon}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.lg,
+                    fontWeight: typography.fontWeight.bold,
+                    color: colors.primary[800],
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  {benefit.title}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.sm,
+                    color: colors.text.secondary,
+                    lineHeight: 22,
+                  }}
+                >
+                  {benefit.description}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* How Much Can You Earn */}
+        <View
+          style={{
+            backgroundColor: colors.neutral[900],
+            marginTop: spacing["2xl"],
+            paddingVertical: spacing["3xl"],
+            paddingHorizontal: spacing.lg,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: responsive(22, 26, 30),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.neutral[0],
+              textAlign: "center",
+              marginBottom: spacing["2xl"],
+            }}
+          >
+            How Much Can You Earn?
+          </Text>
+
+          <View
+            style={{
+              flexDirection: width > 500 ? "row" : "column",
+              justifyContent: "space-around",
+            }}
+          >
+            {[
+              {
+                hours: "1-2 houses/day",
+                week: "$750+",
+                month: "$3,000+",
+                year: "$39,000+",
+                label: "Part-Time",
+              },
+              {
+                hours: "3 houses/day",
+                week: "$1,500+",
+                month: "$6,000+",
+                year: "$78,000+",
+                label: "Full-Time",
+              },
+              {
+                hours: "4+ houses/day",
+                week: "$2,500+",
+                month: "$10,000+",
+                year: "$130,000+",
+                label: "Hustle Mode",
+              },
+            ].map((tier, index) => (
+              <View
+                key={index}
+                style={{
+                  alignItems: "center",
+                  marginBottom: width > 500 ? 0 : spacing.xl,
+                  flex: width > 500 ? 1 : undefined,
+                  paddingHorizontal: spacing.sm,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.xs,
+                    color: colors.neutral[400],
+                    textTransform: "uppercase",
+                    letterSpacing: 1,
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  {tier.label}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.xs,
+                    color: colors.neutral[500],
+                    marginBottom: spacing.xs,
+                  }}
+                >
+                  {tier.hours}
+                </Text>
+                <View
+                  style={{
+                    backgroundColor: colors.neutral[800],
+                    borderRadius: radius.lg,
+                    padding: spacing.md,
+                    width: "100%",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typography.fontSize.xs,
+                      color: colors.neutral[500],
+                    }}
+                  >
+                    Weekly
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: responsive(24, 28, 32),
+                      fontWeight: typography.fontWeight.bold,
+                      color: colors.secondary[400],
+                    }}
+                  >
+                    {tier.week}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    marginTop: spacing.sm,
+                    gap: spacing.sm,
+                  }}
+                >
+                  <View style={{ alignItems: "center" }}>
+                    <Text
+                      style={{
+                        fontSize: typography.fontSize.xs,
+                        color: colors.neutral[500],
+                      }}
+                    >
+                      Monthly
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: typography.fontSize.base,
+                        fontWeight: typography.fontWeight.bold,
+                        color: colors.neutral[300],
+                      }}
+                    >
+                      {tier.month}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: "center" }}>
+                    <Text
+                      style={{
+                        fontSize: typography.fontSize.xs,
+                        color: colors.neutral[500],
+                      }}
+                    >
+                      Yearly
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: typography.fontSize.base,
+                        fontWeight: typography.fontWeight.bold,
+                        color: colors.success[400],
+                      }}
+                    >
+                      {tier.year}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <Text
+            style={{
+              fontSize: typography.fontSize.xs,
+              color: colors.neutral[500],
+              textAlign: "center",
+              marginTop: spacing.xl,
+            }}
+          >
+            *Earnings based on $100-$125 per house. Results vary by location and
+            availability.
+          </Text>
+        </View>
+
+        {/* Perks List */}
+        <View
+          style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
+        >
+          <Text
+            style={{
+              fontSize: responsive(22, 26, 30),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.text.primary,
+              textAlign: "center",
+              marginBottom: spacing["2xl"],
+            }}
+          >
+            What You Get
+          </Text>
+
+          <View
+            style={{
+              backgroundColor: colors.success[50],
+              borderRadius: radius["2xl"],
+              padding: spacing.xl,
+              borderWidth: 1,
+              borderColor: colors.success[200],
+            }}
+          >
+            {perks.map((perk, index) => (
+              <View
+                key={index}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: index < perks.length - 1 ? spacing.lg : 0,
+                }}
+              >
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: colors.success[500],
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: spacing.md,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: colors.neutral[0],
+                      fontWeight: "bold",
+                      fontSize: 14,
+                    }}
+                  >
+                    {perk.icon}
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.base,
+                    color: colors.text.primary,
+                    flex: 1,
+                  }}
+                >
+                  {perk.text}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Testimonial
+        <View
+          style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.neutral[50],
+              borderRadius: radius["2xl"],
+              padding: spacing["2xl"],
+              borderLeftWidth: 4,
+              borderLeftColor: colors.secondary[500],
+            }}
+          >
+            <Text style={{ fontSize: 32, marginBottom: spacing.md }}>💬</Text>
+            <Text
+              style={{
+                fontSize: typography.fontSize.lg,
+                color: colors.text.primary,
+                lineHeight: 28,
+                fontStyle: "italic",
+                marginBottom: spacing.lg,
+              }}
+            >
+              "I quit my 9-5 job and now I make more money working fewer hours.
+              I clean about 3 houses a day and take home over $1,500 a week. I
+              set my own schedule and finally have time for my family. Best
+              decision I ever made."
+            </Text>
+            <View>
+              <Text
+                style={{
+                  fontSize: typography.fontSize.base,
+                  fontWeight: typography.fontWeight.bold,
+                  color: colors.text.primary,
+                }}
+              >
+                Jessica T.
+              </Text>
+              <Text
+                style={{
+                  fontSize: typography.fontSize.sm,
+                  color: colors.text.tertiary,
+                }}
+              >
+                Kleanr Pro since 2023
+              </Text>
+            </View>
+          </View>
+        </View> */}
+
+        {/* Requirements */}
+        <View
+          style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
+        >
+          <Text
+            style={{
+              fontSize: responsive(20, 22, 24),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.text.primary,
+              textAlign: "center",
+              marginBottom: spacing.xl,
+            }}
+          >
+            What You Need to Apply
+          </Text>
+
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              gap: spacing.md,
+            }}
+          >
+            {[
+              { icon: "🚗", text: "Reliable transportation" },
+              { icon: "📱", text: "Smartphone" },
+              { icon: "✅", text: "Background check" },
+              { icon: "💪", text: "Positive attitude" },
+            ].map((req, index) => (
+              <View
+                key={index}
+                style={{
+                  backgroundColor: colors.neutral[100],
+                  paddingVertical: spacing.md,
+                  paddingHorizontal: spacing.lg,
+                  borderRadius: radius.xl,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ fontSize: 18, marginRight: spacing.sm }}>
+                  {req.icon}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.sm,
+                    color: colors.text.primary,
+                    fontWeight: typography.fontWeight.medium,
+                  }}
+                >
+                  {req.text}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <Text
+            style={{
+              fontSize: typography.fontSize.sm,
+              color: colors.text.tertiary,
+              textAlign: "center",
+              marginTop: spacing.lg,
+            }}
+          >
+            No cleaning experience required.
+          </Text>
+        </View>
+
+        {/* Final CTA */}
+        <View
+          style={{
+            marginTop: spacing["3xl"],
+            marginHorizontal: spacing.lg,
+            backgroundColor: colors.primary[600],
+            borderRadius: radius["2xl"],
+            padding: spacing["2xl"],
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={{
+              fontSize: responsive(22, 26, 30),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.neutral[0],
+              textAlign: "center",
+              marginBottom: spacing.sm,
+            }}
+          >
+            Ready to Take Control?
+          </Text>
+          <Text
+            style={{
+              fontSize: typography.fontSize.base,
+              color: colors.primary[100],
+              textAlign: "center",
+              marginBottom: spacing.xl,
+            }}
+          >
+            Join hundreds of cleaners earning great money on their own terms
+          </Text>
+          <TouchableOpacity
+            onPress={() => setShowForm(true)}
+            style={{
+              backgroundColor: colors.secondary[500],
+              paddingVertical: spacing.lg,
+              paddingHorizontal: spacing["3xl"],
+              borderRadius: radius.xl,
+              ...shadows.lg,
+            }}
+          >
+            <Text
+              style={{
+                color: colors.neutral[0],
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.bold,
+              }}
+            >
+              Start Your Application
+            </Text>
+          </TouchableOpacity>
+
+          <Text
+            style={{
+              fontSize: typography.fontSize.xs,
+              color: colors.primary[200],
+              textAlign: "center",
+              marginTop: spacing.lg,
+            }}
+          >
+            Takes only 5 minutes • No fees • Start earning this week
+          </Text>
+        </View>
+
+        {/* FAQ Preview */}
+        <View
+          style={{
+            paddingHorizontal: spacing.lg,
+            marginTop: spacing["3xl"],
+            marginBottom: spacing.xl,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: typography.fontSize.lg,
+              fontWeight: typography.fontWeight.bold,
+              color: colors.text.primary,
+              textAlign: "center",
+              marginBottom: spacing.lg,
+            }}
+          >
+            Common Questions
+          </Text>
+
+          {[
+            {
+              q: "How quickly can I start working?",
+              a: "After your background check clears (3-5 days), you can start accepting jobs immediately.",
+            },
+            {
+              q: "Do I need my own supplies?",
+              a: "Nope! All cleaning supplies and equipment are provided at each job.",
+            },
+            {
+              q: "How do I get paid?",
+              a: "Instantly! As soon as you finish a cleaning, payment is sent directly to your bank.",
+            },
+          ].map((faq, index) => (
+            <View
+              key={index}
+              style={{
+                marginBottom: spacing.lg,
+                paddingBottom: spacing.lg,
+                borderBottomWidth: index < 2 ? 1 : 0,
+                borderBottomColor: colors.border.light,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: typography.fontSize.base,
+                  fontWeight: typography.fontWeight.semibold,
+                  color: colors.text.primary,
+                  marginBottom: spacing.xs,
+                }}
+              >
+                {faq.q}
+              </Text>
+              <Text
+                style={{
+                  fontSize: typography.fontSize.sm,
+                  color: colors.text.secondary,
+                  lineHeight: 22,
+                }}
+              >
+                {faq.a}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
     );
   }
 
@@ -356,7 +1177,9 @@ const CleanerApplicationForm = () => {
     <>
       <Text style={styles.sectionTitle}>Personal Information</Text>
 
-      <Text style={styles.label}>First Name <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        First Name <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="Enter your first name"
@@ -364,7 +1187,9 @@ const CleanerApplicationForm = () => {
         onChangeText={(text) => handleChange("firstName", text)}
       />
 
-      <Text style={styles.label}>Last Name <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Last Name <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="Enter your last name"
@@ -372,7 +1197,9 @@ const CleanerApplicationForm = () => {
         onChangeText={(text) => handleChange("lastName", text)}
       />
 
-      <Text style={styles.label}>Email Address <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Email Address <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="Enter your email"
@@ -382,7 +1209,9 @@ const CleanerApplicationForm = () => {
         autoCapitalize="none"
       />
 
-      <Text style={styles.label}>Phone Number <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Phone Number <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="(555) 555-5555"
@@ -391,7 +1220,9 @@ const CleanerApplicationForm = () => {
         keyboardType="phone-pad"
       />
 
-      <Text style={styles.label}>Date of Birth <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Date of Birth <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="MM/DD/YYYY"
@@ -400,7 +1231,9 @@ const CleanerApplicationForm = () => {
         keyboardType="number-pad"
         maxLength={10}
       />
-      <Text style={styles.helperText}>You must be at least 18 years old to apply.</Text>
+      <Text style={styles.helperText}>
+        You must be at least 18 years old to apply.
+      </Text>
     </>
   );
 
@@ -409,10 +1242,13 @@ const CleanerApplicationForm = () => {
     <>
       <Text style={styles.sectionTitle}>Address & Identity Verification</Text>
       <Text style={styles.description}>
-        This information is required to conduct a background check and verify your identity.
+        This information is required to conduct a background check and verify
+        your identity.
       </Text>
 
-      <Text style={styles.label}>Street Address <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Street Address <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="123 Main Street, Apt 4"
@@ -422,7 +1258,9 @@ const CleanerApplicationForm = () => {
 
       <View style={styles.rowContainer}>
         <View style={styles.flexHalf}>
-          <Text style={styles.label}>City <Text style={styles.requiredLabel}>*</Text></Text>
+          <Text style={styles.label}>
+            City <Text style={styles.requiredLabel}>*</Text>
+          </Text>
           <TextInput
             style={styles.input}
             placeholder="City"
@@ -431,7 +1269,9 @@ const CleanerApplicationForm = () => {
           />
         </View>
         <View style={styles.flexQuarter}>
-          <Text style={styles.label}>State <Text style={styles.requiredLabel}>*</Text></Text>
+          <Text style={styles.label}>
+            State <Text style={styles.requiredLabel}>*</Text>
+          </Text>
           <TextInput
             style={styles.input}
             placeholder="ST"
@@ -442,7 +1282,9 @@ const CleanerApplicationForm = () => {
           />
         </View>
         <View style={styles.flexQuarter}>
-          <Text style={styles.label}>ZIP <Text style={styles.requiredLabel}>*</Text></Text>
+          <Text style={styles.label}>
+            ZIP <Text style={styles.requiredLabel}>*</Text>
+          </Text>
           <TextInput
             style={styles.input}
             placeholder="12345"
@@ -456,17 +1298,24 @@ const CleanerApplicationForm = () => {
 
       <View style={styles.sectionDivider} />
 
-      <Text style={styles.label}>Last 4 Digits of SSN <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Last 4 Digits of SSN <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="XXXX"
         value={formData.ssnLast4}
-        onChangeText={(text) => handleChange("ssnLast4", text.replace(/\D/g, ''))}
+        onChangeText={(text) =>
+          handleChange("ssnLast4", text.replace(/\D/g, ""))
+        }
         keyboardType="number-pad"
         maxLength={4}
         secureTextEntry
       />
-      <Text style={styles.helperText}>Required for background check verification. Your data is encrypted and secure.</Text>
+      <Text style={styles.helperText}>
+        Required for background check verification. Your data is encrypted and
+        secure.
+      </Text>
 
       <View style={styles.rowContainer}>
         <View style={styles.flexThreeQuarter}>
@@ -484,20 +1333,27 @@ const CleanerApplicationForm = () => {
             style={styles.input}
             placeholder="ST"
             value={formData.driversLicenseState}
-            onChangeText={(text) => handleChange("driversLicenseState", text.toUpperCase())}
+            onChangeText={(text) =>
+              handleChange("driversLicenseState", text.toUpperCase())
+            }
             maxLength={2}
             autoCapitalize="characters"
           />
         </View>
       </View>
 
-      <Text style={styles.label}>Upload Government-Issued Photo ID <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Upload Government-Issued Photo ID{" "}
+        <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TouchableOpacity style={styles.uploadButton} onPress={handleIdUpload}>
         <Text style={styles.uploadButtonText}>
           {formData.idPhoto ? "Change ID Photo" : "Select ID Photo"}
         </Text>
       </TouchableOpacity>
-      <Text style={styles.helperText}>Accepted: Driver's license, State ID, or Passport</Text>
+      <Text style={styles.helperText}>
+        Accepted: Driver's license, State ID, or Passport
+      </Text>
 
       {formData.idPhoto && (
         <Image
@@ -516,19 +1372,31 @@ const CleanerApplicationForm = () => {
 
       <Checkbox
         checked={formData.isAuthorizedToWork}
-        onPress={() => handleChange("isAuthorizedToWork", !formData.isAuthorizedToWork)}
+        onPress={() =>
+          handleChange("isAuthorizedToWork", !formData.isAuthorizedToWork)
+        }
         label="I am legally authorized to work in the United States *"
       />
 
       <Checkbox
         checked={formData.hasValidDriversLicense}
-        onPress={() => handleChange("hasValidDriversLicense", !formData.hasValidDriversLicense)}
+        onPress={() =>
+          handleChange(
+            "hasValidDriversLicense",
+            !formData.hasValidDriversLicense
+          )
+        }
         label="I have a valid driver's license"
       />
 
       <Checkbox
         checked={formData.hasReliableTransportation}
-        onPress={() => handleChange("hasReliableTransportation", !formData.hasReliableTransportation)}
+        onPress={() =>
+          handleChange(
+            "hasReliableTransportation",
+            !formData.hasReliableTransportation
+          )
+        }
         label="I have reliable transportation to get to job sites *"
       />
 
@@ -552,13 +1420,16 @@ const CleanerApplicationForm = () => {
     <>
       <Text style={styles.sectionTitle}>Professional Reference</Text>
       <Text style={styles.description}>
-        Please provide 1 professional reference who can speak to your work ethic,
-        reliability, and trustworthiness. Reference should NOT be a family member.
+        Please provide 1 professional reference who can speak to your work
+        ethic, reliability, and trustworthiness. Reference should NOT be a
+        family member.
       </Text>
 
       {formData.references.map((ref, index) => (
         <View key={index} style={styles.referenceCard}>
-          <Text style={styles.referenceHeader}>Reference {index + 1} <Text style={styles.requiredLabel}>*</Text></Text>
+          <Text style={styles.referenceHeader}>
+            Reference {index + 1} <Text style={styles.requiredLabel}>*</Text>
+          </Text>
 
           <Text style={styles.label}>Full Name</Text>
           <TextInput
@@ -582,7 +1453,9 @@ const CleanerApplicationForm = () => {
             style={styles.input}
             placeholder="e.g., Former Supervisor, Coworker, Client"
             value={ref.relationship}
-            onChangeText={(text) => handleReferenceChange(index, "relationship", text)}
+            onChangeText={(text) =>
+              handleReferenceChange(index, "relationship", text)
+            }
           />
 
           <Text style={styles.label}>Company/Organization</Text>
@@ -590,7 +1463,9 @@ const CleanerApplicationForm = () => {
             style={styles.input}
             placeholder="Where you worked together"
             value={ref.company}
-            onChangeText={(text) => handleReferenceChange(index, "company", text)}
+            onChangeText={(text) =>
+              handleReferenceChange(index, "company", text)
+            }
           />
 
           <Text style={styles.label}>How Long Have You Known This Person?</Text>
@@ -598,7 +1473,9 @@ const CleanerApplicationForm = () => {
             style={styles.input}
             placeholder="e.g., 3 years"
             value={ref.yearsKnown}
-            onChangeText={(text) => handleReferenceChange(index, "yearsKnown", text)}
+            onChangeText={(text) =>
+              handleReferenceChange(index, "yearsKnown", text)
+            }
           />
         </View>
       ))}
@@ -613,7 +1490,9 @@ const CleanerApplicationForm = () => {
         Please provide someone we can contact in case of an emergency.
       </Text>
 
-      <Text style={styles.label}>Contact Name <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Contact Name <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="Full name"
@@ -621,7 +1500,9 @@ const CleanerApplicationForm = () => {
         onChangeText={(text) => handleChange("emergencyContactName", text)}
       />
 
-      <Text style={styles.label}>Contact Phone <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Contact Phone <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="(555) 555-5555"
@@ -630,7 +1511,9 @@ const CleanerApplicationForm = () => {
         keyboardType="phone-pad"
       />
 
-      <Text style={styles.label}>Relationship <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Relationship <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         placeholder="e.g., Spouse, Parent, Sibling"
@@ -642,24 +1525,31 @@ const CleanerApplicationForm = () => {
 
       <Text style={styles.sectionTitle}>Criminal History Disclosure</Text>
       <Text style={styles.description}>
-        A criminal record does not automatically disqualify you. We review each application
-        individually and consider the nature of offenses, time elapsed, and rehabilitation.
+        A criminal record does not automatically disqualify you. We review each
+        application individually and consider the nature of offenses, time
+        elapsed, and rehabilitation.
       </Text>
 
       <Checkbox
         checked={formData.hasCriminalHistory}
-        onPress={() => handleChange("hasCriminalHistory", !formData.hasCriminalHistory)}
+        onPress={() =>
+          handleChange("hasCriminalHistory", !formData.hasCriminalHistory)
+        }
         label="I have been convicted of a felony or misdemeanor"
       />
 
       {formData.hasCriminalHistory && (
         <>
-          <Text style={styles.label}>Please Explain <Text style={styles.requiredLabel}>*</Text></Text>
+          <Text style={styles.label}>
+            Please Explain <Text style={styles.requiredLabel}>*</Text>
+          </Text>
           <TextInput
             style={styles.textArea}
             placeholder="Describe the nature of the offense(s), when they occurred, and any steps you've taken toward rehabilitation."
             value={formData.criminalHistoryExplanation}
-            onChangeText={(text) => handleChange("criminalHistoryExplanation", text)}
+            onChangeText={(text) =>
+              handleChange("criminalHistoryExplanation", text)
+            }
             multiline
             numberOfLines={5}
           />
@@ -671,7 +1561,10 @@ const CleanerApplicationForm = () => {
   // Step 6: Consents
   const renderStep6 = () => (
     <>
-      <Text style={styles.label}>Why Do You Want to Work With Us? <Text style={styles.requiredLabel}>*</Text></Text>
+      <Text style={styles.label}>
+        Why Do You Want to Work With Us?{" "}
+        <Text style={styles.requiredLabel}>*</Text>
+      </Text>
       <TextInput
         style={styles.textArea}
         placeholder="Tell us about yourself, your work ethic, and why you'd be a great fit for our team."
@@ -685,47 +1578,131 @@ const CleanerApplicationForm = () => {
 
       <Text style={styles.sectionTitle}>Required Consents</Text>
       <Text style={styles.description}>
-        By checking the boxes below, you authorize us to conduct the following screenings:
+        By checking the boxes below, you authorize us to conduct the following
+        screenings:
       </Text>
 
       <Checkbox
         checked={formData.backgroundConsent}
-        onPress={() => handleChange("backgroundConsent", !formData.backgroundConsent)}
+        onPress={() =>
+          handleChange("backgroundConsent", !formData.backgroundConsent)
+        }
         label="I consent to a comprehensive background check, including criminal history, identity verification, and employment history. *"
       />
 
       <Checkbox
         checked={formData.referenceCheckConsent}
-        onPress={() => handleChange("referenceCheckConsent", !formData.referenceCheckConsent)}
+        onPress={() =>
+          handleChange("referenceCheckConsent", !formData.referenceCheckConsent)
+        }
         label="I consent to having my professional references contacted. *"
       />
 
+      <View style={styles.sectionDivider} />
+
+      <Text style={styles.sectionTitle}>Terms and Conditions</Text>
+      <View style={localStyles.termsContainer}>
+        <View style={localStyles.termsRow}>
+          <TouchableOpacity
+            style={[
+              localStyles.termsCheckbox,
+              formData.termsAccepted && localStyles.termsCheckboxChecked,
+            ]}
+            onPress={() => {
+              if (!formData.termsAccepted) {
+                setShowTermsModal(true);
+              } else {
+                handleChange("termsAccepted", false);
+                handleChange("termsId", null);
+              }
+            }}
+          >
+            {formData.termsAccepted && (
+              <Text style={localStyles.termsCheckmark}>✓</Text>
+            )}
+          </TouchableOpacity>
+          <View style={localStyles.termsTextContainer}>
+            <Text style={localStyles.termsLabel}>
+              I agree to the{" "}
+              <Text
+                style={localStyles.termsLink}
+                onPress={() => setShowTermsModal(true)}
+              >
+                Terms and Conditions
+              </Text>
+              {" *"}
+            </Text>
+          </View>
+        </View>
+        {formData.termsAccepted && (
+          <Text style={localStyles.termsAcceptedText}>Terms accepted</Text>
+        )}
+      </View>
+
       <Text style={styles.legalText}>
-        By submitting this application, I certify that all information provided is true and
-        complete to the best of my knowledge. I understand that any false statements or
-        omissions may result in disqualification from consideration or termination of employment.
+        By submitting this application, I certify that all information provided
+        is true and complete to the best of my knowledge. I understand that any
+        false statements or omissions may result in disqualification from
+        consideration or termination of employment.
       </Text>
+
+      {/* Terms Modal */}
+      <TermsModal
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onAccept={handleTermsAccepted}
+        type="cleaner"
+      />
     </>
   );
 
   const renderCurrentStep = () => {
     switch (currentStep) {
-      case 1: return renderStep1();
-      case 2: return renderStep2();
-      case 3: return renderStep3();
-      case 4: return renderStep4();
-      case 5: return renderStep5();
-      case 6: return renderStep6();
-      default: return renderStep1();
+      case 1:
+        return renderStep1();
+      case 2:
+        return renderStep2();
+      case 3:
+        return renderStep3();
+      case 4:
+        return renderStep4();
+      case 5:
+        return renderStep5();
+      case 6:
+        return renderStep6();
+      default:
+        return renderStep1();
     }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Cleaner Job Application</Text>
+      {/* Back to landing button */}
+      <TouchableOpacity
+        onPress={() => setShowForm(false)}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginBottom: spacing.lg,
+          alignSelf: "flex-start",
+        }}
+      >
+        <Text
+          style={{
+            color: colors.primary[600],
+            fontSize: typography.fontSize.base,
+            fontWeight: typography.fontWeight.medium,
+          }}
+        >
+          ← Back
+        </Text>
+      </TouchableOpacity>
+
+      <Text style={styles.title}>Join the Kleanr Team</Text>
       <Text style={styles.description}>
-        Join our trusted cleaning team. All applicants undergo thorough background checks
-        and reference verification to ensure the safety of our clients.
+        You're just a few steps away from becoming your own boss and earning
+        great money on your own schedule. This application takes about 5
+        minutes.
       </Text>
 
       {renderProgressBar()}
@@ -764,5 +1741,51 @@ const CleanerApplicationForm = () => {
     </ScrollView>
   );
 };
+
+const localStyles = StyleSheet.create({
+  termsContainer: {
+    marginVertical: 12,
+  },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  termsCheckbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: colors.primary[600],
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  termsCheckboxChecked: {
+    backgroundColor: colors.primary[600],
+  },
+  termsCheckmark: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  termsTextContainer: {
+    flex: 1,
+  },
+  termsLabel: {
+    fontSize: 14,
+    color: "#374151",
+  },
+  termsLink: {
+    color: colors.primary[600],
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  termsAcceptedText: {
+    fontSize: 12,
+    color: colors.success ? colors.success[600] : "#16a34a",
+    marginLeft: 36,
+    marginTop: 4,
+  },
+});
 
 export default CleanerApplicationForm;

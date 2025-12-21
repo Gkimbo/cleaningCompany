@@ -13,6 +13,13 @@ jest.mock("../../models", () => ({
   UserBills: {
     create: jest.fn(),
   },
+  TermsAndConditions: {
+    findOne: jest.fn(),
+    findByPk: jest.fn(),
+  },
+  UserTermsAcceptance: {
+    create: jest.fn(),
+  },
 }));
 
 // Mock passport
@@ -30,7 +37,7 @@ jest.mock("passport", () => ({
   session: jest.fn(() => (req, res, next) => next()),
 }));
 
-const { User, UserBills } = require("../../models");
+const { User, UserBills, TermsAndConditions, UserTermsAcceptance } = require("../../models");
 
 describe("Authentication Routes", () => {
   let app;
@@ -70,6 +77,7 @@ describe("Authentication Routes", () => {
         daysWorking: null,
         lastLogin: new Date(),
       });
+      TermsAndConditions.findOne.mockResolvedValue(null); // No terms to accept
 
       const res = await request(app)
         .post("/api/v1/user-sessions/login")
@@ -81,6 +89,7 @@ describe("Authentication Routes", () => {
       expect(res.status).toBe(201);
       expect(res.body).toHaveProperty("user");
       expect(res.body).toHaveProperty("token");
+      expect(res.body.requiresTermsAcceptance).toBe(false);
     });
 
     it("should return 401 for invalid password", async () => {

@@ -187,15 +187,15 @@ const DetailsComponent = ({ state, dispatch }) => {
           <Text style={homePageStyles.homeTileContent}>
             {`Sheets provided: ${
               homeDetails.sheetsProvided === "yes"
-                ? "Yes - changing to No will save $25 per appointment"
-                : "No - changing to Yes will add $25 per appointment"
+                ? "Yes - changing to No will save $50 per appointment"
+                : "No - changing to Yes will add $50 per appointment"
             }`}
           </Text>
           <Text style={homePageStyles.homeTileContent}>
             {`Towels provided: ${
               homeDetails.towelsProvided === "yes"
-                ? "Yes - changing to No will save $25 per appointment"
-                : "No - changing to Yes will add $25 per appointment"
+                ? "Yes - changing to No will save $50 per appointment"
+                : "No - changing to Yes will add $50 per appointment"
             }`}
           </Text>
           {homeDetails.keyPadCode && (
@@ -303,6 +303,8 @@ const DetailsComponent = ({ state, dispatch }) => {
             sheets={homeDetails.sheetsProvided}
             towels={homeDetails.towelsProvided}
             timeToBeCompleted={homeDetails.timeToBeCompleted}
+            bedConfigurations={homeDetails.bedConfigurations}
+            bathroomConfigurations={homeDetails.bathroomConfigurations}
           />
         )}
 
