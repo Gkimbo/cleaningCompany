@@ -23,6 +23,27 @@ sessionRouter.post("/", passport.authenticate("local"), async (req, res) => {
 	}
 });
 
+// Helper function to detect device type from User-Agent
+const detectDeviceType = (userAgent) => {
+	if (!userAgent) return "unknown";
+	const ua = userAgent.toLowerCase();
+
+	// Check for tablets first (they often contain "mobile" too)
+	if (ua.includes("ipad") || (ua.includes("android") && !ua.includes("mobile"))) {
+		return "tablet";
+	}
+
+	// Check for mobile devices
+	if (ua.includes("mobile") || ua.includes("iphone") || ua.includes("android") ||
+	    ua.includes("webos") || ua.includes("blackberry") || ua.includes("opera mini") ||
+	    ua.includes("windows phone") || ua.includes("iemobile")) {
+		return "mobile";
+	}
+
+	// Default to desktop
+	return "desktop";
+};
+
 sessionRouter.post("/login", async (req, res) => {
 	const { username, password } = req.body;
 
@@ -36,6 +57,17 @@ sessionRouter.post("/login", async (req, res) => {
 						console.error(err);
 						res.status(500).json({ message: "Internal server error" });
 					} else {
+						// Detect and store device type
+						const userAgent = req.headers["user-agent"];
+						const deviceType = detectDeviceType(userAgent);
+
+						// Update lastLogin, lastDeviceType, and increment loginCount
+						await user.update({
+							lastLogin: new Date(),
+							lastDeviceType: deviceType,
+							loginCount: (user.loginCount || 0) + 1
+						});
+
 						const serializedUser = UserSerializer.login(user);
 						const token = jwt.sign({ userId: user.id }, secretKey);
 

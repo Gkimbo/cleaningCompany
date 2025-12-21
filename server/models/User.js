@@ -66,6 +66,15 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		lastDeviceType: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		loginCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+		},
 	});
 
 	// Hash the password before saving the user
