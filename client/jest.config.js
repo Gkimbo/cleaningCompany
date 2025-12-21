@@ -6,6 +6,9 @@ module.exports = {
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/app/$1",
+    "^react-native-webview$": "<rootDir>/__mocks__/react-native-webview.js",
+    "^expo-document-picker$": "<rootDir>/__mocks__/expo-document-picker.js",
+    "^react-native-markdown-display$": "<rootDir>/__mocks__/react-native-markdown-display.js",
   },
   testMatch: ["**/__tests__/**/*.test.js", "**/__tests__/**/*.test.tsx"],
   collectCoverageFrom: [

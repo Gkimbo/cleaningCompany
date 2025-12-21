@@ -885,6 +885,20 @@ const ManagerDashboard = ({ state }) => {
       {/* Tax Section */}
       <TaxFormsSection state={state} />
 
+      {/* Terms & Conditions Section */}
+      <View style={styles.section}>
+        <SectionHeader title="Terms & Conditions" />
+        <Text style={styles.termsDescription}>
+          Manage the terms and conditions for homeowners and cleaners. Update terms to require users to re-accept on their next login.
+        </Text>
+        <Pressable
+          style={styles.termsButton}
+          onPress={() => navigate("/manager/terms")}
+        >
+          <Text style={styles.termsButtonText}>Manage Terms & Conditions</Text>
+        </Pressable>
+      </View>
+
       {/* Footer Spacer */}
       <View style={{ height: 40 }} />
     </ScrollView>
@@ -1557,6 +1571,25 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
     fontWeight: typography.fontWeight.medium,
+  },
+
+  // Terms & Conditions
+  termsDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+    lineHeight: 20,
+  },
+  termsButton: {
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  termsButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
 });
 

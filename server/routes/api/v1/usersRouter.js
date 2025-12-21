@@ -5,6 +5,8 @@ const {
   UserAppointments,
   UserCleanerAppointments,
   UserPendingRequests,
+  TermsAndConditions,
+  UserTermsAcceptance,
 } = require("../../../models");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
@@ -19,7 +21,7 @@ const usersRouter = express.Router();
 
 usersRouter.post("/", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, email } = req.body;
+    const { firstName, lastName, username, password, email, termsId } = req.body;
 
     // Validate username doesn't contain "manager"
     if (username && username.toLowerCase().includes("manager")) {
@@ -31,6 +33,16 @@ usersRouter.post("/", async (req, res) => {
     if (!existingUser) {
       existingUser = await User.findOne({ where: { username } });
       if (!existingUser) {
+        // Get terms version if termsId provided
+        let termsVersion = null;
+        let termsRecord = null;
+        if (termsId) {
+          termsRecord = await TermsAndConditions.findByPk(termsId);
+          if (termsRecord) {
+            termsVersion = termsRecord.version;
+          }
+        }
+
         const newUser = await User.create({
           firstName,
           lastName,
@@ -38,6 +50,7 @@ usersRouter.post("/", async (req, res) => {
           password,
           email,
           notifications: ["phone", "email"],
+          termsAcceptedVersion: termsVersion,
         });
         const newBill = await UserBills.create({
           userId: newUser.dataValues.id,
@@ -45,6 +58,19 @@ usersRouter.post("/", async (req, res) => {
           cancellationFee: 0,
           totalDue: 0,
         });
+
+        // Record terms acceptance if terms were accepted
+        if (termsId && termsRecord) {
+          const ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+          await UserTermsAcceptance.create({
+            userId: newUser.dataValues.id,
+            termsId,
+            acceptedAt: new Date(),
+            ipAddress,
+            termsContentSnapshot: termsRecord.contentType === "text" ? termsRecord.content : null,
+          });
+        }
+
         await newUser.update({ lastLogin: new Date() });
         const serializedUser = UserSerializer.login(newUser.dataValues);
         const token = jwt.sign({ userId: serializedUser.id }, secretKey);

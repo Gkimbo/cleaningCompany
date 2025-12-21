@@ -2,7 +2,7 @@
 /* eslint-disable no-unused-vars */
 const express = require("express");
 const passport = require("passport");
-const { User } = require("../../../models");
+const { User, TermsAndConditions } = require("../../../models");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
@@ -31,14 +31,45 @@ sessionRouter.post("/login", async (req, res) => {
 		if (user) {
 			const passwordMatch = await bcrypt.compare(password, user.password);
 			if (passwordMatch) {
-				req.login(user, (err) => {
+				req.login(user, async (err) => {
 					if (err) {
 						console.error(err);
 						res.status(500).json({ message: "Internal server error" });
 					} else {
 						const serializedUser = UserSerializer.login(user);
 						const token = jwt.sign({ userId: user.id }, secretKey);
-						return res.status(201).json({ user: serializedUser, token: token });
+
+						// Check if user needs to accept new terms
+						const userType = user.type === "cleaner" ? "cleaner" : "homeowner";
+						const currentTerms = await TermsAndConditions.findOne({
+							where: { type: userType },
+							order: [["version", "DESC"]],
+						});
+
+						let requiresTermsAcceptance = false;
+						let termsData = null;
+
+						if (currentTerms) {
+							// User needs to accept if they haven't accepted any version or their version is outdated
+							if (!user.termsAcceptedVersion || user.termsAcceptedVersion < currentTerms.version) {
+								requiresTermsAcceptance = true;
+								termsData = {
+									id: currentTerms.id,
+									title: currentTerms.title,
+									version: currentTerms.version,
+									contentType: currentTerms.contentType,
+									content: currentTerms.contentType === "text" ? currentTerms.content : null,
+									pdfUrl: currentTerms.contentType === "pdf" ? `/api/v1/terms/pdf/${currentTerms.id}` : null,
+								};
+							}
+						}
+
+						return res.status(201).json({
+							user: serializedUser,
+							token: token,
+							requiresTermsAcceptance,
+							terms: termsData,
+						});
 					}
 				});
 			} else {

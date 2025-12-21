@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Text, Pressable, View } from "react-native";
+import { Text, Pressable, View, StyleSheet } from "react-native";
 import { useNavigate } from "react-router-native";
-import { TextInput } from "react-native-paper";
+import { TextInput, Checkbox } from "react-native-paper";
 
 import FetchData from "../../../services/fetchRequests/fetchData";
 import formStyles from "../../../services/styles/FormStyle";
 import { AuthContext } from "../../../services/AuthContext";
+import { TermsModal } from "../../terms";
+import { colors } from "../../../services/styles/theme";
 
 const SignUpForm = ({ state, dispatch }) => {
 	const [firstName, setFirstName] = useState("");
@@ -18,6 +20,9 @@ const SignUpForm = ({ state, dispatch }) => {
 	const [showPassword, setShowPassword] = useState(false);
 	const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 	const [errors, setErrors] = useState([]);
+	const [termsAccepted, setTermsAccepted] = useState(false);
+	const [termsId, setTermsId] = useState(null);
+	const [showTermsModal, setShowTermsModal] = useState(false);
 	const navigate = useNavigate();
 	const { login } = useContext(AuthContext);
 
@@ -66,8 +71,18 @@ const SignUpForm = ({ state, dispatch }) => {
 			validationErrors.push("Please enter a valid email address.");
 		}
 
+		if (!termsAccepted) {
+			validationErrors.push("You must accept the Terms and Conditions to create an account.");
+		}
+
 		setErrors(validationErrors);
 		return validationErrors.length === 0;
+	};
+
+	const handleTermsAccepted = (acceptedTermsId) => {
+		setTermsId(acceptedTermsId);
+		setTermsAccepted(true);
+		setShowTermsModal(false);
 	};
 
 	const onSubmit = async () => {
@@ -80,6 +95,7 @@ const SignUpForm = ({ state, dispatch }) => {
 				userName,
 				password,
 				email,
+				termsId,
 			};
 			const response = await FetchData.makeNewUser(data);
 			if (
@@ -195,11 +211,82 @@ const SignUpForm = ({ state, dispatch }) => {
 				Password must be at least 8 characters with 2 uppercase, 2 lowercase, and 2 special characters.
 			</Text>
 
+			{/* Terms and Conditions */}
+			<View style={localStyles.termsContainer}>
+				<View style={localStyles.termsRow}>
+					<Checkbox
+						status={termsAccepted ? "checked" : "unchecked"}
+						onPress={() => {
+							if (!termsAccepted) {
+								setShowTermsModal(true);
+							} else {
+								setTermsAccepted(false);
+								setTermsId(null);
+							}
+						}}
+						color={colors.primary[600]}
+					/>
+					<View style={localStyles.termsTextContainer}>
+						<Text style={localStyles.termsText}>
+							I agree to the{" "}
+							<Text
+								style={localStyles.termsLink}
+								onPress={() => setShowTermsModal(true)}
+							>
+								Terms and Conditions
+							</Text>
+						</Text>
+					</View>
+				</View>
+				{termsAccepted && (
+					<Text style={localStyles.termsAcceptedText}>
+						Terms accepted
+					</Text>
+				)}
+			</View>
+
 			<Pressable style={formStyles.button} onPress={onSubmit}>
 				<Text style={formStyles.buttonText}>Create Account</Text>
 			</Pressable>
+
+			{/* Terms Modal */}
+			<TermsModal
+				visible={showTermsModal}
+				onClose={() => setShowTermsModal(false)}
+				onAccept={handleTermsAccepted}
+				type="homeowner"
+			/>
 		</View>
 	);
 };
+
+const localStyles = StyleSheet.create({
+	termsContainer: {
+		marginBottom: 16,
+	},
+	termsRow: {
+		flexDirection: "row",
+		alignItems: "center",
+	},
+	termsTextContainer: {
+		flex: 1,
+		marginLeft: 4,
+	},
+	termsText: {
+		fontSize: 14,
+		color: "#374151",
+	},
+	termsLink: {
+		color: colors.primary[600],
+		fontWeight: "600",
+		textDecorationLine: "underline",
+	},
+	termsAcceptedText: {
+		fontSize: 12,
+		color: colors.success ? colors.success[600] : "#16a34a",
+		marginLeft: 36,
+		marginTop: 4,
+	},
+});
 
 export default SignUpForm;

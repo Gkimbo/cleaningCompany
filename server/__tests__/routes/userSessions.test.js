@@ -8,6 +8,9 @@ jest.mock("../../models", () => ({
   User: {
     findOne: jest.fn(),
   },
+  TermsAndConditions: {
+    findOne: jest.fn(),
+  },
 }));
 
 jest.mock("bcrypt", () => ({
@@ -58,7 +61,7 @@ jest.mock("passport", () => ({
   authenticate: jest.fn(() => (req, res, next) => next()),
 }));
 
-const { User } = require("../../models");
+const { User, TermsAndConditions } = require("../../models");
 const Email = require("../../services/sendNotifications/EmailClass");
 
 const sessionRouter = require("../../routes/api/v1/userSessionsRouter");
@@ -93,6 +96,7 @@ describe("User Sessions Router", () => {
     it("should login successfully with valid credentials", async () => {
       User.findOne.mockResolvedValue(mockUser);
       bcrypt.compare.mockResolvedValue(true);
+      TermsAndConditions.findOne.mockResolvedValue(null); // No terms to accept
 
       const response = await request(app)
         .post("/api/v1/sessions/login")
@@ -101,6 +105,7 @@ describe("User Sessions Router", () => {
       expect(response.status).toBe(201);
       expect(response.body.user).toBeDefined();
       expect(response.body.token).toBeDefined();
+      expect(response.body.requiresTermsAcceptance).toBe(false);
     });
 
     it("should return 404 for non-existent user", async () => {

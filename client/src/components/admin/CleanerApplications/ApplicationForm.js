@@ -5,6 +5,7 @@ import {
   Image,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,6 +13,8 @@ import {
 } from "react-native";
 import Application from "../../../services/fetchRequests/ApplicationClass";
 import ApplicationFormStyles from "../../../services/styles/ApplicationFormStyles";
+import { TermsModal } from "../../terms";
+import { colors } from "../../../services/styles/theme";
 
 const US_STATES = [
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -70,11 +73,14 @@ const CleanerApplicationForm = () => {
     // Consents
     backgroundConsent: false,
     referenceCheckConsent: false,
+    termsAccepted: false,
+    termsId: null,
   });
 
   const [formError, setFormError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const totalSteps = 6;
   const styles = ApplicationFormStyles;
 
@@ -265,6 +271,9 @@ const CleanerApplicationForm = () => {
         if (!formData.referenceCheckConsent) {
           errors.push("You must consent to reference checks.");
         }
+        if (!formData.termsAccepted) {
+          errors.push("You must accept the Terms and Conditions.");
+        }
         if (!formData.message.trim()) {
           errors.push("Please tell us why you want to work with us.");
         }
@@ -287,6 +296,16 @@ const CleanerApplicationForm = () => {
   const prevStep = () => {
     setFormError(null);
     setCurrentStep((prev) => Math.max(prev - 1, 1));
+  };
+
+  // Handle terms acceptance
+  const handleTermsAccepted = (acceptedTermsId) => {
+    setFormData((prev) => ({
+      ...prev,
+      termsAccepted: true,
+      termsId: acceptedTermsId,
+    }));
+    setShowTermsModal(false);
   };
 
   // Submit form
@@ -700,11 +719,55 @@ const CleanerApplicationForm = () => {
         label="I consent to having my professional references contacted. *"
       />
 
+      <View style={styles.sectionDivider} />
+
+      <Text style={styles.sectionTitle}>Terms and Conditions</Text>
+      <View style={localStyles.termsContainer}>
+        <View style={localStyles.termsRow}>
+          <TouchableOpacity
+            style={[localStyles.termsCheckbox, formData.termsAccepted && localStyles.termsCheckboxChecked]}
+            onPress={() => {
+              if (!formData.termsAccepted) {
+                setShowTermsModal(true);
+              } else {
+                handleChange("termsAccepted", false);
+                handleChange("termsId", null);
+              }
+            }}
+          >
+            {formData.termsAccepted && <Text style={localStyles.termsCheckmark}>✓</Text>}
+          </TouchableOpacity>
+          <View style={localStyles.termsTextContainer}>
+            <Text style={localStyles.termsLabel}>
+              I agree to the{" "}
+              <Text
+                style={localStyles.termsLink}
+                onPress={() => setShowTermsModal(true)}
+              >
+                Terms and Conditions
+              </Text>
+              {" *"}
+            </Text>
+          </View>
+        </View>
+        {formData.termsAccepted && (
+          <Text style={localStyles.termsAcceptedText}>Terms accepted</Text>
+        )}
+      </View>
+
       <Text style={styles.legalText}>
         By submitting this application, I certify that all information provided is true and
         complete to the best of my knowledge. I understand that any false statements or
         omissions may result in disqualification from consideration or termination of employment.
       </Text>
+
+      {/* Terms Modal */}
+      <TermsModal
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onAccept={handleTermsAccepted}
+        type="cleaner"
+      />
     </>
   );
 
@@ -764,5 +827,51 @@ const CleanerApplicationForm = () => {
     </ScrollView>
   );
 };
+
+const localStyles = StyleSheet.create({
+  termsContainer: {
+    marginVertical: 12,
+  },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  termsCheckbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: colors.primary[600],
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  termsCheckboxChecked: {
+    backgroundColor: colors.primary[600],
+  },
+  termsCheckmark: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  termsTextContainer: {
+    flex: 1,
+  },
+  termsLabel: {
+    fontSize: 14,
+    color: "#374151",
+  },
+  termsLink: {
+    color: colors.primary[600],
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  termsAcceptedText: {
+    fontSize: 12,
+    color: colors.success ? colors.success[600] : "#16a34a",
+    marginLeft: 36,
+    marginTop: 4,
+  },
+});
 
 export default CleanerApplicationForm;

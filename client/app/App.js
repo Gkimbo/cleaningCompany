@@ -69,6 +69,12 @@ import AccountSettings from "../src/components/account/AccountSettings";
 // Client components
 import ClientRequestsList from "../src/components/client/ClientRequestsList";
 
+// Manager components
+import TermsEditor from "../src/components/manager/TermsEditor";
+
+// Terms and Conditions
+import { TermsAcceptanceScreen } from "../src/components/terms";
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [stripePublishableKey, setStripePublishableKey] = useState(null);
@@ -176,6 +182,10 @@ export default function App() {
               <Route
                 path="/forgot-credentials"
                 element={<ForgotCredentials />}
+              />
+              <Route
+                path="/terms-acceptance"
+                element={<TermsAcceptanceScreen state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/welcome"
@@ -388,6 +398,11 @@ export default function App() {
               <Route
                 path="/client-requests"
                 element={<ClientRequestsList state={state} dispatch={dispatch} />}
+              />
+              {/* Manager Terms Editor */}
+              <Route
+                path="/manager/terms"
+                element={<TermsEditor state={state} />}
               />
             </Routes>
             </SafeAreaView>

@@ -1,8 +1,6 @@
 import React from "react";
 import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
-
-// Get the mocked Alert for custom behavior in tests
-const Alert = require("react-native/Libraries/Alert/Alert");
+import { Alert } from "react-native";
 
 // Override the global mock for this test file to auto-press destructive actions
 Alert.alert.mockImplementation(async (title, message, buttons) => {
