@@ -486,6 +486,77 @@ const ManagerDashboard = ({ state }) => {
       <View style={styles.section}>
         <SectionHeader title="App Usage Analytics" />
 
+        {/* Platform Overview */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Platform Overview</Text>
+          <View style={styles.platformOverviewGrid}>
+            <View
+              style={[
+                styles.platformOverviewCard,
+                { borderLeftColor: colors.primary[500] },
+              ]}
+            >
+              <Text style={styles.platformOverviewValue}>
+                {userAnalytics?.totals?.cleaners || 0}
+              </Text>
+              <Text style={styles.platformOverviewLabel}>Cleaners</Text>
+            </View>
+            <View
+              style={[
+                styles.platformOverviewCard,
+                { borderLeftColor: colors.secondary[500] },
+              ]}
+            >
+              <Text style={styles.platformOverviewValue}>
+                {userAnalytics?.totals?.homeowners || 0}
+              </Text>
+              <Text style={styles.platformOverviewLabel}>Homeowners</Text>
+            </View>
+            <View
+              style={[
+                styles.platformOverviewCard,
+                { borderLeftColor: colors.success[500] },
+              ]}
+            >
+              <Text style={styles.platformOverviewValue}>
+                {userAnalytics?.totals?.homes || 0}
+              </Text>
+              <Text style={styles.platformOverviewLabel}>Homes</Text>
+            </View>
+          </View>
+
+          {/* Applications Overview */}
+          <View style={[styles.applicationsSection, { marginTop: spacing.md }]}>
+            <Text style={styles.applicationsSectionTitle}>Applications</Text>
+            <View style={styles.applicationsGrid}>
+              <View style={styles.applicationCard}>
+                <Text style={styles.applicationValue}>
+                  {userAnalytics?.applications?.total || 0}
+                </Text>
+                <Text style={styles.applicationLabel}>Total</Text>
+              </View>
+              <View style={[styles.applicationCard, { backgroundColor: colors.warning[50] }]}>
+                <Text style={[styles.applicationValue, { color: colors.warning[700] }]}>
+                  {userAnalytics?.applications?.pending || 0}
+                </Text>
+                <Text style={[styles.applicationLabel, { color: colors.warning[600] }]}>Pending</Text>
+              </View>
+              <View style={[styles.applicationCard, { backgroundColor: colors.success[50] }]}>
+                <Text style={[styles.applicationValue, { color: colors.success[700] }]}>
+                  {userAnalytics?.applications?.approved || 0}
+                </Text>
+                <Text style={[styles.applicationLabel, { color: colors.success[600] }]}>Approved</Text>
+              </View>
+              <View style={[styles.applicationCard, { backgroundColor: colors.error[50] }]}>
+                <Text style={[styles.applicationValue, { color: colors.error[700] }]}>
+                  {userAnalytics?.applications?.rejected || 0}
+                </Text>
+                <Text style={[styles.applicationLabel, { color: colors.error[600] }]}>Rejected</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
         {/* Signups Overview */}
         <View style={styles.appUsageSubsection}>
           <Text style={styles.appUsageSubtitle}>User Signups</Text>
@@ -579,28 +650,53 @@ const ManagerDashboard = ({ state }) => {
           <View style={styles.engagementGrid}>
             <View style={styles.engagementCard}>
               <Text style={styles.engagementValue}>
-                {Math.floor((appUsageData?.engagement?.averageSessionDuration || 0) / 60)}m{" "}
-                {(appUsageData?.engagement?.averageSessionDuration || 0) % 60}s
+                {appUsageData?.engagement?.totalLogins || 0}
               </Text>
-              <Text style={styles.engagementLabel}>Avg. Time on App</Text>
+              <Text style={styles.engagementLabel}>Total Logins</Text>
             </View>
             <View style={styles.engagementCard}>
               <Text style={styles.engagementValue}>
-                {(appUsageData?.engagement?.averagePagesPerSession || 0).toFixed(1)}
+                {(appUsageData?.engagement?.avgLoginsPerUser || 0).toFixed(1)}
               </Text>
-              <Text style={styles.engagementLabel}>Pages per Session</Text>
+              <Text style={styles.engagementLabel}>Avg Logins/User</Text>
             </View>
             <View style={styles.engagementCard}>
               <Text style={styles.engagementValue}>
-                {(appUsageData?.engagement?.returningUserRate || 0).toFixed(0)}%
+                {appUsageData?.engagement?.engagementRate || 0}%
+              </Text>
+              <Text style={styles.engagementLabel}>Engagement Rate</Text>
+            </View>
+            <View style={styles.engagementCard}>
+              <Text style={styles.engagementValue}>
+                {appUsageData?.engagement?.returningUserRate || 0}%
+              </Text>
+              <Text style={styles.engagementLabel}>Returning Users</Text>
+            </View>
+          </View>
+          <View style={[styles.engagementGrid, { marginTop: spacing.sm }]}>
+            <View style={styles.engagementCard}>
+              <Text style={styles.engagementValue}>
+                {appUsageData?.engagement?.usersWhoLoggedIn || 0}
+              </Text>
+              <Text style={styles.engagementLabel}>Active Users</Text>
+            </View>
+            <View style={styles.engagementCard}>
+              <Text style={styles.engagementValue}>
+                {appUsageData?.engagement?.returningUsers || 0}
               </Text>
               <Text style={styles.engagementLabel}>Returning Users</Text>
             </View>
             <View style={styles.engagementCard}>
               <Text style={styles.engagementValue}>
-                {(appUsageData?.engagement?.bounceRate || 0).toFixed(0)}%
+                {appUsageData?.engagement?.highlyEngagedUsers || 0}
               </Text>
-              <Text style={styles.engagementLabel}>Bounce Rate</Text>
+              <Text style={styles.engagementLabel}>Power Users (5+)</Text>
+            </View>
+            <View style={styles.engagementCard}>
+              <Text style={styles.engagementValue}>
+                {appUsageData?.engagement?.powerUserRate || 0}%
+              </Text>
+              <Text style={styles.engagementLabel}>Power User Rate</Text>
             </View>
           </View>
         </View>
@@ -710,77 +806,6 @@ const ManagerDashboard = ({ state }) => {
             </View>
           </View>
         )}
-      </View>
-
-      {/* Platform Overview Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Platform Overview" />
-        <View style={styles.platformOverviewGrid}>
-          <View
-            style={[
-              styles.platformOverviewCard,
-              { borderLeftColor: colors.primary[500] },
-            ]}
-          >
-            <Text style={styles.platformOverviewValue}>
-              {userAnalytics?.totals?.cleaners || 0}
-            </Text>
-            <Text style={styles.platformOverviewLabel}>Cleaners</Text>
-          </View>
-          <View
-            style={[
-              styles.platformOverviewCard,
-              { borderLeftColor: colors.secondary[500] },
-            ]}
-          >
-            <Text style={styles.platformOverviewValue}>
-              {userAnalytics?.totals?.homeowners || 0}
-            </Text>
-            <Text style={styles.platformOverviewLabel}>Homeowners</Text>
-          </View>
-          <View
-            style={[
-              styles.platformOverviewCard,
-              { borderLeftColor: colors.success[500] },
-            ]}
-          >
-            <Text style={styles.platformOverviewValue}>
-              {userAnalytics?.totals?.homes || 0}
-            </Text>
-            <Text style={styles.platformOverviewLabel}>Homes</Text>
-          </View>
-        </View>
-
-        {/* Applications Overview */}
-        <View style={styles.applicationsSection}>
-          <Text style={styles.applicationsSectionTitle}>Applications</Text>
-          <View style={styles.applicationsGrid}>
-            <View style={styles.applicationCard}>
-              <Text style={styles.applicationValue}>
-                {userAnalytics?.applications?.total || 0}
-              </Text>
-              <Text style={styles.applicationLabel}>Total</Text>
-            </View>
-            <View style={[styles.applicationCard, { backgroundColor: colors.warning[50] }]}>
-              <Text style={[styles.applicationValue, { color: colors.warning[700] }]}>
-                {userAnalytics?.applications?.pending || 0}
-              </Text>
-              <Text style={[styles.applicationLabel, { color: colors.warning[600] }]}>Pending</Text>
-            </View>
-            <View style={[styles.applicationCard, { backgroundColor: colors.success[50] }]}>
-              <Text style={[styles.applicationValue, { color: colors.success[700] }]}>
-                {userAnalytics?.applications?.approved || 0}
-              </Text>
-              <Text style={[styles.applicationLabel, { color: colors.success[600] }]}>Approved</Text>
-            </View>
-            <View style={[styles.applicationCard, { backgroundColor: colors.error[50] }]}>
-              <Text style={[styles.applicationValue, { color: colors.error[700] }]}>
-                {userAnalytics?.applications?.rejected || 0}
-              </Text>
-              <Text style={[styles.applicationLabel, { color: colors.error[600] }]}>Rejected</Text>
-            </View>
-          </View>
-        </View>
       </View>
 
       {/* Service Area Section */}

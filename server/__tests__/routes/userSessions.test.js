@@ -91,6 +91,7 @@ describe("User Sessions Router", () => {
       email: "test@test.com",
       password: "hashedpassword",
       type: "client",
+      update: jest.fn().mockResolvedValue(true),
     };
 
     it("should login successfully with valid credentials", async () => {

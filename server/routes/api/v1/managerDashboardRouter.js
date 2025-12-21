@@ -690,6 +690,225 @@ managerDashboardRouter.post(
 );
 
 /**
+ * GET /app-usage-analytics
+ * Get app usage analytics (signups, activity metrics)
+ */
+managerDashboardRouter.get(
+  "/app-usage-analytics",
+  verifyManager,
+  async (req, res) => {
+    try {
+      const now = new Date();
+
+      // Time periods
+      const todayStart = new Date(now);
+      todayStart.setHours(0, 0, 0, 0);
+
+      const weekStart = new Date(now);
+      weekStart.setDate(weekStart.getDate() - 7);
+
+      const monthStart = new Date(now);
+      monthStart.setMonth(monthStart.getMonth() - 1);
+
+      const yearStart = new Date(now);
+      yearStart.setFullYear(yearStart.getFullYear() - 1);
+
+      // Signup counts
+      const signupsToday = await User.count({
+        where: { createdAt: { [Op.gte]: todayStart } },
+      }).catch(() => 0);
+
+      const signupsThisWeek = await User.count({
+        where: { createdAt: { [Op.gte]: weekStart } },
+      }).catch(() => 0);
+
+      const signupsThisMonth = await User.count({
+        where: { createdAt: { [Op.gte]: monthStart } },
+      }).catch(() => 0);
+
+      const signupsThisYear = await User.count({
+        where: { createdAt: { [Op.gte]: yearStart } },
+      }).catch(() => 0);
+
+      const signupsAllTime = await User.count().catch(() => 0);
+
+      // Active users (using lastLogin as proxy for sessions)
+      const activeToday = await User.count({
+        where: { lastLogin: { [Op.gte]: todayStart } },
+      }).catch(() => 0);
+
+      const activeThisWeek = await User.count({
+        where: { lastLogin: { [Op.gte]: weekStart } },
+      }).catch(() => 0);
+
+      const activeThisMonth = await User.count({
+        where: { lastLogin: { [Op.gte]: monthStart } },
+      }).catch(() => 0);
+
+      const activeAllTime = await User.count({
+        where: { lastLogin: { [Op.ne]: null } },
+      }).catch(() => 0);
+
+      // Calculate retention rates
+      // Day N retention = % of users who signed up at least N days ago and logged in at least N days after signup
+      async function calculateRetention(days) {
+        try {
+          // Find users who signed up at least N days ago
+          const cutoffDate = new Date(now);
+          cutoffDate.setDate(cutoffDate.getDate() - days);
+
+          const usersSignedUp = await User.count({
+            where: {
+              createdAt: { [Op.lte]: cutoffDate },
+            },
+          });
+
+          if (usersSignedUp === 0) return 0;
+
+          // Find users who came back at least N days after their signup
+          // This uses a raw query to compare lastLogin with createdAt + interval
+          const usersRetained = await User.count({
+            where: {
+              createdAt: { [Op.lte]: cutoffDate },
+              lastLogin: { [Op.ne]: null },
+              [Op.and]: sequelize.literal(`"lastLogin" >= "createdAt" + interval '${days} days'`),
+            },
+          });
+
+          return Math.round((usersRetained / usersSignedUp) * 100);
+        } catch (err) {
+          console.error(`[Manager Dashboard] Retention calculation error for day ${days}:`, err.message);
+          return 0;
+        }
+      }
+
+      const day1Retention = await calculateRetention(1);
+      const day7Retention = await calculateRetention(7);
+      const day30Retention = await calculateRetention(30);
+
+      // Calculate engagement metrics based on loginCount
+      const totalUsers = await User.count().catch(() => 0);
+
+      // Users who have logged in at least once
+      const usersWhoLoggedIn = await User.count({
+        where: { loginCount: { [Op.gte]: 1 } },
+      }).catch(() => 0);
+
+      // Users who have logged in more than once (returning users)
+      const returningUsers = await User.count({
+        where: { loginCount: { [Op.gte]: 2 } },
+      }).catch(() => 0);
+
+      // Highly engaged users (logged in 5+ times)
+      const highlyEngagedUsers = await User.count({
+        where: { loginCount: { [Op.gte]: 5 } },
+      }).catch(() => 0);
+
+      // Calculate average logins per user
+      const loginStats = await User.findOne({
+        attributes: [
+          [sequelize.fn("AVG", sequelize.col("loginCount")), "avgLogins"],
+          [sequelize.fn("SUM", sequelize.col("loginCount")), "totalLogins"],
+        ],
+        raw: true,
+      }).catch(() => ({ avgLogins: 0, totalLogins: 0 }));
+
+      const avgLoginsPerUser = parseFloat(loginStats?.avgLogins || 0).toFixed(1);
+      const totalLogins = parseInt(loginStats?.totalLogins || 0);
+
+      // Returning user rate: % of users who logged in more than once
+      const returningUserRate = usersWhoLoggedIn > 0
+        ? Math.round((returningUsers / usersWhoLoggedIn) * 100)
+        : 0;
+
+      // Engagement rate: % of all users who have logged in at least once
+      const engagementRate = totalUsers > 0
+        ? Math.round((usersWhoLoggedIn / totalUsers) * 100)
+        : 0;
+
+      // Power user rate: % of users who are highly engaged (5+ logins)
+      const powerUserRate = usersWhoLoggedIn > 0
+        ? Math.round((highlyEngagedUsers / usersWhoLoggedIn) * 100)
+        : 0;
+
+      // Calculate device breakdown from lastDeviceType
+      const deviceCounts = await User.findAll({
+        where: { lastDeviceType: { [Op.ne]: null } },
+        attributes: [
+          "lastDeviceType",
+          [sequelize.fn("COUNT", sequelize.col("id")), "count"],
+        ],
+        group: ["lastDeviceType"],
+        raw: true,
+      }).catch(() => []);
+
+      const totalDevices = deviceCounts.reduce((sum, d) => sum + parseInt(d.count || 0), 0);
+
+      const deviceBreakdown = {
+        mobile: 0,
+        desktop: 0,
+        tablet: 0,
+      };
+
+      if (totalDevices > 0) {
+        deviceCounts.forEach((d) => {
+          const type = d.lastDeviceType;
+          const percentage = Math.round((parseInt(d.count) / totalDevices) * 100);
+          if (type === "mobile") deviceBreakdown.mobile = percentage;
+          else if (type === "desktop") deviceBreakdown.desktop = percentage;
+          else if (type === "tablet") deviceBreakdown.tablet = percentage;
+        });
+      }
+
+      res.json({
+        signups: {
+          today: signupsToday,
+          thisWeek: signupsThisWeek,
+          thisMonth: signupsThisMonth,
+          thisYear: signupsThisYear,
+          allTime: signupsAllTime,
+        },
+        sessions: {
+          today: activeToday,
+          thisWeek: activeThisWeek,
+          thisMonth: activeThisMonth,
+          allTime: activeAllTime,
+          uniqueVisitorsToday: activeToday,
+          uniqueVisitorsWeek: activeThisWeek,
+          uniqueVisitorsMonth: activeThisMonth,
+        },
+        engagement: {
+          totalLogins,
+          avgLoginsPerUser: parseFloat(avgLoginsPerUser),
+          returningUserRate,
+          engagementRate,
+          powerUserRate,
+          usersWhoLoggedIn,
+          returningUsers,
+          highlyEngagedUsers,
+        },
+        pageViews: {
+          today: 0, // Would need client-side tracking
+          thisWeek: 0,
+          thisMonth: 0,
+          allTime: 0,
+          topPages: [],
+        },
+        deviceBreakdown,
+        retention: {
+          day1: day1Retention,
+          day7: day7Retention,
+          day30: day30Retention,
+        },
+      });
+    } catch (error) {
+      console.error("[Manager Dashboard] App usage analytics error:", error);
+      res.status(500).json({ error: "Failed to fetch app usage analytics" });
+    }
+  }
+);
+
+/**
  * GET /homes-outside-service-area
  * Get list of homes currently outside the service area
  */

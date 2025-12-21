@@ -76,6 +76,8 @@ describe("Authentication Routes", () => {
         type: null,
         daysWorking: null,
         lastLogin: new Date(),
+        loginCount: 0,
+        update: jest.fn().mockResolvedValue(true),
       });
       TermsAndConditions.findOne.mockResolvedValue(null); // No terms to accept
 
