@@ -117,7 +117,7 @@ describe("User Sessions Router", () => {
         .send({ username: "nonexistent", password: "password123" });
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toBe("No Username");
+      expect(response.body.error).toBe("No account found");
     });
 
     it("should return 401 for incorrect password", async () => {

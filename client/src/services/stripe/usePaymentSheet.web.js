@@ -1,13 +1,19 @@
 // Web Payment Sheet Hook
-// On web, we'll use a different approach with Stripe Elements
+// On web, we use Stripe Checkout for a hosted payment page experience
 // This provides a compatible interface for the components
 
 import { loadStripe } from "@stripe/stripe-js";
 
 let stripeInstance = null;
+let currentKey = null;
 
 const getStripe = async (publishableKey) => {
-  if (!stripeInstance && publishableKey) {
+  if (!publishableKey) {
+    return null;
+  }
+  // Reinitialize if key changed or not yet initialized
+  if (!stripeInstance || currentKey !== publishableKey) {
+    currentKey = publishableKey;
     stripeInstance = await loadStripe(publishableKey);
   }
   return stripeInstance;
@@ -29,27 +35,34 @@ export const usePaymentSheet = () => {
       }
 
       if (isSetupIntent) {
-        // For setup intents, we use confirmCardSetup
-        // Note: On web, we'd typically use Stripe Elements for card input
-        // This is a simplified version - for full web support,
-        // you'd want to render a card element UI
-        const { error, setupIntent } = await stripe.confirmCardSetup(clientSecret, {
-          payment_method: {
-            card: {
-              // On web, this would come from a CardElement
-              // For now, we'll use the payment sheet redirect
-            },
+        // For setup intents on web, use confirmSetup with redirect
+        // This opens Stripe's hosted page for card entry
+        const returnUrl = `${window.location.origin}/payment-setup?setup_complete=true`;
+
+        const { error } = await stripe.confirmSetup({
+          clientSecret,
+          confirmParams: {
+            return_url: returnUrl,
           },
         });
 
+        // If we get here without redirect, there was an error
         if (error) {
           return { error };
         }
 
-        return { success: true, setupIntent };
+        // This typically won't be reached as confirmSetup redirects
+        return { success: true };
       } else {
-        // For payment intents
-        const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret);
+        // For payment intents, use confirmPayment with redirect
+        const returnUrl = `${window.location.origin}/payment-complete`;
+
+        const { error } = await stripe.confirmPayment({
+          clientSecret,
+          confirmParams: {
+            return_url: returnUrl,
+          },
+        });
 
         if (error) {
           if (error.code === "canceled") {
@@ -58,7 +71,7 @@ export const usePaymentSheet = () => {
           return { error };
         }
 
-        return { success: true, paymentIntent };
+        return { success: true };
       }
     } catch (err) {
       return { error: { message: err.message } };

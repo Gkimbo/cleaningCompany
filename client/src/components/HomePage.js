@@ -718,7 +718,8 @@ const HomePage = ({ state, dispatch }) => {
             {[
               "1 bed / 1 bath base rate",
               `+$${cleaningCompany.extraBedBathFee} per additional bed or bath`,
-              `Sheet service available (+$${cleaningCompany.sheetCleaningFee})`,
+              `Fresh sheets (+$${cleaningCompany.sheetFeePerBed}/bed)`,
+              `Fresh towels (+$${cleaningCompany.towelFee}/towel)`,
               "Flexible 10am-4pm scheduling",
             ].map((item, index) => (
               <View

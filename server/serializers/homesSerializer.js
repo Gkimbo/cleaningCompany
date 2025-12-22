@@ -19,7 +19,13 @@ class HomeSerializer {
 		"specialNotes",
 		"cleanersNeeded",
 		"timeToBeCompleted",
-		"outsideServiceArea"
+		"outsideServiceArea",
+		"bedConfigurations",
+		"bathroomConfigurations",
+		"cleanSheetsLocation",
+		"dirtySheetsLocation",
+		"cleanTowelsLocation",
+		"dirtyTowelsLocation"
 	];
 
 	static serializeOne(home) {

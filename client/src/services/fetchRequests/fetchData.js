@@ -98,7 +98,7 @@ class FetchData {
         if (response.status === 401) {
           return "Invalid password";
         } else if (response.status === 404) {
-          return "That User Name does not exist, please sign up.";
+          return "No account found with that email or username.";
         } else {
           throw new Error("Failed to login");
         }

@@ -363,6 +363,114 @@ appointmentRouter.get("/requests-for-home/:homeId", async (req, res) => {
   }
 });
 
+// Get cancellation info for an appointment
+// IMPORTANT: Must be defined BEFORE /:homeId to avoid route conflict
+appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
+  const { id } = req.params;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const appointment = await UserAppointments.findByPk(id);
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Calculate days until appointment
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(appointment.date);
+    appointmentDate.setHours(0, 0, 0, 0);
+    const diffTime = appointmentDate - today;
+    const daysUntilAppointment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    const isHomeowner = appointment.userId === userId;
+    const isCleaner = appointment.employeesAssigned?.includes(String(userId));
+    const hasCleanerAssigned = appointment.hasBeenAssigned && appointment.employeesAssigned?.length > 0;
+    const price = parseFloat(appointment.price) || 0;
+
+    let response = {
+      daysUntilAppointment,
+      appointmentDate: appointment.date,
+      price,
+      hasCleanerAssigned,
+      isHomeowner,
+      isCleaner,
+    };
+
+    if (isHomeowner) {
+      // Homeowner cancellation rules: 3 days
+      const isWithinPenaltyWindow = daysUntilAppointment <= 3 && hasCleanerAssigned;
+      const estimatedRefund = isWithinPenaltyWindow ? price * 0.5 : price;
+      const cleanerPayout = isWithinPenaltyWindow ? price * 0.5 * 0.9 : 0;
+
+      response = {
+        ...response,
+        userType: "homeowner",
+        isWithinPenaltyWindow,
+        penaltyWindowDays: 3,
+        estimatedRefund: estimatedRefund.toFixed(2),
+        cleanerPayout: cleanerPayout.toFixed(2),
+        warningMessage: isWithinPenaltyWindow
+          ? `Cancelling within 3 days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (50% of the price minus 10% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}.`
+          : hasCleanerAssigned
+          ? "You can cancel this appointment for a full refund."
+          : "You can cancel this appointment. No payment has been processed yet.",
+      };
+    } else if (isCleaner) {
+      // Cleaner cancellation rules: 4 days
+      const isWithinPenaltyWindow = daysUntilAppointment <= 4;
+
+      // Count recent cancellation penalties
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+      const recentPenalties = await UserReviews.count({
+        where: {
+          userId: userId,
+          reviewType: "system_cancellation_penalty",
+          createdAt: { [Op.gte]: threeMonthsAgo },
+        },
+      });
+
+      const willBeFrozen = recentPenalties >= 2;
+
+      response = {
+        ...response,
+        userType: "cleaner",
+        isWithinPenaltyWindow,
+        penaltyWindowDays: 4,
+        recentCancellationPenalties: recentPenalties,
+        willResultInFreeze: willBeFrozen,
+        warningMessage: isWithinPenaltyWindow
+          ? willBeFrozen
+            ? `WARNING: Cancelling within 4 days of the cleaning will result in an automatic 1-star rating. You already have ${recentPenalties} cancellation penalties in the last 3 months. THIS CANCELLATION WILL FREEZE YOUR ACCOUNT.`
+            : `Cancelling within 4 days of the cleaning will result in an automatic 1-star rating with the note "Last minute cancellation". You currently have ${recentPenalties} cancellation ${recentPenalties === 1 ? "penalty" : "penalties"} in the last 3 months. ${3 - recentPenalties - 1} more will result in your account being frozen.`
+          : "You can cancel this job without penalty.",
+      };
+    } else {
+      return res.status(403).json({ error: "You are not authorized to cancel this appointment" });
+    }
+
+    return res.json(response);
+  } catch (error) {
+    console.error("Error getting cancellation info:", error);
+    return res.status(500).json({ error: "Failed to get cancellation info" });
+  }
+});
+
 appointmentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;
   try {
@@ -1207,114 +1315,8 @@ appointmentRouter.patch("/remove-request", async (req, res) => {
 
 // ============================================================================
 // CANCELLATION POLICY ENDPOINTS
+// Note: GET /cancellation-info/:id is defined earlier (before /:homeId) to avoid route conflicts
 // ============================================================================
-
-// Get cancellation info for an appointment
-appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
-  const { id } = req.params;
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    return res.status(401).json({ error: "Authorization token required" });
-  }
-
-  try {
-    const token = authHeader.split(" ")[1];
-    const decodedToken = jwt.verify(token, secretKey);
-    const userId = decodedToken.userId;
-
-    const appointment = await UserAppointments.findByPk(id);
-    if (!appointment) {
-      return res.status(404).json({ error: "Appointment not found" });
-    }
-
-    const user = await User.findByPk(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    // Calculate days until appointment
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(appointment.date);
-    appointmentDate.setHours(0, 0, 0, 0);
-    const diffTime = appointmentDate - today;
-    const daysUntilAppointment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    const isHomeowner = appointment.userId === userId;
-    const isCleaner = appointment.employeesAssigned?.includes(String(userId));
-    const hasCleanerAssigned = appointment.hasBeenAssigned && appointment.employeesAssigned?.length > 0;
-    const price = parseFloat(appointment.price) || 0;
-
-    let response = {
-      daysUntilAppointment,
-      appointmentDate: appointment.date,
-      price,
-      hasCleanerAssigned,
-      isHomeowner,
-      isCleaner,
-    };
-
-    if (isHomeowner) {
-      // Homeowner cancellation rules: 3 days
-      const isWithinPenaltyWindow = daysUntilAppointment <= 3 && hasCleanerAssigned;
-      const estimatedRefund = isWithinPenaltyWindow ? price * 0.5 : price;
-      const cleanerPayout = isWithinPenaltyWindow ? price * 0.5 * 0.9 : 0; // 50% minus 10% platform fee
-
-      response = {
-        ...response,
-        userType: "homeowner",
-        isWithinPenaltyWindow,
-        penaltyWindowDays: 3,
-        estimatedRefund: estimatedRefund.toFixed(2),
-        cleanerPayout: cleanerPayout.toFixed(2),
-        warningMessage: isWithinPenaltyWindow
-          ? `Cancelling within 3 days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (50% of the price minus 10% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}.`
-          : hasCleanerAssigned
-          ? "You can cancel this appointment for a full refund."
-          : "You can cancel this appointment. No payment has been processed yet.",
-      };
-    } else if (isCleaner) {
-      // Cleaner cancellation rules: 4 days
-      const isWithinPenaltyWindow = daysUntilAppointment <= 4;
-
-      // Count recent cancellation penalties
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-
-      const recentPenalties = await UserReviews.count({
-        where: {
-          userId: userId,
-          reviewType: "system_cancellation_penalty",
-          createdAt: { [Op.gte]: threeMonthsAgo },
-        },
-      });
-
-      const willBeFrozen = recentPenalties >= 2; // This will be the 3rd
-
-      response = {
-        ...response,
-        userType: "cleaner",
-        isWithinPenaltyWindow,
-        penaltyWindowDays: 4,
-        recentCancellationPenalties: recentPenalties,
-        willResultInFreeze: willBeFrozen,
-        warningMessage: isWithinPenaltyWindow
-          ? willBeFrozen
-            ? `WARNING: Cancelling within 4 days of the cleaning will result in an automatic 1-star rating. You already have ${recentPenalties} cancellation penalties in the last 3 months. THIS CANCELLATION WILL FREEZE YOUR ACCOUNT.`
-            : `Cancelling within 4 days of the cleaning will result in an automatic 1-star rating with the note "Last minute cancellation". You currently have ${recentPenalties} cancellation ${recentPenalties === 1 ? "penalty" : "penalties"} in the last 3 months. ${3 - recentPenalties - 1} more will result in your account being frozen.`
-          : "You can cancel this job without penalty.",
-      };
-    } else {
-      return res.status(403).json({ error: "You are not authorized to cancel this appointment" });
-    }
-
-    return res.json(response);
-  } catch (error) {
-    console.error("Error getting cancellation info:", error);
-    return res.status(500).json({ error: "Failed to get cancellation info" });
-  }
-});
 
 // Homeowner cancellation endpoint
 appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {

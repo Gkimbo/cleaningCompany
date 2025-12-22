@@ -1,17 +1,19 @@
 import React, { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate, useParams } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
-import { colors } from "../../services/styles/theme";
-import styles from "./OnboardingStyles";
 import { API_BASE } from "../../services/config";
+import CalendarComponent from "../calender/CalendarComponent";
 
 const QuickBookFlow = ({ state, dispatch }) => {
   const navigate = useNavigate();
@@ -19,14 +21,12 @@ const QuickBookFlow = ({ state, dispatch }) => {
   const { user } = useContext(AuthContext);
 
   const [home, setHome] = useState(null);
-  const [selectedDates, setSelectedDates] = useState([]);
-  const [currentMonth, setCurrentMonth] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
-  const [isBooking, setIsBooking] = useState(false);
   const [error, setError] = useState(null);
   const [existingAppointments, setExistingAppointments] = useState([]);
   const [hasPaymentMethod, setHasPaymentMethod] = useState(null);
   const [checkingPayment, setCheckingPayment] = useState(true);
+  const [confirmationModalVisible, setConfirmationModalVisible] = useState(false);
 
   // Check if user has a payment method
   useEffect(() => {
@@ -57,7 +57,7 @@ const QuickBookFlow = ({ state, dispatch }) => {
 
   useEffect(() => {
     loadHomeData();
-  }, [homeId]);
+  }, [homeId, state.homes, state.appointments]);
 
   const loadHomeData = async () => {
     try {
@@ -65,7 +65,7 @@ const QuickBookFlow = ({ state, dispatch }) => {
       if (homeData) {
         setHome(homeData);
         const appts = state.appointments.filter((a) => a.homeId === Number(homeId));
-        setExistingAppointments(appts.map((a) => a.date));
+        setExistingAppointments(appts);
       }
     } catch (err) {
       setError("Failed to load home details");
@@ -74,131 +74,16 @@ const QuickBookFlow = ({ state, dispatch }) => {
     }
   };
 
-  const calculatePrice = () => {
-    if (!home) return 0;
+  const onDatesSelected = async (datesOfCleaning) => {
+    if (!home) return;
 
-    let basePrice = 150; // Base price for 1 bed 1 bath
-    const beds = parseInt(home.numBeds) || 1;
-    const baths = parseInt(home.numBaths) || 1;
-
-    // Add $50 for each additional bed and bath
-    if (beds > 1) basePrice += (beds - 1) * 50;
-    if (baths > 1) basePrice += (baths - 1) * 50;
-
-    // Time window surcharge
-    if (home.timeToBeCompleted === "10-3" || home.timeToBeCompleted === "11-4") {
-      basePrice += 30;
-    } else if (home.timeToBeCompleted === "12-2") {
-      basePrice += 50;
-    }
-
-    // Sheets pricing: $30 per bed
-    if (home.sheetsProvided === "yes") {
-      if (home.bedConfigurations && Array.isArray(home.bedConfigurations) && home.bedConfigurations.length > 0) {
-        const bedsNeedingSheets = home.bedConfigurations.filter((b) => b.needsSheets).length;
-        basePrice += bedsNeedingSheets * 30;
-      } else {
-        basePrice += beds * 30;
-      }
-    }
-
-    // Towels pricing: $10 per towel, $5 per face cloth
-    if (home.towelsProvided === "yes") {
-      if (home.bathroomConfigurations && Array.isArray(home.bathroomConfigurations) && home.bathroomConfigurations.length > 0) {
-        home.bathroomConfigurations.forEach((bath) => {
-          basePrice += (bath.towels || 0) * 10;
-          basePrice += (bath.faceCloths || 0) * 5;
-        });
-      } else {
-        // Fallback: 2 towels + 1 face cloth per bathroom
-        basePrice += baths * (2 * 10 + 1 * 5);
-      }
-    }
-
-    return basePrice;
-  };
-
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const days = [];
-
-    // Add empty slots for days before the first day of month
-    for (let i = 0; i < firstDay.getDay(); i++) {
-      days.push(null);
-    }
-
-    // Add all days of the month
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      days.push(new Date(year, month, i));
-    }
-
-    return days;
-  };
-
-  const formatDateString = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const isDateSelectable = (date) => {
-    if (!date) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const minDate = new Date(today);
-    minDate.setDate(minDate.getDate() + 7); // Must be at least 7 days out
-
-    const dateStr = formatDateString(date);
-    const isExisting = existingAppointments.includes(dateStr);
-
-    return date >= minDate && !isExisting;
-  };
-
-  const toggleDate = (date) => {
-    if (!isDateSelectable(date)) return;
-
-    const dateStr = formatDateString(date);
-    setSelectedDates((prev) => {
-      if (prev.includes(dateStr)) {
-        return prev.filter((d) => d !== dateStr);
-      }
-      return [...prev, dateStr];
-    });
-  };
-
-  const prevMonth = () => {
-    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-  };
-
-  const nextMonth = () => {
-    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  };
-
-  const handleBook = async () => {
-    if (selectedDates.length === 0) return;
-
-    setIsBooking(true);
     setError(null);
 
     try {
-      const pricePerCleaning = calculatePrice();
-      const datesWithPrice = selectedDates.map((date) => ({
-        date,
-        price: pricePerCleaning,
-        bringSheets: home.sheetsProvided,
-        bringTowels: home.towelsProvided,
-        sheetConfigurations: home.sheetsProvided === "yes" ? home.bedConfigurations : null,
-        towelConfigurations: home.towelsProvided === "yes" ? home.bathroomConfigurations : null,
-      }));
-
       const infoObject = {
-        dateArray: datesWithPrice,
+        dateArray: datesOfCleaning,
         homeId: home.id,
-        token: user.token,
+        token: user?.token || state.currentUser?.token,
         keyPadCode: home.keyPadCode,
         keyLocation: home.keyLocation,
       };
@@ -206,48 +91,87 @@ const QuickBookFlow = ({ state, dispatch }) => {
       const response = await Appointment.addAppointmentToDb(infoObject);
 
       if (response) {
-        const totalAmount = pricePerCleaning * selectedDates.length;
-        dispatch({ type: "ADD_BILL", payload: totalAmount });
-        dispatch({
-          type: "ADD_DATES",
-          payload: datesWithPrice.map((d) => ({ ...d, homeId: home.id })),
+        const stateApp = datesOfCleaning.map((app) => ({ ...app, homeId: home.id }));
+        let apptTotal = 0;
+        datesOfCleaning.forEach((date) => {
+          apptTotal += date.price;
         });
+        dispatch({ type: "ADD_BILL", payload: apptTotal });
+        dispatch({ type: "ADD_DATES", payload: stateApp });
         navigate("/list-of-homes");
       } else {
         setError("Failed to book appointments. Please try again.");
       }
     } catch (err) {
       setError("Something went wrong. Please try again.");
-    } finally {
-      setIsBooking(false);
     }
   };
 
-  const days = getDaysInMonth(currentMonth);
-  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
+  const onAppointmentDelete = async (date, cancellationFee) => {
+    if (!home) return;
+    try {
+      const arrayOfAppointments = await Appointment.getHomeAppointments(home.id);
+      const appointmentToDelete = arrayOfAppointments.appointments.find(
+        (appointment) => appointment.date === date.dateString
+      );
+      if (appointmentToDelete) {
+        const token = user?.token || state.currentUser?.token;
+        let response;
+        if (cancellationFee) {
+          response = await Appointment.deleteAppointment(
+            appointmentToDelete.id,
+            cancellationFee,
+            token
+          );
+          dispatch({ type: "ADD_FEE", payload: cancellationFee });
+          dispatch({ type: "SUBTRACT_BILL", payload: appointmentToDelete.price });
+        } else {
+          response = await Appointment.deleteAppointment(
+            appointmentToDelete.id,
+            0,
+            token
+          );
+          dispatch({ type: "SUBTRACT_BILL", payload: appointmentToDelete.price });
+        }
+        if (response.message === "Appointment Deleted") {
+          const updatedAppointments = existingAppointments.filter(
+            (appointment) => appointment.date !== appointmentToDelete.date
+          );
+          setExistingAppointments(updatedAppointments);
+          dispatch({ type: "USER_APPOINTMENTS", payload: updatedAppointments });
+        } else {
+          console.error("Failed to delete appointment");
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting appointment:", error);
+    }
+  };
 
-  if (isLoading) {
+  if (isLoading || checkingPayment) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
+      <View style={styles.loadingContainer}>
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color="#6366f1" />
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
       </View>
     );
   }
 
   if (!home) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-        <Text style={styles.title}>Home not found</Text>
-        <TouchableOpacity
-          style={[styles.primaryButton, { marginTop: 20 }]}
-          onPress={() => navigate("/list-of-homes")}
-        >
-          <Text style={styles.primaryButtonText}>Go Back</Text>
-        </TouchableOpacity>
+      <View style={styles.loadingContainer}>
+        <View style={styles.loadingCard}>
+          <Icon name="home" size={32} color="#6366f1" />
+          <Text style={styles.loadingText}>Home not found</Text>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => navigate("/list-of-homes")}
+          >
+            <Text style={styles.primaryButtonText}>Go Back</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -255,333 +179,428 @@ const QuickBookFlow = ({ state, dispatch }) => {
   // Prevent booking for homes outside service area
   if (home.outsideServiceArea) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center", padding: 20 }]}>
-        <View style={{
-          backgroundColor: "#fef3c7",
-          borderRadius: 16,
-          padding: 24,
-          borderWidth: 1,
-          borderColor: "#fcd34d",
-          alignItems: "center",
-          maxWidth: 400,
-        }}>
-          <Text style={{
-            fontSize: 40,
-            marginBottom: 16,
-          }}>
-            ⚠️
-          </Text>
-          <Text style={{
-            fontSize: 20,
-            fontWeight: "700",
-            color: "#92400e",
-            textAlign: "center",
-            marginBottom: 8,
-          }}>
-            Outside Service Area
-          </Text>
-          <Text style={{
-            fontSize: 14,
-            color: "#a16207",
-            textAlign: "center",
-            lineHeight: 22,
-            marginBottom: 20,
-          }}>
+      <View style={styles.loadingContainer}>
+        <View style={styles.outsideAreaCard}>
+          <View style={styles.outsideAreaIconContainer}>
+            <Icon name="map-marker" size={28} color="#f59e0b" />
+          </View>
+          <Text style={styles.outsideAreaTitle}>Outside Service Area</Text>
+          <Text style={styles.outsideAreaText}>
             This home is currently outside our service area. Booking is not available at this time.
+          </Text>
+          <Text style={styles.outsideAreaSubtext}>
             We'll notify you when we expand to your area.
           </Text>
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: "#f59e0b" }]}
+          <Pressable
+            style={styles.outsideAreaButton}
             onPress={() => navigate("/list-of-homes")}
           >
-            <Text style={styles.primaryButtonText}>Back to My Homes</Text>
-          </TouchableOpacity>
+            <Icon name="arrow-left" size={12} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.outsideAreaButtonText}>Back to My Homes</Text>
+          </Pressable>
         </View>
       </View>
     );
   }
 
   // Require payment method before booking
-  if (!checkingPayment && !hasPaymentMethod) {
+  if (!hasPaymentMethod) {
     return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center", padding: 20 }]}>
-        <View style={{
-          backgroundColor: "#fef3c7",
-          borderRadius: 12,
-          padding: 20,
-          borderWidth: 1,
-          borderColor: "#fcd34d",
-          alignItems: "center",
-          maxWidth: 340,
-          width: "100%",
-        }}>
-          <Text style={{
-            fontSize: 28,
-            marginBottom: 12,
-          }}>
-            💳
-          </Text>
-          <Text style={{
-            fontSize: 16,
-            fontWeight: "600",
-            color: "#92400e",
-            textAlign: "center",
-            marginBottom: 6,
-          }}>
-            Payment Method Required
-          </Text>
-          <Text style={{
-            fontSize: 13,
-            color: "#a16207",
-            textAlign: "center",
-            lineHeight: 19,
-            marginBottom: 16,
-          }}>
+      <View style={styles.loadingContainer}>
+        <View style={styles.paymentCard}>
+          <View style={styles.paymentIconContainer}>
+            <Icon name="credit-card" size={28} color="#f59e0b" />
+          </View>
+          <Text style={styles.paymentTitle}>Payment Method Required</Text>
+          <Text style={styles.paymentText}>
             Add a payment method before booking. Your card will be charged 3 days before each cleaning.
           </Text>
-          <TouchableOpacity
-            style={{
-              backgroundColor: "#3b82f6",
-              paddingVertical: 10,
-              paddingHorizontal: 20,
-              borderRadius: 8,
-              width: "100%",
-              alignItems: "center",
-            }}
+          <Pressable
+            style={styles.primaryButton}
             onPress={() => navigate("/payment-setup")}
           >
-            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>Set Up Payment</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{
-              marginTop: 10,
-              paddingVertical: 8,
-              paddingHorizontal: 16,
-            }}
+            <Text style={styles.primaryButtonText}>Set Up Payment</Text>
+          </Pressable>
+          <Pressable
+            style={styles.secondaryButton}
             onPress={() => navigate("/list-of-homes")}
           >
-            <Text style={{ color: "#92400e", fontWeight: "500", fontSize: 13 }}>Back to My Homes</Text>
-          </TouchableOpacity>
+            <Text style={styles.secondaryButtonText}>Back to My Homes</Text>
+          </Pressable>
         </View>
       </View>
     );
   }
 
-  const pricePerCleaning = calculatePrice();
-  const totalPrice = pricePerCleaning * selectedDates.length;
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.contentContainer}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Book Cleaning</Text>
-          <Text style={styles.subtitle}>{home.nickName || home.address}</Text>
-        </View>
+    <ScrollView
+      style={[
+        styles.container,
+        confirmationModalVisible && styles.containerDimmed,
+      ]}
+      contentContainerStyle={styles.scrollContent}
+    >
+      {/* Header with Back Button */}
+      <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => navigate(`/details/${homeId}`)}>
+          <Icon name="chevron-left" size={12} color="#6366f1" />
+          <Text style={styles.backButtonText}>Back</Text>
+        </Pressable>
+      </View>
 
-        {error && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+      {/* Main Card */}
+      <View style={styles.mainCard}>
+        {/* Home Title Section */}
+        <View style={styles.titleSection}>
+          <View style={styles.homeIconContainer}>
+            <Icon name="home" size={24} color="#fff" />
           </View>
-        )}
-
-        <View style={styles.formCard}>
-          {/* Calendar Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 20,
-            }}
-          >
-            <TouchableOpacity onPress={prevMonth} style={{ padding: 10 }}>
-              <Text style={{ fontSize: 24, color: colors.primary[600] }}>{"<"}</Text>
-            </TouchableOpacity>
-            <Text style={styles.sectionTitle}>
-              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-            </Text>
-            <TouchableOpacity onPress={nextMonth} style={{ padding: 10 }}>
-              <Text style={{ fontSize: 24, color: colors.primary[600] }}>{">"}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Week days header */}
-          <View style={{ flexDirection: "row", marginBottom: 10 }}>
-            {weekDays.map((day) => (
-              <View key={day} style={{ flex: 1, alignItems: "center" }}>
-                <Text style={{ color: colors.text.tertiary, fontSize: 12 }}>{day}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Calendar grid */}
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            {days.map((date, index) => {
-              if (!date) {
-                return <View key={`empty-${index}`} style={{ width: "14.28%", height: 44 }} />;
-              }
-
-              const dateStr = formatDateString(date);
-              const isSelected = selectedDates.includes(dateStr);
-              const isSelectable = isDateSelectable(date);
-              const isExisting = existingAppointments.includes(dateStr);
-
-              return (
-                <TouchableOpacity
-                  key={dateStr}
-                  onPress={() => toggleDate(date)}
-                  disabled={!isSelectable}
-                  style={{
-                    width: "14.28%",
-                    height: 44,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: isSelected
-                        ? colors.primary[500]
-                        : isExisting
-                        ? colors.success[100]
-                        : "transparent",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        color: isSelected
-                          ? colors.neutral[0]
-                          : isSelectable
-                          ? colors.text.primary
-                          : colors.text.tertiary,
-                        fontWeight: isSelected ? "bold" : "normal",
-                      }}
-                    >
-                      {date.getDate()}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* Legend */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              marginTop: 20,
-              gap: 20,
-            }}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <View
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: colors.primary[500],
-                  marginRight: 6,
-                }}
-              />
-              <Text style={{ fontSize: 12, color: colors.text.secondary }}>Selected</Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <View
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: colors.success[100],
-                  marginRight: 6,
-                }}
-              />
-              <Text style={{ fontSize: 12, color: colors.text.secondary }}>Booked</Text>
-            </View>
-          </View>
-
-          <View style={styles.infoBox}>
-            <Text style={styles.infoBoxText}>
-              Select dates at least 7 days in advance. Tap a date to select or deselect it.
+          <View style={styles.titleContent}>
+            <Text style={styles.homeNickname}>{home.nickName || "My Home"}</Text>
+            <Text style={styles.homeAddress}>{home.address}</Text>
+            <Text style={styles.homeCityZip}>
+              {home.city}, {home.state} {home.zipcode}
             </Text>
           </View>
         </View>
 
-        {/* Price Summary */}
-        {selectedDates.length > 0 && (
-          <View style={[styles.formCard, { marginTop: 16 }]}>
-            <Text style={styles.sectionTitle}>Booking Summary</Text>
-
-            <View style={{ marginBottom: 16 }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  paddingVertical: 8,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border.light,
-                }}
-              >
-                <Text style={{ color: colors.text.secondary }}>Cleanings</Text>
-                <Text style={{ fontWeight: "600" }}>{selectedDates.length}</Text>
-              </View>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  paddingVertical: 8,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border.light,
-                }}
-              >
-                <Text style={{ color: colors.text.secondary }}>Price each</Text>
-                <Text style={{ fontWeight: "600" }}>${pricePerCleaning}</Text>
-              </View>
-            </View>
-
-            <View style={styles.priceCard}>
-              <Text style={styles.priceLabel}>Total</Text>
-              <Text style={styles.priceAmount}>${totalPrice}</Text>
-              <Text style={styles.priceNote}>Payment due 3 days before each cleaning</Text>
-            </View>
-
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => navigate(`/details/${homeId}`)}
-              >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryButton, isBooking && styles.buttonDisabled]}
-                onPress={handleBook}
-                disabled={isBooking}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {isBooking ? "Booking..." : `Book ${selectedDates.length} Cleaning${selectedDates.length > 1 ? "s" : ""}`}
-                </Text>
-              </TouchableOpacity>
-            </View>
+        {/* Quick Stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Icon name="bed" size={16} color="#6366f1" />
+            <Text style={styles.statValue}>{home.numBeds}</Text>
+            <Text style={styles.statLabel}>Beds</Text>
           </View>
-        )}
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Icon name="bath" size={16} color="#6366f1" />
+            <Text style={styles.statValue}>{home.numBaths}</Text>
+            <Text style={styles.statLabel}>Baths</Text>
+          </View>
+        </View>
+      </View>
 
-        {selectedDates.length === 0 && (
-          <TouchableOpacity
-            style={[styles.secondaryButton, { marginTop: 16 }]}
-            onPress={() => navigate(`/details/${homeId}`)}
-          >
-            <Text style={styles.secondaryButtonText}>Back to Home Details</Text>
-          </TouchableOpacity>
-        )}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Icon name="exclamation-circle" size={14} color="#dc2626" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {/* Calendar Section */}
+      <View style={styles.calendarSection}>
+        <View style={styles.calendarHeader}>
+          <Icon name="calendar-check-o" size={16} color="#10b981" />
+          <Text style={styles.calendarTitle}>Book a Cleaning</Text>
+        </View>
+        <CalendarComponent
+          onDatesSelected={onDatesSelected}
+          numBeds={home.numBeds}
+          numBaths={home.numBaths}
+          appointments={existingAppointments}
+          onAppointmentDelete={onAppointmentDelete}
+          confirmationModalVisible={confirmationModalVisible}
+          setConfirmationModalVisible={setConfirmationModalVisible}
+          sheets={home.sheetsProvided}
+          towels={home.towelsProvided}
+          timeToBeCompleted={home.timeToBeCompleted}
+          bedConfigurations={home.bedConfigurations}
+          bathroomConfigurations={home.bathroomConfigurations}
+        />
       </View>
     </ScrollView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  containerDimmed: {
+    backgroundColor: "#9ca3af",
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 32,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#64748b",
+  },
+
+  // Header
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  backButtonText: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6366f1",
+  },
+
+  // Main Card
+  mainCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  titleSection: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  homeIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "#6366f1",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  titleContent: {
+    flex: 1,
+  },
+  homeNickname: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  homeAddress: {
+    fontSize: 14,
+    color: "#475569",
+    fontWeight: "500",
+  },
+  homeCityZip: {
+    fontSize: 13,
+    color: "#94a3b8",
+    marginTop: 2,
+  },
+
+  // Stats Row
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+  },
+  statItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginTop: 6,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#94a3b8",
+    marginTop: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: "#e2e8f0",
+  },
+
+  // Error Container
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef2f2",
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  errorText: {
+    color: "#dc2626",
+    fontSize: 13,
+    flex: 1,
+    fontWeight: "500",
+  },
+
+  // Calendar Section
+  calendarSection: {
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  calendarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginLeft: 8,
+  },
+
+  // Outside Area Card
+  outsideAreaCard: {
+    backgroundColor: "#fffbeb",
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#fcd34d",
+    maxWidth: 360,
+    width: "100%",
+  },
+  outsideAreaIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fef3c7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  outsideAreaTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#92400e",
+    marginBottom: 8,
+  },
+  outsideAreaText: {
+    fontSize: 14,
+    color: "#a16207",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  outsideAreaSubtext: {
+    fontSize: 13,
+    color: "#ca8a04",
+    textAlign: "center",
+    marginTop: 8,
+    fontWeight: "500",
+  },
+  outsideAreaButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f59e0b",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    marginTop: 20,
+  },
+  outsideAreaButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#fff",
+  },
+
+  // Payment Card
+  paymentCard: {
+    backgroundColor: "#fffbeb",
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#fcd34d",
+    maxWidth: 360,
+    width: "100%",
+  },
+  paymentIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fef3c7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  paymentTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#92400e",
+    marginBottom: 8,
+  },
+  paymentText: {
+    fontSize: 14,
+    color: "#a16207",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+
+  // Buttons
+  primaryButton: {
+    backgroundColor: "#6366f1",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: "100%",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  primaryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  secondaryButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginTop: 12,
+  },
+  secondaryButtonText: {
+    color: "#92400e",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+});
 
 export default QuickBookFlow;

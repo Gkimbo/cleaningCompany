@@ -3,6 +3,7 @@
 const express = require("express");
 const passport = require("passport");
 const { User, TermsAndConditions } = require("../../../models");
+const { Op } = require("sequelize");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
@@ -48,7 +49,15 @@ sessionRouter.post("/login", async (req, res) => {
 	const { username, password } = req.body;
 
 	try {
-		const user = await User.findOne({ where: { username } });
+		// Allow login with either username or email
+		const user = await User.findOne({
+			where: {
+				[Op.or]: [
+					{ username: username },
+					{ email: username }
+				]
+			}
+		});
 		if (user) {
 			const passwordMatch = await bcrypt.compare(password, user.password);
 			if (passwordMatch) {
@@ -108,7 +117,7 @@ sessionRouter.post("/login", async (req, res) => {
 				res.status(401).json({ error: "Invalid password" });
 			}
 		} else {
-			res.status(404).json({ error: "No Username" });
+			res.status(404).json({ error: "No account found" });
 		}
 	} catch (error) {
 		console.error(error);

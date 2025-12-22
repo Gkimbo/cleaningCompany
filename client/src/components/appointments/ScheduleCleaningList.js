@@ -3,15 +3,17 @@ import {
   ScrollView,
   Text,
   View,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Dimensions,
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
-import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+
+const { width } = Dimensions.get("window");
 
 const ScheduleCleaningList = ({ state, dispatch }) => {
   const navigate = useNavigate();
@@ -66,10 +68,6 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
     navigate("/setup-home");
   };
 
-  const handleViewCalendar = () => {
-    navigate("/my-requests-calendar");
-  };
-
   // Filter homes that can be scheduled (not outside service area)
   const schedulableHomes = homes.filter(home => !home.outsideServiceArea);
   const outsideAreaHomes = homes.filter(home => home.outsideServiceArea);
@@ -77,8 +75,10 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
-        <Text style={styles.loadingText}>Loading your homes...</Text>
+        <View style={styles.loadingCard}>
+          <Icon name="calendar" size={32} color="#6366f1" />
+          <Text style={styles.loadingText}>Loading your homes...</Text>
+        </View>
       </View>
     );
   }
@@ -91,105 +91,166 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          colors={[colors.primary[500]]}
-          tintColor={colors.primary[500]}
+          colors={["#6366f1"]}
+          tintColor="#6366f1"
         />
       }
     >
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Icon name="angle-left" size={20} color={colors.primary[600]} />
+        <Pressable style={styles.backButton} onPress={handleBack}>
+          <Icon name="chevron-left" size={12} color="#6366f1" />
           <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Schedule Cleaning</Text>
-        <TouchableOpacity style={styles.calendarButton} onPress={handleViewCalendar}>
-          <Icon name="calendar" size={18} color={colors.primary[600]} />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
-      {/* Intro Text */}
-      <View style={styles.introCard}>
-        <Icon name="home" size={24} color={colors.primary[500]} />
-        <Text style={styles.introText}>
-          Select a home below to schedule a professional cleaning
-        </Text>
+      {/* Title Card */}
+      <View style={styles.titleCard}>
+        <View style={styles.titleSection}>
+          <View style={styles.titleIconContainer}>
+            <Icon name="calendar-plus-o" size={24} color="#fff" />
+          </View>
+          <View style={styles.titleContent}>
+            <Text style={styles.pageTitle}>Schedule Cleaning</Text>
+            <Text style={styles.pageSubtitle}>
+              Select a home to book a professional cleaning
+            </Text>
+          </View>
+        </View>
+
+        {/* Quick Stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Icon name="home" size={16} color="#6366f1" />
+            <Text style={styles.statValue}>{schedulableHomes.length}</Text>
+            <Text style={styles.statLabel}>Available</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Icon name="calendar-check-o" size={16} color="#10b981" />
+            <Text style={styles.statValue}>{state.appointments?.filter(a => new Date(a.date) >= new Date()).length || 0}</Text>
+            <Text style={styles.statLabel}>Upcoming</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Icon name="map-marker" size={16} color="#f59e0b" />
+            <Text style={styles.statValue}>{outsideAreaHomes.length}</Text>
+            <Text style={styles.statLabel}>Outside Area</Text>
+          </View>
+        </View>
       </View>
 
       {/* Schedulable Homes */}
       {schedulableHomes.length > 0 ? (
-        <View style={styles.homesSection}>
-          <Text style={styles.sectionTitle}>Your Homes</Text>
-          {schedulableHomes.map((home) => (
-            <View key={home.id} style={styles.homeCard}>
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Icon name="home" size={14} color="#6366f1" />
+            <Text style={styles.sectionTitle}>Your Homes</Text>
+          </View>
+
+          {schedulableHomes.map((home, index) => (
+            <View
+              key={home.id}
+              style={[
+                styles.homeItem,
+                index < schedulableHomes.length - 1 && styles.homeItemBorder
+              ]}
+            >
               <View style={styles.homeInfo}>
                 <Text style={styles.homeNickname}>{home.nickName || "My Home"}</Text>
                 <Text style={styles.homeAddress}>{home.address}</Text>
-                <Text style={styles.homeLocation}>{home.city}, {home.state} {home.zipcode}</Text>
-                <View style={styles.homeStats}>
-                  <View style={styles.statBadge}>
-                    <Icon name="bed" size={12} color={colors.text.secondary} />
-                    <Text style={styles.statText}>{home.numBeds} bed</Text>
+                <View style={styles.homeMetaRow}>
+                  <View style={styles.homeMeta}>
+                    <Icon name="bed" size={12} color="#64748b" />
+                    <Text style={styles.homeMetaText}>{home.numBeds} bed</Text>
                   </View>
-                  <View style={styles.statBadge}>
-                    <Icon name="tint" size={12} color={colors.text.secondary} />
-                    <Text style={styles.statText}>{home.numBaths} bath</Text>
+                  <View style={styles.homeMeta}>
+                    <Icon name="bath" size={12} color="#64748b" />
+                    <Text style={styles.homeMetaText}>{home.numBaths} bath</Text>
+                  </View>
+                  <View style={styles.homeMeta}>
+                    <Icon name="map-marker" size={12} color="#64748b" />
+                    <Text style={styles.homeMetaText}>{home.city}</Text>
                   </View>
                 </View>
               </View>
 
               <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={styles.quickBookButton}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.quickBookButton,
+                    pressed && styles.buttonPressed,
+                  ]}
                   onPress={() => handleQuickBook(home.id)}
                 >
-                  <Icon name="bolt" size={14} color={colors.neutral[0]} />
+                  <Icon name="bolt" size={14} color="#fff" />
                   <Text style={styles.quickBookText}>Quick Book</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.scheduleButton}
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.calendarButton,
+                    pressed && styles.buttonPressed,
+                  ]}
                   onPress={() => handleSchedule(home.id)}
                 >
-                  <Icon name="calendar-plus-o" size={14} color={colors.primary[600]} />
-                  <Text style={styles.scheduleText}>View Calendar</Text>
-                </TouchableOpacity>
+                  <Icon name="calendar" size={14} color="#6366f1" />
+                  <Text style={styles.calendarButtonText}>Calendar</Text>
+                </Pressable>
               </View>
             </View>
           ))}
         </View>
       ) : (
-        <View style={styles.emptyState}>
-          <View style={styles.emptyIcon}>
-            <Icon name="home" size={48} color={colors.primary[300]} />
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconContainer}>
+            <Icon name="home" size={32} color="#6366f1" />
           </View>
           <Text style={styles.emptyTitle}>No Homes Available</Text>
-          <Text style={styles.emptyDescription}>
+          <Text style={styles.emptyText}>
             Add a home to start scheduling professional cleaning services.
           </Text>
-          <TouchableOpacity style={styles.addFirstButton} onPress={handleAddHome}>
-            <Icon name="plus" size={16} color={colors.neutral[0]} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.addFirstButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={handleAddHome}
+          >
+            <Icon name="plus" size={14} color="#fff" />
             <Text style={styles.addFirstButtonText}>Add Your First Home</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       )}
 
       {/* Outside Service Area Homes */}
       {outsideAreaHomes.length > 0 && (
-        <View style={styles.outsideSection}>
-          <Text style={styles.sectionTitle}>Outside Service Area</Text>
-          <Text style={styles.outsideNote}>
-            These homes are currently outside our service area
-          </Text>
-          {outsideAreaHomes.map((home) => (
-            <View key={home.id} style={styles.outsideHomeCard}>
-              <View style={styles.homeInfo}>
-                <Text style={styles.homeNickname}>{home.nickName || "My Home"}</Text>
-                <Text style={styles.homeAddress}>{home.address}</Text>
-                <Text style={styles.homeLocation}>{home.city}, {home.state}</Text>
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Icon name="map-marker" size={14} color="#f59e0b" />
+            <Text style={styles.sectionTitle}>Outside Service Area</Text>
+          </View>
+
+          <View style={styles.outsideNote}>
+            <Icon name="info-circle" size={12} color="#f59e0b" />
+            <Text style={styles.outsideNoteText}>
+              These homes are currently outside our service area
+            </Text>
+          </View>
+
+          {outsideAreaHomes.map((home, index) => (
+            <View
+              key={home.id}
+              style={[
+                styles.outsideHomeItem,
+                index < outsideAreaHomes.length - 1 && styles.homeItemBorder
+              ]}
+            >
+              <View style={styles.outsideHomeInfo}>
+                <Text style={styles.outsideHomeNickname}>{home.nickName || "My Home"}</Text>
+                <Text style={styles.outsideHomeAddress}>{home.address}, {home.city}</Text>
               </View>
               <View style={styles.outsideBadge}>
-                <Icon name="map-marker" size={12} color={colors.warning[600]} />
-                <Text style={styles.outsideBadgeText}>Not Available</Text>
+                <Text style={styles.outsideBadgeText}>Unavailable</Text>
               </View>
             </View>
           ))}
@@ -198,10 +259,22 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
 
       {/* Add Another Home */}
       {homes.length > 0 && (
-        <TouchableOpacity style={styles.addAnotherButton} onPress={handleAddHome}>
-          <Icon name="plus-circle" size={20} color={colors.primary[600]} />
-          <Text style={styles.addAnotherButtonText}>Add Another Home</Text>
-        </TouchableOpacity>
+        <Pressable
+          style={({ pressed }) => [
+            styles.addAnotherButton,
+            pressed && styles.buttonPressed,
+          ]}
+          onPress={handleAddHome}
+        >
+          <View style={styles.addAnotherIcon}>
+            <Icon name="plus" size={16} color="#6366f1" />
+          </View>
+          <View style={styles.addAnotherContent}>
+            <Text style={styles.addAnotherTitle}>Add Another Home</Text>
+            <Text style={styles.addAnotherSubtitle}>Register a new property</Text>
+          </View>
+          <Icon name="chevron-right" size={14} color="#94a3b8" />
+        </Pressable>
       )}
 
       <View style={styles.bottomSpacer} />
@@ -212,269 +285,385 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: "#f8fafc",
   },
   scrollContent: {
-    padding: spacing.lg,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
+    backgroundColor: "#f8fafc",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.background.secondary,
+    padding: 20,
+  },
+  loadingCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 32,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   loadingText: {
-    marginTop: spacing.md,
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
+    marginTop: 12,
+    fontSize: 16,
+    color: "#64748b",
   },
 
   // Header
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.xl,
-    paddingTop: spacing.md,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   backButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.sm,
-    paddingRight: spacing.md,
-    gap: spacing.xs,
+    backgroundColor: "#fff",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignSelf: "flex-start",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   backButtonText: {
-    fontSize: typography.fontSize.base,
-    color: colors.primary[600],
-    fontWeight: typography.fontWeight.medium,
-  },
-  title: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  calendarButton: {
-    padding: spacing.sm,
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.md,
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6366f1",
   },
 
-  // Intro Card
-  introCard: {
+  // Title Card
+  titleCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  titleSection: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  titleIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: "#6366f1",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  titleContent: {
+    flex: 1,
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: "#64748b",
+  },
+
+  // Stats Row
+  statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    gap: spacing.md,
+    justifyContent: "space-around",
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
   },
-  introText: {
+  statItem: {
+    alignItems: "center",
     flex: 1,
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[700],
-    lineHeight: 20,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginTop: 6,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: "#94a3b8",
+    marginTop: 2,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: "#e2e8f0",
   },
 
-  // Sections
-  homesSection: {
-    marginBottom: spacing.xl,
+  // Section Card
+  sectionCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
   sectionTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing.md,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginLeft: 8,
   },
 
-  // Home Card
-  homeCard: {
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.md,
+  // Home Item
+  homeItem: {
+    paddingVertical: 14,
+  },
+  homeItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
   homeInfo: {
-    marginBottom: spacing.md,
+    marginBottom: 12,
   },
   homeNickname: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 2,
   },
   homeAddress: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
+    fontSize: 14,
+    color: "#64748b",
   },
-  homeLocation: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    marginTop: 2,
-  },
-  homeStats: {
+  homeMetaRow: {
     flexDirection: "row",
-    gap: spacing.md,
-    marginTop: spacing.sm,
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 8,
   },
-  statBadge: {
+  homeMeta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.neutral[100],
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
+    gap: 4,
   },
-  statText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+  homeMetaText: {
+    fontSize: 12,
+    color: "#64748b",
   },
 
   // Action Buttons
   actionButtons: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: 10,
   },
   quickBookButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    gap: spacing.xs,
-    ...shadows.sm,
+    backgroundColor: "#6366f1",
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 6,
+    shadowColor: "#6366f1",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   quickBookText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.neutral[0],
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#fff",
   },
-  scheduleButton: {
+  calendarButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.neutral[0],
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 2,
-    borderColor: colors.primary[500],
-    gap: spacing.xs,
+    backgroundColor: "#eef2ff",
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 6,
   },
-  scheduleText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[600],
+  calendarButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6366f1",
+  },
+  buttonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
 
   // Outside Service Area
-  outsideSection: {
-    marginBottom: spacing.xl,
-  },
   outsideNote: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    marginBottom: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fffbeb",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    gap: 8,
   },
-  outsideHomeCard: {
+  outsideNoteText: {
+    fontSize: 12,
+    color: "#92400e",
+    flex: 1,
+  },
+  outsideHomeItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
+    paddingVertical: 12,
     opacity: 0.7,
-    borderWidth: 1,
-    borderColor: colors.warning[200],
+  },
+  outsideHomeInfo: {
+    flex: 1,
+  },
+  outsideHomeNickname: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#64748b",
+  },
+  outsideHomeAddress: {
+    fontSize: 12,
+    color: "#94a3b8",
+    marginTop: 2,
   },
   outsideBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.warning[100],
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
+    backgroundColor: "#fef3c7",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
   },
   outsideBadgeText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.warning[700],
-    fontWeight: typography.fontWeight.medium,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#d97706",
   },
 
   // Empty State
-  emptyState: {
+  emptyCard: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 20,
+    padding: 32,
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing["4xl"],
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  emptyIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.primary[100],
-    alignItems: "center",
+  emptyIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#eef2ff",
     justifyContent: "center",
-    marginBottom: spacing.xl,
+    alignItems: "center",
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: typography.fontSize["2xl"],
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginBottom: 8,
   },
-  emptyDescription: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.secondary,
+  emptyText: {
+    fontSize: 14,
+    color: "#64748b",
     textAlign: "center",
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.xl,
-    lineHeight: 24,
+    lineHeight: 22,
+    marginBottom: 20,
   },
   addFirstButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing["3xl"],
-    borderRadius: radius.lg,
-    gap: spacing.sm,
-    ...shadows.md,
+    backgroundColor: "#6366f1",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: "#6366f1",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   addFirstButtonText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.neutral[0],
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#fff",
   },
 
   // Add Another Button
   addAnotherButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.neutral[0],
-    paddingVertical: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 2,
-    borderColor: colors.primary[500],
-    borderStyle: "dashed",
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
-  addAnotherButtonText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[600],
+  addAnotherIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#eef2ff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  addAnotherContent: {
+    flex: 1,
+  },
+  addAnotherTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  addAnotherSubtitle: {
+    fontSize: 12,
+    color: "#94a3b8",
+    marginTop: 2,
   },
 
   bottomSpacer: {
-    height: spacing["4xl"],
+    height: 40,
   },
 });
 

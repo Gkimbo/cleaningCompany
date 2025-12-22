@@ -25,8 +25,9 @@ const STEPS = {
 
 const TIME_OPTIONS = [
   { value: "anytime", label: "Anytime", description: "Most flexible, best pricing" },
-  { value: "10-3", label: "10am - 3pm", description: "+$30 per cleaning" },
-  { value: "11-4", label: "11am - 4pm", description: "+$30 per cleaning" },
+  { value: "10-3", label: "10am - 3pm", description: "+$25 per cleaning" },
+  { value: "11-4", label: "11am - 4pm", description: "+$25 per cleaning" },
+  { value: "12-2", label: "12pm - 2pm", description: "+$30 per cleaning" },
 ];
 
 const BED_SIZE_OPTIONS = [
@@ -261,8 +262,9 @@ const AddHomeForm = ({ state, dispatch }) => {
           dirtySheetsLocation: homeData.sheetsProvided === "no" ? homeData.dirtySheetsLocation : "",
           cleanTowelsLocation: homeData.towelsProvided === "no" ? homeData.cleanTowelsLocation : "",
           dirtyTowelsLocation: homeData.towelsProvided === "no" ? homeData.dirtyTowelsLocation : "",
-          bedConfigurations: homeData.sheetsProvided === "yes" ? homeData.bedConfigurations : null,
-          bathroomConfigurations: homeData.towelsProvided === "yes" ? homeData.bathroomConfigurations : null,
+          // Always save configurations so they can be restored when toggled back on
+          bedConfigurations: homeData.bedConfigurations,
+          bathroomConfigurations: homeData.bathroomConfigurations,
         },
       };
 
@@ -732,8 +734,8 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0
-              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * 30} - $30 per bed`
-              : "Select to configure sheets for each bed"}
+              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * 30} ($30 x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
+              : homeData.numBeds ? `$30 x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * 30}` : "Select to configure sheets for each bed"}
           </Text>
         </View>
         <View
@@ -830,8 +832,8 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
-              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * 10 + (b.faceCloths || 0) * 5, 0)} - $10/towel, $5/face cloth`
-              : "Select to configure towels for each bathroom"}
+              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * 5 + (b.faceCloths || 0) * 2, 0)} - $5/towel, $2/face cloth`
+              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $5/towel, $2/face cloth` : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -867,7 +869,7 @@ const AddHomeForm = ({ state, dispatch }) => {
                 Bathroom {bath.bathroomNumber}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                <Text style={{ flex: 1, color: "#555" }}>Towels ($10 each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Towels ($5 each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -905,7 +907,7 @@ const AddHomeForm = ({ state, dispatch }) => {
                 </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ flex: 1, color: "#555" }}>Face cloths ($5 each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Face cloths ($2 each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{

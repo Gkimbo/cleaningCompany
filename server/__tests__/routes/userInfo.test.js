@@ -1,3 +1,6 @@
+// Set SESSION_SECRET before importing router
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || "test_secret";
+
 const express = require("express");
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
@@ -40,6 +43,10 @@ jest.mock("../../config/businessConfig", () => ({
 
 jest.mock("../../serializers/userSerializer", () => ({
   serializeOne: jest.fn((user) => user),
+}));
+
+jest.mock("../../serializers/homesSerializer", () => ({
+  serializeOne: jest.fn((home) => home),
 }));
 
 const { User, UserHomes, UserAppointments, UserBills } = require("../../models");

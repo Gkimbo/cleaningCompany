@@ -93,8 +93,11 @@ if (!process.env.STRIPE_SECRET_KEY || !process.env.SESSION_SECRET) {
  * ------------------------------------------------------
  */
 paymentRouter.get("/config", (req, res) => {
+  const key = process.env.STRIPE_PUBLISHABLE_KEY;
+  console.log("Stripe publishable key loaded:", key ? `${key.substring(0, 12)}...${key.substring(key.length - 4)}` : "NOT SET");
+  console.log("Key length:", key ? key.length : 0);
   res.json({
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+    publishableKey: key,
   });
 });
 
@@ -221,6 +224,69 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
 });
 
 /**
+ * Get payment method status for a user
+ * IMPORTANT: This must be defined BEFORE /:homeId to avoid route conflict
+ */
+paymentRouter.get("/payment-method-status", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    console.log(`[Payment] Fetching payment methods for user ${userId}, stripeCustomerId: ${user.stripeCustomerId}`);
+
+    let paymentMethods = [];
+    let hasValidPaymentMethod = user.hasPaymentMethod;
+
+    // If user has a Stripe customer ID, verify payment methods exist
+    if (user.stripeCustomerId) {
+      try {
+        const methods = await stripe.paymentMethods.list({
+          customer: user.stripeCustomerId,
+          type: "card",
+        });
+        console.log(`[Payment] Found ${methods.data.length} payment methods for customer ${user.stripeCustomerId}`);
+
+        paymentMethods = methods.data.map((pm) => ({
+          id: pm.id,
+          brand: pm.card.brand,
+          last4: pm.card.last4,
+          expMonth: pm.card.exp_month,
+          expYear: pm.card.exp_year,
+        }));
+        hasValidPaymentMethod = methods.data.length > 0;
+
+        // Update user if status changed
+        if (user.hasPaymentMethod !== hasValidPaymentMethod) {
+          console.log(`[Payment] Updating user ${userId} hasPaymentMethod: ${user.hasPaymentMethod} -> ${hasValidPaymentMethod}`);
+          await user.update({ hasPaymentMethod: hasValidPaymentMethod });
+        }
+      } catch (stripeError) {
+        console.error("Error fetching payment methods from Stripe:", stripeError);
+      }
+    } else {
+      console.log(`[Payment] User ${userId} has no stripeCustomerId`);
+    }
+
+    return res.json({
+      hasPaymentMethod: hasValidPaymentMethod,
+      paymentMethods,
+    });
+  } catch (error) {
+    console.error("Error getting payment method status:", error);
+    return res.status(400).json({ error: "Failed to get payment method status" });
+  }
+});
+
+/**
  * ------------------------------------------------------
  * 4️⃣ Get Appointments for a Specific Home
  * ------------------------------------------------------
@@ -282,6 +348,7 @@ paymentRouter.post("/setup-intent", async (req, res) => {
     return res.json({
       clientSecret: setupIntent.client_secret,
       customerId: stripeCustomerId,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
     });
   } catch (error) {
     console.error("Error creating setup intent:", error);
@@ -303,24 +370,49 @@ paymentRouter.post("/confirm-payment-method", async (req, res) => {
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Verify the SetupIntent was successful
-    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+    // Verify the SetupIntent was successful with retry for timing issues
+    let setupIntent;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+      console.log(`[Payment] SetupIntent ${setupIntentId} status: ${setupIntent.status} (attempt ${attempts + 1})`);
+
+      if (setupIntent.status === "succeeded") {
+        break;
+      }
+
+      // Wait a bit before retrying (timing issue with Stripe)
+      if (attempts < maxAttempts - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      attempts++;
+    }
 
     if (setupIntent.status !== "succeeded") {
-      return res.status(400).json({ error: "Payment method setup not completed" });
+      console.error(`[Payment] SetupIntent not succeeded after ${maxAttempts} attempts. Status: ${setupIntent.status}`);
+      return res.status(400).json({
+        error: "Payment method setup not completed",
+        status: setupIntent.status,
+      });
     }
 
     // Set the payment method as the default for the customer
     if (setupIntent.payment_method) {
+      console.log(`[Payment] Setting default payment method: ${setupIntent.payment_method}`);
       await stripe.customers.update(user.stripeCustomerId, {
         invoice_settings: {
           default_payment_method: setupIntent.payment_method,
         },
       });
+    } else {
+      console.warn(`[Payment] No payment_method on succeeded SetupIntent`);
     }
 
     // Update user record
     await user.update({ hasPaymentMethod: true });
+    console.log(`[Payment] User ${userId} hasPaymentMethod set to true`);
 
     return res.json({
       success: true,
@@ -330,61 +422,6 @@ paymentRouter.post("/confirm-payment-method", async (req, res) => {
   } catch (error) {
     console.error("Error confirming payment method:", error);
     return res.status(400).json({ error: "Failed to confirm payment method" });
-  }
-});
-
-/**
- * Get payment method status for a user
- */
-paymentRouter.get("/payment-method-status", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).json({ error: "Authorization required" });
-  }
-
-  try {
-    const token = authHeader.split(" ")[1];
-    const decodedToken = jwt.verify(token, secretKey);
-    const userId = decodedToken.userId;
-
-    const user = await User.findByPk(userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    let paymentMethods = [];
-    let hasValidPaymentMethod = user.hasPaymentMethod;
-
-    // If user has a Stripe customer ID, verify payment methods exist
-    if (user.stripeCustomerId) {
-      try {
-        const methods = await stripe.paymentMethods.list({
-          customer: user.stripeCustomerId,
-          type: "card",
-        });
-        paymentMethods = methods.data.map((pm) => ({
-          id: pm.id,
-          brand: pm.card.brand,
-          last4: pm.card.last4,
-          expMonth: pm.card.exp_month,
-          expYear: pm.card.exp_year,
-        }));
-        hasValidPaymentMethod = methods.data.length > 0;
-
-        // Update user if status changed
-        if (user.hasPaymentMethod !== hasValidPaymentMethod) {
-          await user.update({ hasPaymentMethod: hasValidPaymentMethod });
-        }
-      } catch (stripeError) {
-        console.error("Error fetching payment methods:", stripeError);
-      }
-    }
-
-    return res.json({
-      hasPaymentMethod: hasValidPaymentMethod,
-      paymentMethods,
-    });
-  } catch (error) {
-    console.error("Error getting payment method status:", error);
-    return res.status(400).json({ error: "Failed to get payment method status" });
   }
 });
 
