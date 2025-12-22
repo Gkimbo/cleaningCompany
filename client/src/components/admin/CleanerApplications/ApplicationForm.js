@@ -87,13 +87,16 @@ const CleanerApplicationForm = () => {
   const pricing = fetchedPricing?.basePrice ? fetchedPricing : defaultPricing;
 
   // Calculate cleaner earnings (base price minus platform fee)
-  const platformFeePercent = pricing.platform?.feePercent ?? defaultPricing.platform.feePercent;
+  const platformFeePercent =
+    pricing.platform?.feePercent ?? defaultPricing.platform.feePercent;
   const minCleanerPay = Math.round(
     (pricing.basePrice ?? defaultPricing.basePrice) * (1 - platformFeePercent)
   );
-  // Max pay assumes a 2bed/2bath (1 extra bed + 1 extra bath = 2 extras)
+  // Max pay assumes a 2bed/1bath (1 extra bed = 1 extra)
   const maxCleanerPay = Math.round(
-    ((pricing.basePrice ?? defaultPricing.basePrice) + (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee) * 2) * (1 - platformFeePercent)
+    ((pricing.basePrice ?? defaultPricing.basePrice) +
+      (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee)) *
+      (1 - platformFeePercent)
   );
 
   // Calculate weekly/monthly/yearly earnings for different tiers
