@@ -125,7 +125,7 @@ const DetailsComponent = ({ state, dispatch }) => {
       navigate("/list-of-homes");
       setRedirect(false);
     }
-  }, [id, redirect, state.appointments]);
+  }, [id, redirect, state.appointments, state.homes]);
 
   const getTimeWindowText = (time) => {
     switch (time) {

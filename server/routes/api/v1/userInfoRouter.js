@@ -10,6 +10,7 @@ const {
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
+const HomeSerializer = require("../../../serializers/homesSerializer");
 const {
   isInServiceArea,
   getCleanersNeeded,
@@ -122,9 +123,12 @@ userInfoRouter.post("/home", async (req, res) => {
       bathroomConfigurations,
     });
 
+    // Serialize the home to ensure consistent structure with fetched homes
+    const serializedHome = HomeSerializer.serializeOne(newHome);
+
     return res.status(201).json({
       user,
-      home: newHome,
+      home: serializedHome,
       outsideServiceArea,
       serviceAreaMessage: outsideServiceArea
         ? "This home is outside our current service area. It has been saved to your profile, but you won't be able to book appointments until we expand to this area."

@@ -57,7 +57,7 @@ const QuickBookFlow = ({ state, dispatch }) => {
 
   useEffect(() => {
     loadHomeData();
-  }, [homeId]);
+  }, [homeId, state.homes, state.appointments]);
 
   const loadHomeData = async () => {
     try {
