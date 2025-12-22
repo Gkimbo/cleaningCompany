@@ -4,6 +4,7 @@ import { Calendar } from "react-native-calendars";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
+import { cleaningCompany, getTimeWindowSurcharge } from "../../services/data/companyInfo";
 
 const CalendarComponent = ({
   onDatesSelected,
@@ -29,58 +30,43 @@ const CalendarComponent = ({
   const navigate = useNavigate();
 
   const calculatePrice = () => {
+    const { pricing } = cleaningCompany;
+    const { basePrice, extraBedBathFee } = pricing;
+    const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;
     let price = 0;
 
-    // Time window surcharge
-    if (timeToBeCompleted === "anytime") {
-      price += 0;
-    } else if (timeToBeCompleted === "10-3") {
-      price += 25;
-    } else if (timeToBeCompleted === "11-4") {
-      price += 25;
-    } else if (timeToBeCompleted === "12-2") {
-      price += 30;
-    }
+    // Time window surcharge from config
+    price += getTimeWindowSurcharge(timeToBeCompleted);
 
     // Linen pricing with configuration-based pricing
     if (sheets === "yes") {
       if (bedConfigurations && Array.isArray(bedConfigurations) && bedConfigurations.length > 0) {
         const bedsNeedingSheets = bedConfigurations.filter((b) => b.needsSheets).length;
-        price += bedsNeedingSheets * 30;
+        price += bedsNeedingSheets * sheetFeePerBed;
       } else {
-        price += Number(numBeds) * 30;
+        price += Number(numBeds) * sheetFeePerBed;
       }
     }
 
     if (towels === "yes") {
       if (bathroomConfigurations && Array.isArray(bathroomConfigurations) && bathroomConfigurations.length > 0) {
         bathroomConfigurations.forEach((bath) => {
-          price += (bath.towels || 0) * 5;
-          price += (bath.faceCloths || 0) * 2;
+          price += (bath.towels || 0) * towelFee;
+          price += (bath.faceCloths || 0) * faceClothFee;
         });
       } else {
-        price += Number(numBaths) * (2 * 5 + 1 * 2);
+        price += Number(numBaths) * (2 * towelFee + 1 * faceClothFee);
       }
     }
 
-    // Base price calculation ($150 for 1 bed/1 bath)
-    if (Number(numBeds) === 1 && Number(numBaths) === 1) {
-      price = price + 150;
-      return price;
-    } else if (Number(numBeds) === 1) {
-      const baths = (Number(numBaths) - 1) * 50;
-      price += baths + 150;
-      return price;
-    } else if (Number(numBaths) === 1) {
-      const beds = (Number(numBeds) - 1) * 50;
-      price += beds + 150;
-      return price;
-    } else {
-      const beds = (Number(numBeds) - 1) * 50;
-      const baths = (Number(numBaths) - 1) * 50;
-      price += beds + baths + 150;
-      return price;
-    }
+    // Base price calculation
+    const beds = Number(numBeds);
+    const baths = Number(numBaths);
+    const extraBeds = Math.max(0, beds - 1);
+    const extraBaths = Math.max(0, baths - 1);
+    price += basePrice + (extraBeds + extraBaths) * extraBedBathFee;
+
+    return price;
   };
 
   const handleDateSelect = (date) => {
@@ -178,7 +164,7 @@ const CalendarComponent = ({
     setAppointmentToCancel(appointment);
 
     if (isWithinWeek) {
-      setCancellationFee(25);
+      setCancellationFee(cleaningCompany.pricing.cancellation.fee);
     } else {
       setCancellationFee(0);
     }

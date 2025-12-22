@@ -1,5 +1,9 @@
 const { UserHomes, User, UserAppointments, UserBills } = require("../models");
 const bcrypt = require("bcrypt");
+const { businessConfig } = require("../config/businessConfig");
+
+// Get pricing from config
+const { pricing } = businessConfig;
 
 class UserInfoClass {
   static async addHomeToDB({
@@ -170,16 +174,8 @@ class UserInfoClass {
   }
 
   static async editTimeInDB({ id, timeToBeCompleted }) {
-    let price;
-    if (timeToBeCompleted === "anytime") {
-      price = 0;
-    } else if (timeToBeCompleted === "10-3") {
-      price = 30;
-    } else if (timeToBeCompleted === "11-4") {
-      price = 30;
-    }else if (timeToBeCompleted === "12-2") {
-		price = 50;
-	  }
+    // Get time window surcharge from config
+    const price = pricing.timeWindows[timeToBeCompleted] || 0;
 
     const existingAppointment = await UserAppointments.findOne({
       where: { id },
@@ -216,10 +212,9 @@ class UserInfoClass {
   }
 
   static async editSheetsInDB({ id, bringSheets }) {
-    let price;
-    if (bringSheets === "yes") {
-      price = 25;
-    } else price = -25;
+    // Use sheet fee from config (per bed - assumes 1 bed adjustment for simple toggle)
+    const sheetFee = pricing.linens.sheetFeePerBed;
+    const price = bringSheets === "yes" ? sheetFee : -sheetFee;
 
     const existingAppointment = await UserAppointments.findOne({
       where: { id },
@@ -256,10 +251,10 @@ class UserInfoClass {
   }
 
   static async editTowelsInDB({ id, bringTowels }) {
-    let price;
-    if (bringTowels === "yes") {
-      price = 25;
-    } else price = -25;
+    // Use towel fee from config (default: 2 towels + 1 face cloth per bathroom for simple toggle)
+    const { towelFee, faceClothFee } = pricing.linens;
+    const defaultTowelPrice = 2 * towelFee + faceClothFee; // $12 for default bathroom
+    const price = bringTowels === "yes" ? defaultTowelPrice : -defaultTowelPrice;
 
     const existingAppointment = await UserAppointments.findOne({
       where: { id },

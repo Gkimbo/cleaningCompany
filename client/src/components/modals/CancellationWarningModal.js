@@ -10,6 +10,7 @@ import {
 import Icon from "react-native-vector-icons/FontAwesome";
 import { Checkbox } from "react-native-paper";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { cleaningCompany } from "../../services/data/companyInfo";
 
 const CancellationWarningModal = ({
   visible,
@@ -100,7 +101,7 @@ const CancellationWarningModal = ({
                 <View style={styles.divider} />
 
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Your Refund (50%)</Text>
+                  <Text style={styles.breakdownLabel}>Your Refund ({cleaningCompany.pricing.cancellation.refundPercentage * 100}%)</Text>
                   <Text style={[styles.breakdownValue, styles.refundAmount]}>${estimatedRefund}</Text>
                 </View>
 
@@ -112,7 +113,7 @@ const CancellationWarningModal = ({
                 <View style={styles.breakdownNote}>
                   <Icon name="info-circle" size={12} color={colors.text.tertiary} />
                   <Text style={styles.breakdownNoteText}>
-                    Cleaner receives 50% minus 10% platform fee
+                    Cleaner receives {cleaningCompany.pricing.cancellation.refundPercentage * 100}% minus {cleaningCompany.pricing.platform.feePercent * 100}% platform fee
                   </Text>
                 </View>
               </View>

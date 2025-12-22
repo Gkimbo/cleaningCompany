@@ -16,9 +16,14 @@ const calculatePrice = require("../../../services/CalculatePrice");
 const HomeSerializer = require("../../../serializers/homesSerializer");
 const { emit } = require("nodemon");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const { businessConfig } = require("../../../config/businessConfig");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+// Get pricing config
+const { pricing } = businessConfig;
+const { cancellation, platform } = pricing;
 
 appointmentRouter.get("/unassigned", async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
@@ -411,27 +416,31 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
     };
 
     if (isHomeowner) {
-      // Homeowner cancellation rules: 3 days
-      const isWithinPenaltyWindow = daysUntilAppointment <= 3 && hasCleanerAssigned;
-      const estimatedRefund = isWithinPenaltyWindow ? price * 0.5 : price;
-      const cleanerPayout = isWithinPenaltyWindow ? price * 0.5 * 0.9 : 0;
+      // Homeowner cancellation rules - use config values
+      const penaltyDays = cancellation.homeownerPenaltyDays;
+      const refundPercent = cancellation.refundPercentage;
+      const platformFee = platform.feePercent;
+      const isWithinPenaltyWindow = daysUntilAppointment <= penaltyDays && hasCleanerAssigned;
+      const estimatedRefund = isWithinPenaltyWindow ? price * refundPercent : price;
+      const cleanerPayout = isWithinPenaltyWindow ? price * refundPercent * (1 - platformFee) : 0;
 
       response = {
         ...response,
         userType: "homeowner",
         isWithinPenaltyWindow,
-        penaltyWindowDays: 3,
+        penaltyWindowDays: penaltyDays,
         estimatedRefund: estimatedRefund.toFixed(2),
         cleanerPayout: cleanerPayout.toFixed(2),
         warningMessage: isWithinPenaltyWindow
-          ? `Cancelling within 3 days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (50% of the price minus 10% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}.`
+          ? `Cancelling within ${penaltyDays} days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (${refundPercent * 100}% of the price minus ${platformFee * 100}% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}.`
           : hasCleanerAssigned
           ? "You can cancel this appointment for a full refund."
           : "You can cancel this appointment. No payment has been processed yet.",
       };
     } else if (isCleaner) {
-      // Cleaner cancellation rules: 4 days
-      const isWithinPenaltyWindow = daysUntilAppointment <= 4;
+      // Cleaner cancellation rules - use config values
+      const penaltyDays = cancellation.cleanerPenaltyDays;
+      const isWithinPenaltyWindow = daysUntilAppointment <= penaltyDays;
 
       // Count recent cancellation penalties
       const threeMonthsAgo = new Date();
@@ -451,13 +460,13 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
         ...response,
         userType: "cleaner",
         isWithinPenaltyWindow,
-        penaltyWindowDays: 4,
+        penaltyWindowDays: penaltyDays,
         recentCancellationPenalties: recentPenalties,
         willResultInFreeze: willBeFrozen,
         warningMessage: isWithinPenaltyWindow
           ? willBeFrozen
-            ? `WARNING: Cancelling within 4 days of the cleaning will result in an automatic 1-star rating. You already have ${recentPenalties} cancellation penalties in the last 3 months. THIS CANCELLATION WILL FREEZE YOUR ACCOUNT.`
-            : `Cancelling within 4 days of the cleaning will result in an automatic 1-star rating with the note "Last minute cancellation". You currently have ${recentPenalties} cancellation ${recentPenalties === 1 ? "penalty" : "penalties"} in the last 3 months. ${3 - recentPenalties - 1} more will result in your account being frozen.`
+            ? `WARNING: Cancelling within ${penaltyDays} days of the cleaning will result in an automatic 1-star rating. You already have ${recentPenalties} cancellation penalties in the last 3 months. THIS CANCELLATION WILL FREEZE YOUR ACCOUNT.`
+            : `Cancelling within ${penaltyDays} days of the cleaning will result in an automatic 1-star rating with the note "Last minute cancellation". You currently have ${recentPenalties} cancellation ${recentPenalties === 1 ? "penalty" : "penalties"} in the last 3 months. ${3 - recentPenalties - 1} more will result in your account being frozen.`
           : "You can cancel this job without penalty.",
       };
     } else {
@@ -965,8 +974,8 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       const cleanerCount = employees.length;
       const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
       const perCleanerGross = Math.round(priceInCents / cleanerCount);
-      const platformFee = Math.round(perCleanerGross * 0.10); // 10% platform fee
-      const netAmount = perCleanerGross - platformFee; // 90% to cleaner
+      const platformFeeAmount = Math.round(perCleanerGross * platform.feePercent);
+      const netAmount = perCleanerGross - platformFeeAmount;
 
       // Check if payout record already exists
       const existingPayout = await Payout.findOne({
@@ -978,7 +987,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
           appointmentId,
           cleanerId,
           grossAmount: perCleanerGross,
-          platformFee,
+          platformFee: platformFeeAmount,
           netAmount,
           status: "pending", // Will change to "held" when payment is captured
         });
@@ -1356,7 +1365,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     const daysUntilAppointment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     const hasCleanerAssigned = appointment.hasBeenAssigned && appointment.employeesAssigned?.length > 0;
-    const isWithinPenaltyWindow = daysUntilAppointment <= 3 && hasCleanerAssigned;
+    const isWithinPenaltyWindow = daysUntilAppointment <= cancellation.homeownerPenaltyDays && hasCleanerAssigned;
     const price = parseFloat(appointment.price) || 0;
     const priceInCents = Math.round(price * 100);
 
@@ -1369,9 +1378,11 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
 
       if (isWithinPenaltyWindow) {
-        // Partial refund: 50% to homeowner
-        const refundAmount = Math.round(priceInCents * 0.5);
-        const cleanerAmount = Math.round(priceInCents * 0.5 * 0.9); // 50% minus 10% platform fee
+        // Partial refund based on config refund percentage
+        const refundPercent = cancellation.refundPercentage;
+        const platformFeePercent = platform.feePercent;
+        const refundAmount = Math.round(priceInCents * refundPercent);
+        const cleanerAmount = Math.round(priceInCents * refundPercent * (1 - platformFeePercent));
 
         if (paymentIntent.status === "succeeded") {
           // Payment was captured, process partial refund
@@ -1388,8 +1399,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             await Payout.create({
               appointmentId: appointment.id,
               cleanerId,
-              grossAmount: Math.round(priceInCents * 0.5 / cleanerIds.length),
-              platformFee: Math.round(priceInCents * 0.5 * 0.1 / cleanerIds.length),
+              grossAmount: Math.round(priceInCents * refundPercent / cleanerIds.length),
+              platformFee: Math.round(priceInCents * refundPercent * platformFeePercent / cleanerIds.length),
               netAmount: perCleanerAmount,
               status: "pending",
             });
@@ -1426,12 +1437,12 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const appointmentTotal = price;
       const oldAppt = Number(existingBill.appointmentDue);
       const oldFee = Number(existingBill.cancellationFee);
-      const cancellationFee = isWithinPenaltyWindow ? price * 0.5 : 0;
+      const cancellationFeeAmount = isWithinPenaltyWindow ? price * cancellation.refundPercentage : 0;
 
       await existingBill.update({
-        cancellationFee: oldFee + cancellationFee,
+        cancellationFee: oldFee + cancellationFeeAmount,
         appointmentDue: oldAppt - appointmentTotal,
-        totalDue: oldFee + cancellationFee + oldAppt - appointmentTotal,
+        totalDue: oldFee + cancellationFeeAmount + oldAppt - appointmentTotal,
       });
     }
 
@@ -1440,6 +1451,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const cleanerIds = appointment.employeesAssigned || [];
       const home = await UserHomes.findByPk(appointment.homeId);
       const homeowner = await User.findByPk(userId);
+      const cleanerPayment = (price * cancellation.refundPercentage * (1 - platform.feePercent) / cleanerIds.length).toFixed(2);
 
       for (const cleanerId of cleanerIds) {
         const cleaner = await User.findByPk(cleanerId);
@@ -1453,7 +1465,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           });
           notifications.unshift(
             isWithinPenaltyWindow
-              ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${(price * 0.5 * 0.9 / cleanerIds.length).toFixed(2)}.`
+              ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${cleanerPayment}.`
               : `The homeowner cancelled the ${formattedDate} cleaning at ${home?.address || "their property"}.`
           );
           await cleaner.update({ notifications: notifications.slice(0, 50) });

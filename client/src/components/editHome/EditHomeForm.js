@@ -21,6 +21,7 @@ import {
   shadows,
   typography,
 } from "../../services/styles/theme";
+import { cleaningCompany, TIME_WINDOW_OPTIONS } from "../../services/data/companyInfo";
 
 const STEPS = {
   BASICS: 0,
@@ -28,17 +29,6 @@ const STEPS = {
   SERVICES: 2,
   REVIEW: 3,
 };
-
-const TIME_OPTIONS = [
-  {
-    value: "anytime",
-    label: "Anytime",
-    description: "Most flexible, best pricing",
-  },
-  { value: "10-3", label: "10am - 3pm", description: "+$25 per cleaning" },
-  { value: "11-4", label: "11am - 4pm", description: "+$25 per cleaning" },
-  { value: "12-2", label: "12pm - 2pm", description: "+$30 per cleaning" },
-];
 
 const BED_SIZE_OPTIONS = [
   { value: "long_twin", label: "Long Twin" },
@@ -346,16 +336,17 @@ const EditHomeForm = ({ state, dispatch }) => {
   const checkAppointmentsWithinWeek = async (homeId) => {
     const appointments = await Appointment.getHomeAppointments(homeId);
     const currentDate = new Date();
+    const { cancellation } = cleaningCompany.pricing;
     let fee = 0;
 
     if (appointments?.appointments) {
       appointments.appointments.forEach((appt) => {
         const date = new Date(appt.date);
         if (
-          date.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000 &&
+          date.getTime() - currentDate.getTime() <= cancellation.windowDays * 24 * 60 * 60 * 1000 &&
           date.getTime() - currentDate.getTime() >= 0
         ) {
-          fee += 25;
+          fee += cancellation.fee;
         }
       });
     }
@@ -869,7 +860,7 @@ const EditHomeForm = ({ state, dispatch }) => {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Preferred Time Window</Text>
         <View style={styles.choiceGroup}>
-          {TIME_OPTIONS.map((option) => (
+          {TIME_WINDOW_OPTIONS.map((option) => (
             <TouchableOpacity
               key={option.value}
               style={[
@@ -917,8 +908,8 @@ const EditHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0
-              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * 30} ($30 x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
-              : homeData.numBeds ? `$30 x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * 30}` : "Select to configure sheets for each bed"}
+              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * cleaningCompany.pricing.linens.sheetFeePerBed} ($${cleaningCompany.pricing.linens.sheetFeePerBed} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
+              : homeData.numBeds ? `$${cleaningCompany.pricing.linens.sheetFeePerBed} x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * cleaningCompany.pricing.linens.sheetFeePerBed}` : "Select to configure sheets for each bed"}
           </Text>
         </View>
         <View
@@ -1018,8 +1009,8 @@ const EditHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
-              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * 5 + (b.faceCloths || 0) * 2, 0)} - $5/towel, $2/face cloth`
-              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $5/towel, $2/face cloth` : "Select to configure towels for each bathroom"}
+              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * cleaningCompany.pricing.linens.towelFee + (b.faceCloths || 0) * cleaningCompany.pricing.linens.faceClothFee, 0)} - $${cleaningCompany.pricing.linens.towelFee}/towel, $${cleaningCompany.pricing.linens.faceClothFee}/face cloth`
+              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${cleaningCompany.pricing.linens.towelFee}/towel, $${cleaningCompany.pricing.linens.faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -1055,7 +1046,7 @@ const EditHomeForm = ({ state, dispatch }) => {
                 Bathroom {bath.bathroomNumber}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                <Text style={{ flex: 1, color: "#555" }}>Towels ($5 each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Towels (${cleaningCompany.pricing.linens.towelFee} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -1093,7 +1084,7 @@ const EditHomeForm = ({ state, dispatch }) => {
                 </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ flex: 1, color: "#555" }}>Face cloths ($2 each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${cleaningCompany.pricing.linens.faceClothFee} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -1221,7 +1212,7 @@ const EditHomeForm = ({ state, dispatch }) => {
           {"\n\n"}
           <Text style={{ fontWeight: "bold" }}>Preferred Time: </Text>
           {
-            TIME_OPTIONS.find((o) => o.value === homeData.timeToBeCompleted)
+            TIME_WINDOW_OPTIONS.find((o) => o.value === homeData.timeToBeCompleted)
               ?.label
           }
           {"\n\n"}

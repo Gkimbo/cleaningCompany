@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import CalendarComponent from "../calender/CalendarComponent";
 import { API_BASE } from "../../services/config";
+import { cleaningCompany } from "../../services/data/companyInfo";
 
 const { width } = Dimensions.get("window");
 
@@ -128,18 +129,15 @@ const DetailsComponent = ({ state, dispatch }) => {
   }, [id, redirect, state.appointments, state.homes]);
 
   const getTimeWindowText = (time) => {
-    switch (time) {
-      case "anytime":
-        return { text: "Anytime", surcharge: null };
-      case "10-3":
-        return { text: "10am - 3pm", surcharge: "+$25" };
-      case "11-4":
-        return { text: "11am - 4pm", surcharge: "+$25" };
-      case "12-2":
-        return { text: "12pm - 2pm", surcharge: "+$30" };
-      default:
-        return { text: "Not set", surcharge: null };
+    const { timeWindows } = cleaningCompany.pricing;
+    const windowConfig = timeWindows[time];
+
+    if (!windowConfig) {
+      return { text: "Not set", surcharge: null };
     }
+
+    const surcharge = windowConfig.surcharge > 0 ? `+$${windowConfig.surcharge}` : null;
+    return { text: windowConfig.label, surcharge };
   };
 
   const DetailRow = ({ icon, label, value, valueStyle, surcharge }) => (
@@ -246,7 +244,7 @@ const DetailsComponent = ({ state, dispatch }) => {
               Fresh Sheets
             </Text>
             <Text style={styles.servicePrice}>
-              {homeDetails.sheetsProvided === "yes" ? "Included" : "$30/bed"}
+              {homeDetails.sheetsProvided === "yes" ? "Included" : `$${cleaningCompany.pricing.linens.sheetFeePerBed}/bed`}
             </Text>
           </View>
 
@@ -260,7 +258,7 @@ const DetailsComponent = ({ state, dispatch }) => {
               Fresh Towels
             </Text>
             <Text style={styles.servicePrice}>
-              {homeDetails.towelsProvided === "yes" ? "Included" : "$5/towel"}
+              {homeDetails.towelsProvided === "yes" ? "Included" : `$${cleaningCompany.pricing.linens.towelFee}/towel`}
             </Text>
           </View>
         </View>

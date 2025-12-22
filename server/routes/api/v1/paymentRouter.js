@@ -18,9 +18,10 @@ const {
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const { businessConfig } = require("../../../config/businessConfig");
 
-// Platform fee percentage (10%)
-const PLATFORM_FEE_PERCENT = 0.10;
+// Platform fee percentage from config
+const PLATFORM_FEE_PERCENT = businessConfig.pricing.platform.feePercent;
 
 const paymentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;

@@ -1,4 +1,13 @@
 /**
+ * Price Calculation Service
+ * Uses pricing values from businessConfig.js
+ */
+const { businessConfig } = require("../config/businessConfig");
+
+// Get pricing config
+const { pricing } = businessConfig;
+
+/**
  * Calculate the price for linen services
  * @param {Array} sheetConfigs - Array of bed configurations with needsSheets flag
  * @param {Array} towelConfigs - Array of bathroom configurations with towel/facecloth counts
@@ -6,18 +15,19 @@
  */
 const calculateLinenPrice = (sheetConfigs, towelConfigs) => {
   let price = 0;
+  const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;
 
-  // Sheets: $30 per bed needing sheets
+  // Sheets: per bed needing sheets
   if (sheetConfigs && Array.isArray(sheetConfigs)) {
     const bedsNeedingSheets = sheetConfigs.filter((b) => b.needsSheets).length;
-    price += bedsNeedingSheets * 30;
+    price += bedsNeedingSheets * sheetFeePerBed;
   }
 
-  // Towels: $5 each, Face cloths: $2 each
+  // Towels and face cloths
   if (towelConfigs && Array.isArray(towelConfigs)) {
     towelConfigs.forEach((bathroom) => {
-      price += (bathroom.towels || 0) * 5;
-      price += (bathroom.faceCloths || 0) * 2;
+      price += (bathroom.towels || 0) * towelFee;
+      price += (bathroom.faceCloths || 0) * faceClothFee;
     });
   }
 
@@ -45,27 +55,22 @@ const calculatePrice = (
   towelConfigs = null
 ) => {
   let price = 0;
+  const { basePrice, extraBedBathFee } = pricing;
+  const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;
 
-  // Time window surcharge (+$25 for any specific time window)
-  if (timeToBeCompleted === "anytime") {
-    price += 0;
-  } else if (timeToBeCompleted === "10-3") {
-    price += 25;
-  } else if (timeToBeCompleted === "11-4") {
-    price += 25;
-  } else if (timeToBeCompleted === "12-2") {
-    price += 30;
-  }
+  // Time window surcharge
+  const timeSurcharge = pricing.timeWindows[timeToBeCompleted] || 0;
+  price += timeSurcharge;
 
   // Linen pricing
   if (sheets === "yes") {
     if (sheetConfigs && Array.isArray(sheetConfigs)) {
       // Use specific configurations
       const bedsNeedingSheets = sheetConfigs.filter((b) => b.needsSheets).length;
-      price += bedsNeedingSheets * 30;
+      price += bedsNeedingSheets * sheetFeePerBed;
     } else {
       // Fallback: charge for all beds if no specific config
-      price += Number(numBeds) * 30;
+      price += Number(numBeds) * sheetFeePerBed;
     }
   }
 
@@ -73,34 +78,25 @@ const calculatePrice = (
     if (towelConfigs && Array.isArray(towelConfigs)) {
       // Use specific configurations
       towelConfigs.forEach((bathroom) => {
-        price += (bathroom.towels || 0) * 5;
-        price += (bathroom.faceCloths || 0) * 2;
+        price += (bathroom.towels || 0) * towelFee;
+        price += (bathroom.faceCloths || 0) * faceClothFee;
       });
     } else {
       // Fallback: default 2 towels + 1 face cloth per bathroom if no specific config
-      const defaultTowelPrice = Number(numBaths) * (2 * 5 + 1 * 2);
+      const defaultTowelPrice = Number(numBaths) * (2 * towelFee + 1 * faceClothFee);
       price += defaultTowelPrice;
     }
   }
 
-  // Base price calculation ($150 for 1 bed/1 bath)
-  if (Number(numBeds) === 1 && Number(numBaths) === 1) {
-    price = price + 150;
-    return price;
-  } else if (Number(numBeds) === 1) {
-    const baths = (Number(numBaths) - 1) * 50;
-    price += baths + 150;
-    return price;
-  } else if (Number(numBaths) === 1) {
-    const beds = (Number(numBeds) - 1) * 50;
-    price += beds + 150;
-    return price;
-  } else {
-    const beds = (Number(numBeds) - 1) * 50;
-    const baths = (Number(numBaths) - 1) * 50;
-    price += beds + baths + 150;
-    return price;
-  }
+  // Base price calculation
+  const beds = Number(numBeds);
+  const baths = Number(numBaths);
+  const extraBeds = Math.max(0, beds - 1);
+  const extraBaths = Math.max(0, baths - 1);
+
+  price += basePrice + (extraBeds + extraBaths) * extraBedBathFee;
+
+  return price;
 };
 
 module.exports = calculatePrice;
