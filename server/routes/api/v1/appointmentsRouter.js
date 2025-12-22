@@ -491,6 +491,13 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
         penaltyWindowDays: penaltyDays,
         recentCancellationPenalties: recentPenalties,
         willResultInFreeze: willBeFrozen,
+        // Require acknowledgment for last-minute cancellations
+        requiresAcknowledgment: isWithinPenaltyWindow,
+        acknowledgmentMessage: isWithinPenaltyWindow
+          ? willBeFrozen
+            ? "I understand that cancelling this appointment will result in a 1-star rating and my account will be frozen due to having 3 or more last-minute cancellations within 3 months."
+            : "I understand that cancelling this appointment within the penalty window will result in an automatic 1-star rating. I acknowledge that 3 last-minute cancellations within 3 months will result in my account being frozen."
+          : null,
         warningMessage: isWithinPenaltyWindow
           ? willBeFrozen
             ? `WARNING: Cancelling within ${penaltyDays} days of the cleaning will result in an automatic 1-star rating. You already have ${recentPenalties} cancellation penalties in the last 3 months. THIS CANCELLATION WILL FREEZE YOUR ACCOUNT.`
@@ -900,8 +907,70 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
   }
 });
 
+// Get booking info for an appointment (large home warnings, etc.)
+appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
+  const { appointmentId } = req.params;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    jwt.verify(token, secretKey);
+
+    const appointment = await UserAppointments.findByPk(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    const home = await UserHomes.findByPk(appointment.homeId);
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    const numBeds = parseInt(home.numBeds) || 0;
+    const numBaths = parseInt(home.numBaths) || 0;
+    const timeToBeCompleted = home.timeToBeCompleted || "anytime";
+    const cleanersNeeded = home.cleanersNeeded || 1;
+
+    // Large home is defined as more than 2 beds AND more than 2 baths
+    const isLargeHome = numBeds > 2 && numBaths > 2;
+    // Time constraint only matters for large homes
+    const hasTimeConstraint = isLargeHome && timeToBeCompleted !== "anytime";
+
+    // Build acknowledgment message based on conditions
+    let acknowledgmentMessage = null;
+    if (isLargeHome) {
+      if (hasTimeConstraint) {
+        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - I may need to bring my own help. The cleaning must be completed between ${timeToBeCompleted}, which may be difficult without assistance.`;
+      } else {
+        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - I may need to bring my own help to complete this cleaning.`;
+      }
+    }
+
+    return res.json({
+      appointmentId: parseInt(appointmentId),
+      homeInfo: {
+        numBeds,
+        numBaths,
+        timeToBeCompleted,
+        cleanersNeeded,
+      },
+      isLargeHome,
+      hasTimeConstraint,
+      requiresAcknowledgment: isLargeHome,
+      acknowledgmentMessage,
+    });
+  } catch (error) {
+    console.error("Error getting booking info:", error);
+    return res.status(500).json({ error: "Failed to get booking info" });
+  }
+});
+
 appointmentRouter.patch("/request-employee", async (req, res) => {
-  const { id, appointmentId } = req.body;
+  const { id, appointmentId, acknowledged } = req.body;
 
   try {
     const appointment = await UserAppointments.findByPk(Number(appointmentId));
@@ -917,6 +986,32 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     const cleaner = await User.findByPk(id);
     if (!cleaner) {
       return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    // Check if home is large and requires acknowledgment
+    const home = await UserHomes.findByPk(appointment.homeId);
+    if (home) {
+      const numBeds = parseInt(home.numBeds) || 0;
+      const numBaths = parseInt(home.numBaths) || 0;
+      const isLargeHome = numBeds > 2 && numBaths > 2;
+
+      if (isLargeHome && !acknowledged) {
+        const timeToBeCompleted = home.timeToBeCompleted || "anytime";
+        const hasTimeConstraint = timeToBeCompleted !== "anytime";
+
+        let message = `This is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - you may need to bring your own help.`;
+        if (hasTimeConstraint) {
+          message += ` The cleaning must be completed between ${timeToBeCompleted}, which may be difficult without assistance.`;
+        }
+
+        return res.status(400).json({
+          error: "Acknowledgment required",
+          message,
+          requiresAcknowledgment: true,
+          isLargeHome: true,
+          hasTimeConstraint,
+        });
+      }
     }
 
     const existingRequest = await UserPendingRequests.findOne({
@@ -1648,6 +1743,18 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
     const isWithinPenaltyWindow = daysUntilAppointment <= 4;
     let accountFrozen = false;
 
+    // Require acknowledgment for last-minute cancellations
+    if (isWithinPenaltyWindow) {
+      const { acknowledged } = req.body;
+      if (!acknowledged) {
+        return res.status(400).json({
+          error: "Acknowledgment required",
+          message: "You must acknowledge the penalties before cancelling within the penalty window. Cancelling will result in an automatic 1-star rating. 3 last-minute cancellations within 3 months will freeze your account.",
+          requiresAcknowledgment: true,
+        });
+      }
+    }
+
     if (isWithinPenaltyWindow) {
       // Create system cancellation penalty review
       await UserReviews.create({
@@ -1681,6 +1788,83 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
           accountFrozenReason: "3 or more last-minute cancellations within 3 months",
         });
         accountFrozen = true;
+
+        // Remove cleaner from all future appointments
+        const futureAssignments = await UserCleanerAppointments.findAll({
+          where: { employeeId: userId },
+          include: [{
+            model: UserAppointments,
+            as: "appointment",
+            where: {
+              date: { [Op.gte]: today.toISOString().split('T')[0] },
+              completed: false,
+            },
+          }],
+        });
+
+        for (const assignment of futureAssignments) {
+          const futureAppointment = assignment.appointment;
+
+          // Skip the current appointment being cancelled (already handled below)
+          if (futureAppointment.id === parseInt(id)) continue;
+
+          // Remove from employeesAssigned array
+          let futureEmployees = Array.isArray(futureAppointment.employeesAssigned)
+            ? [...futureAppointment.employeesAssigned]
+            : [];
+          const updatedFutureEmployees = futureEmployees.filter(
+            (empId) => empId !== String(userId)
+          );
+
+          await futureAppointment.update({
+            employeesAssigned: updatedFutureEmployees,
+            hasBeenAssigned: updatedFutureEmployees.length > 0,
+          });
+
+          // Delete the assignment record
+          await assignment.destroy();
+
+          // Delete pending payout for this cleaner
+          await Payout.destroy({
+            where: {
+              appointmentId: futureAppointment.id,
+              cleanerId: userId,
+              status: "pending",
+            },
+          });
+
+          // Notify homeowner about the removed assignment
+          const futureHomeowner = await User.findByPk(futureAppointment.userId);
+          const futureHome = await UserHomes.findByPk(futureAppointment.homeId);
+
+          if (futureHomeowner) {
+            const notifications = futureHomeowner.notifications || [];
+            const formattedDate = new Date(futureAppointment.date).toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            });
+            notifications.unshift(
+              `A cleaner has been removed from the ${formattedDate} cleaning at ${futureHome?.address || "your property"} due to account issues. A new cleaner will need to be assigned.`
+            );
+            await futureHomeowner.update({ notifications: notifications.slice(0, 50) });
+
+            // Send email notification
+            if (futureHome) {
+              await Email.sendEmailCancellation(
+                futureHomeowner.email,
+                {
+                  street: futureHome.address,
+                  city: futureHome.city,
+                  state: futureHome.state,
+                  zipcode: futureHome.zipcode,
+                },
+                futureHomeowner.username,
+                futureAppointment.date
+              );
+            }
+          }
+        }
       }
     }
 

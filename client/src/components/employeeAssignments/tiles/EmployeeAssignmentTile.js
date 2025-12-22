@@ -105,7 +105,8 @@ const EmployeeAssignmentTile = ({
   const handleConfirmCancel = async () => {
     setCancelLoading(true);
     try {
-      const result = await FetchData.cancelAsCleaner(id, token);
+      // Pass acknowledged: true since user confirmed via the modal checkbox
+      const result = await FetchData.cancelAsCleaner(id, token, true);
       if (result.error) {
         setError(result.error);
         setCancelLoading(false);

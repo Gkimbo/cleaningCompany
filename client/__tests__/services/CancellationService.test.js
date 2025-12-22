@@ -155,7 +155,7 @@ describe("Cancellation Service Methods", () => {
         json: () => Promise.resolve(mockResponse),
       });
 
-      const result = await FetchData.cancelAsCleaner(1, mockToken);
+      const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/appointments/1/cancel-cleaner"),
@@ -165,11 +165,33 @@ describe("Cancellation Service Methods", () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${mockToken}`,
           },
+          body: JSON.stringify({ acknowledged: true }),
         })
       );
 
       expect(result.success).toBe(true);
       expect(result.penaltyApplied).toBe(false);
+    });
+
+    it("should send acknowledged: false by default", async () => {
+      const mockResponse = {
+        success: true,
+        wasWithinPenaltyWindow: false,
+      };
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
+
+      await FetchData.cancelAsCleaner(1, mockToken);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/appointments/1/cancel-cleaner"),
+        expect.objectContaining({
+          body: JSON.stringify({ acknowledged: false }),
+        })
+      );
     });
 
     it("should return penalty info when within penalty window", async () => {
@@ -187,7 +209,7 @@ describe("Cancellation Service Methods", () => {
         json: () => Promise.resolve(mockResponse),
       });
 
-      const result = await FetchData.cancelAsCleaner(1, mockToken);
+      const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
       expect(result.wasWithinPenaltyWindow).toBe(true);
       expect(result.penaltyApplied).toBe(true);
@@ -209,9 +231,27 @@ describe("Cancellation Service Methods", () => {
         json: () => Promise.resolve(mockResponse),
       });
 
-      const result = await FetchData.cancelAsCleaner(1, mockToken);
+      const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
       expect(result.accountFrozen).toBe(true);
+    });
+
+    it("should return acknowledgment required error when not acknowledged", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        json: () =>
+          Promise.resolve({
+            error: "Acknowledgment required",
+            requiresAcknowledgment: true,
+            message: "You must acknowledge the penalties before cancelling.",
+          }),
+      });
+
+      const result = await FetchData.cancelAsCleaner(1, mockToken, false);
+
+      expect(result.error).toBe("Acknowledgment required");
+      expect(result.requiresAcknowledgment).toBe(true);
+      expect(result.message).toContain("acknowledge");
     });
 
     it("should return error when not assigned to appointment", async () => {
@@ -220,9 +260,9 @@ describe("Cancellation Service Methods", () => {
         json: () => Promise.resolve({ error: "You are not assigned to this appointment" }),
       });
 
-      const result = await FetchData.cancelAsCleaner(1, mockToken);
+      const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
-      expect(result).toEqual({ error: "You are not assigned to this appointment" });
+      expect(result.error).toBe("You are not assigned to this appointment");
     });
 
     it("should return error when account is frozen", async () => {
@@ -232,15 +272,15 @@ describe("Cancellation Service Methods", () => {
           Promise.resolve({ error: "Your account is frozen. Please contact support." }),
       });
 
-      const result = await FetchData.cancelAsCleaner(1, mockToken);
+      const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
-      expect(result).toEqual({ error: "Your account is frozen. Please contact support." });
+      expect(result.error).toBe("Your account is frozen. Please contact support.");
     });
 
     it("should return error on network failure", async () => {
       global.fetch.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await FetchData.cancelAsCleaner(1, mockToken);
+      const result = await FetchData.cancelAsCleaner(1, mockToken, true);
 
       expect(result).toEqual({ error: "Failed to cancel job" });
     });

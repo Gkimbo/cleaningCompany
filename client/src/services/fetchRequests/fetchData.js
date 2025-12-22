@@ -345,7 +345,33 @@ class FetchData {
     }
   }
 
-  static async addEmployee(id, appointmentId) {
+  static async getBookingInfo(appointmentId, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/appointments/booking-info/${appointmentId}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to get booking info" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error getting booking info:", error);
+      return { error: "Failed to get booking info" };
+    }
+  }
+
+  static async addEmployee(id, appointmentId, acknowledged = false) {
     try {
       const response = await fetch(
         baseURL + "/api/v1/appointments/request-employee",
@@ -357,17 +383,27 @@ class FetchData {
           body: JSON.stringify({
             id,
             appointmentId,
+            acknowledged,
           }),
         }
       );
-      if (!response.ok) {
-        throw new Error("Failed to delete");
-      }
 
       const responseData = await response.json();
-      return true;
+
+      if (!response.ok) {
+        return {
+          error: responseData.error || "Failed to request appointment",
+          requiresAcknowledgment: responseData.requiresAcknowledgment,
+          isLargeHome: responseData.isLargeHome,
+          hasTimeConstraint: responseData.hasTimeConstraint,
+          message: responseData.message,
+        };
+      }
+
+      return { success: true, message: responseData.message };
     } catch (error) {
-      return error;
+      console.error("Error requesting appointment:", error);
+      return { error: "Failed to request appointment" };
     }
   }
 
@@ -727,7 +763,7 @@ class FetchData {
     }
   }
 
-  static async cancelAsCleaner(appointmentId, token) {
+  static async cancelAsCleaner(appointmentId, token, acknowledged = false) {
     try {
       const response = await fetch(
         baseURL + `/api/v1/appointments/${appointmentId}/cancel-cleaner`,
@@ -737,13 +773,18 @@ class FetchData {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({ acknowledged }),
         }
       );
 
       const responseData = await response.json();
 
       if (!response.ok) {
-        return { error: responseData.error || "Failed to cancel job" };
+        return {
+          error: responseData.error || "Failed to cancel job",
+          requiresAcknowledgment: responseData.requiresAcknowledgment,
+          message: responseData.message,
+        };
       }
 
       return responseData;
