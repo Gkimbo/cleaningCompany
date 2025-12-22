@@ -289,8 +289,9 @@ const EditHomeForm = ({ state, dispatch }) => {
         dirtySheetsLocation: homeData.sheetsProvided === "no" ? homeData.dirtySheetsLocation : "",
         cleanTowelsLocation: homeData.towelsProvided === "no" ? homeData.cleanTowelsLocation : "",
         dirtyTowelsLocation: homeData.towelsProvided === "no" ? homeData.dirtyTowelsLocation : "",
-        bedConfigurations: homeData.sheetsProvided === "yes" ? homeData.bedConfigurations : null,
-        bathroomConfigurations: homeData.towelsProvided === "yes" ? homeData.bathroomConfigurations : null,
+        // Always save configurations so they can be restored when toggled back on
+        bedConfigurations: homeData.bedConfigurations,
+        bathroomConfigurations: homeData.bathroomConfigurations,
       };
 
       const response = await FetchData.editHomeInfo(submitData, user);

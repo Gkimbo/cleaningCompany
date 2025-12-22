@@ -12,6 +12,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
+import MessageService from "../../services/fetchRequests/MessageClass";
 import {
   colors,
   spacing,
@@ -19,7 +20,6 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
-import GetHelpButton from "../messaging/GetHelpButton";
 import TaxFormsSection from "../tax/TaxFormsSection";
 
 const { width } = Dimensions.get("window");
@@ -78,7 +78,7 @@ const QuickActionButton = ({ title, subtitle, onPress, icon, iconColor, bgColor,
     ]}
   >
     <View style={[styles.quickActionIconContainer, { backgroundColor: accentColor }]}>
-      <Icon name={icon} size={20} color={iconColor} />
+      <Icon name={icon} size={14} color={iconColor} />
     </View>
     <Text style={styles.quickActionText}>{title}</Text>
     {subtitle && <Text style={styles.quickActionSubtext}>{subtitle}</Text>}
@@ -318,30 +318,55 @@ const ClientDashboard = ({ state, dispatch }) => {
 
       {/* Quick Actions */}
       <View style={styles.quickActionsContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.quickActionsScroll}
-        >
+        <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+        <View style={styles.quickActionsGrid}>
           <QuickActionButton
-            title="Schedule Cleaning"
+            title="Schedule"
+            subtitle="Book a cleaning"
+            icon="calendar-plus-o"
+            iconColor="#fff"
+            bgColor="#fff"
+            accentColor="#6366f1"
             onPress={() => navigate("/schedule-cleaning")}
-            color={colors.primary[600]}
           />
           <QuickActionButton
             title="Add Home"
+            subtitle="Register property"
+            icon="home"
+            iconColor="#fff"
+            bgColor="#fff"
+            accentColor="#10b981"
             onPress={() => navigate("/add-home")}
-            color={colors.secondary[500]}
           />
           <QuickActionButton
             title="View Bill"
+            subtitle="Check balance"
+            icon="file-text-o"
+            iconColor="#fff"
+            bgColor="#fff"
+            accentColor="#f59e0b"
             onPress={() => navigate("/bill")}
-            color={colors.neutral[600]}
           />
-          <View style={styles.getHelpWrapper}>
-            <GetHelpButton token={state.currentUser.token} />
-          </View>
-        </ScrollView>
+          <QuickActionButton
+            title="Get Help"
+            subtitle="Contact support"
+            icon="life-ring"
+            iconColor="#fff"
+            bgColor="#fff"
+            accentColor="#3b82f6"
+            onPress={() => {
+              if (state.currentUser.token) {
+                MessageService.createSupportConversation(state.currentUser.token)
+                  .then((response) => {
+                    if (response.conversation) {
+                      navigate(`/messages/${response.conversation.id}`);
+                    }
+                  })
+                  .catch((err) => console.error(err));
+              }
+            }}
+          />
+        </View>
       </View>
 
       {/* Quick Stats */}
@@ -623,27 +648,51 @@ const styles = StyleSheet.create({
   quickActionsContainer: {
     marginBottom: spacing.xl,
   },
-  quickActionsScroll: {
-    paddingRight: spacing.lg,
+  quickActionsTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
+  quickActionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
   },
   quickActionButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.full,
-    marginRight: spacing.sm,
+    width: (width - spacing.lg * 2 - spacing.sm) / 2,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 70,
     ...shadows.sm,
+    shadowColor: "#6366f1",
+    shadowOpacity: 0.06,
   },
   quickActionButtonPressed: {
-    opacity: 0.8,
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  quickActionIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.xs,
   },
   quickActionText: {
-    color: colors.neutral[0],
+    color: colors.text.primary,
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+    textAlign: "center",
   },
-  getHelpWrapper: {
-    marginLeft: spacing.xs,
+  quickActionSubtext: {
+    color: colors.text.tertiary,
+    fontSize: 10,
+    marginTop: 1,
+    textAlign: "center",
   },
 
   // Stats Row

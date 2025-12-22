@@ -235,8 +235,9 @@ const HomeSetupWizard = ({ state, dispatch }) => {
           towelsProvided: homeData.towelsProvided,
           contact: homeData.contact,
           specialNotes: homeData.specialNotes,
-          bedConfigurations: homeData.sheetsProvided === "yes" ? homeData.bedConfigurations : null,
-          bathroomConfigurations: homeData.towelsProvided === "yes" ? homeData.bathroomConfigurations : null,
+          // Always save configurations so they can be restored when toggled back on
+          bedConfigurations: homeData.bedConfigurations,
+          bathroomConfigurations: homeData.bathroomConfigurations,
         },
       };
 
