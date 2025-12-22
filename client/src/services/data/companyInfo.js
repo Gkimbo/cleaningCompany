@@ -3,16 +3,19 @@ export const cleaningCompany = {
   maxDistance: 10,
   basePrice: 150,
   extraBedBathFee: 50,
-  sheetCleaningFee: 50,
+  sheetFeePerBed: 30,
+  towelFee: 5,
+  faceClothFee: 2,
   highVolumeFee: 50,
-  cancellationFee: 50,
+  cancellationFee: 25,
+  cancellationWindowDays: 7,
   maxBookingDays: 14,
   cleaningHours: { start: 10, end: 16 },
   highVolumeDays: ["holiday", "holiday weekend"],
 
   bookingInfo: {
     description:
-      "Clients can easily schedule cleaning appointments up to one weeks in advance. We offer flexible options for one-bedroom, one-bathroom, and studio rentals at a base price of $150. Additional charges of $50 per bed and bath apply, accommodating various property sizes. Clients can opt to provide their own clean sheets and pillowcases or request our cleaning service to handle this for an additional $50 per cleaning. Appointments are available daily between 10 am and 4 pm.",
+      "Clients can easily schedule cleaning appointments up to two weeks in advance. We offer flexible options for one-bedroom, one-bathroom, and studio rentals at a base price of $150. Additional charges of $50 per bed and bath apply, accommodating various property sizes. Clients can opt to provide their own clean sheets and pillowcases or request our cleaning service to handle this for an additional $30 per bed. Appointments are available daily between 10 am and 4 pm.",
   },
 
   specialConsiderations: {
@@ -22,7 +25,7 @@ export const cleaningCompany = {
 
   cancellationPolicy: {
     description:
-      "We understand that plans can change. Clients can cancel appointments up to one week prior to the scheduled cleaning without incurring any fees. However, cancellations within one week of the cleaning date will result in a cancellation fee of $50. This policy is in place to account for the planning and resources allocated to each appointment.",
+      "We understand that plans can change. Clients can cancel appointments up to one week prior to the scheduled cleaning without incurring any fees. However, cancellations within one week of the cleaning date will result in a cancellation fee of $25. This policy is in place to account for the planning and resources allocated to each appointment.",
   },
 
   aboutService: {

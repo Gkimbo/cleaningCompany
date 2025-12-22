@@ -125,7 +125,7 @@ describe("Authentication Routes", () => {
         });
 
       expect(res.status).toBe(404);
-      expect(res.body.error).toBe("No Username");
+      expect(res.body.error).toBe("No account found");
     });
   });
 

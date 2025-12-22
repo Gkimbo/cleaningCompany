@@ -20,7 +20,7 @@ const SignInForm = ({ state, dispatch }) => {
 	const validateForm = () => {
 		const validationErrors = [];
 		if (userName.length === 0) {
-			validationErrors.push("Please type in your User Name");
+			validationErrors.push("Please enter your email or username");
 		}
 		if (password.length === 0) {
 			validationErrors.push("Please type your password");
@@ -38,7 +38,7 @@ const SignInForm = ({ state, dispatch }) => {
 			};
 
 			const response = await FetchData.login(loginData);
-			if (response === "That User Name does not exist, please sign up.") {
+			if (response === "No account found with that email or username.") {
 				setErrors([response]);
 			}
 			if (response === "Invalid password") {
@@ -89,10 +89,10 @@ const SignInForm = ({ state, dispatch }) => {
 			)}
 			<TextInput
 				mode="outlined"
-				label="Username"
+				label="Email or Username"
 				value={userName}
 				onChangeText={setUserName}
-				placeholder="Enter your username"
+				placeholder="Enter your email or username"
 				style={formStyles.input}
 			/>
 			<TextInput
