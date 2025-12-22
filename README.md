@@ -14,7 +14,7 @@
 
 ---
 
-<img src="https://via.placeholder.com/800x400/1a1a2e/eee?text=Kleanr+Platform" alt="Kleanr Platform" width="100%"/>
+<!-- <img src="https://via.placeholder.com/800x400/1a1a2e/eee?text=Kleanr+Platform" alt="Kleanr Platform" width="100%"/> -->
 
 </div>
 
@@ -29,6 +29,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 <td width="33%" valign="top">
 
 ### Homeowners
+
 - Schedule and manage cleaning appointments
 - Sync calendars with Airbnb, VRBO, Booking.com
 - Auto-create cleanings after guest checkouts
@@ -41,6 +42,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 <td width="33%" valign="top">
 
 ### Cleaners
+
 - View assigned appointments and schedules
 - Photo documentation (before/after)
 - Digital cleaning checklists
@@ -53,6 +55,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 <td width="33%" valign="top">
 
 ### Managers
+
 - Assign cleaners to appointments
 - Monitor all platform activity
 - Send broadcast announcements
@@ -68,15 +71,15 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 
 ### Core Platform Features
 
-| Feature | Description |
-|---------|-------------|
-| **Calendar Sync** | Automatic iCal sync with Airbnb, VRBO, Booking.com. Auto-create cleaning appointments based on guest checkouts. |
+| Feature                 | Description                                                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Calendar Sync**       | Automatic iCal sync with Airbnb, VRBO, Booking.com. Auto-create cleaning appointments based on guest checkouts.             |
 | **Real-time Messaging** | WebSocket-powered chat between homeowners, cleaners, and support. Includes broadcast announcements and email notifications. |
-| **Payment Processing** | Stripe integration with Apple Pay/Google Pay. Platform fee collection and instant cleaner payouts via Stripe Connect. |
-| **Tax Management** | Automated 1099-NEC generation for cleaners, platform income tracking, Schedule C data, and quarterly tax estimates. |
-| **Photo Documentation** | Before/after photo capture for quality assurance. Room-by-room photo organization with notes. |
-| **Review System** | Multi-aspect reviews for cleaners covering quality, timeliness, and communication. |
-| **Terms & Conditions** | Version-controlled T&C management with PDF/text support, user acceptance tracking, and legal compliance snapshots. |
+| **Payment Processing**  | Stripe integration with Apple Pay/Google Pay. Platform fee collection and instant cleaner payouts via Stripe Connect.       |
+| **Tax Management**      | Automated 1099-NEC generation for cleaners, platform income tracking, Schedule C data, and quarterly tax estimates.         |
+| **Photo Documentation** | Before/after photo capture for quality assurance. Room-by-room photo organization with notes.                               |
+| **Review System**       | Multi-aspect reviews for cleaners covering quality, timeliness, and communication.                                          |
+| **Terms & Conditions**  | Version-controlled T&C management with PDF/text support, user acceptance tracking, and legal compliance snapshots.          |
 
 ---
 
@@ -87,6 +90,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 <td width="50%" valign="top">
 
 ### Frontend (Mobile App)
+
 ```
 React Native + Expo SDK 52
 ├── react-router-native     # Navigation
@@ -100,6 +104,7 @@ React Native + Expo SDK 52
 <td width="50%" valign="top">
 
 ### Backend (API Server)
+
 ```
 Node.js + Express.js
 ├── PostgreSQL + Sequelize  # Database & ORM
@@ -255,16 +260,16 @@ npm test -- --coverage
 
 ### Test Coverage
 
-| Area | Server | Client |
-|------|--------|--------|
-| Authentication | 15 tests | - |
-| Appointments | 24 tests | - |
+| Area              | Server   | Client   |
+| ----------------- | -------- | -------- |
+| Authentication    | 15 tests | -        |
+| Appointments      | 24 tests | -        |
 | Payments & Stripe | 89 tests | 12 tests |
-| Calendar Sync | 16 tests | 73 tests |
-| Tax Documents | 45 tests | 42 tests |
-| Messaging | 21 tests | - |
-| Reviews | 32 tests | 54 tests |
-| Integration | 27 tests | - |
+| Calendar Sync     | 16 tests | 73 tests |
+| Tax Documents     | 45 tests | 42 tests |
+| Messaging         | 21 tests | -        |
+| Reviews           | 32 tests | 54 tests |
+| Integration       | 27 tests | -        |
 
 ---
 
@@ -272,72 +277,72 @@ npm test -- --coverage
 
 ### Authentication
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/user-sessions/login` | User login |
-| `POST` | `/api/v1/users` | User registration |
-| `GET` | `/api/v1/user-sessions/current` | Get current user |
+| Method | Endpoint                        | Description       |
+| ------ | ------------------------------- | ----------------- |
+| `POST` | `/api/v1/user-sessions/login`   | User login        |
+| `POST` | `/api/v1/users`                 | User registration |
+| `GET`  | `/api/v1/user-sessions/current` | Get current user  |
 
 ### Appointments
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/appointments/:homeId` | Get home appointments |
-| `POST` | `/api/v1/appointments` | Create appointment |
-| `DELETE` | `/api/v1/appointments/:id` | Cancel appointment |
-| `PATCH` | `/api/v1/appointments/request-employee` | Request specific cleaner |
+| Method   | Endpoint                                | Description              |
+| -------- | --------------------------------------- | ------------------------ |
+| `GET`    | `/api/v1/appointments/:homeId`          | Get home appointments    |
+| `POST`   | `/api/v1/appointments`                  | Create appointment       |
+| `DELETE` | `/api/v1/appointments/:id`              | Cancel appointment       |
+| `PATCH`  | `/api/v1/appointments/request-employee` | Request specific cleaner |
 
 ### Calendar Sync
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/calendar-sync/home/:homeId` | Get syncs for home |
-| `POST` | `/api/v1/calendar-sync` | Create new sync |
-| `POST` | `/api/v1/calendar-sync/:id/sync` | Trigger manual sync |
-| `DELETE` | `/api/v1/calendar-sync/:id` | Remove sync |
+| Method   | Endpoint                             | Description         |
+| -------- | ------------------------------------ | ------------------- |
+| `GET`    | `/api/v1/calendar-sync/home/:homeId` | Get syncs for home  |
+| `POST`   | `/api/v1/calendar-sync`              | Create new sync     |
+| `POST`   | `/api/v1/calendar-sync/:id/sync`     | Trigger manual sync |
+| `DELETE` | `/api/v1/calendar-sync/:id`          | Remove sync         |
 
 ### Payments
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/payments/create-intent` | Create payment intent |
-| `POST` | `/api/v1/payments/capture` | Capture payment |
-| `GET` | `/api/v1/payments/history/:userId` | Payment history |
+| Method | Endpoint                           | Description           |
+| ------ | ---------------------------------- | --------------------- |
+| `POST` | `/api/v1/payments/create-intent`   | Create payment intent |
+| `POST` | `/api/v1/payments/capture`         | Capture payment       |
+| `GET`  | `/api/v1/payments/history/:userId` | Payment history       |
 
 ### Stripe Connect
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/stripe-connect/create-account` | Create Connect account |
-| `POST` | `/api/v1/stripe-connect/process-payout` | Process cleaner payout |
-| `GET` | `/api/v1/stripe-connect/payouts/:userId` | Payout history |
+| Method | Endpoint                                 | Description            |
+| ------ | ---------------------------------------- | ---------------------- |
+| `POST` | `/api/v1/stripe-connect/create-account`  | Create Connect account |
+| `POST` | `/api/v1/stripe-connect/process-payout`  | Process cleaner payout |
+| `GET`  | `/api/v1/stripe-connect/payouts/:userId` | Payout history         |
 
 ### Tax Documents
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/api/v1/tax/submit-w9` | Submit W-9 data |
-| `GET` | `/api/v1/tax/contractor/1099-nec/:year` | Get 1099-NEC |
-| `GET` | `/api/v1/tax/platform/comprehensive-report/:year` | Platform tax report |
+| Method | Endpoint                                          | Description         |
+| ------ | ------------------------------------------------- | ------------------- |
+| `POST` | `/api/v1/tax/submit-w9`                           | Submit W-9 data     |
+| `GET`  | `/api/v1/tax/contractor/1099-nec/:year`           | Get 1099-NEC        |
+| `GET`  | `/api/v1/tax/platform/comprehensive-report/:year` | Platform tax report |
 
 ### Terms & Conditions
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/v1/terms/current/:type` | Get current terms (public) |
-| `GET` | `/api/v1/terms/check` | Check if user needs to accept terms |
-| `POST` | `/api/v1/terms/accept` | Accept terms |
-| `POST` | `/api/v1/terms` | Create new terms version (Manager) |
-| `GET` | `/api/v1/terms/history/:type` | Get version history (Manager) |
+| Method | Endpoint                      | Description                         |
+| ------ | ----------------------------- | ----------------------------------- |
+| `GET`  | `/api/v1/terms/current/:type` | Get current terms (public)          |
+| `GET`  | `/api/v1/terms/check`         | Check if user needs to accept terms |
+| `POST` | `/api/v1/terms/accept`        | Accept terms                        |
+| `POST` | `/api/v1/terms`               | Create new terms version (Manager)  |
+| `GET`  | `/api/v1/terms/history/:type` | Get version history (Manager)       |
 
 ---
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
+| Document                            | Description                                  |
+| ----------------------------------- | -------------------------------------------- |
 | [Server README](./server/README.md) | API documentation, database schema, services |
-| [Client README](./client/README.md) | Component documentation, state management |
+| [Client README](./client/README.md) | Component documentation, state management    |
 
 ---
 
