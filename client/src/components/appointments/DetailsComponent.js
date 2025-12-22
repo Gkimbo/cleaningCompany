@@ -5,7 +5,7 @@ import { useNavigate, useParams } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import CalendarComponent from "../calender/CalendarComponent";
 import { API_BASE } from "../../services/config";
-import { cleaningCompany } from "../../services/data/companyInfo";
+import { usePricing } from "../../context/PricingContext";
 
 const { width } = Dimensions.get("window");
 
@@ -18,6 +18,9 @@ const DetailsComponent = ({ state, dispatch }) => {
   const [hasPaymentMethod, setHasPaymentMethod] = useState(null);
   const [checkingPayment, setCheckingPayment] = useState(true);
   const navigate = useNavigate();
+
+  // Get pricing from database
+  const { pricing } = usePricing();
 
   // Check if user has a payment method
   useEffect(() => {
@@ -129,7 +132,7 @@ const DetailsComponent = ({ state, dispatch }) => {
   }, [id, redirect, state.appointments, state.homes]);
 
   const getTimeWindowText = (time) => {
-    const { timeWindows } = cleaningCompany.pricing;
+    const { timeWindows } = pricing;
     const windowConfig = timeWindows[time];
 
     if (!windowConfig) {
@@ -244,7 +247,7 @@ const DetailsComponent = ({ state, dispatch }) => {
               Fresh Sheets
             </Text>
             <Text style={styles.servicePrice}>
-              {homeDetails.sheetsProvided === "yes" ? "Included" : `$${cleaningCompany.pricing.linens.sheetFeePerBed}/bed`}
+              {homeDetails.sheetsProvided === "yes" ? "Included" : `$${pricing.linens.sheetFeePerBed}/bed`}
             </Text>
           </View>
 
@@ -258,7 +261,7 @@ const DetailsComponent = ({ state, dispatch }) => {
               Fresh Towels
             </Text>
             <Text style={styles.servicePrice}>
-              {homeDetails.towelsProvided === "yes" ? "Included" : `$${cleaningCompany.pricing.linens.towelFee}/towel`}
+              {homeDetails.towelsProvided === "yes" ? "Included" : `$${pricing.linens.towelFee}/towel`}
             </Text>
           </View>
         </View>

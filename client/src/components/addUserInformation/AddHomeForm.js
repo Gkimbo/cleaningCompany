@@ -15,7 +15,7 @@ import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
 import styles from "../onboarding/OnboardingStyles";
-import { cleaningCompany, TIME_WINDOW_OPTIONS } from "../../services/data/companyInfo";
+import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
 
 const STEPS = {
   BASICS: 0,
@@ -36,6 +36,8 @@ const BED_SIZE_OPTIONS = [
 const AddHomeForm = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const { pricing } = usePricing();
+  const TIME_WINDOW_OPTIONS = getTimeWindowOptions(pricing);
 
   const [currentStep, setCurrentStep] = useState(STEPS.BASICS);
   const [errors, setErrors] = useState({});
@@ -159,7 +161,7 @@ const AddHomeForm = ({ state, dispatch }) => {
 
   // Calculate linen price for display
   const calculateLinenPrice = () => {
-    const { sheetFeePerBed, towelFee, faceClothFee } = cleaningCompany.pricing.linens;
+    const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;
     let price = 0;
     if (homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0) {
       const bedsNeedingSheets = homeData.bedConfigurations.filter((b) => b.needsSheets).length;
@@ -729,8 +731,8 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0
-              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * cleaningCompany.pricing.linens.sheetFeePerBed} ($${cleaningCompany.pricing.linens.sheetFeePerBed} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
-              : homeData.numBeds ? `$${cleaningCompany.pricing.linens.sheetFeePerBed} x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * cleaningCompany.pricing.linens.sheetFeePerBed}` : "Select to configure sheets for each bed"}
+              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * pricing.linens.sheetFeePerBed} ($${pricing.linens.sheetFeePerBed} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
+              : homeData.numBeds ? `$${pricing.linens.sheetFeePerBed} x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * pricing.linens.sheetFeePerBed}` : "Select to configure sheets for each bed"}
           </Text>
         </View>
         <View
@@ -827,8 +829,8 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
-              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * cleaningCompany.pricing.linens.towelFee + (b.faceCloths || 0) * cleaningCompany.pricing.linens.faceClothFee, 0)} - $${cleaningCompany.pricing.linens.towelFee}/towel, $${cleaningCompany.pricing.linens.faceClothFee}/face cloth`
-              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${cleaningCompany.pricing.linens.towelFee}/towel, $${cleaningCompany.pricing.linens.faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
+              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * pricing.linens.towelFee + (b.faceCloths || 0) * pricing.linens.faceClothFee, 0)} - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth`
+              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -864,7 +866,7 @@ const AddHomeForm = ({ state, dispatch }) => {
                 Bathroom {bath.bathroomNumber}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                <Text style={{ flex: 1, color: "#555" }}>Towels (${cleaningCompany.pricing.linens.towelFee} each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Towels (${pricing.linens.towelFee} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -902,7 +904,7 @@ const AddHomeForm = ({ state, dispatch }) => {
                 </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${cleaningCompany.pricing.linens.faceClothFee} each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${pricing.linens.faceClothFee} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{

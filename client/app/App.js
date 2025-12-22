@@ -70,6 +70,10 @@ import ClientRequestsList from "../src/components/client/ClientRequestsList";
 
 // Manager components
 import TermsEditor from "../src/components/manager/TermsEditor";
+import PricingManagement from "../src/components/manager/PricingManagement";
+
+// Pricing Context
+import { PricingProvider } from "../src/context/PricingContext";
 
 // Terms and Conditions
 import { TermsAcceptanceScreen } from "../src/components/terms";
@@ -160,6 +164,7 @@ export default function App() {
   return (
     <AuthProvider>
       <StripeProvider publishableKey={stripePublishableKey}>
+        <PricingProvider>
         <SocketProvider token={state.currentUser.token}>
           <UserContext.Provider value={{ currentUser: state.currentUser }}>
           <NativeRouter>
@@ -394,11 +399,17 @@ export default function App() {
                 path="/manager/terms"
                 element={<TermsEditor state={state} />}
               />
+              {/* Manager Pricing */}
+              <Route
+                path="/manager/pricing"
+                element={<PricingManagement state={state} />}
+              />
             </Routes>
             </SafeAreaView>
           </NativeRouter>
           </UserContext.Provider>
         </SocketProvider>
+        </PricingProvider>
       </StripeProvider>
     </AuthProvider>
   );

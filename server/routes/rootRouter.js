@@ -15,6 +15,7 @@ const jobPhotosRouter = require("./api/v1/jobPhotosRouter");
 const calendarSyncRouter = require("./api/v1/calendarSyncRouter");
 const managerDashboardRouter = require("./api/v1/managerDashboardRouter");
 const termsRouter = require("./api/v1/termsRouter");
+const pricingRouter = require("./api/v1/pricingRouter");
 
 const rootRouter = new express.Router();
 
@@ -33,6 +34,7 @@ rootRouter.use("/api/v1/job-photos", jobPhotosRouter);
 rootRouter.use("/api/v1/calendar-sync", calendarSyncRouter);
 rootRouter.use("/api/v1/manager-dashboard", managerDashboardRouter);
 rootRouter.use("/api/v1/terms", termsRouter);
+rootRouter.use("/api/v1/pricing", pricingRouter);
 
 rootRouter.use("/", clientRouter);
 

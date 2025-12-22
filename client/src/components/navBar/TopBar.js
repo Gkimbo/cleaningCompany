@@ -21,6 +21,7 @@ import EditHomeButton from "./EditHomeButton";
 import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
 import HomeButton from "./HomeButton";
 import ManageEmployees from "./ManageEmployeeButton";
+import ManagePricingButton from "./ManagePricingButton";
 import MyRequestsButton from "./MyRequestsButton";
 import ScheduleCleaningButton from "./ScheduleCleaningButton";
 import SeeAllAppointments from "./SeeAllAppointmentsButton";
@@ -91,6 +92,7 @@ const TopBar = ({ dispatch, state }) => {
                       {state.account === "manager1" ? (
                         <>
                           <ManageEmployees closeModal={closeModal} />
+                          <ManagePricingButton closeModal={closeModal} />
                           <SeeAllAppointments closeModal={closeModal} />
                           <UnassignedAppointmentsButton
                             closeModal={closeModal}

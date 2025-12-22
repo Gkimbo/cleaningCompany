@@ -2,37 +2,37 @@
  * Frontend Pricing Consolidation Tests
  *
  * These tests verify that all pricing throughout the frontend comes from the
- * centralized config in companyInfo.js. If you change pricing values in
- * the config, all dependent code should automatically use the new values.
+ * centralized PricingContext which fetches from the database. The defaultPricing
+ * in PricingContext serves as fallback when the API is unavailable.
  */
 
 import {
-  cleaningCompany,
-  TIME_WINDOW_OPTIONS,
+  getTimeWindowOptions,
   getTimeWindowSurcharge,
   calculateBasePrice,
-} from "../../src/services/data/companyInfo";
+  defaultPricing,
+} from "../../src/context/PricingContext";
 
-describe("Frontend Pricing Consolidation - Config Source of Truth", () => {
-  describe("companyInfo.js has expected structure", () => {
-    it("should have pricing object with all required fields", () => {
-      expect(cleaningCompany.pricing).toBeDefined();
-      expect(cleaningCompany.pricing).toHaveProperty("basePrice");
-      expect(cleaningCompany.pricing).toHaveProperty("extraBedBathFee");
-      expect(cleaningCompany.pricing).toHaveProperty("linens");
-      expect(cleaningCompany.pricing).toHaveProperty("timeWindows");
-      expect(cleaningCompany.pricing).toHaveProperty("cancellation");
-      expect(cleaningCompany.pricing).toHaveProperty("platform");
+describe("PricingContext - Default Pricing Structure", () => {
+  describe("defaultPricing has expected structure", () => {
+    it("should have all required top-level fields", () => {
+      expect(defaultPricing).toBeDefined();
+      expect(defaultPricing).toHaveProperty("basePrice");
+      expect(defaultPricing).toHaveProperty("extraBedBathFee");
+      expect(defaultPricing).toHaveProperty("linens");
+      expect(defaultPricing).toHaveProperty("timeWindows");
+      expect(defaultPricing).toHaveProperty("cancellation");
+      expect(defaultPricing).toHaveProperty("platform");
     });
 
     it("should have all linen pricing fields", () => {
-      expect(cleaningCompany.pricing.linens).toHaveProperty("sheetFeePerBed");
-      expect(cleaningCompany.pricing.linens).toHaveProperty("towelFee");
-      expect(cleaningCompany.pricing.linens).toHaveProperty("faceClothFee");
+      expect(defaultPricing.linens).toHaveProperty("sheetFeePerBed");
+      expect(defaultPricing.linens).toHaveProperty("towelFee");
+      expect(defaultPricing.linens).toHaveProperty("faceClothFee");
     });
 
     it("should have all time window options with surcharge and label", () => {
-      const { timeWindows } = cleaningCompany.pricing;
+      const { timeWindows } = defaultPricing;
 
       expect(timeWindows).toHaveProperty("anytime");
       expect(timeWindows).toHaveProperty("10-3");
@@ -48,46 +48,22 @@ describe("Frontend Pricing Consolidation - Config Source of Truth", () => {
     });
 
     it("should have all cancellation fields", () => {
-      expect(cleaningCompany.pricing.cancellation).toHaveProperty("fee");
-      expect(cleaningCompany.pricing.cancellation).toHaveProperty("windowDays");
-      expect(cleaningCompany.pricing.cancellation).toHaveProperty("homeownerPenaltyDays");
-      expect(cleaningCompany.pricing.cancellation).toHaveProperty("cleanerPenaltyDays");
-      expect(cleaningCompany.pricing.cancellation).toHaveProperty("refundPercentage");
+      expect(defaultPricing.cancellation).toHaveProperty("fee");
+      expect(defaultPricing.cancellation).toHaveProperty("windowDays");
+      expect(defaultPricing.cancellation).toHaveProperty("homeownerPenaltyDays");
+      expect(defaultPricing.cancellation).toHaveProperty("cleanerPenaltyDays");
+      expect(defaultPricing.cancellation).toHaveProperty("refundPercentage");
     });
 
     it("should have platform fee", () => {
-      expect(cleaningCompany.pricing.platform).toHaveProperty("feePercent");
-    });
-  });
-
-  describe("Backward-compatible getters work correctly", () => {
-    it("basePrice getter returns pricing.basePrice", () => {
-      expect(cleaningCompany.basePrice).toBe(cleaningCompany.pricing.basePrice);
-    });
-
-    it("extraBedBathFee getter returns pricing.extraBedBathFee", () => {
-      expect(cleaningCompany.extraBedBathFee).toBe(cleaningCompany.pricing.extraBedBathFee);
-    });
-
-    it("sheetFeePerBed getter returns pricing.linens.sheetFeePerBed", () => {
-      expect(cleaningCompany.sheetFeePerBed).toBe(cleaningCompany.pricing.linens.sheetFeePerBed);
-    });
-
-    it("towelFee getter returns pricing.linens.towelFee", () => {
-      expect(cleaningCompany.towelFee).toBe(cleaningCompany.pricing.linens.towelFee);
-    });
-
-    it("faceClothFee getter returns pricing.linens.faceClothFee", () => {
-      expect(cleaningCompany.faceClothFee).toBe(cleaningCompany.pricing.linens.faceClothFee);
-    });
-
-    it("cancellationFee getter returns pricing.cancellation.fee", () => {
-      expect(cleaningCompany.cancellationFee).toBe(cleaningCompany.pricing.cancellation.fee);
+      expect(defaultPricing.platform).toHaveProperty("feePercent");
     });
   });
 });
 
-describe("TIME_WINDOW_OPTIONS helper", () => {
+describe("getTimeWindowOptions helper", () => {
+  const TIME_WINDOW_OPTIONS = getTimeWindowOptions(defaultPricing);
+
   it("should be an array with all time windows", () => {
     expect(Array.isArray(TIME_WINDOW_OPTIONS)).toBe(true);
     expect(TIME_WINDOW_OPTIONS.length).toBe(4);
@@ -110,16 +86,16 @@ describe("TIME_WINDOW_OPTIONS helper", () => {
     expect(values).toContain("12-2");
   });
 
-  it("should have surcharges matching config", () => {
+  it("should have surcharges matching pricing config", () => {
     TIME_WINDOW_OPTIONS.forEach((option) => {
-      const configSurcharge = cleaningCompany.pricing.timeWindows[option.value].surcharge;
+      const configSurcharge = defaultPricing.timeWindows[option.value].surcharge;
       expect(option.surcharge).toBe(configSurcharge);
     });
   });
 
-  it("should have labels matching config", () => {
+  it("should have labels matching pricing config", () => {
     TIME_WINDOW_OPTIONS.forEach((option) => {
-      const configLabel = cleaningCompany.pricing.timeWindows[option.value].label;
+      const configLabel = defaultPricing.timeWindows[option.value].label;
       expect(option.label).toBe(configLabel);
     });
   });
@@ -127,123 +103,123 @@ describe("TIME_WINDOW_OPTIONS helper", () => {
 
 describe("getTimeWindowSurcharge helper", () => {
   it("should return correct surcharge for each time window", () => {
-    expect(getTimeWindowSurcharge("anytime")).toBe(
-      cleaningCompany.pricing.timeWindows.anytime.surcharge
+    expect(getTimeWindowSurcharge(defaultPricing, "anytime")).toBe(
+      defaultPricing.timeWindows.anytime.surcharge
     );
-    expect(getTimeWindowSurcharge("10-3")).toBe(
-      cleaningCompany.pricing.timeWindows["10-3"].surcharge
+    expect(getTimeWindowSurcharge(defaultPricing, "10-3")).toBe(
+      defaultPricing.timeWindows["10-3"].surcharge
     );
-    expect(getTimeWindowSurcharge("11-4")).toBe(
-      cleaningCompany.pricing.timeWindows["11-4"].surcharge
+    expect(getTimeWindowSurcharge(defaultPricing, "11-4")).toBe(
+      defaultPricing.timeWindows["11-4"].surcharge
     );
-    expect(getTimeWindowSurcharge("12-2")).toBe(
-      cleaningCompany.pricing.timeWindows["12-2"].surcharge
+    expect(getTimeWindowSurcharge(defaultPricing, "12-2")).toBe(
+      defaultPricing.timeWindows["12-2"].surcharge
     );
   });
 
   it("should return 0 for unknown time window", () => {
-    expect(getTimeWindowSurcharge("invalid")).toBe(0);
-    expect(getTimeWindowSurcharge(null)).toBe(0);
-    expect(getTimeWindowSurcharge(undefined)).toBe(0);
+    expect(getTimeWindowSurcharge(defaultPricing, "invalid")).toBe(0);
+    expect(getTimeWindowSurcharge(defaultPricing, null)).toBe(0);
+    expect(getTimeWindowSurcharge(defaultPricing, undefined)).toBe(0);
   });
 });
 
 describe("calculateBasePrice helper", () => {
   it("should calculate price for 1 bed, 1 bath correctly", () => {
-    const price = calculateBasePrice(1, 1);
-    expect(price).toBe(cleaningCompany.pricing.basePrice);
+    const price = calculateBasePrice(defaultPricing, 1, 1);
+    expect(price).toBe(defaultPricing.basePrice);
   });
 
   it("should add extraBedBathFee for extra beds", () => {
-    const price = calculateBasePrice(3, 1);
+    const price = calculateBasePrice(defaultPricing, 3, 1);
     // 2 extra beds
     const expected =
-      cleaningCompany.pricing.basePrice + 2 * cleaningCompany.pricing.extraBedBathFee;
+      defaultPricing.basePrice + 2 * defaultPricing.extraBedBathFee;
     expect(price).toBe(expected);
   });
 
   it("should add extraBedBathFee for extra baths", () => {
-    const price = calculateBasePrice(1, 3);
+    const price = calculateBasePrice(defaultPricing, 1, 3);
     // 2 extra baths
     const expected =
-      cleaningCompany.pricing.basePrice + 2 * cleaningCompany.pricing.extraBedBathFee;
+      defaultPricing.basePrice + 2 * defaultPricing.extraBedBathFee;
     expect(price).toBe(expected);
   });
 
   it("should add extraBedBathFee for both extra beds and baths", () => {
-    const price = calculateBasePrice(4, 3);
+    const price = calculateBasePrice(defaultPricing, 4, 3);
     // 3 extra beds + 2 extra baths = 5 extras
     const expected =
-      cleaningCompany.pricing.basePrice + 5 * cleaningCompany.pricing.extraBedBathFee;
+      defaultPricing.basePrice + 5 * defaultPricing.extraBedBathFee;
     expect(price).toBe(expected);
   });
 
   it("should handle string inputs", () => {
-    const price = calculateBasePrice("2", "2");
+    const price = calculateBasePrice(defaultPricing, "2", "2");
     const expected =
-      cleaningCompany.pricing.basePrice + 2 * cleaningCompany.pricing.extraBedBathFee;
+      defaultPricing.basePrice + 2 * defaultPricing.extraBedBathFee;
     expect(price).toBe(expected);
   });
 });
 
-describe("Default pricing values are correct", () => {
+describe("Default pricing values are correct (fallback values)", () => {
   it("should have correct base price", () => {
-    expect(cleaningCompany.pricing.basePrice).toBe(150);
+    expect(defaultPricing.basePrice).toBe(150);
   });
 
   it("should have correct extra bed/bath fee", () => {
-    expect(cleaningCompany.pricing.extraBedBathFee).toBe(50);
+    expect(defaultPricing.extraBedBathFee).toBe(50);
   });
 
   it("should have correct sheet fee per bed", () => {
-    expect(cleaningCompany.pricing.linens.sheetFeePerBed).toBe(30);
+    expect(defaultPricing.linens.sheetFeePerBed).toBe(30);
   });
 
   it("should have correct towel fee", () => {
-    expect(cleaningCompany.pricing.linens.towelFee).toBe(5);
+    expect(defaultPricing.linens.towelFee).toBe(5);
   });
 
   it("should have correct face cloth fee", () => {
-    expect(cleaningCompany.pricing.linens.faceClothFee).toBe(2);
+    expect(defaultPricing.linens.faceClothFee).toBe(2);
   });
 
   it("should have correct time window surcharges", () => {
-    expect(cleaningCompany.pricing.timeWindows.anytime.surcharge).toBe(0);
-    expect(cleaningCompany.pricing.timeWindows["10-3"].surcharge).toBe(25);
-    expect(cleaningCompany.pricing.timeWindows["11-4"].surcharge).toBe(25);
-    expect(cleaningCompany.pricing.timeWindows["12-2"].surcharge).toBe(30);
+    expect(defaultPricing.timeWindows.anytime.surcharge).toBe(0);
+    expect(defaultPricing.timeWindows["10-3"].surcharge).toBe(25);
+    expect(defaultPricing.timeWindows["11-4"].surcharge).toBe(25);
+    expect(defaultPricing.timeWindows["12-2"].surcharge).toBe(30);
   });
 
   it("should have correct cancellation settings", () => {
-    expect(cleaningCompany.pricing.cancellation.fee).toBe(25);
-    expect(cleaningCompany.pricing.cancellation.windowDays).toBe(7);
-    expect(cleaningCompany.pricing.cancellation.homeownerPenaltyDays).toBe(3);
-    expect(cleaningCompany.pricing.cancellation.cleanerPenaltyDays).toBe(4);
-    expect(cleaningCompany.pricing.cancellation.refundPercentage).toBe(0.5);
+    expect(defaultPricing.cancellation.fee).toBe(25);
+    expect(defaultPricing.cancellation.windowDays).toBe(7);
+    expect(defaultPricing.cancellation.homeownerPenaltyDays).toBe(3);
+    expect(defaultPricing.cancellation.cleanerPenaltyDays).toBe(4);
+    expect(defaultPricing.cancellation.refundPercentage).toBe(0.5);
   });
 
   it("should have correct platform fee", () => {
-    expect(cleaningCompany.pricing.platform.feePercent).toBe(0.1);
+    expect(defaultPricing.platform.feePercent).toBe(0.1);
   });
 });
 
-describe("Linen price calculations use config", () => {
+describe("Linen price calculations use pricing config", () => {
   it("should calculate sheet price correctly", () => {
     const numBeds = 3;
-    const sheetPrice = numBeds * cleaningCompany.pricing.linens.sheetFeePerBed;
+    const sheetPrice = numBeds * defaultPricing.linens.sheetFeePerBed;
     expect(sheetPrice).toBe(90); // 3 * $30
   });
 
   it("should calculate towel price for default bathroom config", () => {
     // Default: 2 towels + 1 face cloth per bathroom
     const numBaths = 2;
-    const { towelFee, faceClothFee } = cleaningCompany.pricing.linens;
+    const { towelFee, faceClothFee } = defaultPricing.linens;
     const towelPrice = numBaths * (2 * towelFee + 1 * faceClothFee);
     expect(towelPrice).toBe(24); // 2 * (2*$5 + 1*$2) = 2 * $12
   });
 
   it("should calculate custom towel configuration correctly", () => {
-    const { towelFee, faceClothFee } = cleaningCompany.pricing.linens;
+    const { towelFee, faceClothFee } = defaultPricing.linens;
 
     const bathroomConfigs = [
       { bathroomNumber: 1, towels: 3, faceCloths: 2 },
@@ -261,10 +237,10 @@ describe("Linen price calculations use config", () => {
   });
 });
 
-describe("Cancellation calculations use config", () => {
+describe("Cancellation calculations use pricing config", () => {
   it("should calculate partial refund correctly", () => {
     const appointmentPrice = 200;
-    const refundPercentage = cleaningCompany.pricing.cancellation.refundPercentage;
+    const refundPercentage = defaultPricing.cancellation.refundPercentage;
     const refund = appointmentPrice * refundPercentage;
 
     expect(refund).toBe(100); // 50% of $200
@@ -272,8 +248,8 @@ describe("Cancellation calculations use config", () => {
 
   it("should calculate cleaner payout on cancellation correctly", () => {
     const appointmentPrice = 200;
-    const { refundPercentage } = cleaningCompany.pricing.cancellation;
-    const { feePercent } = cleaningCompany.pricing.platform;
+    const { refundPercentage } = defaultPricing.cancellation;
+    const { feePercent } = defaultPricing.platform;
 
     const customerPortion = appointmentPrice * refundPercentage; // 50%
     const cleanerGross = appointmentPrice * refundPercentage; // 50%
@@ -285,7 +261,7 @@ describe("Cancellation calculations use config", () => {
   });
 
   it("should check penalty window using config days", () => {
-    const { homeownerPenaltyDays, cleanerPenaltyDays } = cleaningCompany.pricing.cancellation;
+    const { homeownerPenaltyDays, cleanerPenaltyDays } = defaultPricing.cancellation;
 
     // Verify these are the expected values
     expect(homeownerPenaltyDays).toBe(3);
@@ -301,9 +277,9 @@ describe("Cancellation calculations use config", () => {
   });
 });
 
-describe("Full appointment price calculation uses config", () => {
+describe("Full appointment price calculation uses pricing config", () => {
   it("should calculate complete appointment price correctly", () => {
-    const { pricing } = cleaningCompany;
+    const pricing = defaultPricing;
 
     // Scenario: 3 bed, 2 bath, sheets, towels (default config), 10-3 time
     const numBeds = 3;
@@ -339,33 +315,33 @@ describe("Full appointment price calculation uses config", () => {
   });
 });
 
-describe("Display strings should use config values", () => {
+describe("Display strings should use pricing config values", () => {
   it("should format sheet price string correctly", () => {
-    const { sheetFeePerBed } = cleaningCompany.pricing.linens;
+    const { sheetFeePerBed } = defaultPricing.linens;
     const priceString = `$${sheetFeePerBed}/bed`;
     expect(priceString).toBe("$30/bed");
   });
 
   it("should format towel price string correctly", () => {
-    const { towelFee } = cleaningCompany.pricing.linens;
+    const { towelFee } = defaultPricing.linens;
     const priceString = `$${towelFee}/towel`;
     expect(priceString).toBe("$5/towel");
   });
 
   it("should format face cloth price string correctly", () => {
-    const { faceClothFee } = cleaningCompany.pricing.linens;
+    const { faceClothFee } = defaultPricing.linens;
     const priceString = `$${faceClothFee} each`;
     expect(priceString).toBe("$2 each");
   });
 
   it("should format refund percentage string correctly", () => {
-    const { refundPercentage } = cleaningCompany.pricing.cancellation;
+    const { refundPercentage } = defaultPricing.cancellation;
     const percentString = `${refundPercentage * 100}%`;
     expect(percentString).toBe("50%");
   });
 
   it("should format platform fee percentage string correctly", () => {
-    const { feePercent } = cleaningCompany.pricing.platform;
+    const { feePercent } = defaultPricing.platform;
     const percentString = `${feePercent * 100}%`;
     expect(percentString).toBe("10%");
   });

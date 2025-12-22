@@ -314,10 +314,41 @@ async function updateAllHomesServiceAreaStatus(
   }
 }
 
+/**
+ * Get pricing from database with fallback to static config
+ * @returns {Promise<object>} Pricing configuration object
+ */
+async function getPricingConfig() {
+  try {
+    // Dynamic import to avoid circular dependency
+    const { PricingConfig } = require("../models");
+    const dbPricing = await PricingConfig.getFormattedPricing();
+    if (dbPricing) {
+      return dbPricing;
+    }
+  } catch (error) {
+    // PricingConfig model may not be loaded yet during startup
+    console.log("[BusinessConfig] Using static pricing config (DB not available)");
+  }
+  return businessConfig.pricing;
+}
+
+/**
+ * Get time window surcharge from database or static config
+ * @param {string} timeWindow - Time window selection
+ * @returns {Promise<number>} Surcharge amount
+ */
+async function getTimeWindowSurchargeAsync(timeWindow) {
+  const pricing = await getPricingConfig();
+  return pricing.timeWindows[timeWindow] || 0;
+}
+
 module.exports = {
   businessConfig,
   isInServiceArea,
   getCleanersNeeded,
   getTimeWindowSurcharge,
+  getTimeWindowSurchargeAsync,
+  getPricingConfig,
   updateAllHomesServiceAreaStatus,
 };

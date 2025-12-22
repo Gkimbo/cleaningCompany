@@ -4,7 +4,7 @@ import { Calendar } from "react-native-calendars";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
-import { cleaningCompany, getTimeWindowSurcharge } from "../../services/data/companyInfo";
+import { usePricing, getTimeWindowSurcharge } from "../../context/PricingContext";
 
 const CalendarComponent = ({
   onDatesSelected,
@@ -29,14 +29,16 @@ const CalendarComponent = ({
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
   const navigate = useNavigate();
 
+  // Get pricing from database
+  const { pricing } = usePricing();
+
   const calculatePrice = () => {
-    const { pricing } = cleaningCompany;
     const { basePrice, extraBedBathFee } = pricing;
     const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;
     let price = 0;
 
-    // Time window surcharge from config
-    price += getTimeWindowSurcharge(timeToBeCompleted);
+    // Time window surcharge from database config
+    price += getTimeWindowSurcharge(pricing, timeToBeCompleted);
 
     // Linen pricing with configuration-based pricing
     if (sheets === "yes") {
@@ -164,7 +166,7 @@ const CalendarComponent = ({
     setAppointmentToCancel(appointment);
 
     if (isWithinWeek) {
-      setCancellationFee(cleaningCompany.pricing.cancellation.fee);
+      setCancellationFee(pricing.cancellation.fee);
     } else {
       setCancellationFee(0);
     }

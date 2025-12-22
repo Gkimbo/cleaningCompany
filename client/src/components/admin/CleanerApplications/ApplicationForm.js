@@ -23,6 +23,7 @@ import {
   typography,
   responsive,
 } from "../../../services/styles/theme";
+import { usePricing, defaultPricing } from "../../../context/PricingContext";
 
 const US_STATES = [
   "AL",
@@ -80,6 +81,34 @@ const US_STATES = [
 const { width } = Dimensions.get("window");
 
 const CleanerApplicationForm = () => {
+  const { pricing: fetchedPricing, loading } = usePricing();
+
+  // Use fetched pricing if available, otherwise fall back to defaults
+  const pricing = fetchedPricing?.basePrice ? fetchedPricing : defaultPricing;
+
+  // Calculate cleaner earnings (base price minus platform fee)
+  const platformFeePercent = pricing.platform?.feePercent ?? defaultPricing.platform.feePercent;
+  const minCleanerPay = Math.round(
+    (pricing.basePrice ?? defaultPricing.basePrice) * (1 - platformFeePercent)
+  );
+  // Max pay assumes a 2bed/2bath (1 extra bed + 1 extra bath = 2 extras)
+  const maxCleanerPay = Math.round(
+    ((pricing.basePrice ?? defaultPricing.basePrice) + (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee) * 2) * (1 - platformFeePercent)
+  );
+
+  // Calculate weekly/monthly/yearly earnings for different tiers
+  const calculateEarnings = (housesPerDay, daysPerWeek = 5) => {
+    const avgPayPerHouse = Math.round((minCleanerPay + maxCleanerPay) / 2);
+    const weekly = housesPerDay * daysPerWeek * avgPayPerHouse;
+    const monthly = weekly * 4;
+    const yearly = weekly * 52;
+    return { weekly, monthly, yearly };
+  };
+
+  const partTimeEarnings = calculateEarnings(1.5); // 1-2 houses/day average
+  const fullTimeEarnings = calculateEarnings(3);
+  const hustleModeEarnings = calculateEarnings(4);
+
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     // Basic Information
@@ -467,8 +496,7 @@ const CleanerApplicationForm = () => {
     {
       icon: "💰",
       title: "Earn Great Money",
-      description:
-        "Earn $100-$125 per house cleaned. Average cleaners make $1,500+ per week.",
+      description: `Earn $${minCleanerPay}-$${maxCleanerPay} per house cleaned. Average cleaners make $${fullTimeEarnings.weekly.toLocaleString()}+ per week.`,
     },
     {
       icon: "📈",
@@ -527,7 +555,8 @@ const CleanerApplicationForm = () => {
               lineHeight: responsive(34, 44, 52),
             }}
           >
-            Earn $100-$125{"\n"}Per House Cleaned
+            Earn ${minCleanerPay}-${maxCleanerPay}
+            {"\n"}Per House Cleaned
           </Text>
           <Text
             style={{
@@ -595,7 +624,7 @@ const CleanerApplicationForm = () => {
               color: colors.success[600],
             }}
           >
-            $1,500+
+            ${fullTimeEarnings.weekly.toLocaleString()}+
           </Text>
           <Text
             style={{
@@ -604,7 +633,8 @@ const CleanerApplicationForm = () => {
               textAlign: "center",
             }}
           >
-            Based on 3 houses/day, 5 days/week
+            Based on 3 houses/day, 5 days/week at ${minCleanerPay}-$
+            {maxCleanerPay}/house
           </Text>
         </View>
 
@@ -711,23 +741,23 @@ const CleanerApplicationForm = () => {
             {[
               {
                 hours: "1-2 houses/day",
-                week: "$750+",
-                month: "$3,000+",
-                year: "$39,000+",
+                week: `$${partTimeEarnings.weekly.toLocaleString()}+`,
+                month: `$${partTimeEarnings.monthly.toLocaleString()}+`,
+                year: `$${partTimeEarnings.yearly.toLocaleString()}+`,
                 label: "Part-Time",
               },
               {
                 hours: "3 houses/day",
-                week: "$1,500+",
-                month: "$6,000+",
-                year: "$78,000+",
+                week: `$${fullTimeEarnings.weekly.toLocaleString()}+`,
+                month: `$${fullTimeEarnings.monthly.toLocaleString()}+`,
+                year: `$${fullTimeEarnings.yearly.toLocaleString()}+`,
                 label: "Full-Time",
               },
               {
                 hours: "4+ houses/day",
-                week: "$2,500+",
-                month: "$10,000+",
-                year: "$130,000+",
+                week: `$${hustleModeEarnings.weekly.toLocaleString()}+`,
+                month: `$${hustleModeEarnings.monthly.toLocaleString()}+`,
+                year: `$${hustleModeEarnings.yearly.toLocaleString()}+`,
                 label: "Hustle Mode",
               },
             ].map((tier, index) => (
@@ -845,8 +875,8 @@ const CleanerApplicationForm = () => {
               marginTop: spacing.xl,
             }}
           >
-            *Earnings based on $100-$125 per house. Results vary by location and
-            availability.
+            *Earnings based on ${minCleanerPay}-${maxCleanerPay} per house.
+            Results vary by location and availability.
           </Text>
         </View>
 
@@ -1130,7 +1160,7 @@ const CleanerApplicationForm = () => {
             },
             {
               q: "Do I need my own supplies?",
-              a: "Nope! All cleaning supplies and equipment are provided at each job.",
+              a: "Yes! Some homes will have a few supplies but its always best to bring the cleaning suppies you like to use.",
             },
             {
               q: "How do I get paid?",
