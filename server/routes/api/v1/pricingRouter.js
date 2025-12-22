@@ -6,7 +6,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { User, PricingConfig } = require("../../../models");
-const { businessConfig } = require("../../../config/businessConfig");
+const { getPricingConfig } = require("../../../config/businessConfig");
 
 const pricingRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -51,17 +51,19 @@ pricingRouter.get("/current", async (req, res) => {
       });
     }
 
-    // Fall back to static config
+    // Fall back to static config via getPricingConfig (which has its own fallback)
+    const fallbackPricing = await getPricingConfig();
     return res.json({
       source: "config",
-      pricing: businessConfig.pricing,
+      pricing: fallbackPricing,
     });
   } catch (error) {
     console.error("[Pricing API] Error fetching current pricing:", error);
-    // On error, fall back to static config
+    // On error, fall back to static config via getPricingConfig
+    const fallbackPricing = await getPricingConfig();
     return res.json({
       source: "config",
-      pricing: businessConfig.pricing,
+      pricing: fallbackPricing,
     });
   }
 });
@@ -82,28 +84,29 @@ pricingRouter.get("/config", verifyManager, async (req, res) => {
       });
     }
 
-    // No database config, return static values
+    // No database config, return values from getPricingConfig (which has fallback to static)
+    const pricing = await getPricingConfig();
     return res.json({
       source: "config",
       config: null,
-      formattedPricing: businessConfig.pricing,
+      formattedPricing: pricing,
       staticDefaults: {
-        basePrice: businessConfig.pricing.basePrice,
-        extraBedBathFee: businessConfig.pricing.extraBedBathFee,
-        sheetFeePerBed: businessConfig.pricing.linens.sheetFeePerBed,
-        towelFee: businessConfig.pricing.linens.towelFee,
-        faceClothFee: businessConfig.pricing.linens.faceClothFee,
-        timeWindowAnytime: businessConfig.pricing.timeWindows.anytime,
-        timeWindow10To3: businessConfig.pricing.timeWindows["10-3"],
-        timeWindow11To4: businessConfig.pricing.timeWindows["11-4"],
-        timeWindow12To2: businessConfig.pricing.timeWindows["12-2"],
-        cancellationFee: businessConfig.pricing.cancellation.fee,
-        cancellationWindowDays: businessConfig.pricing.cancellation.windowDays,
-        homeownerPenaltyDays: businessConfig.pricing.cancellation.homeownerPenaltyDays,
-        cleanerPenaltyDays: businessConfig.pricing.cancellation.cleanerPenaltyDays,
-        refundPercentage: businessConfig.pricing.cancellation.refundPercentage,
-        platformFeePercent: businessConfig.pricing.platform.feePercent,
-        highVolumeFee: businessConfig.pricing.highVolumeFee,
+        basePrice: pricing.basePrice,
+        extraBedBathFee: pricing.extraBedBathFee,
+        sheetFeePerBed: pricing.linens.sheetFeePerBed,
+        towelFee: pricing.linens.towelFee,
+        faceClothFee: pricing.linens.faceClothFee,
+        timeWindowAnytime: pricing.timeWindows.anytime,
+        timeWindow10To3: pricing.timeWindows["10-3"],
+        timeWindow11To4: pricing.timeWindows["11-4"],
+        timeWindow12To2: pricing.timeWindows["12-2"],
+        cancellationFee: pricing.cancellation.fee,
+        cancellationWindowDays: pricing.cancellation.windowDays,
+        homeownerPenaltyDays: pricing.cancellation.homeownerPenaltyDays,
+        cleanerPenaltyDays: pricing.cancellation.cleanerPenaltyDays,
+        refundPercentage: pricing.cancellation.refundPercentage,
+        platformFeePercent: pricing.platform.feePercent,
+        highVolumeFee: pricing.highVolumeFee,
       },
     });
   } catch (error) {

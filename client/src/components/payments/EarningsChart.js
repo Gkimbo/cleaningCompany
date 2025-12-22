@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { usePricing } from "../../context/PricingContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -137,6 +138,8 @@ const barChartStyles = StyleSheet.create({
 });
 
 const EarningsChart = ({ appointments = [], currentUserId }) => {
+  const { pricing } = usePricing();
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const [selectedRange, setSelectedRange] = useState("1M");
   const [chartData, setChartData] = useState({ data: [], labels: [] });
   const [stats, setStats] = useState({ total: 0, average: 0, change: 0 });
@@ -183,11 +186,11 @@ const EarningsChart = ({ appointments = [], currentUserId }) => {
       return apptDate >= startDate && apptDate <= now;
     });
 
-    // Calculate cleaner earnings (90% of price, split among cleaners)
+    // Calculate cleaner earnings (share of price, split among cleaners)
     const calculateEarnings = (appt) => {
       const numCleaners = appt.employeesAssigned?.length || 1;
       const price = parseFloat(appt.price) || 0;
-      return (price / numCleaners) * 0.9;
+      return (price / numCleaners) * cleanerSharePercent;
     };
 
     // Group earnings by period

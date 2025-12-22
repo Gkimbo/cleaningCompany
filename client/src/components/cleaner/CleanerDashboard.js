@@ -24,6 +24,7 @@ import TaxFormsSection from "../tax/TaxFormsSection";
 import ReviewsOverview from "../reviews/ReviewsOverview";
 import TodaysAppointment from "../employeeAssignments/tiles/TodaysAppointment";
 import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlow";
+import { usePricing } from "../../context/PricingContext";
 
 const { width } = Dimensions.get("window");
 
@@ -76,7 +77,7 @@ const QuickActionButton = ({ title, onPress, color = colors.primary[600] }) => (
 );
 
 // Upcoming Appointment Card Component
-const UpcomingAppointmentCard = ({ appointment, home, onPress }) => {
+const UpcomingAppointmentCard = ({ appointment, home, onPress, cleanerSharePercent }) => {
   const appointmentDate = new Date(appointment.date);
   const today = new Date();
   const tomorrow = new Date(today);
@@ -92,7 +93,7 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress }) => {
   };
 
   const totalPrice = Number(appointment.price);
-  const payout = totalPrice * 0.9;
+  const payout = totalPrice * cleanerSharePercent;
 
   return (
     <Pressable
@@ -156,6 +157,8 @@ const PendingRequestCard = ({ request, onPress }) => {
 
 const CleanerDashboard = ({ state, dispatch }) => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [appointments, setAppointments] = useState([]);
@@ -279,7 +282,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
   // Calculate expected payout
   const expectedPayout = sortedAppointments
     .filter((apt) => !apt.completed && new Date(apt.date) >= today)
-    .reduce((sum, apt) => sum + Number(apt.price) * 0.9, 0);
+    .reduce((sum, apt) => sum + Number(apt.price) * cleanerSharePercent, 0);
 
   const handleJobCompleted = (data) => {
     setShowCompletionFlow(false);
@@ -435,6 +438,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                   appointment={apt}
                   home={homeDetails[apt.homeId]}
                   onPress={() => navigate("/employee-assignments")}
+                  cleanerSharePercent={cleanerSharePercent}
                 />
               ))}
             </View>

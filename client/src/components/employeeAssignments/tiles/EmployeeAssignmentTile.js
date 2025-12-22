@@ -3,6 +3,7 @@ import { ActivityIndicator, LayoutAnimation, Pressable, StyleSheet, Text, View }
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import CleanerCancellationWarningModal from "../../modals/CleanerCancellationWarningModal";
+import { usePricing } from "../../../context/PricingContext";
 
 const EmployeeAssignmentTile = ({
   id,
@@ -24,6 +25,7 @@ const EmployeeAssignmentTile = ({
   onCancelComplete,
 }) => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
   const [expandWindow, setExpandWindow] = useState(false);
   const [home, setHome] = useState({
     address: "",
@@ -40,7 +42,8 @@ const EmployeeAssignmentTile = ({
   const [cancelLoading, setCancelLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const amount = Number(price) * 0.9;
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+  const amount = Number(price) * cleanerSharePercent;
 
   const formatDate = (dateString) => {
     const date = new Date(dateString + "T00:00:00");

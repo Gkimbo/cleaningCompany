@@ -1,19 +1,18 @@
 /**
  * Price Calculation Service
- * Uses pricing values from businessConfig.js
+ * Uses pricing values from database via getPricingConfig()
  */
-const { businessConfig } = require("../config/businessConfig");
-
-// Get pricing config
-const { pricing } = businessConfig;
+const { getPricingConfig } = require("../config/businessConfig");
 
 /**
  * Calculate the price for linen services
  * @param {Array} sheetConfigs - Array of bed configurations with needsSheets flag
  * @param {Array} towelConfigs - Array of bathroom configurations with towel/facecloth counts
- * @returns {number} Total linen price
+ * @param {Object} pricingConfig - Optional: pricing config (fetched if not provided)
+ * @returns {Promise<number>} Total linen price
  */
-const calculateLinenPrice = (sheetConfigs, towelConfigs) => {
+const calculateLinenPrice = async (sheetConfigs, towelConfigs, pricingConfig = null) => {
+  const pricing = pricingConfig || await getPricingConfig();
   let price = 0;
   const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;
 
@@ -43,17 +42,20 @@ const calculateLinenPrice = (sheetConfigs, towelConfigs) => {
  * @param {string} timeToBeCompleted - Time window preference
  * @param {Array} sheetConfigs - Optional: specific bed configurations
  * @param {Array} towelConfigs - Optional: specific bathroom configurations
- * @returns {number} Total appointment price
+ * @param {Object} pricingConfig - Optional: pricing config (fetched if not provided)
+ * @returns {Promise<number>} Total appointment price
  */
-const calculatePrice = (
+const calculatePrice = async (
   sheets,
   towels,
   numBeds,
   numBaths,
   timeToBeCompleted,
   sheetConfigs = null,
-  towelConfigs = null
+  towelConfigs = null,
+  pricingConfig = null
 ) => {
+  const pricing = pricingConfig || await getPricingConfig();
   let price = 0;
   const { basePrice, extraBedBathFee } = pricing;
   const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;

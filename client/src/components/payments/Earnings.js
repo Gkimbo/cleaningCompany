@@ -12,8 +12,11 @@ import StripeConnectOnboarding from "./StripeConnectOnboarding";
 import PayoutHistory from "./PayoutHistory";
 import EarningsChart from "./EarningsChart";
 import { API_BASE } from "../../services/config";
+import { usePricing } from "../../context/PricingContext";
 
 const Earnings = ({ state, dispatch }) => {
+  const { pricing } = usePricing();
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const [activeTab, setActiveTab] = useState("overview");
   const [earnings, setEarnings] = useState({
     totalEarnings: "0.00",
@@ -127,7 +130,7 @@ const Earnings = ({ state, dispatch }) => {
   const calculateCleanerShare = (price, numCleaners = 1) => {
     const gross = parseFloat(price) || 0;
     const perCleaner = gross / numCleaners;
-    const cleanerShare = perCleaner * 0.9;
+    const cleanerShare = perCleaner * cleanerSharePercent;
     return cleanerShare.toFixed(2);
   };
 

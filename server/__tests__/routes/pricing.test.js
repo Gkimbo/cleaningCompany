@@ -15,36 +15,40 @@ jest.mock("../../models", () => ({
   },
 }));
 
-jest.mock("../../config/businessConfig", () => ({
-  businessConfig: {
-    pricing: {
-      basePrice: 150,
-      extraBedBathFee: 50,
-      linens: {
-        sheetFeePerBed: 30,
-        towelFee: 5,
-        faceClothFee: 2,
-      },
-      timeWindows: {
-        anytime: 0,
-        "10-3": 25,
-        "11-4": 25,
-        "12-2": 30,
-      },
-      cancellation: {
-        fee: 25,
-        windowDays: 7,
-        homeownerPenaltyDays: 3,
-        cleanerPenaltyDays: 4,
-        refundPercentage: 0.5,
-      },
-      platform: {
-        feePercent: 0.1,
-      },
-      highVolumeFee: 50,
+jest.mock("../../config/businessConfig", () => {
+  const mockPricing = {
+    basePrice: 150,
+    extraBedBathFee: 50,
+    linens: {
+      sheetFeePerBed: 30,
+      towelFee: 5,
+      faceClothFee: 2,
     },
-  },
-}));
+    timeWindows: {
+      anytime: 0,
+      "10-3": 25,
+      "11-4": 25,
+      "12-2": 30,
+    },
+    cancellation: {
+      fee: 25,
+      windowDays: 7,
+      homeownerPenaltyDays: 3,
+      cleanerPenaltyDays: 4,
+      refundPercentage: 0.5,
+    },
+    platform: {
+      feePercent: 0.1,
+    },
+    highVolumeFee: 50,
+  };
+  return {
+    businessConfig: {
+      pricing: mockPricing,
+    },
+    getPricingConfig: jest.fn().mockResolvedValue(mockPricing),
+  };
+});
 
 const { User, PricingConfig } = require("../../models");
 

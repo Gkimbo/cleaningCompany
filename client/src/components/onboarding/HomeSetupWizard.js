@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useMemo } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
 import styles from "./OnboardingStyles";
+import { usePricing } from "../../context/PricingContext";
 
 const STEPS = {
   BASICS: 0,
@@ -20,7 +21,8 @@ const STEPS = {
   REVIEW: 3,
 };
 
-const TIME_OPTIONS = [
+// Default time options - will be replaced with pricing context values
+const DEFAULT_TIME_OPTIONS = [
   { value: "anytime", label: "Anytime", description: "Most flexible, best pricing" },
   { value: "10-3", label: "10am - 3pm", description: "+$25 per cleaning" },
   { value: "11-4", label: "11am - 4pm", description: "+$25 per cleaning" },
@@ -47,6 +49,24 @@ const US_STATES = [
 const HomeSetupWizard = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const { pricing } = usePricing();
+
+  // Get linen prices from pricing context
+  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed || 30;
+  const towelFee = pricing?.linens?.towelFee || 5;
+  const faceClothFee = pricing?.linens?.faceClothFee || 2;
+
+  // Generate time options from pricing context
+  const TIME_OPTIONS = useMemo(() => {
+    if (pricing?.timeWindows) {
+      return Object.entries(pricing.timeWindows).map(([value, config]) => ({
+        value,
+        label: config.label,
+        description: config.surcharge > 0 ? `+$${config.surcharge} per cleaning` : config.description,
+      }));
+    }
+    return DEFAULT_TIME_OPTIONS;
+  }, [pricing?.timeWindows]);
 
   const [currentStep, setCurrentStep] = useState(STEPS.BASICS);
   const [errors, setErrors] = useState({});
@@ -699,8 +719,8 @@ const HomeSetupWizard = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0
-              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * 30} ($30 x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
-              : homeData.numBeds ? `$30 x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * 30}` : "Select to configure sheets for each bed"}
+              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * sheetFeePerBed} ($${sheetFeePerBed} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
+              : homeData.numBeds ? `$${sheetFeePerBed} x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * sheetFeePerBed}` : "Select to configure sheets for each bed"}
           </Text>
         </View>
         <View
@@ -768,8 +788,8 @@ const HomeSetupWizard = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
-              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * 5 + (b.faceCloths || 0) * 2, 0)} - $5/towel, $2/face cloth`
-              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $5/towel, $2/face cloth` : "Select to configure towels for each bathroom"}
+              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * towelFee + (b.faceCloths || 0) * faceClothFee, 0)} - $${towelFee}/towel, $${faceClothFee}/face cloth`
+              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${towelFee}/towel, $${faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -805,7 +825,7 @@ const HomeSetupWizard = ({ state, dispatch }) => {
                 Bathroom {bath.bathroomNumber}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                <Text style={{ flex: 1, color: "#555" }}>Towels ($5 each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Towels (${towelFee} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -843,7 +863,7 @@ const HomeSetupWizard = ({ state, dispatch }) => {
                 </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ flex: 1, color: "#555" }}>Face cloths ($2 each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${faceClothFee} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{

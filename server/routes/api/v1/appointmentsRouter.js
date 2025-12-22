@@ -585,12 +585,12 @@ appointmentRouter.post("/", async (req, res) => {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
-  dateArray.forEach((date) => {
+  for (const date of dateArray) {
     // Use configurations if provided, otherwise fall back to home defaults
     const sheetConfigs = date.sheetConfigurations || home.dataValues.bedConfigurations;
     const towelConfigs = date.towelConfigurations || home.dataValues.bathroomConfigurations;
 
-    const price = calculatePrice(
+    const price = await calculatePrice(
       date.bringSheets,
       date.bringTowels,
       home.dataValues.numBeds,
@@ -603,7 +603,7 @@ appointmentRouter.post("/", async (req, res) => {
     date.sheetConfigurations = sheetConfigs;
     date.towelConfigurations = towelConfigs;
     appointmentTotal += price;
-  });
+  }
   try {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
@@ -719,7 +719,7 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
     });
 
     // Calculate new price
-    const newPrice = calculatePrice(
+    const newPrice = await calculatePrice(
       bringSheets,
       bringTowels,
       home.dataValues.numBeds,
@@ -1128,7 +1128,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
             });
             if (existingOtherPayout && existingOtherPayout.status === "pending") {
               const updatedGross = Math.round(priceInCents / cleanerCount);
-              const updatedFee = Math.round(updatedGross * 0.10);
+              const updatedFee = Math.round(updatedGross * platformConfig.feePercent);
               const updatedNet = updatedGross - updatedFee;
               await existingOtherPayout.update({
                 grossAmount: updatedGross,

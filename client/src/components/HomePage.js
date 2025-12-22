@@ -106,8 +106,9 @@ const HomePage = ({ state, dispatch }) => {
     (a, b) => new Date(a.date) - new Date(b.date)
   );
 
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   sortedAppointments.forEach((appointment, index) => {
-    const correctedAmount = Number(appointment.price) * 0.9;
+    const correctedAmount = Number(appointment.price) * cleanerSharePercent;
     upcomingPayment += correctedAmount;
     const today = new Date();
     const appointmentDate = new Date(appointment.date);

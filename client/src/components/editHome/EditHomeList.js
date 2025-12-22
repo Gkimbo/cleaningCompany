@@ -11,9 +11,12 @@ import { useNavigate } from "react-router-native";
 import FetchData from "../../services/fetchRequests/fetchData";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import { usePricing } from "../../context/PricingContext";
 
 const EditHomeList = ({ state, dispatch }) => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
+  const cancellationFeePerAppt = pricing?.cancellation?.fee || 25;
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedHomeId, setSelectedHomeId] = useState(null);
   const [deleteFee, setDeleteFee] = useState(0);
@@ -41,7 +44,7 @@ const EditHomeList = ({ state, dispatch }) => {
         const date = new Date(appt.date);
         if (date.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000 &&
             date.getTime() - currentDate.getTime() >= 0) {
-          fee += 25;
+          fee += cancellationFeePerAppt;
         }
       });
     }

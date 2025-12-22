@@ -8,6 +8,7 @@ import FetchData from "../../services/fetchRequests/fetchData";
 import CancellationWarningModal from "../modals/CancellationWarningModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
+import { usePricing } from "../../context/PricingContext";
 
 const BED_SIZE_OPTIONS = [
   { value: "long_twin", label: "Long Twin" },
@@ -62,6 +63,12 @@ const EachAppointment = ({
   const [showBedOptions, setShowBedOptions] = useState(false);
   const [showTowelOptions, setShowTowelOptions] = useState(false);
   const navigate = useNavigate();
+  const { pricing } = usePricing();
+
+  // Get linen prices from pricing context
+  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed || 30;
+  const towelFee = pricing?.linens?.towelFee || 5;
+  const faceClothFee = pricing?.linens?.faceClothFee || 2;
 
   // Initialize bed configurations
   const initializeBedConfigurations = (beds) => {
@@ -450,8 +457,8 @@ const EachAppointment = ({
                 <Text style={styles.toggleLabel}>Fresh Sheets</Text>
                 <Text style={styles.togglePrice}>
                   {bringSheets === "yes" && bedConfigurations.length > 0
-                    ? `$${bedConfigurations.filter(b => b.needsSheets).length * 30} ($30 x ${bedConfigurations.filter(b => b.needsSheets).length} beds)`
-                    : "$30 per bed"}
+                    ? `$${bedConfigurations.filter(b => b.needsSheets).length * sheetFeePerBed} ($${sheetFeePerBed} x ${bedConfigurations.filter(b => b.needsSheets).length} beds)`
+                    : `$${sheetFeePerBed} per bed`}
                 </Text>
               </View>
             </View>
@@ -547,8 +554,8 @@ const EachAppointment = ({
                 <Text style={styles.toggleLabel}>Fresh Towels</Text>
                 <Text style={styles.togglePrice}>
                   {bringTowels === "yes" && bathroomConfigurations.length > 0
-                    ? `$${bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * 5 + (b.faceCloths || 0) * 2, 0)} - $5/towel, $2/face cloth`
-                    : "$5/towel, $2/face cloth"}
+                    ? `$${bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * towelFee + (b.faceCloths || 0) * faceClothFee, 0)} - $${towelFee}/towel, $${faceClothFee}/face cloth`
+                    : `$${towelFee}/towel, $${faceClothFee}/face cloth`}
                 </Text>
               </View>
             </View>
@@ -602,7 +609,7 @@ const EachAppointment = ({
 
                       {/* Towels Counter */}
                       <View style={styles.counterRow}>
-                        <Text style={styles.counterLabel}>Towels ($5 each):</Text>
+                        <Text style={styles.counterLabel}>Towels (${towelFee} each):</Text>
                         <View style={styles.counterControls}>
                           <TouchableOpacity
                             style={styles.counterButton}
@@ -624,7 +631,7 @@ const EachAppointment = ({
 
                       {/* Face Cloths Counter */}
                       <View style={styles.counterRow}>
-                        <Text style={styles.counterLabel}>Face cloths ($2 each):</Text>
+                        <Text style={styles.counterLabel}>Face cloths (${faceClothFee} each):</Text>
                         <View style={styles.counterControls}>
                           <TouchableOpacity
                             style={styles.counterButton}

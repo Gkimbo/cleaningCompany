@@ -11,6 +11,16 @@
  */
 
 const { businessConfig } = require("../../config/businessConfig");
+
+// Mock getPricingConfig to return the static businessConfig.pricing for testing
+jest.mock("../../config/businessConfig", () => {
+  const originalModule = jest.requireActual("../../config/businessConfig");
+  return {
+    ...originalModule,
+    getPricingConfig: jest.fn().mockResolvedValue(originalModule.businessConfig.pricing),
+  };
+});
+
 const calculatePrice = require("../../services/CalculatePrice");
 const { calculateLinenPrice } = require("../../services/CalculatePrice");
 
@@ -56,31 +66,31 @@ describe("CalculatePrice.js uses config values", () => {
   const { pricing } = businessConfig;
 
   describe("Base price calculation", () => {
-    it("should use basePrice from config for 1 bed, 1 bath", () => {
-      const price = calculatePrice("no", "no", 1, 1, "anytime");
+    it("should use basePrice from config for 1 bed, 1 bath", async () => {
+      const price = await calculatePrice("no", "no", 1, 1, "anytime");
       expect(price).toBe(pricing.basePrice);
     });
 
-    it("should use extraBedBathFee from config for additional beds", () => {
-      const price1bed = calculatePrice("no", "no", 1, 1, "anytime");
-      const price3beds = calculatePrice("no", "no", 3, 1, "anytime");
+    it("should use extraBedBathFee from config for additional beds", async () => {
+      const price1bed = await calculatePrice("no", "no", 1, 1, "anytime");
+      const price3beds = await calculatePrice("no", "no", 3, 1, "anytime");
 
       // Difference should be 2 extra beds * extraBedBathFee
       expect(price3beds - price1bed).toBe(2 * pricing.extraBedBathFee);
     });
 
-    it("should use extraBedBathFee from config for additional baths", () => {
-      const price1bath = calculatePrice("no", "no", 1, 1, "anytime");
-      const price3baths = calculatePrice("no", "no", 1, 3, "anytime");
+    it("should use extraBedBathFee from config for additional baths", async () => {
+      const price1bath = await calculatePrice("no", "no", 1, 1, "anytime");
+      const price3baths = await calculatePrice("no", "no", 1, 3, "anytime");
 
       // Difference should be 2 extra baths * extraBedBathFee
       expect(price3baths - price1bath).toBe(2 * pricing.extraBedBathFee);
     });
 
-    it("should calculate correct price for any bed/bath combination", () => {
+    it("should calculate correct price for any bed/bath combination", async () => {
       const numBeds = 4;
       const numBaths = 3;
-      const price = calculatePrice("no", "no", numBeds, numBaths, "anytime");
+      const price = await calculatePrice("no", "no", numBeds, numBaths, "anytime");
 
       const extraBeds = numBeds - 1;
       const extraBaths = numBaths - 1;
@@ -91,27 +101,27 @@ describe("CalculatePrice.js uses config values", () => {
   });
 
   describe("Sheet pricing", () => {
-    it("should use sheetFeePerBed from config", () => {
-      const priceWithoutSheets = calculatePrice("no", "no", 3, 1, "anytime");
-      const priceWithSheets = calculatePrice("yes", "no", 3, 1, "anytime");
+    it("should use sheetFeePerBed from config", async () => {
+      const priceWithoutSheets = await calculatePrice("no", "no", 3, 1, "anytime");
+      const priceWithSheets = await calculatePrice("yes", "no", 3, 1, "anytime");
 
       // Difference should be 3 beds * sheetFeePerBed
       expect(priceWithSheets - priceWithoutSheets).toBe(3 * pricing.linens.sheetFeePerBed);
     });
 
-    it("should calculate sheets for any number of beds", () => {
+    it("should calculate sheets for any number of beds", async () => {
       const numBeds = 5;
-      const priceWithoutSheets = calculatePrice("no", "no", numBeds, 1, "anytime");
-      const priceWithSheets = calculatePrice("yes", "no", numBeds, 1, "anytime");
+      const priceWithoutSheets = await calculatePrice("no", "no", numBeds, 1, "anytime");
+      const priceWithSheets = await calculatePrice("yes", "no", numBeds, 1, "anytime");
 
       expect(priceWithSheets - priceWithoutSheets).toBe(numBeds * pricing.linens.sheetFeePerBed);
     });
   });
 
   describe("Towel pricing", () => {
-    it("should use towelFee and faceClothFee from config", () => {
-      const priceWithoutTowels = calculatePrice("no", "no", 1, 2, "anytime");
-      const priceWithTowels = calculatePrice("no", "yes", 1, 2, "anytime");
+    it("should use towelFee and faceClothFee from config", async () => {
+      const priceWithoutTowels = await calculatePrice("no", "no", 1, 2, "anytime");
+      const priceWithTowels = await calculatePrice("no", "yes", 1, 2, "anytime");
 
       // Default: 2 towels + 1 face cloth per bathroom
       const defaultTowelPrice = 2 * (2 * pricing.linens.towelFee + 1 * pricing.linens.faceClothFee);
@@ -119,10 +129,10 @@ describe("CalculatePrice.js uses config values", () => {
       expect(priceWithTowels - priceWithoutTowels).toBe(defaultTowelPrice);
     });
 
-    it("should calculate towels for any number of bathrooms", () => {
+    it("should calculate towels for any number of bathrooms", async () => {
       const numBaths = 4;
-      const priceWithoutTowels = calculatePrice("no", "no", 1, numBaths, "anytime");
-      const priceWithTowels = calculatePrice("no", "yes", 1, numBaths, "anytime");
+      const priceWithoutTowels = await calculatePrice("no", "no", 1, numBaths, "anytime");
+      const priceWithTowels = await calculatePrice("no", "yes", 1, numBaths, "anytime");
 
       const defaultTowelPrice =
         numBaths * (2 * pricing.linens.towelFee + 1 * pricing.linens.faceClothFee);
@@ -132,54 +142,54 @@ describe("CalculatePrice.js uses config values", () => {
   });
 
   describe("Time window surcharges", () => {
-    it("should use anytime surcharge from config (should be 0)", () => {
-      const basePrice = calculatePrice("no", "no", 1, 1, "anytime");
+    it("should use anytime surcharge from config (should be 0)", async () => {
+      const basePrice = await calculatePrice("no", "no", 1, 1, "anytime");
       expect(basePrice).toBe(pricing.basePrice + pricing.timeWindows.anytime);
     });
 
-    it("should use 10-3 surcharge from config", () => {
-      const anytimePrice = calculatePrice("no", "no", 1, 1, "anytime");
-      const tenToThreePrice = calculatePrice("no", "no", 1, 1, "10-3");
+    it("should use 10-3 surcharge from config", async () => {
+      const anytimePrice = await calculatePrice("no", "no", 1, 1, "anytime");
+      const tenToThreePrice = await calculatePrice("no", "no", 1, 1, "10-3");
 
       expect(tenToThreePrice - anytimePrice).toBe(
         pricing.timeWindows["10-3"] - pricing.timeWindows.anytime
       );
     });
 
-    it("should use 11-4 surcharge from config", () => {
-      const anytimePrice = calculatePrice("no", "no", 1, 1, "anytime");
-      const elevenToFourPrice = calculatePrice("no", "no", 1, 1, "11-4");
+    it("should use 11-4 surcharge from config", async () => {
+      const anytimePrice = await calculatePrice("no", "no", 1, 1, "anytime");
+      const elevenToFourPrice = await calculatePrice("no", "no", 1, 1, "11-4");
 
       expect(elevenToFourPrice - anytimePrice).toBe(
         pricing.timeWindows["11-4"] - pricing.timeWindows.anytime
       );
     });
 
-    it("should use 12-2 surcharge from config", () => {
-      const anytimePrice = calculatePrice("no", "no", 1, 1, "anytime");
-      const noonToTwoPrice = calculatePrice("no", "no", 1, 1, "12-2");
+    it("should use 12-2 surcharge from config", async () => {
+      const anytimePrice = await calculatePrice("no", "no", 1, 1, "anytime");
+      const noonToTwoPrice = await calculatePrice("no", "no", 1, 1, "12-2");
 
       expect(noonToTwoPrice - anytimePrice).toBe(
         pricing.timeWindows["12-2"] - pricing.timeWindows.anytime
       );
     });
 
-    it("should apply each time window surcharge correctly", () => {
-      Object.entries(pricing.timeWindows).forEach(([window, surcharge]) => {
-        const price = calculatePrice("no", "no", 1, 1, window);
+    it("should apply each time window surcharge correctly", async () => {
+      for (const [window, surcharge] of Object.entries(pricing.timeWindows)) {
+        const price = await calculatePrice("no", "no", 1, 1, window);
         const expectedPrice = pricing.basePrice + surcharge;
         expect(price).toBe(expectedPrice);
-      });
+      }
     });
   });
 
   describe("Combined pricing calculation", () => {
-    it("should correctly combine all pricing elements from config", () => {
+    it("should correctly combine all pricing elements from config", async () => {
       const numBeds = 4;
       const numBaths = 3;
       const timeWindow = "12-2";
 
-      const price = calculatePrice("yes", "yes", numBeds, numBaths, timeWindow);
+      const price = await calculatePrice("yes", "yes", numBeds, numBaths, timeWindow);
 
       // Calculate expected price using config values
       const extraBeds = numBeds - 1;
@@ -200,26 +210,26 @@ describe("CalculatePrice.js uses config values", () => {
 describe("calculateLinenPrice helper uses config values", () => {
   const { pricing } = businessConfig;
 
-  it("should calculate sheet price from config", () => {
+  it("should calculate sheet price from config", async () => {
     const sheetConfigs = [
       { bedNumber: 1, needsSheets: true },
       { bedNumber: 2, needsSheets: true },
       { bedNumber: 3, needsSheets: false },
     ];
 
-    const price = calculateLinenPrice(sheetConfigs, []);
+    const price = await calculateLinenPrice(sheetConfigs, []);
 
     // 2 beds need sheets
     expect(price).toBe(2 * pricing.linens.sheetFeePerBed);
   });
 
-  it("should calculate towel price from config", () => {
+  it("should calculate towel price from config", async () => {
     const towelConfigs = [
       { bathroomNumber: 1, towels: 3, faceCloths: 2 },
       { bathroomNumber: 2, towels: 2, faceCloths: 1 },
     ];
 
-    const price = calculateLinenPrice([], towelConfigs);
+    const price = await calculateLinenPrice([], towelConfigs);
 
     const expected =
       3 * pricing.linens.towelFee +
@@ -230,14 +240,14 @@ describe("calculateLinenPrice helper uses config values", () => {
     expect(price).toBe(expected);
   });
 
-  it("should calculate combined linen price from config", () => {
+  it("should calculate combined linen price from config", async () => {
     const sheetConfigs = [
       { bedNumber: 1, needsSheets: true },
       { bedNumber: 2, needsSheets: true },
     ];
     const towelConfigs = [{ bathroomNumber: 1, towels: 4, faceCloths: 2 }];
 
-    const price = calculateLinenPrice(sheetConfigs, towelConfigs);
+    const price = await calculateLinenPrice(sheetConfigs, towelConfigs);
 
     const sheetPrice = 2 * pricing.linens.sheetFeePerBed;
     const towelPrice = 4 * pricing.linens.towelFee + 2 * pricing.linens.faceClothFee;
@@ -361,9 +371,9 @@ describe("Default pricing values match expected configuration", () => {
 describe("Price calculations are self-consistent with config", () => {
   const { pricing } = businessConfig;
 
-  it("full appointment price matches manual calculation", () => {
+  it("full appointment price matches manual calculation", async () => {
     // Test case: 3 bed, 2 bath, sheets, towels, 10-3 time window
-    const calculatedPrice = calculatePrice("yes", "yes", 3, 2, "10-3");
+    const calculatedPrice = await calculatePrice("yes", "yes", 3, 2, "10-3");
 
     // Manual calculation using config values
     const basePriceComponent = pricing.basePrice;
@@ -383,21 +393,11 @@ describe("Price calculations are self-consistent with config", () => {
       timeComponent;
 
     expect(calculatedPrice).toBe(manualTotal);
-
-    // Log the breakdown for documentation
-    console.log("Price breakdown for 3bed/2bath with sheets, towels, 10-3 time:");
-    console.log(`  Base price: $${basePriceComponent}`);
-    console.log(`  Extra beds (2): $${extraBedsComponent}`);
-    console.log(`  Extra baths (1): $${extraBathsComponent}`);
-    console.log(`  Sheets (3 beds): $${sheetsComponent}`);
-    console.log(`  Towels (2 baths): $${towelsComponent}`);
-    console.log(`  Time window (10-3): $${timeComponent}`);
-    console.log(`  TOTAL: $${manualTotal}`);
   });
 
-  it("changing any config value would change the calculation", () => {
+  it("changing any config value would change the calculation", async () => {
     // This test documents that calculations depend on config values
-    const price = calculatePrice("yes", "yes", 2, 2, "anytime");
+    const price = await calculatePrice("yes", "yes", 2, 2, "anytime");
 
     // The price should equal this formula using config values:
     const expected =
