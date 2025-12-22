@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,64 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
   const [error, setError] = useState(null);
+
+  // Handle redirect return from Stripe (web only)
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const params = new URLSearchParams(window.location.search);
+      const setupComplete = params.get("setup_complete");
+      const setupIntentId = params.get("setup_intent");
+      const redirectStatus = params.get("redirect_status");
+
+      if (setupComplete && setupIntentId && redirectStatus === "succeeded") {
+        // Clear URL params
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        // Confirm the payment method on our backend
+        confirmSetupFromRedirect(setupIntentId);
+      } else if (setupComplete && redirectStatus && redirectStatus !== "succeeded") {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setError("Payment setup was not completed. Please try again.");
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  const confirmSetupFromRedirect = async (setupIntentId) => {
+    setIsProcessing(true);
+    try {
+      const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: state.currentUser.token,
+          setupIntentId,
+        }),
+      });
+
+      const confirmData = await confirmResponse.json();
+
+      if (confirmResponse.ok && confirmData.success) {
+        setHasPaymentMethod(true);
+        await fetchPaymentMethodStatus();
+        Alert.alert("Success", "Payment method added successfully!");
+
+        if (onSetupComplete) {
+          onSetupComplete();
+        } else if (redirectTo) {
+          navigate(redirectTo);
+        }
+      } else {
+        throw new Error(confirmData.error || "Failed to save payment method");
+      }
+    } catch (err) {
+      console.error("Error confirming setup from redirect:", err);
+      setError(err.message);
+    } finally {
+      setIsProcessing(false);
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchPaymentMethodStatus();
@@ -72,13 +131,17 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
       }
 
       // Use the platform-agnostic payment sheet
+      // Note: On web, this will redirect to Stripe's hosted page and won't return
       const result = await openPaymentSheet({
         clientSecret: setupData.clientSecret,
         merchantDisplayName: "Kleanr Inc.",
         customerId: setupData.customerId,
         isSetupIntent: true,
+        publishableKey: setupData.publishableKey,
       });
 
+      // On web, if we get here with an error, handle it
+      // If successful redirect happened, this code won't run
       if (result.error) {
         throw new Error(result.error.message);
       }
@@ -89,30 +152,33 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         return;
       }
 
-      // Confirm the payment method was saved
-      const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: state.currentUser.token,
-          setupIntentId: setupData.clientSecret.split("_secret_")[0],
-        }),
-      });
+      // This code path is for native apps where openPaymentSheet returns without redirect
+      if (Platform.OS !== "web") {
+        // Confirm the payment method was saved
+        const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: state.currentUser.token,
+            setupIntentId: setupData.clientSecret.split("_secret_")[0],
+          }),
+        });
 
-      const confirmData = await confirmResponse.json();
+        const confirmData = await confirmResponse.json();
 
-      if (confirmResponse.ok && confirmData.success) {
-        setHasPaymentMethod(true);
-        fetchPaymentMethodStatus();
-        Alert.alert("Success", "Payment method added successfully!");
+        if (confirmResponse.ok && confirmData.success) {
+          setHasPaymentMethod(true);
+          fetchPaymentMethodStatus();
+          Alert.alert("Success", "Payment method added successfully!");
 
-        if (onSetupComplete) {
-          onSetupComplete();
-        } else if (redirectTo) {
-          navigate(redirectTo);
+          if (onSetupComplete) {
+            onSetupComplete();
+          } else if (redirectTo) {
+            navigate(redirectTo);
+          }
+        } else {
+          throw new Error(confirmData.error || "Failed to save payment method");
         }
-      } else {
-        throw new Error(confirmData.error || "Failed to save payment method");
       }
     } catch (err) {
       console.error("Payment setup error:", err);

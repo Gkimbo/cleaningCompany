@@ -87,12 +87,12 @@ const QuickBookFlow = ({ state, dispatch }) => {
 
     // Time window surcharge
     if (home.timeToBeCompleted === "10-3" || home.timeToBeCompleted === "11-4") {
-      basePrice += 30;
+      basePrice += 25;
     } else if (home.timeToBeCompleted === "12-2") {
-      basePrice += 50;
+      basePrice += 30;
     }
 
-    // Sheets pricing: $30 per bed
+    // Sheets pricing: $30 per bed (matches server)
     if (home.sheetsProvided === "yes") {
       if (home.bedConfigurations && Array.isArray(home.bedConfigurations) && home.bedConfigurations.length > 0) {
         const bedsNeedingSheets = home.bedConfigurations.filter((b) => b.needsSheets).length;
@@ -102,16 +102,16 @@ const QuickBookFlow = ({ state, dispatch }) => {
       }
     }
 
-    // Towels pricing: $10 per towel, $5 per face cloth
+    // Towels pricing: $5 per towel, $2 per face cloth (matches server)
     if (home.towelsProvided === "yes") {
       if (home.bathroomConfigurations && Array.isArray(home.bathroomConfigurations) && home.bathroomConfigurations.length > 0) {
         home.bathroomConfigurations.forEach((bath) => {
-          basePrice += (bath.towels || 0) * 10;
-          basePrice += (bath.faceCloths || 0) * 5;
+          basePrice += (bath.towels || 0) * 5;
+          basePrice += (bath.faceCloths || 0) * 2;
         });
       } else {
-        // Fallback: 2 towels + 1 face cloth per bathroom
-        basePrice += baths * (2 * 10 + 1 * 5);
+        // Fallback: 2 towels + 1 face cloth per bathroom (matches server: 2*5 + 1*2 = $12)
+        basePrice += baths * (2 * 5 + 1 * 2);
       }
     }
 

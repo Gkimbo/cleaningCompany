@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, Text, View, StyleSheet, ActivityIndicator } from "react-native";
+import { Pressable, Text, View, StyleSheet, ActivityIndicator, TouchableOpacity } from "react-native";
 import { SegmentedButtons, TextInput } from "react-native-paper";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
@@ -7,6 +7,16 @@ import Appointment from "../../services/fetchRequests/AppointmentClass";
 import FetchData from "../../services/fetchRequests/fetchData";
 import CancellationWarningModal from "../modals/CancellationWarningModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { API_BASE } from "../../services/config";
+
+const BED_SIZE_OPTIONS = [
+  { value: "long_twin", label: "Long Twin" },
+  { value: "twin", label: "Twin" },
+  { value: "full", label: "Full" },
+  { value: "queen", label: "Queen" },
+  { value: "king", label: "King" },
+  { value: "california_king", label: "Cal King" },
+];
 
 const EachAppointment = ({
   id,
@@ -31,6 +41,11 @@ const EachAppointment = ({
   cleanerName,
   token,
   onCancel,
+  numBeds,
+  numBaths,
+  sheetConfigurations: initialSheetConfigs,
+  towelConfigurations: initialTowelConfigs,
+  onConfigurationsUpdate,
 }) => {
   const [code, setCode] = useState("");
   const [key, setKeyLocation] = useState("");
@@ -43,7 +58,111 @@ const EachAppointment = ({
   const [cancellationInfo, setCancellationInfo] = useState(null);
   const [loadingCancellation, setLoadingCancellation] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [savingConfigs, setSavingConfigs] = useState(false);
+  const [showBedOptions, setShowBedOptions] = useState(false);
+  const [showTowelOptions, setShowTowelOptions] = useState(false);
   const navigate = useNavigate();
+
+  // Initialize bed configurations
+  const initializeBedConfigurations = (beds) => {
+    const numBedsInt = parseInt(beds) || 0;
+    const configs = [];
+    for (let i = 1; i <= numBedsInt; i++) {
+      configs.push({ bedNumber: i, size: "queen", needsSheets: true });
+    }
+    return configs;
+  };
+
+  // Initialize bathroom configurations
+  const initializeBathroomConfigurations = (baths) => {
+    const numBathsInt = parseInt(baths) || 0;
+    const configs = [];
+    for (let i = 1; i <= numBathsInt; i++) {
+      configs.push({ bathroomNumber: i, towels: 2, faceCloths: 1 });
+    }
+    return configs;
+  };
+
+  // State for configurations
+  const [bedConfigurations, setBedConfigurations] = useState(
+    initialSheetConfigs || initializeBedConfigurations(numBeds)
+  );
+  const [bathroomConfigurations, setBathroomConfigurations] = useState(
+    initialTowelConfigs || initializeBathroomConfigurations(numBaths)
+  );
+
+  // Update configurations when props change
+  useEffect(() => {
+    if (initialSheetConfigs) {
+      setBedConfigurations(initialSheetConfigs);
+    } else if (numBeds) {
+      setBedConfigurations(initializeBedConfigurations(numBeds));
+    }
+  }, [initialSheetConfigs, numBeds]);
+
+  useEffect(() => {
+    if (initialTowelConfigs) {
+      setBathroomConfigurations(initialTowelConfigs);
+    } else if (numBaths) {
+      setBathroomConfigurations(initializeBathroomConfigurations(numBaths));
+    }
+  }, [initialTowelConfigs, numBaths]);
+
+  // Update a specific bed configuration
+  const updateBedConfig = async (bedNumber, field, value) => {
+    const updatedConfigs = bedConfigurations.map((bed) =>
+      bed.bedNumber === bedNumber ? { ...bed, [field]: value } : bed
+    );
+    setBedConfigurations(updatedConfigs);
+    await saveConfigurations(updatedConfigs, bathroomConfigurations);
+  };
+
+  // Update a specific bathroom configuration
+  const updateBathroomConfig = async (bathroomNumber, field, value) => {
+    const updatedConfigs = bathroomConfigurations.map((bath) =>
+      bath.bathroomNumber === bathroomNumber ? { ...bath, [field]: value } : bath
+    );
+    setBathroomConfigurations(updatedConfigs);
+    await saveConfigurations(bedConfigurations, updatedConfigs);
+  };
+
+  // Save configurations to server
+  const saveConfigurations = async (sheetConfigs, towelConfigs) => {
+    if (!token || isDisabled) return;
+    setSavingConfigs(true);
+    try {
+      const response = await fetch(`${API_BASE}/appointments/${id}/linens`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          sheetConfigurations: sheetConfigs,
+          towelConfigurations: towelConfigs,
+          bringSheets,
+          bringTowels,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (onConfigurationsUpdate) {
+          onConfigurationsUpdate(id, data.appointment);
+        }
+        setChangesSubmitted(true);
+        setChangeNotification({
+          message: "Configuration updated successfully!",
+          appointment: id,
+        });
+      }
+    } catch (err) {
+      console.error("Error saving configurations:", err);
+      setError("Failed to save configuration");
+    } finally {
+      setSavingConfigs(false);
+    }
+  };
 
   // Handle code and key inputs
   const handleKeyPadCode = (newCode) => {
@@ -329,7 +448,11 @@ const EachAppointment = ({
               </View>
               <View>
                 <Text style={styles.toggleLabel}>Fresh Sheets</Text>
-                <Text style={styles.togglePrice}>+$50</Text>
+                <Text style={styles.togglePrice}>
+                  {bringSheets === "yes" && bedConfigurations.length > 0
+                    ? `$${bedConfigurations.filter(b => b.needsSheets).length * 30} ($30 x ${bedConfigurations.filter(b => b.needsSheets).length} beds)`
+                    : "$30 per bed"}
+                </Text>
               </View>
             </View>
             {isDisabled ? (
@@ -352,6 +475,68 @@ const EachAppointment = ({
             )}
           </View>
 
+          {/* Bed Size Configuration - shown when sheets is "yes" */}
+          {bringSheets === "yes" && bedConfigurations.length > 0 && !isDisabled && (
+            <View style={styles.expandableSection}>
+              {!showBedOptions ? (
+                <TouchableOpacity
+                  style={styles.expandButton}
+                  onPress={() => setShowBedOptions(true)}
+                >
+                  <Icon name="cog" size={12} color={colors.primary[600]} />
+                  <Text style={styles.expandButtonText}>Configure Bed Sizes</Text>
+                  <Icon name="chevron-down" size={10} color={colors.primary[600]} />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.configurationSection}>
+                  <View style={styles.configHeader}>
+                    <Text style={styles.configSectionTitle}>Select bed sizes:</Text>
+                    <TouchableOpacity
+                      style={styles.hideButton}
+                      onPress={() => setShowBedOptions(false)}
+                    >
+                      <Text style={styles.hideButtonText}>Hide</Text>
+                      <Icon name="chevron-up" size={10} color={colors.text.tertiary} />
+                    </TouchableOpacity>
+                  </View>
+                  {bedConfigurations.map((bed) => (
+                    <View key={bed.bedNumber} style={styles.configRow}>
+                      <Text style={styles.configLabel}>Bed {bed.bedNumber}</Text>
+                      <View style={styles.bedSizeOptions}>
+                        {BED_SIZE_OPTIONS.map((option) => (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[
+                              styles.bedSizeButton,
+                              bed.size === option.value && styles.bedSizeButtonActive,
+                            ]}
+                            onPress={() => updateBedConfig(bed.bedNumber, "size", option.value)}
+                            disabled={savingConfigs}
+                          >
+                            <Text
+                              style={[
+                                styles.bedSizeButtonText,
+                                bed.size === option.value && styles.bedSizeButtonTextActive,
+                              ]}
+                            >
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                  {savingConfigs && (
+                    <View style={styles.savingIndicator}>
+                      <ActivityIndicator size="small" color={colors.primary[500]} />
+                      <Text style={styles.savingText}>Saving...</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Towels Toggle */}
           <View style={styles.toggleRow}>
             <View style={styles.toggleInfo}>
@@ -360,7 +545,11 @@ const EachAppointment = ({
               </View>
               <View>
                 <Text style={styles.toggleLabel}>Fresh Towels</Text>
-                <Text style={styles.togglePrice}>+$50</Text>
+                <Text style={styles.togglePrice}>
+                  {bringTowels === "yes" && bathroomConfigurations.length > 0
+                    ? `$${bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * 5 + (b.faceCloths || 0) * 2, 0)} - $5/towel, $2/face cloth`
+                    : "$5/towel, $2/face cloth"}
+                </Text>
               </View>
             </View>
             {isDisabled ? (
@@ -382,6 +571,90 @@ const EachAppointment = ({
               />
             )}
           </View>
+
+          {/* Bathroom Configuration - shown when towels is "yes" */}
+          {bringTowels === "yes" && bathroomConfigurations.length > 0 && !isDisabled && (
+            <View style={styles.expandableSection}>
+              {!showTowelOptions ? (
+                <TouchableOpacity
+                  style={styles.expandButton}
+                  onPress={() => setShowTowelOptions(true)}
+                >
+                  <Icon name="cog" size={12} color={colors.primary[600]} />
+                  <Text style={styles.expandButtonText}>Configure Towels</Text>
+                  <Icon name="chevron-down" size={10} color={colors.primary[600]} />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.configurationSection}>
+                  <View style={styles.configHeader}>
+                    <Text style={styles.configSectionTitle}>Configure towels per bathroom:</Text>
+                    <TouchableOpacity
+                      style={styles.hideButton}
+                      onPress={() => setShowTowelOptions(false)}
+                    >
+                      <Text style={styles.hideButtonText}>Hide</Text>
+                      <Icon name="chevron-up" size={10} color={colors.text.tertiary} />
+                    </TouchableOpacity>
+                  </View>
+                  {bathroomConfigurations.map((bath) => (
+                    <View key={bath.bathroomNumber} style={styles.bathroomConfigCard}>
+                      <Text style={styles.bathroomTitle}>Bathroom {bath.bathroomNumber}</Text>
+
+                      {/* Towels Counter */}
+                      <View style={styles.counterRow}>
+                        <Text style={styles.counterLabel}>Towels ($5 each):</Text>
+                        <View style={styles.counterControls}>
+                          <TouchableOpacity
+                            style={styles.counterButton}
+                            onPress={() => updateBathroomConfig(bath.bathroomNumber, "towels", Math.max(0, bath.towels - 1))}
+                            disabled={savingConfigs}
+                          >
+                            <Text style={styles.counterButtonText}>-</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.counterValue}>{bath.towels}</Text>
+                          <TouchableOpacity
+                            style={[styles.counterButton, styles.counterButtonAdd]}
+                            onPress={() => updateBathroomConfig(bath.bathroomNumber, "towels", Math.min(10, bath.towels + 1))}
+                            disabled={savingConfigs}
+                          >
+                            <Text style={[styles.counterButtonText, styles.counterButtonTextAdd]}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Face Cloths Counter */}
+                      <View style={styles.counterRow}>
+                        <Text style={styles.counterLabel}>Face cloths ($2 each):</Text>
+                        <View style={styles.counterControls}>
+                          <TouchableOpacity
+                            style={styles.counterButton}
+                            onPress={() => updateBathroomConfig(bath.bathroomNumber, "faceCloths", Math.max(0, bath.faceCloths - 1))}
+                            disabled={savingConfigs}
+                          >
+                            <Text style={styles.counterButtonText}>-</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.counterValue}>{bath.faceCloths}</Text>
+                          <TouchableOpacity
+                            style={[styles.counterButton, styles.counterButtonAdd]}
+                            onPress={() => updateBathroomConfig(bath.bathroomNumber, "faceCloths", Math.min(10, bath.faceCloths + 1))}
+                            disabled={savingConfigs}
+                          >
+                            <Text style={[styles.counterButtonText, styles.counterButtonTextAdd]}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                  {savingConfigs && (
+                    <View style={styles.savingIndicator}>
+                      <ActivityIndicator size="small" color={colors.primary[500]} />
+                      <Text style={styles.savingText}>Saving...</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
 
           {isDisabled && (
             <View style={styles.lockedNotice}>
@@ -749,10 +1022,12 @@ const styles = StyleSheet.create({
   // Toggle Row
   toggleRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
+    rowGap: spacing.sm,
     marginBottom: spacing.md,
-    padding: spacing.sm,
+    padding: spacing.md,
     backgroundColor: colors.neutral[50],
     borderRadius: radius.lg,
   },
@@ -760,6 +1035,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
+    flex: 1,
+    minWidth: 140,
   },
   toggleIconContainer: {
     width: 32,
@@ -768,6 +1045,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary[50],
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   toggleLabel: {
     fontSize: typography.fontSize.sm,
@@ -780,7 +1058,8 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
   },
   segmentedButton: {
-    width: 120,
+    minWidth: 110,
+    flexShrink: 0,
   },
   lockedValue: {
     backgroundColor: colors.neutral[100],
@@ -946,6 +1225,162 @@ const styles = StyleSheet.create({
     color: colors.error[600],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Expandable Section
+  expandableSection: {
+    marginBottom: spacing.sm,
+  },
+  expandButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    borderStyle: "dashed",
+  },
+  expandButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // Configuration Section
+  configurationSection: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.xs,
+  },
+  configHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  configSectionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  hideButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  hideButtonText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  configRow: {
+    marginBottom: spacing.md,
+  },
+  configLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  bedSizeOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  bedSizeButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    backgroundColor: colors.neutral[0],
+  },
+  bedSizeButtonActive: {
+    borderColor: colors.primary[500],
+    backgroundColor: colors.primary[50],
+  },
+  bedSizeButtonText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  bedSizeButtonTextActive: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Bathroom Config Card
+  bathroomConfigCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  bathroomTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
+  counterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  counterLabel: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  counterControls: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  counterButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.neutral[200],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  counterButtonAdd: {
+    backgroundColor: colors.primary[500],
+  },
+  counterButtonText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: colors.text.primary,
+  },
+  counterButtonTextAdd: {
+    color: colors.neutral[0],
+  },
+  counterValue: {
+    width: 40,
+    textAlign: "center",
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+
+  // Saving Indicator
+  savingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  savingText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
   },
 });
 

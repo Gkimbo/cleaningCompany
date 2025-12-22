@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import EachAppointment from "./EachAppointment";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { API_BASE } from "../../services/config";
 
 const HomeAppointmentTile = ({
   id,
@@ -16,6 +17,10 @@ const HomeAppointmentTile = ({
   contact,
   allAppointments,
   setChangesSubmitted,
+  token,
+  onAppointmentCancelled,
+  numBeds,
+  numBaths,
 }) => {
   const [appointments, setAppointments] = useState([]);
   const [changeNotification, setChangeNotification] = useState({
@@ -31,25 +36,42 @@ const HomeAppointmentTile = ({
 
   const handleSheetsToggle = async (value, appointmentId) => {
     try {
-      const updatedAppointments = appointments.map((appointment) => {
-        if (appointment.id === appointmentId) {
-          const priceChange = value === "yes" ? 25 : -25;
-          if (value === appointment.bringSheets) return appointment;
-          return { ...appointment, bringSheets: value, price: Number(appointment.price) + priceChange };
-        }
-        return appointment;
+      const appointmentToUpdate = appointments.find((a) => a.id === appointmentId);
+      if (value === appointmentToUpdate.bringSheets) {
+        setChangeNotification({ message: "", appointment: "" });
+        return;
+      }
+
+      // Use the linens endpoint which recalculates price correctly
+      const response = await fetch(`${API_BASE}/appointments/${appointmentId}/linens`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          bringSheets: value,
+          bringTowels: appointmentToUpdate.bringTowels,
+          sheetConfigurations: appointmentToUpdate.sheetConfigurations,
+          towelConfigurations: appointmentToUpdate.towelConfigurations,
+        }),
       });
 
-      const appointmentToUpdate = appointments.find((a) => a.id === appointmentId);
-      if (value !== appointmentToUpdate.bringSheets) {
-        await Appointment.updateSheetsAppointments(value, appointmentId);
+      if (response.ok) {
+        const data = await response.json();
+        const updatedAppointments = appointments.map((appointment) => {
+          if (appointment.id === appointmentId) {
+            return { ...appointment, ...data.appointment };
+          }
+          return appointment;
+        });
+        setAppointments(updatedAppointments);
+        setChangesSubmitted(true);
         setChangeNotification({
           message: "Sheets updated. Price adjusted.",
           appointment: appointmentId,
         });
-      } else setChangeNotification({ message: "", appointment: "" });
-
-      setAppointments(updatedAppointments);
+      }
     } catch (error) {
       console.error("Error updating sheetsProvided:", error);
     }
@@ -57,25 +79,42 @@ const HomeAppointmentTile = ({
 
   const handleTowelToggle = async (value, appointmentId) => {
     try {
-      const updatedAppointments = appointments.map((appointment) => {
-        if (appointment.id === appointmentId) {
-          const priceChange = value === "yes" ? 25 : -25;
-          if (value === appointment.bringTowels) return appointment;
-          return { ...appointment, bringTowels: value, price: Number(appointment.price) + priceChange };
-        }
-        return appointment;
+      const appointmentToUpdate = appointments.find((a) => a.id === appointmentId);
+      if (value === appointmentToUpdate.bringTowels) {
+        setChangeNotification({ message: "", appointment: "" });
+        return;
+      }
+
+      // Use the linens endpoint which recalculates price correctly
+      const response = await fetch(`${API_BASE}/appointments/${appointmentId}/linens`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          bringSheets: appointmentToUpdate.bringSheets,
+          bringTowels: value,
+          sheetConfigurations: appointmentToUpdate.sheetConfigurations,
+          towelConfigurations: appointmentToUpdate.towelConfigurations,
+        }),
       });
 
-      const appointmentToUpdate = appointments.find((a) => a.id === appointmentId);
-      if (value !== appointmentToUpdate.bringTowels) {
-        await Appointment.updateTowelsAppointments(value, appointmentId);
+      if (response.ok) {
+        const data = await response.json();
+        const updatedAppointments = appointments.map((appointment) => {
+          if (appointment.id === appointmentId) {
+            return { ...appointment, ...data.appointment };
+          }
+          return appointment;
+        });
+        setAppointments(updatedAppointments);
+        setChangesSubmitted(true);
         setChangeNotification({
           message: "Towels updated. Price adjusted.",
           appointment: appointmentId,
         });
-      } else setChangeNotification({ message: "", appointment: "" });
-
-      setAppointments(updatedAppointments);
+      }
     } catch (error) {
       console.error("Error updating towelsProvided:", error);
     }
@@ -107,6 +146,21 @@ const HomeAppointmentTile = ({
   const totalDue = needsPayment.reduce((sum, a) => sum + Number(a.price || 0), 0);
   const upcomingTotal = upcoming.reduce((sum, a) => sum + Number(a.price || 0), 0);
 
+  const handleCancel = (appointmentId) => {
+    // Remove from local state
+    setAppointments(prev => prev.filter(a => a.id !== appointmentId));
+    // Notify parent
+    if (onAppointmentCancelled) {
+      onAppointmentCancelled(appointmentId);
+    }
+  };
+
+  const handleConfigurationsUpdate = (appointmentId, updatedAppointment) => {
+    setAppointments(prev =>
+      prev.map(a => a.id === appointmentId ? { ...a, ...updatedAppointment } : a)
+    );
+  };
+
   const renderAppointment = (appointment, index) => {
     const isDisabled = isWithinOneWeek(appointment.date);
     return (
@@ -132,6 +186,13 @@ const HomeAppointmentTile = ({
         completed={appointment.completed}
         timeToBeCompleted={appointment.timeToBeCompleted}
         cleanerName={appointment.cleanerName}
+        token={token}
+        onCancel={handleCancel}
+        numBeds={numBeds}
+        numBaths={numBaths}
+        sheetConfigurations={appointment.sheetConfigurations}
+        towelConfigurations={appointment.towelConfigurations}
+        onConfigurationsUpdate={handleConfigurationsUpdate}
       />
     );
   };

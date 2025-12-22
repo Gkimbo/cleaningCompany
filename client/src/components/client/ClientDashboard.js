@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 import {
   colors,
@@ -67,16 +68,20 @@ const SectionHeader = ({ title, onPress, actionText }) => (
 );
 
 // Quick Action Button Component
-const QuickActionButton = ({ title, onPress, color = colors.primary[600] }) => (
+const QuickActionButton = ({ title, subtitle, onPress, icon, iconColor, bgColor, accentColor }) => (
   <Pressable
     onPress={onPress}
     style={({ pressed }) => [
       styles.quickActionButton,
-      { backgroundColor: color },
+      { backgroundColor: bgColor },
       pressed && styles.quickActionButtonPressed,
     ]}
   >
+    <View style={[styles.quickActionIconContainer, { backgroundColor: accentColor }]}>
+      <Icon name={icon} size={20} color={iconColor} />
+    </View>
     <Text style={styles.quickActionText}>{title}</Text>
+    {subtitle && <Text style={styles.quickActionSubtext}>{subtitle}</Text>}
   </Pressable>
 );
 

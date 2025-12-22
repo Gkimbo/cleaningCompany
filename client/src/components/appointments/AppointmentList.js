@@ -57,6 +57,11 @@ const AppointmentList = ({ state, dispatch }) => {
     setBackRedirect(true);
   };
 
+  const handleAppointmentCancelled = (appointmentId) => {
+    setAllAppointments(prev => prev.filter(a => a.id !== appointmentId));
+    setChangesSubmitted(true);
+  };
+
   const usersHomes = state.homes.map((home) => (
     <View key={home.id} style={{ marginBottom: 16 }}>
       <HomeAppointmentTile
@@ -69,6 +74,10 @@ const AppointmentList = ({ state, dispatch }) => {
         contact={home.contact}
         allAppointments={allAppointments}
         setChangesSubmitted={setChangesSubmitted}
+        token={state.currentUser.token}
+        onAppointmentCancelled={handleAppointmentCancelled}
+        numBeds={home.numBeds}
+        numBaths={home.numBaths}
       />
     </View>
   ));

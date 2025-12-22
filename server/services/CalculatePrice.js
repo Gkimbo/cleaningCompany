@@ -13,11 +13,11 @@ const calculateLinenPrice = (sheetConfigs, towelConfigs) => {
     price += bedsNeedingSheets * 30;
   }
 
-  // Towels: $10 each, Face cloths: $5 each
+  // Towels: $5 each, Face cloths: $2 each
   if (towelConfigs && Array.isArray(towelConfigs)) {
     towelConfigs.forEach((bathroom) => {
-      price += (bathroom.towels || 0) * 10;
-      price += (bathroom.faceCloths || 0) * 5;
+      price += (bathroom.towels || 0) * 5;
+      price += (bathroom.faceCloths || 0) * 2;
     });
   }
 
@@ -46,15 +46,15 @@ const calculatePrice = (
 ) => {
   let price = 0;
 
-  // Time window surcharge
+  // Time window surcharge (+$25 for any specific time window)
   if (timeToBeCompleted === "anytime") {
     price += 0;
   } else if (timeToBeCompleted === "10-3") {
-    price += 30;
+    price += 25;
   } else if (timeToBeCompleted === "11-4") {
-    price += 30;
+    price += 25;
   } else if (timeToBeCompleted === "12-2") {
-    price += 50;
+    price += 30;
   }
 
   // Linen pricing
@@ -73,32 +73,32 @@ const calculatePrice = (
     if (towelConfigs && Array.isArray(towelConfigs)) {
       // Use specific configurations
       towelConfigs.forEach((bathroom) => {
-        price += (bathroom.towels || 0) * 10;
-        price += (bathroom.faceCloths || 0) * 5;
+        price += (bathroom.towels || 0) * 5;
+        price += (bathroom.faceCloths || 0) * 2;
       });
     } else {
       // Fallback: default 2 towels + 1 face cloth per bathroom if no specific config
-      const defaultTowelPrice = Number(numBaths) * (2 * 10 + 1 * 5);
+      const defaultTowelPrice = Number(numBaths) * (2 * 5 + 1 * 2);
       price += defaultTowelPrice;
     }
   }
 
-  // Base price calculation
+  // Base price calculation ($150 for 1 bed/1 bath)
   if (Number(numBeds) === 1 && Number(numBaths) === 1) {
-    price = price + 100;
+    price = price + 150;
     return price;
   } else if (Number(numBeds) === 1) {
     const baths = (Number(numBaths) - 1) * 50;
-    price += baths + 100;
+    price += baths + 150;
     return price;
   } else if (Number(numBaths) === 1) {
     const beds = (Number(numBeds) - 1) * 50;
-    price += beds + 100;
+    price += beds + 150;
     return price;
   } else {
     const beds = (Number(numBeds) - 1) * 50;
     const baths = (Number(numBaths) - 1) * 50;
-    price += beds + baths + 100;
+    price += beds + baths + 150;
     return price;
   }
 };
