@@ -1,10 +1,10 @@
 import React, { useEffect } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useNavigate } from "react-router-native";
-import Icon from "react-native-vector-icons/FontAwesome";
-import messagingStyles from "../../services/styles/MessagingStyles";
+import { Feather } from "@expo/vector-icons";
 import MessageService from "../../services/fetchRequests/MessageClass";
 import { useSocket } from "../../services/SocketContext";
+import { colors, spacing, radius } from "../../services/styles/theme";
 
 const MessagesButton = ({ state, dispatch, style }) => {
   const navigate = useNavigate();
@@ -53,20 +53,50 @@ const MessagesButton = ({ state, dispatch, style }) => {
   return (
     <Pressable
       onPress={() => navigate("/messages")}
-      style={[messagingStyles.messagesButtonContainer, style]}
+      style={({ pressed }) => [
+        styles.messageButton,
+        pressed && { opacity: 0.7 },
+        style,
+      ]}
     >
-      <View style={messagingStyles.messagesButton}>
-        <Icon name="comments" size={22} color="#1e3a8a" />
-      </View>
+      <Feather name="message-circle" size={20} color="white" />
       {unreadCount > 0 && (
-        <View style={messagingStyles.navBadge}>
-          <Text style={messagingStyles.navBadgeText}>
-            {unreadCount > 99 ? "99+" : unreadCount}
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {unreadCount > 9 ? "9+" : unreadCount}
           </Text>
         </View>
       )}
     </Pressable>
   );
 };
+
+const styles = StyleSheet.create({
+  messageButton: {
+    padding: 8,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[600],
+    position: "relative",
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: colors.error[500],
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: colors.neutral[800],
+  },
+  badgeText: {
+    color: colors.neutral[0],
+    fontSize: 10,
+    fontWeight: "700",
+  },
+});
 
 export default MessagesButton;

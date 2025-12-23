@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-482_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-738_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -111,9 +111,11 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Calendar Sync** | Connect Airbnb, VRBO, Booking.com calendars. Auto-create cleanings after checkouts. |
 | **Photo Documentation** | Before/after photos with room-by-room organization |
 | **Cleaning Checklists** | Digital task lists with progress tracking |
-| **Real-time Messaging** | WebSocket-powered chat with push notifications |
+| **Real-time Messaging** | WebSocket-powered chat with unread message badges in navigation |
 | **Stripe Payments** | Apple Pay, Google Pay, and card payments |
 | **Review System** | Multi-aspect cleaner reviews |
+| **Notification Badges** | Unread messages and pending applications shown in top bar |
+| **Quick Action Dashboard** | Styled quick action buttons for common tasks on cleaner/client dashboards |
 
 ---
 
@@ -412,7 +414,12 @@ npm test -- CleaningChecklist.test.js
 | AuthContext | 18 | Authentication flow |
 | TermsComponents | 85 | Terms modal, editor, acceptance |
 | SignUpForm | 42 | Registration with terms |
-| **Total** | **482** | - |
+| MessagesButton | 20 | Unread badge, notifications |
+| TopBar | 25 | Navigation, notification badges |
+| ApplicationClass | 23 | Application API methods |
+| CreateNewEmployeeForm | 28 | Username generation, form validation |
+| Pricing & Staffing | 15 | Dynamic pricing, config |
+| **Total** | **738** | - |
 
 ### Example Test
 

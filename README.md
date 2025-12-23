@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-1131_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-1647_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service management platform for short-term rental properties**
 
@@ -74,12 +74,14 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | Feature                 | Description                                                                                                                 |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Calendar Sync**       | Automatic iCal sync with Airbnb, VRBO, Booking.com. Auto-create cleaning appointments based on guest checkouts.             |
-| **Real-time Messaging** | WebSocket-powered chat between homeowners, cleaners, and support. Includes broadcast announcements and email notifications. |
+| **Real-time Messaging** | WebSocket-powered chat between homeowners, cleaners, and support. Unread message badges in navigation. Broadcast announcements. |
 | **Payment Processing**  | Stripe integration with Apple Pay/Google Pay. Platform fee collection and instant cleaner payouts via Stripe Connect.       |
 | **Tax Management**      | Automated 1099-NEC generation for cleaners, platform income tracking, Schedule C data, and quarterly tax estimates.         |
 | **Photo Documentation** | Before/after photo capture for quality assurance. Room-by-room photo organization with notes.                               |
 | **Review System**       | Multi-aspect reviews for cleaners covering quality, timeliness, and communication.                                          |
 | **Terms & Conditions**  | Version-controlled T&C management with PDF/text support, user acceptance tracking, and legal compliance snapshots.          |
+| **Email Notifications** | Professional HTML email templates for all notifications: confirmations, cancellations, password resets, and more.           |
+| **Application System**  | Cleaner job applications with manager review workflow, notification badges, and one-click employee account creation.        |
 
 ---
 
@@ -218,7 +220,7 @@ kleanr/
 │   │       ├── fetchRequests/      # API service classes
 │   │       ├── AuthContext.js      # Authentication state
 │   │       └── SocketContext.js    # WebSocket provider
-│   ├── __tests__/                  # 482 client tests
+│   ├── __tests__/                  # 738 client tests
 │   └── package.json
 │
 ├── server/                         # Express.js API Server
@@ -234,10 +236,11 @@ kleanr/
 │   ├── services/
 │   │   ├── calendarSyncService.js  # iCal parsing & sync
 │   │   ├── TaxDocumentService.js   # 1099-NEC generation
-│   │   └── PlatformTaxService.js   # Platform tax reports
+│   │   ├── PlatformTaxService.js   # Platform tax reports
+│   │   └── EmailClass.js           # HTML email notifications
 │   ├── models/                     # Sequelize models
 │   ├── migrations/                 # Database migrations
-│   ├── __tests__/                  # 649 server tests
+│   ├── __tests__/                  # 909 server tests
 │   └── package.json
 │
 └── README.md
@@ -248,10 +251,10 @@ kleanr/
 ## Testing
 
 ```bash
-# Run all server tests (649 tests)
+# Run all server tests (909 tests)
 cd server && npm test
 
-# Run all client tests (482 tests)
+# Run all client tests (738 tests)
 cd client && npm test
 
 # Run with coverage
@@ -262,13 +265,16 @@ npm test -- --coverage
 
 | Area              | Server   | Client   |
 | ----------------- | -------- | -------- |
-| Authentication    | 15 tests | -        |
+| Authentication    | 15 tests | 18 tests |
 | Appointments      | 24 tests | -        |
 | Payments & Stripe | 89 tests | 12 tests |
 | Calendar Sync     | 16 tests | 73 tests |
 | Tax Documents     | 45 tests | 42 tests |
-| Messaging         | 21 tests | -        |
+| Messaging         | 21 tests | 25 tests |
 | Reviews           | 32 tests | 54 tests |
+| Email Notifications | 54 tests | -      |
+| Applications      | -        | 48 tests |
+| Terms & Conditions | 54 tests | 85 tests |
 | Integration       | 27 tests | -        |
 
 ---

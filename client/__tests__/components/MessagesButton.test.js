@@ -1,8 +1,10 @@
 import React from "react";
 import { render } from "@testing-library/react-native";
 
-// Mock react-native-vector-icons
-jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
+// Mock @expo/vector-icons
+jest.mock("@expo/vector-icons", () => ({
+  Feather: "Feather",
+}));
 
 // Mock react-router-native
 jest.mock("react-router-native", () => ({
@@ -65,31 +67,31 @@ describe("MessagesButton Component", () => {
       expect(getByText("1")).toBeTruthy();
     });
 
-    it("should display badge with count 99", () => {
-      const state = createState(99);
+    it("should display badge with count 9", () => {
+      const state = createState(9);
       const { getByText } = render(
         <MessagesButton state={state} dispatch={mockDispatch} />
       );
 
-      expect(getByText("99")).toBeTruthy();
+      expect(getByText("9")).toBeTruthy();
     });
 
-    it("should display '99+' when unreadCount exceeds 99", () => {
-      const state = createState(100);
+    it("should display '9+' when unreadCount exceeds 9", () => {
+      const state = createState(10);
       const { getByText } = render(
         <MessagesButton state={state} dispatch={mockDispatch} />
       );
 
-      expect(getByText("99+")).toBeTruthy();
+      expect(getByText("9+")).toBeTruthy();
     });
 
-    it("should display '99+' when unreadCount is very large", () => {
+    it("should display '9+' when unreadCount is very large", () => {
       const state = createState(500);
       const { getByText } = render(
         <MessagesButton state={state} dispatch={mockDispatch} />
       );
 
-      expect(getByText("99+")).toBeTruthy();
+      expect(getByText("9+")).toBeTruthy();
     });
 
     it("should not display badge when unreadCount is undefined", () => {
@@ -99,7 +101,7 @@ describe("MessagesButton Component", () => {
       );
 
       expect(queryByText("0")).toBeNull();
-      expect(queryByText("99+")).toBeNull();
+      expect(queryByText("9+")).toBeNull();
     });
 
     it("should not display badge when unreadCount is null", () => {
@@ -115,7 +117,7 @@ describe("MessagesButton Component", () => {
   describe("Badge Count Logic", () => {
     const formatUnreadCount = (count) => {
       if (!count || count <= 0) return null;
-      return count > 99 ? "99+" : count.toString();
+      return count > 9 ? "9+" : count.toString();
     };
 
     it("should return null for 0", () => {
@@ -134,18 +136,19 @@ describe("MessagesButton Component", () => {
       expect(formatUnreadCount(null)).toBeNull();
     });
 
-    it("should return string for positive numbers", () => {
+    it("should return string for positive numbers up to 9", () => {
       expect(formatUnreadCount(5)).toBe("5");
-      expect(formatUnreadCount(50)).toBe("50");
+      expect(formatUnreadCount(9)).toBe("9");
     });
 
-    it("should return '99+' for numbers over 99", () => {
-      expect(formatUnreadCount(100)).toBe("99+");
-      expect(formatUnreadCount(999)).toBe("99+");
+    it("should return '9+' for numbers over 9", () => {
+      expect(formatUnreadCount(10)).toBe("9+");
+      expect(formatUnreadCount(99)).toBe("9+");
+      expect(formatUnreadCount(999)).toBe("9+");
     });
 
-    it("should return '99' for exactly 99", () => {
-      expect(formatUnreadCount(99)).toBe("99");
+    it("should return '9' for exactly 9", () => {
+      expect(formatUnreadCount(9)).toBe("9");
     });
   });
 

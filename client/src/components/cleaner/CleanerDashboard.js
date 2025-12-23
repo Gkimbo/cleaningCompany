@@ -11,6 +11,7 @@ import {
   Modal,
 } from "react-native";
 import { useNavigate } from "react-router-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import {
   colors,
@@ -19,7 +20,6 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
-import GetHelpButton from "../messaging/GetHelpButton";
 import TaxFormsSection from "../tax/TaxFormsSection";
 import ReviewsOverview from "../reviews/ReviewsOverview";
 import TodaysAppointment from "../employeeAssignments/tiles/TodaysAppointment";
@@ -63,16 +63,20 @@ const SectionHeader = ({ title, onPress, actionText }) => (
 );
 
 // Quick Action Button Component
-const QuickActionButton = ({ title, onPress, color = colors.primary[600] }) => (
+const QuickActionButton = ({ title, subtitle, onPress, icon, iconColor, bgColor, accentColor }) => (
   <Pressable
     onPress={onPress}
     style={({ pressed }) => [
       styles.quickActionButton,
-      { backgroundColor: color },
+      { backgroundColor: bgColor },
       pressed && styles.quickActionButtonPressed,
     ]}
   >
+    <View style={[styles.quickActionIconContainer, { backgroundColor: accentColor }]}>
+      <Icon name={icon} size={14} color={iconColor} />
+    </View>
     <Text style={styles.quickActionText}>{title}</Text>
+    {subtitle && <Text style={styles.quickActionSubtext}>{subtitle}</Text>}
   </Pressable>
 );
 
@@ -335,30 +339,60 @@ const CleanerDashboard = ({ state, dispatch }) => {
 
         {/* Quick Actions */}
         <View style={styles.quickActionsContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickActionsScroll}
-          >
+          <Text style={styles.quickActionsTitle}>Quick Actions</Text>
+          <View style={styles.quickActionsGrid}>
             <QuickActionButton
               title="Find Jobs"
+              subtitle="Browse available"
+              icon="search"
+              iconColor="#fff"
+              bgColor="#fff"
+              accentColor="#6366f1"
               onPress={() => navigate("/new-job-choice")}
-              color={colors.primary[600]}
             />
             <QuickActionButton
               title="My Schedule"
+              subtitle="View assignments"
+              icon="calendar"
+              iconColor="#fff"
+              bgColor="#fff"
+              accentColor="#0d9488"
               onPress={() => navigate("/employee-assignments")}
-              color={colors.secondary[500]}
             />
             <QuickActionButton
               title="Earnings"
+              subtitle="Track income"
+              icon="dollar"
+              iconColor="#fff"
+              bgColor="#fff"
+              accentColor="#10b981"
               onPress={() => navigate("/earnings")}
-              color={colors.success[600]}
             />
-            <View style={styles.getHelpWrapper}>
-              <GetHelpButton token={state.currentUser.token} />
-            </View>
-          </ScrollView>
+            <QuickActionButton
+              title="Get Help"
+              subtitle="Contact support"
+              icon="life-ring"
+              iconColor="#fff"
+              bgColor="#fff"
+              accentColor="#3b82f6"
+              onPress={() => {
+                if (state.currentUser.token) {
+                  import("../../services/fetchRequests/MessageClass").then(
+                    (module) => {
+                      const MessageService = module.default;
+                      MessageService.createSupportConversation(state.currentUser.token)
+                        .then((response) => {
+                          if (response.conversation) {
+                            navigate(`/messages/${response.conversation.id}`);
+                          }
+                        })
+                        .catch((err) => console.error(err));
+                    }
+                  );
+                }
+              }}
+            />
+          </View>
         </View>
 
         {/* Quick Stats */}
@@ -565,27 +599,51 @@ const styles = StyleSheet.create({
   quickActionsContainer: {
     marginBottom: spacing.xl,
   },
-  quickActionsScroll: {
-    paddingRight: spacing.lg,
+  quickActionsTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
+  quickActionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.sm,
   },
   quickActionButton: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.full,
-    marginRight: spacing.sm,
+    width: (width - spacing.lg * 2 - spacing.sm) / 2,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 70,
     ...shadows.sm,
+    shadowColor: "#6366f1",
+    shadowOpacity: 0.06,
   },
   quickActionButtonPressed: {
-    opacity: 0.8,
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  quickActionIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.xs,
   },
   quickActionText: {
-    color: colors.neutral[0],
+    color: colors.text.primary,
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+    textAlign: "center",
   },
-  getHelpWrapper: {
-    marginLeft: spacing.xs,
+  quickActionSubtext: {
+    color: colors.text.tertiary,
+    fontSize: 10,
+    marginTop: 1,
+    textAlign: "center",
   },
 
   // Stats Row
