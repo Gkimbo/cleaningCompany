@@ -16,9 +16,13 @@ const calculatePrice = require("../../../services/CalculatePrice");
 const HomeSerializer = require("../../../serializers/homesSerializer");
 const { emit } = require("nodemon");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const { businessConfig, getPricingConfig } = require("../../../config/businessConfig");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+// Static pricing config (used as fallback, prefer getPricingConfig() for database values)
+const { pricing } = businessConfig;
 
 appointmentRouter.get("/unassigned", async (req, res) => {
   const token = req.headers.authorization.split(" ")[1];
@@ -411,27 +415,60 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
     };
 
     if (isHomeowner) {
-      // Homeowner cancellation rules: 3 days
-      const isWithinPenaltyWindow = daysUntilAppointment <= 3 && hasCleanerAssigned;
-      const estimatedRefund = isWithinPenaltyWindow ? price * 0.5 : price;
-      const cleanerPayout = isWithinPenaltyWindow ? price * 0.5 * 0.9 : 0;
+      // Homeowner cancellation rules - fetch from database
+      const pricingConfig = await getPricingConfig();
+      const { cancellation: cancellationConfig, platform: platformConfig } = pricingConfig;
+
+      const penaltyDays = cancellationConfig.homeownerPenaltyDays;
+      const refundPercent = cancellationConfig.refundPercentage;
+      const platformFee = platformConfig.feePercent;
+      const cancellationFeeAmount = cancellationConfig.fee;
+      const cancellationWindowDays = cancellationConfig.windowDays;
+      const isWithinPenaltyWindow = daysUntilAppointment <= penaltyDays && hasCleanerAssigned;
+      const willChargeCancellationFee = daysUntilAppointment <= cancellationWindowDays;
+      const estimatedRefund = isWithinPenaltyWindow ? price * refundPercent : price;
+      const cleanerPayout = isWithinPenaltyWindow ? price * refundPercent * (1 - platformFee) : 0;
+
+      // Check if user has a payment method on file
+      const hasPaymentMethod = user.hasPaymentMethod && user.stripeCustomerId;
+
+      // Build warning message
+      let warningMessage;
+      if (willChargeCancellationFee && hasPaymentMethod) {
+        if (isWithinPenaltyWindow) {
+          warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (${refundPercent * 100}% of the price minus ${platformFee * 100}% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}. Additionally, a $${cancellationFeeAmount} cancellation fee will be charged to your card on file.`;
+        } else {
+          warningMessage = `A $${cancellationFeeAmount} cancellation fee will be charged to your card on file for cancelling within ${cancellationWindowDays} days of the appointment.` + (hasCleanerAssigned ? " You will receive a full refund of the cleaning cost." : "");
+        }
+      } else if (isWithinPenaltyWindow) {
+        warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (${refundPercent * 100}% of the price minus ${platformFee * 100}% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}.`;
+      } else if (hasCleanerAssigned) {
+        warningMessage = "You can cancel this appointment for a full refund.";
+      } else {
+        warningMessage = "You can cancel this appointment. No payment has been processed yet.";
+      }
 
       response = {
         ...response,
         userType: "homeowner",
         isWithinPenaltyWindow,
-        penaltyWindowDays: 3,
+        penaltyWindowDays: penaltyDays,
         estimatedRefund: estimatedRefund.toFixed(2),
         cleanerPayout: cleanerPayout.toFixed(2),
-        warningMessage: isWithinPenaltyWindow
-          ? `Cancelling within 3 days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (50% of the price minus 10% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}.`
-          : hasCleanerAssigned
-          ? "You can cancel this appointment for a full refund."
-          : "You can cancel this appointment. No payment has been processed yet.",
+        // Cancellation fee info
+        willChargeCancellationFee,
+        cancellationFee: cancellationFeeAmount,
+        cancellationWindowDays,
+        hasPaymentMethod,
+        warningMessage,
       };
     } else if (isCleaner) {
-      // Cleaner cancellation rules: 4 days
-      const isWithinPenaltyWindow = daysUntilAppointment <= 4;
+      // Cleaner cancellation rules - fetch from database
+      const pricingConfig = await getPricingConfig();
+      const { cancellation: cancellationConfig } = pricingConfig;
+
+      const penaltyDays = cancellationConfig.cleanerPenaltyDays;
+      const isWithinPenaltyWindow = daysUntilAppointment <= penaltyDays;
 
       // Count recent cancellation penalties
       const threeMonthsAgo = new Date();
@@ -451,13 +488,20 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
         ...response,
         userType: "cleaner",
         isWithinPenaltyWindow,
-        penaltyWindowDays: 4,
+        penaltyWindowDays: penaltyDays,
         recentCancellationPenalties: recentPenalties,
         willResultInFreeze: willBeFrozen,
+        // Require acknowledgment for last-minute cancellations
+        requiresAcknowledgment: isWithinPenaltyWindow,
+        acknowledgmentMessage: isWithinPenaltyWindow
+          ? willBeFrozen
+            ? "I understand that cancelling this appointment will result in a 1-star rating and my account will be frozen due to having 3 or more last-minute cancellations within 3 months."
+            : "I understand that cancelling this appointment within the penalty window will result in an automatic 1-star rating. I acknowledge that 3 last-minute cancellations within 3 months will result in my account being frozen."
+          : null,
         warningMessage: isWithinPenaltyWindow
           ? willBeFrozen
-            ? `WARNING: Cancelling within 4 days of the cleaning will result in an automatic 1-star rating. You already have ${recentPenalties} cancellation penalties in the last 3 months. THIS CANCELLATION WILL FREEZE YOUR ACCOUNT.`
-            : `Cancelling within 4 days of the cleaning will result in an automatic 1-star rating with the note "Last minute cancellation". You currently have ${recentPenalties} cancellation ${recentPenalties === 1 ? "penalty" : "penalties"} in the last 3 months. ${3 - recentPenalties - 1} more will result in your account being frozen.`
+            ? `WARNING: Cancelling within ${penaltyDays} days of the cleaning will result in an automatic 1-star rating. You already have ${recentPenalties} cancellation penalties in the last 3 months. THIS CANCELLATION WILL FREEZE YOUR ACCOUNT.`
+            : `Cancelling within ${penaltyDays} days of the cleaning will result in an automatic 1-star rating with the note "Last minute cancellation". You currently have ${recentPenalties} cancellation ${recentPenalties === 1 ? "penalty" : "penalties"} in the last 3 months. ${3 - recentPenalties - 1} more will result in your account being frozen.`
           : "You can cancel this job without penalty.",
       };
     } else {
@@ -541,12 +585,12 @@ appointmentRouter.post("/", async (req, res) => {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
-  dateArray.forEach((date) => {
+  for (const date of dateArray) {
     // Use configurations if provided, otherwise fall back to home defaults
     const sheetConfigs = date.sheetConfigurations || home.dataValues.bedConfigurations;
     const towelConfigs = date.towelConfigurations || home.dataValues.bathroomConfigurations;
 
-    const price = calculatePrice(
+    const price = await calculatePrice(
       date.bringSheets,
       date.bringTowels,
       home.dataValues.numBeds,
@@ -559,7 +603,7 @@ appointmentRouter.post("/", async (req, res) => {
     date.sheetConfigurations = sheetConfigs;
     date.towelConfigurations = towelConfigs;
     appointmentTotal += price;
-  });
+  }
   try {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
@@ -675,7 +719,7 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
     });
 
     // Calculate new price
-    const newPrice = calculatePrice(
+    const newPrice = await calculatePrice(
       bringSheets,
       bringTowels,
       home.dataValues.numBeds,
@@ -808,7 +852,7 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
         if (updatedEmployees.length !== employees.length) {
           await updateAppointment.update({
             employeesAssigned: updatedEmployees,
-            hasBeenAssigned: false,
+            hasBeenAssigned: updatedEmployees.length > 0,
           });
         }
       }
@@ -863,8 +907,70 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
   }
 });
 
+// Get booking info for an appointment (large home warnings, etc.)
+appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
+  const { appointmentId } = req.params;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    jwt.verify(token, secretKey);
+
+    const appointment = await UserAppointments.findByPk(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    const home = await UserHomes.findByPk(appointment.homeId);
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    const numBeds = parseInt(home.numBeds) || 0;
+    const numBaths = parseInt(home.numBaths) || 0;
+    const timeToBeCompleted = home.timeToBeCompleted || "anytime";
+    const cleanersNeeded = home.cleanersNeeded || 1;
+
+    // Large home is defined as more than 2 beds AND more than 2 baths
+    const isLargeHome = numBeds > 2 && numBaths > 2;
+    // Time constraint only matters for large homes
+    const hasTimeConstraint = isLargeHome && timeToBeCompleted !== "anytime";
+
+    // Build acknowledgment message based on conditions
+    let acknowledgmentMessage = null;
+    if (isLargeHome) {
+      if (hasTimeConstraint) {
+        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - I may need to bring my own help. The cleaning must be completed between ${timeToBeCompleted}, which may be difficult without assistance.`;
+      } else {
+        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - I may need to bring my own help to complete this cleaning.`;
+      }
+    }
+
+    return res.json({
+      appointmentId: parseInt(appointmentId),
+      homeInfo: {
+        numBeds,
+        numBaths,
+        timeToBeCompleted,
+        cleanersNeeded,
+      },
+      isLargeHome,
+      hasTimeConstraint,
+      requiresAcknowledgment: isLargeHome,
+      acknowledgmentMessage,
+    });
+  } catch (error) {
+    console.error("Error getting booking info:", error);
+    return res.status(500).json({ error: "Failed to get booking info" });
+  }
+});
+
 appointmentRouter.patch("/request-employee", async (req, res) => {
-  const { id, appointmentId } = req.body;
+  const { id, appointmentId, acknowledged } = req.body;
 
   try {
     const appointment = await UserAppointments.findByPk(Number(appointmentId));
@@ -880,6 +986,32 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     const cleaner = await User.findByPk(id);
     if (!cleaner) {
       return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    // Check if home is large and requires acknowledgment
+    const home = await UserHomes.findByPk(appointment.homeId);
+    if (home) {
+      const numBeds = parseInt(home.numBeds) || 0;
+      const numBaths = parseInt(home.numBaths) || 0;
+      const isLargeHome = numBeds > 2 && numBaths > 2;
+
+      if (isLargeHome && !acknowledged) {
+        const timeToBeCompleted = home.timeToBeCompleted || "anytime";
+        const hasTimeConstraint = timeToBeCompleted !== "anytime";
+
+        let message = `This is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - you may need to bring your own help.`;
+        if (hasTimeConstraint) {
+          message += ` The cleaning must be completed between ${timeToBeCompleted}, which may be difficult without assistance.`;
+        }
+
+        return res.status(400).json({
+          error: "Acknowledgment required",
+          message,
+          requiresAcknowledgment: true,
+          isLargeHome: true,
+          hasTimeConstraint,
+        });
+      }
     }
 
     const existingRequest = await UserPendingRequests.findOne({
@@ -960,13 +1092,16 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       });
 
       // Create payout record for the approved cleaner
+      const pricingConfig = await getPricingConfig();
+      const { platform: platformConfig } = pricingConfig;
+
       const cleanerId = request.dataValues.employeeId;
       const appointmentId = request.dataValues.appointmentId;
       const cleanerCount = employees.length;
       const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
       const perCleanerGross = Math.round(priceInCents / cleanerCount);
-      const platformFee = Math.round(perCleanerGross * 0.10); // 10% platform fee
-      const netAmount = perCleanerGross - platformFee; // 90% to cleaner
+      const platformFeeAmount = Math.round(perCleanerGross * platformConfig.feePercent);
+      const netAmount = perCleanerGross - platformFeeAmount;
 
       // Check if payout record already exists
       const existingPayout = await Payout.findOne({
@@ -978,7 +1113,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
           appointmentId,
           cleanerId,
           grossAmount: perCleanerGross,
-          platformFee,
+          platformFee: platformFeeAmount,
           netAmount,
           status: "pending", // Will change to "held" when payment is captured
         });
@@ -993,7 +1128,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
             });
             if (existingOtherPayout && existingOtherPayout.status === "pending") {
               const updatedGross = Math.round(priceInCents / cleanerCount);
-              const updatedFee = Math.round(updatedGross * 0.10);
+              const updatedFee = Math.round(updatedGross * platformConfig.feePercent);
               const updatedNet = updatedGross - updatedFee;
               await existingOtherPayout.update({
                 grossAmount: updatedGross,
@@ -1151,7 +1286,7 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
         if (updatedEmployees.length !== employees.length) {
           await updateAppointment.update({
             employeesAssigned: updatedEmployees,
-            hasBeenAssigned: false,
+            hasBeenAssigned: updatedEmployees.length > 0,
           });
         }
       }
@@ -1355,23 +1490,83 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     const diffTime = appointmentDate - today;
     const daysUntilAppointment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
+    // Get pricing config from database
+    const pricingConfig = await getPricingConfig();
+    const { cancellation: cancellationConfig, platform: platformConfig } = pricingConfig;
+
     const hasCleanerAssigned = appointment.hasBeenAssigned && appointment.employeesAssigned?.length > 0;
-    const isWithinPenaltyWindow = daysUntilAppointment <= 3 && hasCleanerAssigned;
+    const isWithinPenaltyWindow = daysUntilAppointment <= cancellationConfig.homeownerPenaltyDays && hasCleanerAssigned;
+    const isWithinCancellationFeeWindow = daysUntilAppointment <= cancellationConfig.windowDays;
     const price = parseFloat(appointment.price) || 0;
     const priceInCents = Math.round(price * 100);
 
     let refundResult = null;
     let cleanerPayoutResult = null;
+    let cancellationFeeResult = null;
+
+    // Get user for Stripe customer info
+    const user = await User.findByPk(userId);
+
+    const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+    // Charge cancellation fee if within the window and user has payment method
+    if (isWithinCancellationFeeWindow && user.stripeCustomerId && user.hasPaymentMethod) {
+      const cancellationFeeAmountCents = Math.round(cancellationConfig.fee * 100);
+
+      try {
+        // Get the customer's default payment method
+        const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+        const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+        if (defaultPaymentMethod) {
+          // Create and confirm a PaymentIntent for the cancellation fee
+          const cancellationPaymentIntent = await stripe.paymentIntents.create({
+            amount: cancellationFeeAmountCents,
+            currency: "usd",
+            customer: user.stripeCustomerId,
+            payment_method: defaultPaymentMethod,
+            confirm: true,
+            off_session: true,
+            description: `Cancellation fee for appointment on ${appointment.date}`,
+            metadata: {
+              appointmentId: appointment.id.toString(),
+              userId: userId.toString(),
+              type: "cancellation_fee",
+            },
+          });
+
+          cancellationFeeResult = {
+            charged: true,
+            amount: cancellationConfig.fee,
+            paymentIntentId: cancellationPaymentIntent.id,
+          };
+        } else {
+          console.log(`[Cancellation] User ${userId} has no default payment method, skipping cancellation fee`);
+          cancellationFeeResult = {
+            charged: false,
+            reason: "No default payment method",
+          };
+        }
+      } catch (stripeError) {
+        console.error(`[Cancellation] Error charging cancellation fee:`, stripeError);
+        cancellationFeeResult = {
+          charged: false,
+          reason: stripeError.message,
+        };
+        // Continue with cancellation even if fee charge fails
+      }
+    }
 
     // Handle payment cancellation/refund
     if (appointment.paymentIntentId) {
-      const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
       const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
 
       if (isWithinPenaltyWindow) {
-        // Partial refund: 50% to homeowner
-        const refundAmount = Math.round(priceInCents * 0.5);
-        const cleanerAmount = Math.round(priceInCents * 0.5 * 0.9); // 50% minus 10% platform fee
+        // Partial refund based on config refund percentage
+        const refundPercent = cancellationConfig.refundPercentage;
+        const platformFeePercent = platformConfig.feePercent;
+        const refundAmount = Math.round(priceInCents * refundPercent);
+        const cleanerAmount = Math.round(priceInCents * refundPercent * (1 - platformFeePercent));
 
         if (paymentIntent.status === "succeeded") {
           // Payment was captured, process partial refund
@@ -1388,8 +1583,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             await Payout.create({
               appointmentId: appointment.id,
               cleanerId,
-              grossAmount: Math.round(priceInCents * 0.5 / cleanerIds.length),
-              platformFee: Math.round(priceInCents * 0.5 * 0.1 / cleanerIds.length),
+              grossAmount: Math.round(priceInCents * refundPercent / cleanerIds.length),
+              platformFee: Math.round(priceInCents * refundPercent * platformFeePercent / cleanerIds.length),
               netAmount: perCleanerAmount,
               status: "pending",
             });
@@ -1426,12 +1621,12 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const appointmentTotal = price;
       const oldAppt = Number(existingBill.appointmentDue);
       const oldFee = Number(existingBill.cancellationFee);
-      const cancellationFee = isWithinPenaltyWindow ? price * 0.5 : 0;
+      const cancellationFeeAmount = isWithinPenaltyWindow ? price * cancellationConfig.refundPercentage : 0;
 
       await existingBill.update({
-        cancellationFee: oldFee + cancellationFee,
+        cancellationFee: oldFee + cancellationFeeAmount,
         appointmentDue: oldAppt - appointmentTotal,
-        totalDue: oldFee + cancellationFee + oldAppt - appointmentTotal,
+        totalDue: oldFee + cancellationFeeAmount + oldAppt - appointmentTotal,
       });
     }
 
@@ -1440,6 +1635,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const cleanerIds = appointment.employeesAssigned || [];
       const home = await UserHomes.findByPk(appointment.homeId);
       const homeowner = await User.findByPk(userId);
+      const cleanerPayment = (price * cancellationConfig.refundPercentage * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
 
       for (const cleanerId of cleanerIds) {
         const cleaner = await User.findByPk(cleanerId);
@@ -1453,7 +1649,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           });
           notifications.unshift(
             isWithinPenaltyWindow
-              ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${(price * 0.5 * 0.9 / cleanerIds.length).toFixed(2)}.`
+              ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${cleanerPayment}.`
               : `The homeowner cancelled the ${formattedDate} cleaning at ${home?.address || "their property"}.`
           );
           await cleaner.update({ notifications: notifications.slice(0, 50) });
@@ -1473,14 +1669,22 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     // Delete the appointment
     await appointment.destroy();
 
+    // Build response message
+    let message = "Appointment cancelled successfully.";
+    if (isWithinPenaltyWindow) {
+      message = "Appointment cancelled. Cleaner will receive partial payment.";
+    }
+    if (cancellationFeeResult?.charged) {
+      message += ` A $${cancellationFeeResult.amount} cancellation fee has been charged to your card.`;
+    }
+
     return res.json({
       success: true,
-      message: isWithinPenaltyWindow
-        ? "Appointment cancelled. Cleaner will receive partial payment."
-        : "Appointment cancelled successfully.",
+      message,
       refund: refundResult ? { amount: refundResult.amount / 100 } : null,
       cleanerPayout: cleanerPayoutResult,
       wasWithinPenaltyWindow: isWithinPenaltyWindow,
+      cancellationFee: cancellationFeeResult,
     });
   } catch (error) {
     console.error("Error cancelling appointment as homeowner:", error);
@@ -1539,6 +1743,18 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
     const isWithinPenaltyWindow = daysUntilAppointment <= 4;
     let accountFrozen = false;
 
+    // Require acknowledgment for last-minute cancellations
+    if (isWithinPenaltyWindow) {
+      const { acknowledged } = req.body;
+      if (!acknowledged) {
+        return res.status(400).json({
+          error: "Acknowledgment required",
+          message: "You must acknowledge the penalties before cancelling within the penalty window. Cancelling will result in an automatic 1-star rating. 3 last-minute cancellations within 3 months will freeze your account.",
+          requiresAcknowledgment: true,
+        });
+      }
+    }
+
     if (isWithinPenaltyWindow) {
       // Create system cancellation penalty review
       await UserReviews.create({
@@ -1572,6 +1788,83 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
           accountFrozenReason: "3 or more last-minute cancellations within 3 months",
         });
         accountFrozen = true;
+
+        // Remove cleaner from all future appointments
+        const futureAssignments = await UserCleanerAppointments.findAll({
+          where: { employeeId: userId },
+          include: [{
+            model: UserAppointments,
+            as: "appointment",
+            where: {
+              date: { [Op.gte]: today.toISOString().split('T')[0] },
+              completed: false,
+            },
+          }],
+        });
+
+        for (const assignment of futureAssignments) {
+          const futureAppointment = assignment.appointment;
+
+          // Skip the current appointment being cancelled (already handled below)
+          if (futureAppointment.id === parseInt(id)) continue;
+
+          // Remove from employeesAssigned array
+          let futureEmployees = Array.isArray(futureAppointment.employeesAssigned)
+            ? [...futureAppointment.employeesAssigned]
+            : [];
+          const updatedFutureEmployees = futureEmployees.filter(
+            (empId) => empId !== String(userId)
+          );
+
+          await futureAppointment.update({
+            employeesAssigned: updatedFutureEmployees,
+            hasBeenAssigned: updatedFutureEmployees.length > 0,
+          });
+
+          // Delete the assignment record
+          await assignment.destroy();
+
+          // Delete pending payout for this cleaner
+          await Payout.destroy({
+            where: {
+              appointmentId: futureAppointment.id,
+              cleanerId: userId,
+              status: "pending",
+            },
+          });
+
+          // Notify homeowner about the removed assignment
+          const futureHomeowner = await User.findByPk(futureAppointment.userId);
+          const futureHome = await UserHomes.findByPk(futureAppointment.homeId);
+
+          if (futureHomeowner) {
+            const notifications = futureHomeowner.notifications || [];
+            const formattedDate = new Date(futureAppointment.date).toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            });
+            notifications.unshift(
+              `A cleaner has been removed from the ${formattedDate} cleaning at ${futureHome?.address || "your property"} due to account issues. A new cleaner will need to be assigned.`
+            );
+            await futureHomeowner.update({ notifications: notifications.slice(0, 50) });
+
+            // Send email notification
+            if (futureHome) {
+              await Email.sendEmailCancellation(
+                futureHomeowner.email,
+                {
+                  street: futureHome.address,
+                  city: futureHome.city,
+                  state: futureHome.state,
+                  zipcode: futureHome.zipcode,
+                },
+                futureHomeowner.username,
+                futureAppointment.date
+              );
+            }
+          }
+        }
       }
     }
 

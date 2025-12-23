@@ -60,27 +60,54 @@ const businessConfig = {
 
   /**
    * PRICING CONFIGURATION
+   * Single source of truth for all pricing in the backend
    */
   pricing: {
+    // Base cleaning rate
+    basePrice: 150, // 1 bed/1 bath starting price
+    extraBedBathFee: 50, // Per additional bedroom or bathroom
+
+    // Linen services
+    linens: {
+      sheetFeePerBed: 30, // Per bed needing fresh sheets
+      towelFee: 5, // Per towel
+      faceClothFee: 2, // Per face cloth
+    },
+
     // Time window surcharges
     timeWindows: {
       anytime: 0,
-      "10-3": 30,
-      "11-4": 30,
-      "12-2": 50,
+      "10-3": 25,
+      "11-4": 25,
+      "12-2": 30,
     },
 
-    // Add-on services
-    addOns: {
-      freshSheets: 25,
-      freshTowels: 25,
+    // Cancellation policy
+    cancellation: {
+      fee: 25, // Flat cancellation fee
+      windowDays: 7, // Days before appointment when fee applies
+      homeownerPenaltyDays: 3, // Days before when homeowner gets partial refund
+      cleanerPenaltyDays: 4, // Days before when cleaner gets penalty
+      refundPercentage: 0.5, // Percentage refunded within penalty window (50%)
     },
 
-    // Cancellation fee per appointment (within cancellation window)
-    cancellationFee: 25,
+    // Platform fees
+    platform: {
+      feePercent: 0.1, // 10% platform fee on cleaner payouts
+    },
 
-    // Days before appointment when cancellation fee applies
-    cancellationWindowDays: 7,
+    // High volume day surcharge
+    highVolumeFee: 50,
+    highVolumeDays: ["holiday", "holiday weekend"],
+  },
+
+  /**
+   * STAFFING CONFIGURATION
+   * Settings for appointment assignment and staffing
+   */
+  staffing: {
+    // Minimum number of cleaners required to mark an appointment as "assigned"
+    minCleanersForAssignment: 1,
   },
 
   /**
@@ -296,10 +323,41 @@ async function updateAllHomesServiceAreaStatus(
   }
 }
 
+/**
+ * Get pricing from database with fallback to static config
+ * @returns {Promise<object>} Pricing configuration object
+ */
+async function getPricingConfig() {
+  try {
+    // Dynamic import to avoid circular dependency
+    const { PricingConfig } = require("../models");
+    const dbPricing = await PricingConfig.getFormattedPricing();
+    if (dbPricing) {
+      return dbPricing;
+    }
+  } catch (error) {
+    // PricingConfig model may not be loaded yet during startup
+    console.log("[BusinessConfig] Using static pricing config (DB not available)");
+  }
+  return businessConfig.pricing;
+}
+
+/**
+ * Get time window surcharge from database or static config
+ * @param {string} timeWindow - Time window selection
+ * @returns {Promise<number>} Surcharge amount
+ */
+async function getTimeWindowSurchargeAsync(timeWindow) {
+  const pricing = await getPricingConfig();
+  return pricing.timeWindows[timeWindow] || 0;
+}
+
 module.exports = {
   businessConfig,
   isInServiceArea,
   getCleanersNeeded,
   getTimeWindowSurcharge,
+  getTimeWindowSurchargeAsync,
+  getPricingConfig,
   updateAllHomesServiceAreaStatus,
 };

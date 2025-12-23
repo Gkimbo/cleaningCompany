@@ -152,6 +152,19 @@ applicationRouter.post("/submitted", async (req, res) => {
     return res.status(500).json({ error: "Failed to connect to database" });
   }
 });
+// GET: fetch pending application count
+applicationRouter.get("/pending-count", async (req, res) => {
+  try {
+    const count = await UserApplications.count({
+      where: { status: "pending" },
+    });
+    return res.status(200).json({ count });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Failed to fetch pending count", count: 0 });
+  }
+});
+
 // GET: fetch all applications
 applicationRouter.get("/all-applications", async (req, res) => {
   try {

@@ -10,6 +10,7 @@ import {
 import Icon from "react-native-vector-icons/FontAwesome";
 import { Checkbox } from "react-native-paper";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import { usePricing } from "../../context/PricingContext";
 
 const CancellationWarningModal = ({
   visible,
@@ -19,6 +20,7 @@ const CancellationWarningModal = ({
   loading = false,
 }) => {
   const [agreed, setAgreed] = useState(false);
+  const { pricing } = usePricing();
 
   const handleClose = () => {
     setAgreed(false);
@@ -41,7 +43,12 @@ const CancellationWarningModal = ({
     warningMessage,
     daysUntilAppointment,
     hasCleanerAssigned,
+    willChargeCancellationFee,
+    cancellationFee,
+    hasPaymentMethod,
   } = cancellationInfo;
+
+  const showCancellationFeeWarning = willChargeCancellationFee && hasPaymentMethod;
 
   return (
     <Modal
@@ -53,16 +60,16 @@ const CancellationWarningModal = ({
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
           {/* Header */}
-          <View style={[styles.header, isWithinPenaltyWindow ? styles.headerWarning : styles.headerNormal]}>
+          <View style={[styles.header, (isWithinPenaltyWindow || showCancellationFeeWarning) ? styles.headerWarning : styles.headerNormal]}>
             <View style={styles.iconContainer}>
               <Icon
-                name={isWithinPenaltyWindow ? "exclamation-triangle" : "info-circle"}
+                name={(isWithinPenaltyWindow || showCancellationFeeWarning) ? "exclamation-triangle" : "info-circle"}
                 size={32}
-                color={isWithinPenaltyWindow ? colors.warning[600] : colors.primary[600]}
+                color={(isWithinPenaltyWindow || showCancellationFeeWarning) ? colors.warning[600] : colors.primary[600]}
               />
             </View>
             <Text style={styles.headerTitle}>
-              {isWithinPenaltyWindow ? "Cancellation Warning" : "Cancel Appointment"}
+              {showCancellationFeeWarning ? "Cancellation Fee Required" : isWithinPenaltyWindow ? "Cancellation Warning" : "Cancel Appointment"}
             </Text>
           </View>
 
@@ -81,11 +88,28 @@ const CancellationWarningModal = ({
             </View>
 
             {/* Warning message */}
-            <View style={[styles.messageBox, isWithinPenaltyWindow ? styles.messageBoxWarning : styles.messageBoxInfo]}>
-              <Text style={[styles.messageText, isWithinPenaltyWindow ? styles.messageTextWarning : styles.messageTextInfo]}>
+            <View style={[styles.messageBox, (isWithinPenaltyWindow || showCancellationFeeWarning) ? styles.messageBoxWarning : styles.messageBoxInfo]}>
+              <Text style={[styles.messageText, (isWithinPenaltyWindow || showCancellationFeeWarning) ? styles.messageTextWarning : styles.messageTextInfo]}>
                 {warningMessage}
               </Text>
             </View>
+
+            {/* Cancellation fee warning */}
+            {showCancellationFeeWarning && (
+              <View style={styles.feeWarningContainer}>
+                <View style={styles.feeWarningHeader}>
+                  <Icon name="credit-card" size={18} color={colors.error[600]} />
+                  <Text style={styles.feeWarningTitle}>Card Will Be Charged</Text>
+                </View>
+                <View style={styles.feeAmountRow}>
+                  <Text style={styles.feeLabel}>Cancellation Fee</Text>
+                  <Text style={styles.feeAmount}>${cancellationFee}</Text>
+                </View>
+                <Text style={styles.feeNote}>
+                  This fee will be charged to your card on file immediately upon cancellation.
+                </Text>
+              </View>
+            )}
 
             {/* Financial breakdown for penalty window */}
             {isWithinPenaltyWindow && hasCleanerAssigned && (
@@ -100,7 +124,7 @@ const CancellationWarningModal = ({
                 <View style={styles.divider} />
 
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Your Refund (50%)</Text>
+                  <Text style={styles.breakdownLabel}>Your Refund ({pricing.cancellation.refundPercentage * 100}%)</Text>
                   <Text style={[styles.breakdownValue, styles.refundAmount]}>${estimatedRefund}</Text>
                 </View>
 
@@ -112,7 +136,7 @@ const CancellationWarningModal = ({
                 <View style={styles.breakdownNote}>
                   <Icon name="info-circle" size={12} color={colors.text.tertiary} />
                   <Text style={styles.breakdownNoteText}>
-                    Cleaner receives 50% minus 10% platform fee
+                    Cleaner receives {pricing.cancellation.refundPercentage * 100}% minus {pricing.platform.feePercent * 100}% platform fee
                   </Text>
                 </View>
               </View>
@@ -130,7 +154,9 @@ const CancellationWarningModal = ({
                 color={colors.primary[600]}
               />
               <Text style={styles.checkboxLabel}>
-                {isWithinPenaltyWindow
+                {showCancellationFeeWarning
+                  ? `I agree to pay the $${cancellationFee} cancellation fee`
+                  : isWithinPenaltyWindow
                   ? "I understand and agree to the cancellation terms"
                   : "I want to cancel this appointment"}
               </Text>
@@ -293,6 +319,49 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
     flex: 1,
+  },
+  feeWarningContainer: {
+    backgroundColor: colors.error[50],
+    borderWidth: 2,
+    borderColor: colors.error[300],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  feeWarningHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  feeWarningTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.error[700],
+  },
+  feeAmountRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  feeLabel: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  feeAmount: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.error[600],
+  },
+  feeNote: {
+    fontSize: typography.fontSize.xs,
+    color: colors.error[600],
+    fontStyle: "italic",
   },
   checkboxContainer: {
     flexDirection: "row",

@@ -39,6 +39,9 @@ jest.mock("../../services/HomeClass", () => ({
 jest.mock("../../config/businessConfig", () => ({
   isInServiceArea: jest.fn(),
   getCleanersNeeded: jest.fn(),
+  getPricingConfig: jest.fn().mockResolvedValue({
+    cancellation: { fee: 25 },
+  }),
 }));
 
 jest.mock("../../serializers/userSerializer", () => ({

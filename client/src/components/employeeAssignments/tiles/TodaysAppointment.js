@@ -3,8 +3,10 @@ import { StyleSheet, Text, View, TouchableOpacity, Modal } from "react-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import JobCompletionFlow from "../jobPhotos/JobCompletionFlow";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
+import { usePricing } from "../../../context/PricingContext";
 
 const TodaysAppointment = ({ appointment, onJobCompleted }) => {
+  const { pricing } = usePricing();
   const [home, setHome] = useState({
     address: "",
     city: "",
@@ -31,8 +33,9 @@ const TodaysAppointment = ({ appointment, onJobCompleted }) => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const totalPrice = Number(appointment.price);
-  const correctedAmount = totalPrice * 0.9;
+  const correctedAmount = totalPrice * cleanerSharePercent;
 
   useEffect(() => {
     FetchData.getHome(appointment.homeId).then((response) => {

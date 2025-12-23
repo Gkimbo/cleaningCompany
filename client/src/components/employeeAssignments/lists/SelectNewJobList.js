@@ -15,6 +15,7 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import RequestedTile from "../tiles/RequestedTile";
+import LargeHomeWarningModal from "../../modals/LargeHomeWarningModal";
 import {
   colors,
   spacing,
@@ -54,6 +55,12 @@ const SelectNewJobList = ({ state }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showSortModal, setShowSortModal] = useState(false);
+
+  // Large home warning modal state
+  const [showLargeHomeModal, setShowLargeHomeModal] = useState(false);
+  const [bookingInfo, setBookingInfo] = useState(null);
+  const [pendingBooking, setPendingBooking] = useState(null);
+  const [bookingLoading, setBookingLoading] = useState(false);
 
   const navigate = useNavigate();
 
@@ -146,6 +153,84 @@ const SelectNewJobList = ({ state }) => {
     setRefreshing(true);
     fetchData(true);
   }, [fetchData]);
+
+  // Handle booking request with large home check
+  const handleBookingRequest = useCallback(async (employeeId, appointmentId) => {
+    try {
+      // First, check if this is a large home that requires acknowledgment
+      const info = await FetchData.getBookingInfo(appointmentId, state.currentUser.token);
+
+      if (info.error) {
+        console.error("Error getting booking info:", info.error);
+        // Proceed with booking anyway if we can't get info
+        const result = await FetchData.addEmployee(employeeId, appointmentId, false);
+        if (result.success) {
+          setAllAppointments((prev) => {
+            const assigned = prev.find((a) => a.id === appointmentId);
+            if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
+            return prev.filter((a) => a.id !== appointmentId);
+          });
+        }
+        return;
+      }
+
+      if (info.requiresAcknowledgment) {
+        // Show warning modal for large homes
+        setBookingInfo(info);
+        setPendingBooking({ employeeId, appointmentId });
+        setShowLargeHomeModal(true);
+      } else {
+        // Proceed directly for small homes
+        const result = await FetchData.addEmployee(employeeId, appointmentId, false);
+        if (result.success) {
+          setAllAppointments((prev) => {
+            const assigned = prev.find((a) => a.id === appointmentId);
+            if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
+            return prev.filter((a) => a.id !== appointmentId);
+          });
+        } else if (result.error) {
+          console.error("Error booking:", result.error);
+        }
+      }
+    } catch (err) {
+      console.error("Error handling booking request:", err);
+    }
+  }, [state.currentUser.token]);
+
+  // Confirm booking after acknowledging large home warning
+  const handleConfirmLargeHomeBooking = useCallback(async () => {
+    if (!pendingBooking) return;
+
+    setBookingLoading(true);
+    try {
+      const { employeeId, appointmentId } = pendingBooking;
+      const result = await FetchData.addEmployee(employeeId, appointmentId, true);
+
+      if (result.success) {
+        setAllAppointments((prev) => {
+          const assigned = prev.find((a) => a.id === appointmentId);
+          if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
+          return prev.filter((a) => a.id !== appointmentId);
+        });
+        setShowLargeHomeModal(false);
+        setBookingInfo(null);
+        setPendingBooking(null);
+      } else if (result.error) {
+        console.error("Error confirming booking:", result.error);
+      }
+    } catch (err) {
+      console.error("Error confirming large home booking:", err);
+    } finally {
+      setBookingLoading(false);
+    }
+  }, [pendingBooking]);
+
+  // Close large home modal
+  const handleCloseLargeHomeModal = useCallback(() => {
+    setShowLargeHomeModal(false);
+    setBookingInfo(null);
+    setPendingBooking(null);
+  }, []);
 
   const sortedData = useMemo(() => {
     const processed = requestsAndAppointments.map((appointment) => {
@@ -312,18 +397,7 @@ const SelectNewJobList = ({ state }) => {
                       {...appointment}
                       cleanerId={userId}
                       assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
-                      addEmployee={async (employeeId, appointmentId) => {
-                        try {
-                          await FetchData.addEmployee(employeeId, appointmentId);
-                          setAllAppointments((prev) => {
-                            const assigned = prev.find((a) => a.id === appointmentId);
-                            if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
-                            return prev.filter((a) => a.id !== appointmentId);
-                          });
-                        } catch (err) {
-                          console.error("Error adding employee:", err);
-                        }
-                      }}
+                      addEmployee={handleBookingRequest}
                       removeEmployee={async (employeeId, appointmentId) => {
                         try {
                           await FetchData.removeEmployee(employeeId, appointmentId);
@@ -402,6 +476,15 @@ const SelectNewJobList = ({ state }) => {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Large Home Warning Modal */}
+      <LargeHomeWarningModal
+        visible={showLargeHomeModal}
+        onClose={handleCloseLargeHomeModal}
+        onConfirm={handleConfirmLargeHomeBooking}
+        bookingInfo={bookingInfo}
+        loading={bookingLoading}
+      />
     </View>
   );
 };

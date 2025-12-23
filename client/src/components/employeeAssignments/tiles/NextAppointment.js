@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
+import { usePricing } from "../../../context/PricingContext";
 
 const NextAppointment = ({ appointment }) => {
+  const { pricing } = usePricing();
   const [expandWindow, setExpandWindow] = useState(false);
   const [home, setHome] = useState({
     address: "",
@@ -29,8 +31,9 @@ const NextAppointment = ({ appointment }) => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const totalPrice = Number(appointment.price);
-  const correctedAmount = totalPrice * 0.9;
+  const correctedAmount = totalPrice * cleanerSharePercent;
 
   const expandDetails = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

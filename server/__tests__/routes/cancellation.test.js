@@ -290,6 +290,94 @@ describe("Cancellation Endpoints", () => {
         expect(res.body.isWithinPenaltyWindow).toBe(false);
         expect(res.body.warningMessage).toContain("without penalty");
       });
+
+      it("should require acknowledgment when within penalty window", async () => {
+        const token = jwt.sign({ userId: 2 }, secretKey);
+
+        User.findByPk.mockResolvedValue({
+          id: 2,
+          type: "cleaner",
+        });
+
+        UserAppointments.findByPk.mockResolvedValue({
+          id: 1,
+          userId: 1,
+          date: getFutureDate(3), // 3 days from now - within penalty window
+          price: "200",
+          hasBeenAssigned: true,
+          employeesAssigned: ["2"],
+        });
+
+        UserReviews.count.mockResolvedValue(0);
+
+        const res = await request(app)
+          .get("/api/v1/appointments/cancellation-info/1")
+          .set("Authorization", `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.requiresAcknowledgment).toBe(true);
+        expect(res.body.acknowledgmentMessage).toBeDefined();
+        expect(res.body.acknowledgmentMessage).toContain("1-star rating");
+        expect(res.body.acknowledgmentMessage).toContain("3 last-minute cancellations");
+      });
+
+      it("should not require acknowledgment when outside penalty window", async () => {
+        const token = jwt.sign({ userId: 2 }, secretKey);
+
+        User.findByPk.mockResolvedValue({
+          id: 2,
+          type: "cleaner",
+        });
+
+        UserAppointments.findByPk.mockResolvedValue({
+          id: 1,
+          userId: 1,
+          date: getFutureDate(7), // 7 days from now - outside penalty window
+          price: "200",
+          hasBeenAssigned: true,
+          employeesAssigned: ["2"],
+        });
+
+        UserReviews.count.mockResolvedValue(0);
+
+        const res = await request(app)
+          .get("/api/v1/appointments/cancellation-info/1")
+          .set("Authorization", `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.requiresAcknowledgment).toBe(false);
+        expect(res.body.acknowledgmentMessage).toBeNull();
+      });
+
+      it("should have different acknowledgment message when account will be frozen", async () => {
+        const token = jwt.sign({ userId: 2 }, secretKey);
+
+        User.findByPk.mockResolvedValue({
+          id: 2,
+          type: "cleaner",
+        });
+
+        UserAppointments.findByPk.mockResolvedValue({
+          id: 1,
+          userId: 1,
+          date: getFutureDate(2), // 2 days from now - within penalty window
+          price: "200",
+          hasBeenAssigned: true,
+          employeesAssigned: ["2"],
+        });
+
+        UserReviews.count.mockResolvedValue(2); // 2 penalties - next one will freeze
+
+        const res = await request(app)
+          .get("/api/v1/appointments/cancellation-info/1")
+          .set("Authorization", `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.requiresAcknowledgment).toBe(true);
+        expect(res.body.willResultInFreeze).toBe(true);
+        expect(res.body.acknowledgmentMessage).toContain("account will be frozen");
+        expect(res.body.acknowledgmentMessage).toContain("1-star rating");
+      });
     });
 
     it("should return 401 without authorization", async () => {
@@ -618,7 +706,8 @@ describe("Cancellation Endpoints", () => {
 
       const res = await request(app)
         .post("/api/v1/appointments/1/cancel-cleaner")
-        .set("Authorization", `Bearer ${token}`);
+        .set("Authorization", `Bearer ${token}`)
+        .send({ acknowledged: true });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -634,6 +723,92 @@ describe("Cancellation Endpoints", () => {
           isPublished: true,
         })
       );
+    });
+
+    it("should require acknowledgment for last-minute cancellations", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        date: getFutureDate(3), // 3 days away - within penalty window
+        price: "200",
+        hasBeenAssigned: true,
+        employeesAssigned: ["2"],
+        completed: false,
+        update: jest.fn().mockResolvedValue(true),
+      });
+
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        type: "cleaner",
+        accountFrozen: false,
+        update: jest.fn().mockResolvedValue(true),
+      });
+
+      // Try to cancel without acknowledgment
+      const res = await request(app)
+        .post("/api/v1/appointments/1/cancel-cleaner")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ acknowledged: false });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Acknowledgment required");
+      expect(res.body.requiresAcknowledgment).toBe(true);
+      expect(res.body.message).toContain("1-star rating");
+      expect(res.body.message).toContain("freeze your account");
+    });
+
+    it("should not require acknowledgment for cancellations outside penalty window", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        type: "cleaner",
+        accountFrozen: false,
+        notifications: [],
+        update: jest.fn().mockResolvedValue(true),
+      });
+
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 2,
+          type: "cleaner",
+          accountFrozen: false,
+        })
+        .mockResolvedValueOnce({
+          id: 1,
+          notifications: [],
+          update: jest.fn().mockResolvedValue(true),
+        });
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        date: getFutureDate(7), // 7 days away - outside penalty window
+        price: "200",
+        hasBeenAssigned: true,
+        employeesAssigned: ["2"],
+        completed: false,
+        update: jest.fn().mockResolvedValue(true),
+      });
+
+      UserHomes.findByPk.mockResolvedValue({
+        address: "123 Test St",
+      });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      Payout.destroy.mockResolvedValue(1);
+
+      // Cancel without acknowledgment - should work since outside penalty window
+      const res = await request(app)
+        .post("/api/v1/appointments/1/cancel-cleaner")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ acknowledged: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.wasWithinPenaltyWindow).toBe(false);
     });
 
     it("should freeze account after 3 cancellation penalties", async () => {
@@ -673,12 +848,16 @@ describe("Cancellation Endpoints", () => {
         address: "123 Test St",
       });
 
+      // Mock no other future appointments (only the current one being cancelled)
+      UserCleanerAppointments.findAll.mockResolvedValue([]);
+
       UserCleanerAppointments.destroy.mockResolvedValue(1);
       Payout.destroy.mockResolvedValue(1);
 
       const res = await request(app)
         .post("/api/v1/appointments/1/cancel-cleaner")
-        .set("Authorization", `Bearer ${token}`);
+        .set("Authorization", `Bearer ${token}`)
+        .send({ acknowledged: true });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -689,6 +868,321 @@ describe("Cancellation Endpoints", () => {
           accountFrozenReason: "3 or more last-minute cancellations within 3 months",
         })
       );
+    });
+
+    it("should remove cleaner from all future appointments when account is frozen", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+      const Email = require("../../services/sendNotifications/EmailClass");
+
+      const mockCleaner = {
+        id: 2,
+        type: "cleaner",
+        accountFrozen: false,
+        notifications: [],
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      // Mock future appointment that the cleaner is also assigned to
+      const mockFutureAppointment1 = {
+        id: 10,
+        userId: 5,
+        homeId: 15,
+        date: getFutureDate(10),
+        price: "180",
+        hasBeenAssigned: true,
+        employeesAssigned: ["2", "3"], // Cleaner 2 and another cleaner
+        completed: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const mockFutureAppointment2 = {
+        id: 11,
+        userId: 6,
+        homeId: 16,
+        date: getFutureDate(14),
+        price: "220",
+        hasBeenAssigned: true,
+        employeesAssigned: ["2"], // Only cleaner 2
+        completed: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      // Mock assignment records
+      const mockAssignment1 = {
+        employeeId: 2,
+        appointmentId: 10,
+        appointment: mockFutureAppointment1,
+        destroy: jest.fn().mockResolvedValue(true),
+      };
+
+      const mockAssignment2 = {
+        employeeId: 2,
+        appointmentId: 11,
+        appointment: mockFutureAppointment2,
+        destroy: jest.fn().mockResolvedValue(true),
+      };
+
+      // Setup User.findByPk mock sequence
+      User.findByPk
+        .mockResolvedValueOnce(mockCleaner) // First call - get cleaner
+        .mockResolvedValueOnce({ // Homeowner for future appointment 1
+          id: 5,
+          notifications: [],
+          update: jest.fn().mockResolvedValue(true),
+        })
+        .mockResolvedValueOnce({ // Homeowner for future appointment 2
+          id: 6,
+          notifications: [],
+          update: jest.fn().mockResolvedValue(true),
+        })
+        .mockResolvedValueOnce({ // Homeowner for original appointment notification
+          id: 1,
+          notifications: [],
+          update: jest.fn().mockResolvedValue(true),
+        });
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        homeId: 1,
+        date: getFutureDate(2), // 2 days away - within penalty window
+        price: "200",
+        hasBeenAssigned: true,
+        employeesAssigned: ["2"],
+        completed: false,
+        update: jest.fn().mockResolvedValue(true),
+      });
+
+      // Mock finding future assignments when account is frozen
+      UserCleanerAppointments.findAll.mockResolvedValue([
+        mockAssignment1,
+        mockAssignment2,
+      ]);
+
+      UserReviews.count.mockResolvedValue(3); // 3 penalties triggers freeze
+      UserReviews.create.mockResolvedValue({ id: 1 });
+
+      UserHomes.findByPk
+        .mockResolvedValueOnce({ address: "456 Future St", city: "Test City", state: "TS", zipcode: "12345" })
+        .mockResolvedValueOnce({ address: "789 Another St", city: "Test City", state: "TS", zipcode: "12345" })
+        .mockResolvedValueOnce({ address: "123 Test St", city: "Test City", state: "TS", zipcode: "12345" });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      Payout.destroy.mockResolvedValue(1);
+
+      const res = await request(app)
+        .post("/api/v1/appointments/1/cancel-cleaner")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ acknowledged: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.accountFrozen).toBe(true);
+
+      // Verify future appointments were updated
+      expect(mockFutureAppointment1.update).toHaveBeenCalledWith({
+        employeesAssigned: ["3"], // Cleaner 2 removed, cleaner 3 remains
+        hasBeenAssigned: true, // Still has another cleaner
+      });
+
+      expect(mockFutureAppointment2.update).toHaveBeenCalledWith({
+        employeesAssigned: [], // Cleaner 2 removed, no cleaners left
+        hasBeenAssigned: false, // No cleaners left
+      });
+
+      // Verify assignment records were destroyed
+      expect(mockAssignment1.destroy).toHaveBeenCalled();
+      expect(mockAssignment2.destroy).toHaveBeenCalled();
+
+      // Verify payouts were deleted for future appointments
+      expect(Payout.destroy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            appointmentId: 10,
+            cleanerId: 2,
+            status: "pending",
+          }),
+        })
+      );
+      expect(Payout.destroy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            appointmentId: 11,
+            cleanerId: 2,
+            status: "pending",
+          }),
+        })
+      );
+
+      // Verify email notifications were sent
+      expect(Email.sendEmailCancellation).toHaveBeenCalledTimes(3); // 2 future + 1 original
+    });
+
+    it("should skip current appointment when removing cleaner from future appointments", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      const mockCleaner = {
+        id: 2,
+        type: "cleaner",
+        accountFrozen: false,
+        notifications: [],
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      // Mock assignment for the current appointment being cancelled (should be skipped)
+      const currentAppointment = {
+        id: 1,
+        userId: 1,
+        homeId: 1,
+        date: getFutureDate(2),
+        price: "200",
+        hasBeenAssigned: true,
+        employeesAssigned: ["2"],
+        completed: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const mockCurrentAssignment = {
+        employeeId: 2,
+        appointmentId: 1,
+        appointment: currentAppointment,
+        destroy: jest.fn().mockResolvedValue(true),
+      };
+
+      User.findByPk
+        .mockResolvedValueOnce(mockCleaner)
+        .mockResolvedValueOnce({ // Homeowner for notification
+          id: 1,
+          notifications: [],
+          update: jest.fn().mockResolvedValue(true),
+        });
+
+      UserAppointments.findByPk.mockResolvedValue(currentAppointment);
+
+      // Return only the current appointment in future assignments
+      UserCleanerAppointments.findAll.mockResolvedValue([mockCurrentAssignment]);
+
+      UserReviews.count.mockResolvedValue(3);
+      UserReviews.create.mockResolvedValue({ id: 1 });
+
+      UserHomes.findByPk.mockResolvedValue({
+        address: "123 Test St",
+        city: "Test City",
+        state: "TS",
+        zipcode: "12345",
+      });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      Payout.destroy.mockResolvedValue(1);
+
+      const res = await request(app)
+        .post("/api/v1/appointments/1/cancel-cleaner")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ acknowledged: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.accountFrozen).toBe(true);
+
+      // The current appointment should NOT be updated by the freeze logic
+      // (it's handled separately by the main cancellation flow)
+      // The mockCurrentAssignment.destroy should NOT be called by the freeze logic
+      expect(mockCurrentAssignment.destroy).not.toHaveBeenCalled();
+    });
+
+    it("should notify homeowners when cleaner is removed due to account freeze", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+      const Email = require("../../services/sendNotifications/EmailClass");
+
+      const mockCleaner = {
+        id: 2,
+        type: "cleaner",
+        accountFrozen: false,
+        notifications: [],
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const mockFutureAppointment = {
+        id: 10,
+        userId: 5,
+        homeId: 15,
+        date: getFutureDate(10),
+        price: "180",
+        hasBeenAssigned: true,
+        employeesAssigned: ["2"],
+        completed: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const mockAssignment = {
+        employeeId: 2,
+        appointmentId: 10,
+        appointment: mockFutureAppointment,
+        destroy: jest.fn().mockResolvedValue(true),
+      };
+
+      const mockFutureHomeowner = {
+        id: 5,
+        notifications: [],
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const mockOriginalHomeowner = {
+        id: 1,
+        notifications: [],
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      User.findByPk
+        .mockResolvedValueOnce(mockCleaner)
+        .mockResolvedValueOnce(mockFutureHomeowner) // Homeowner for future appointment
+        .mockResolvedValueOnce(mockOriginalHomeowner); // Homeowner for original appointment
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        homeId: 1,
+        date: getFutureDate(2),
+        price: "200",
+        hasBeenAssigned: true,
+        employeesAssigned: ["2"],
+        completed: false,
+        update: jest.fn().mockResolvedValue(true),
+      });
+
+      UserCleanerAppointments.findAll.mockResolvedValue([mockAssignment]);
+
+      UserReviews.count.mockResolvedValue(3);
+      UserReviews.create.mockResolvedValue({ id: 1 });
+
+      UserHomes.findByPk
+        .mockResolvedValueOnce({ address: "456 Future St", city: "Test City", state: "TS", zipcode: "12345" })
+        .mockResolvedValueOnce({ address: "123 Test St", city: "Test City", state: "TS", zipcode: "12345" });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      Payout.destroy.mockResolvedValue(1);
+
+      const res = await request(app)
+        .post("/api/v1/appointments/1/cancel-cleaner")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ acknowledged: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.accountFrozen).toBe(true);
+
+      // Verify future homeowner was notified about removal due to account issues
+      expect(mockFutureHomeowner.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notifications: expect.arrayContaining([
+            expect.stringContaining("due to account issues"),
+          ]),
+        })
+      );
+
+      // Verify original homeowner was also notified (regular cancellation message)
+      expect(mockOriginalHomeowner.update).toHaveBeenCalled();
+
+      // Verify emails were sent to both homeowners
+      expect(Email.sendEmailCancellation).toHaveBeenCalledTimes(2);
     });
 
     it("should return 403 if cleaner is not assigned to appointment", async () => {
@@ -723,12 +1217,14 @@ describe("Cancellation Endpoints", () => {
         hasBeenAssigned: true,
         employeesAssigned: ["2"],
         completed: false,
+        update: jest.fn().mockResolvedValue(true),
       });
 
       User.findByPk.mockResolvedValue({
         id: 2,
         type: "cleaner",
         accountFrozen: true, // Already frozen
+        update: jest.fn().mockResolvedValue(true),
       });
 
       const res = await request(app)

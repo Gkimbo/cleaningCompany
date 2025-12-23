@@ -9,6 +9,7 @@ import {
   Image,
 } from "react-native";
 import { UserContext } from "../../../context/UserContext";
+import { usePricing } from "../../../context/PricingContext";
 import JobPhotoCapture from "./JobPhotoCapture";
 import CleaningChecklist from "./CleaningChecklist";
 import styles from "./JobCompletionFlowStyles";
@@ -25,6 +26,8 @@ const STEPS = {
 
 const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   const { currentUser } = useContext(UserContext);
+  const { pricing } = usePricing();
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const [currentStep, setCurrentStep] = useState(STEPS.BEFORE_PHOTOS);
   const [photoStatus, setPhotoStatus] = useState({
     hasBeforePhotos: false,
@@ -272,7 +275,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
       <View style={styles.payoutCard}>
         <Text style={styles.payoutTitle}>Your Payout</Text>
         <Text style={styles.payoutAmount}>
-          ${(Number(appointment.price) * 0.9).toFixed(2)}
+          ${(Number(appointment.price) * cleanerSharePercent).toFixed(2)}
         </Text>
       </View>
 

@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-649_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-909_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -173,7 +173,8 @@ server/
 │   ├── calendarSyncService.js      # iCal parsing & sync
 │   ├── TaxDocumentService.js       # 1099-NEC generation
 │   ├── PlatformTaxService.js       # Platform tax reporting
-│   └── emailService.js             # Email notifications
+│   └── sendNotifications/
+│       └── EmailClass.js           # HTML email notifications
 │
 ├── middleware/
 │   └── authenticatedToken.js       # JWT authentication
@@ -541,7 +542,7 @@ Configure these webhooks in your Stripe dashboard:
 ## Testing
 
 ```bash
-# Run all tests (649 tests)
+# Run all tests (909 tests)
 npm test
 
 # Run specific test file
@@ -570,10 +571,12 @@ npm test -- __tests__/integration/
 | Reviews | 32 | Create, read, summaries |
 | Messaging | 21 | Conversations, send, broadcast |
 | Manager Features | 28 | Dashboard, applications |
+| Email Notifications | 54 | HTML templates, all notification types |
+| Pricing & Staffing | 10 | Dynamic pricing, staffing config |
 | Terms & Conditions | 54 | Version management, acceptance tracking |
 | Models | 27 | TermsAndConditions, UserTermsAcceptance |
 | Integration | 27 | Full payment flows |
-| **Total** | **649** | - |
+| **Total** | **909** | - |
 
 ---
 

@@ -13,6 +13,8 @@ const {
   UserAppointments,
   UserHomes,
   UserApplications,
+  UserBills,
+  UserReviews,
   Message,
   Conversation,
   sequelize,
@@ -952,6 +954,264 @@ managerDashboardRouter.get(
       res
         .status(500)
         .json({ error: "Failed to fetch homes outside service area" });
+    }
+  }
+);
+
+/**
+ * GET /business-metrics
+ * Get key business performance metrics
+ * - Cost per booking (average platform fee)
+ * - Repeat booking rate
+ * - Subscription % of users (frequent bookers)
+ * - Churn (cancellations)
+ * - Cleaner reliability
+ */
+managerDashboardRouter.get(
+  "/business-metrics",
+  verifyManager,
+  async (req, res) => {
+    try {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+      const ninetyDaysAgo = new Date(now - 90 * 24 * 60 * 60 * 1000);
+
+      // ==========================================
+      // 1. COST PER BOOKING (Platform fee per appointment)
+      // ==========================================
+      let costPerBooking = { avgFeeCents: 0, totalFeeCents: 0, bookingCount: 0 };
+      try {
+        const platformEarningsStats = await PlatformEarnings.findOne({
+          attributes: [
+            [sequelize.fn("AVG", sequelize.col("platformFeeAmount")), "avgFee"],
+            [sequelize.fn("SUM", sequelize.col("platformFeeAmount")), "totalFee"],
+            [sequelize.fn("COUNT", sequelize.col("id")), "count"],
+          ],
+          where: { status: "collected" },
+          raw: true,
+        });
+
+        costPerBooking = {
+          avgFeeCents: Math.round(parseFloat(platformEarningsStats?.avgFee || 0)),
+          totalFeeCents: parseInt(platformEarningsStats?.totalFee || 0),
+          bookingCount: parseInt(platformEarningsStats?.count || 0),
+        };
+      } catch (err) {
+        console.error("[Business Metrics] Cost per booking error:", err.message);
+      }
+
+      // ==========================================
+      // 2. REPEAT BOOKING RATE
+      // ==========================================
+      let repeatBookingRate = { rate: 0, repeatBookers: 0, singleBookers: 0, totalHomeowners: 0 };
+      try {
+        // Get homeowners with their booking counts
+        const bookingCounts = await UserAppointments.findAll({
+          attributes: [
+            "userId",
+            [sequelize.fn("COUNT", sequelize.col("id")), "bookingCount"],
+          ],
+          group: ["userId"],
+          raw: true,
+        });
+
+        const totalHomeowners = bookingCounts.length;
+        const repeatBookers = bookingCounts.filter((u) => parseInt(u.bookingCount) > 1).length;
+        const singleBookers = totalHomeowners - repeatBookers;
+
+        repeatBookingRate = {
+          rate: totalHomeowners > 0 ? Math.round((repeatBookers / totalHomeowners) * 100) : 0,
+          repeatBookers,
+          singleBookers,
+          totalHomeowners,
+        };
+      } catch (err) {
+        console.error("[Business Metrics] Repeat booking rate error:", err.message);
+      }
+
+      // ==========================================
+      // 3. SUBSCRIPTION % (Frequent bookers - 3+ bookings)
+      // ==========================================
+      let subscriptionRate = { rate: 0, frequentBookers: 0, regularBookers: 0, occasionalBookers: 0 };
+      try {
+        const bookingCounts = await UserAppointments.findAll({
+          attributes: [
+            "userId",
+            [sequelize.fn("COUNT", sequelize.col("id")), "bookingCount"],
+          ],
+          group: ["userId"],
+          raw: true,
+        });
+
+        const totalHomeowners = bookingCounts.length;
+        const frequentBookers = bookingCounts.filter((u) => parseInt(u.bookingCount) >= 5).length;
+        const regularBookers = bookingCounts.filter((u) => {
+          const count = parseInt(u.bookingCount);
+          return count >= 3 && count < 5;
+        }).length;
+        const occasionalBookers = bookingCounts.filter((u) => parseInt(u.bookingCount) < 3).length;
+
+        subscriptionRate = {
+          rate: totalHomeowners > 0 ? Math.round((frequentBookers / totalHomeowners) * 100) : 0,
+          frequentBookers, // 5+ bookings (loyal customers)
+          regularBookers, // 3-4 bookings
+          occasionalBookers, // 1-2 bookings
+          totalHomeowners,
+        };
+      } catch (err) {
+        console.error("[Business Metrics] Subscription rate error:", err.message);
+      }
+
+      // ==========================================
+      // 4. CHURN (Cancellations)
+      // ==========================================
+      let churn = {
+        homeownerCancellations: { total: 0, last30Days: 0, totalFeeCents: 0 },
+        cleanerCancellations: { total: 0, last30Days: 0, last90Days: 0 },
+      };
+      try {
+        // Track homeowner cancellations via cancellation fees in UserBills
+        const billsWithCancellations = await UserBills.findAll({
+          where: { cancellationFee: { [Op.gt]: 0 } },
+          attributes: [
+            [sequelize.fn("SUM", sequelize.col("cancellationFee")), "totalFees"],
+            [sequelize.fn("COUNT", sequelize.col("id")), "count"],
+          ],
+          raw: true,
+        });
+
+        // Track cleaner cancellations via system_cancellation_penalty reviews
+        const cleanerCancellationReviews = await UserReviews.count({
+          where: { reviewType: "system_cancellation_penalty" },
+        }).catch(() => 0);
+
+        const cleanerCancellationsLast30 = await UserReviews.count({
+          where: {
+            reviewType: "system_cancellation_penalty",
+            createdAt: { [Op.gte]: thirtyDaysAgo },
+          },
+        }).catch(() => 0);
+
+        const cleanerCancellationsLast90 = await UserReviews.count({
+          where: {
+            reviewType: "system_cancellation_penalty",
+            createdAt: { [Op.gte]: ninetyDaysAgo },
+          },
+        }).catch(() => 0);
+
+        churn = {
+          homeownerCancellations: {
+            usersWithCancellations: parseInt(billsWithCancellations?.[0]?.count || 0),
+            totalFeeCents: parseInt(billsWithCancellations?.[0]?.totalFees || 0),
+          },
+          cleanerCancellations: {
+            total: cleanerCancellationReviews,
+            last30Days: cleanerCancellationsLast30,
+            last90Days: cleanerCancellationsLast90,
+          },
+        };
+      } catch (err) {
+        console.error("[Business Metrics] Churn error:", err.message);
+      }
+
+      // ==========================================
+      // 5. CLEANER RELIABILITY
+      // ==========================================
+      let cleanerReliability = {
+        overallCompletionRate: 0,
+        avgRating: 0,
+        totalCompleted: 0,
+        totalAssigned: 0,
+        cleanerStats: [],
+      };
+      try {
+        // Get all cleaners
+        const cleaners = await User.findAll({
+          where: { type: "cleaner" },
+          attributes: ["id", "username", "cleanerRating"],
+        });
+
+        // Get completed appointments count
+        const totalCompleted = await UserAppointments.count({
+          where: { completed: true },
+        });
+
+        // Get assigned appointments (past date or completed)
+        const totalAssigned = await UserAppointments.count({
+          where: {
+            hasBeenAssigned: true,
+            [Op.or]: [
+              { completed: true },
+              { date: { [Op.lt]: now.toISOString().split("T")[0] } },
+            ],
+          },
+        });
+
+        // Calculate completion rate
+        const completionRate = totalAssigned > 0 ? Math.round((totalCompleted / totalAssigned) * 100) : 0;
+
+        // Get average cleaner rating
+        const avgRatingResult = await User.findOne({
+          where: { type: "cleaner", cleanerRating: { [Op.gt]: 0 } },
+          attributes: [[sequelize.fn("AVG", sequelize.col("cleanerRating")), "avgRating"]],
+          raw: true,
+        });
+
+        // Get per-cleaner stats (top performers)
+        const cleanerStatsPromises = cleaners.slice(0, 20).map(async (cleaner) => {
+          const completedByThisCleaner = await UserAppointments.count({
+            where: {
+              completed: true,
+              employeesAssigned: { [Op.contains]: [cleaner.id.toString()] },
+            },
+          }).catch(() => 0);
+
+          const assignedToThisCleaner = await UserAppointments.count({
+            where: {
+              hasBeenAssigned: true,
+              employeesAssigned: { [Op.contains]: [cleaner.id.toString()] },
+              [Op.or]: [
+                { completed: true },
+                { date: { [Op.lt]: now.toISOString().split("T")[0] } },
+              ],
+            },
+          }).catch(() => 0);
+
+          return {
+            id: cleaner.id,
+            username: cleaner.username,
+            rating: parseFloat(cleaner.cleanerRating) || 0,
+            completed: completedByThisCleaner,
+            assigned: assignedToThisCleaner,
+            completionRate: assignedToThisCleaner > 0
+              ? Math.round((completedByThisCleaner / assignedToThisCleaner) * 100)
+              : 100,
+          };
+        });
+
+        const cleanerStats = await Promise.all(cleanerStatsPromises);
+
+        cleanerReliability = {
+          overallCompletionRate: completionRate,
+          avgRating: parseFloat(parseFloat(avgRatingResult?.avgRating || 0).toFixed(2)),
+          totalCompleted,
+          totalAssigned,
+          cleanerStats: cleanerStats.sort((a, b) => b.completionRate - a.completionRate),
+        };
+      } catch (err) {
+        console.error("[Business Metrics] Cleaner reliability error:", err.message);
+      }
+
+      res.json({
+        costPerBooking,
+        repeatBookingRate,
+        subscriptionRate,
+        churn,
+        cleanerReliability,
+      });
+    } catch (error) {
+      console.error("[Manager Dashboard] Business metrics error:", error);
+      res.status(500).json({ error: "Failed to fetch business metrics" });
     }
   }
 );

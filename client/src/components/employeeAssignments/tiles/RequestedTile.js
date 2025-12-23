@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
+import { usePricing } from "../../../context/PricingContext";
 
 const RequestedTile = ({
   id,
@@ -17,10 +18,12 @@ const RequestedTile = ({
   timeToBeCompleted,
 }) => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
   const [expandWindow, setExpandWindow] = useState(false);
   const [home, setHome] = useState({});
 
-  const amount = Number(price) * 0.9;
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+  const amount = Number(price) * cleanerSharePercent;
 
   const formatDate = (dateString) => {
     const date = new Date(dateString + "T00:00:00");

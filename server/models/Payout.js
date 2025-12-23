@@ -65,10 +65,12 @@ module.exports = (sequelize, DataTypes) => {
     });
   };
 
-  // Helper to calculate 90/10 split
-  Payout.calculateSplit = (grossAmountCents) => {
-    const platformFee = Math.round(grossAmountCents * 0.10); // 10% to platform
-    const netAmount = grossAmountCents - platformFee; // 90% to cleaner
+  // Helper to calculate platform/cleaner split
+  // NOTE: Prefer using getPricingConfig() to get feePercent from database
+  // This method is a convenience for when you already have the feePercent
+  Payout.calculateSplit = (grossAmountCents, feePercent = 0.10) => {
+    const platformFee = Math.round(grossAmountCents * feePercent);
+    const netAmount = grossAmountCents - platformFee;
     return { platformFee, netAmount };
   };
 

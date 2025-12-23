@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import { colors, spacing, radius, shadows } from "../../services/styles/theme";
+import Application from "../../services/fetchRequests/ApplicationClass";
 
 import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
@@ -21,6 +22,7 @@ import EditHomeButton from "./EditHomeButton";
 import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
 import HomeButton from "./HomeButton";
 import ManageEmployees from "./ManageEmployeeButton";
+import ManagePricingButton from "./ManagePricingButton";
 import MyRequestsButton from "./MyRequestsButton";
 import ScheduleCleaningButton from "./ScheduleCleaningButton";
 import SeeAllAppointments from "./SeeAllAppointmentsButton";
@@ -35,8 +37,20 @@ const TopBar = ({ dispatch, state }) => {
   const [signInRedirect, setSignInRedirect] = useState(false);
   const [signUpRedirect, setSignUpRedirect] = useState(false);
   const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
+  const [pendingApplications, setPendingApplications] = useState(0);
 
   const navigate = useNavigate();
+
+  // Fetch pending applications count for managers
+  useEffect(() => {
+    const fetchPendingApplications = async () => {
+      if (state.account === "manager1") {
+        const count = await Application.getPendingCount();
+        setPendingApplications(count);
+      }
+    };
+    fetchPendingApplications();
+  }, [state.account]);
 
   useEffect(() => {
     if (signInRedirect) {
@@ -66,6 +80,23 @@ const TopBar = ({ dispatch, state }) => {
             <View style={styles.rightSection}>
               <MessagesButton state={state} dispatch={dispatch} />
               <HomeButton />
+              {/* Applications notification badge for managers */}
+              {state.account === "manager1" && pendingApplications > 0 && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.notificationButton,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => navigate("/view-all-applications")}
+                >
+                  <Feather name="users" size={20} color="white" />
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {pendingApplications > 9 ? "9+" : pendingApplications}
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
               <Pressable
                 style={({ pressed }) => [
                   styles.hamburgerButton,
@@ -91,6 +122,7 @@ const TopBar = ({ dispatch, state }) => {
                       {state.account === "manager1" ? (
                         <>
                           <ManageEmployees closeModal={closeModal} />
+                          <ManagePricingButton closeModal={closeModal} />
                           <SeeAllAppointments closeModal={closeModal} />
                           <UnassignedAppointmentsButton
                             closeModal={closeModal}
@@ -231,6 +263,33 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: radius.lg,
     backgroundColor: colors.neutral[700],
+  },
+
+  // Notification button with badge
+  notificationButton: {
+    padding: 8,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[600],
+    position: "relative",
+  },
+  badge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: colors.error[500],
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: colors.neutral[800],
+  },
+  badgeText: {
+    color: colors.neutral[0],
+    fontSize: 10,
+    fontWeight: "700",
   },
 
   // Auth buttons (Sign In / Sign Up / Become Cleaner)

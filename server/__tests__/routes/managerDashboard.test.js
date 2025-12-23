@@ -8,6 +8,7 @@ jest.mock("../../models", () => ({
     findByPk: jest.fn(),
     count: jest.fn(),
     findAll: jest.fn(),
+    findOne: jest.fn(),
   },
   Payment: {
     count: jest.fn(),
@@ -27,6 +28,12 @@ jest.mock("../../models", () => ({
   UserApplications: {
     count: jest.fn(),
   },
+  UserBills: {
+    findAll: jest.fn(),
+  },
+  UserReviews: {
+    count: jest.fn(),
+  },
   Message: {
     count: jest.fn(),
   },
@@ -37,6 +44,7 @@ jest.mock("../../models", () => ({
   sequelize: {
     fn: jest.fn((name, ...args) => ({ fn: name, args })),
     col: jest.fn((name) => ({ col: name })),
+    literal: jest.fn((str) => ({ literal: str })),
   },
 }));
 
@@ -61,6 +69,8 @@ const {
   UserAppointments,
   UserHomes,
   UserApplications,
+  UserBills,
+  UserReviews,
   Message,
   Conversation,
 } = require("../../models");
@@ -344,6 +354,243 @@ describe("Manager Dashboard Router", () => {
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(0);
       expect(response.body.homes).toHaveLength(0);
+    });
+  });
+
+  describe("GET /business-metrics", () => {
+    beforeEach(() => {
+      // Reset all mocks
+      PlatformEarnings.findOne.mockReset();
+      UserAppointments.findAll.mockReset();
+      UserAppointments.count.mockReset();
+      UserBills.findAll.mockReset();
+      UserReviews.count.mockReset();
+      User.findAll.mockReset();
+      User.findOne.mockReset();
+      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+    });
+
+    it("should return all business metrics", async () => {
+      // Mock cost per booking data
+      PlatformEarnings.findOne.mockResolvedValue({
+        avgFee: 1500,
+        totalFee: 150000,
+        count: 100,
+      });
+
+      // Mock repeat booking rate data
+      UserAppointments.findAll.mockResolvedValue([
+        { userId: 1, bookingCount: 5 },
+        { userId: 2, bookingCount: 1 },
+        { userId: 3, bookingCount: 3 },
+        { userId: 4, bookingCount: 1 },
+      ]);
+
+      // Mock churn data
+      UserBills.findAll.mockResolvedValue([{ count: 5, totalFees: 12500 }]);
+      UserReviews.count.mockResolvedValue(3);
+
+      // Mock cleaner reliability data
+      User.findAll.mockResolvedValue([
+        { id: 10, username: "cleaner1", cleanerRating: 4.5 },
+        { id: 11, username: "cleaner2", cleanerRating: 4.8 },
+      ]);
+      UserAppointments.count.mockResolvedValue(50);
+      User.findOne.mockResolvedValue({ avgRating: 4.65 });
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.costPerBooking).toBeDefined();
+      expect(response.body.repeatBookingRate).toBeDefined();
+      expect(response.body.subscriptionRate).toBeDefined();
+      expect(response.body.churn).toBeDefined();
+      expect(response.body.cleanerReliability).toBeDefined();
+    });
+
+    it("should calculate cost per booking correctly", async () => {
+      PlatformEarnings.findOne.mockResolvedValue({
+        avgFee: 1250,
+        totalFee: 125000,
+        count: 100,
+      });
+      UserAppointments.findAll.mockResolvedValue([]);
+      UserBills.findAll.mockResolvedValue([]);
+      UserReviews.count.mockResolvedValue(0);
+      User.findAll.mockResolvedValue([]);
+      UserAppointments.count.mockResolvedValue(0);
+      User.findOne.mockResolvedValue(null);
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.costPerBooking.avgFeeCents).toBe(1250);
+      expect(response.body.costPerBooking.totalFeeCents).toBe(125000);
+      expect(response.body.costPerBooking.bookingCount).toBe(100);
+    });
+
+    it("should calculate repeat booking rate correctly", async () => {
+      PlatformEarnings.findOne.mockResolvedValue(null);
+      UserAppointments.findAll.mockResolvedValue([
+        { userId: 1, bookingCount: 5 },
+        { userId: 2, bookingCount: 1 },
+        { userId: 3, bookingCount: 3 },
+        { userId: 4, bookingCount: 1 },
+        { userId: 5, bookingCount: 2 },
+      ]);
+      UserBills.findAll.mockResolvedValue([]);
+      UserReviews.count.mockResolvedValue(0);
+      User.findAll.mockResolvedValue([]);
+      UserAppointments.count.mockResolvedValue(0);
+      User.findOne.mockResolvedValue(null);
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      // 3 repeat bookers (5, 3, 2 bookings) out of 5 total = 60%
+      expect(response.body.repeatBookingRate.rate).toBe(60);
+      expect(response.body.repeatBookingRate.repeatBookers).toBe(3);
+      expect(response.body.repeatBookingRate.singleBookers).toBe(2);
+      expect(response.body.repeatBookingRate.totalHomeowners).toBe(5);
+    });
+
+    it("should calculate subscription rate (customer loyalty) correctly", async () => {
+      PlatformEarnings.findOne.mockResolvedValue(null);
+      UserAppointments.findAll.mockResolvedValue([
+        { userId: 1, bookingCount: 10 }, // frequent (5+)
+        { userId: 2, bookingCount: 5 },  // frequent (5+)
+        { userId: 3, bookingCount: 4 },  // regular (3-4)
+        { userId: 4, bookingCount: 3 },  // regular (3-4)
+        { userId: 5, bookingCount: 2 },  // occasional (1-2)
+        { userId: 6, bookingCount: 1 },  // occasional (1-2)
+      ]);
+      UserBills.findAll.mockResolvedValue([]);
+      UserReviews.count.mockResolvedValue(0);
+      User.findAll.mockResolvedValue([]);
+      UserAppointments.count.mockResolvedValue(0);
+      User.findOne.mockResolvedValue(null);
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      // 2 frequent bookers out of 6 = 33%
+      expect(response.body.subscriptionRate.rate).toBe(33);
+      expect(response.body.subscriptionRate.frequentBookers).toBe(2);
+      expect(response.body.subscriptionRate.regularBookers).toBe(2);
+      expect(response.body.subscriptionRate.occasionalBookers).toBe(2);
+    });
+
+    it("should calculate churn (cancellations) correctly", async () => {
+      PlatformEarnings.findOne.mockResolvedValue(null);
+      UserAppointments.findAll.mockResolvedValue([]);
+      UserBills.findAll.mockResolvedValue([{ count: 10, totalFees: 25000 }]);
+      UserReviews.count
+        .mockResolvedValueOnce(15) // total cleaner cancellations
+        .mockResolvedValueOnce(3)  // last 30 days
+        .mockResolvedValueOnce(8); // last 90 days
+      User.findAll.mockResolvedValue([]);
+      UserAppointments.count.mockResolvedValue(0);
+      User.findOne.mockResolvedValue(null);
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.churn.homeownerCancellations.usersWithCancellations).toBe(10);
+      expect(response.body.churn.homeownerCancellations.totalFeeCents).toBe(25000);
+      expect(response.body.churn.cleanerCancellations.total).toBe(15);
+      expect(response.body.churn.cleanerCancellations.last30Days).toBe(3);
+      expect(response.body.churn.cleanerCancellations.last90Days).toBe(8);
+    });
+
+    it("should calculate cleaner reliability correctly", async () => {
+      PlatformEarnings.findOne.mockResolvedValue(null);
+      UserAppointments.findAll.mockResolvedValue([]);
+      UserBills.findAll.mockResolvedValue([]);
+      UserReviews.count.mockResolvedValue(0);
+      User.findAll.mockResolvedValue([
+        { id: 10, username: "topCleaner", cleanerRating: 4.9 },
+        { id: 11, username: "goodCleaner", cleanerRating: 4.5 },
+      ]);
+      UserAppointments.count
+        .mockResolvedValueOnce(95)  // total completed
+        .mockResolvedValueOnce(100) // total assigned
+        .mockResolvedValueOnce(50)  // cleaner 1 completed
+        .mockResolvedValueOnce(50)  // cleaner 1 assigned
+        .mockResolvedValueOnce(45)  // cleaner 2 completed
+        .mockResolvedValueOnce(50); // cleaner 2 assigned
+      User.findOne.mockResolvedValue({ avgRating: 4.7 });
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.cleanerReliability.overallCompletionRate).toBe(95);
+      expect(response.body.cleanerReliability.avgRating).toBe(4.7);
+      expect(response.body.cleanerReliability.totalCompleted).toBe(95);
+      expect(response.body.cleanerReliability.totalAssigned).toBe(100);
+      expect(response.body.cleanerReliability.cleanerStats).toBeDefined();
+      expect(response.body.cleanerReliability.cleanerStats.length).toBe(2);
+    });
+
+    it("should handle empty data gracefully", async () => {
+      PlatformEarnings.findOne.mockResolvedValue(null);
+      UserAppointments.findAll.mockResolvedValue([]);
+      UserBills.findAll.mockResolvedValue([]);
+      UserReviews.count.mockResolvedValue(0);
+      User.findAll.mockResolvedValue([]);
+      UserAppointments.count.mockResolvedValue(0);
+      User.findOne.mockResolvedValue(null);
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.costPerBooking.avgFeeCents).toBe(0);
+      expect(response.body.repeatBookingRate.rate).toBe(0);
+      expect(response.body.subscriptionRate.rate).toBe(0);
+      expect(response.body.cleanerReliability.overallCompletionRate).toBe(0);
+    });
+
+    it("should require manager authentication", async () => {
+      User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${cleanerToken}`);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe("Manager access required");
+    });
+
+    it("should handle database errors gracefully", async () => {
+      PlatformEarnings.findOne.mockRejectedValue(new Error("Database error"));
+      UserAppointments.findAll.mockRejectedValue(new Error("Database error"));
+      UserBills.findAll.mockRejectedValue(new Error("Database error"));
+      UserReviews.count.mockRejectedValue(new Error("Database error"));
+      User.findAll.mockRejectedValue(new Error("Database error"));
+      UserAppointments.count.mockRejectedValue(new Error("Database error"));
+      User.findOne.mockRejectedValue(new Error("Database error"));
+
+      const response = await request(app)
+        .get("/api/v1/manager/business-metrics")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      // Should still return 200 with default values due to try-catch blocks
+      expect(response.status).toBe(200);
+      expect(response.body.costPerBooking).toBeDefined();
+      expect(response.body.repeatBookingRate).toBeDefined();
     });
   });
 });

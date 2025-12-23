@@ -73,7 +73,7 @@ const syncSingleCalendar = async (sync) => {
         }
 
         // Calculate price based on home details
-        const price = calculatePrice(
+        const price = await calculatePrice(
           home.sheetsProvided,
           home.towelsProvided,
           home.numBeds,

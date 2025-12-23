@@ -381,4 +381,196 @@ describe("CancellationWarningModal", () => {
       expect(elements.length).toBe(1);
     });
   });
+
+  describe("Cancellation Fee Warning", () => {
+    const cancellationFeeInfo = {
+      isWithinPenaltyWindow: false,
+      price: 200,
+      estimatedRefund: "200.00",
+      cleanerPayout: "0.00",
+      warningMessage: "A $25 cancellation fee will be charged to your card on file for cancelling within 7 days of the appointment.",
+      daysUntilAppointment: 5,
+      hasCleanerAssigned: false,
+      willChargeCancellationFee: true,
+      cancellationFee: 25,
+      hasPaymentMethod: true,
+    };
+
+    const cancellationFeeWithPenaltyInfo = {
+      isWithinPenaltyWindow: true,
+      price: 200,
+      estimatedRefund: "100.00",
+      cleanerPayout: "90.00",
+      warningMessage: "Cancelling within 3 days of the cleaning means the assigned cleaner will receive $90.00. Additionally, a $25 cancellation fee will be charged to your card on file.",
+      daysUntilAppointment: 2,
+      hasCleanerAssigned: true,
+      willChargeCancellationFee: true,
+      cancellationFee: 25,
+      hasPaymentMethod: true,
+    };
+
+    const noCancellationFeeInfo = {
+      isWithinPenaltyWindow: false,
+      price: 200,
+      estimatedRefund: "200.00",
+      cleanerPayout: "0.00",
+      warningMessage: "You can cancel this appointment for a full refund.",
+      daysUntilAppointment: 10,
+      hasCleanerAssigned: false,
+      willChargeCancellationFee: false,
+      cancellationFee: 25,
+      hasPaymentMethod: true,
+    };
+
+    const noPaymentMethodInfo = {
+      isWithinPenaltyWindow: false,
+      price: 200,
+      estimatedRefund: "200.00",
+      cleanerPayout: "0.00",
+      warningMessage: "You can cancel this appointment.",
+      daysUntilAppointment: 5,
+      hasCleanerAssigned: false,
+      willChargeCancellationFee: true,
+      cancellationFee: 25,
+      hasPaymentMethod: false,
+    };
+
+    it("should show Cancellation Fee Required title when fee will be charged", () => {
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={cancellationFeeInfo}
+        />
+      );
+
+      expect(getByText("Cancellation Fee Required")).toBeTruthy();
+    });
+
+    it("should show Card Will Be Charged section when fee applies", () => {
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={cancellationFeeInfo}
+        />
+      );
+
+      expect(getByText("Card Will Be Charged")).toBeTruthy();
+      expect(getByText("Cancellation Fee")).toBeTruthy();
+      expect(getByText("$25")).toBeTruthy();
+    });
+
+    it("should show fee note about immediate charge", () => {
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={cancellationFeeInfo}
+        />
+      );
+
+      expect(
+        getByText("This fee will be charged to your card on file immediately upon cancellation.")
+      ).toBeTruthy();
+    });
+
+    it("should show correct checkbox label for fee agreement", () => {
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={cancellationFeeInfo}
+        />
+      );
+
+      expect(getByText("I agree to pay the $25 cancellation fee")).toBeTruthy();
+    });
+
+    it("should not show fee section when outside 7-day window", () => {
+      const { queryByText, getAllByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={noCancellationFeeInfo}
+        />
+      );
+
+      expect(queryByText("Card Will Be Charged")).toBeNull();
+      expect(queryByText("Cancellation Fee Required")).toBeNull();
+      // Should show normal title (may appear in title and button)
+      expect(getAllByText("Cancel Appointment").length).toBeGreaterThan(0);
+    });
+
+    it("should not show fee section when user has no payment method", () => {
+      const { queryByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={noPaymentMethodInfo}
+        />
+      );
+
+      expect(queryByText("Card Will Be Charged")).toBeNull();
+    });
+
+    it("should show both fee warning and penalty window info together", () => {
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={cancellationFeeWithPenaltyInfo}
+        />
+      );
+
+      // Fee warning should be shown
+      expect(getByText("Card Will Be Charged")).toBeTruthy();
+      expect(getByText("$25")).toBeTruthy();
+
+      // Financial breakdown should also be shown
+      expect(getByText("Financial Breakdown")).toBeTruthy();
+      expect(getByText("Your Refund (50%)")).toBeTruthy();
+      expect(getByText("$100.00")).toBeTruthy();
+    });
+
+    it("should use warning styling when fee will be charged", () => {
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={cancellationFeeInfo}
+        />
+      );
+
+      // Header should say "Cancellation Fee Required" not "Cancel Appointment"
+      expect(getByText("Cancellation Fee Required")).toBeTruthy();
+    });
+
+    it("should display cancellation fee amount correctly", () => {
+      const customFeeInfo = {
+        ...cancellationFeeInfo,
+        cancellationFee: 35,
+      };
+
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={customFeeInfo}
+        />
+      );
+
+      expect(getByText("$35")).toBeTruthy();
+      expect(getByText("I agree to pay the $35 cancellation fee")).toBeTruthy();
+    });
+  });
 });

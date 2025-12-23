@@ -18,9 +18,7 @@ const {
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
-
-// Platform fee percentage (10%)
-const PLATFORM_FEE_PERCENT = 0.10;
+const { getPricingConfig } = require("../../../config/businessConfig");
 
 const paymentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -143,6 +141,10 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
   const { employeeId } = req.params;
 
   try {
+    // Get platform fee from database
+    const pricing = await getPricingConfig();
+    const platformFeePercent = pricing.platform.feePercent;
+
     // First try to get earnings from Payout records (more accurate)
     const payouts = await Payout.findAll({
       where: { cleanerId: employeeId },
@@ -154,7 +156,7 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
     });
 
     if (payouts.length > 0) {
-      // Use payout records for accurate 90/10 split
+      // Use payout records for accurate split
       const completedPayouts = payouts.filter(p => p.status === "completed");
       const pendingPayouts = payouts.filter(p => ["pending", "held", "processing"].includes(p.status));
 
@@ -165,8 +167,8 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
         totalEarnings: totalEarnings.toFixed(2),
         pendingEarnings: pendingEarnings.toFixed(2),
         completedJobs: completedPayouts.length,
-        platformFeePercent: 10,
-        cleanerPercent: 90,
+        platformFeePercent: platformFeePercent * 100,
+        cleanerPercent: (1 - platformFeePercent) * 100,
       });
     }
 
@@ -183,12 +185,12 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
       (appt) => appt.employeesAssigned && appt.employeesAssigned.includes(employeeId)
     );
 
-    // Calculate with 90% (cleaner gets 90%, platform keeps 10%)
+    // Calculate with dynamic cleaner percentage from database
     const totalEarnings = employeeAppointments.reduce((total, appt) => {
       const price = parseFloat(appt.price) || 0;
       const employeeCount = appt.employeesAssigned ? appt.employeesAssigned.length : 1;
       const grossPerCleaner = price / employeeCount;
-      const netPerCleaner = grossPerCleaner * (1 - PLATFORM_FEE_PERCENT); // 90%
+      const netPerCleaner = grossPerCleaner * (1 - platformFeePercent);
       return total + netPerCleaner;
     }, 0);
 
@@ -205,7 +207,7 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
           const price = parseFloat(appt.price) || 0;
           const employeeCount = appt.employeesAssigned ? appt.employeesAssigned.length : 1;
           const grossPerCleaner = price / employeeCount;
-          const netPerCleaner = grossPerCleaner * (1 - PLATFORM_FEE_PERCENT); // 90%
+          const netPerCleaner = grossPerCleaner * (1 - platformFeePercent);
           return total + netPerCleaner;
         }, 0)
     );
@@ -214,8 +216,8 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
       totalEarnings: totalEarnings.toFixed(2),
       pendingEarnings: pendingEarnings.toFixed(2),
       completedJobs: employeeAppointments.length,
-      platformFeePercent: 10,
-      cleanerPercent: 90,
+      platformFeePercent: platformFeePercent * 100,
+      cleanerPercent: (1 - platformFeePercent) * 100,
     });
   } catch (error) {
     console.error("Error fetching earnings:", error);
@@ -556,6 +558,10 @@ async function processCleanerPayouts(appointment) {
   const cleanerIds = appointment.employeesAssigned || [];
   const results = [];
 
+  // Get platform fee from database
+  const pricing = await getPricingConfig();
+  const platformFeePercent = pricing.platform.feePercent;
+
   for (const cleanerId of cleanerIds) {
     try {
       // Get or create payout record
@@ -582,10 +588,10 @@ async function processCleanerPayouts(appointment) {
         continue;
       }
 
-      // Calculate amounts
+      // Calculate amounts using database pricing
       const priceInCents = Math.round(parseFloat(appointment.price) * 100);
       const perCleanerGross = Math.round(priceInCents / cleanerIds.length);
-      const platformFee = Math.round(perCleanerGross * PLATFORM_FEE_PERCENT);
+      const platformFee = Math.round(perCleanerGross * platformFeePercent);
       const netAmount = perCleanerGross - platformFee;
 
       // Create payout record if it doesn't exist
@@ -658,7 +664,7 @@ async function processCleanerPayouts(appointment) {
         metadata: {
           cleanerId,
           grossAmount: perCleanerGross,
-          feePercent: PLATFORM_FEE_PERCENT * 100,
+          feePercent: platformFeePercent * 100,
         },
       });
 

@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
 import styles from "../onboarding/OnboardingStyles";
+import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
 
 const STEPS = {
   BASICS: 0,
@@ -22,13 +23,6 @@ const STEPS = {
   SERVICES: 2,
   REVIEW: 3,
 };
-
-const TIME_OPTIONS = [
-  { value: "anytime", label: "Anytime", description: "Most flexible, best pricing" },
-  { value: "10-3", label: "10am - 3pm", description: "+$25 per cleaning" },
-  { value: "11-4", label: "11am - 4pm", description: "+$25 per cleaning" },
-  { value: "12-2", label: "12pm - 2pm", description: "+$30 per cleaning" },
-];
 
 const BED_SIZE_OPTIONS = [
   { value: "long_twin", label: "Long Twin" },
@@ -42,6 +36,8 @@ const BED_SIZE_OPTIONS = [
 const AddHomeForm = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const { pricing } = usePricing();
+  const TIME_WINDOW_OPTIONS = getTimeWindowOptions(pricing);
 
   const [currentStep, setCurrentStep] = useState(STEPS.BASICS);
   const [errors, setErrors] = useState({});
@@ -165,15 +161,16 @@ const AddHomeForm = ({ state, dispatch }) => {
 
   // Calculate linen price for display
   const calculateLinenPrice = () => {
+    const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;
     let price = 0;
     if (homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0) {
       const bedsNeedingSheets = homeData.bedConfigurations.filter((b) => b.needsSheets).length;
-      price += bedsNeedingSheets * 30;
+      price += bedsNeedingSheets * sheetFeePerBed;
     }
     if (homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0) {
       homeData.bathroomConfigurations.forEach((bath) => {
-        price += (bath.towels || 0) * 10;
-        price += (bath.faceCloths || 0) * 5;
+        price += (bath.towels || 0) * towelFee;
+        price += (bath.faceCloths || 0) * faceClothFee;
       });
     }
     return price;
@@ -694,7 +691,7 @@ const AddHomeForm = ({ state, dispatch }) => {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Preferred Time Window</Text>
         <View style={styles.choiceGroup}>
-          {TIME_OPTIONS.map((option) => (
+          {TIME_WINDOW_OPTIONS.map((option) => (
             <TouchableOpacity
               key={option.value}
               style={[
@@ -734,8 +731,8 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Sheets</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.sheetsProvided === "yes" && homeData.bedConfigurations.length > 0
-              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * 30} ($30 x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
-              : homeData.numBeds ? `$30 x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * 30}` : "Select to configure sheets for each bed"}
+              ? `$${homeData.bedConfigurations.filter(b => b.needsSheets).length * pricing.linens.sheetFeePerBed} ($${pricing.linens.sheetFeePerBed} x ${homeData.bedConfigurations.filter(b => b.needsSheets).length} beds)`
+              : homeData.numBeds ? `$${pricing.linens.sheetFeePerBed} x ${homeData.numBeds} beds = $${parseInt(homeData.numBeds) * pricing.linens.sheetFeePerBed}` : "Select to configure sheets for each bed"}
           </Text>
         </View>
         <View
@@ -832,8 +829,8 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardTitle}>We Bring Fresh Towels</Text>
           <Text style={styles.toggleCardDescription}>
             {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
-              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * 5 + (b.faceCloths || 0) * 2, 0)} - $5/towel, $2/face cloth`
-              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $5/towel, $2/face cloth` : "Select to configure towels for each bathroom"}
+              ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * pricing.linens.towelFee + (b.faceCloths || 0) * pricing.linens.faceClothFee, 0)} - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth`
+              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -869,7 +866,7 @@ const AddHomeForm = ({ state, dispatch }) => {
                 Bathroom {bath.bathroomNumber}
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                <Text style={{ flex: 1, color: "#555" }}>Towels ($5 each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Towels (${pricing.linens.towelFee} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -907,7 +904,7 @@ const AddHomeForm = ({ state, dispatch }) => {
                 </View>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ flex: 1, color: "#555" }}>Face cloths ($2 each):</Text>
+                <Text style={{ flex: 1, color: "#555" }}>Face cloths (${pricing.linens.faceClothFee} each):</Text>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <TouchableOpacity
                     style={{
@@ -1034,7 +1031,7 @@ const AddHomeForm = ({ state, dispatch }) => {
             : `Key: ${homeData.keyLocation}`}
           {"\n\n"}
           <Text style={{ fontWeight: "bold" }}>Preferred Time: </Text>
-          {TIME_OPTIONS.find((o) => o.value === homeData.timeToBeCompleted)?.label}
+          {TIME_WINDOW_OPTIONS.find((o) => o.value === homeData.timeToBeCompleted)?.label}
           {"\n\n"}
           <Text style={{ fontWeight: "bold" }}>Contact: </Text>
           {homeData.contact}

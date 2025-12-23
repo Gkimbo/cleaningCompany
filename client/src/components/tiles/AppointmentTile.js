@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Animated, Pressable, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
+import FetchData from "../../services/fetchRequests/fetchData";
+import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 
 const AppointmentTile = ({
   id,
@@ -11,12 +14,11 @@ const AppointmentTile = ({
   empoyeesNeeded,
   employeesAssigned,
   handleDeletePress,
-  deleteAnimation,
   deleteConfirmation,
-  setDeleteConfirmation,
   handleNoPress,
 }) => {
   const [home, setHome] = useState({});
+  const [minCleaners, setMinCleaners] = useState(1);
   const navigate = useNavigate();
   const numberOfAssigned = Array.isArray(employeesAssigned)
     ? employeesAssigned.length
@@ -33,170 +35,262 @@ const AppointmentTile = ({
     }
   };
 
+  const fetchStaffingConfig = async () => {
+    try {
+      const config = await FetchData.getStaffingConfig();
+      setMinCleaners(config.minCleanersForAssignment || 1);
+    } catch (error) {
+      console.error("Error fetching staffing config:", error);
+    }
+  };
+
   useEffect(() => {
     fetchHomeInfo();
+    fetchStaffingConfig();
   }, []);
 
   const formatDate = (dateString) => {
-    const options = { month: "short", day: "numeric", year: "numeric" };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    const options = { weekday: "short", month: "short", day: "numeric", year: "numeric" };
+    return new Date(dateString).toLocaleDateString("en-US", options);
+  };
+
+  const formatPrice = (priceValue) => {
+    return `$${Number(priceValue).toFixed(2)}`;
   };
 
   const handleAppointmentPress = () => {
     navigate(`/assign-cleaner/${id}`);
   };
 
-  // Determine status color for left accent
-  let statusColor = "#dc3545"; // Red = none assigned
-  if (numberOfAssigned === empoyeesNeeded) statusColor = "#28a745"; // Green = all assigned
-  else if (numberOfAssigned > 0) statusColor = "#ffc107"; // Orange = partially assigned
+  const getStatusInfo = () => {
+    if (numberOfAssigned >= 1) {
+      return { color: colors.success[500], label: "Assigned", bgColor: colors.success[100] };
+    }
+    return { color: colors.error[500], label: "Needs Staff", bgColor: colors.error[100] };
+  };
+
+  const status = getStatusInfo();
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        backgroundColor: "#fff",
-        borderRadius: 12,
-        marginVertical: 8,
-        marginHorizontal: 10,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-      }}
-    >
-      {/* Left colored accent */}
-      <View
-        style={{
-          width: 8,
-          borderTopLeftRadius: 12,
-          borderBottomLeftRadius: 12,
-          backgroundColor: statusColor,
-        }}
-      />
-
-      {/* Main content */}
-      <View style={{ flex: 1, padding: 15 }}>
+    <View style={styles.card}>
+      <View style={[styles.statusBar, { backgroundColor: status.color }]} />
+      <View style={styles.cardContent}>
         {/* Header */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <Text style={{ fontSize: 16, fontWeight: "bold", color: "#333" }}>
-            {formatDate(date)}
-          </Text>
-          <Text style={{ fontSize: 16, fontWeight: "bold", color: "#333" }}>
-            ${price}
-          </Text>
+        <View style={styles.cardHeader}>
+          <View style={styles.dateContainer}>
+            <Icon name="calendar" size={14} color={colors.primary[600]} />
+            <Text style={styles.dateText}>{formatDate(date)}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: status.bgColor }]}>
+            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+          </View>
         </View>
 
         {/* Home Info */}
-        <View style={{ marginTop: 5 }}>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: "#555" }}>
-            {home.nickName || "Home Name"}
-          </Text>
-          <Text style={{ fontSize: 13, color: "#777", marginTop: 2 }}>
-            {home.address}, {home.city}, {home.state} {home.zipcode}
-          </Text>
-        </View>
-
-        {/* Cleaners Info */}
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            marginTop: 10,
-          }}
-        >
-          <Text style={{ fontSize: 14, color: "#555" }}>
-            Cleaners Needed: {empoyeesNeeded - numberOfAssigned}
-          </Text>
-          <Text style={{ fontSize: 14, color: "#555" }}>
-            Assigned: {numberOfAssigned}
-          </Text>
-        </View>
-
-        {/* Buttons */}
-        <View
-          style={{
-            flexDirection: "row",
-            marginTop: 12,
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
-          {/* Assign Button */}
-          <Pressable
-            style={{
-              backgroundColor: "#007bff",
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 8,
-            }}
-            onPress={handleAppointmentPress}
-          >
-            <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 14 }}>
-              Assign Employees
+        <View style={styles.homeInfo}>
+          <Text style={styles.homeName}>{home.nickName || "Loading..."}</Text>
+          {home.address && (
+            <Text style={styles.homeAddress}>
+              {home.address}, {home.city}, {home.state} {home.zipcode}
             </Text>
-          </Pressable>
+          )}
+        </View>
 
-          {/* Delete/Keep Buttons stacked vertically */}
-          <View style={{ flexDirection: "column", alignItems: "flex-end" }}>
-            {/* Delete Button */}
-            <Pressable onPress={() => handleDeletePress(id)}>
-              {({ pressed }) => (
-                <Animated.View
-                  style={{
-                    borderRadius: 8,
-                    marginBottom: deleteConfirmation[id] ? 6 : 0,
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    backgroundColor: deleteConfirmation[id]
-                      ? "#dc3545"
-                      : pressed
-                      ? "#c82333"
-                      : "#e04e4e",
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontWeight: "bold",
-                      fontSize: deleteConfirmation[id] ? 12 : 14,
-                    }}
-                  >
-                    {deleteConfirmation[id] ? "Delete Appointment" : "X"}
-                  </Text>
-                </Animated.View>
-              )}
-            </Pressable>
-
-            {/* Keep Button */}
-            {deleteConfirmation[id] && (
-              <Pressable onPress={() => handleNoPress(id)}>
-                <View
-                  style={{
-                    backgroundColor: "#28a745",
-                    borderRadius: 8,
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "#fff",
-                      fontWeight: "bold",
-                      fontSize: 12,
-                    }}
-                  >
-                    Keep Appointment
-                  </Text>
-                </View>
-              </Pressable>
-            )}
+        {/* Details Row */}
+        <View style={styles.detailsRow}>
+          <View style={styles.detailItem}>
+            <Icon name="usd" size={14} color={colors.text.secondary} />
+            <Text style={styles.detailText}>{formatPrice(price)}</Text>
           </View>
+          <View style={styles.detailItem}>
+            <Icon name="users" size={14} color={colors.text.secondary} />
+            <Text style={styles.detailText}>
+              {numberOfAssigned}/{minCleaners} Cleaners
+            </Text>
+          </View>
+          {home.numBeds && (
+            <View style={styles.detailItem}>
+              <Icon name="bed" size={14} color={colors.text.secondary} />
+              <Text style={styles.detailText}>
+                {home.numBeds} Bed / {home.numBaths} Bath
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity style={styles.assignButton} onPress={handleAppointmentPress}>
+            <Icon name="user-plus" size={14} color={colors.neutral[0]} />
+            <Text style={styles.assignButtonText}>Manage Staff</Text>
+          </TouchableOpacity>
+
+          {!deleteConfirmation[id] ? (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleDeletePress(id)}
+            >
+              <Icon name="trash" size={14} color={colors.error[600]} />
+              <Text style={styles.deleteButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={styles.confirmDeleteButton}
+                onPress={() => handleDeletePress(id)}
+              >
+                <Text style={styles.confirmDeleteText}>Confirm Delete</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.keepButton}
+                onPress={() => handleNoPress(id)}
+              >
+                <Text style={styles.keepButtonText}>Keep</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  card: {
+    flexDirection: "row",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    marginBottom: spacing.md,
+    overflow: "hidden",
+    ...shadows.md,
+  },
+  statusBar: {
+    width: 6,
+  },
+  cardContent: {
+    flex: 1,
+    padding: spacing.lg,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  dateContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  dateText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  statusBadge: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  statusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  homeInfo: {
+    marginBottom: spacing.md,
+  },
+  homeName: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  homeAddress: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  detailsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  detailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  detailText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  assignButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+  },
+  assignButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.error[500],
+  },
+  deleteButtonText: {
+    color: colors.error[600],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  confirmButtons: {
+    flexDirection: "column",
+    gap: spacing.sm,
+  },
+  confirmDeleteButton: {
+    backgroundColor: colors.error[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: "center",
+  },
+  confirmDeleteText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+  },
+  keepButton: {
+    backgroundColor: colors.success[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: "center",
+  },
+  keepButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+  },
+});
 
 export default AppointmentTile;

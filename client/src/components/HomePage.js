@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import { cleaningCompany } from "../services/data/companyInfo";
+import { usePricing, defaultPricing } from "../context/PricingContext";
 import FetchData from "../services/fetchRequests/fetchData";
 import image1 from "../services/photos/Best-Cleaning-Service.jpeg";
 import image2 from "../services/photos/clean-laptop.jpg";
@@ -38,6 +39,15 @@ const HomePage = ({ state, dispatch }) => {
   const [redirectToJobs, setRedirectToJobs] = useState(false);
   const navigate = useNavigate();
   const { width } = Dimensions.get("window");
+
+  // Get pricing from database (via PricingContext)
+  const { pricing: fetchedPricing, loading } = usePricing();
+
+  // Use fetched pricing if available, otherwise fall back to defaults
+  const pricing = fetchedPricing?.basePrice ? fetchedPricing : defaultPricing;
+
+  // Display the full base price (no platform fee deduction - that's only shown to cleaners)
+  const displayBasePrice = Math.round(pricing.basePrice ?? defaultPricing.basePrice);
 
   useEffect(() => {
     if (redirect) {
@@ -96,8 +106,9 @@ const HomePage = ({ state, dispatch }) => {
     (a, b) => new Date(a.date) - new Date(b.date)
   );
 
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   sortedAppointments.forEach((appointment, index) => {
-    const correctedAmount = Number(appointment.price) * 0.9;
+    const correctedAmount = Number(appointment.price) * cleanerSharePercent;
     upcomingPayment += correctedAmount;
     const today = new Date();
     const appointmentDate = new Date(appointment.date);
@@ -695,7 +706,7 @@ const HomePage = ({ state, dispatch }) => {
                   color: colors.primary[600],
                 }}
               >
-                {cleaningCompany.basePrice}
+                {displayBasePrice}
               </Text>
             </View>
             <Text
@@ -717,9 +728,9 @@ const HomePage = ({ state, dispatch }) => {
           >
             {[
               "1 bed / 1 bath base rate",
-              `+$${cleaningCompany.extraBedBathFee} per additional bed or bath`,
-              `Fresh sheets (+$${cleaningCompany.sheetFeePerBed}/bed)`,
-              `Fresh towels (+$${cleaningCompany.towelFee}/towel)`,
+              `+$${pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee} per additional bed or bath`,
+              `Fresh sheets (+$${pricing.linens?.sheetFeePerBed ?? defaultPricing.linens.sheetFeePerBed}/bed)`,
+              `Fresh towels (+$${pricing.linens?.towelFee ?? defaultPricing.linens.towelFee}/towel)`,
               "Flexible 10am-4pm scheduling",
             ].map((item, index) => (
               <View

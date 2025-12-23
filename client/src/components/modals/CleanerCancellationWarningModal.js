@@ -39,6 +39,8 @@ const CleanerCancellationWarningModal = ({
     daysUntilAppointment,
     recentCancellationPenalties = 0,
     willResultInFreeze = false,
+    requiresAcknowledgment = false,
+    acknowledgmentMessage,
   } = cancellationInfo;
 
   const remainingBeforeFreeze = Math.max(0, 2 - recentCancellationPenalties);
@@ -190,7 +192,9 @@ const CleanerCancellationWarningModal = ({
                 styles.checkboxLabel,
                 willResultInFreeze && styles.checkboxLabelDanger
               ]}>
-                {willResultInFreeze
+                {acknowledgmentMessage
+                  ? acknowledgmentMessage
+                  : willResultInFreeze
                   ? "I understand my account will be frozen"
                   : isWithinPenaltyWindow
                   ? "I understand and accept the 1-star penalty"

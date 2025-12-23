@@ -267,7 +267,7 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
         }
 
         // Calculate price based on home details
-        const price = calculatePrice(
+        const price = await calculatePrice(
           home.sheetsProvided,
           home.towelsProvided,
           home.numBeds,
@@ -385,7 +385,7 @@ calendarSyncRouter.get("/:id/preview", verifyToken, async (req, res) => {
       });
 
       // Calculate price
-      const price = calculatePrice(
+      const price = await calculatePrice(
         home.sheetsProvided,
         home.towelsProvided,
         home.numBeds,

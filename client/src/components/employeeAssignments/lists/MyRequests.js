@@ -21,6 +21,7 @@ import {
   typography,
   shadows,
 } from "../../../services/styles/theme";
+import { usePricing } from "../../../context/PricingContext";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -44,6 +45,8 @@ const sortOptions = [
 ];
 
 const MyRequests = ({ state }) => {
+  const { pricing } = usePricing();
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
@@ -168,7 +171,7 @@ const MyRequests = ({ state }) => {
 
   // Calculate stats (cleaners receive 90% of appointment price)
   const totalEarnings = sortedRequests.reduce(
-    (sum, r) => sum + (Number(r.price) || 0) * 0.9,
+    (sum, r) => sum + (Number(r.price) || 0) * cleanerSharePercent,
     0
   );
 

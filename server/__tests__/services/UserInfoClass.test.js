@@ -239,33 +239,33 @@ describe("UserInfoClass", () => {
       );
     });
 
-    it("should add $30 for 10-3 time slot", async () => {
+    it("should add $25 for 10-3 time slot", async () => {
       await UserInfoClass.editTimeInDB({ id: 1, timeToBeCompleted: "10-3" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           timeToBeCompleted: "10-3",
-          price: 130,
+          price: 125,
         })
       );
     });
 
-    it("should add $30 for 11-4 time slot", async () => {
+    it("should add $25 for 11-4 time slot", async () => {
       await UserInfoClass.editTimeInDB({ id: 1, timeToBeCompleted: "11-4" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          price: 130,
+          price: 125,
         })
       );
     });
 
-    it("should add $50 for 12-2 time slot", async () => {
+    it("should add $30 for 12-2 time slot", async () => {
       await UserInfoClass.editTimeInDB({ id: 1, timeToBeCompleted: "12-2" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          price: 150,
+          price: 130,
         })
       );
     });
@@ -274,8 +274,8 @@ describe("UserInfoClass", () => {
       await UserInfoClass.editTimeInDB({ id: 1, timeToBeCompleted: "10-3" });
 
       expect(mockBill.update).toHaveBeenCalledWith({
-        appointmentDue: 130,
-        totalDue: 130,
+        appointmentDue: 125,
+        totalDue: 125,
       });
     });
   });
@@ -295,24 +295,24 @@ describe("UserInfoClass", () => {
       UserBills.findOne.mockResolvedValue(mockBill);
     });
 
-    it("should add $25 when bringing sheets", async () => {
+    it("should add $30 when bringing sheets", async () => {
       await UserInfoClass.editSheetsInDB({ id: 1, bringSheets: "yes" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           bringSheets: "yes",
-          price: 125,
+          price: 130,
         })
       );
     });
 
-    it("should subtract $25 when not bringing sheets", async () => {
+    it("should subtract $30 when not bringing sheets", async () => {
       await UserInfoClass.editSheetsInDB({ id: 1, bringSheets: "no" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           bringSheets: "no",
-          price: 75,
+          price: 70,
         })
       );
     });
@@ -333,24 +333,24 @@ describe("UserInfoClass", () => {
       UserBills.findOne.mockResolvedValue(mockBill);
     });
 
-    it("should add $25 when bringing towels", async () => {
+    it("should add $12 when bringing towels (2 towels at $5 + 1 face cloth at $2)", async () => {
       await UserInfoClass.editTowelsInDB({ id: 1, bringTowels: "yes" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           bringTowels: "yes",
-          price: 125,
+          price: 112,
         })
       );
     });
 
-    it("should subtract $25 when not bringing towels", async () => {
+    it("should subtract $12 when not bringing towels", async () => {
       await UserInfoClass.editTowelsInDB({ id: 1, bringTowels: "no" });
 
       expect(mockAppointment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           bringTowels: "no",
-          price: 75,
+          price: 88,
         })
       );
     });
