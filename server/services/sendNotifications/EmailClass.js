@@ -1103,6 +1103,89 @@ Kleanr System`;
       console.error("❌ Error sending new application notification email:", error);
     }
   }
+
+  static async sendUnassignedAppointmentWarning(
+    email,
+    address,
+    userName,
+    appointmentDate
+  ) {
+    try {
+      const transporter = createTransporter();
+      const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Notice",
+        subtitle: "No cleaner assigned yet",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+        greeting: `Hi ${userName},`,
+        content: `<p>Your upcoming cleaning appointment is in <strong>3 days</strong> and has not yet been assigned to a cleaner.</p>`,
+        infoBox: {
+          icon: "📅",
+          title: "Appointment Details",
+          items: [
+            { label: "Address", value: fullAddress },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "⏳ Awaiting Cleaner" },
+          ],
+        },
+        warningBox: {
+          icon: "💡",
+          text: "<strong>Don't worry!</strong> Cleaners are still able to pick up your appointment. Many cleaners select jobs closer to the date. However, we recommend having a backup plan just in case.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        steps: {
+          title: "📝 What You Can Do",
+          items: [
+            "Wait a bit longer - cleaners often pick up jobs at the last minute",
+            "Check the app for any status updates",
+            "Consider having a backup cleaning plan ready",
+          ],
+        },
+        ctaText: "Log into the Kleanr app to view your appointment status or make changes.",
+        footerMessage: "We're working to find you a cleaner",
+      });
+
+      const textContent = `Hi ${userName},
+
+Your upcoming cleaning appointment is in 3 days and has not yet been assigned to a cleaner.
+
+APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${fullAddress}
+Date: ${formatDate(appointmentDate)}
+Status: Awaiting Cleaner
+
+Don't worry! Cleaners are still able to pick up your appointment. Many cleaners select jobs closer to the date. However, we recommend having a backup plan just in case.
+
+WHAT YOU CAN DO
+━━━━━━━━━━━━━━━━━━━━━━
+1. Wait a bit longer - cleaners often pick up jobs at the last minute
+2. Check the app for any status updates
+3. Consider having a backup cleaning plan ready
+
+Log into the Kleanr app to view your appointment status or make changes.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⏳ Heads Up - No Cleaner Assigned Yet for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Unassigned warning email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending unassigned warning email:", error);
+    }
+  }
 }
 
 module.exports = Email;

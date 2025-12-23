@@ -885,6 +885,69 @@ cron.schedule("0 7 * * *", async () => {
   const now = new Date();
 
   try {
+    // ============================================================
+    // PART 1: Send unassigned appointment warnings (3 days before)
+    // ============================================================
+    const unassignedAppointments = await UserAppointments.findAll({
+      where: {
+        hasBeenAssigned: false,
+        unassignedWarningSent: false,
+        completed: false,
+      },
+    });
+
+    for (const appointment of unassignedAppointments) {
+      const appointmentDate = new Date(appointment.date);
+      const diffInDays = Math.floor(
+        (appointmentDate - now) / (1000 * 60 * 60 * 24)
+      );
+
+      // Send warning 3 days before (or less, if not already sent)
+      if (diffInDays <= 3 && diffInDays >= 0) {
+        try {
+          const user = await User.findByPk(appointment.userId);
+          const home = await UserHomes.findByPk(appointment.homeId);
+          if (!user || !home) continue;
+
+          // Send email notification
+          await Email.sendUnassignedAppointmentWarning(
+            user.email,
+            {
+              street: home.address,
+              city: home.city,
+              state: home.state,
+              zipcode: home.zipcode,
+            },
+            user.firstName,
+            appointmentDate
+          );
+
+          // Add in-app notification
+          const notifications = user.notifications || [];
+          const formattedDate = appointmentDate.toLocaleDateString(undefined, {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+          notifications.unshift(
+            `Heads up! Your cleaning on ${formattedDate} at ${home.address} doesn't have a cleaner assigned yet. There's still time for one to pick it up, but you may want to have a backup plan.`
+          );
+          await user.update({ notifications: notifications.slice(0, 50) });
+
+          // Mark warning as sent
+          await appointment.update({ unassignedWarningSent: true });
+
+          console.log(`[Cron] Unassigned warning sent for appointment ${appointment.id} to ${user.email}`);
+        } catch (err) {
+          console.error(`[Cron] Failed to send unassigned warning for appointment ${appointment.id}:`, err);
+        }
+      }
+    }
+
+    // ============================================================
+    // PART 2: Payment processing (existing logic)
+    // ============================================================
     // Find appointments with pending payments that have a paymentIntentId
     const appointments = await UserAppointments.findAll({
       where: {

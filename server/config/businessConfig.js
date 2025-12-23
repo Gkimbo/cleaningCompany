@@ -171,22 +171,13 @@ function isInServiceArea(city, state, zipcode) {
 
 /**
  * Helper function to get number of cleaners needed
- * @param {number} numBeds - Number of bedrooms
- * @param {number} numBaths - Number of bathrooms
- * @returns {number} Number of cleaners needed
+ * All homes require exactly 1 cleaner regardless of size
+ * @param {number} numBeds - Number of bedrooms (unused)
+ * @param {number} numBaths - Number of bathrooms (unused)
+ * @returns {number} Number of cleaners needed (always 1)
  */
 function getCleanersNeeded(numBeds, numBaths) {
-  const beds = parseInt(numBeds) || 0;
-  const baths = parseInt(numBaths) || 0;
-
-  for (const rule of businessConfig.cleanerRequirements) {
-    if (beds <= rule.maxBeds && baths <= rule.maxBaths) {
-      return rule.cleanersNeeded;
-    }
-  }
-
-  // Default to max if no rule matches
-  return 6;
+  return 1;
 }
 
 /**
