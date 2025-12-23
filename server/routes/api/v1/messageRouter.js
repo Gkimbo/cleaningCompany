@@ -9,6 +9,7 @@ const {
   UserAppointments,
 } = require("../../../models");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 
 const messageRouter = express.Router();
 
@@ -226,6 +227,16 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
           content
         );
       }
+
+      // Send push notification if user has phone notifications enabled
+      if (p.user.notifications && p.user.notifications.includes("phone") && p.user.expoPushToken) {
+        await PushNotification.sendPushNewMessage(
+          p.user.expoPushToken,
+          p.user.username,
+          sender.username,
+          content
+        );
+      }
     }
 
     return res.status(201).json({ message: messageWithSender });
@@ -436,6 +447,16 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
           content
         );
       }
+
+      // Send push notification if user has phone notifications enabled
+      if (targetUser.notifications && targetUser.notifications.includes("phone") && targetUser.expoPushToken) {
+        await PushNotification.sendPushBroadcast(
+          targetUser.expoPushToken,
+          targetUser.username,
+          title || "Company Announcement",
+          content
+        );
+      }
     }
 
     return res.status(201).json({ conversation, message: messageWithSender });
@@ -622,6 +643,16 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
       if (manager.email) {
         await Email.sendNewMessageNotification(
           manager.email,
+          manager.username,
+          user.username,
+          `New support request from ${user.username}`
+        );
+      }
+
+      // Send push notification to manager
+      if (manager.expoPushToken) {
+        await PushNotification.sendPushNewMessage(
+          manager.expoPushToken,
           manager.username,
           user.username,
           `New support request from ${user.username}`

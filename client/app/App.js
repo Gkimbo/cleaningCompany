@@ -3,6 +3,7 @@ import React, { useEffect, useReducer, useState } from "react";
 import { ActivityIndicator, SafeAreaView, Text, View } from "react-native";
 import { NativeRouter, Route, Routes } from "react-router-native";
 import { AuthProvider } from "../src/services/AuthContext";
+import { PushNotificationProvider } from "../src/services/PushNotificationContext";
 import { SocketProvider } from "../src/services/SocketContext";
 import { UserContext } from "../src/context/UserContext";
 import getCurrentUser from "../src/services/fetchRequests/getCurrentUser";
@@ -163,6 +164,7 @@ export default function App() {
 
   return (
     <AuthProvider>
+      <PushNotificationProvider>
       <StripeProvider publishableKey={stripePublishableKey}>
         <PricingProvider>
         <SocketProvider token={state.currentUser.token}>
@@ -411,6 +413,7 @@ export default function App() {
         </SocketProvider>
         </PricingProvider>
       </StripeProvider>
+      </PushNotificationProvider>
     </AuthProvider>
   );
 }

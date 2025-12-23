@@ -89,7 +89,7 @@ usersRouter.post("/", async (req, res) => {
 
 usersRouter.post("/new-employee", async (req, res) => {
   try {
-    const { username, password, email, type, firstName, lastName } = req.body;
+    const { username, password, email, type, firstName, lastName, phone } = req.body;
     let existingUser = null;
     existingUser = await User.findOne({ where: { email } });
     if (!existingUser) {
@@ -102,6 +102,7 @@ usersRouter.post("/new-employee", async (req, res) => {
           password,
           email,
           type,
+          phone: phone || null,
           notifications: ["phone", "email"],
         });
         const newBill = await UserBills.create({
@@ -452,6 +453,55 @@ usersRouter.patch("/update-email", async (req, res) => {
       return res.status(401).json({ error: "Token has expired" });
     }
     return res.status(500).json({ error: "Failed to update email" });
+  }
+});
+
+// PATCH: Update phone number
+usersRouter.patch("/update-phone", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+    const { phone } = req.body;
+
+    // Validate phone - allow empty string to clear phone number
+    if (phone === undefined) {
+      return res.status(400).json({ error: "Phone number is required" });
+    }
+
+    // If phone is provided (not empty), validate format
+    if (phone && phone.length > 0) {
+      // Remove all non-digit characters for validation
+      const digitsOnly = phone.replace(/\D/g, "");
+
+      // Must have 10-15 digits (supports international numbers)
+      if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+        return res.status(400).json({ error: "Please enter a valid phone number (10-15 digits)" });
+      }
+    }
+
+    // Find and update user
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Store empty string as null in database
+    const phoneToStore = phone && phone.length > 0 ? phone : null;
+    await user.update({ phone: phoneToStore });
+    console.log(`✅ Phone updated for user ${userId}: ${phoneToStore || "(cleared)"}`);
+
+    return res.status(200).json({ message: "Phone number updated successfully", phone: phoneToStore });
+  } catch (error) {
+    console.error("Error updating phone:", error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+    return res.status(500).json({ error: "Failed to update phone number" });
   }
 });
 

@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const UserSerializer = require("../../../serializers/userSerializer");
 const authenticateToken = require("../../../middleware/authenticatedToken");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 
 const sessionRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -167,6 +168,11 @@ sessionRouter.post("/forgot-username", async (req, res) => {
 		await Email.sendUsernameRecovery(email, user.username);
 		console.log(`✅ Username recovery email sent to ${email}`);
 
+		// Send push notification if user has a stored token
+		if (user.expoPushToken) {
+			await PushNotification.sendPushUsernameRecovery(user.expoPushToken, user.username);
+		}
+
 		return res.status(200).json({
 			message: "If an account with that email exists, we've sent the username to it."
 		});
@@ -207,6 +213,11 @@ sessionRouter.post("/forgot-password", async (req, res) => {
 		// Send password reset email
 		await Email.sendPasswordReset(email, user.username, temporaryPassword);
 		console.log(`✅ Password reset email sent to ${email}`);
+
+		// Send push notification if user has a stored token
+		if (user.expoPushToken) {
+			await PushNotification.sendPushPasswordReset(user.expoPushToken, user.username);
+		}
 
 		return res.status(200).json({
 			message: "If an account with that email exists, we've sent password reset instructions to it."

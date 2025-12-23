@@ -18,6 +18,7 @@ const {
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { getPricingConfig } = require("../../../config/businessConfig");
 
 const paymentRouter = express.Router();
@@ -910,17 +911,28 @@ cron.schedule("0 7 * * *", async () => {
           if (!user || !home) continue;
 
           // Send email notification
+          const homeAddress = {
+            street: home.address,
+            city: home.city,
+            state: home.state,
+            zipcode: home.zipcode,
+          };
           await Email.sendUnassignedAppointmentWarning(
             user.email,
-            {
-              street: home.address,
-              city: home.city,
-              state: home.state,
-              zipcode: home.zipcode,
-            },
+            homeAddress,
             user.firstName,
             appointmentDate
           );
+
+          // Send push notification
+          if (user.expoPushToken) {
+            await PushNotification.sendPushUnassignedWarning(
+              user.expoPushToken,
+              user.firstName,
+              appointmentDate,
+              homeAddress
+            );
+          }
 
           // Add in-app notification
           const notifications = user.notifications || [];
@@ -1024,12 +1036,28 @@ cron.schedule("0 7 * * *", async () => {
               description: `Scheduled cancellation - no cleaner assigned for appointment ${appointment.id}`,
             });
 
+            const cancelAddress = {
+              street: home.address,
+              city: home.city,
+              state: home.state,
+              zipcode: home.zipcode,
+            };
             await Email.sendEmailCancellation(
               user.email,
-              home,
+              cancelAddress,
               user.firstName,
               appointmentDate
             );
+
+            // Send push notification
+            if (user.expoPushToken) {
+              await PushNotification.sendPushCancellation(
+                user.expoPushToken,
+                user.firstName,
+                appointmentDate,
+                cancelAddress
+              );
+            }
 
             console.log(
               `Appointment ${appointment.id} cancelled — user notified (${user.email})`

@@ -35,12 +35,13 @@ const generateUsername = (first, last) => {
 	return username;
 };
 
-const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initialLastName, email, setApplicationsList}) => {
+const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initialLastName, email, phone: initialPhone, setApplicationsList}) => {
 	const [firstNameInput, setFirstNameInput] = useState(initialFirstName || "");
 	const [lastNameInput, setLastNameInput] = useState(initialLastName || "");
 	const [userName, setUserName] = useState(generateUsername(initialFirstName, initialLastName));
 	const [password, setPassword] = useState(`${initialLastName}$${initialFirstName}124`);
 	const [emailInput, setEmail] = useState(email);
+	const [phoneInput, setPhone] = useState(initialPhone || "");
 	const [showPassword, setShowPassword] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,6 +100,7 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 				type,
 				firstName: firstNameInput,
 				lastName: lastNameInput,
+				phone: phoneInput || null,
 			};
 			const response = await FetchData.makeNewEmployee(data);
 			if (
@@ -230,6 +232,19 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 				autoCapitalize="none"
 				theme={inputTheme}
 				left={<TextInput.Icon icon="email" color={colors.text.tertiary} />}
+			/>
+
+			{/* Phone */}
+			<TextInput
+				mode="outlined"
+				label="Phone Number"
+				placeholder="Phone Number (optional)"
+				style={styles.input}
+				value={phoneInput}
+				onChangeText={setPhone}
+				keyboardType="phone-pad"
+				theme={inputTheme}
+				left={<TextInput.Icon icon="phone" color={colors.text.tertiary} />}
 			/>
 
 			{/* Submit Button */}

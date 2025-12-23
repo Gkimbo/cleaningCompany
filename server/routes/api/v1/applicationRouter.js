@@ -4,6 +4,7 @@ const ApplicationInfoClass = require("../../../services/ApplicationInfoClass");
 const ApplicationSerializer = require("../../../serializers/ApplicationSerializer");
 const { UserApplications, User } = require("../../../models");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 
 const applicationRouter = express.Router();
 
@@ -112,6 +113,14 @@ applicationRouter.post("/submitted", async (req, res) => {
             applicantName,
             email,
             experience
+          );
+        }
+
+        // Send push notification
+        if (manager.expoPushToken) {
+          await PushNotification.sendPushNewApplication(
+            manager.expoPushToken,
+            applicantName
           );
         }
 

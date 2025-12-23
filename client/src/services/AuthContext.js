@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import PushNotificationService from "./PushNotificationService";
 
 const AuthContext = createContext({
 	user: null,
@@ -41,6 +42,12 @@ const AuthProvider = ({ children }) => {
 
 	const logout = async () => {
 		try {
+			// Get the token before removing it to unregister push notifications
+			const token = await AsyncStorage.getItem("token");
+			if (token) {
+				// Remove push token from backend
+				await PushNotificationService.removeTokenFromBackend(token);
+			}
 			// Remove the token from AsyncStorage
 			await AsyncStorage.removeItem("token");
 			// Set the user as logged out

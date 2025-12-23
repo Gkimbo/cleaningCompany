@@ -16,6 +16,7 @@ const calculatePrice = require("../../../services/CalculatePrice");
 const HomeSerializer = require("../../../serializers/homesSerializer");
 const { emit } = require("nodemon");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { businessConfig, getPricingConfig } = require("../../../config/businessConfig");
 
 const appointmentRouter = express.Router();
@@ -893,6 +894,17 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
         clientUserName,
         appointmentDate
       );
+
+      // Send push notification to homeowner
+      const bookingClient = await User.findByPk(bookingClientId);
+      if (bookingClient?.expoPushToken) {
+        await PushNotification.sendPushCancellation(
+          bookingClient.expoPushToken,
+          clientUserName,
+          appointmentDate,
+          address
+        );
+      }
     }
 
     return res.status(200).json({ user: userInfo });
@@ -1052,6 +1064,17 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
       appointment.dataValues.date
     );
 
+    // Send push notification to homeowner
+    if (client.dataValues.expoPushToken) {
+      await PushNotification.sendPushEmployeeRequest(
+        client.dataValues.expoPushToken,
+        client.dataValues.username,
+        cleaner.dataValues.username,
+        averageRating,
+        appointment.dataValues.date
+      );
+    }
+
     return res
       .status(200)
       .json({ message: "Request sent to the client for approval" });
@@ -1161,6 +1184,17 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
           appointment.dataValues.date
         );
 
+        // Send push notification to cleaner
+        if (cleaner.dataValues.expoPushToken) {
+          await PushNotification.sendPushRequestApproved(
+            cleaner.dataValues.expoPushToken,
+            cleaner.dataValues.username,
+            homeowner.dataValues.username,
+            appointment.dataValues.date,
+            address
+          );
+        }
+
         // Add in-app notification
         const notifications = cleaner.dataValues.notifications || [];
         const formattedDate = new Date(appointment.dataValues.date).toLocaleDateString(undefined, {
@@ -1221,6 +1255,15 @@ appointmentRouter.patch("/deny-request", async (req, res) => {
       cleaner.dataValues.username,
       appointment.dataValues.date
     );
+
+    // Send push notification to cleaner
+    if (cleaner.dataValues.expoPushToken) {
+      await PushNotification.sendPushRequestDenied(
+        cleaner.dataValues.expoPushToken,
+        cleaner.dataValues.username,
+        appointment.dataValues.date
+      );
+    }
 
     // Add in-app notification to cleaner
     const home = await UserHomes.findByPk(appointment.dataValues.homeId);
@@ -1360,6 +1403,17 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
         clientUserName,
         appointmentDate
       );
+
+      // Send push notification to homeowner
+      const bookingClient = await User.findByPk(bookingClientId);
+      if (bookingClient?.expoPushToken) {
+        await PushNotification.sendPushCancellation(
+          bookingClient.expoPushToken,
+          clientUserName,
+          appointmentDate,
+          address
+        );
+      }
       return res.status(200).json({ message: "Request update" });
     } else {
       const appointment = await UserAppointments.findByPk(
@@ -1437,6 +1491,15 @@ appointmentRouter.patch("/remove-request", async (req, res) => {
       client.dataValues.username,
       appointment.dataValues.date
     );
+
+    // Send push notification to homeowner
+    if (client.dataValues.expoPushToken) {
+      await PushNotification.sendPushRemoveRequest(
+        client.dataValues.expoPushToken,
+        client.dataValues.username,
+        appointment.dataValues.date
+      );
+    }
 
     return res.status(200).json({
       message: "Request removed",
@@ -1851,17 +1914,28 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
 
             // Send email notification
             if (futureHome) {
+              const futureAddress = {
+                street: futureHome.address,
+                city: futureHome.city,
+                state: futureHome.state,
+                zipcode: futureHome.zipcode,
+              };
               await Email.sendEmailCancellation(
                 futureHomeowner.email,
-                {
-                  street: futureHome.address,
-                  city: futureHome.city,
-                  state: futureHome.state,
-                  zipcode: futureHome.zipcode,
-                },
+                futureAddress,
                 futureHomeowner.username,
                 futureAppointment.date
               );
+
+              // Send push notification
+              if (futureHomeowner.expoPushToken) {
+                await PushNotification.sendPushCancellation(
+                  futureHomeowner.expoPushToken,
+                  futureHomeowner.username,
+                  futureAppointment.date,
+                  futureAddress
+                );
+              }
             }
           }
         }
@@ -1907,17 +1981,28 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
 
       // Send email notification
       if (home) {
+        const homeAddress = {
+          street: home.address,
+          city: home.city,
+          state: home.state,
+          zipcode: home.zipcode,
+        };
         await Email.sendEmailCancellation(
           homeowner.email,
-          {
-            street: home.address,
-            city: home.city,
-            state: home.state,
-            zipcode: home.zipcode,
-          },
+          homeAddress,
           homeowner.username,
           appointment.date
         );
+
+        // Send push notification
+        if (homeowner.expoPushToken) {
+          await PushNotification.sendPushCancellation(
+            homeowner.expoPushToken,
+            homeowner.username,
+            appointment.date,
+            homeAddress
+          );
+        }
       }
     }
 

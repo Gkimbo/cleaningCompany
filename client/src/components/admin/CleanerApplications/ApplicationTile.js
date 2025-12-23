@@ -386,6 +386,7 @@ const ApplicationTile = ({
                 firstName={application.firstName}
                 lastName={application.lastName}
                 email={application.email}
+                phone={application.phone}
                 setApplicationsList={onRefresh}
               />
             </View>

@@ -155,6 +155,7 @@ class FetchData {
           type: data.type,
           firstName: data.firstName,
           lastName: data.lastName,
+          phone: data.phone,
         }),
       });
       if (!response.ok) {
@@ -607,6 +608,30 @@ class FetchData {
     } catch (error) {
       console.error("Error updating email:", error);
       return { error: "Failed to update email" };
+    }
+  }
+
+  static async updatePhone(token, phone) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/users/update-phone", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ phone }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to update phone number" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error updating phone:", error);
+      return { error: "Failed to update phone number" };
     }
   }
 

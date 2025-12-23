@@ -15,6 +15,7 @@ import { colors, spacing, radius, typography, shadows } from "../../services/sty
 const AccountSettings = ({ state, dispatch }) => {
   const [username, setUsername] = useState(state.currentUser.user?.username || "");
   const [email, setEmail] = useState(state.currentUser.user?.email || "");
+  const [phone, setPhone] = useState(state.currentUser.user?.phone || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -64,6 +65,18 @@ const AccountSettings = ({ state, dispatch }) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       validationErrors.push("Please enter a valid email address.");
+    }
+    return validationErrors;
+  };
+
+  const validatePhone = () => {
+    const validationErrors = [];
+    // Phone is optional, only validate if provided
+    if (phone && phone.length > 0) {
+      const digitsOnly = phone.replace(/\D/g, "");
+      if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+        validationErrors.push("Please enter a valid phone number (10-15 digits).");
+      }
     }
     return validationErrors;
   };
@@ -169,6 +182,40 @@ const AccountSettings = ({ state, dispatch }) => {
     }
   };
 
+  const handleUpdatePhone = async () => {
+    setErrors([]);
+    setSuccessMessage("");
+
+    const validationErrors = validatePhone();
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await FetchData.updatePhone(
+        state.currentUser.token,
+        phone
+      );
+
+      if (response.error) {
+        setErrors([response.error]);
+      } else {
+        setSuccessMessage("Phone number updated successfully!");
+        // Update local state
+        dispatch({
+          type: "UPDATE_USER",
+          payload: { ...state.currentUser.user, phone: response.phone },
+        });
+      }
+    } catch (error) {
+      setErrors(["Failed to update phone number. Please try again."]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <Text style={styles.title}>Account Settings</Text>
@@ -256,6 +303,35 @@ const AccountSettings = ({ state, dispatch }) => {
           </Pressable>
         </View>
       )}
+
+      {/* Phone Section - available for all users */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Change Phone Number</Text>
+        <Text style={styles.sectionDescription}>
+          Update your phone number for account contact purposes.
+        </Text>
+
+        <Text style={styles.label}>Phone Number</Text>
+        <TextInput
+          style={styles.input}
+          value={phone}
+          onChangeText={setPhone}
+          placeholder="Enter phone number (optional)"
+          placeholderTextColor={colors.text.tertiary}
+          keyboardType="phone-pad"
+          autoCorrect={false}
+        />
+
+        <Pressable
+          style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
+          onPress={handleUpdatePhone}
+          disabled={loading}
+        >
+          <Text style={styles.primaryButtonText}>
+            {loading ? "Updating..." : "Update Phone"}
+          </Text>
+        </Pressable>
+      </View>
 
       {/* Password Section */}
       <View style={styles.section}>

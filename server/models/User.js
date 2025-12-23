@@ -75,6 +75,14 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: 0,
 		},
+		expoPushToken: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		phone: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
 	});
 
 	// Hash the password before saving the user

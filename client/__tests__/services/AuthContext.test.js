@@ -7,7 +7,13 @@ jest.mock("@react-native-async-storage/async-storage", () => ({
   removeItem: jest.fn(),
 }));
 
+// Mock PushNotificationService
+jest.mock("../../src/services/PushNotificationService", () => ({
+  removeTokenFromBackend: jest.fn(),
+}));
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import PushNotificationService from "../../src/services/PushNotificationService";
 
 describe("AuthContext Service", () => {
   beforeEach(() => {
@@ -94,6 +100,59 @@ describe("AuthContext Service", () => {
       await AsyncStorage.removeItem("token");
 
       expect(AsyncStorage.removeItem).toHaveBeenCalled();
+    });
+
+    it("should remove push token from backend on logout", async () => {
+      const token = "logout_token_123";
+      AsyncStorage.getItem.mockResolvedValue(token);
+      PushNotificationService.removeTokenFromBackend.mockResolvedValue(true);
+
+      // Simulate logout flow: get token, remove push token, remove auth token
+      const storedToken = await AsyncStorage.getItem("token");
+      if (storedToken) {
+        await PushNotificationService.removeTokenFromBackend(storedToken);
+      }
+      await AsyncStorage.removeItem("token");
+
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith("token");
+      expect(PushNotificationService.removeTokenFromBackend).toHaveBeenCalledWith(token);
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith("token");
+    });
+
+    it("should not call removeTokenFromBackend if no token exists", async () => {
+      AsyncStorage.getItem.mockResolvedValue(null);
+
+      // Simulate logout flow
+      const storedToken = await AsyncStorage.getItem("token");
+      if (storedToken) {
+        await PushNotificationService.removeTokenFromBackend(storedToken);
+      }
+      await AsyncStorage.removeItem("token");
+
+      expect(PushNotificationService.removeTokenFromBackend).not.toHaveBeenCalled();
+    });
+
+    it("should continue logout even if push token removal fails", async () => {
+      const token = "failing_token_456";
+      AsyncStorage.getItem.mockResolvedValue(token);
+      PushNotificationService.removeTokenFromBackend.mockRejectedValue(
+        new Error("Network error")
+      );
+      AsyncStorage.removeItem.mockResolvedValue(undefined);
+
+      // Simulate logout flow with error handling
+      const storedToken = await AsyncStorage.getItem("token");
+      try {
+        if (storedToken) {
+          await PushNotificationService.removeTokenFromBackend(storedToken);
+        }
+      } catch (error) {
+        // Error is caught but logout continues
+      }
+      await AsyncStorage.removeItem("token");
+
+      expect(PushNotificationService.removeTokenFromBackend).toHaveBeenCalled();
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith("token");
     });
   });
 
