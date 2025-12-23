@@ -64,24 +64,32 @@ describe("HomeSizeAdjustment Router", () => {
   };
 
   // Helper to create mock user
-  const createMockUser = (overrides = {}) => ({
-    id: 1,
-    firstName: "John",
-    lastName: "Doe",
-    username: "johndoe",
-    email: "john@example.com",
-    type: "homeowner",
-    notifications: ["email", "phone"],
-    expoPushToken: "ExponentPushToken[xxx]",
-    managerPrivateNotes: null,
-    falseHomeSizeCount: 0,
-    falseClaimCount: 0,
-    update: jest.fn().mockImplementation(function (data) {
-      Object.assign(this, data);
-      return Promise.resolve(this);
-    }),
-    ...overrides,
-  });
+  const createMockUser = (overrides = {}) => {
+    const user = {
+      id: 1,
+      firstName: "John",
+      lastName: "Doe",
+      username: "johndoe",
+      email: "john@example.com",
+      notificationEmail: null,
+      type: "homeowner",
+      notifications: ["email", "phone"],
+      expoPushToken: "ExponentPushToken[xxx]",
+      managerPrivateNotes: null,
+      falseHomeSizeCount: 0,
+      falseClaimCount: 0,
+      update: jest.fn().mockImplementation(function (data) {
+        Object.assign(this, data);
+        return Promise.resolve(this);
+      }),
+      ...overrides,
+    };
+    // Add the getNotificationEmail method
+    user.getNotificationEmail = function () {
+      return this.notificationEmail || this.email;
+    };
+    return user;
+  };
 
   // Helper to create mock appointment
   const createMockAppointment = (overrides = {}) => ({

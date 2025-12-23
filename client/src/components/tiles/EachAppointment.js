@@ -65,10 +65,10 @@ const EachAppointment = ({
   const navigate = useNavigate();
   const { pricing } = usePricing();
 
-  // Get linen prices from pricing context
-  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed || 30;
-  const towelFee = pricing?.linens?.towelFee || 5;
-  const faceClothFee = pricing?.linens?.faceClothFee || 2;
+  // Get linen prices from pricing context (fallbacks match database defaults)
+  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 30;
+  const towelFee = pricing?.linens?.towelFee ?? 5;
+  const faceClothFee = pricing?.linens?.faceClothFee ?? 2;
 
   // Initialize bed configurations
   const initializeBedConfigurations = (beds) => {

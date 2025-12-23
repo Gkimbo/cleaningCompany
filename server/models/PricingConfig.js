@@ -25,7 +25,13 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 50,
-      comment: "Additional fee per extra bed or bath",
+      comment: "Additional fee per extra bed or full bath",
+    },
+    halfBathFee: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 25,
+      comment: "Additional fee per half bathroom",
     },
 
     // Linen services (in dollars)
@@ -169,6 +175,7 @@ module.exports = (sequelize, DataTypes) => {
     return {
       basePrice: config.basePrice,
       extraBedBathFee: config.extraBedBathFee,
+      halfBathFee: config.halfBathFee,
       linens: {
         sheetFeePerBed: config.sheetFeePerBed,
         towelFee: config.towelFee,

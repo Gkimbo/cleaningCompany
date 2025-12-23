@@ -21,7 +21,7 @@ const STEPS = {
   REVIEW: 3,
 };
 
-// Default time options - will be replaced with pricing context values
+// Fallback time options matching database defaults (used if pricing context unavailable)
 const DEFAULT_TIME_OPTIONS = [
   { value: "anytime", label: "Anytime", description: "Most flexible, best pricing" },
   { value: "10-3", label: "10am - 3pm", description: "+$25 per cleaning" },
@@ -51,12 +51,12 @@ const HomeSetupWizard = ({ state, dispatch }) => {
   const { user } = useContext(AuthContext);
   const { pricing } = usePricing();
 
-  // Get linen prices from pricing context
-  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed || 30;
-  const towelFee = pricing?.linens?.towelFee || 5;
-  const faceClothFee = pricing?.linens?.faceClothFee || 2;
+  // Get linen prices from pricing context (fallbacks match database defaults)
+  const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 30;
+  const towelFee = pricing?.linens?.towelFee ?? 5;
+  const faceClothFee = pricing?.linens?.faceClothFee ?? 2;
 
-  // Generate time options from pricing context
+  // Generate time options from pricing context (fallback to defaults if unavailable)
   const TIME_OPTIONS = useMemo(() => {
     if (pricing?.timeWindows) {
       return Object.entries(pricing.timeWindows).map(([value, config]) => ({

@@ -357,6 +357,262 @@ describe("Manager Dashboard Router", () => {
     });
   });
 
+  describe("GET /settings", () => {
+    it("should return manager settings including notification email", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: "alerts@test.com",
+        notifications: ["email", "phone"],
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .get("/api/v1/manager/settings")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.email).toBe("manager@test.com");
+      expect(response.body.notificationEmail).toBe("alerts@test.com");
+      expect(response.body.effectiveNotificationEmail).toBe("alerts@test.com");
+      expect(response.body.notifications).toEqual(["email", "phone"]);
+    });
+
+    it("should return main email as effective when notificationEmail is null", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: null,
+        notifications: [],
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .get("/api/v1/manager/settings")
+        .set("Authorization", `Bearer ${managerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.email).toBe("manager@test.com");
+      expect(response.body.notificationEmail).toBeNull();
+      expect(response.body.effectiveNotificationEmail).toBe("manager@test.com");
+    });
+
+    it("should require manager authentication", async () => {
+      User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
+
+      const response = await request(app)
+        .get("/api/v1/manager/settings")
+        .set("Authorization", `Bearer ${cleanerToken}`);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe("Manager access required");
+    });
+  });
+
+  describe("PUT /settings/notification-email", () => {
+    it("should update notification email successfully", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: null,
+        update: jest.fn().mockImplementation(function (data) {
+          Object.assign(this, data);
+          return Promise.resolve(this);
+        }),
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .put("/api/v1/manager/settings/notification-email")
+        .set("Authorization", `Bearer ${managerToken}`)
+        .send({ notificationEmail: "alerts@test.com" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.notificationEmail).toBe("alerts@test.com");
+      expect(response.body.effectiveNotificationEmail).toBe("alerts@test.com");
+      expect(mockManager.update).toHaveBeenCalledWith({
+        notificationEmail: "alerts@test.com",
+      });
+    });
+
+    it("should clear notification email when empty string provided", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: "alerts@test.com",
+        update: jest.fn().mockImplementation(function (data) {
+          Object.assign(this, data);
+          return Promise.resolve(this);
+        }),
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .put("/api/v1/manager/settings/notification-email")
+        .set("Authorization", `Bearer ${managerToken}`)
+        .send({ notificationEmail: "" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.notificationEmail).toBeNull();
+      expect(response.body.effectiveNotificationEmail).toBe("manager@test.com");
+      expect(mockManager.update).toHaveBeenCalledWith({
+        notificationEmail: null,
+      });
+    });
+
+    it("should clear notification email when null provided", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: "alerts@test.com",
+        update: jest.fn().mockImplementation(function (data) {
+          Object.assign(this, data);
+          return Promise.resolve(this);
+        }),
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .put("/api/v1/manager/settings/notification-email")
+        .set("Authorization", `Bearer ${managerToken}`)
+        .send({ notificationEmail: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(mockManager.update).toHaveBeenCalledWith({
+        notificationEmail: null,
+      });
+    });
+
+    it("should reject invalid email format", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: null,
+        update: jest.fn(),
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .put("/api/v1/manager/settings/notification-email")
+        .set("Authorization", `Bearer ${managerToken}`)
+        .send({ notificationEmail: "invalid-email" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Invalid email format");
+      expect(mockManager.update).not.toHaveBeenCalled();
+    });
+
+    it("should reject email without @ symbol", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: null,
+        update: jest.fn(),
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .put("/api/v1/manager/settings/notification-email")
+        .set("Authorization", `Bearer ${managerToken}`)
+        .send({ notificationEmail: "notanemail.com" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Invalid email format");
+    });
+
+    it("should trim whitespace from email", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: null,
+        update: jest.fn().mockImplementation(function (data) {
+          Object.assign(this, data);
+          return Promise.resolve(this);
+        }),
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .put("/api/v1/manager/settings/notification-email")
+        .set("Authorization", `Bearer ${managerToken}`)
+        .send({ notificationEmail: "  alerts@test.com  " });
+
+      expect(response.status).toBe(200);
+      expect(mockManager.update).toHaveBeenCalledWith({
+        notificationEmail: "alerts@test.com",
+      });
+    });
+
+    it("should require manager authentication", async () => {
+      User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
+
+      const response = await request(app)
+        .put("/api/v1/manager/settings/notification-email")
+        .set("Authorization", `Bearer ${cleanerToken}`)
+        .send({ notificationEmail: "alerts@test.com" });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe("Manager access required");
+    });
+
+    it("should handle database errors gracefully", async () => {
+      const mockManager = {
+        id: 1,
+        type: "manager",
+        email: "manager@test.com",
+        notificationEmail: null,
+        update: jest.fn().mockRejectedValue(new Error("Database error")),
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
+        },
+      };
+      User.findByPk.mockResolvedValue(mockManager);
+
+      const response = await request(app)
+        .put("/api/v1/manager/settings/notification-email")
+        .set("Authorization", `Bearer ${managerToken}`)
+        .send({ notificationEmail: "alerts@test.com" });
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("Failed to update notification email");
+    });
+  });
+
   describe("GET /business-metrics", () => {
     beforeEach(() => {
       // Reset all mocks

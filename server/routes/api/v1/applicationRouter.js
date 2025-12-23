@@ -106,10 +106,11 @@ applicationRouter.post("/submitted", async (req, res) => {
       const applicantName = `${firstName} ${lastName}`;
 
       for (const manager of managers) {
-        // Send email notification
-        if (manager.email) {
+        // Send email notification (use notificationEmail if set, otherwise main email)
+        const managerNotificationEmail = manager.getNotificationEmail();
+        if (managerNotificationEmail) {
           await Email.sendNewApplicationNotification(
-            manager.email,
+            managerNotificationEmail,
             applicantName,
             email,
             experience

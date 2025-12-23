@@ -24,6 +24,11 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: false,
 		},
+		notificationEmail: {
+			type: DataTypes.STRING,
+			allowNull: true,
+			comment: "Separate email for receiving notifications (falls back to main email if null)",
+		},
 		lastLogin: {
 			type: DataTypes.DATE,
 			allowNull: true,
@@ -117,6 +122,11 @@ module.exports = (sequelize, DataTypes) => {
 		} catch (error) {
 			throw new Error(error);
 		}
+	};
+
+	// Method to get email for notifications (uses notificationEmail if set, otherwise main email)
+	User.prototype.getNotificationEmail = function () {
+		return this.notificationEmail || this.email;
 	};
 
 	// Define the one-to-many relationship with UserInformation

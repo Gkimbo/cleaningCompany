@@ -16,7 +16,7 @@ import { usePricing } from "../../context/PricingContext";
 const EditHomeList = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
-  const cancellationFeePerAppt = pricing?.cancellation?.fee || 25;
+  const cancellationFeePerAppt = pricing?.cancellation?.fee ?? 25;
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [selectedHomeId, setSelectedHomeId] = useState(null);
   const [deleteFee, setDeleteFee] = useState(0);

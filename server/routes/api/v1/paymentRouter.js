@@ -1122,10 +1122,11 @@ cron.schedule("0 * * * *", async () => {
 
         // Notify all managers
         for (const manager of managers) {
-          // Send email notification
-          if (manager.email) {
+          // Send email notification (use notificationEmail if set, otherwise main email)
+          const managerNotificationEmail = manager.getNotificationEmail();
+          if (managerNotificationEmail) {
             await Email.sendAdjustmentNeedsManagerReview(
-              manager.email,
+              managerNotificationEmail,
               manager.firstName,
               request.id,
               request.cleaner?.firstName || "Cleaner",

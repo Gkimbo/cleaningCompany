@@ -103,14 +103,17 @@ describe("Application Router", () => {
         id: 1,
         ...validApplicationData,
       });
-      User.findAll.mockResolvedValue([
-        {
-          id: 1,
-          email: "manager@test.com",
-          notifications: [],
-          update: jest.fn(),
+      const mockManager = {
+        id: 1,
+        email: "manager@test.com",
+        notificationEmail: null,
+        notifications: [],
+        update: jest.fn(),
+        getNotificationEmail: function () {
+          return this.notificationEmail || this.email;
         },
-      ]);
+      };
+      User.findAll.mockResolvedValue([mockManager]);
 
       const response = await request(app)
         .post("/api/v1/applications/submitted")

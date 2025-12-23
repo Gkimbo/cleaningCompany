@@ -1216,4 +1216,63 @@ managerDashboardRouter.get(
   }
 );
 
+/**
+ * GET /settings
+ * Get manager's current settings including notification email
+ */
+managerDashboardRouter.get("/settings", verifyManager, async (req, res) => {
+  try {
+    const manager = req.user;
+
+    res.json({
+      email: manager.email,
+      notificationEmail: manager.notificationEmail,
+      effectiveNotificationEmail: manager.getNotificationEmail(),
+      notifications: manager.notifications || [],
+    });
+  } catch (error) {
+    console.error("[Manager Dashboard] Settings fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch settings" });
+  }
+});
+
+/**
+ * PUT /settings/notification-email
+ * Update the email address for receiving manager notifications
+ */
+managerDashboardRouter.put(
+  "/settings/notification-email",
+  verifyManager,
+  async (req, res) => {
+    try {
+      const { notificationEmail } = req.body;
+
+      // Validate email format if provided
+      if (notificationEmail && notificationEmail.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(notificationEmail.trim())) {
+          return res.status(400).json({ error: "Invalid email format" });
+        }
+      }
+
+      // Update the notification email (null clears it, falling back to main email)
+      await req.user.update({
+        notificationEmail: notificationEmail?.trim() || null,
+      });
+
+      res.json({
+        success: true,
+        message: notificationEmail?.trim()
+          ? "Notification email updated successfully"
+          : "Notification email cleared - using main email",
+        notificationEmail: req.user.notificationEmail,
+        effectiveNotificationEmail: req.user.getNotificationEmail(),
+      });
+    } catch (error) {
+      console.error("[Manager Dashboard] Update notification email error:", error);
+      res.status(500).json({ error: "Failed to update notification email" });
+    }
+  }
+);
+
 module.exports = managerDashboardRouter;

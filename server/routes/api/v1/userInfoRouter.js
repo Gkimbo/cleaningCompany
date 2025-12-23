@@ -263,7 +263,7 @@ userInfoRouter.delete("/home", async (req, res) => {
 
     if (appointmentsWithinWeek.length > 0) {
       const pricing = await getPricingConfig();
-      const cancellationFeePerAppt = pricing.cancellation?.fee || 25;
+      const cancellationFeePerAppt = pricing?.cancellation?.fee ?? 25;
       const cancellationFee = cancellationFeePerAppt * appointmentsWithinWeek.length;
       const oldFee = Number(billToUpdate.dataValues.cancellationFee);
 

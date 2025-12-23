@@ -99,6 +99,7 @@ pricingRouter.get("/config", verifyManager, async (req, res) => {
       staticDefaults: {
         basePrice: pricing.basePrice,
         extraBedBathFee: pricing.extraBedBathFee,
+        halfBathFee: pricing.halfBathFee,
         sheetFeePerBed: pricing.linens.sheetFeePerBed,
         towelFee: pricing.linens.towelFee,
         faceClothFee: pricing.linens.faceClothFee,
@@ -130,6 +131,7 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
     const {
       basePrice,
       extraBedBathFee,
+      halfBathFee,
       sheetFeePerBed,
       towelFee,
       faceClothFee,
@@ -151,6 +153,7 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
     const requiredFields = {
       basePrice,
       extraBedBathFee,
+      halfBathFee,
       sheetFeePerBed,
       towelFee,
       faceClothFee,
@@ -182,6 +185,7 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
     const numericFields = {
       basePrice,
       extraBedBathFee,
+      halfBathFee,
       sheetFeePerBed,
       towelFee,
       faceClothFee,
@@ -222,6 +226,7 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
       {
         basePrice,
         extraBedBathFee,
+        halfBathFee,
         sheetFeePerBed,
         towelFee,
         faceClothFee,
@@ -283,6 +288,7 @@ pricingRouter.get("/history", verifyManager, async (req, res) => {
         pricing: {
           basePrice: config.basePrice,
           extraBedBathFee: config.extraBedBathFee,
+          halfBathFee: config.halfBathFee,
           sheetFeePerBed: config.sheetFeePerBed,
           towelFee: config.towelFee,
           faceClothFee: config.faceClothFee,

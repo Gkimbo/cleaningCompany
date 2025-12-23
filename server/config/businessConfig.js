@@ -65,7 +65,8 @@ const businessConfig = {
   pricing: {
     // Base cleaning rate
     basePrice: 150, // 1 bed/1 bath starting price
-    extraBedBathFee: 50, // Per additional bedroom or bathroom
+    extraBedBathFee: 50, // Per additional bedroom or full bathroom
+    halfBathFee: 25, // Per half bathroom
 
     // Linen services
     linens: {

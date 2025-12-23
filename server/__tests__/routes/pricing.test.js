@@ -19,6 +19,7 @@ jest.mock("../../config/businessConfig", () => {
   const mockPricing = {
     basePrice: 150,
     extraBedBathFee: 50,
+    halfBathFee: 25,
     linens: {
       sheetFeePerBed: 30,
       towelFee: 5,
@@ -270,6 +271,7 @@ describe("Pricing Router", () => {
     const validPricingData = {
       basePrice: 175,
       extraBedBathFee: 60,
+      halfBathFee: 30,
       sheetFeePerBed: 35,
       towelFee: 6,
       faceClothFee: 3,
@@ -558,6 +560,7 @@ describe("Pricing Router", () => {
       const validPricingData = {
         basePrice: 175,
         extraBedBathFee: 60,
+        halfBathFee: 30,
         sheetFeePerBed: 35,
         towelFee: 6,
         faceClothFee: 3,

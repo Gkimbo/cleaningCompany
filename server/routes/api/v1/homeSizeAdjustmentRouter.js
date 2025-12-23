@@ -506,8 +506,9 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
       const managers = await User.findAll({ where: { type: "manager" } });
       for (const manager of managers) {
         if (manager.notifications?.includes("email")) {
+          // Use notificationEmail if set, otherwise main email
           await Email.sendAdjustmentNeedsManagerReview(
-            manager.email,
+            manager.getNotificationEmail(),
             manager.firstName || manager.username,
             request,
             home,

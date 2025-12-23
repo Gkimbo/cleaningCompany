@@ -217,6 +217,43 @@ class ManagerDashboardService {
       return { success: false, error: "Network error. Please try again." };
     }
   }
+
+  static async getSettings(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/manager-dashboard/settings`,
+      token,
+      {
+        email: "",
+        notificationEmail: null,
+        effectiveNotificationEmail: "",
+        notifications: [],
+      }
+    );
+  }
+
+  static async updateNotificationEmail(token, notificationEmail) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/manager-dashboard/settings/notification-email`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ notificationEmail }),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { success: false, error: errorData.error || "Failed to update notification email" };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[ManagerDashboard] updateNotificationEmail failed:", error.message);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
 }
 
 export default ManagerDashboardService;
