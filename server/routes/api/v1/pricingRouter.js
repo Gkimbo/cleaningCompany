@@ -6,7 +6,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { User, PricingConfig } = require("../../../models");
-const { getPricingConfig } = require("../../../config/businessConfig");
+const { getPricingConfig, businessConfig } = require("../../../config/businessConfig");
 
 const pricingRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -41,13 +41,17 @@ const verifyManager = async (req, res, next) => {
  */
 pricingRouter.get("/current", async (req, res) => {
   try {
-    // Try to get from database first
+    // Get staffing config (always from static config)
+    const staffing = businessConfig.staffing;
+
+    // Try to get pricing from database first
     const dbPricing = await PricingConfig.getFormattedPricing();
 
     if (dbPricing) {
       return res.json({
         source: "database",
         pricing: dbPricing,
+        staffing,
       });
     }
 
@@ -56,6 +60,7 @@ pricingRouter.get("/current", async (req, res) => {
     return res.json({
       source: "config",
       pricing: fallbackPricing,
+      staffing,
     });
   } catch (error) {
     console.error("[Pricing API] Error fetching current pricing:", error);
@@ -64,6 +69,7 @@ pricingRouter.get("/current", async (req, res) => {
     return res.json({
       source: "config",
       pricing: fallbackPricing,
+      staffing: businessConfig.staffing,
     });
   }
 });

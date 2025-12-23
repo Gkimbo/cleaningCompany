@@ -852,7 +852,7 @@ appointmentRouter.patch("/remove-employee", async (req, res) => {
         if (updatedEmployees.length !== employees.length) {
           await updateAppointment.update({
             employeesAssigned: updatedEmployees,
-            hasBeenAssigned: false,
+            hasBeenAssigned: updatedEmployees.length > 0,
           });
         }
       }
@@ -1286,7 +1286,7 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
         if (updatedEmployees.length !== employees.length) {
           await updateAppointment.update({
             employeesAssigned: updatedEmployees,
-            hasBeenAssigned: false,
+            hasBeenAssigned: updatedEmployees.length > 0,
           });
         }
       }

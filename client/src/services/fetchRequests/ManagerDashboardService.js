@@ -150,6 +150,51 @@ class ManagerDashboardService {
     );
   }
 
+  static async getBusinessMetrics(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/manager-dashboard/business-metrics`,
+      token,
+      {
+        costPerBooking: {
+          avgFeeCents: 0,
+          totalFeeCents: 0,
+          bookingCount: 0,
+        },
+        repeatBookingRate: {
+          rate: 0,
+          repeatBookers: 0,
+          singleBookers: 0,
+          totalHomeowners: 0,
+        },
+        subscriptionRate: {
+          rate: 0,
+          frequentBookers: 0,
+          regularBookers: 0,
+          occasionalBookers: 0,
+          totalHomeowners: 0,
+        },
+        churn: {
+          homeownerCancellations: {
+            usersWithCancellations: 0,
+            totalFeeCents: 0,
+          },
+          cleanerCancellations: {
+            total: 0,
+            last30Days: 0,
+            last90Days: 0,
+          },
+        },
+        cleanerReliability: {
+          overallCompletionRate: 0,
+          avgRating: 0,
+          totalCompleted: 0,
+          totalAssigned: 0,
+          cleanerStats: [],
+        },
+      }
+    );
+  }
+
   static async recheckServiceAreas(token) {
     try {
       const response = await fetch(

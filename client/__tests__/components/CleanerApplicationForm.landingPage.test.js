@@ -40,9 +40,9 @@ import CleanerApplicationForm from "../../src/components/admin/CleanerApplicatio
 const calculateCleanerEarnings = (pricing) => {
   const platformFeePercent = pricing.platform?.feePercent ?? defaultPricing.platform.feePercent;
   const minPay = Math.round((pricing.basePrice ?? defaultPricing.basePrice) * (1 - platformFeePercent));
-  // Max pay uses 2 extras (matching the component)
+  // Max pay uses 1 extra (matching the component - a 2bed/1bath scenario)
   const maxPay = Math.round(
-    ((pricing.basePrice ?? defaultPricing.basePrice) + (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee) * 2) *
+    ((pricing.basePrice ?? defaultPricing.basePrice) + (pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee)) *
       (1 - platformFeePercent)
   );
   return { minPay, maxPay };
@@ -85,7 +85,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
       });
 
       const { minPay, maxPay } = calculateCleanerEarnings(dbPricing);
-      // With 10% fee: min = 150 * 0.9 = 135, max = (150 + 50*2) * 0.9 = 225
+      // With 10% fee: min = 150 * 0.9 = 135, max = (150 + 50) * 0.9 = 180
 
       const { getAllByText } = renderCleanerApplicationForm();
 
@@ -117,7 +117,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
         pricing: dbPricing,
       });
 
-      // With 15% fee: min = 200 * 0.85 = 170, max = (200 + 60*2) * 0.85 = 272
+      // With 15% fee: min = 200 * 0.85 = 170, max = (200 + 60) * 0.85 = 221
       const { minPay, maxPay } = calculateCleanerEarnings(dbPricing);
 
       const { getAllByText } = renderCleanerApplicationForm();
@@ -226,7 +226,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
 
       // Should fall back to default platform fee (0.1)
       const minPay = Math.round(175 * (1 - defaultPricing.platform.feePercent));
-      const maxPay = Math.round((175 + 50 * 2) * (1 - defaultPricing.platform.feePercent));
+      const maxPay = Math.round((175 + 50) * (1 - defaultPricing.platform.feePercent));
 
       const { getAllByText } = renderCleanerApplicationForm();
 
@@ -315,7 +315,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
         pricing: highFeePricing,
       });
 
-      // With 20% fee: min = 150 * 0.8 = 120, max = 250 * 0.8 = 200
+      // With 20% fee: min = 150 * 0.8 = 120, max = (150 + 50) * 0.8 = 160
       const { minPay, maxPay } = calculateCleanerEarnings(highFeePricing);
 
       const { getAllByText } = renderCleanerApplicationForm();
@@ -337,7 +337,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
         pricing: lowFeePricing,
       });
 
-      // With 5% fee: min = 150 * 0.95 = 142.5 -> 143, max = 250 * 0.95 = 237.5 -> 238
+      // With 5% fee: min = 150 * 0.95 = 142.5 -> 143, max = (150 + 50) * 0.95 = 190
       const { minPay, maxPay } = calculateCleanerEarnings(lowFeePricing);
 
       const { getAllByText } = renderCleanerApplicationForm();
@@ -372,7 +372,7 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
       });
 
       const { minPay, maxPay } = calculateCleanerEarnings(updatedPricing);
-      // With 10% fee: min = 200 * 0.9 = 180, max = (200 + 75*2) * 0.9 = 315
+      // With 10% fee: min = 200 * 0.9 = 180, max = (200 + 75) * 0.9 = 248
 
       const { getAllByText } = renderCleanerApplicationForm();
 

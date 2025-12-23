@@ -712,6 +712,24 @@ class FetchData {
     }
   }
 
+  // Get staffing configuration (includes minCleanersForAssignment)
+  static async getStaffingConfig() {
+    try {
+      const response = await fetch(baseURL + "/api/v1/pricing/current");
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch config");
+      }
+
+      const responseData = await response.json();
+      return responseData.staffing || { minCleanersForAssignment: 1 };
+    } catch (error) {
+      console.error("Error fetching staffing config:", error);
+      // Return default if fetch fails
+      return { minCleanersForAssignment: 1 };
+    }
+  }
+
   // Cancellation API methods
   static async getCancellationInfo(appointmentId, token) {
     try {

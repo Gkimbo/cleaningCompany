@@ -109,6 +109,20 @@ class Application {
       throw err;
     }
   }
+
+  static async getPendingCount() {
+    try {
+      const response = await fetch(baseURL + "/api/v1/applications/pending-count");
+      if (!response.ok) {
+        return 0;
+      }
+      const responseData = await response.json();
+      return responseData.count || 0;
+    } catch (error) {
+      console.error("Error fetching pending applications:", error);
+      return 0;
+    }
+  }
 }
 
 export default Application;

@@ -129,6 +129,7 @@ const ManagerDashboard = ({ state }) => {
   const [error, setError] = useState(null);
   const [serviceAreaData, setServiceAreaData] = useState(null);
   const [appUsageData, setAppUsageData] = useState(null);
+  const [businessMetrics, setBusinessMetrics] = useState(null);
   const [recheckLoading, setRecheckLoading] = useState(false);
   const [recheckResult, setRecheckResult] = useState(null);
 
@@ -147,13 +148,14 @@ const ManagerDashboard = ({ state }) => {
     setError(null);
 
     try {
-      const [financial, users, stats, messages, serviceAreas, appUsage] = await Promise.all([
+      const [financial, users, stats, messages, serviceAreas, appUsage, bizMetrics] = await Promise.all([
         ManagerDashboardService.getFinancialSummary(state.currentUser.token),
         ManagerDashboardService.getUserAnalytics(state.currentUser.token),
         ManagerDashboardService.getQuickStats(state.currentUser.token),
         ManagerDashboardService.getMessagesSummary(state.currentUser.token),
         ManagerDashboardService.getServiceAreas(state.currentUser.token),
         ManagerDashboardService.getAppUsageAnalytics(state.currentUser.token),
+        ManagerDashboardService.getBusinessMetrics(state.currentUser.token),
       ]);
 
       // Set data even if some endpoints return fallback values
@@ -163,6 +165,7 @@ const ManagerDashboard = ({ state }) => {
       setMessagesSummary(messages);
       setServiceAreaData(serviceAreas);
       setAppUsageData(appUsage);
+      setBusinessMetrics(bizMetrics);
     } catch (err) {
       console.error("[ManagerDashboard] Error fetching data:", err);
       setError("Failed to load dashboard data");
@@ -480,6 +483,198 @@ const ManagerDashboard = ({ state }) => {
             color={colors.primary[500]}
           />
         )}
+      </View>
+
+      {/* Business Metrics Section */}
+      <View style={styles.section}>
+        <SectionHeader title="Business Metrics" />
+
+        {/* Cost Per Booking */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Cost Per Booking</Text>
+          <View style={styles.businessMetricRow}>
+            <View style={[styles.businessMetricCard, styles.businessMetricCardHighlight]}>
+              <Text style={styles.businessMetricLabel}>Avg Platform Fee</Text>
+              <Text style={styles.businessMetricValue}>
+                {formatCurrency(businessMetrics?.costPerBooking?.avgFeeCents)}
+              </Text>
+            </View>
+            <View style={styles.businessMetricCard}>
+              <Text style={styles.businessMetricLabel}>Total Earned</Text>
+              <Text style={styles.businessMetricValue}>
+                {formatCurrencyShort(businessMetrics?.costPerBooking?.totalFeeCents)}
+              </Text>
+            </View>
+            <View style={styles.businessMetricCard}>
+              <Text style={styles.businessMetricLabel}>Bookings</Text>
+              <Text style={styles.businessMetricValue}>
+                {businessMetrics?.costPerBooking?.bookingCount || 0}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Repeat Booking Rate */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Repeat Booking Rate</Text>
+          <View style={styles.businessMetricRow}>
+            <View style={[styles.businessMetricCard, styles.businessMetricCardLarge]}>
+              <Text style={styles.businessMetricValueLarge}>
+                {businessMetrics?.repeatBookingRate?.rate || 0}%
+              </Text>
+              <Text style={styles.businessMetricLabel}>Repeat Customers</Text>
+            </View>
+            <View style={styles.businessMetricCardStack}>
+              <View style={styles.businessMetricMini}>
+                <Text style={styles.businessMetricMiniValue}>
+                  {businessMetrics?.repeatBookingRate?.repeatBookers || 0}
+                </Text>
+                <Text style={styles.businessMetricMiniLabel}>Repeat</Text>
+              </View>
+              <View style={styles.businessMetricMini}>
+                <Text style={styles.businessMetricMiniValue}>
+                  {businessMetrics?.repeatBookingRate?.singleBookers || 0}
+                </Text>
+                <Text style={styles.businessMetricMiniLabel}>Single</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Subscription Rate (Frequent Bookers) */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Customer Loyalty</Text>
+          <View style={styles.businessMetricRow}>
+            <View style={[styles.loyaltyCard, { backgroundColor: colors.success[50] }]}>
+              <Text style={[styles.loyaltyValue, { color: colors.success[700] }]}>
+                {businessMetrics?.subscriptionRate?.frequentBookers || 0}
+              </Text>
+              <Text style={[styles.loyaltyLabel, { color: colors.success[600] }]}>
+                Loyal (5+)
+              </Text>
+            </View>
+            <View style={[styles.loyaltyCard, { backgroundColor: colors.primary[50] }]}>
+              <Text style={[styles.loyaltyValue, { color: colors.primary[700] }]}>
+                {businessMetrics?.subscriptionRate?.regularBookers || 0}
+              </Text>
+              <Text style={[styles.loyaltyLabel, { color: colors.primary[600] }]}>
+                Regular (3-4)
+              </Text>
+            </View>
+            <View style={[styles.loyaltyCard, { backgroundColor: colors.neutral[100] }]}>
+              <Text style={styles.loyaltyValue}>
+                {businessMetrics?.subscriptionRate?.occasionalBookers || 0}
+              </Text>
+              <Text style={styles.loyaltyLabel}>
+                Occasional (1-2)
+              </Text>
+            </View>
+          </View>
+          <View style={styles.loyaltyRateContainer}>
+            <Text style={styles.loyaltyRateText}>
+              {businessMetrics?.subscriptionRate?.rate || 0}% of customers are loyal (5+ bookings)
+            </Text>
+          </View>
+        </View>
+
+        {/* Churn / Cancellations */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Churn (Cancellations)</Text>
+          <View style={styles.churnContainer}>
+            <View style={styles.churnSection}>
+              <Text style={styles.churnSectionTitle}>Homeowner Cancellations</Text>
+              <View style={styles.churnRow}>
+                <View style={styles.churnCard}>
+                  <Text style={styles.churnValue}>
+                    {businessMetrics?.churn?.homeownerCancellations?.usersWithCancellations || 0}
+                  </Text>
+                  <Text style={styles.churnLabel}>Users w/ Fees</Text>
+                </View>
+                <View style={styles.churnCard}>
+                  <Text style={styles.churnValue}>
+                    {formatCurrency(businessMetrics?.churn?.homeownerCancellations?.totalFeeCents)}
+                  </Text>
+                  <Text style={styles.churnLabel}>Total Fees</Text>
+                </View>
+              </View>
+            </View>
+            <View style={[styles.churnSection, { marginTop: spacing.md }]}>
+              <Text style={styles.churnSectionTitle}>Cleaner Cancellations (Penalties)</Text>
+              <View style={styles.churnRow}>
+                <View style={[styles.churnCard, { backgroundColor: colors.error[50] }]}>
+                  <Text style={[styles.churnValue, { color: colors.error[700] }]}>
+                    {businessMetrics?.churn?.cleanerCancellations?.last30Days || 0}
+                  </Text>
+                  <Text style={[styles.churnLabel, { color: colors.error[600] }]}>Last 30 Days</Text>
+                </View>
+                <View style={[styles.churnCard, { backgroundColor: colors.warning[50] }]}>
+                  <Text style={[styles.churnValue, { color: colors.warning[700] }]}>
+                    {businessMetrics?.churn?.cleanerCancellations?.last90Days || 0}
+                  </Text>
+                  <Text style={[styles.churnLabel, { color: colors.warning[600] }]}>Last 90 Days</Text>
+                </View>
+                <View style={styles.churnCard}>
+                  <Text style={styles.churnValue}>
+                    {businessMetrics?.churn?.cleanerCancellations?.total || 0}
+                  </Text>
+                  <Text style={styles.churnLabel}>All Time</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Cleaner Reliability */}
+        <View style={styles.appUsageSubsection}>
+          <Text style={styles.appUsageSubtitle}>Cleaner Reliability</Text>
+          <View style={styles.reliabilityOverview}>
+            <View style={[styles.reliabilityCard, { backgroundColor: colors.success[50] }]}>
+              <Text style={[styles.reliabilityValueLarge, { color: colors.success[700] }]}>
+                {businessMetrics?.cleanerReliability?.overallCompletionRate || 0}%
+              </Text>
+              <Text style={[styles.reliabilityLabel, { color: colors.success[600] }]}>
+                Completion Rate
+              </Text>
+            </View>
+            <View style={styles.reliabilityCard}>
+              <Text style={styles.reliabilityValue}>
+                {businessMetrics?.cleanerReliability?.avgRating || 0}
+              </Text>
+              <Text style={styles.reliabilityLabel}>Avg Rating</Text>
+            </View>
+            <View style={styles.reliabilityCard}>
+              <Text style={styles.reliabilityValue}>
+                {businessMetrics?.cleanerReliability?.totalCompleted || 0}
+              </Text>
+              <Text style={styles.reliabilityLabel}>Completed</Text>
+            </View>
+          </View>
+
+          {/* Top Cleaners */}
+          {businessMetrics?.cleanerReliability?.cleanerStats?.length > 0 && (
+            <View style={styles.topCleanersContainer}>
+              <Text style={styles.topCleanersTitle}>Top Performers</Text>
+              {businessMetrics.cleanerReliability.cleanerStats.slice(0, 5).map((cleaner, index) => (
+                <View key={cleaner.id} style={styles.topCleanerRow}>
+                  <View style={styles.topCleanerRank}>
+                    <Text style={styles.topCleanerRankText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.topCleanerName} numberOfLines={1}>
+                    {cleaner.username}
+                  </Text>
+                  <View style={styles.topCleanerStats}>
+                    <Text style={styles.topCleanerStat}>
+                      {cleaner.completionRate}%
+                    </Text>
+                    <Text style={styles.topCleanerStatLabel}>
+                      ({cleaner.completed}/{cleaner.assigned})
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
       </View>
 
       {/* App Usage Analytics Section */}
@@ -1615,6 +1810,212 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Business Metrics Styles
+  businessMetricRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  businessMetricCard: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  businessMetricCardHighlight: {
+    backgroundColor: colors.secondary[50],
+    borderWidth: 1,
+    borderColor: colors.secondary[200],
+  },
+  businessMetricCardLarge: {
+    flex: 2,
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  businessMetricCardStack: {
+    flex: 1,
+    gap: spacing.sm,
+  },
+  businessMetricLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  businessMetricValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  businessMetricValueLarge: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  businessMetricMini: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    alignItems: "center",
+  },
+  businessMetricMiniValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  businessMetricMiniLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+
+  // Loyalty Styles
+  loyaltyCard: {
+    flex: 1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  loyaltyValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  loyaltyLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 4,
+    textAlign: "center",
+  },
+  loyaltyRateContainer: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.success[50],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    alignItems: "center",
+  },
+  loyaltyRateText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // Churn Styles
+  churnContainer: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  churnSection: {},
+  churnSectionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  churnRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  churnCard: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    alignItems: "center",
+  },
+  churnValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  churnLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+    textAlign: "center",
+  },
+
+  // Reliability Styles
+  reliabilityOverview: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  reliabilityCard: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  reliabilityValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  reliabilityValueLarge: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+  },
+  reliabilityLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 4,
+    textAlign: "center",
+  },
+
+  // Top Cleaners Styles
+  topCleanersContainer: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  topCleanersTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  topCleanerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  topCleanerRank: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.sm,
+  },
+  topCleanerRankText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  topCleanerName: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+  },
+  topCleanerStats: {
+    alignItems: "flex-end",
+  },
+  topCleanerStat: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
+  },
+  topCleanerStatLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
   },
 });
 

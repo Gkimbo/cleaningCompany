@@ -42,9 +42,13 @@ jest.mock("../../config/businessConfig", () => {
     },
     highVolumeFee: 50,
   };
+  const mockStaffing = {
+    minCleanersForAssignment: 1,
+  };
   return {
     businessConfig: {
       pricing: mockPricing,
+      staffing: mockStaffing,
     },
     getPricingConfig: jest.fn().mockResolvedValue(mockPricing),
   };
@@ -131,6 +135,43 @@ describe("Pricing Router", () => {
       const res = await request(app).get("/api/v1/pricing/current");
 
       expect(res.status).toBe(200);
+    });
+
+    it("should include staffing config with minCleanersForAssignment", async () => {
+      PricingConfig.getFormattedPricing.mockResolvedValue(null);
+
+      const res = await request(app).get("/api/v1/pricing/current");
+
+      expect(res.status).toBe(200);
+      expect(res.body.staffing).toBeDefined();
+      expect(res.body.staffing.minCleanersForAssignment).toBe(1);
+    });
+
+    it("should include staffing config when returning database pricing", async () => {
+      const mockDbPricing = {
+        basePrice: 175,
+        extraBedBathFee: 60,
+      };
+
+      PricingConfig.getFormattedPricing.mockResolvedValue(mockDbPricing);
+
+      const res = await request(app).get("/api/v1/pricing/current");
+
+      expect(res.status).toBe(200);
+      expect(res.body.source).toBe("database");
+      expect(res.body.pricing).toEqual(mockDbPricing);
+      expect(res.body.staffing).toBeDefined();
+      expect(res.body.staffing.minCleanersForAssignment).toBe(1);
+    });
+
+    it("should include staffing config even on database error", async () => {
+      PricingConfig.getFormattedPricing.mockRejectedValue(new Error("DB Error"));
+
+      const res = await request(app).get("/api/v1/pricing/current");
+
+      expect(res.status).toBe(200);
+      expect(res.body.staffing).toBeDefined();
+      expect(res.body.staffing.minCleanersForAssignment).toBe(1);
     });
   });
 

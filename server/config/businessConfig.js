@@ -102,6 +102,15 @@ const businessConfig = {
   },
 
   /**
+   * STAFFING CONFIGURATION
+   * Settings for appointment assignment and staffing
+   */
+  staffing: {
+    // Minimum number of cleaners required to mark an appointment as "assigned"
+    minCleanersForAssignment: 1,
+  },
+
+  /**
    * CLEANER REQUIREMENTS
    * Based on number of bedrooms and bathrooms
    */
