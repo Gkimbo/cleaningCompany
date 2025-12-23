@@ -41,10 +41,10 @@ const TopBar = ({ dispatch, state }) => {
 
   const navigate = useNavigate();
 
-  // Fetch pending applications count for managers
+  // Fetch pending applications count for owners
   useEffect(() => {
     const fetchPendingApplications = async () => {
-      if (state.account === "manager1") {
+      if (state.account === "owner1") {
         const count = await Application.getPendingCount();
         setPendingApplications(count);
       }
@@ -80,8 +80,8 @@ const TopBar = ({ dispatch, state }) => {
             <View style={styles.rightSection}>
               <MessagesButton state={state} dispatch={dispatch} />
               <HomeButton />
-              {/* Applications notification badge for managers */}
-              {state.account === "manager1" && pendingApplications > 0 && (
+              {/* Applications notification badge for owners */}
+              {state.account === "owner1" && pendingApplications > 0 && (
                 <Pressable
                   style={({ pressed }) => [
                     styles.notificationButton,
@@ -119,7 +119,7 @@ const TopBar = ({ dispatch, state }) => {
                     <View style={styles.glassSidebar}>
                       <Text style={styles.sidebarHeader}>Menu</Text>
 
-                      {state.account === "manager1" ? (
+                      {state.account === "owner1" ? (
                         <>
                           <ManageEmployees closeModal={closeModal} />
                           <ManagePricingButton closeModal={closeModal} />

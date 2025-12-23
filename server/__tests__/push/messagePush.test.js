@@ -297,14 +297,14 @@ describe("Message Router - Push Notifications", () => {
     });
   });
 
-  describe("Support Conversation - Push to Manager", () => {
-    it("should send push notification to manager when support conversation created", async () => {
-      const manager = {
+  describe("Support Conversation - Push to Owner", () => {
+    it("should send push notification to owner when support conversation created", async () => {
+      const owner = {
         id: 1,
-        username: "manager1",
-        email: "manager@test.com",
+        username: "owner1",
+        email: "owner@test.com",
         expoPushToken: validExpoPushToken,
-        type: "manager",
+        type: "owner",
       };
 
       const user = {
@@ -315,35 +315,35 @@ describe("Message Router - Push Notifications", () => {
 
       const supportMessage = `New support request from ${user.username}`;
 
-      // Manager always gets notifications (no preference check for support)
-      if (manager.email) {
+      // Owner always gets notifications (no preference check for support)
+      if (owner.email) {
         await Email.sendNewMessageNotification(
-          manager.email,
-          manager.username,
+          owner.email,
+          owner.username,
           user.username,
           supportMessage
         );
       }
 
-      if (manager.expoPushToken) {
+      if (owner.expoPushToken) {
         await PushNotification.sendPushNewMessage(
-          manager.expoPushToken,
-          manager.username,
+          owner.expoPushToken,
+          owner.username,
           user.username,
           supportMessage
         );
       }
 
       expect(Email.sendNewMessageNotification).toHaveBeenCalledWith(
-        "manager@test.com",
-        "manager1",
+        "owner@test.com",
+        "owner1",
         "customer1",
         supportMessage
       );
 
       expect(PushNotification.sendPushNewMessage).toHaveBeenCalledWith(
         validExpoPushToken,
-        "manager1",
+        "owner1",
         "customer1",
         supportMessage
       );

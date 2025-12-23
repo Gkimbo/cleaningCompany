@@ -77,23 +77,36 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
     fetchEmployees();
   }, []);
 
-  const EmployeeTile = ({ employee }) => (
+  const EmployeeTile = ({ employee }) => {
+    const fullName = [employee.firstName, employee.lastName].filter(Boolean).join(" ");
+    const displayName = fullName || employee.username;
+    const avatarInitial = employee.firstName?.charAt(0)?.toUpperCase() ||
+                          employee.username?.charAt(0)?.toUpperCase() || "?";
+
+    return (
     <View style={styles.employeeTile}>
       <View style={styles.employeeHeader}>
         <View style={styles.employeeInfo}>
           <View style={styles.avatarContainer}>
             <Text style={styles.avatarText}>
-              {employee.username?.charAt(0)?.toUpperCase() || "?"}
+              {avatarInitial}
             </Text>
           </View>
           <View style={styles.employeeDetails}>
-            <Text style={styles.employeeName}>{employee.username}</Text>
+            {fullName ? (
+              <>
+                <Text style={styles.employeeName}>{fullName}</Text>
+                <Text style={styles.employeeUsername}>@{employee.username}</Text>
+              </>
+            ) : (
+              <Text style={styles.employeeName}>{employee.username}</Text>
+            )}
             <Text style={styles.employeeEmail}>{employee.email}</Text>
           </View>
         </View>
-        <View style={[styles.typeBadge, employee.type === "manager" && styles.managerBadge]}>
-          <Text style={[styles.typeBadgeText, employee.type === "manager" && styles.managerBadgeText]}>
-            {employee.type === "manager" ? "Manager" : "Cleaner"}
+        <View style={[styles.typeBadge, employee.type === "owner" && styles.ownerBadge]}>
+          <Text style={[styles.typeBadgeText, employee.type === "owner" && styles.ownerBadgeText]}>
+            {employee.type === "owner" ? "Owner" : "Cleaner"}
           </Text>
         </View>
       </View>
@@ -112,13 +125,14 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.deleteButton}
-          onPress={() => handleDeletePress(employee.id, employee.username)}
+          onPress={() => handleDeletePress(employee.id, fullName || employee.username)}
         >
           <Text style={styles.deleteButtonText}>Remove</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -304,6 +318,11 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.xs,
   },
+  employeeUsername: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xs,
+  },
   employeeEmail: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
@@ -319,10 +338,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     color: colors.primary[700],
   },
-  managerBadge: {
+  ownerBadge: {
     backgroundColor: colors.secondary[100],
   },
-  managerBadgeText: {
+  ownerBadgeText: {
     color: colors.secondary[700],
   },
   employeeMeta: {

@@ -203,24 +203,24 @@ describe("Employee Service", () => {
       expect(result).toBeInstanceOf(Error);
     });
 
-    it("should change employee type to manager", async () => {
+    it("should change employee type to owner", async () => {
       const promoteData = {
         id: 1,
         userName: "promoteduser",
         password: "password",
         email: "promoted@test.com",
-        type: "manager",
+        type: "owner",
       };
 
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ user: { id: 1, type: "manager" } }),
+        json: async () => ({ user: { id: 1, type: "owner" } }),
       });
 
       await FetchData.editEmployee(promoteData);
 
       const callBody = JSON.parse(fetch.mock.calls[0][1].body);
-      expect(callBody.type).toBe("manager");
+      expect(callBody.type).toBe("owner");
     });
   });
 

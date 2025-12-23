@@ -934,10 +934,10 @@ class FetchData {
     }
   }
 
-  static async managerResolveAdjustment(token, adjustmentId, data) {
+  static async ownerResolveAdjustment(token, adjustmentId, data) {
     try {
       const response = await fetch(
-        baseURL + `/api/v1/home-size-adjustment/${adjustmentId}/manager-resolve`,
+        baseURL + `/api/v1/home-size-adjustment/${adjustmentId}/owner-resolve`,
         {
           method: "POST",
           headers: {

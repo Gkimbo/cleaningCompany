@@ -111,7 +111,7 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
       where: {
         appointmentId,
         status: {
-          [Op.in]: ["pending_homeowner", "pending_manager"],
+          [Op.in]: ["pending_homeowner", "pending_owner"],
         },
       },
     });
@@ -227,7 +227,7 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
 
 /**
  * GET /pending
- * Get pending adjustment requests for current user (homeowner or manager)
+ * Get pending adjustment requests for current user (homeowner or owner)
  */
 homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => {
   const userId = req.user.userId;
@@ -239,13 +239,13 @@ homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => 
     }
 
     let whereClause;
-    const isManager = user.type === "manager";
+    const isOwner = user.type === "owner";
 
-    if (isManager) {
-      // Managers see disputed and expired requests
+    if (isOwner) {
+      // Owners see disputed and expired requests
       whereClause = {
         status: {
-          [Op.in]: ["pending_manager", "expired", "denied"],
+          [Op.in]: ["pending_owner", "expired", "denied"],
         },
       };
     } else {
@@ -256,7 +256,7 @@ homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => 
       };
     }
 
-    // Build includes - only managers get photos
+    // Build includes - only owners get photos
     const includes = [
       {
         model: UserHomes,
@@ -271,21 +271,21 @@ homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => 
       {
         model: User,
         as: "cleaner",
-        attributes: isManager
-          ? ["id", "username", "firstName", "lastName", "managerPrivateNotes", "falseClaimCount"]
+        attributes: isOwner
+          ? ["id", "username", "firstName", "lastName", "ownerPrivateNotes", "falseClaimCount"]
           : ["id", "username", "firstName", "lastName"],
       },
       {
         model: User,
         as: "homeowner",
-        attributes: isManager
-          ? ["id", "username", "firstName", "lastName", "managerPrivateNotes", "falseHomeSizeCount"]
+        attributes: isOwner
+          ? ["id", "username", "firstName", "lastName", "ownerPrivateNotes", "falseHomeSizeCount"]
           : ["id", "username", "firstName", "lastName"],
       },
     ];
 
-    // Only include photos for managers
-    if (isManager) {
+    // Only include photos for owners
+    if (isOwner) {
       includes.push({
         model: HomeSizeAdjustmentPhoto,
         as: "photos",
@@ -309,18 +309,18 @@ homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => 
 /**
  * GET /:id
  * Get a specific adjustment request
- * Photos are only included for managers
+ * Photos are only included for owners
  */
 homeSizeAdjustmentRouter.get("/:id", authenticateToken, async (req, res) => {
   const { id } = req.params;
   const userId = req.user.userId;
 
   try {
-    // First check if user is a manager
+    // First check if user is a owner
     const user = await User.findByPk(userId);
-    const isManager = user && user.type === "manager";
+    const isOwner = user && user.type === "owner";
 
-    // Build includes - only managers get photos and tracking fields
+    // Build includes - only owners get photos and tracking fields
     const includes = [
       {
         model: UserHomes,
@@ -335,21 +335,21 @@ homeSizeAdjustmentRouter.get("/:id", authenticateToken, async (req, res) => {
       {
         model: User,
         as: "cleaner",
-        attributes: isManager
-          ? ["id", "username", "firstName", "lastName", "managerPrivateNotes", "falseClaimCount"]
+        attributes: isOwner
+          ? ["id", "username", "firstName", "lastName", "ownerPrivateNotes", "falseClaimCount"]
           : ["id", "username", "firstName", "lastName"],
       },
       {
         model: User,
         as: "homeowner",
-        attributes: isManager
-          ? ["id", "username", "firstName", "lastName", "managerPrivateNotes", "falseHomeSizeCount"]
+        attributes: isOwner
+          ? ["id", "username", "firstName", "lastName", "ownerPrivateNotes", "falseHomeSizeCount"]
           : ["id", "username", "firstName", "lastName"],
       },
     ];
 
-    // Only include photos for managers
-    if (isManager) {
+    // Only include photos for owners
+    if (isOwner) {
       includes.push({
         model: HomeSizeAdjustmentPhoto,
         as: "photos",
@@ -365,11 +365,11 @@ homeSizeAdjustmentRouter.get("/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Request not found" });
     }
 
-    // Check authorization: must be homeowner, cleaner, or manager
+    // Check authorization: must be homeowner, cleaner, or owner
     if (
       request.homeownerId !== userId &&
       request.cleanerId !== userId &&
-      !isManager
+      !isOwner
     ) {
       return res.status(403).json({ error: "Not authorized to view this request" });
     }
@@ -495,21 +495,21 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
         chargeStatus,
       });
     } else {
-      // Homeowner denied - escalate to manager
+      // Homeowner denied - escalate to owner
       await request.update({
-        status: "pending_manager",
+        status: "pending_owner",
         homeownerResponse: reason || null,
         homeownerRespondedAt: new Date(),
       });
 
-      // Notify managers
-      const managers = await User.findAll({ where: { type: "manager" } });
-      for (const manager of managers) {
-        if (manager.notifications?.includes("email")) {
+      // Notify owners
+      const owners = await User.findAll({ where: { type: "owner" } });
+      for (const owner of owners) {
+        if (owner.notifications?.includes("email")) {
           // Use notificationEmail if set, otherwise main email
-          await Email.sendAdjustmentNeedsManagerReview(
-            manager.getNotificationEmail(),
-            manager.firstName || manager.username,
+          await Email.sendAdjustmentNeedsOwnerReview(
+            owner.getNotificationEmail(),
+            owner.firstName || owner.username,
             request,
             home,
             cleaner,
@@ -517,19 +517,19 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
           );
         }
 
-        if (manager.notifications?.includes("phone") && manager.expoPushToken) {
+        if (owner.notifications?.includes("phone") && owner.expoPushToken) {
           await PushNotification.sendPushAdjustmentNeedsReview(
-            manager.expoPushToken,
+            owner.expoPushToken,
             request.id
           );
         }
       }
 
-      console.log(`⚠️ Adjustment request ${id} denied by homeowner. Escalated to managers.`);
+      console.log(`⚠️ Adjustment request ${id} denied by homeowner. Escalated to owners.`);
 
       return res.json({
         success: true,
-        message: "Request denied and escalated to manager for review",
+        message: "Request denied and escalated to owner for review",
       });
     }
   } catch (error) {
@@ -539,18 +539,18 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
 });
 
 /**
- * POST /:id/manager-resolve
- * Manager resolves a disputed adjustment request
+ * POST /:id/owner-resolve
+ * Owner resolves a disputed adjustment request
  */
-homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (req, res) => {
+homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { approve, managerNote, finalBeds, finalBaths } = req.body;
-  const managerId = req.user.userId;
+  const { approve, ownerNote, finalBeds, finalBaths } = req.body;
+  const ownerId = req.user.userId;
 
   try {
-    const manager = await User.findByPk(managerId);
-    if (!manager || manager.type !== "manager") {
-      return res.status(403).json({ error: "Manager access required" });
+    const owner = await User.findByPk(ownerId);
+    if (!owner || owner.type !== "owner") {
+      return res.status(403).json({ error: "Owner access required" });
     }
 
     const request = await HomeSizeAdjustmentRequest.findByPk(id);
@@ -558,8 +558,8 @@ homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (
       return res.status(404).json({ error: "Request not found" });
     }
 
-    if (!["pending_manager", "expired"].includes(request.status)) {
-      return res.status(400).json({ error: "This request is not awaiting manager review" });
+    if (!["pending_owner", "expired"].includes(request.status)) {
+      return res.status(400).json({ error: "This request is not awaiting owner review" });
     }
 
     const home = await UserHomes.findByPk(request.homeId);
@@ -568,7 +568,7 @@ homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (
     const cleaner = await User.findByPk(request.cleanerId);
 
     if (approve) {
-      // Manager approved cleaner's report (or custom values)
+      // Owner approved cleaner's report (or custom values)
       const bedsToUse = finalBeds || request.reportedNumBeds;
       const bathsToUse = finalBaths || request.reportedNumBaths;
 
@@ -624,11 +624,11 @@ homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (
 
       // Record false home size claim on homeowner (they disputed but were wrong)
       const timestamp = new Date().toISOString();
-      const currentNotes = homeowner.managerPrivateNotes || '';
-      const newNote = `[${timestamp}] HOME SIZE DISCREPANCY: Homeowner disputed cleaner's claim but manager found home was incorrectly sized. Original: ${request.originalNumBeds}bd/${request.originalNumBaths}ba, Actual: ${bedsToUse}bd/${bathsToUse}ba. Manager: ${manager.firstName} ${manager.lastName}`;
+      const currentNotes = homeowner.ownerPrivateNotes || '';
+      const newNote = `[${timestamp}] HOME SIZE DISCREPANCY: Homeowner disputed cleaner's claim but owner found home was incorrectly sized. Original: ${request.originalNumBeds}bd/${request.originalNumBaths}ba, Actual: ${bedsToUse}bd/${bathsToUse}ba. Owner: ${owner.firstName} ${owner.lastName}`;
 
       await homeowner.update({
-        managerPrivateNotes: currentNotes ? currentNotes + '\n' + newNote : newNote,
+        ownerPrivateNotes: currentNotes ? currentNotes + '\n' + newNote : newNote,
         falseHomeSizeCount: (homeowner.falseHomeSizeCount || 0) + 1
       });
 
@@ -641,10 +641,10 @@ homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (
       }
 
       await request.update({
-        status: "manager_approved",
-        managerId,
-        managerNote: managerNote || null,
-        managerResolvedAt: new Date(),
+        status: "owner_approved",
+        ownerId,
+        ownerNote: ownerNote || null,
+        ownerResolvedAt: new Date(),
         chargeStatus,
       });
 
@@ -657,7 +657,7 @@ homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (
           bedsToUse,
           bathsToUse,
           priceDiff,
-          managerNote
+          ownerNote
         );
       }
 
@@ -669,35 +669,35 @@ homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (
           bedsToUse,
           bathsToUse,
           priceDiff,
-          managerNote
+          ownerNote
         );
       }
 
-      console.log(`✅ Manager ${managerId} approved adjustment request ${id}`);
+      console.log(`✅ Owner ${ownerId} approved adjustment request ${id}`);
 
       return res.json({
         success: true,
-        message: "Adjustment approved by manager, home updated",
+        message: "Adjustment approved by owner, home updated",
         finalBeds: bedsToUse,
         finalBaths: bathsToUse,
         chargeStatus,
       });
     } else {
-      // Manager denied - side with homeowner (cleaner made false claim)
+      // Owner denied - side with homeowner (cleaner made false claim)
       await request.update({
-        status: "manager_denied",
-        managerId,
-        managerNote: managerNote || null,
-        managerResolvedAt: new Date(),
+        status: "owner_denied",
+        ownerId,
+        ownerNote: ownerNote || null,
+        ownerResolvedAt: new Date(),
       });
 
       // Record false claim on cleaner (their report was incorrect)
       const timestamp = new Date().toISOString();
-      const currentNotes = cleaner.managerPrivateNotes || '';
-      const newNote = `[${timestamp}] FALSE CLAIM: Cleaner claimed home was ${request.reportedNumBeds}bd/${request.reportedNumBaths}ba but manager verified it was correctly listed as ${request.originalNumBeds}bd/${request.originalNumBaths}ba. Manager: ${manager.firstName} ${manager.lastName}`;
+      const currentNotes = cleaner.ownerPrivateNotes || '';
+      const newNote = `[${timestamp}] FALSE CLAIM: Cleaner claimed home was ${request.reportedNumBeds}bd/${request.reportedNumBaths}ba but owner verified it was correctly listed as ${request.originalNumBeds}bd/${request.originalNumBaths}ba. Owner: ${owner.firstName} ${owner.lastName}`;
 
       await cleaner.update({
-        managerPrivateNotes: currentNotes ? currentNotes + '\n' + newNote : newNote,
+        ownerPrivateNotes: currentNotes ? currentNotes + '\n' + newNote : newNote,
         falseClaimCount: (cleaner.falseClaimCount || 0) + 1
       });
 
@@ -712,7 +712,7 @@ homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (
           null,
           null,
           0,
-          managerNote
+          ownerNote
         );
       }
 
@@ -724,15 +724,15 @@ homeSizeAdjustmentRouter.post("/:id/manager-resolve", authenticateToken, async (
           null,
           null,
           0,
-          managerNote
+          ownerNote
         );
       }
 
-      console.log(`❌ Manager ${managerId} denied adjustment request ${id}`);
+      console.log(`❌ Owner ${ownerId} denied adjustment request ${id}`);
 
       return res.json({
         success: true,
-        message: "Adjustment denied by manager",
+        message: "Adjustment denied by owner",
       });
     }
   } catch (error) {
@@ -758,7 +758,7 @@ homeSizeAdjustmentRouter.get("/history/:homeId", authenticateToken, async (req, 
     }
 
     // Check authorization
-    if (home.userId !== userId && user.type !== "manager") {
+    if (home.userId !== userId && user.type !== "owner") {
       return res.status(403).json({ error: "Not authorized to view this home's history" });
     }
 

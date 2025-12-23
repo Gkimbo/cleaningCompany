@@ -70,9 +70,9 @@ module.exports = {
           'pending_homeowner',
           'approved',
           'denied',
-          'pending_manager',
-          'manager_approved',
-          'manager_denied',
+          'pending_owner',
+          'owner_approved',
+          'owner_denied',
           'expired'
         ),
         allowNull: false,
@@ -86,11 +86,11 @@ module.exports = {
         type: Sequelize.TEXT,
         allowNull: true,
       },
-      managerNote: {
+      ownerNote: {
         type: Sequelize.TEXT,
         allowNull: true,
       },
-      managerId: {
+      ownerId: {
         type: Sequelize.INTEGER,
         allowNull: true,
         references: { model: 'Users', key: 'id' },
@@ -107,7 +107,7 @@ module.exports = {
         type: Sequelize.DATE,
         allowNull: true,
       },
-      managerResolvedAt: {
+      ownerResolvedAt: {
         type: Sequelize.DATE,
         allowNull: true,
       },

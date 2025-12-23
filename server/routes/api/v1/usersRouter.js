@@ -19,13 +19,45 @@ const secretKey = process.env.SESSION_SECRET;
 
 const usersRouter = express.Router();
 
+// Password strength validation
+const validatePassword = (password) => {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+  if (!password || password.length < minLength) {
+    return "Password must be at least 8 characters";
+  }
+  if (!hasUpperCase) {
+    return "Password must contain an uppercase letter";
+  }
+  if (!hasLowerCase) {
+    return "Password must contain a lowercase letter";
+  }
+  if (!hasNumbers) {
+    return "Password must contain a number";
+  }
+  if (!hasSpecialChar) {
+    return "Password must contain a special character (!@#$%^&*(),.?\":{}|<>)";
+  }
+  return null;
+};
+
 usersRouter.post("/", async (req, res) => {
   try {
     const { firstName, lastName, username, password, email, termsId } = req.body;
 
-    // Validate username doesn't contain "manager"
-    if (username && username.toLowerCase().includes("manager")) {
-      return res.status(400).json("Username cannot contain the word 'manager'");
+    // Validate password strength
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    // Validate username doesn't contain "owner"
+    if (username && username.toLowerCase().includes("owner")) {
+      return res.status(400).json("Username cannot contain the word 'owner'");
     }
 
     let existingUser = null;
@@ -73,7 +105,7 @@ usersRouter.post("/", async (req, res) => {
 
         await newUser.update({ lastLogin: new Date() });
         const serializedUser = UserSerializer.login(newUser.dataValues);
-        const token = jwt.sign({ userId: serializedUser.id }, secretKey);
+        const token = jwt.sign({ userId: serializedUser.id }, secretKey, { expiresIn: '24h' });
         return res.status(201).json({ user: serializedUser, token: token });
       } else {
         return res.status(410).json("Username already exists");
@@ -127,7 +159,7 @@ usersRouter.post("/new-employee", async (req, res) => {
           type,
         );
 
-        console.log(`✅ New employee created and welcome email sent to ${email}`);
+        console.log(`✅ New employee created and welcome email sent`);
         return res.status(201).json({ user: serializedUser });
       } else {
         return res.status(410).json("Username already exists");
@@ -142,7 +174,10 @@ usersRouter.post("/new-employee", async (req, res) => {
 });
 
 usersRouter.get("/employees", async (req, res) => {
-  const token = req.headers.authorization.split(" ")[1];
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
   try {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
@@ -237,7 +272,10 @@ usersRouter.delete("/employee", async (req, res) => {
   }
 });
 usersRouter.get("/appointments", async (req, res) => {
-  const token = req.headers.authorization.split(" ")[1];
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
   try {
     const userAppointments = await UserAppointments.findAll();
     const serializedAppointments =
@@ -329,9 +367,9 @@ usersRouter.patch("/update-username", async (req, res) => {
       return res.status(400).json({ error: "Username can only contain letters, numbers, and underscores" });
     }
 
-    // Check if username contains "manager" (restricted word)
-    if (username.toLowerCase().includes("manager")) {
-      return res.status(400).json({ error: "Username cannot contain the word 'manager'" });
+    // Check if username contains "owner" (restricted word)
+    if (username.toLowerCase().includes("owner")) {
+      return res.status(400).json({ error: "Username cannot contain the word 'owner'" });
     }
 
     // Check if username is already taken
@@ -347,7 +385,7 @@ usersRouter.patch("/update-username", async (req, res) => {
     }
 
     await user.update({ username });
-    console.log(`✅ Username updated for user ${userId}: ${username}`);
+    console.log(`✅ Username updated for user ${userId}`);
 
     return res.status(200).json({ message: "Username updated successfully", username });
   } catch (error) {
@@ -376,8 +414,10 @@ usersRouter.patch("/update-password", async (req, res) => {
       return res.status(400).json({ error: "Current password is required" });
     }
 
-    if (!newPassword || newPassword.length < 6) {
-      return res.status(400).json({ error: "New password must be at least 6 characters" });
+    // Validate password strength
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
 
     // Find user and verify current password
@@ -444,7 +484,7 @@ usersRouter.patch("/update-email", async (req, res) => {
     }
 
     await user.update({ email });
-    console.log(`✅ Email updated for user ${userId}: ${email}`);
+    console.log(`✅ Email updated for user ${userId}`);
 
     return res.status(200).json({ message: "Email updated successfully", email });
   } catch (error) {
@@ -493,7 +533,7 @@ usersRouter.patch("/update-phone", async (req, res) => {
     // Store empty string as null in database
     const phoneToStore = phone && phone.length > 0 ? phone : null;
     await user.update({ phone: phoneToStore });
-    console.log(`✅ Phone updated for user ${userId}: ${phoneToStore || "(cleared)"}`);
+    console.log(`✅ Phone updated for user ${userId}`);
 
     return res.status(200).json({ message: "Phone number updated successfully", phone: phoneToStore });
   } catch (error) {

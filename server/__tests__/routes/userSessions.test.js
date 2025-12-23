@@ -109,19 +109,25 @@ describe("User Sessions Router", () => {
       expect(response.body.requiresTermsAcceptance).toBe(false);
     });
 
-    it("should return 404 for non-existent user", async () => {
+    it("should return 401 for non-existent user (generic error to prevent enumeration)", async () => {
       User.findOne.mockResolvedValue(null);
 
       const response = await request(app)
         .post("/api/v1/sessions/login")
         .send({ username: "nonexistent", password: "password123" });
 
-      expect(response.status).toBe(404);
-      expect(response.body.error).toBe("No account found");
+      expect(response.status).toBe(401); // Same status as wrong password
+      expect(response.body.error).toBe("Invalid credentials"); // Generic error
     });
 
-    it("should return 401 for incorrect password", async () => {
-      User.findOne.mockResolvedValue(mockUser);
+    it("should return 401 for incorrect password (generic error to prevent enumeration)", async () => {
+      const mockUserWithLockout = {
+        ...mockUser,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+      User.findOne.mockResolvedValue(mockUserWithLockout);
       bcrypt.compare.mockResolvedValue(false);
 
       const response = await request(app)
@@ -129,7 +135,7 @@ describe("User Sessions Router", () => {
         .send({ username: "testuser", password: "wrongpassword" });
 
       expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Invalid password");
+      expect(response.body.error).toBe("Invalid credentials"); // Generic error
     });
 
     it("should handle database error", async () => {

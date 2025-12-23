@@ -25,10 +25,10 @@ const StatusBadge = ({ status }) => {
     pending_homeowner: { label: "Pending Homeowner", color: colors.warning[500], bg: colors.warning[100] },
     approved: { label: "Approved", color: colors.success[600], bg: colors.success[100] },
     denied: { label: "Denied by Homeowner", color: colors.error[600], bg: colors.error[100] },
-    pending_manager: { label: "Needs Review", color: colors.warning[600], bg: colors.warning[100] },
+    pending_owner: { label: "Needs Review", color: colors.warning[600], bg: colors.warning[100] },
     expired: { label: "Expired", color: colors.error[600], bg: colors.error[100] },
-    manager_approved: { label: "Manager Approved", color: colors.success[600], bg: colors.success[100] },
-    manager_denied: { label: "Manager Denied", color: colors.error[600], bg: colors.error[100] },
+    owner_approved: { label: "Owner Approved", color: colors.success[600], bg: colors.success[100] },
+    owner_denied: { label: "Owner Denied", color: colors.error[600], bg: colors.error[100] },
   };
 
   const config = statusConfig[status] || { label: status, color: colors.text.tertiary, bg: colors.neutral[100] };
@@ -58,7 +58,7 @@ const AdjustmentCard = ({ adjustment, onPress }) => {
     ? `${adjustment.homeowner.firstName} ${adjustment.homeowner.lastName}`
     : "Unknown homeowner";
 
-  const needsReview = adjustment.status === "denied" || adjustment.status === "expired" || adjustment.status === "pending_manager";
+  const needsReview = adjustment.status === "denied" || adjustment.status === "expired" || adjustment.status === "pending_owner";
 
   return (
     <TouchableOpacity
@@ -125,7 +125,7 @@ const HomeSizeAdjustmentReview = ({ state }) => {
   // Resolution form state
   const [finalBeds, setFinalBeds] = useState("");
   const [finalBaths, setFinalBaths] = useState("");
-  const [managerNote, setManagerNote] = useState("");
+  const [ownerNote, setOwnerNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -166,7 +166,7 @@ const HomeSizeAdjustmentReview = ({ state }) => {
     setSelectedAdjustment(adjustment);
     setFinalBeds(adjustment.reportedNumBeds);
     setFinalBaths(adjustment.reportedNumBaths);
-    setManagerNote("");
+    setOwnerNote("");
     setError("");
     setShowDetailModal(true);
   };
@@ -174,12 +174,12 @@ const HomeSizeAdjustmentReview = ({ state }) => {
   const handleCloseModal = () => {
     setShowDetailModal(false);
     setSelectedAdjustment(null);
-    setManagerNote("");
+    setOwnerNote("");
     setError("");
   };
 
   const handleResolve = async (approved) => {
-    if (!managerNote.trim()) {
+    if (!ownerNote.trim()) {
       setError("Please provide a note explaining your decision.");
       return;
     }
@@ -188,14 +188,14 @@ const HomeSizeAdjustmentReview = ({ state }) => {
     setError("");
 
     try {
-      const result = await FetchData.managerResolveAdjustment(
+      const result = await FetchData.ownerResolveAdjustment(
         state.currentUser.token,
         selectedAdjustment.id,
         {
           approved,
           finalNumBeds: finalBeds,
           finalNumBaths: finalBaths,
-          managerNote: managerNote.trim(),
+          ownerNote: ownerNote.trim(),
         }
       );
 
@@ -209,7 +209,7 @@ const HomeSizeAdjustmentReview = ({ state }) => {
       setAdjustments(prev =>
         prev.map(adj =>
           adj.id === selectedAdjustment.id
-            ? { ...adj, status: approved ? "manager_approved" : "manager_denied" }
+            ? { ...adj, status: approved ? "owner_approved" : "owner_denied" }
             : adj
         )
       );
@@ -229,15 +229,15 @@ const HomeSizeAdjustmentReview = ({ state }) => {
   // Filter adjustments
   const filteredAdjustments = adjustments.filter(adj => {
     if (filter === "needs_review") {
-      return ["denied", "expired", "pending_manager"].includes(adj.status);
+      return ["denied", "expired", "pending_owner"].includes(adj.status);
     } else if (filter === "resolved") {
-      return ["manager_approved", "manager_denied", "approved"].includes(adj.status);
+      return ["owner_approved", "owner_denied", "approved"].includes(adj.status);
     }
     return true;
   });
 
   const needsReviewCount = adjustments.filter(adj =>
-    ["denied", "expired", "pending_manager"].includes(adj.status)
+    ["denied", "expired", "pending_owner"].includes(adj.status)
   ).length;
 
   if (loading) {
@@ -376,29 +376,29 @@ const HomeSizeAdjustmentReview = ({ state }) => {
                       </View>
                     </View>
 
-                    {/* Manager Private Notes - shown if either party has notes */}
-                    {(selectedAdjustment.cleaner?.managerPrivateNotes || selectedAdjustment.homeowner?.managerPrivateNotes) && (
-                      <View style={styles.managerNotesSection}>
-                        <Text style={styles.managerNotesTitle}>
-                          <Icon name="lock" size={12} color={colors.warning[600]} /> Manager Notes (Private)
+                    {/* Owner Private Notes - shown if either party has notes */}
+                    {(selectedAdjustment.cleaner?.ownerPrivateNotes || selectedAdjustment.homeowner?.ownerPrivateNotes) && (
+                      <View style={styles.ownerNotesSection}>
+                        <Text style={styles.ownerNotesTitle}>
+                          <Icon name="lock" size={12} color={colors.warning[600]} /> Owner Notes (Private)
                         </Text>
-                        {selectedAdjustment.cleaner?.managerPrivateNotes && (
-                          <View style={styles.managerNoteBox}>
-                            <Text style={styles.managerNoteLabel}>
+                        {selectedAdjustment.cleaner?.ownerPrivateNotes && (
+                          <View style={styles.ownerNoteBox}>
+                            <Text style={styles.ownerNoteLabel}>
                               {selectedAdjustment.cleaner.firstName} {selectedAdjustment.cleaner.lastName} (Cleaner):
                             </Text>
-                            <Text style={styles.managerNoteText}>
-                              {selectedAdjustment.cleaner.managerPrivateNotes}
+                            <Text style={styles.ownerNoteText}>
+                              {selectedAdjustment.cleaner.ownerPrivateNotes}
                             </Text>
                           </View>
                         )}
-                        {selectedAdjustment.homeowner?.managerPrivateNotes && (
-                          <View style={styles.managerNoteBox}>
-                            <Text style={styles.managerNoteLabel}>
+                        {selectedAdjustment.homeowner?.ownerPrivateNotes && (
+                          <View style={styles.ownerNoteBox}>
+                            <Text style={styles.ownerNoteLabel}>
                               {selectedAdjustment.homeowner.firstName} {selectedAdjustment.homeowner.lastName} (Homeowner):
                             </Text>
-                            <Text style={styles.managerNoteText}>
-                              {selectedAdjustment.homeowner.managerPrivateNotes}
+                            <Text style={styles.ownerNoteText}>
+                              {selectedAdjustment.homeowner.ownerPrivateNotes}
                             </Text>
                           </View>
                         )}
@@ -468,7 +468,7 @@ const HomeSizeAdjustmentReview = ({ state }) => {
                       </View>
                     )}
 
-                    {/* Photo Evidence - Only shown to managers */}
+                    {/* Photo Evidence - Only shown to owners */}
                     {selectedAdjustment.photos && selectedAdjustment.photos.length > 0 && (
                       <View style={styles.photoEvidenceSection}>
                         <Text style={styles.photoEvidenceTitle}>
@@ -495,9 +495,9 @@ const HomeSizeAdjustmentReview = ({ state }) => {
                     )}
 
                     {/* Resolution Form */}
-                    {["denied", "expired", "pending_manager"].includes(selectedAdjustment.status) && (
+                    {["denied", "expired", "pending_owner"].includes(selectedAdjustment.status) && (
                       <View style={styles.resolutionForm}>
-                        <Text style={styles.resolutionTitle}>Manager Resolution</Text>
+                        <Text style={styles.resolutionTitle}>Owner Resolution</Text>
 
                         <View style={styles.formRow}>
                           <View style={styles.formGroup}>
@@ -531,11 +531,11 @@ const HomeSizeAdjustmentReview = ({ state }) => {
                         </View>
 
                         <View style={styles.formGroup}>
-                          <Text style={styles.formLabel}>Manager Note *</Text>
+                          <Text style={styles.formLabel}>Owner Note *</Text>
                           <TextInput
                             style={styles.textInput}
-                            value={managerNote}
-                            onChangeText={setManagerNote}
+                            value={ownerNote}
+                            onChangeText={setOwnerNote}
                             placeholder="Explain your decision..."
                             placeholderTextColor={colors.text.tertiary}
                             multiline
@@ -588,22 +588,22 @@ const HomeSizeAdjustmentReview = ({ state }) => {
                     )}
 
                     {/* Already resolved */}
-                    {["manager_approved", "manager_denied", "approved"].includes(selectedAdjustment.status) && (
+                    {["owner_approved", "owner_denied", "approved"].includes(selectedAdjustment.status) && (
                       <View style={styles.resolvedBox}>
                         <Icon
-                          name={selectedAdjustment.status === "manager_denied" ? "times-circle" : "check-circle"}
+                          name={selectedAdjustment.status === "owner_denied" ? "times-circle" : "check-circle"}
                           size={24}
-                          color={selectedAdjustment.status === "manager_denied" ? colors.error[500] : colors.success[500]}
+                          color={selectedAdjustment.status === "owner_denied" ? colors.error[500] : colors.success[500]}
                         />
                         <Text style={styles.resolvedText}>
                           {selectedAdjustment.status === "approved"
                             ? "Approved by homeowner"
-                            : selectedAdjustment.status === "manager_approved"
-                            ? "Approved by manager"
-                            : "Denied by manager"}
+                            : selectedAdjustment.status === "owner_approved"
+                            ? "Approved by owner"
+                            : "Denied by owner"}
                         </Text>
-                        {selectedAdjustment.managerNote && (
-                          <Text style={styles.resolvedNote}>{selectedAdjustment.managerNote}</Text>
+                        {selectedAdjustment.ownerNote && (
+                          <Text style={styles.resolvedNote}>{selectedAdjustment.ownerNote}</Text>
                         )}
                       </View>
                     )}
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
     color: colors.error[700],
     fontWeight: typography.fontWeight.semibold,
   },
-  managerNotesSection: {
+  ownerNotesSection: {
     backgroundColor: colors.warning[50],
     borderRadius: radius.lg,
     padding: spacing.md,
@@ -864,25 +864,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.warning[200],
   },
-  managerNotesTitle: {
+  ownerNotesTitle: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.warning[700],
     marginBottom: spacing.sm,
   },
-  managerNoteBox: {
+  ownerNoteBox: {
     backgroundColor: colors.neutral[0],
     padding: spacing.sm,
     borderRadius: radius.md,
     marginTop: spacing.xs,
   },
-  managerNoteLabel: {
+  ownerNoteLabel: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.secondary,
     marginBottom: 2,
   },
-  managerNoteText: {
+  ownerNoteText: {
     fontSize: typography.fontSize.xs,
     color: colors.text.primary,
     lineHeight: 16,

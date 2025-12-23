@@ -1,8 +1,8 @@
 /**
  * User Model Tracking Fields Tests
  *
- * Tests the new manager-only tracking fields:
- * - managerPrivateNotes (TEXT)
+ * Tests the new owner-only tracking fields:
+ * - ownerPrivateNotes (TEXT)
  * - falseHomeSizeCount (INTEGER)
  * - falseClaimCount (INTEGER)
  */
@@ -15,7 +15,7 @@ const createMockUser = (overrides = {}) => ({
   username: "johndoe",
   email: "john@example.com",
   type: "homeowner",
-  managerPrivateNotes: null,
+  ownerPrivateNotes: null,
   falseHomeSizeCount: 0,
   falseClaimCount: 0,
   createdAt: new Date(),
@@ -30,9 +30,9 @@ const createMockUser = (overrides = {}) => ({
 
 describe("User Model - Tracking Fields", () => {
   describe("Model Structure", () => {
-    it("should have managerPrivateNotes field", () => {
+    it("should have ownerPrivateNotes field", () => {
       const user = createMockUser();
-      expect(user).toHaveProperty("managerPrivateNotes");
+      expect(user).toHaveProperty("ownerPrivateNotes");
     });
 
     it("should have falseHomeSizeCount field", () => {
@@ -45,9 +45,9 @@ describe("User Model - Tracking Fields", () => {
       expect(user).toHaveProperty("falseClaimCount");
     });
 
-    it("should have default null for managerPrivateNotes", () => {
+    it("should have default null for ownerPrivateNotes", () => {
       const user = createMockUser();
-      expect(user.managerPrivateNotes).toBeNull();
+      expect(user.ownerPrivateNotes).toBeNull();
     });
 
     it("should have default 0 for falseHomeSizeCount", () => {
@@ -61,67 +61,67 @@ describe("User Model - Tracking Fields", () => {
     });
   });
 
-  describe("Manager Private Notes", () => {
+  describe("Owner Private Notes", () => {
     it("should allow null notes", () => {
-      const user = createMockUser({ managerPrivateNotes: null });
-      expect(user.managerPrivateNotes).toBeNull();
+      const user = createMockUser({ ownerPrivateNotes: null });
+      expect(user.ownerPrivateNotes).toBeNull();
     });
 
     it("should store text notes", () => {
-      const note = "[2025-01-15] False claim reported by manager";
-      const user = createMockUser({ managerPrivateNotes: note });
-      expect(user.managerPrivateNotes).toBe(note);
+      const note = "[2025-01-15] False claim reported by owner";
+      const user = createMockUser({ ownerPrivateNotes: note });
+      expect(user.ownerPrivateNotes).toBe(note);
     });
 
     it("should store long text notes", () => {
       const longNote = "A".repeat(5000);
-      const user = createMockUser({ managerPrivateNotes: longNote });
-      expect(user.managerPrivateNotes.length).toBe(5000);
+      const user = createMockUser({ ownerPrivateNotes: longNote });
+      expect(user.ownerPrivateNotes.length).toBe(5000);
     });
 
     it("should append new notes to existing notes", async () => {
       const existingNote = "[2025-01-01] First incident";
-      const user = createMockUser({ managerPrivateNotes: existingNote });
+      const user = createMockUser({ ownerPrivateNotes: existingNote });
 
       const newNote = "[2025-01-15] Second incident";
       const combinedNotes = existingNote + "\n" + newNote;
 
-      await user.update({ managerPrivateNotes: combinedNotes });
+      await user.update({ ownerPrivateNotes: combinedNotes });
 
-      expect(user.managerPrivateNotes).toContain("First incident");
-      expect(user.managerPrivateNotes).toContain("Second incident");
+      expect(user.ownerPrivateNotes).toContain("First incident");
+      expect(user.ownerPrivateNotes).toContain("Second incident");
     });
 
-    it("should handle first note when managerPrivateNotes is null", async () => {
-      const user = createMockUser({ managerPrivateNotes: null });
+    it("should handle first note when ownerPrivateNotes is null", async () => {
+      const user = createMockUser({ ownerPrivateNotes: null });
 
       const firstNote = "[2025-01-15] First note ever";
-      await user.update({ managerPrivateNotes: firstNote });
+      await user.update({ ownerPrivateNotes: firstNote });
 
-      expect(user.managerPrivateNotes).toBe(firstNote);
-      expect(user.managerPrivateNotes).not.toContain("null");
+      expect(user.ownerPrivateNotes).toBe(firstNote);
+      expect(user.ownerPrivateNotes).not.toContain("null");
     });
 
     it("should store notes with timestamps", () => {
       const timestamp = new Date().toISOString();
       const note = `[${timestamp}] HOME SIZE DISCREPANCY: Homeowner disputed`;
-      const user = createMockUser({ managerPrivateNotes: note });
+      const user = createMockUser({ ownerPrivateNotes: note });
 
-      expect(user.managerPrivateNotes).toContain(timestamp);
+      expect(user.ownerPrivateNotes).toContain(timestamp);
     });
 
-    it("should store notes with manager identification", () => {
-      const note = "[2025-01-15] FALSE CLAIM: Manager: John Smith";
-      const user = createMockUser({ managerPrivateNotes: note });
+    it("should store notes with owner identification", () => {
+      const note = "[2025-01-15] FALSE CLAIM: Owner: John Smith";
+      const user = createMockUser({ ownerPrivateNotes: note });
 
-      expect(user.managerPrivateNotes).toContain("Manager: John Smith");
+      expect(user.ownerPrivateNotes).toContain("Owner: John Smith");
     });
 
     it("should preserve newlines in multi-line notes", () => {
       const multiLineNote = "Line 1\nLine 2\nLine 3";
-      const user = createMockUser({ managerPrivateNotes: multiLineNote });
+      const user = createMockUser({ ownerPrivateNotes: multiLineNote });
 
-      const lines = user.managerPrivateNotes.split("\n");
+      const lines = user.ownerPrivateNotes.split("\n");
       expect(lines).toHaveLength(3);
     });
   });
@@ -206,61 +206,61 @@ describe("User Model - Tracking Fields", () => {
   });
 
   describe("Field Independence", () => {
-    it("should update managerPrivateNotes independently", async () => {
+    it("should update ownerPrivateNotes independently", async () => {
       const user = createMockUser({
-        managerPrivateNotes: "Initial note",
+        ownerPrivateNotes: "Initial note",
         falseHomeSizeCount: 1,
         falseClaimCount: 2,
       });
 
-      await user.update({ managerPrivateNotes: "Updated note" });
+      await user.update({ ownerPrivateNotes: "Updated note" });
 
-      expect(user.managerPrivateNotes).toBe("Updated note");
+      expect(user.ownerPrivateNotes).toBe("Updated note");
       expect(user.falseHomeSizeCount).toBe(1);
       expect(user.falseClaimCount).toBe(2);
     });
 
     it("should update falseHomeSizeCount independently", async () => {
       const user = createMockUser({
-        managerPrivateNotes: "Some note",
+        ownerPrivateNotes: "Some note",
         falseHomeSizeCount: 1,
         falseClaimCount: 0,
       });
 
       await user.update({ falseHomeSizeCount: 2 });
 
-      expect(user.managerPrivateNotes).toBe("Some note");
+      expect(user.ownerPrivateNotes).toBe("Some note");
       expect(user.falseHomeSizeCount).toBe(2);
       expect(user.falseClaimCount).toBe(0);
     });
 
     it("should update falseClaimCount independently", async () => {
       const user = createMockUser({
-        managerPrivateNotes: "Some note",
+        ownerPrivateNotes: "Some note",
         falseHomeSizeCount: 1,
         falseClaimCount: 0,
       });
 
       await user.update({ falseClaimCount: 1 });
 
-      expect(user.managerPrivateNotes).toBe("Some note");
+      expect(user.ownerPrivateNotes).toBe("Some note");
       expect(user.falseHomeSizeCount).toBe(1);
       expect(user.falseClaimCount).toBe(1);
     });
 
     it("should update multiple fields together", async () => {
       const user = createMockUser({
-        managerPrivateNotes: null,
+        ownerPrivateNotes: null,
         falseHomeSizeCount: 0,
         falseClaimCount: 0,
       });
 
       await user.update({
-        managerPrivateNotes: "New note",
+        ownerPrivateNotes: "New note",
         falseHomeSizeCount: 1,
       });
 
-      expect(user.managerPrivateNotes).toBe("New note");
+      expect(user.ownerPrivateNotes).toBe("New note");
       expect(user.falseHomeSizeCount).toBe(1);
     });
   });
@@ -273,11 +273,11 @@ describe("User Model - Tracking Fields", () => {
       const note = `[${timestamp}] HOME SIZE DISCREPANCY: Homeowner disputed claim`;
 
       await user.update({
-        managerPrivateNotes: note,
+        ownerPrivateNotes: note,
         falseHomeSizeCount: 1,
       });
 
-      expect(user.managerPrivateNotes).toContain("HOME SIZE DISCREPANCY");
+      expect(user.ownerPrivateNotes).toContain("HOME SIZE DISCREPANCY");
       expect(user.falseHomeSizeCount).toBe(1);
     });
 
@@ -288,11 +288,11 @@ describe("User Model - Tracking Fields", () => {
       const note = `[${timestamp}] FALSE CLAIM: Cleaner made invalid claim`;
 
       await user.update({
-        managerPrivateNotes: note,
+        ownerPrivateNotes: note,
         falseClaimCount: 1,
       });
 
-      expect(user.managerPrivateNotes).toContain("FALSE CLAIM");
+      expect(user.ownerPrivateNotes).toContain("FALSE CLAIM");
       expect(user.falseClaimCount).toBe(1);
     });
   });
@@ -318,61 +318,61 @@ describe("User Model - Tracking Fields", () => {
       expect(cleaner.falseClaimCount).toBe(2);
     });
 
-    it("should allow managers to have notes but typically 0 counts", () => {
-      const manager = createMockUser({
-        type: "manager",
-        managerPrivateNotes: "Manager notes about operations",
+    it("should allow owners to have notes but typically 0 counts", () => {
+      const owner = createMockUser({
+        type: "owner",
+        ownerPrivateNotes: "Owner notes about operations",
         falseHomeSizeCount: 0,
         falseClaimCount: 0,
       });
 
-      expect(manager.managerPrivateNotes).toBeTruthy();
-      expect(manager.falseHomeSizeCount).toBe(0);
-      expect(manager.falseClaimCount).toBe(0);
+      expect(owner.ownerPrivateNotes).toBeTruthy();
+      expect(owner.falseHomeSizeCount).toBe(0);
+      expect(owner.falseClaimCount).toBe(0);
     });
   });
 
-  describe("Privacy - Manager Only Access", () => {
+  describe("Privacy - Owner Only Access", () => {
     it("should store data that is hidden from users", () => {
       const user = createMockUser({
-        managerPrivateNotes: "SECRET: User has history of issues",
+        ownerPrivateNotes: "SECRET: User has history of issues",
         falseHomeSizeCount: 2,
       });
 
       // This tests the data structure - actual access control is in the router
-      expect(user.managerPrivateNotes).toContain("SECRET");
+      expect(user.ownerPrivateNotes).toContain("SECRET");
       expect(user.falseHomeSizeCount).toBe(2);
     });
 
     it("should not expose notes in standard user properties", () => {
       const user = createMockUser({
-        managerPrivateNotes: "Private manager note",
+        ownerPrivateNotes: "Private owner note",
       });
 
-      // Regular user properties should not include managerPrivateNotes in serialized output
+      // Regular user properties should not include ownerPrivateNotes in serialized output
       const publicFields = ["firstName", "lastName", "username", "email"];
       publicFields.forEach((field) => {
-        expect(user[field]).not.toContain("Private manager note");
+        expect(user[field]).not.toContain("Private owner note");
       });
     });
   });
 
   describe("Edge Cases", () => {
     it("should handle empty string notes", () => {
-      const user = createMockUser({ managerPrivateNotes: "" });
-      expect(user.managerPrivateNotes).toBe("");
+      const user = createMockUser({ ownerPrivateNotes: "" });
+      expect(user.ownerPrivateNotes).toBe("");
     });
 
     it("should handle special characters in notes", () => {
       const specialNote = "Note with special chars: <script>alert('xss')</script> & \"quotes\"";
-      const user = createMockUser({ managerPrivateNotes: specialNote });
-      expect(user.managerPrivateNotes).toBe(specialNote);
+      const user = createMockUser({ ownerPrivateNotes: specialNote });
+      expect(user.ownerPrivateNotes).toBe(specialNote);
     });
 
     it("should handle unicode in notes", () => {
       const unicodeNote = "Note with emoji: 🚨 Warning! User flagged";
-      const user = createMockUser({ managerPrivateNotes: unicodeNote });
-      expect(user.managerPrivateNotes).toContain("🚨");
+      const user = createMockUser({ ownerPrivateNotes: unicodeNote });
+      expect(user.ownerPrivateNotes).toContain("🚨");
     });
 
     it("should handle max integer for counts", () => {
@@ -385,18 +385,18 @@ describe("User Model - Tracking Fields", () => {
   describe("Historical Record", () => {
     it("should maintain full history in notes", () => {
       const notes = [
-        "[2025-01-01T10:00:00Z] First incident - Manager: Admin1",
-        "[2025-01-15T14:30:00Z] Second incident - Manager: Admin2",
-        "[2025-02-01T09:00:00Z] Third incident - Manager: Admin1",
+        "[2025-01-01T10:00:00Z] First incident - Owner: Admin1",
+        "[2025-01-15T14:30:00Z] Second incident - Owner: Admin2",
+        "[2025-02-01T09:00:00Z] Third incident - Owner: Admin1",
       ].join("\n");
 
-      const user = createMockUser({ managerPrivateNotes: notes });
+      const user = createMockUser({ ownerPrivateNotes: notes });
 
-      expect(user.managerPrivateNotes).toContain("First incident");
-      expect(user.managerPrivateNotes).toContain("Second incident");
-      expect(user.managerPrivateNotes).toContain("Third incident");
+      expect(user.ownerPrivateNotes).toContain("First incident");
+      expect(user.ownerPrivateNotes).toContain("Second incident");
+      expect(user.ownerPrivateNotes).toContain("Third incident");
 
-      const noteLines = user.managerPrivateNotes.split("\n");
+      const noteLines = user.ownerPrivateNotes.split("\n");
       expect(noteLines).toHaveLength(3);
     });
 

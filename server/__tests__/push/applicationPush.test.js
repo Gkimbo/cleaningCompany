@@ -1,6 +1,6 @@
 /**
  * Tests for Push Notifications in Application Router
- * Tests that push notifications are sent to managers for new applications
+ * Tests that push notifications are sent to owners for new applications
  */
 
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || "test_secret";
@@ -25,14 +25,14 @@ describe("Application Router - Push Notifications", () => {
     jest.clearAllMocks();
   });
 
-  describe("New Application - Push to Managers", () => {
-    it("should send push notification to manager when application submitted", async () => {
-      const manager = {
+  describe("New Application - Push to Owners", () => {
+    it("should send push notification to owner when application submitted", async () => {
+      const owner = {
         id: 1,
-        username: "manager1",
-        email: "manager@test.com",
+        username: "owner1",
+        email: "owner@test.com",
         expoPushToken: validExpoPushToken,
-        type: "manager",
+        type: "owner",
         notifications: [],
         update: jest.fn().mockResolvedValue(true),
       };
@@ -42,24 +42,24 @@ describe("Application Router - Push Notifications", () => {
       const experience = "3 years";
 
       // Simulate what the router does
-      if (manager.email) {
+      if (owner.email) {
         await Email.sendNewApplicationNotification(
-          manager.email,
+          owner.email,
           applicantName,
           applicantEmail,
           experience
         );
       }
 
-      if (manager.expoPushToken) {
+      if (owner.expoPushToken) {
         await PushNotification.sendPushNewApplication(
-          manager.expoPushToken,
+          owner.expoPushToken,
           applicantName
         );
       }
 
       expect(Email.sendNewApplicationNotification).toHaveBeenCalledWith(
-        "manager@test.com",
+        "owner@test.com",
         "John Doe",
         "john.doe@test.com",
         "3 years"
@@ -71,39 +71,39 @@ describe("Application Router - Push Notifications", () => {
       );
     });
 
-    it("should send push to multiple managers", async () => {
-      const managers = [
+    it("should send push to multiple owners", async () => {
+      const owners = [
         {
           id: 1,
-          username: "manager1",
-          email: "manager1@test.com",
+          username: "owner1",
+          email: "owner1@test.com",
           expoPushToken: "ExponentPushToken[aaaaaaaaaaaaaaaaaaaaa]",
-          type: "manager",
+          type: "owner",
         },
         {
           id: 2,
-          username: "manager2",
-          email: "manager2@test.com",
+          username: "owner2",
+          email: "owner2@test.com",
           expoPushToken: "ExponentPushToken[bbbbbbbbbbbbbbbbbbbbb]",
-          type: "manager1",
+          type: "owner1",
         },
       ];
 
       const applicantName = "Jane Smith";
 
-      for (const manager of managers) {
-        if (manager.email) {
+      for (const owner of owners) {
+        if (owner.email) {
           await Email.sendNewApplicationNotification(
-            manager.email,
+            owner.email,
             applicantName,
             "jane@test.com",
             "5 years"
           );
         }
 
-        if (manager.expoPushToken) {
+        if (owner.expoPushToken) {
           await PushNotification.sendPushNewApplication(
-            manager.expoPushToken,
+            owner.expoPushToken,
             applicantName
           );
         }
@@ -113,21 +113,21 @@ describe("Application Router - Push Notifications", () => {
       expect(PushNotification.sendPushNewApplication).toHaveBeenCalledTimes(2);
     });
 
-    it("should not send push if manager has no push token", async () => {
-      const manager = {
+    it("should not send push if owner has no push token", async () => {
+      const owner = {
         id: 1,
-        username: "manager1",
-        email: "manager@test.com",
+        username: "owner1",
+        email: "owner@test.com",
         expoPushToken: null, // No push token
-        type: "manager",
+        type: "owner",
       };
 
       const applicantName = "Bob Johnson";
 
       // Email should still be sent
-      if (manager.email) {
+      if (owner.email) {
         await Email.sendNewApplicationNotification(
-          manager.email,
+          owner.email,
           applicantName,
           "bob@test.com",
           "2 years"
@@ -135,9 +135,9 @@ describe("Application Router - Push Notifications", () => {
       }
 
       // Push should not be sent
-      if (manager.expoPushToken) {
+      if (owner.expoPushToken) {
         await PushNotification.sendPushNewApplication(
-          manager.expoPushToken,
+          owner.expoPushToken,
           applicantName
         );
       }
@@ -146,42 +146,42 @@ describe("Application Router - Push Notifications", () => {
       expect(PushNotification.sendPushNewApplication).not.toHaveBeenCalled();
     });
 
-    it("should handle some managers without tokens", async () => {
-      const managers = [
+    it("should handle some owners without tokens", async () => {
+      const owners = [
         {
           id: 1,
-          email: "manager1@test.com",
+          email: "owner1@test.com",
           expoPushToken: "ExponentPushToken[aaaaaaaaaaaaaaaaaaaaa]",
         },
         {
           id: 2,
-          email: "manager2@test.com",
+          email: "owner2@test.com",
           expoPushToken: null, // No token
         },
         {
           id: 3,
-          email: "manager3@test.com",
+          email: "owner3@test.com",
           expoPushToken: "ExponentPushToken[ccccccccccccccccccccc]",
         },
       ];
 
       const applicantName = "Test Applicant";
 
-      for (const manager of managers) {
-        if (manager.expoPushToken) {
+      for (const owner of owners) {
+        if (owner.expoPushToken) {
           await PushNotification.sendPushNewApplication(
-            manager.expoPushToken,
+            owner.expoPushToken,
             applicantName
           );
         }
       }
 
-      // Should only send to 2 managers (those with tokens)
+      // Should only send to 2 owners (those with tokens)
       expect(PushNotification.sendPushNewApplication).toHaveBeenCalledTimes(2);
     });
 
     it("should include full applicant name in notification", async () => {
-      const manager = {
+      const owner = {
         id: 1,
         expoPushToken: validExpoPushToken,
       };
@@ -191,7 +191,7 @@ describe("Application Router - Push Notifications", () => {
       const applicantName = `${firstName} ${lastName}`;
 
       await PushNotification.sendPushNewApplication(
-        manager.expoPushToken,
+        owner.expoPushToken,
         applicantName
       );
 
@@ -203,16 +203,16 @@ describe("Application Router - Push Notifications", () => {
   });
 
   describe("Error Handling", () => {
-    it("should continue sending to other managers if one fails", async () => {
-      const managers = [
+    it("should continue sending to other owners if one fails", async () => {
+      const owners = [
         {
           id: 1,
-          email: "manager1@test.com",
+          email: "owner1@test.com",
           expoPushToken: "ExponentPushToken[aaaaaaaaaaaaaaaaaaaaa]",
         },
         {
           id: 2,
-          email: "manager2@test.com",
+          email: "owner2@test.com",
           expoPushToken: "ExponentPushToken[bbbbbbbbbbbbbbbbbbbbb]",
         },
       ];
@@ -224,10 +224,10 @@ describe("Application Router - Push Notifications", () => {
 
       const results = [];
 
-      for (const manager of managers) {
+      for (const owner of owners) {
         try {
           const result = await PushNotification.sendPushNewApplication(
-            manager.expoPushToken,
+            owner.expoPushToken,
             "Applicant"
           );
           results.push({ success: true, result });

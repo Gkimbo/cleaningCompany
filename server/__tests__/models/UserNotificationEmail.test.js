@@ -12,7 +12,7 @@ describe("User Model - Notification Email", () => {
       username: "johndoe",
       email: "john@example.com",
       notificationEmail: null,
-      type: "manager",
+      type: "owner",
       ...overrides,
     };
     // Add the getNotificationEmail method as defined in the User model
@@ -60,14 +60,14 @@ describe("User Model - Notification Email", () => {
       expect(user.getNotificationEmail()).toBe("main@example.com");
     });
 
-    it("should work for manager users", () => {
-      const manager = createMockUser({
-        type: "manager",
-        email: "manager@company.com",
-        notificationEmail: "manager-alerts@company.com",
+    it("should work for owner users", () => {
+      const owner = createMockUser({
+        type: "owner",
+        email: "owner@company.com",
+        notificationEmail: "owner-alerts@company.com",
       });
 
-      expect(manager.getNotificationEmail()).toBe("manager-alerts@company.com");
+      expect(owner.getNotificationEmail()).toBe("owner-alerts@company.com");
     });
 
     it("should work for cleaner users", () => {
@@ -169,40 +169,40 @@ describe("User Model - Notification Email", () => {
   });
 
   describe("integration scenarios", () => {
-    it("should work in manager notification scenario", () => {
-      const managers = [
+    it("should work in owner notification scenario", () => {
+      const owners = [
         createMockUser({
           id: 1,
-          type: "manager",
-          email: "manager1@company.com",
+          type: "owner",
+          email: "owner1@company.com",
           notificationEmail: "alerts1@company.com",
         }),
         createMockUser({
           id: 2,
-          type: "manager",
-          email: "manager2@company.com",
+          type: "owner",
+          email: "owner2@company.com",
           notificationEmail: null, // Uses main email
         }),
         createMockUser({
           id: 3,
-          type: "manager",
-          email: "manager3@company.com",
+          type: "owner",
+          email: "owner3@company.com",
           notificationEmail: "external@gmail.com",
         }),
       ];
 
-      const notificationEmails = managers.map((m) => m.getNotificationEmail());
+      const notificationEmails = owners.map((m) => m.getNotificationEmail());
 
       expect(notificationEmails).toEqual([
         "alerts1@company.com",
-        "manager2@company.com",
+        "owner2@company.com",
         "external@gmail.com",
       ]);
     });
 
     it("should handle mixed user types", () => {
       const users = [
-        createMockUser({ type: "manager", email: "m@test.com", notificationEmail: "m-alerts@test.com" }),
+        createMockUser({ type: "owner", email: "m@test.com", notificationEmail: "m-alerts@test.com" }),
         createMockUser({ type: "cleaner", email: "c@test.com", notificationEmail: null }),
         createMockUser({ type: "homeowner", email: "h@test.com", notificationEmail: "h-alerts@test.com" }),
       ];

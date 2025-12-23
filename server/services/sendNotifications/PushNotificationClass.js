@@ -147,7 +147,7 @@ class PushNotification {
     });
   }
 
-  // 9. New Application notification (to managers)
+  // 9. New Application notification (to owners)
   static async sendPushNewApplication(expoPushToken, applicantName) {
     const title = "New Cleaner Application";
     const body = `${applicantName} submitted a new cleaner application. Tap to review.`;
@@ -213,7 +213,7 @@ class PushNotification {
     });
   }
 
-  // 15. Adjustment needs manager review (to manager)
+  // 15. Adjustment needs owner review (to owner)
   static async sendPushAdjustmentNeedsReview(expoPushToken, requestId) {
     const title = "Dispute Needs Review";
     const body = `A homeowner has denied a home size adjustment. Please review request #${requestId}.`;
@@ -228,8 +228,8 @@ class PushNotification {
   static async sendPushAdjustmentResolved(expoPushToken, userName, approved) {
     const title = approved ? "Dispute Resolved - Approved" : "Dispute Resolved - Denied";
     const body = approved
-      ? `Hi ${userName}, the manager approved the home size adjustment. Details updated.`
-      : `Hi ${userName}, the manager has denied the home size adjustment request.`;
+      ? `Hi ${userName}, the owner approved the home size adjustment. Details updated.`
+      : `Hi ${userName}, the owner has denied the home size adjustment request.`;
 
     return this.sendPushNotification(expoPushToken, title, body, {
       type: "adjustment_resolved",

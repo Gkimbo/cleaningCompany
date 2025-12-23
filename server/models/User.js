@@ -88,7 +88,7 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
-		managerPrivateNotes: {
+		ownerPrivateNotes: {
 			type: DataTypes.TEXT,
 			allowNull: true,
 		},
@@ -101,6 +101,15 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: false,
 			defaultValue: 0,
+		},
+		failedLoginAttempts: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+		},
+		lockedUntil: {
+			type: DataTypes.DATE,
+			allowNull: true,
 		},
 	});
 

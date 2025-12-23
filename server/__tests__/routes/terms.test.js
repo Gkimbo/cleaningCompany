@@ -359,11 +359,11 @@ describe("Terms Router", () => {
     });
   });
 
-  describe("GET /terms/history/:type (Manager only)", () => {
-    it("should return version history for managers", async () => {
+  describe("GET /terms/history/:type (Owner only)", () => {
+    it("should return version history for owners", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       TermsAndConditions.findAll.mockResolvedValue([
         {
@@ -395,7 +395,7 @@ describe("Terms Router", () => {
       expect(response.body.versions[0].version).toBe(2);
     });
 
-    it("should return 403 for non-managers", async () => {
+    it("should return 403 for non-owners", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({ id: 1, type: "client" });
@@ -408,11 +408,11 @@ describe("Terms Router", () => {
     });
   });
 
-  describe("POST /terms (Create text terms - Manager only)", () => {
+  describe("POST /terms (Create text terms - Owner only)", () => {
     it("should create new text terms version", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       TermsAndConditions.findOne.mockResolvedValue({ version: 1 });
       TermsAndConditions.create.mockResolvedValue({
         id: 2,
@@ -440,7 +440,7 @@ describe("Terms Router", () => {
     it("should create version 1 if no previous terms", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       TermsAndConditions.findOne.mockResolvedValue(null);
       TermsAndConditions.create.mockResolvedValue({
         id: 1,
@@ -467,7 +467,7 @@ describe("Terms Router", () => {
     it("should return 400 if missing required fields", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       const response = await request(app)
         .post("/api/v1/terms")
@@ -480,7 +480,7 @@ describe("Terms Router", () => {
     it("should return 400 for invalid type", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       const response = await request(app)
         .post("/api/v1/terms")
@@ -495,12 +495,12 @@ describe("Terms Router", () => {
     });
   });
 
-  describe("GET /terms/user-acceptance/:userId (Manager only)", () => {
+  describe("GET /terms/user-acceptance/:userId (Owner only)", () => {
     it("should return user acceptance history", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk
-        .mockResolvedValueOnce({ id: 1, type: "manager" }) // requireManager check
+        .mockResolvedValueOnce({ id: 1, type: "owner" }) // requireOwner check
         .mockResolvedValueOnce({
           id: 2,
           firstName: "John",
@@ -542,7 +542,7 @@ describe("Terms Router", () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk
-        .mockResolvedValueOnce({ id: 1, type: "manager" })
+        .mockResolvedValueOnce({ id: 1, type: "owner" })
         .mockResolvedValueOnce(null);
 
       const response = await request(app)
@@ -553,11 +553,11 @@ describe("Terms Router", () => {
     });
   });
 
-  describe("GET /terms/acceptance-snapshot/:acceptanceId (Manager only)", () => {
+  describe("GET /terms/acceptance-snapshot/:acceptanceId (Owner only)", () => {
     it("should return text snapshot content", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       UserTermsAcceptance.findByPk.mockResolvedValue({
         id: 1,
@@ -592,7 +592,7 @@ describe("Terms Router", () => {
     it("should return 404 if acceptance not found", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       UserTermsAcceptance.findByPk.mockResolvedValue(null);
 
       const response = await request(app)
@@ -603,11 +603,11 @@ describe("Terms Router", () => {
     });
   });
 
-  describe("GET /terms/:termsId/acceptances (Manager only)", () => {
+  describe("GET /terms/:termsId/acceptances (Owner only)", () => {
     it("should return all acceptances for a terms version", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       TermsAndConditions.findByPk.mockResolvedValue({
         id: 1,
@@ -659,7 +659,7 @@ describe("Terms Router", () => {
     it("should return 404 if terms not found", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       TermsAndConditions.findByPk.mockResolvedValue(null);
 
       const response = await request(app)

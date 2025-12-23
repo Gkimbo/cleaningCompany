@@ -1080,7 +1080,7 @@ cron.schedule("0 7 * * *", async () => {
 /**
  * ------------------------------------------------------
  * Home Size Adjustment Auto-Escalation Cron Job
- * Runs hourly to escalate expired adjustment requests to managers
+ * Runs hourly to escalate expired adjustment requests to owners
  * ------------------------------------------------------
  */
 cron.schedule("0 * * * *", async () => {
@@ -1110,24 +1110,24 @@ cron.schedule("0 * * * *", async () => {
 
     console.log(`[Cron] Found ${expiredRequests.length} expired adjustment request(s)`);
 
-    // Get all managers
-    const managers = await User.findAll({
-      where: { role: "manager" },
+    // Get all owners
+    const owners = await User.findAll({
+      where: { role: "owner" },
     });
 
     for (const request of expiredRequests) {
       try {
-        // Update status to expired (which triggers manager review)
+        // Update status to expired (which triggers owner review)
         await request.update({ status: "expired" });
 
-        // Notify all managers
-        for (const manager of managers) {
+        // Notify all owners
+        for (const owner of owners) {
           // Send email notification (use notificationEmail if set, otherwise main email)
-          const managerNotificationEmail = manager.getNotificationEmail();
-          if (managerNotificationEmail) {
-            await Email.sendAdjustmentNeedsManagerReview(
-              managerNotificationEmail,
-              manager.firstName,
+          const ownerNotificationEmail = owner.getNotificationEmail();
+          if (ownerNotificationEmail) {
+            await Email.sendAdjustmentNeedsOwnerReview(
+              ownerNotificationEmail,
+              owner.firstName,
               request.id,
               request.cleaner?.firstName || "Cleaner",
               request.homeowner?.firstName || "Homeowner",
@@ -1136,22 +1136,22 @@ cron.schedule("0 * * * *", async () => {
           }
 
           // Send push notification
-          if (manager.expoPushToken) {
+          if (owner.expoPushToken) {
             await PushNotification.sendPushAdjustmentNeedsReview(
-              manager.expoPushToken,
+              owner.expoPushToken,
               request.id
             );
           }
 
           // Add in-app notification
-          const notifications = manager.notifications || [];
+          const notifications = owner.notifications || [];
           notifications.unshift(
             `Home size adjustment request #${request.id} has expired and needs your review.`
           );
-          await manager.update({ notifications: notifications.slice(0, 50) });
+          await owner.update({ notifications: notifications.slice(0, 50) });
         }
 
-        console.log(`[Cron] Escalated request ${request.id} to managers`);
+        console.log(`[Cron] Escalated request ${request.id} to owners`);
       } catch (err) {
         console.error(`[Cron] Failed to escalate request ${request.id}:`, err);
       }

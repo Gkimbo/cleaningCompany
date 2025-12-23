@@ -22,7 +22,7 @@ class PricingService {
   }
 
   /**
-   * Get full pricing configuration with metadata (manager only)
+   * Get full pricing configuration with metadata (owner only)
    * Includes audit info and all fields
    */
   static async getFullConfig(token) {
@@ -42,7 +42,7 @@ class PricingService {
   }
 
   /**
-   * Update pricing configuration (manager only)
+   * Update pricing configuration (owner only)
    * @param {string} token - Auth token
    * @param {object} pricingData - New pricing values
    * @returns {object} { success, message, config } or { success: false, error }
@@ -81,7 +81,7 @@ class PricingService {
   }
 
   /**
-   * Get pricing change history (manager only)
+   * Get pricing change history (owner only)
    * @param {string} token - Auth token
    * @param {number} limit - Max number of history items to return
    */

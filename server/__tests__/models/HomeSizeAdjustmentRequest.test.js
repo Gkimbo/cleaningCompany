@@ -21,12 +21,12 @@ const createMockRequest = (overrides = {}) => ({
   status: "pending_homeowner",
   cleanerNote: null,
   homeownerResponse: null,
-  managerNote: null,
-  managerId: null,
+  ownerNote: null,
+  ownerId: null,
   chargePaymentIntentId: null,
   chargeStatus: null,
   homeownerRespondedAt: null,
-  managerResolvedAt: null,
+  ownerResolvedAt: null,
   expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -79,12 +79,12 @@ describe("HomeSizeAdjustmentRequest Model", () => {
 
       expect(request.cleanerNote).toBeNull();
       expect(request.homeownerResponse).toBeNull();
-      expect(request.managerNote).toBeNull();
-      expect(request.managerId).toBeNull();
+      expect(request.ownerNote).toBeNull();
+      expect(request.ownerId).toBeNull();
       expect(request.chargePaymentIntentId).toBeNull();
       expect(request.chargeStatus).toBeNull();
       expect(request.homeownerRespondedAt).toBeNull();
-      expect(request.managerResolvedAt).toBeNull();
+      expect(request.ownerResolvedAt).toBeNull();
     });
   });
 
@@ -104,19 +104,19 @@ describe("HomeSizeAdjustmentRequest Model", () => {
       expect(request.status).toBe("denied");
     });
 
-    it("should accept pending_manager status", () => {
-      const request = createMockRequest({ status: "pending_manager" });
-      expect(request.status).toBe("pending_manager");
+    it("should accept pending_owner status", () => {
+      const request = createMockRequest({ status: "pending_owner" });
+      expect(request.status).toBe("pending_owner");
     });
 
-    it("should accept manager_approved status", () => {
-      const request = createMockRequest({ status: "manager_approved" });
-      expect(request.status).toBe("manager_approved");
+    it("should accept owner_approved status", () => {
+      const request = createMockRequest({ status: "owner_approved" });
+      expect(request.status).toBe("owner_approved");
     });
 
-    it("should accept manager_denied status", () => {
-      const request = createMockRequest({ status: "manager_denied" });
-      expect(request.status).toBe("manager_denied");
+    it("should accept owner_denied status", () => {
+      const request = createMockRequest({ status: "owner_denied" });
+      expect(request.status).toBe("owner_denied");
     });
 
     it("should accept expired status", () => {
@@ -163,46 +163,46 @@ describe("HomeSizeAdjustmentRequest Model", () => {
     });
 
     describe("Escalation Path - Homeowner Denies", () => {
-      it("should transition from pending_homeowner to pending_manager", async () => {
+      it("should transition from pending_homeowner to pending_owner", async () => {
         const request = createMockRequest({ status: "pending_homeowner" });
 
         await request.update({
-          status: "pending_manager",
+          status: "pending_owner",
           homeownerResponse: "The home size is correct",
           homeownerRespondedAt: new Date(),
         });
 
-        expect(request.status).toBe("pending_manager");
+        expect(request.status).toBe("pending_owner");
         expect(request.homeownerResponse).toBe("The home size is correct");
       });
 
-      it("should transition from pending_manager to manager_approved", async () => {
-        const request = createMockRequest({ status: "pending_manager" });
+      it("should transition from pending_owner to owner_approved", async () => {
+        const request = createMockRequest({ status: "pending_owner" });
 
         await request.update({
-          status: "manager_approved",
-          managerId: 3,
-          managerNote: "Verified home is larger",
-          managerResolvedAt: new Date(),
+          status: "owner_approved",
+          ownerId: 3,
+          ownerNote: "Verified home is larger",
+          ownerResolvedAt: new Date(),
         });
 
-        expect(request.status).toBe("manager_approved");
-        expect(request.managerId).toBe(3);
-        expect(request.managerNote).toBe("Verified home is larger");
+        expect(request.status).toBe("owner_approved");
+        expect(request.ownerId).toBe(3);
+        expect(request.ownerNote).toBe("Verified home is larger");
       });
 
-      it("should transition from pending_manager to manager_denied", async () => {
-        const request = createMockRequest({ status: "pending_manager" });
+      it("should transition from pending_owner to owner_denied", async () => {
+        const request = createMockRequest({ status: "pending_owner" });
 
         await request.update({
-          status: "manager_denied",
-          managerId: 3,
-          managerNote: "Home size is correct as listed",
-          managerResolvedAt: new Date(),
+          status: "owner_denied",
+          ownerId: 3,
+          ownerNote: "Home size is correct as listed",
+          ownerResolvedAt: new Date(),
         });
 
-        expect(request.status).toBe("manager_denied");
-        expect(request.managerId).toBe(3);
+        expect(request.status).toBe("owner_denied");
+        expect(request.ownerId).toBe(3);
       });
     });
 
@@ -401,12 +401,12 @@ describe("HomeSizeAdjustmentRequest Model", () => {
       expect(request.homeownerId).toBe(3);
     });
 
-    it("should optionally reference manager", () => {
-      const pendingRequest = createMockRequest({ managerId: null });
-      const resolvedRequest = createMockRequest({ managerId: 7 });
+    it("should optionally reference owner", () => {
+      const pendingRequest = createMockRequest({ ownerId: null });
+      const resolvedRequest = createMockRequest({ ownerId: 7 });
 
-      expect(pendingRequest.managerId).toBeNull();
-      expect(resolvedRequest.managerId).toBe(7);
+      expect(pendingRequest.ownerId).toBeNull();
+      expect(resolvedRequest.ownerId).toBe(7);
     });
   });
 
@@ -427,12 +427,12 @@ describe("HomeSizeAdjustmentRequest Model", () => {
       expect(request.homeownerResponse).toBe("The listing is correct. Extra room is office.");
     });
 
-    it("should store manager note", () => {
+    it("should store owner note", () => {
       const request = createMockRequest({
-        managerNote: "Verified via photos - home has 4 bedrooms",
+        ownerNote: "Verified via photos - home has 4 bedrooms",
       });
 
-      expect(request.managerNote).toBe("Verified via photos - home has 4 bedrooms");
+      expect(request.ownerNote).toBe("Verified via photos - home has 4 bedrooms");
     });
 
     it("should handle long notes", () => {
@@ -481,12 +481,12 @@ describe("HomeSizeAdjustmentRequest Model", () => {
       expect(request.homeownerRespondedAt).toBeInstanceOf(Date);
     });
 
-    it("should track manager resolution time", async () => {
-      const request = createMockRequest({ managerResolvedAt: null });
+    it("should track owner resolution time", async () => {
+      const request = createMockRequest({ ownerResolvedAt: null });
 
-      await request.update({ managerResolvedAt: new Date() });
+      await request.update({ ownerResolvedAt: new Date() });
 
-      expect(request.managerResolvedAt).toBeInstanceOf(Date);
+      expect(request.ownerResolvedAt).toBeInstanceOf(Date);
     });
   });
 

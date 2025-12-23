@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
-import ManagerDashboardService from "../../services/fetchRequests/ManagerDashboardService";
+import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
 import {
   colors,
   spacing,
@@ -118,7 +118,7 @@ const PeriodSelector = ({ selected, onSelect, options }) => (
   </View>
 );
 
-const ManagerDashboard = ({ state }) => {
+const OwnerDashboard = ({ state }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -133,10 +133,6 @@ const ManagerDashboard = ({ state }) => {
   const [businessMetrics, setBusinessMetrics] = useState(null);
   const [recheckLoading, setRecheckLoading] = useState(false);
   const [recheckResult, setRecheckResult] = useState(null);
-  const [managerSettings, setManagerSettings] = useState(null);
-  const [notificationEmailInput, setNotificationEmailInput] = useState("");
-  const [savingEmail, setSavingEmail] = useState(false);
-  const [emailSaveResult, setEmailSaveResult] = useState(null);
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -153,15 +149,14 @@ const ManagerDashboard = ({ state }) => {
     setError(null);
 
     try {
-      const [financial, users, stats, messages, serviceAreas, appUsage, bizMetrics, settings] = await Promise.all([
-        ManagerDashboardService.getFinancialSummary(state.currentUser.token),
-        ManagerDashboardService.getUserAnalytics(state.currentUser.token),
-        ManagerDashboardService.getQuickStats(state.currentUser.token),
-        ManagerDashboardService.getMessagesSummary(state.currentUser.token),
-        ManagerDashboardService.getServiceAreas(state.currentUser.token),
-        ManagerDashboardService.getAppUsageAnalytics(state.currentUser.token),
-        ManagerDashboardService.getBusinessMetrics(state.currentUser.token),
-        ManagerDashboardService.getSettings(state.currentUser.token),
+      const [financial, users, stats, messages, serviceAreas, appUsage, bizMetrics] = await Promise.all([
+        OwnerDashboardService.getFinancialSummary(state.currentUser.token),
+        OwnerDashboardService.getUserAnalytics(state.currentUser.token),
+        OwnerDashboardService.getQuickStats(state.currentUser.token),
+        OwnerDashboardService.getMessagesSummary(state.currentUser.token),
+        OwnerDashboardService.getServiceAreas(state.currentUser.token),
+        OwnerDashboardService.getAppUsageAnalytics(state.currentUser.token),
+        OwnerDashboardService.getBusinessMetrics(state.currentUser.token),
       ]);
 
       // Set data even if some endpoints return fallback values
@@ -172,10 +167,8 @@ const ManagerDashboard = ({ state }) => {
       setServiceAreaData(serviceAreas);
       setAppUsageData(appUsage);
       setBusinessMetrics(bizMetrics);
-      setManagerSettings(settings);
-      setNotificationEmailInput(settings.notificationEmail || "");
     } catch (err) {
-      console.error("[ManagerDashboard] Error fetching data:", err);
+      console.error("[OwnerDashboard] Error fetching data:", err);
       setError("Failed to load dashboard data");
     } finally {
       setLoading(false);
@@ -219,66 +212,15 @@ const ManagerDashboard = ({ state }) => {
     setRecheckLoading(true);
     setRecheckResult(null);
     try {
-      const result = await ManagerDashboardService.recheckServiceAreas(state.currentUser.token);
+      const result = await OwnerDashboardService.recheckServiceAreas(state.currentUser.token);
       setRecheckResult(result);
       // Refresh service area data after recheck
-      const updatedServiceAreas = await ManagerDashboardService.getServiceAreas(state.currentUser.token);
+      const updatedServiceAreas = await OwnerDashboardService.getServiceAreas(state.currentUser.token);
       setServiceAreaData(updatedServiceAreas);
     } catch (err) {
       setRecheckResult({ success: false, error: "Failed to recheck service areas" });
     } finally {
       setRecheckLoading(false);
-    }
-  };
-
-  const handleSaveNotificationEmail = async () => {
-    setSavingEmail(true);
-    setEmailSaveResult(null);
-    try {
-      const result = await ManagerDashboardService.updateNotificationEmail(
-        state.currentUser.token,
-        notificationEmailInput.trim() || null
-      );
-      if (result.success) {
-        setEmailSaveResult({ success: true, message: result.message });
-        setManagerSettings((prev) => ({
-          ...prev,
-          notificationEmail: result.notificationEmail,
-          effectiveNotificationEmail: result.effectiveNotificationEmail,
-        }));
-      } else {
-        setEmailSaveResult({ success: false, error: result.error });
-      }
-    } catch (err) {
-      setEmailSaveResult({ success: false, error: "Failed to save notification email" });
-    } finally {
-      setSavingEmail(false);
-    }
-  };
-
-  const handleClearNotificationEmail = async () => {
-    setNotificationEmailInput("");
-    setSavingEmail(true);
-    setEmailSaveResult(null);
-    try {
-      const result = await ManagerDashboardService.updateNotificationEmail(
-        state.currentUser.token,
-        null
-      );
-      if (result.success) {
-        setEmailSaveResult({ success: true, message: result.message });
-        setManagerSettings((prev) => ({
-          ...prev,
-          notificationEmail: null,
-          effectiveNotificationEmail: result.effectiveNotificationEmail,
-        }));
-      } else {
-        setEmailSaveResult({ success: false, error: result.error });
-      }
-    } catch (err) {
-      setEmailSaveResult({ success: false, error: "Failed to clear notification email" });
-    } finally {
-      setSavingEmail(false);
     }
   };
 
@@ -335,7 +277,7 @@ const ManagerDashboard = ({ state }) => {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Manager Dashboard</Text>
+        <Text style={styles.headerTitle}>Owner Dashboard</Text>
         <Text style={styles.headerSubtitle}>
           {new Date().toLocaleDateString("en-US", {
             weekday: "long",
@@ -1164,75 +1106,6 @@ const ManagerDashboard = ({ state }) => {
       {/* Tax Section */}
       <TaxFormsSection state={state} />
 
-      {/* Manager Settings Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Account Settings" />
-
-        <View style={styles.settingsSubsection}>
-          <Text style={styles.settingsLabel}>Notification Email</Text>
-          <Text style={styles.settingsDescription}>
-            Set a separate email address to receive manager notifications (new applications, home size disputes, etc.).
-            Leave blank to use your main account email.
-          </Text>
-
-          <View style={styles.settingsCurrentEmail}>
-            <Text style={styles.settingsCurrentEmailLabel}>Currently sending to:</Text>
-            <Text style={styles.settingsCurrentEmailValue}>
-              {managerSettings?.effectiveNotificationEmail || managerSettings?.email || "Not set"}
-            </Text>
-          </View>
-
-          <View style={styles.emailInputContainer}>
-            <TextInput
-              style={styles.emailInput}
-              placeholder="notification@example.com"
-              placeholderTextColor={colors.text.tertiary}
-              value={notificationEmailInput}
-              onChangeText={setNotificationEmailInput}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {notificationEmailInput !== (managerSettings?.notificationEmail || "") && (
-              <Pressable
-                style={[styles.saveEmailButton, savingEmail && styles.saveEmailButtonDisabled]}
-                onPress={handleSaveNotificationEmail}
-                disabled={savingEmail}
-              >
-                {savingEmail ? (
-                  <ActivityIndicator size="small" color={colors.neutral[0]} />
-                ) : (
-                  <Text style={styles.saveEmailButtonText}>Save</Text>
-                )}
-              </Pressable>
-            )}
-          </View>
-
-          {managerSettings?.notificationEmail && (
-            <Pressable
-              style={styles.clearEmailButton}
-              onPress={handleClearNotificationEmail}
-              disabled={savingEmail}
-            >
-              <Text style={styles.clearEmailButtonText}>
-                Clear and use main email ({managerSettings?.email})
-              </Text>
-            </Pressable>
-          )}
-
-          {emailSaveResult && (
-            <View style={[
-              styles.emailSaveResult,
-              emailSaveResult.success ? styles.emailSaveResultSuccess : styles.emailSaveResultError,
-            ]}>
-              <Text style={emailSaveResult.success ? styles.emailSaveResultSuccessText : styles.emailSaveResultErrorText}>
-                {emailSaveResult.success ? emailSaveResult.message : emailSaveResult.error}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-
       {/* Terms & Conditions Section */}
       <View style={styles.section}>
         <SectionHeader title="Terms & Conditions" />
@@ -1241,7 +1114,7 @@ const ManagerDashboard = ({ state }) => {
         </Text>
         <Pressable
           style={styles.termsButton}
-          onPress={() => navigate("/manager/terms")}
+          onPress={() => navigate("/owner/terms")}
         >
           <Text style={styles.termsButtonText}>Manage Terms & Conditions</Text>
         </Pressable>
@@ -1940,102 +1813,6 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
   },
 
-  // Settings Styles
-  settingsSubsection: {
-    marginBottom: spacing.md,
-  },
-  settingsLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  settingsDescription: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginBottom: spacing.md,
-    lineHeight: 20,
-  },
-  settingsCurrentEmail: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  settingsCurrentEmailLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-    marginBottom: 4,
-  },
-  settingsCurrentEmailValue: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
-  },
-  emailInputContainer: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  emailInput: {
-    flex: 1,
-    backgroundColor: colors.background.secondary,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-  },
-  saveEmailButton: {
-    backgroundColor: colors.primary[600],
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    justifyContent: "center",
-    alignItems: "center",
-    minWidth: 70,
-  },
-  saveEmailButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveEmailButtonText: {
-    color: colors.neutral[0],
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  clearEmailButton: {
-    paddingVertical: spacing.sm,
-  },
-  clearEmailButtonText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    textDecorationLine: "underline",
-  },
-  emailSaveResult: {
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginTop: spacing.sm,
-  },
-  emailSaveResultSuccess: {
-    backgroundColor: colors.success[50],
-    borderWidth: 1,
-    borderColor: colors.success[200],
-  },
-  emailSaveResultError: {
-    backgroundColor: colors.error[50],
-    borderWidth: 1,
-    borderColor: colors.error[200],
-  },
-  emailSaveResultSuccessText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.success[700],
-  },
-  emailSaveResultErrorText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.error[700],
-  },
-
   // Business Metrics Styles
   businessMetricRow: {
     flexDirection: "row",
@@ -2243,4 +2020,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ManagerDashboard;
+export default OwnerDashboard;

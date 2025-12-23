@@ -284,7 +284,7 @@ Kleanr Support Team`;
         },
       });
 
-      const roleTitle = type === "manager" ? "Manager" : "Cleaner";
+      const roleTitle = type === "owner" ? "Owner" : "Cleaner";
 
       const htmlContent = `
 <!DOCTYPE html>
@@ -1034,7 +1034,7 @@ Kleanr Support Team`;
     }
   }
 
-  static async sendNewApplicationNotification(managerEmail, applicantName, applicantEmail, experience) {
+  static async sendNewApplicationNotification(ownerEmail, applicantName, applicantEmail, experience) {
     try {
       const transporter = createTransporter();
 
@@ -1042,7 +1042,7 @@ Kleanr Support Team`;
         title: "New Application",
         subtitle: "A cleaner wants to join the team",
         headerColor: "linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)",
-        greeting: "Hello Manager! 📋",
+        greeting: "Hello Owner! 📋",
         content: `<p>A new cleaner application has been submitted and is ready for your review.</p>`,
         infoBox: {
           icon: "👤",
@@ -1056,7 +1056,7 @@ Kleanr Support Team`;
         steps: {
           title: "📝 Next Steps",
           items: [
-            "Log into the Kleanr manager dashboard",
+            "Log into the Kleanr owner dashboard",
             "Go to the Applications section",
             "Review the full application details",
             "Approve or decline the application",
@@ -1066,7 +1066,7 @@ Kleanr Support Team`;
         footerMessage: "Kleanr Management",
       });
 
-      const textContent = `Hello Manager!
+      const textContent = `Hello Owner!
 
 A new cleaner application has been submitted and is ready for your review.
 
@@ -1078,7 +1078,7 @@ Experience: ${experience || "Not specified"}
 
 NEXT STEPS
 ━━━━━━━━━━━━━━━━━━━━━━
-1. Log into the Kleanr manager dashboard
+1. Log into the Kleanr owner dashboard
 2. Go to the Applications section
 3. Review the full application details
 4. Approve or decline the application
@@ -1090,7 +1090,7 @@ Kleanr System`;
 
       const mailOptions = {
         from: process.env.EMAIL_USER,
-        to: managerEmail,
+        to: ownerEmail,
         subject: `📋 New Cleaner Application - ${applicantName}`,
         text: textContent,
         html: htmlContent,
@@ -1320,9 +1320,9 @@ Kleanr Support Team`;
     }
   }
 
-  static async sendAdjustmentNeedsManagerReview(
+  static async sendAdjustmentNeedsOwnerReview(
     email,
-    managerName,
+    ownerName,
     request,
     home,
     cleaner,
@@ -1335,7 +1335,7 @@ Kleanr Support Team`;
         title: "Dispute Needs Review",
         subtitle: "Home size adjustment disputed",
         headerColor: "linear-gradient(135deg, #ef4444 0%, #f87171 100%)",
-        greeting: `Hi ${managerName},`,
+        greeting: `Hi ${ownerName},`,
         content: `<p>A homeowner has denied a cleaner's home size adjustment report. This dispute requires your review and resolution.</p>`,
         infoBox: {
           icon: "⚠️",
@@ -1356,11 +1356,11 @@ Kleanr Support Team`;
           borderColor: "#ef4444",
           textColor: "#991b1b",
         } : null,
-        ctaText: "Please review this dispute in the Kleanr manager dashboard.",
+        ctaText: "Please review this dispute in the Kleanr owner dashboard.",
         footerMessage: "This requires your attention",
       });
 
-      const textContent = `Hi ${managerName},
+      const textContent = `Hi ${ownerName},
 
 A homeowner has denied a cleaner's home size adjustment report. This dispute requires your review.
 
@@ -1374,7 +1374,7 @@ Reported: ${request.reportedNumBeds} bed, ${request.reportedNumBaths} bath
 Price Difference: $${request.priceDifference}
 ${request.homeownerResponse ? `\nHomeowner's Reason: "${request.homeownerResponse}"` : ''}
 
-Please review this dispute in the Kleanr manager dashboard.
+Please review this dispute in the Kleanr owner dashboard.
 
 Best regards,
 Kleanr System`;
@@ -1388,10 +1388,10 @@ Kleanr System`;
       };
 
       const info = await transporter.sendMail(mailOptions);
-      console.log("✅ Manager review email sent:", info.response);
+      console.log("✅ Owner review email sent:", info.response);
       return info.response;
     } catch (error) {
-      console.error("❌ Error sending manager review email:", error);
+      console.error("❌ Error sending owner review email:", error);
     }
   }
 
@@ -1402,7 +1402,7 @@ Kleanr System`;
     finalBeds,
     finalBaths,
     amountCharged,
-    managerNote
+    ownerNote
   ) {
     try {
       const transporter = createTransporter();
@@ -1410,15 +1410,15 @@ Kleanr System`;
 
       const htmlContent = createEmailTemplate({
         title: isApproved ? "Dispute Resolved - Approved" : "Dispute Resolved - Denied",
-        subtitle: "Manager has reviewed your case",
+        subtitle: "Owner has reviewed your case",
         headerColor: isApproved
           ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
           : "linear-gradient(135deg, #6b7280 0%, #9ca3af 100%)",
         greeting: `Hi ${userName},`,
         content: isApproved
-          ? `<p>A manager has reviewed the home size dispute and approved the adjustment.</p>
+          ? `<p>A owner has reviewed the home size dispute and approved the adjustment.</p>
              <p>The home details have been updated accordingly.</p>`
-          : `<p>A manager has reviewed the home size dispute and has denied the adjustment request.</p>
+          : `<p>A owner has reviewed the home size dispute and has denied the adjustment request.</p>
              <p>The original home details will remain unchanged.</p>`,
         infoBox: isApproved ? {
           icon: "✅",
@@ -1428,9 +1428,9 @@ Kleanr System`;
             ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${amountCharged.toFixed(2)}` }] : []),
           ],
         } : null,
-        warningBox: managerNote ? {
+        warningBox: ownerNote ? {
           icon: "📝",
-          text: `<strong>Manager's Note:</strong> "${managerNote}"`,
+          text: `<strong>Owner's Note:</strong> "${ownerNote}"`,
           bgColor: "#f1f5f9",
           borderColor: "#64748b",
           textColor: "#334155",
@@ -1440,14 +1440,14 @@ Kleanr System`;
 
       const textContent = `Hi ${userName},
 
-A manager has reviewed the home size dispute and has ${isApproved ? 'approved' : 'denied'} the adjustment.
+A owner has reviewed the home size dispute and has ${isApproved ? 'approved' : 'denied'} the adjustment.
 
 ${isApproved ? `UPDATED HOME DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
 Final Size: ${finalBeds} bed, ${finalBaths} bath
 ${amountCharged > 0 ? `Amount Charged: $${amountCharged.toFixed(2)}\n` : ''}` : 'The original home details will remain unchanged.'}
 
-${managerNote ? `Manager's Note: "${managerNote}"\n` : ''}
+${ownerNote ? `Owner's Note: "${ownerNote}"\n` : ''}
 Best regards,
 Kleanr Support Team`;
 

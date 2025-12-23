@@ -9,6 +9,37 @@ import { AuthContext } from "../../../services/AuthContext";
 import Application from "../../../services/fetchRequests/ApplicationClass";
 import { colors, spacing, radius, typography, shadows } from "../../../services/styles/theme";
 
+// Generate a strong random password
+const generateStrongPassword = (length = 16) => {
+	const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // Removed I, O to avoid confusion
+	const lowercase = "abcdefghjkmnpqrstuvwxyz"; // Removed i, l, o to avoid confusion
+	const numbers = "23456789"; // Removed 0, 1 to avoid confusion
+	const special = "!@#$%&*?";
+
+	// Ensure at least one of each type
+	let password = "";
+	password += uppercase[Math.floor(Math.random() * uppercase.length)];
+	password += uppercase[Math.floor(Math.random() * uppercase.length)];
+	password += lowercase[Math.floor(Math.random() * lowercase.length)];
+	password += lowercase[Math.floor(Math.random() * lowercase.length)];
+	password += numbers[Math.floor(Math.random() * numbers.length)];
+	password += numbers[Math.floor(Math.random() * numbers.length)];
+	password += special[Math.floor(Math.random() * special.length)];
+	password += special[Math.floor(Math.random() * special.length)];
+
+	// Fill remaining length with random characters from all sets
+	const allChars = uppercase + lowercase + numbers + special;
+	for (let i = password.length; i < length; i++) {
+		password += allChars[Math.floor(Math.random() * allChars.length)];
+	}
+
+	// Shuffle the password
+	return password
+		.split("")
+		.sort(() => Math.random() - 0.5)
+		.join("");
+};
+
 // Generate a username from first and last name that fits 4-12 character limit
 const generateUsername = (first, last) => {
 	const cleanFirst = (first || "").toLowerCase().replace(/[^a-z]/g, "");
@@ -39,7 +70,7 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 	const [firstNameInput, setFirstNameInput] = useState(initialFirstName || "");
 	const [lastNameInput, setLastNameInput] = useState(initialLastName || "");
 	const [userName, setUserName] = useState(generateUsername(initialFirstName, initialLastName));
-	const [password, setPassword] = useState(`${initialLastName}$${initialFirstName}124`);
+	const [password, setPassword] = useState(generateStrongPassword());
 	const [emailInput, setEmail] = useState(email);
 	const [phoneInput, setPhone] = useState(initialPhone || "");
 	const [showPassword, setShowPassword] = useState(false);
@@ -219,6 +250,14 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 				}
 				style={styles.input}
 			/>
+			<View style={styles.passwordHelperRow}>
+				<Text style={styles.passwordHelperText}>
+					Strong password (auto-generated)
+				</Text>
+				<Pressable onPress={() => setPassword(generateStrongPassword())} style={styles.regenerateButton}>
+					<Icon name="refresh" size={14} color={colors.primary[600]} />
+				</Pressable>
+			</View>
 
 			{/* Email */}
 			<TextInput
@@ -300,6 +339,27 @@ const styles = StyleSheet.create({
 		color: colors.text.tertiary,
 		marginBottom: spacing.md,
 		marginLeft: spacing.xs,
+	},
+	passwordHelperRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		marginBottom: spacing.lg,
+		paddingHorizontal: spacing.sm,
+	},
+	passwordHelperText: {
+		fontSize: typography.fontSize.xs,
+		color: colors.text.tertiary,
+	},
+	regenerateButton: {
+		alignItems: "center",
+		justifyContent: "center",
+		backgroundColor: colors.primary[50],
+		width: 32,
+		height: 32,
+		borderRadius: radius.full,
+		borderWidth: 1,
+		borderColor: colors.primary[200],
 	},
 	errorContainer: {
 		flexDirection: "row",

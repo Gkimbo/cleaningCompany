@@ -61,7 +61,7 @@ import {
 } from "../src/components/onboarding";
 
 // Calendar Sync
-import { CalendarSyncManager } from "../src/components/calendarSync";
+import { CalendarSyncOwner } from "../src/components/calendarSync";
 
 // Account Settings
 import AccountSettings from "../src/components/account/AccountSettings";
@@ -69,9 +69,9 @@ import AccountSettings from "../src/components/account/AccountSettings";
 // Client components
 import ClientRequestsList from "../src/components/client/ClientRequestsList";
 
-// Manager components
-import TermsEditor from "../src/components/manager/TermsEditor";
-import PricingManagement from "../src/components/manager/PricingManagement";
+// Owner components
+import TermsEditor from "../src/components/owner/TermsEditor";
+import PricingManagement from "../src/components/owner/PricingManagement";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
@@ -119,7 +119,7 @@ export default function App() {
       if (user.user.email) {
         dispatch({ type: "SET_USER_EMAIL", payload: user.user.email });
       }
-      if (user.user.username === "manager1") {
+      if (user.user.username === "owner1") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
       }
       if (user.user.type === "cleaner") {
@@ -270,7 +270,7 @@ export default function App() {
               />
               <Route
                 path="/calendar-sync/:homeId"
-                element={<CalendarSyncManager state={state} dispatch={dispatch} />}
+                element={<CalendarSyncOwner state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/appointments"
@@ -396,14 +396,14 @@ export default function App() {
                 path="/client-requests"
                 element={<ClientRequestsList state={state} dispatch={dispatch} />}
               />
-              {/* Manager Terms Editor */}
+              {/* Owner Terms Editor */}
               <Route
-                path="/manager/terms"
+                path="/owner/terms"
                 element={<TermsEditor state={state} />}
               />
-              {/* Manager Pricing */}
+              {/* Owner Pricing */}
               <Route
-                path="/manager/pricing"
+                path="/owner/pricing"
                 element={<PricingManagement state={state} />}
               />
             </Routes>

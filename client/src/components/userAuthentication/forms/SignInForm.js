@@ -46,7 +46,7 @@ const SignInForm = ({ state, dispatch }) => {
 			}
 			if (response.user) {
 				dispatch({ type: "CURRENT_USER", payload: response.token });
-				if (response.user.username === "manager1") {
+				if (response.user.username === "owner1") {
 					dispatch({ type: "USER_ACCOUNT", payload: response.user.username });
 				}
 				if (response.user.type === "cleaner") {

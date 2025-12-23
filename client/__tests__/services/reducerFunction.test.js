@@ -91,11 +91,11 @@ describe("Reducer Function", () => {
       expect(newState.account).toBe("cleaner");
     });
 
-    it("should set account type to manager", () => {
-      const action = { type: "USER_ACCOUNT", payload: "manager1" };
+    it("should set account type to owner", () => {
+      const action = { type: "USER_ACCOUNT", payload: "owner1" };
       const newState = reducer(initialState, action);
 
-      expect(newState.account).toBe("manager1");
+      expect(newState.account).toBe("owner1");
     });
   });
 

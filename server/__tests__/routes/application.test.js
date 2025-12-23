@@ -98,14 +98,14 @@ describe("Application Router", () => {
       expect(ApplicationInfoClass.addApplicationToDB).toHaveBeenCalled();
     });
 
-    it("should notify managers about new application", async () => {
+    it("should notify owners about new application", async () => {
       ApplicationInfoClass.addApplicationToDB.mockResolvedValue({
         id: 1,
         ...validApplicationData,
       });
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        email: "manager@test.com",
+        email: "owner@test.com",
         notificationEmail: null,
         notifications: [],
         update: jest.fn(),
@@ -113,7 +113,7 @@ describe("Application Router", () => {
           return this.notificationEmail || this.email;
         },
       };
-      User.findAll.mockResolvedValue([mockManager]);
+      User.findAll.mockResolvedValue([mockOwner]);
 
       const response = await request(app)
         .post("/api/v1/applications/submitted")

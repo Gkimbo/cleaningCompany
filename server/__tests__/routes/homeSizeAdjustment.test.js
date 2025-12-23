@@ -33,7 +33,7 @@ jest.mock("../../services/CalculatePrice", () => jest.fn());
 jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendHomeSizeAdjustmentRequest: jest.fn().mockResolvedValue(true),
   sendAdjustmentApproved: jest.fn().mockResolvedValue(true),
-  sendAdjustmentNeedsManagerReview: jest.fn().mockResolvedValue(true),
+  sendAdjustmentNeedsOwnerReview: jest.fn().mockResolvedValue(true),
   sendAdjustmentResolved: jest.fn().mockResolvedValue(true),
 }));
 
@@ -75,7 +75,7 @@ describe("HomeSizeAdjustment Router", () => {
       type: "homeowner",
       notifications: ["email", "phone"],
       expoPushToken: "ExponentPushToken[xxx]",
-      managerPrivateNotes: null,
+      ownerPrivateNotes: null,
       falseHomeSizeCount: 0,
       falseClaimCount: 0,
       update: jest.fn().mockImplementation(function (data) {
@@ -146,8 +146,8 @@ describe("HomeSizeAdjustment Router", () => {
     status: "pending_homeowner",
     cleanerNote: "Home is larger than listed",
     homeownerResponse: null,
-    managerNote: null,
-    managerId: null,
+    ownerNote: null,
+    ownerId: null,
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     update: jest.fn().mockImplementation(function (data) {
       Object.assign(this, data);
@@ -379,27 +379,27 @@ describe("HomeSizeAdjustment Router", () => {
     });
   });
 
-  describe("GET /pending - Manager Only Fields", () => {
-    it("should include tracking fields for managers", async () => {
+  describe("GET /pending - Owner Only Fields", () => {
+    it("should include tracking fields for owners", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
       const mockHomeowner = createMockUser({
         id: 1,
         falseHomeSizeCount: 2,
-        managerPrivateNotes: "Previous incident noted",
+        ownerPrivateNotes: "Previous incident noted",
       });
       const mockCleaner = createMockUser({
         id: 2,
         type: "cleaner",
         falseClaimCount: 1,
-        managerPrivateNotes: "Made false claim before",
+        ownerPrivateNotes: "Made false claim before",
       });
 
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
       HomeSizeAdjustmentRequest.findAll.mockResolvedValue([
         {
-          ...createMockRequest({ status: "pending_manager" }),
+          ...createMockRequest({ status: "pending_owner" }),
           home: createMockHome(),
           appointment: createMockAppointment(),
           cleaner: mockCleaner,
@@ -413,19 +413,19 @@ describe("HomeSizeAdjustment Router", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      // Managers should see tracking fields
+      // Owners should see tracking fields
       expect(HomeSizeAdjustmentRequest.findAll).toHaveBeenCalled();
     });
 
-    it("should include photos for managers", async () => {
+    it("should include photos for owners", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
 
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
       HomeSizeAdjustmentRequest.findAll.mockResolvedValue([
         {
-          ...createMockRequest({ status: "pending_manager" }),
+          ...createMockRequest({ status: "pending_owner" }),
           home: createMockHome(),
           appointment: createMockAppointment(),
           cleaner: createMockUser({ id: 2, type: "cleaner" }),
@@ -456,7 +456,7 @@ describe("HomeSizeAdjustment Router", () => {
           appointment: createMockAppointment(),
           cleaner: createMockUser({ id: 2, type: "cleaner" }),
           homeowner: mockHomeowner,
-          // Photos should not be included in query for non-managers
+          // Photos should not be included in query for non-owners
         },
       ]);
 
@@ -508,13 +508,13 @@ describe("HomeSizeAdjustment Router", () => {
       expect(mockFutureAppointments[1].update).toHaveBeenCalled();
     });
 
-    it("should escalate to manager when homeowner denies", async () => {
+    it("should escalate to owner when homeowner denies", async () => {
       const token = generateToken(1);
 
       const mockRequest = createMockRequest();
       const mockHome = createMockHome();
       const mockAppointment = createMockAppointment();
-      const mockManagers = [createMockUser({ id: 3, type: "manager" })];
+      const mockOwners = [createMockUser({ id: 3, type: "owner" })];
 
       HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
       UserHomes.findByPk.mockResolvedValue(mockHome);
@@ -523,7 +523,7 @@ describe("HomeSizeAdjustment Router", () => {
         if (id === 1) return Promise.resolve(createMockUser({ id: 1 }));
         if (id === 2) return Promise.resolve(createMockUser({ id: 2, type: "cleaner" }));
       });
-      User.findAll.mockResolvedValue(mockManagers);
+      User.findAll.mockResolvedValue(mockOwners);
 
       const res = await request(app)
         .post("/api/v1/home-size-adjustment/1/homeowner-response")
@@ -536,32 +536,32 @@ describe("HomeSizeAdjustment Router", () => {
       expect(res.status).toBe(200);
       expect(mockRequest.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: "pending_manager",
+          status: "pending_owner",
           homeownerResponse: "The home size is correct as listed",
         })
       );
-      expect(Email.sendAdjustmentNeedsManagerReview).toHaveBeenCalled();
+      expect(Email.sendAdjustmentNeedsOwnerReview).toHaveBeenCalled();
     });
   });
 
-  describe("POST /:id/manager-resolve - False Claim Tracking", () => {
-    it("should add note and increment count on homeowner when manager approves", async () => {
+  describe("POST /:id/owner-resolve - False Claim Tracking", () => {
+    it("should add note and increment count on homeowner when owner approves", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
       const mockHomeowner = createMockUser({
         id: 1,
         type: "homeowner",
         falseHomeSizeCount: 1,
-        managerPrivateNotes: "Previous note",
+        ownerPrivateNotes: "Previous note",
       });
       const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
-      const mockRequest = createMockRequest({ status: "pending_manager" });
+      const mockRequest = createMockRequest({ status: "pending_owner" });
       const mockHome = createMockHome();
       const mockAppointment = createMockAppointment();
 
       User.findByPk.mockImplementation((id) => {
-        if (id === 3) return Promise.resolve(mockManager);
+        if (id === 3) return Promise.resolve(mockOwner);
         if (id === 1) return Promise.resolve(mockHomeowner);
         if (id === 2) return Promise.resolve(mockCleaner);
       });
@@ -571,11 +571,11 @@ describe("HomeSizeAdjustment Router", () => {
       UserAppointments.findAll.mockResolvedValue([]);
 
       const res = await request(app)
-        .post("/api/v1/home-size-adjustment/1/manager-resolve")
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
         .set("Authorization", `Bearer ${token}`)
         .send({
           approve: true,
-          managerNote: "Verified home is larger than listed",
+          ownerNote: "Verified home is larger than listed",
         });
 
       expect(res.status).toBe(200);
@@ -586,29 +586,29 @@ describe("HomeSizeAdjustment Router", () => {
           falseHomeSizeCount: 2, // Was 1, now 2
         })
       );
-      // Check that managerPrivateNotes was updated
+      // Check that ownerPrivateNotes was updated
       const updateCall = mockHomeowner.update.mock.calls[0][0];
-      expect(updateCall.managerPrivateNotes).toContain("HOME SIZE DISCREPANCY");
-      expect(updateCall.managerPrivateNotes).toContain("Previous note");
+      expect(updateCall.ownerPrivateNotes).toContain("HOME SIZE DISCREPANCY");
+      expect(updateCall.ownerPrivateNotes).toContain("Previous note");
     });
 
-    it("should add note and increment count on cleaner when manager denies", async () => {
+    it("should add note and increment count on cleaner when owner denies", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
       const mockHomeowner = createMockUser({ id: 1, type: "homeowner" });
       const mockCleaner = createMockUser({
         id: 2,
         type: "cleaner",
         falseClaimCount: 0,
-        managerPrivateNotes: null,
+        ownerPrivateNotes: null,
       });
-      const mockRequest = createMockRequest({ status: "pending_manager" });
+      const mockRequest = createMockRequest({ status: "pending_owner" });
       const mockHome = createMockHome();
       const mockAppointment = createMockAppointment();
 
       User.findByPk.mockImplementation((id) => {
-        if (id === 3) return Promise.resolve(mockManager);
+        if (id === 3) return Promise.resolve(mockOwner);
         if (id === 1) return Promise.resolve(mockHomeowner);
         if (id === 2) return Promise.resolve(mockCleaner);
       });
@@ -617,11 +617,11 @@ describe("HomeSizeAdjustment Router", () => {
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
 
       const res = await request(app)
-        .post("/api/v1/home-size-adjustment/1/manager-resolve")
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
         .set("Authorization", `Bearer ${token}`)
         .send({
           approve: false,
-          managerNote: "Home size is correctly listed",
+          ownerNote: "Home size is correctly listed",
         });
 
       expect(res.status).toBe(200);
@@ -632,18 +632,18 @@ describe("HomeSizeAdjustment Router", () => {
           falseClaimCount: 1, // Was 0, now 1
         })
       );
-      // Check that managerPrivateNotes was added
+      // Check that ownerPrivateNotes was added
       const updateCall = mockCleaner.update.mock.calls[0][0];
-      expect(updateCall.managerPrivateNotes).toContain("FALSE CLAIM");
+      expect(updateCall.ownerPrivateNotes).toContain("FALSE CLAIM");
     });
 
-    it("should update all future appointments when manager approves", async () => {
+    it("should update all future appointments when owner approves", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
       const mockHomeowner = createMockUser({ id: 1 });
       const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
-      const mockRequest = createMockRequest({ status: "pending_manager" });
+      const mockRequest = createMockRequest({ status: "pending_owner" });
       const mockHome = createMockHome();
       const mockAppointment = createMockAppointment();
       const mockFutureAppointments = [
@@ -653,7 +653,7 @@ describe("HomeSizeAdjustment Router", () => {
       ];
 
       User.findByPk.mockImplementation((id) => {
-        if (id === 3) return Promise.resolve(mockManager);
+        if (id === 3) return Promise.resolve(mockOwner);
         if (id === 1) return Promise.resolve(mockHomeowner);
         if (id === 2) return Promise.resolve(mockCleaner);
       });
@@ -663,11 +663,11 @@ describe("HomeSizeAdjustment Router", () => {
       UserAppointments.findAll.mockResolvedValue(mockFutureAppointments);
 
       const res = await request(app)
-        .post("/api/v1/home-size-adjustment/1/manager-resolve")
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
         .set("Authorization", `Bearer ${token}`)
         .send({
           approve: true,
-          managerNote: "Verified - home is larger",
+          ownerNote: "Verified - home is larger",
           finalBeds: "5",
           finalBaths: "3",
         });
@@ -679,18 +679,18 @@ describe("HomeSizeAdjustment Router", () => {
       expect(mockFutureAppointments[2].update).toHaveBeenCalled();
     });
 
-    it("should NOT update appointments when manager denies", async () => {
+    it("should NOT update appointments when owner denies", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
       const mockHomeowner = createMockUser({ id: 1 });
       const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
-      const mockRequest = createMockRequest({ status: "pending_manager" });
+      const mockRequest = createMockRequest({ status: "pending_owner" });
       const mockHome = createMockHome();
       const mockAppointment = createMockAppointment();
 
       User.findByPk.mockImplementation((id) => {
-        if (id === 3) return Promise.resolve(mockManager);
+        if (id === 3) return Promise.resolve(mockOwner);
         if (id === 1) return Promise.resolve(mockHomeowner);
         if (id === 2) return Promise.resolve(mockCleaner);
       });
@@ -699,11 +699,11 @@ describe("HomeSizeAdjustment Router", () => {
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
 
       const res = await request(app)
-        .post("/api/v1/home-size-adjustment/1/manager-resolve")
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
         .set("Authorization", `Bearer ${token}`)
         .send({
           approve: false,
-          managerNote: "Home is correctly sized",
+          ownerNote: "Home is correctly sized",
         });
 
       expect(res.status).toBe(200);
@@ -713,28 +713,28 @@ describe("HomeSizeAdjustment Router", () => {
       expect(mockAppointment.update).not.toHaveBeenCalled();
     });
 
-    it("should require manager role", async () => {
-      const token = generateToken(1); // Not a manager
+    it("should require owner role", async () => {
+      const token = generateToken(1); // Not a owner
 
       User.findByPk.mockResolvedValue(createMockUser({ id: 1, type: "homeowner" }));
 
       const res = await request(app)
-        .post("/api/v1/home-size-adjustment/1/manager-resolve")
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
         .set("Authorization", `Bearer ${token}`)
-        .send({ approve: true, managerNote: "Test" });
+        .send({ approve: true, ownerNote: "Test" });
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Manager access required");
+      expect(res.body.error).toBe("Owner access required");
     });
 
-    it("should allow manager to override with custom bed/bath values", async () => {
+    it("should allow owner to override with custom bed/bath values", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
       const mockHomeowner = createMockUser({ id: 1 });
       const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
       const mockRequest = createMockRequest({
-        status: "pending_manager",
+        status: "pending_owner",
         reportedNumBeds: "4",
         reportedNumBaths: "3",
       });
@@ -742,7 +742,7 @@ describe("HomeSizeAdjustment Router", () => {
       const mockAppointment = createMockAppointment();
 
       User.findByPk.mockImplementation((id) => {
-        if (id === 3) return Promise.resolve(mockManager);
+        if (id === 3) return Promise.resolve(mockOwner);
         if (id === 1) return Promise.resolve(mockHomeowner);
         if (id === 2) return Promise.resolve(mockCleaner);
       });
@@ -752,11 +752,11 @@ describe("HomeSizeAdjustment Router", () => {
       UserAppointments.findAll.mockResolvedValue([]);
 
       const res = await request(app)
-        .post("/api/v1/home-size-adjustment/1/manager-resolve")
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
         .set("Authorization", `Bearer ${token}`)
         .send({
           approve: true,
-          managerNote: "Split the difference",
+          ownerNote: "Split the difference",
           finalBeds: "3.5", // Custom value
           finalBaths: "2.5", // Custom value
         });
@@ -764,7 +764,7 @@ describe("HomeSizeAdjustment Router", () => {
       expect(res.status).toBe(200);
       expect(res.body.finalBeds).toBe("3.5");
       expect(res.body.finalBaths).toBe("2.5");
-      // Home should be updated with manager's custom values
+      // Home should be updated with owner's custom values
       expect(mockHome.update).toHaveBeenCalledWith({
         numBeds: "3.5",
         numBaths: "2.5",
@@ -772,13 +772,13 @@ describe("HomeSizeAdjustment Router", () => {
     });
   });
 
-  describe("GET /:id - Single Request with Manager Fields", () => {
-    it("should include tracking fields and photos for managers", async () => {
+  describe("GET /:id - Single Request with Owner Fields", () => {
+    it("should include tracking fields and photos for owners", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
 
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
       HomeSizeAdjustmentRequest.findByPk.mockResolvedValue({
         ...createMockRequest(),
         home: createMockHome(),
@@ -800,17 +800,17 @@ describe("HomeSizeAdjustment Router", () => {
     it("should append notes with timestamp", async () => {
       const token = generateToken(3);
 
-      const mockManager = createMockUser({ id: 3, type: "manager", firstName: "Admin", lastName: "User" });
+      const mockOwner = createMockUser({ id: 3, type: "owner", firstName: "Admin", lastName: "User" });
       const mockCleaner = createMockUser({
         id: 2,
         type: "cleaner",
         falseClaimCount: 0,
-        managerPrivateNotes: null,
+        ownerPrivateNotes: null,
       });
-      const mockRequest = createMockRequest({ status: "pending_manager" });
+      const mockRequest = createMockRequest({ status: "pending_owner" });
 
       User.findByPk.mockImplementation((id) => {
-        if (id === 3) return Promise.resolve(mockManager);
+        if (id === 3) return Promise.resolve(mockOwner);
         if (id === 1) return Promise.resolve(createMockUser({ id: 1 }));
         if (id === 2) return Promise.resolve(mockCleaner);
       });
@@ -819,31 +819,31 @@ describe("HomeSizeAdjustment Router", () => {
       UserAppointments.findByPk.mockResolvedValue(createMockAppointment());
 
       await request(app)
-        .post("/api/v1/home-size-adjustment/1/manager-resolve")
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
         .set("Authorization", `Bearer ${token}`)
-        .send({ approve: false, managerNote: "Test denial" });
+        .send({ approve: false, ownerNote: "Test denial" });
 
       const updateCall = mockCleaner.update.mock.calls[0][0];
       // Note should contain timestamp format [YYYY-MM-DDTHH:mm:ss...]
-      expect(updateCall.managerPrivateNotes).toMatch(/\[\d{4}-\d{2}-\d{2}T/);
-      // Note should contain manager name
-      expect(updateCall.managerPrivateNotes).toContain("Admin User");
+      expect(updateCall.ownerPrivateNotes).toMatch(/\[\d{4}-\d{2}-\d{2}T/);
+      // Note should contain owner name
+      expect(updateCall.ownerPrivateNotes).toContain("Admin User");
     });
 
     it("should preserve existing notes when adding new ones", async () => {
       const token = generateToken(3);
 
       const existingNote = "[2025-01-01] Previous incident noted";
-      const mockManager = createMockUser({ id: 3, type: "manager" });
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
       const mockHomeowner = createMockUser({
         id: 1,
         falseHomeSizeCount: 1,
-        managerPrivateNotes: existingNote,
+        ownerPrivateNotes: existingNote,
       });
-      const mockRequest = createMockRequest({ status: "pending_manager" });
+      const mockRequest = createMockRequest({ status: "pending_owner" });
 
       User.findByPk.mockImplementation((id) => {
-        if (id === 3) return Promise.resolve(mockManager);
+        if (id === 3) return Promise.resolve(mockOwner);
         if (id === 1) return Promise.resolve(mockHomeowner);
         if (id === 2) return Promise.resolve(createMockUser({ id: 2, type: "cleaner" }));
       });
@@ -853,14 +853,14 @@ describe("HomeSizeAdjustment Router", () => {
       UserAppointments.findAll.mockResolvedValue([]);
 
       await request(app)
-        .post("/api/v1/home-size-adjustment/1/manager-resolve")
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
         .set("Authorization", `Bearer ${token}`)
-        .send({ approve: true, managerNote: "Second incident" });
+        .send({ approve: true, ownerNote: "Second incident" });
 
       const updateCall = mockHomeowner.update.mock.calls[0][0];
       // Should contain both old and new notes
-      expect(updateCall.managerPrivateNotes).toContain(existingNote);
-      expect(updateCall.managerPrivateNotes).toContain("HOME SIZE DISCREPANCY");
+      expect(updateCall.ownerPrivateNotes).toContain(existingNote);
+      expect(updateCall.ownerPrivateNotes).toContain("HOME SIZE DISCREPANCY");
     });
   });
 });

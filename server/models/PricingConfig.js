@@ -138,7 +138,7 @@ module.exports = (sequelize, DataTypes) => {
     updatedBy: {
       type: DataTypes.INTEGER,
       allowNull: true,
-      comment: "User ID of manager who made the update",
+      comment: "User ID of owner who made the update",
     },
     changeNote: {
       type: DataTypes.TEXT,
@@ -204,10 +204,10 @@ module.exports = (sequelize, DataTypes) => {
   /**
    * Create a new pricing config and deactivate the old one.
    * @param {Object} pricingData - New pricing values
-   * @param {number} managerId - ID of the manager making the change
+   * @param {number} ownerId - ID of the owner making the change
    * @param {string} changeNote - Optional note about the change
    */
-  PricingConfig.updatePricing = async (pricingData, managerId, changeNote = null) => {
+  PricingConfig.updatePricing = async (pricingData, ownerId, changeNote = null) => {
     const transaction = await sequelize.transaction();
 
     try {
@@ -222,7 +222,7 @@ module.exports = (sequelize, DataTypes) => {
         {
           ...pricingData,
           isActive: true,
-          updatedBy: managerId,
+          updatedBy: ownerId,
           changeNote,
         },
         { transaction }

@@ -1,6 +1,6 @@
 /**
- * Manager Dashboard Router
- * Provides analytics and financial data for the manager dashboard
+ * Owner Dashboard Router
+ * Provides analytics and financial data for the owner dashboard
  */
 
 const express = require("express");
@@ -25,11 +25,11 @@ const {
 } = require("../../../config/businessConfig");
 const EmailClass = require("../../../services/sendNotifications/EmailClass");
 
-const managerDashboardRouter = express.Router();
+const ownerDashboardRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
-// Middleware to verify manager access
-const verifyManager = async (req, res, next) => {
+// Middleware to verify owner access
+const verifyOwner = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -40,8 +40,8 @@ const verifyManager = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    if (!user || user.type !== "manager") {
-      return res.status(403).json({ error: "Manager access required" });
+    if (!user || user.type !== "owner") {
+      return res.status(403).json({ error: "Owner access required" });
     }
 
     req.user = user;
@@ -55,9 +55,9 @@ const verifyManager = async (req, res, next) => {
  * GET /financial-summary
  * Get platform financial summary
  */
-managerDashboardRouter.get(
+ownerDashboardRouter.get(
   "/financial-summary",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       const currentYear = new Date().getFullYear();
@@ -190,7 +190,7 @@ managerDashboardRouter.get(
         });
       } catch (earningsError) {
         console.error(
-          "[Manager Dashboard] Earnings query error:",
+          "[Owner Dashboard] Earnings query error:",
           earningsError.message
         );
         // Continue with defaults if PlatformEarnings table has issues
@@ -213,7 +213,7 @@ managerDashboardRouter.get(
         })),
       });
     } catch (error) {
-      console.error("[Manager Dashboard] Financial summary error:", error);
+      console.error("[Owner Dashboard] Financial summary error:", error);
       res.status(500).json({ error: "Failed to fetch financial summary" });
     }
   }
@@ -223,9 +223,9 @@ managerDashboardRouter.get(
  * GET /user-analytics
  * Get user analytics (cleaners, homeowners, activity)
  */
-managerDashboardRouter.get(
+ownerDashboardRouter.get(
   "/user-analytics",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       const now = new Date();
@@ -260,17 +260,17 @@ managerDashboardRouter.get(
       }).catch(() => 0);
       const totalHomeowners = homeownerCountResult;
 
-      // Registered users (non-cleaner, non-manager) - potential homeowners
+      // Registered users (non-cleaner, non-owner) - potential homeowners
       const totalRegisteredUsers = await User.count({
         where: {
           [Op.or]: [{ type: null }, { type: "" }, { type: "homeowner" }],
         },
       }).catch(() => 0);
 
-      // Managers: check for both "manager" and "manager1" types
-      const totalManagers = await User.count({
+      // Owners: check for both "owner" and "owner1" types
+      const totalOwners = await User.count({
         where: {
-          [Op.or]: [{ type: "manager" }, { type: "manager1" }],
+          [Op.or]: [{ type: "owner" }, { type: "owner1" }],
         },
       }).catch(() => 0);
 
@@ -358,7 +358,7 @@ managerDashboardRouter.get(
         });
       } catch (growthError) {
         console.error(
-          "[Manager Dashboard] User growth query error:",
+          "[Owner Dashboard] User growth query error:",
           growthError.message
         );
       }
@@ -389,13 +389,13 @@ managerDashboardRouter.get(
           cleanersWithAvailability: cleanersWithAvailability,
           // Users who have at least one home registered
           homeowners: totalHomeowners,
-          // All registered users (potential homeowners - no cleaner/manager type)
+          // All registered users (potential homeowners - no cleaner/owner type)
           registeredUsers: totalRegisteredUsers,
-          managers: totalManagers,
+          owners: totalOwners,
           // Total homes in the system
           homes: totalHomes,
-          // Total users (all cleaners + homeowners with homes + managers)
-          total: totalCleaners + totalHomeowners + totalManagers,
+          // Total users (all cleaners + homeowners with homes + owners)
+          total: totalCleaners + totalHomeowners + totalOwners,
         },
         applications: {
           total: totalApplications,
@@ -429,7 +429,7 @@ managerDashboardRouter.get(
         growth: Object.values(growthByMonth),
       });
     } catch (error) {
-      console.error("[Manager Dashboard] User analytics error:", error);
+      console.error("[Owner Dashboard] User analytics error:", error);
       res.status(500).json({ error: "Failed to fetch user analytics" });
     }
   }
@@ -439,9 +439,9 @@ managerDashboardRouter.get(
  * GET /appointments-analytics
  * Get appointment/booking analytics
  */
-managerDashboardRouter.get(
+ownerDashboardRouter.get(
   "/appointments-analytics",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       const now = new Date();
@@ -482,7 +482,7 @@ managerDashboardRouter.get(
         });
       } catch (monthlyError) {
         console.error(
-          "[Manager Dashboard] Appointments monthly query error:",
+          "[Owner Dashboard] Appointments monthly query error:",
           monthlyError.message
         );
       }
@@ -500,7 +500,7 @@ managerDashboardRouter.get(
         })),
       });
     } catch (error) {
-      console.error("[Manager Dashboard] Appointments analytics error:", error);
+      console.error("[Owner Dashboard] Appointments analytics error:", error);
       res.status(500).json({ error: "Failed to fetch appointment analytics" });
     }
   }
@@ -508,11 +508,11 @@ managerDashboardRouter.get(
 
 /**
  * GET /messages-summary
- * Get messages summary for manager
+ * Get messages summary for owner
  */
-managerDashboardRouter.get(
+ownerDashboardRouter.get(
   "/messages-summary",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       // Get recent conversations
@@ -548,7 +548,7 @@ managerDashboardRouter.get(
         });
       } catch (msgError) {
         console.error(
-          "[Manager Dashboard] Messages query error:",
+          "[Owner Dashboard] Messages query error:",
           msgError.message
         );
         // Continue with defaults if messages table has issues
@@ -572,7 +572,7 @@ managerDashboardRouter.get(
         })),
       });
     } catch (error) {
-      console.error("[Manager Dashboard] Messages summary error:", error);
+      console.error("[Owner Dashboard] Messages summary error:", error);
       res.status(500).json({ error: "Failed to fetch messages summary" });
     }
   }
@@ -582,7 +582,7 @@ managerDashboardRouter.get(
  * GET /quick-stats
  * Get quick overview stats
  */
-managerDashboardRouter.get("/quick-stats", verifyManager, async (req, res) => {
+ownerDashboardRouter.get("/quick-stats", verifyOwner, async (req, res) => {
   try {
     const now = new Date();
     const todayStart = new Date(now);
@@ -626,7 +626,7 @@ managerDashboardRouter.get("/quick-stats", verifyManager, async (req, res) => {
       completedThisWeek,
     });
   } catch (error) {
-    console.error("[Manager Dashboard] Quick stats error:", error);
+    console.error("[Owner Dashboard] Quick stats error:", error);
     res.status(500).json({ error: "Failed to fetch quick stats" });
   }
 });
@@ -635,9 +635,9 @@ managerDashboardRouter.get("/quick-stats", verifyManager, async (req, res) => {
  * GET /service-areas
  * Get current service area configuration
  */
-managerDashboardRouter.get(
+ownerDashboardRouter.get(
   "/service-areas",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       // Get count of homes outside service area
@@ -656,7 +656,7 @@ managerDashboardRouter.get(
         },
       });
     } catch (error) {
-      console.error("[Manager Dashboard] Service areas error:", error);
+      console.error("[Owner Dashboard] Service areas error:", error);
       res.status(500).json({ error: "Failed to fetch service areas" });
     }
   }
@@ -668,9 +668,9 @@ managerDashboardRouter.get(
  * Call this after modifying the service area settings
  * Sends email and in-app notifications to homeowners when status changes
  */
-managerDashboardRouter.post(
+ownerDashboardRouter.post(
   "/recheck-service-areas",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       const result = await updateAllHomesServiceAreaStatus(
@@ -685,7 +685,7 @@ managerDashboardRouter.post(
         ...result,
       });
     } catch (error) {
-      console.error("[Manager Dashboard] Recheck service areas error:", error);
+      console.error("[Owner Dashboard] Recheck service areas error:", error);
       res.status(500).json({ error: "Failed to recheck service areas" });
     }
   }
@@ -695,9 +695,9 @@ managerDashboardRouter.post(
  * GET /app-usage-analytics
  * Get app usage analytics (signups, activity metrics)
  */
-managerDashboardRouter.get(
+ownerDashboardRouter.get(
   "/app-usage-analytics",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       const now = new Date();
@@ -779,7 +779,7 @@ managerDashboardRouter.get(
 
           return Math.round((usersRetained / usersSignedUp) * 100);
         } catch (err) {
-          console.error(`[Manager Dashboard] Retention calculation error for day ${days}:`, err.message);
+          console.error(`[Owner Dashboard] Retention calculation error for day ${days}:`, err.message);
           return 0;
         }
       }
@@ -904,7 +904,7 @@ managerDashboardRouter.get(
         },
       });
     } catch (error) {
-      console.error("[Manager Dashboard] App usage analytics error:", error);
+      console.error("[Owner Dashboard] App usage analytics error:", error);
       res.status(500).json({ error: "Failed to fetch app usage analytics" });
     }
   }
@@ -914,9 +914,9 @@ managerDashboardRouter.get(
  * GET /homes-outside-service-area
  * Get list of homes currently outside the service area
  */
-managerDashboardRouter.get(
+ownerDashboardRouter.get(
   "/homes-outside-service-area",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       const homes = await UserHomes.findAll({
@@ -950,7 +950,7 @@ managerDashboardRouter.get(
         })),
       });
     } catch (error) {
-      console.error("[Manager Dashboard] Homes outside area error:", error);
+      console.error("[Owner Dashboard] Homes outside area error:", error);
       res
         .status(500)
         .json({ error: "Failed to fetch homes outside service area" });
@@ -967,9 +967,9 @@ managerDashboardRouter.get(
  * - Churn (cancellations)
  * - Cleaner reliability
  */
-managerDashboardRouter.get(
+ownerDashboardRouter.get(
   "/business-metrics",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       const now = new Date();
@@ -1210,7 +1210,7 @@ managerDashboardRouter.get(
         cleanerReliability,
       });
     } catch (error) {
-      console.error("[Manager Dashboard] Business metrics error:", error);
+      console.error("[Owner Dashboard] Business metrics error:", error);
       res.status(500).json({ error: "Failed to fetch business metrics" });
     }
   }
@@ -1218,31 +1218,31 @@ managerDashboardRouter.get(
 
 /**
  * GET /settings
- * Get manager's current settings including notification email
+ * Get owner's current settings including notification email
  */
-managerDashboardRouter.get("/settings", verifyManager, async (req, res) => {
+ownerDashboardRouter.get("/settings", verifyOwner, async (req, res) => {
   try {
-    const manager = req.user;
+    const owner = req.user;
 
     res.json({
-      email: manager.email,
-      notificationEmail: manager.notificationEmail,
-      effectiveNotificationEmail: manager.getNotificationEmail(),
-      notifications: manager.notifications || [],
+      email: owner.email,
+      notificationEmail: owner.notificationEmail,
+      effectiveNotificationEmail: owner.getNotificationEmail(),
+      notifications: owner.notifications || [],
     });
   } catch (error) {
-    console.error("[Manager Dashboard] Settings fetch error:", error);
+    console.error("[Owner Dashboard] Settings fetch error:", error);
     res.status(500).json({ error: "Failed to fetch settings" });
   }
 });
 
 /**
  * PUT /settings/notification-email
- * Update the email address for receiving manager notifications
+ * Update the email address for receiving owner notifications
  */
-managerDashboardRouter.put(
+ownerDashboardRouter.put(
   "/settings/notification-email",
-  verifyManager,
+  verifyOwner,
   async (req, res) => {
     try {
       const { notificationEmail } = req.body;
@@ -1269,10 +1269,10 @@ managerDashboardRouter.put(
         effectiveNotificationEmail: req.user.getNotificationEmail(),
       });
     } catch (error) {
-      console.error("[Manager Dashboard] Update notification email error:", error);
+      console.error("[Owner Dashboard] Update notification email error:", error);
       res.status(500).json({ error: "Failed to update notification email" });
     }
   }
 );
 
-module.exports = managerDashboardRouter;
+module.exports = ownerDashboardRouter;

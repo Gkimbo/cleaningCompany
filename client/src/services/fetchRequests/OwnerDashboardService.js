@@ -2,26 +2,26 @@ import { API_BASE } from "../config";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
-class ManagerDashboardService {
+class OwnerDashboardService {
   static async fetchWithFallback(url, token, fallback = {}) {
     try {
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) {
-        console.warn(`[ManagerDashboard] ${url} returned ${response.status}`);
+        console.warn(`[OwnerDashboard] ${url} returned ${response.status}`);
         return fallback;
       }
       return await response.json();
     } catch (error) {
-      console.warn(`[ManagerDashboard] ${url} failed:`, error.message);
+      console.warn(`[OwnerDashboard] ${url} failed:`, error.message);
       return fallback;
     }
   }
 
   static async getFinancialSummary(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/financial-summary`,
+      `${baseURL}/api/v1/owner-dashboard/financial-summary`,
       token,
       {
         current: {
@@ -40,10 +40,10 @@ class ManagerDashboardService {
 
   static async getUserAnalytics(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/user-analytics`,
+      `${baseURL}/api/v1/owner-dashboard/user-analytics`,
       token,
       {
-        totals: { cleaners: 0, homeowners: 0, managers: 0, homes: 0, total: 0 },
+        totals: { cleaners: 0, homeowners: 0, owners: 0, homes: 0, total: 0 },
         active: {
           cleaners: { day: 0, week: 0, month: 0, year: 0, allTime: 0 },
           homeowners: { day: 0, week: 0, month: 0, year: 0, allTime: 0 },
@@ -56,7 +56,7 @@ class ManagerDashboardService {
 
   static async getAppointmentsAnalytics(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/appointments-analytics`,
+      `${baseURL}/api/v1/owner-dashboard/appointments-analytics`,
       token,
       {
         totals: { total: 0, completed: 0, upcoming: 0 },
@@ -67,7 +67,7 @@ class ManagerDashboardService {
 
   static async getMessagesSummary(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/messages-summary`,
+      `${baseURL}/api/v1/owner-dashboard/messages-summary`,
       token,
       {
         unreadCount: 0,
@@ -80,7 +80,7 @@ class ManagerDashboardService {
 
   static async getQuickStats(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/quick-stats`,
+      `${baseURL}/api/v1/owner-dashboard/quick-stats`,
       token,
       {
         todaysAppointments: 0,
@@ -93,7 +93,7 @@ class ManagerDashboardService {
 
   static async getServiceAreas(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/service-areas`,
+      `${baseURL}/api/v1/owner-dashboard/service-areas`,
       token,
       {
         config: { enabled: false, cities: [], states: [], zipcodes: [] },
@@ -104,7 +104,7 @@ class ManagerDashboardService {
 
   static async getAppUsageAnalytics(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/app-usage-analytics`,
+      `${baseURL}/api/v1/owner-dashboard/app-usage-analytics`,
       token,
       {
         signups: {
@@ -152,7 +152,7 @@ class ManagerDashboardService {
 
   static async getBusinessMetrics(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/business-metrics`,
+      `${baseURL}/api/v1/owner-dashboard/business-metrics`,
       token,
       {
         costPerBooking: {
@@ -198,7 +198,7 @@ class ManagerDashboardService {
   static async recheckServiceAreas(token) {
     try {
       const response = await fetch(
-        `${baseURL}/api/v1/manager-dashboard/recheck-service-areas`,
+        `${baseURL}/api/v1/owner-dashboard/recheck-service-areas`,
         {
           method: "POST",
           headers: {
@@ -213,14 +213,14 @@ class ManagerDashboardService {
       }
       return await response.json();
     } catch (error) {
-      console.error("[ManagerDashboard] recheckServiceAreas failed:", error.message);
+      console.error("[OwnerDashboard] recheckServiceAreas failed:", error.message);
       return { success: false, error: "Network error. Please try again." };
     }
   }
 
   static async getSettings(token) {
     return this.fetchWithFallback(
-      `${baseURL}/api/v1/manager-dashboard/settings`,
+      `${baseURL}/api/v1/owner-dashboard/settings`,
       token,
       {
         email: "",
@@ -234,7 +234,7 @@ class ManagerDashboardService {
   static async updateNotificationEmail(token, notificationEmail) {
     try {
       const response = await fetch(
-        `${baseURL}/api/v1/manager-dashboard/settings/notification-email`,
+        `${baseURL}/api/v1/owner-dashboard/settings/notification-email`,
         {
           method: "PUT",
           headers: {
@@ -250,10 +250,10 @@ class ManagerDashboardService {
       }
       return await response.json();
     } catch (error) {
-      console.error("[ManagerDashboard] updateNotificationEmail failed:", error.message);
+      console.error("[OwnerDashboard] updateNotificationEmail failed:", error.message);
       return { success: false, error: "Network error. Please try again." };
     }
   }
 }
 
-export default ManagerDashboardService;
+export default OwnerDashboardService;

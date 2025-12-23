@@ -95,22 +95,22 @@ applicationRouter.post("/submitted", async (req, res) => {
       referenceCheckConsent,
     });
 
-    // Notify managers about the new application
+    // Notify owners about the new application
     try {
-      const managers = await User.findAll({
+      const owners = await User.findAll({
         where: {
-          [Op.or]: [{ type: "manager" }, { type: "manager1" }],
+          [Op.or]: [{ type: "owner" }, { type: "owner1" }],
         },
       });
 
       const applicantName = `${firstName} ${lastName}`;
 
-      for (const manager of managers) {
+      for (const owner of owners) {
         // Send email notification (use notificationEmail if set, otherwise main email)
-        const managerNotificationEmail = manager.getNotificationEmail();
-        if (managerNotificationEmail) {
+        const ownerNotificationEmail = owner.getNotificationEmail();
+        if (ownerNotificationEmail) {
           await Email.sendNewApplicationNotification(
-            managerNotificationEmail,
+            ownerNotificationEmail,
             applicantName,
             email,
             experience
@@ -118,41 +118,41 @@ applicationRouter.post("/submitted", async (req, res) => {
         }
 
         // Send push notification
-        if (manager.expoPushToken) {
+        if (owner.expoPushToken) {
           await PushNotification.sendPushNewApplication(
-            manager.expoPushToken,
+            owner.expoPushToken,
             applicantName
           );
         }
 
         // Add in-app notification
         const notification = {
-          id: Date.now().toString() + "-" + manager.id,
+          id: Date.now().toString() + "-" + owner.id,
           type: "new_application",
           title: "New Cleaner Application",
-          message: `${applicantName} has submitted a new cleaner application. Review it in the manager dashboard.`,
+          message: `${applicantName} has submitted a new cleaner application. Review it in the owner dashboard.`,
           applicantName,
           applicantEmail: email,
           read: false,
           createdAt: new Date().toISOString(),
         };
 
-        const currentNotifications = manager.notifications || [];
+        const currentNotifications = owner.notifications || [];
         // Handle case where notifications might be stored as strings
         const notificationsArray = Array.isArray(currentNotifications)
           ? currentNotifications
           : [];
 
-        await manager.update({
+        await owner.update({
           notifications: [...notificationsArray, JSON.stringify(notification)],
         });
       }
 
       console.log(
-        `✅ Notified ${managers.length} manager(s) about new application`
+        `✅ Notified ${owners.length} owner(s) about new application`
       );
     } catch (notifyError) {
-      console.error("Error notifying managers:", notifyError);
+      console.error("Error notifying owners:", notifyError);
       // Don't fail the application submission if notifications fail
     }
 

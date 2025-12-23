@@ -67,9 +67,9 @@ module.exports = (sequelize, DataTypes) => {
         'pending_homeowner',
         'approved',
         'denied',
-        'pending_manager',
-        'manager_approved',
-        'manager_denied',
+        'pending_owner',
+        'owner_approved',
+        'owner_denied',
         'expired'
       ),
       allowNull: false,
@@ -83,11 +83,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    managerNote: {
+    ownerNote: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    managerId: {
+    ownerId: {
       type: DataTypes.INTEGER,
       allowNull: true,
       references: { model: 'Users', key: 'id' },
@@ -104,7 +104,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
-    managerResolvedAt: {
+    ownerResolvedAt: {
       type: DataTypes.DATE,
       allowNull: true,
     },
@@ -132,8 +132,8 @@ module.exports = (sequelize, DataTypes) => {
       as: 'homeowner',
     });
     HomeSizeAdjustmentRequest.belongsTo(models.User, {
-      foreignKey: 'managerId',
-      as: 'manager',
+      foreignKey: 'ownerId',
+      as: 'owner',
     });
     HomeSizeAdjustmentRequest.hasMany(models.HomeSizeAdjustmentPhoto, {
       foreignKey: 'adjustmentRequestId',

@@ -76,44 +76,44 @@ const {
 } = require("../../models");
 const { updateAllHomesServiceAreaStatus } = require("../../config/businessConfig");
 
-const managerDashboardRouter = require("../../routes/api/v1/managerDashboardRouter");
+const ownerDashboardRouter = require("../../routes/api/v1/ownerDashboardRouter");
 const app = express();
 app.use(express.json());
-app.use("/api/v1/manager", managerDashboardRouter);
+app.use("/api/v1/owner", ownerDashboardRouter);
 
-describe("Manager Dashboard Router", () => {
+describe("Owner Dashboard Router", () => {
   const secretKey = process.env.SESSION_SECRET || "test_secret";
-  const managerToken = jwt.sign({ userId: 1 }, secretKey);
+  const ownerToken = jwt.sign({ userId: 1 }, secretKey);
   const cleanerToken = jwt.sign({ userId: 2 }, secretKey);
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default manager user mock
-    User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+    // Default owner user mock
+    User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
   });
 
   describe("Authentication", () => {
     it("should return 401 without authorization header", async () => {
-      const response = await request(app).get("/api/v1/manager/quick-stats");
+      const response = await request(app).get("/api/v1/owner/quick-stats");
 
       expect(response.status).toBe(401);
       expect(response.body.error).toBe("Unauthorized");
     });
 
-    it("should return 403 for non-manager user", async () => {
+    it("should return 403 for non-owner user", async () => {
       User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
 
       const response = await request(app)
-        .get("/api/v1/manager/quick-stats")
+        .get("/api/v1/owner/quick-stats")
         .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Manager access required");
+      expect(response.body.error).toBe("Owner access required");
     });
 
     it("should return 401 for invalid token", async () => {
       const response = await request(app)
-        .get("/api/v1/manager/quick-stats")
+        .get("/api/v1/owner/quick-stats")
         .set("Authorization", "Bearer invalid_token");
 
       expect(response.status).toBe(401);
@@ -132,8 +132,8 @@ describe("Manager Dashboard Router", () => {
       PlatformEarnings.findAll.mockResolvedValue([]);
 
       const response = await request(app)
-        .get("/api/v1/manager/financial-summary")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/financial-summary")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.current).toBeDefined();
@@ -145,8 +145,8 @@ describe("Manager Dashboard Router", () => {
       PlatformEarnings.findAll.mockResolvedValue([]);
 
       const response = await request(app)
-        .get("/api/v1/manager/financial-summary")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/financial-summary")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.current.todayCents).toBe(0);
@@ -163,8 +163,8 @@ describe("Manager Dashboard Router", () => {
 
     it("should return user analytics data", async () => {
       const response = await request(app)
-        .get("/api/v1/manager/user-analytics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/user-analytics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.totals).toBeDefined();
@@ -176,13 +176,13 @@ describe("Manager Dashboard Router", () => {
     it("should include cleaner and homeowner counts", async () => {
       User.count.mockImplementation(async ({ where }) => {
         if (where?.type === "cleaner") return 15;
-        if (where?.type === "manager" || where?.[require("sequelize").Op?.or]) return 2;
+        if (where?.type === "owner" || where?.[require("sequelize").Op?.or]) return 2;
         return 20;
       });
 
       const response = await request(app)
-        .get("/api/v1/manager/user-analytics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/user-analytics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.totals.cleaners).toBeDefined();
@@ -197,8 +197,8 @@ describe("Manager Dashboard Router", () => {
 
     it("should return appointment analytics", async () => {
       const response = await request(app)
-        .get("/api/v1/manager/appointments-analytics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/appointments-analytics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.totals).toBeDefined();
@@ -212,8 +212,8 @@ describe("Manager Dashboard Router", () => {
         .mockResolvedValueOnce(15); // upcoming
 
       const response = await request(app)
-        .get("/api/v1/manager/appointments-analytics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/appointments-analytics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.totals.total).toBe(100);
@@ -231,8 +231,8 @@ describe("Manager Dashboard Router", () => {
 
     it("should return messages summary", async () => {
       const response = await request(app)
-        .get("/api/v1/manager/messages-summary")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/messages-summary")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.totalMessages).toBeDefined();
@@ -243,8 +243,8 @@ describe("Manager Dashboard Router", () => {
       Conversation.count.mockResolvedValue(3);
 
       const response = await request(app)
-        .get("/api/v1/manager/messages-summary")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/messages-summary")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.unreadCount).toBe(3);
@@ -260,8 +260,8 @@ describe("Manager Dashboard Router", () => {
 
     it("should return quick stats", async () => {
       const response = await request(app)
-        .get("/api/v1/manager/quick-stats")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/quick-stats")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.todaysAppointments).toBeDefined();
@@ -282,8 +282,8 @@ describe("Manager Dashboard Router", () => {
         .mockResolvedValueOnce(10); // total homes
 
       const response = await request(app)
-        .get("/api/v1/manager/service-areas")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/service-areas")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.config).toBeDefined();
@@ -301,8 +301,8 @@ describe("Manager Dashboard Router", () => {
       });
 
       const response = await request(app)
-        .post("/api/v1/manager/recheck-service-areas")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .post("/api/v1/owner/recheck-service-areas")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
@@ -313,8 +313,8 @@ describe("Manager Dashboard Router", () => {
       updateAllHomesServiceAreaStatus.mockRejectedValue(new Error("Database error"));
 
       const response = await request(app)
-        .post("/api/v1/manager/recheck-service-areas")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .post("/api/v1/owner/recheck-service-areas")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(500);
     });
@@ -335,8 +335,8 @@ describe("Manager Dashboard Router", () => {
       ]);
 
       const response = await request(app)
-        .get("/api/v1/manager/homes-outside-service-area")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/homes-outside-service-area")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(1);
@@ -348,8 +348,8 @@ describe("Manager Dashboard Router", () => {
       UserHomes.findAll.mockResolvedValue([]);
 
       const response = await request(app)
-        .get("/api/v1/manager/homes-outside-service-area")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/homes-outside-service-area")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(0);
@@ -358,71 +358,71 @@ describe("Manager Dashboard Router", () => {
   });
 
   describe("GET /settings", () => {
-    it("should return manager settings including notification email", async () => {
-      const mockManager = {
+    it("should return owner settings including notification email", async () => {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: "alerts@test.com",
         notifications: ["email", "phone"],
         getNotificationEmail: function () {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .get("/api/v1/manager/settings")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/settings")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.email).toBe("manager@test.com");
+      expect(response.body.email).toBe("owner@test.com");
       expect(response.body.notificationEmail).toBe("alerts@test.com");
       expect(response.body.effectiveNotificationEmail).toBe("alerts@test.com");
       expect(response.body.notifications).toEqual(["email", "phone"]);
     });
 
     it("should return main email as effective when notificationEmail is null", async () => {
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: null,
         notifications: [],
         getNotificationEmail: function () {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .get("/api/v1/manager/settings")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/settings")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.email).toBe("manager@test.com");
+      expect(response.body.email).toBe("owner@test.com");
       expect(response.body.notificationEmail).toBeNull();
-      expect(response.body.effectiveNotificationEmail).toBe("manager@test.com");
+      expect(response.body.effectiveNotificationEmail).toBe("owner@test.com");
     });
 
-    it("should require manager authentication", async () => {
+    it("should require owner authentication", async () => {
       User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
 
       const response = await request(app)
-        .get("/api/v1/manager/settings")
+        .get("/api/v1/owner/settings")
         .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Manager access required");
+      expect(response.body.error).toBe("Owner access required");
     });
   });
 
   describe("PUT /settings/notification-email", () => {
     it("should update notification email successfully", async () => {
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: null,
         update: jest.fn().mockImplementation(function (data) {
           Object.assign(this, data);
@@ -432,27 +432,27 @@ describe("Manager Dashboard Router", () => {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .put("/api/v1/manager/settings/notification-email")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .put("/api/v1/owner/settings/notification-email")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ notificationEmail: "alerts@test.com" });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.notificationEmail).toBe("alerts@test.com");
       expect(response.body.effectiveNotificationEmail).toBe("alerts@test.com");
-      expect(mockManager.update).toHaveBeenCalledWith({
+      expect(mockOwner.update).toHaveBeenCalledWith({
         notificationEmail: "alerts@test.com",
       });
     });
 
     it("should clear notification email when empty string provided", async () => {
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: "alerts@test.com",
         update: jest.fn().mockImplementation(function (data) {
           Object.assign(this, data);
@@ -462,27 +462,27 @@ describe("Manager Dashboard Router", () => {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .put("/api/v1/manager/settings/notification-email")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .put("/api/v1/owner/settings/notification-email")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ notificationEmail: "" });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.notificationEmail).toBeNull();
-      expect(response.body.effectiveNotificationEmail).toBe("manager@test.com");
-      expect(mockManager.update).toHaveBeenCalledWith({
+      expect(response.body.effectiveNotificationEmail).toBe("owner@test.com");
+      expect(mockOwner.update).toHaveBeenCalledWith({
         notificationEmail: null,
       });
     });
 
     it("should clear notification email when null provided", async () => {
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: "alerts@test.com",
         update: jest.fn().mockImplementation(function (data) {
           Object.assign(this, data);
@@ -492,59 +492,59 @@ describe("Manager Dashboard Router", () => {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .put("/api/v1/manager/settings/notification-email")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .put("/api/v1/owner/settings/notification-email")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ notificationEmail: null });
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(mockManager.update).toHaveBeenCalledWith({
+      expect(mockOwner.update).toHaveBeenCalledWith({
         notificationEmail: null,
       });
     });
 
     it("should reject invalid email format", async () => {
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: null,
         update: jest.fn(),
         getNotificationEmail: function () {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .put("/api/v1/manager/settings/notification-email")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .put("/api/v1/owner/settings/notification-email")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ notificationEmail: "invalid-email" });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe("Invalid email format");
-      expect(mockManager.update).not.toHaveBeenCalled();
+      expect(mockOwner.update).not.toHaveBeenCalled();
     });
 
     it("should reject email without @ symbol", async () => {
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: null,
         update: jest.fn(),
         getNotificationEmail: function () {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .put("/api/v1/manager/settings/notification-email")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .put("/api/v1/owner/settings/notification-email")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ notificationEmail: "notanemail.com" });
 
       expect(response.status).toBe(400);
@@ -552,10 +552,10 @@ describe("Manager Dashboard Router", () => {
     });
 
     it("should trim whitespace from email", async () => {
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: null,
         update: jest.fn().mockImplementation(function (data) {
           Object.assign(this, data);
@@ -565,47 +565,47 @@ describe("Manager Dashboard Router", () => {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .put("/api/v1/manager/settings/notification-email")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .put("/api/v1/owner/settings/notification-email")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ notificationEmail: "  alerts@test.com  " });
 
       expect(response.status).toBe(200);
-      expect(mockManager.update).toHaveBeenCalledWith({
+      expect(mockOwner.update).toHaveBeenCalledWith({
         notificationEmail: "alerts@test.com",
       });
     });
 
-    it("should require manager authentication", async () => {
+    it("should require owner authentication", async () => {
       User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
 
       const response = await request(app)
-        .put("/api/v1/manager/settings/notification-email")
+        .put("/api/v1/owner/settings/notification-email")
         .set("Authorization", `Bearer ${cleanerToken}`)
         .send({ notificationEmail: "alerts@test.com" });
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Manager access required");
+      expect(response.body.error).toBe("Owner access required");
     });
 
     it("should handle database errors gracefully", async () => {
-      const mockManager = {
+      const mockOwner = {
         id: 1,
-        type: "manager",
-        email: "manager@test.com",
+        type: "owner",
+        email: "owner@test.com",
         notificationEmail: null,
         update: jest.fn().mockRejectedValue(new Error("Database error")),
         getNotificationEmail: function () {
           return this.notificationEmail || this.email;
         },
       };
-      User.findByPk.mockResolvedValue(mockManager);
+      User.findByPk.mockResolvedValue(mockOwner);
 
       const response = await request(app)
-        .put("/api/v1/manager/settings/notification-email")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .put("/api/v1/owner/settings/notification-email")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ notificationEmail: "alerts@test.com" });
 
       expect(response.status).toBe(500);
@@ -623,7 +623,7 @@ describe("Manager Dashboard Router", () => {
       UserReviews.count.mockReset();
       User.findAll.mockReset();
       User.findOne.mockReset();
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
     });
 
     it("should return all business metrics", async () => {
@@ -655,8 +655,8 @@ describe("Manager Dashboard Router", () => {
       User.findOne.mockResolvedValue({ avgRating: 4.65 });
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/business-metrics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.costPerBooking).toBeDefined();
@@ -680,8 +680,8 @@ describe("Manager Dashboard Router", () => {
       User.findOne.mockResolvedValue(null);
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/business-metrics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.costPerBooking.avgFeeCents).toBe(1250);
@@ -705,8 +705,8 @@ describe("Manager Dashboard Router", () => {
       User.findOne.mockResolvedValue(null);
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/business-metrics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       // 3 repeat bookers (5, 3, 2 bookings) out of 5 total = 60%
@@ -733,8 +733,8 @@ describe("Manager Dashboard Router", () => {
       User.findOne.mockResolvedValue(null);
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/business-metrics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       // 2 frequent bookers out of 6 = 33%
@@ -757,8 +757,8 @@ describe("Manager Dashboard Router", () => {
       User.findOne.mockResolvedValue(null);
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/business-metrics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.churn.homeownerCancellations.usersWithCancellations).toBe(10);
@@ -787,8 +787,8 @@ describe("Manager Dashboard Router", () => {
       User.findOne.mockResolvedValue({ avgRating: 4.7 });
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/business-metrics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.cleanerReliability.overallCompletionRate).toBe(95);
@@ -809,8 +809,8 @@ describe("Manager Dashboard Router", () => {
       User.findOne.mockResolvedValue(null);
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/business-metrics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.costPerBooking.avgFeeCents).toBe(0);
@@ -819,15 +819,15 @@ describe("Manager Dashboard Router", () => {
       expect(response.body.cleanerReliability.overallCompletionRate).toBe(0);
     });
 
-    it("should require manager authentication", async () => {
+    it("should require owner authentication", async () => {
       User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
+        .get("/api/v1/owner/business-metrics")
         .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe("Manager access required");
+      expect(response.body.error).toBe("Owner access required");
     });
 
     it("should handle database errors gracefully", async () => {
@@ -840,8 +840,8 @@ describe("Manager Dashboard Router", () => {
       User.findOne.mockRejectedValue(new Error("Database error"));
 
       const response = await request(app)
-        .get("/api/v1/manager/business-metrics")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .get("/api/v1/owner/business-metrics")
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       // Should still return 200 with default values due to try-catch blocks
       expect(response.status).toBe(200);

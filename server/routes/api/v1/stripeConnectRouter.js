@@ -1099,7 +1099,7 @@ async function handleAccountUpdated(account) {
     // Could send notification email here
     const user = await User.findByPk(connectAccount.userId);
     if (user) {
-      console.log(`[StripeConnect] User ${user.id} (${user.email}) can now receive payouts`);
+      console.log(`[StripeConnect] User ${user.id} can now receive payouts`);
     }
   }
 }

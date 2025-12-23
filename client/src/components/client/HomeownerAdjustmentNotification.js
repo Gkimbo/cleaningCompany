@@ -231,7 +231,7 @@ const HomeownerAdjustmentNotification = ({ adjustment, token, onResponse, onDism
                     </TouchableOpacity>
 
                     <Text style={styles.infoText}>
-                      If you dispute, a manager will review the case within 24 hours.
+                      If you dispute, a owner will review the case within 24 hours.
                     </Text>
                   </View>
                 ) : (

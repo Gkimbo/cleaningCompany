@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -10,6 +11,7 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import FetchData from "../../services/fetchRequests/fetchData";
+import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const AccountSettings = ({ state, dispatch }) => {
@@ -26,6 +28,85 @@ const AccountSettings = ({ state, dispatch }) => {
   const [errors, setErrors] = useState([]);
   const [successMessage, setSuccessMessage] = useState("");
 
+  // Owner notification email settings
+  const [ownerSettings, setOwnerSettings] = useState(null);
+  const [notificationEmailInput, setNotificationEmailInput] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [emailSaveResult, setEmailSaveResult] = useState(null);
+  const [loadingOwnerSettings, setLoadingOwnerSettings] = useState(false);
+
+  const isOwner = state.account === "owner1";
+
+  useEffect(() => {
+    if (isOwner && state.currentUser.token) {
+      fetchOwnerSettings();
+    }
+  }, [isOwner, state.currentUser.token]);
+
+  const fetchOwnerSettings = async () => {
+    setLoadingOwnerSettings(true);
+    try {
+      const settings = await OwnerDashboardService.getSettings(state.currentUser.token);
+      setOwnerSettings(settings);
+      setNotificationEmailInput(settings.notificationEmail || "");
+    } catch (err) {
+      console.error("Failed to fetch owner settings:", err);
+    } finally {
+      setLoadingOwnerSettings(false);
+    }
+  };
+
+  const handleSaveNotificationEmail = async () => {
+    setSavingEmail(true);
+    setEmailSaveResult(null);
+    try {
+      const result = await OwnerDashboardService.updateNotificationEmail(
+        state.currentUser.token,
+        notificationEmailInput.trim() || null
+      );
+      if (result.success) {
+        setEmailSaveResult({ success: true, message: result.message });
+        setOwnerSettings((prev) => ({
+          ...prev,
+          notificationEmail: result.notificationEmail,
+          effectiveNotificationEmail: result.effectiveNotificationEmail,
+        }));
+      } else {
+        setEmailSaveResult({ success: false, error: result.error });
+      }
+    } catch (err) {
+      setEmailSaveResult({ success: false, error: "Failed to save notification email" });
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
+  const handleClearNotificationEmail = async () => {
+    setNotificationEmailInput("");
+    setSavingEmail(true);
+    setEmailSaveResult(null);
+    try {
+      const result = await OwnerDashboardService.updateNotificationEmail(
+        state.currentUser.token,
+        null
+      );
+      if (result.success) {
+        setEmailSaveResult({ success: true, message: result.message });
+        setOwnerSettings((prev) => ({
+          ...prev,
+          notificationEmail: null,
+          effectiveNotificationEmail: result.effectiveNotificationEmail,
+        }));
+      } else {
+        setEmailSaveResult({ success: false, error: result.error });
+      }
+    } catch (err) {
+      setEmailSaveResult({ success: false, error: "Failed to clear notification email" });
+    } finally {
+      setSavingEmail(false);
+    }
+  };
+
   const validateUsername = () => {
     const validationErrors = [];
     if (username.length < 4) {
@@ -37,8 +118,8 @@ const AccountSettings = ({ state, dispatch }) => {
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       validationErrors.push("Username can only contain letters, numbers, and underscores.");
     }
-    if (username.toLowerCase().includes("manager")) {
-      validationErrors.push("Username cannot contain the word 'manager'.");
+    if (username.toLowerCase().includes("owner")) {
+      validationErrors.push("Username cannot contain the word 'owner'.");
     }
     return validationErrors;
   };
@@ -241,8 +322,8 @@ const AccountSettings = ({ state, dispatch }) => {
         </View>
       )}
 
-      {/* Username Section - hidden for managers */}
-      {state.account !== "manager1" && (
+      {/* Username Section - hidden for owners */}
+      {state.account !== "owner1" && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Change Username</Text>
           <Text style={styles.sectionDescription}>
@@ -272,8 +353,8 @@ const AccountSettings = ({ state, dispatch }) => {
         </View>
       )}
 
-      {/* Email Section - hidden for managers */}
-      {state.account !== "manager1" && (
+      {/* Email Section - hidden for owners */}
+      {state.account !== "owner1" && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Change Email</Text>
           <Text style={styles.sectionDescription}>
@@ -419,6 +500,79 @@ const AccountSettings = ({ state, dispatch }) => {
           </Text>
         </Pressable>
       </View>
+
+      {/* Owner Notification Email Settings - Only visible to owners */}
+      {isOwner && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notification Email</Text>
+          <Text style={styles.sectionDescription}>
+            Set a separate email address to receive owner notifications (new applications, home size disputes, etc.).
+            Leave blank to use your main account email.
+          </Text>
+
+          {loadingOwnerSettings ? (
+            <ActivityIndicator size="small" color={colors.primary[600]} />
+          ) : (
+            <>
+              <View style={styles.currentEmailBox}>
+                <Text style={styles.currentEmailLabel}>Currently sending to:</Text>
+                <Text style={styles.currentEmailValue}>
+                  {ownerSettings?.effectiveNotificationEmail || ownerSettings?.email || "Not set"}
+                </Text>
+              </View>
+
+              <View style={styles.emailInputRow}>
+                <TextInput
+                  style={styles.notificationEmailInput}
+                  placeholder="notification@example.com"
+                  placeholderTextColor={colors.text.tertiary}
+                  value={notificationEmailInput}
+                  onChangeText={setNotificationEmailInput}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {notificationEmailInput !== (ownerSettings?.notificationEmail || "") && (
+                  <Pressable
+                    style={[styles.saveEmailBtn, savingEmail && styles.buttonDisabled]}
+                    onPress={handleSaveNotificationEmail}
+                    disabled={savingEmail}
+                  >
+                    {savingEmail ? (
+                      <ActivityIndicator size="small" color={colors.neutral[0]} />
+                    ) : (
+                      <Text style={styles.saveEmailBtnText}>Save</Text>
+                    )}
+                  </Pressable>
+                )}
+              </View>
+
+              {ownerSettings?.notificationEmail && (
+                <Pressable
+                  style={styles.clearEmailLink}
+                  onPress={handleClearNotificationEmail}
+                  disabled={savingEmail}
+                >
+                  <Text style={styles.clearEmailLinkText}>
+                    Clear and use main email ({ownerSettings?.email})
+                  </Text>
+                </Pressable>
+              )}
+
+              {emailSaveResult && (
+                <View style={[
+                  styles.emailResultBox,
+                  emailSaveResult.success ? styles.emailResultSuccess : styles.emailResultError,
+                ]}>
+                  <Text style={emailSaveResult.success ? styles.emailResultSuccessText : styles.emailResultErrorText}>
+                    {emailSaveResult.success ? emailSaveResult.message : emailSaveResult.error}
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+      )}
 
       {/* Security Tips */}
       <View style={styles.tipsSection}>
@@ -595,6 +749,84 @@ const styles = StyleSheet.create({
   tipText: {
     fontSize: typography.fontSize.sm,
     color: colors.primary[700],
+  },
+
+  // Notification Email Styles (for owners)
+  currentEmailBox: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  currentEmailLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 4,
+  },
+  currentEmailValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  emailInputRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  notificationEmailInput: {
+    flex: 1,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  saveEmailBtn: {
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 70,
+  },
+  saveEmailBtnText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  clearEmailLink: {
+    paddingVertical: spacing.sm,
+  },
+  clearEmailLinkText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    textDecorationLine: "underline",
+  },
+  emailResultBox: {
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  emailResultSuccess: {
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  emailResultError: {
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  emailResultSuccessText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+  },
+  emailResultErrorText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[700],
   },
 });
 

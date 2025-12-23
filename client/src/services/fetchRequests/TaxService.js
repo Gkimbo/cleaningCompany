@@ -117,7 +117,7 @@ class TaxService {
   }
 
   /**
-   * Get platform income summary (for manager/company)
+   * Get platform income summary (for owner/company)
    */
   static async getPlatformIncomeSummary(token, taxYear) {
     try {
@@ -140,7 +140,7 @@ class TaxService {
   }
 
   /**
-   * Get comprehensive platform tax report (for manager/company)
+   * Get comprehensive platform tax report (for owner/company)
    */
   static async getPlatformTaxReport(token, taxYear) {
     try {
@@ -163,7 +163,7 @@ class TaxService {
   }
 
   /**
-   * Get Schedule C data (for manager/company)
+   * Get Schedule C data (for owner/company)
    */
   static async getScheduleCData(token, taxYear) {
     try {
@@ -209,7 +209,7 @@ class TaxService {
   }
 
   /**
-   * Get quarterly estimated tax info (for manager/company)
+   * Get quarterly estimated tax info (for owner/company)
    */
   static async getQuarterlyTax(token, taxYear, quarter) {
     try {

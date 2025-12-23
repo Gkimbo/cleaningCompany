@@ -286,18 +286,18 @@ describe("EmailClass", () => {
       expect(mailOptions.html).toContain("Cleaner");
     });
 
-    it("should show correct role title for manager", async () => {
+    it("should show correct role title for owner", async () => {
       await Email.sendEmailCongragulations(
         "Admin",
         "User",
         "admin1",
         "AdminPass",
         "admin@example.com",
-        "manager"
+        "owner"
       );
 
       const mailOptions = mockSendMail.mock.calls[0][0];
-      expect(mailOptions.html).toContain("Manager");
+      expect(mailOptions.html).toContain("Owner");
     });
 
     it("should include security warning", async () => {
@@ -689,9 +689,9 @@ describe("EmailClass", () => {
   });
 
   describe("sendNewApplicationNotification", () => {
-    it("should send application notification to manager", async () => {
+    it("should send application notification to owner", async () => {
       await Email.sendNewApplicationNotification(
-        "manager@example.com",
+        "owner@example.com",
         "Jane Doe",
         "jane@applicant.com",
         "3 years professional cleaning"
@@ -699,7 +699,7 @@ describe("EmailClass", () => {
 
       expect(mockSendMail).toHaveBeenCalledTimes(1);
       const mailOptions = mockSendMail.mock.calls[0][0];
-      expect(mailOptions.to).toBe("manager@example.com");
+      expect(mailOptions.to).toBe("owner@example.com");
       expect(mailOptions.subject).toContain("Jane Doe");
       expect(mailOptions.html).toContain("Jane Doe");
       expect(mailOptions.html).toContain("jane@applicant.com");
@@ -707,7 +707,7 @@ describe("EmailClass", () => {
 
     it("should include experience in email", async () => {
       await Email.sendNewApplicationNotification(
-        "manager@example.com",
+        "owner@example.com",
         "Jane Doe",
         "jane@applicant.com",
         "5 years hotel housekeeping"
@@ -719,7 +719,7 @@ describe("EmailClass", () => {
 
     it("should handle missing experience", async () => {
       await Email.sendNewApplicationNotification(
-        "manager@example.com",
+        "owner@example.com",
         "Jane Doe",
         "jane@applicant.com",
         null
@@ -729,9 +729,9 @@ describe("EmailClass", () => {
       expect(mailOptions.html).toContain("Not specified");
     });
 
-    it("should include next steps for manager", async () => {
+    it("should include next steps for owner", async () => {
       await Email.sendNewApplicationNotification(
-        "manager@example.com",
+        "owner@example.com",
         "Jane Doe",
         "jane@applicant.com",
         "3 years"

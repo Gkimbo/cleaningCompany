@@ -1,3 +1,6 @@
+// Set required environment variables before importing modules
+process.env.TAX_ENCRYPTION_KEY = "test-encryption-key-at-least-32-chars-long!!";
+
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");

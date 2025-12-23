@@ -41,8 +41,8 @@ const SignUpForm = ({ state, dispatch }) => {
 			validationErrors.push("Username must be between 4 and 12 characters.");
 		}
 
-		if (userName.toLowerCase().includes("manager")) {
-			validationErrors.push("Username cannot contain the word 'manager'.");
+		if (userName.toLowerCase().includes("owner")) {
+			validationErrors.push("Username cannot contain the word 'owner'.");
 		}
 
 		const uppercaseCount = (password.match(/[A-Z]/g) || []).length;

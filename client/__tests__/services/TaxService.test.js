@@ -203,7 +203,7 @@ describe("TaxService", () => {
   });
 
   describe("getPlatformIncomeSummary", () => {
-    it("should fetch platform income summary for manager", async () => {
+    it("should fetch platform income summary for owner", async () => {
       const mockSummary = {
         taxYear: 2024,
         annual: {

@@ -94,13 +94,16 @@ describe("Authentication Routes", () => {
       expect(res.body.requiresTermsAcceptance).toBe(false);
     });
 
-    it("should return 401 for invalid password", async () => {
+    it("should return 401 for invalid password (generic error to prevent enumeration)", async () => {
       const hashedPassword = await bcrypt.hash("testpassword", 10);
 
       User.findOne.mockResolvedValue({
         id: 1,
         username: "testuser",
         password: hashedPassword,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        update: jest.fn().mockResolvedValue(true),
       });
 
       const res = await request(app)
@@ -111,10 +114,10 @@ describe("Authentication Routes", () => {
         });
 
       expect(res.status).toBe(401);
-      expect(res.body.error).toBe("Invalid password");
+      expect(res.body.error).toBe("Invalid credentials"); // Generic error prevents username enumeration
     });
 
-    it("should return 404 for non-existent user", async () => {
+    it("should return 401 for non-existent user (generic error to prevent enumeration)", async () => {
       User.findOne.mockResolvedValue(null);
 
       const res = await request(app)
@@ -124,8 +127,8 @@ describe("Authentication Routes", () => {
           password: "anypassword",
         });
 
-      expect(res.status).toBe(404);
-      expect(res.body.error).toBe("No account found");
+      expect(res.status).toBe(401); // Same status for non-existent user
+      expect(res.body.error).toBe("Invalid credentials"); // Generic error prevents username enumeration
     });
   });
 
@@ -213,7 +216,7 @@ describe("User Registration Routes", () => {
         .post("/api/v1/users")
         .send({
           username: "newuser",
-          password: "testpassword123",
+          password: "TestPass123!", // Strong password meeting all requirements
           email: "new@example.com",
         });
 
@@ -229,7 +232,7 @@ describe("User Registration Routes", () => {
         .post("/api/v1/users")
         .send({
           username: "newuser",
-          password: "testpassword123",
+          password: "TestPass123!", // Strong password meeting all requirements
           email: "existing@example.com",
         });
 
@@ -245,7 +248,7 @@ describe("User Registration Routes", () => {
         .post("/api/v1/users")
         .send({
           username: "existinguser",
-          password: "testpassword123",
+          password: "TestPass123!", // Strong password meeting all requirements
           email: "new@example.com",
         });
 

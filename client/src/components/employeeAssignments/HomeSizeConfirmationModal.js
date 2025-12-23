@@ -558,7 +558,7 @@ const HomeSizeConfirmationModal = ({
 
                   <View style={styles.infoBox}>
                     <Text style={styles.infoText}>
-                      The homeowner will be notified to confirm your report. Photos will only be visible to managers if the report is disputed.
+                      The homeowner will be notified to confirm your report. Photos will only be visible to owners if the report is disputed.
                     </Text>
                   </View>
 

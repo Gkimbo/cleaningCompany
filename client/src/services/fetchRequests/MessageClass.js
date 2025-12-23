@@ -97,7 +97,7 @@ class MessageService {
   }
 
   /**
-   * Send a broadcast message (manager only)
+   * Send a broadcast message (owner only)
    */
   static async sendBroadcast(content, targetAudience, title, token) {
     try {
@@ -165,7 +165,7 @@ class MessageService {
   }
 
   /**
-   * Create or get a support conversation with the manager
+   * Create or get a support conversation with the owner
    */
   static async createSupportConversation(token) {
     try {

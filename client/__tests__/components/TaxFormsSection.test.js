@@ -24,13 +24,13 @@ describe("TaxFormsSection Component", () => {
       expect(state.account).toBe("cleaner");
     });
 
-    it("should identify manager user type", () => {
+    it("should identify owner user type", () => {
       const state = {
-        account: "manager1",
+        account: "owner1",
         currentUser: { token: "test_token", id: 1 },
       };
 
-      expect(state.account).toBe("manager1");
+      expect(state.account).toBe("owner1");
     });
 
     it("should identify homeowner (null account)", () => {
@@ -109,7 +109,7 @@ describe("TaxFormsSection Component", () => {
     });
   });
 
-  describe("Manager Tax Data Fetching", () => {
+  describe("Owner Tax Data Fetching", () => {
     it("should fetch platform comprehensive report from correct endpoint", async () => {
       const mockResponse = {
         taxYear: 2024,
@@ -296,7 +296,7 @@ describe("TaxFormsSection Component", () => {
       const getEndpoint = (type, year) => {
         if (type === "cleaner") {
           return `/api/v1/tax/contractor/tax-summary/${year}`;
-        } else if (type === "manager1") {
+        } else if (type === "owner1") {
           return `/api/v1/tax/platform/comprehensive-report/${year}`;
         } else {
           return `/api/v1/tax/payment-history/${year}`;
@@ -306,13 +306,13 @@ describe("TaxFormsSection Component", () => {
       expect(getEndpoint(userType, 2024)).toBe("/api/v1/tax/contractor/tax-summary/2024");
     });
 
-    it("should call manager endpoint for manager1 account", () => {
-      const userType = "manager1";
+    it("should call owner endpoint for owner1 account", () => {
+      const userType = "owner1";
 
       const getEndpoint = (type, year) => {
         if (type === "cleaner") {
           return `/api/v1/tax/contractor/tax-summary/${year}`;
-        } else if (type === "manager1") {
+        } else if (type === "owner1") {
           return `/api/v1/tax/platform/comprehensive-report/${year}`;
         } else {
           return `/api/v1/tax/payment-history/${year}`;
@@ -328,7 +328,7 @@ describe("TaxFormsSection Component", () => {
       const getEndpoint = (type, year) => {
         if (type === "cleaner") {
           return `/api/v1/tax/contractor/tax-summary/${year}`;
-        } else if (type === "manager1") {
+        } else if (type === "owner1") {
           return `/api/v1/tax/platform/comprehensive-report/${year}`;
         } else {
           return `/api/v1/tax/payment-history/${year}`;

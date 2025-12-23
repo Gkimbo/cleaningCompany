@@ -1,6 +1,6 @@
 /**
- * Tests for notification email routing in manager notifications
- * Verifies that manager.getNotificationEmail() is used instead of manager.email
+ * Tests for notification email routing in owner notifications
+ * Verifies that owner.getNotificationEmail() is used instead of owner.email
  */
 
 const express = require("express");
@@ -27,7 +27,7 @@ jest.mock("../../models", () => ({
 // Mock Email class
 jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendNewApplicationNotification: jest.fn().mockResolvedValue(true),
-  sendAdjustmentNeedsManagerReview: jest.fn().mockResolvedValue(true),
+  sendAdjustmentNeedsOwnerReview: jest.fn().mockResolvedValue(true),
 }));
 
 // Mock Push notification
@@ -68,7 +68,7 @@ describe("Notification Email Routing", () => {
       type: "homeowner",
       notifications: ["email", "phone"],
       expoPushToken: null,
-      managerPrivateNotes: null,
+      ownerPrivateNotes: null,
       update: jest.fn().mockImplementation(function (data) {
         Object.assign(this, data);
         return Promise.resolve(this);
@@ -85,7 +85,7 @@ describe("Notification Email Routing", () => {
     jest.clearAllMocks();
   });
 
-  describe("Application Router - Manager Notification Email", () => {
+  describe("Application Router - Owner Notification Email", () => {
     const validApplicationData = {
       firstName: "Test",
       lastName: "Applicant",
@@ -95,19 +95,19 @@ describe("Notification Email Routing", () => {
       referenceCheckConsent: true,
     };
 
-    it("should send notification to manager's notificationEmail when set", async () => {
+    it("should send notification to owner's notificationEmail when set", async () => {
       ApplicationInfoClass.addApplicationToDB.mockResolvedValue({
         id: 1,
         ...validApplicationData,
       });
 
-      const mockManager = createMockUser({
+      const mockOwner = createMockUser({
         id: 1,
-        type: "manager",
-        email: "manager@company.com",
-        notificationEmail: "manager-alerts@company.com",
+        type: "owner",
+        email: "owner@company.com",
+        notificationEmail: "owner-alerts@company.com",
       });
-      User.findAll.mockResolvedValue([mockManager]);
+      User.findAll.mockResolvedValue([mockOwner]);
 
       const response = await request(appApplication)
         .post("/api/v1/applications/submitted")
@@ -115,26 +115,26 @@ describe("Notification Email Routing", () => {
 
       expect(response.status).toBe(201);
       expect(Email.sendNewApplicationNotification).toHaveBeenCalledWith(
-        "manager-alerts@company.com", // Should use notificationEmail
+        "owner-alerts@company.com", // Should use notificationEmail
         "Test Applicant",
         "applicant@test.com",
         "2 years"
       );
     });
 
-    it("should send notification to manager's main email when notificationEmail is null", async () => {
+    it("should send notification to owner's main email when notificationEmail is null", async () => {
       ApplicationInfoClass.addApplicationToDB.mockResolvedValue({
         id: 1,
         ...validApplicationData,
       });
 
-      const mockManager = createMockUser({
+      const mockOwner = createMockUser({
         id: 1,
-        type: "manager",
-        email: "manager@company.com",
+        type: "owner",
+        email: "owner@company.com",
         notificationEmail: null, // Not set, should fall back to main email
       });
-      User.findAll.mockResolvedValue([mockManager]);
+      User.findAll.mockResolvedValue([mockOwner]);
 
       const response = await request(appApplication)
         .post("/api/v1/applications/submitted")
@@ -142,40 +142,40 @@ describe("Notification Email Routing", () => {
 
       expect(response.status).toBe(201);
       expect(Email.sendNewApplicationNotification).toHaveBeenCalledWith(
-        "manager@company.com", // Should use main email as fallback
+        "owner@company.com", // Should use main email as fallback
         "Test Applicant",
         "applicant@test.com",
         "2 years"
       );
     });
 
-    it("should send to different notification emails for multiple managers", async () => {
+    it("should send to different notification emails for multiple owners", async () => {
       ApplicationInfoClass.addApplicationToDB.mockResolvedValue({
         id: 1,
         ...validApplicationData,
       });
 
-      const managers = [
+      const owners = [
         createMockUser({
           id: 1,
-          type: "manager",
-          email: "manager1@company.com",
+          type: "owner",
+          email: "owner1@company.com",
           notificationEmail: "alerts1@company.com",
         }),
         createMockUser({
           id: 2,
-          type: "manager",
-          email: "manager2@company.com",
+          type: "owner",
+          email: "owner2@company.com",
           notificationEmail: null, // Uses main email
         }),
         createMockUser({
           id: 3,
-          type: "manager",
-          email: "manager3@company.com",
+          type: "owner",
+          email: "owner3@company.com",
           notificationEmail: "external@gmail.com",
         }),
       ];
-      User.findAll.mockResolvedValue(managers);
+      User.findAll.mockResolvedValue(owners);
 
       const response = await request(appApplication)
         .post("/api/v1/applications/submitted")
@@ -194,7 +194,7 @@ describe("Notification Email Routing", () => {
       );
       expect(Email.sendNewApplicationNotification).toHaveBeenNthCalledWith(
         2,
-        "manager2@company.com",
+        "owner2@company.com",
         expect.any(String),
         expect.any(String),
         expect.any(String)
@@ -211,48 +211,48 @@ describe("Notification Email Routing", () => {
 
   // Note: Home Size Adjustment notification email routing is tested in
   // homeSizeAdjustment.test.js which has the complete mock setup for that router.
-  // The key logic (using manager.getNotificationEmail()) is tested there.
+  // The key logic (using owner.getNotificationEmail()) is tested there.
 
   describe("Edge Cases", () => {
-    it("should handle manager with empty string notificationEmail", async () => {
-      const mockManager = createMockUser({
-        type: "manager",
-        email: "manager@company.com",
+    it("should handle owner with empty string notificationEmail", async () => {
+      const mockOwner = createMockUser({
+        type: "owner",
+        email: "owner@company.com",
         notificationEmail: "", // Empty string
       });
 
       // Empty string is falsy, so getNotificationEmail should return main email
-      expect(mockManager.getNotificationEmail()).toBe("manager@company.com");
+      expect(mockOwner.getNotificationEmail()).toBe("owner@company.com");
     });
 
-    it("should handle manager changing notificationEmail", async () => {
-      const mockManager = createMockUser({
-        type: "manager",
-        email: "manager@company.com",
+    it("should handle owner changing notificationEmail", async () => {
+      const mockOwner = createMockUser({
+        type: "owner",
+        email: "owner@company.com",
         notificationEmail: "old-alerts@company.com",
       });
 
-      expect(mockManager.getNotificationEmail()).toBe("old-alerts@company.com");
+      expect(mockOwner.getNotificationEmail()).toBe("old-alerts@company.com");
 
       // Simulate updating notification email
-      mockManager.notificationEmail = "new-alerts@company.com";
+      mockOwner.notificationEmail = "new-alerts@company.com";
 
-      expect(mockManager.getNotificationEmail()).toBe("new-alerts@company.com");
+      expect(mockOwner.getNotificationEmail()).toBe("new-alerts@company.com");
     });
 
-    it("should handle manager clearing notificationEmail", async () => {
-      const mockManager = createMockUser({
-        type: "manager",
-        email: "manager@company.com",
+    it("should handle owner clearing notificationEmail", async () => {
+      const mockOwner = createMockUser({
+        type: "owner",
+        email: "owner@company.com",
         notificationEmail: "alerts@company.com",
       });
 
-      expect(mockManager.getNotificationEmail()).toBe("alerts@company.com");
+      expect(mockOwner.getNotificationEmail()).toBe("alerts@company.com");
 
       // Clear notification email
-      mockManager.notificationEmail = null;
+      mockOwner.notificationEmail = null;
 
-      expect(mockManager.getNotificationEmail()).toBe("manager@company.com");
+      expect(mockOwner.getNotificationEmail()).toBe("owner@company.com");
     });
   });
 });

@@ -2,7 +2,7 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.addColumn('Users', 'managerPrivateNotes', {
+    await queryInterface.addColumn('Users', 'ownerPrivateNotes', {
       type: Sequelize.TEXT,
       allowNull: true,
     });
@@ -21,7 +21,7 @@ module.exports = {
   },
 
   async down(queryInterface) {
-    await queryInterface.removeColumn('Users', 'managerPrivateNotes');
+    await queryInterface.removeColumn('Users', 'ownerPrivateNotes');
     await queryInterface.removeColumn('Users', 'falseHomeSizeCount');
     await queryInterface.removeColumn('Users', 'falseClaimCount');
   },

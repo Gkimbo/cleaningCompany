@@ -89,7 +89,7 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   removeRequestEmail: jest.fn().mockResolvedValue(true),
 }));
 
-// Mock pricing config - simulates what manager set in the database
+// Mock pricing config - simulates what owner set in the database
 // These values are used throughout tests to verify correct behavior
 const mockPricingConfig = {
   basePrice: 150,
@@ -106,7 +106,7 @@ const mockPricingConfig = {
     "12-2": 30,
   },
   cancellation: {
-    fee: 10, // Manager-set cancellation fee
+    fee: 10, // Owner-set cancellation fee
     windowDays: 7,
     homeownerPenaltyDays: 3,
     cleanerPenaltyDays: 4,
