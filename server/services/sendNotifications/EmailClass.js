@@ -1186,6 +1186,288 @@ Kleanr Support Team`;
       console.error("❌ Error sending unassigned warning email:", error);
     }
   }
+
+  // Home Size Adjustment Emails
+
+  static async sendHomeSizeAdjustmentRequest(
+    email,
+    userName,
+    cleanerName,
+    homeAddress,
+    adjustment
+  ) {
+    try {
+      const transporter = createTransporter();
+      const { originalBeds, originalBaths, reportedBeds, reportedBaths, priceDifference } = adjustment;
+
+      const htmlContent = createEmailTemplate({
+        title: "Home Size Discrepancy",
+        subtitle: "Action Required",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+        greeting: `Hi ${userName},`,
+        content: `<p>Your cleaner, <strong>${cleanerName}</strong>, has reported that your home has a different size than what's currently on file.</p>
+          <p>Please review the details below and respond within 24 hours.</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Size Comparison",
+          items: [
+            { label: "Address", value: homeAddress },
+            { label: "On File", value: `${originalBeds} bed, ${originalBaths} bath` },
+            { label: "Reported", value: `${reportedBeds} bed, ${reportedBaths} bath` },
+            { label: "Price Difference", value: priceDifference > 0 ? `+$${priceDifference.toFixed(2)}` : `$${priceDifference.toFixed(2)}` },
+          ],
+        },
+        warningBox: priceDifference > 0 ? {
+          icon: "💳",
+          text: `If you approve this change, $${priceDifference.toFixed(2)} will be charged to your payment method on file.`,
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        } : null,
+        ctaText: "Open the Kleanr app to approve or deny this request.",
+        footerMessage: "Please respond within 24 hours",
+      });
+
+      const textContent = `Hi ${userName},
+
+Your cleaner, ${cleanerName}, has reported that your home has a different size than what's currently on file.
+
+HOME SIZE COMPARISON
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${homeAddress}
+On File: ${originalBeds} bed, ${originalBaths} bath
+Reported: ${reportedBeds} bed, ${reportedBaths} bath
+Price Difference: ${priceDifference > 0 ? '+' : ''}$${priceDifference.toFixed(2)}
+
+${priceDifference > 0 ? `If you approve this change, $${priceDifference.toFixed(2)} will be charged to your payment method.\n\n` : ''}Please respond within 24 hours by opening the Kleanr app.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🏠 Home Size Discrepancy Reported - Action Required`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Home size adjustment request email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending home size adjustment request email:", error);
+    }
+  }
+
+  static async sendAdjustmentApproved(
+    email,
+    userName,
+    homeAddress,
+    newBeds,
+    newBaths,
+    amountCharged
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Adjustment Approved",
+        subtitle: "Home size updated",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${userName},`,
+        content: `<p>Great news! The home size adjustment for your cleaning has been approved.</p>
+          <p>Your home details have been updated for all future appointments.</p>`,
+        infoBox: {
+          icon: "✅",
+          title: "Updated Home Details",
+          items: [
+            { label: "Address", value: homeAddress },
+            { label: "Updated Size", value: `${newBeds} bed, ${newBaths} bath` },
+            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${amountCharged.toFixed(2)}` }] : []),
+          ],
+        },
+        footerMessage: "Thank you for keeping your home details accurate",
+      });
+
+      const textContent = `Hi ${userName},
+
+Great news! The home size adjustment for your cleaning has been approved.
+
+UPDATED HOME DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${homeAddress}
+Updated Size: ${newBeds} bed, ${newBaths} bath
+${amountCharged > 0 ? `Amount Charged: $${amountCharged.toFixed(2)}\n` : ''}
+Your home details have been updated for all future appointments.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Home Size Adjustment Approved`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Adjustment approved email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending adjustment approved email:", error);
+    }
+  }
+
+  static async sendAdjustmentNeedsManagerReview(
+    email,
+    managerName,
+    request,
+    home,
+    cleaner,
+    homeowner
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Dispute Needs Review",
+        subtitle: "Home size adjustment disputed",
+        headerColor: "linear-gradient(135deg, #ef4444 0%, #f87171 100%)",
+        greeting: `Hi ${managerName},`,
+        content: `<p>A homeowner has denied a cleaner's home size adjustment report. This dispute requires your review and resolution.</p>`,
+        infoBox: {
+          icon: "⚠️",
+          title: "Dispute Details",
+          items: [
+            { label: "Home Address", value: home.address },
+            { label: "Homeowner", value: homeowner.firstName || homeowner.username },
+            { label: "Cleaner", value: cleaner.firstName || cleaner.username },
+            { label: "On File", value: `${request.originalNumBeds} bed, ${request.originalNumBaths} bath` },
+            { label: "Reported", value: `${request.reportedNumBeds} bed, ${request.reportedNumBaths} bath` },
+            { label: "Price Difference", value: `$${request.priceDifference}` },
+          ],
+        },
+        warningBox: request.homeownerResponse ? {
+          icon: "💬",
+          text: `<strong>Homeowner's Reason:</strong> "${request.homeownerResponse}"`,
+          bgColor: "#fee2e2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        } : null,
+        ctaText: "Please review this dispute in the Kleanr manager dashboard.",
+        footerMessage: "This requires your attention",
+      });
+
+      const textContent = `Hi ${managerName},
+
+A homeowner has denied a cleaner's home size adjustment report. This dispute requires your review.
+
+DISPUTE DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Home Address: ${home.address}
+Homeowner: ${homeowner.firstName || homeowner.username}
+Cleaner: ${cleaner.firstName || cleaner.username}
+On File: ${request.originalNumBeds} bed, ${request.originalNumBaths} bath
+Reported: ${request.reportedNumBeds} bed, ${request.reportedNumBaths} bath
+Price Difference: $${request.priceDifference}
+${request.homeownerResponse ? `\nHomeowner's Reason: "${request.homeownerResponse}"` : ''}
+
+Please review this dispute in the Kleanr manager dashboard.
+
+Best regards,
+Kleanr System`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⚠️ Home Size Dispute Needs Review - Request #${request.id}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Manager review email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending manager review email:", error);
+    }
+  }
+
+  static async sendAdjustmentResolved(
+    email,
+    userName,
+    resolution,
+    finalBeds,
+    finalBaths,
+    amountCharged,
+    managerNote
+  ) {
+    try {
+      const transporter = createTransporter();
+      const isApproved = resolution === "approved";
+
+      const htmlContent = createEmailTemplate({
+        title: isApproved ? "Dispute Resolved - Approved" : "Dispute Resolved - Denied",
+        subtitle: "Manager has reviewed your case",
+        headerColor: isApproved
+          ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
+          : "linear-gradient(135deg, #6b7280 0%, #9ca3af 100%)",
+        greeting: `Hi ${userName},`,
+        content: isApproved
+          ? `<p>A manager has reviewed the home size dispute and approved the adjustment.</p>
+             <p>The home details have been updated accordingly.</p>`
+          : `<p>A manager has reviewed the home size dispute and has denied the adjustment request.</p>
+             <p>The original home details will remain unchanged.</p>`,
+        infoBox: isApproved ? {
+          icon: "✅",
+          title: "Updated Home Details",
+          items: [
+            { label: "Final Size", value: `${finalBeds} bed, ${finalBaths} bath` },
+            ...(amountCharged > 0 ? [{ label: "Amount Charged", value: `$${amountCharged.toFixed(2)}` }] : []),
+          ],
+        } : null,
+        warningBox: managerNote ? {
+          icon: "📝",
+          text: `<strong>Manager's Note:</strong> "${managerNote}"`,
+          bgColor: "#f1f5f9",
+          borderColor: "#64748b",
+          textColor: "#334155",
+        } : null,
+        footerMessage: "Thank you for your patience",
+      });
+
+      const textContent = `Hi ${userName},
+
+A manager has reviewed the home size dispute and has ${isApproved ? 'approved' : 'denied'} the adjustment.
+
+${isApproved ? `UPDATED HOME DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Final Size: ${finalBeds} bed, ${finalBaths} bath
+${amountCharged > 0 ? `Amount Charged: $${amountCharged.toFixed(2)}\n` : ''}` : 'The original home details will remain unchanged.'}
+
+${managerNote ? `Manager's Note: "${managerNote}"\n` : ''}
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: isApproved
+          ? `✅ Home Size Dispute Resolved - Approved`
+          : `📋 Home Size Dispute Resolved - Denied`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Adjustment resolved email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending adjustment resolved email:", error);
+    }
+  }
 }
 
 module.exports = Email;

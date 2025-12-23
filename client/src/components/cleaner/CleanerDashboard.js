@@ -427,6 +427,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
             <TodaysAppointment
               appointment={todaysAppointment}
               onJobCompleted={handleJobCompleted}
+              token={state.currentUser.token}
             />
           </View>
         )}

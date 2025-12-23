@@ -17,6 +17,7 @@ const managerDashboardRouter = require("./api/v1/managerDashboardRouter");
 const termsRouter = require("./api/v1/termsRouter");
 const pricingRouter = require("./api/v1/pricingRouter");
 const pushNotificationRouter = require("./api/v1/pushNotificationRouter");
+const homeSizeAdjustmentRouter = require("./api/v1/homeSizeAdjustmentRouter");
 
 const rootRouter = new express.Router();
 
@@ -37,6 +38,7 @@ rootRouter.use("/api/v1/manager-dashboard", managerDashboardRouter);
 rootRouter.use("/api/v1/terms", termsRouter);
 rootRouter.use("/api/v1/pricing", pricingRouter);
 rootRouter.use("/api/v1/push-notifications", pushNotificationRouter);
+rootRouter.use("/api/v1/home-size-adjustment", homeSizeAdjustmentRouter);
 
 rootRouter.use("/", clientRouter);
 

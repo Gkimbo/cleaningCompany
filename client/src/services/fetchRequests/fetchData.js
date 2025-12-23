@@ -836,6 +836,154 @@ class FetchData {
       return { error: "Failed to cancel job" };
     }
   }
+
+  // Home Size Adjustment API methods
+  static async createHomeSizeAdjustment(token, data) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/home-size-adjustment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to create adjustment request" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error creating home size adjustment:", error);
+      return { error: "Failed to create adjustment request" };
+    }
+  }
+
+  static async getPendingAdjustments(token) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/home-size-adjustment/pending", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch adjustments" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching pending adjustments:", error);
+      return { error: "Failed to fetch adjustments" };
+    }
+  }
+
+  static async getAdjustmentDetails(token, adjustmentId) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/home-size-adjustment/${adjustmentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch adjustment details" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching adjustment details:", error);
+      return { error: "Failed to fetch adjustment details" };
+    }
+  }
+
+  static async respondToAdjustment(token, adjustmentId, approved, homeownerResponse = null) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/home-size-adjustment/${adjustmentId}/homeowner-response`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ approved, homeownerResponse }),
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to respond to adjustment" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error responding to adjustment:", error);
+      return { error: "Failed to respond to adjustment" };
+    }
+  }
+
+  static async managerResolveAdjustment(token, adjustmentId, data) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/home-size-adjustment/${adjustmentId}/manager-resolve`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(data),
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to resolve adjustment" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error resolving adjustment:", error);
+      return { error: "Failed to resolve adjustment" };
+    }
+  }
+
+  static async getAdjustmentHistory(token, homeId) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/home-size-adjustment/history/${homeId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch adjustment history" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching adjustment history:", error);
+      return { error: "Failed to fetch adjustment history" };
+    }
+  }
 }
 
 export default FetchData;

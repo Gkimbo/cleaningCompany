@@ -15,6 +15,7 @@ const {
   StripeConnectAccount,
   Payment,
   JobPhoto,
+  HomeSizeAdjustmentRequest,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
@@ -1073,6 +1074,89 @@ cron.schedule("0 7 * * *", async () => {
     }
   } catch (err) {
     console.error("Cron job error:", err);
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Home Size Adjustment Auto-Escalation Cron Job
+ * Runs hourly to escalate expired adjustment requests to managers
+ * ------------------------------------------------------
+ */
+cron.schedule("0 * * * *", async () => {
+  console.log("[Cron] Running home size adjustment expiration check...");
+
+  try {
+    const { Op } = require("sequelize");
+    const now = new Date();
+
+    // Find expired pending requests
+    const expiredRequests = await HomeSizeAdjustmentRequest.findAll({
+      where: {
+        status: "pending_homeowner",
+        expiresAt: { [Op.lte]: now },
+      },
+      include: [
+        { model: UserHomes, as: "home" },
+        { model: User, as: "cleaner" },
+        { model: User, as: "homeowner" },
+      ],
+    });
+
+    if (expiredRequests.length === 0) {
+      console.log("[Cron] No expired adjustment requests found.");
+      return;
+    }
+
+    console.log(`[Cron] Found ${expiredRequests.length} expired adjustment request(s)`);
+
+    // Get all managers
+    const managers = await User.findAll({
+      where: { role: "manager" },
+    });
+
+    for (const request of expiredRequests) {
+      try {
+        // Update status to expired (which triggers manager review)
+        await request.update({ status: "expired" });
+
+        // Notify all managers
+        for (const manager of managers) {
+          // Send email notification
+          if (manager.email) {
+            await Email.sendAdjustmentNeedsManagerReview(
+              manager.email,
+              manager.firstName,
+              request.id,
+              request.cleaner?.firstName || "Cleaner",
+              request.homeowner?.firstName || "Homeowner",
+              request.home ? `${request.home.address}, ${request.home.city}` : "Unknown address"
+            );
+          }
+
+          // Send push notification
+          if (manager.expoPushToken) {
+            await PushNotification.sendPushAdjustmentNeedsReview(
+              manager.expoPushToken,
+              request.id
+            );
+          }
+
+          // Add in-app notification
+          const notifications = manager.notifications || [];
+          notifications.unshift(
+            `Home size adjustment request #${request.id} has expired and needs your review.`
+          );
+          await manager.update({ notifications: notifications.slice(0, 50) });
+        }
+
+        console.log(`[Cron] Escalated request ${request.id} to managers`);
+      } catch (err) {
+        console.error(`[Cron] Failed to escalate request ${request.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("[Cron] Home size adjustment expiration check error:", err);
   }
 });
 

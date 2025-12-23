@@ -115,7 +115,7 @@ const HomePage = ({ state, dispatch }) => {
 
     if (appointmentDate.toDateString() === today.toDateString()) {
       foundToday = true;
-      todaysAppointment = <TodaysAppointment appointment={appointment} />;
+      todaysAppointment = <TodaysAppointment appointment={appointment} token={state.currentUser.token} />;
       if (index < sortedAppointments.length - 1) {
         nextAppointment = (
           <View style={{ marginVertical: 15 }}>

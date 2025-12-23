@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, View, TouchableOpacity, Modal } from "react-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import JobCompletionFlow from "../jobPhotos/JobCompletionFlow";
+import HomeSizeConfirmationModal from "../HomeSizeConfirmationModal";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
 
-const TodaysAppointment = ({ appointment, onJobCompleted }) => {
+const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
   const { pricing } = usePricing();
   const [home, setHome] = useState({
     address: "",
@@ -27,6 +28,7 @@ const TodaysAppointment = ({ appointment, onJobCompleted }) => {
     timeToBeCompleted: "",
   });
   const [showCompletionFlow, setShowCompletionFlow] = useState(false);
+  const [showHomeSizeModal, setShowHomeSizeModal] = useState(false);
 
   const formatDate = (dateString) => {
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
@@ -44,7 +46,23 @@ const TodaysAppointment = ({ appointment, onJobCompleted }) => {
   }, [appointment.homeId]);
 
   const handleStartJob = () => {
+    // Show home size confirmation modal before starting job
+    setShowHomeSizeModal(true);
+  };
+
+  const handleHomeSizeConfirmed = () => {
+    // Close confirmation modal and proceed to job completion flow
+    setShowHomeSizeModal(false);
     setShowCompletionFlow(true);
+  };
+
+  const handleHomeSizeModalClose = () => {
+    setShowHomeSizeModal(false);
+  };
+
+  const handleAdjustmentReportSubmitted = (result) => {
+    // Adjustment request was submitted - can show a toast or log
+    console.log("[TodaysAppointment] Home size adjustment submitted:", result);
   };
 
   const handleJobCompleted = (data) => {
@@ -135,6 +153,16 @@ const TodaysAppointment = ({ appointment, onJobCompleted }) => {
           </View>
         )}
       </View>
+
+      <HomeSizeConfirmationModal
+        visible={showHomeSizeModal}
+        onClose={handleHomeSizeModalClose}
+        onConfirm={handleHomeSizeConfirmed}
+        onReportSubmitted={handleAdjustmentReportSubmitted}
+        home={home}
+        appointment={appointment}
+        token={token}
+      />
 
       <Modal
         visible={showCompletionFlow}

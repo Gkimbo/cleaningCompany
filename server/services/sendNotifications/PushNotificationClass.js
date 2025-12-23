@@ -189,6 +189,53 @@ class PushNotification {
       type: "password_reset",
     });
   }
+
+  // Home Size Adjustment Push Notifications
+
+  // 13. Home size adjustment request (to homeowner)
+  static async sendPushHomeSizeAdjustment(expoPushToken, userName, cleanerName, priceDifference) {
+    const title = "Home Size Discrepancy";
+    const priceText = priceDifference > 0 ? ` (+$${priceDifference.toFixed(2)})` : "";
+    const body = `Hi ${userName}, ${cleanerName} reports your home is larger than on file${priceText}. Tap to review and respond.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "home_size_adjustment",
+    });
+  }
+
+  // 14. Adjustment approved (to cleaner)
+  static async sendPushAdjustmentApproved(expoPushToken, cleanerName, address) {
+    const title = "Adjustment Approved";
+    const body = `Hi ${cleanerName}, your home size report for ${address} was approved. The home details have been updated.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "adjustment_approved",
+    });
+  }
+
+  // 15. Adjustment needs manager review (to manager)
+  static async sendPushAdjustmentNeedsReview(expoPushToken, requestId) {
+    const title = "Dispute Needs Review";
+    const body = `A homeowner has denied a home size adjustment. Please review request #${requestId}.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "adjustment_needs_review",
+      requestId: String(requestId),
+    });
+  }
+
+  // 16. Adjustment resolved (to both parties)
+  static async sendPushAdjustmentResolved(expoPushToken, userName, approved) {
+    const title = approved ? "Dispute Resolved - Approved" : "Dispute Resolved - Denied";
+    const body = approved
+      ? `Hi ${userName}, the manager approved the home size adjustment. Details updated.`
+      : `Hi ${userName}, the manager has denied the home size adjustment request.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "adjustment_resolved",
+      approved,
+    });
+  }
 }
 
 module.exports = PushNotification;

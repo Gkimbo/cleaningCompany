@@ -83,6 +83,20 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
+		managerPrivateNotes: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+		},
+		falseHomeSizeCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+		},
+		falseClaimCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+		},
 	});
 
 	// Hash the password before saving the user
