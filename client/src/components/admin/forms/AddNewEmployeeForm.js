@@ -13,6 +13,37 @@ import FetchData from "../../../services/fetchRequests/fetchData";
 import { AuthContext } from "../../../services/AuthContext";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 
+// Generate a strong random password
+const generateStrongPassword = (length = 16) => {
+  const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // Removed I, O to avoid confusion
+  const lowercase = "abcdefghjkmnpqrstuvwxyz"; // Removed i, l, o to avoid confusion
+  const numbers = "23456789"; // Removed 0, 1 to avoid confusion
+  const special = "!@#$%&*?";
+
+  // Ensure at least one of each type
+  let password = "";
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+
+  // Fill remaining length with random characters from all sets
+  const allChars = uppercase + lowercase + numbers + special;
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+
+  // Shuffle the password
+  return password
+    .split("")
+    .sort(() => Math.random() - 0.5)
+    .join("");
+};
+
 const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -28,6 +59,12 @@ const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
   const navigate = useNavigate();
   const { login } = useContext(AuthContext);
   const type = "cleaner";
+
+  const handleGeneratePassword = () => {
+    const newPassword = generateStrongPassword();
+    setPassword(newPassword);
+    setConfirmPassword(newPassword);
+  };
 
   const validate = () => {
     const validationErrors = [];
@@ -155,7 +192,16 @@ const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
       </View>
 
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Password</Text>
+        <View style={styles.passwordLabelRow}>
+          <Text style={styles.inputLabel}>Password</Text>
+          <TouchableOpacity
+            style={styles.generateButton}
+            onPress={handleGeneratePassword}
+          >
+            <Icon name="refresh" size={14} color={colors.primary[600]} />
+            <Text style={styles.generateButtonText}>Auto-generate</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
@@ -263,6 +309,28 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
     marginBottom: spacing.xs,
+  },
+  passwordLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  generateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    gap: spacing.xs,
+  },
+  generateButtonText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[600],
   },
   input: {
     backgroundColor: colors.neutral[0],
