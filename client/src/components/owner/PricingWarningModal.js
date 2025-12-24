@@ -103,7 +103,7 @@ const PricingWarningModal = ({
                 <View style={styles.warningTextContainer}>
                   <Text style={styles.warningTitle}>AUDIT TRAIL</Text>
                   <Text style={styles.warningDescription}>
-                    This change will be logged with your manager ID and timestamp.
+                    This change will be logged with your owner ID and timestamp.
                   </Text>
                 </View>
               </View>

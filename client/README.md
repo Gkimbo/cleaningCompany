@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-738_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-1217_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -17,7 +17,7 @@
 
 ## Overview
 
-The Kleanr mobile app is a React Native application built with Expo that provides a seamless experience for homeowners to book cleanings, cleaners to manage their schedules and earnings, and managers to oversee platform operations.
+The Kleanr mobile app is a React Native application built with Expo that provides a seamless experience for homeowners to book cleanings, cleaners to manage their schedules and earnings, and owners to oversee platform operations.
 
 ---
 
@@ -91,14 +91,15 @@ export const API_BASE = "http://localhost:3000/api/v1";
 </td>
 <td width="33%" valign="top">
 
-#### Managers
+#### Owners
 - Assign cleaners to jobs
 - Platform overview
 - Broadcast messages
 - Process applications
 - Tax reporting
 - Terms & Conditions editor
-- Service area mgmt
+- Service area management
+- Notification email settings
 
 </td>
 </tr>
@@ -135,7 +136,7 @@ client/
 │   │   ├── employeeAssignments/  # Job photos & checklists
 │   │   │   └── jobPhotos/
 │   │   │       └── CleaningChecklist.js
-│   │   ├── manager/              # Manager dashboard
+│   │   ├── owner/                # Owner dashboard
 │   │   ├── messaging/            # Chat system
 │   │   ├── navBar/               # Navigation
 │   │   ├── onboarding/           # User onboarding flow
@@ -153,6 +154,7 @@ client/
 │       ├── fetchRequests/        # API service classes
 │       │   ├── fetchData.js      # General API
 │       │   ├── MessageService.js # Messaging API
+│       │   ├── OwnerDashboardService.js # Owner dashboard API
 │       │   ├── PaymentService.js # Payment API
 │       │   └── TaxService.js     # Tax API
 │       ├── styles/
@@ -192,7 +194,7 @@ const initialState = {
     token: null,
     id: null,
     email: null,
-    type: null,        // 'cleaner', 'manager1', or null (homeowner)
+    type: null,        // 'cleaner', 'owner1', or null (homeowner)
   },
   homes: [],           // User's properties
   appointments: [],    // Scheduled cleanings
@@ -280,6 +282,27 @@ const history = await PaymentService.getPaymentHistory(token);
 
 // Get cleaner earnings
 const earnings = await PaymentService.getEarnings(token);
+```
+
+### OwnerDashboardService
+
+```javascript
+import OwnerDashboardService from './services/fetchRequests/OwnerDashboardService';
+
+// Get financial summary
+const financial = await OwnerDashboardService.getFinancialSummary(token);
+
+// Get user analytics
+const users = await OwnerDashboardService.getUserAnalytics(token);
+
+// Get service areas
+const areas = await OwnerDashboardService.getServiceAreas(token);
+
+// Update notification email
+await OwnerDashboardService.updateNotificationEmail(token, 'notify@example.com');
+
+// Get owner settings
+const settings = await OwnerDashboardService.getSettings(token);
 ```
 
 ---
@@ -419,7 +442,8 @@ npm test -- CleaningChecklist.test.js
 | ApplicationClass | 23 | Application API methods |
 | CreateNewEmployeeForm | 28 | Username generation, form validation |
 | Pricing & Staffing | 15 | Dynamic pricing, config |
-| **Total** | **738** | - |
+| OwnerDashboard | 45 | Owner dashboard, analytics |
+| **Total** | **1217** | - |
 
 ### Example Test
 

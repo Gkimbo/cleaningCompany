@@ -33,8 +33,13 @@ const CalendarComponent = ({
   const { pricing } = usePricing();
 
   const calculatePrice = () => {
-    const { basePrice, extraBedBathFee } = pricing;
-    const { sheetFeePerBed, towelFee, faceClothFee } = pricing.linens;
+    // Fallbacks match database defaults in case pricing is unavailable
+    const basePrice = pricing?.basePrice ?? 150;
+    const extraBedBathFee = pricing?.extraBedBathFee ?? 50;
+    const halfBathFee = pricing?.halfBathFee ?? 25;
+    const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 30;
+    const towelFee = pricing?.linens?.towelFee ?? 5;
+    const faceClothFee = pricing?.linens?.faceClothFee ?? 2;
     let price = 0;
 
     // Time window surcharge from database config
@@ -61,12 +66,17 @@ const CalendarComponent = ({
       }
     }
 
-    // Base price calculation
+    // Base price calculation with half bath support
     const beds = Number(numBeds);
-    const baths = Number(numBaths);
+    const baths = parseFloat(numBaths) || 0;
+    const fullBaths = Math.floor(baths);
+    const hasHalfBath = (baths % 1) >= 0.5;
+
     const extraBeds = Math.max(0, beds - 1);
-    const extraBaths = Math.max(0, baths - 1);
-    price += basePrice + (extraBeds + extraBaths) * extraBedBathFee;
+    const extraFullBaths = Math.max(0, fullBaths - 1);
+    const halfBathCount = hasHalfBath ? 1 : 0;
+
+    price += basePrice + (extraBeds * extraBedBathFee) + (extraFullBaths * extraBedBathFee) + (halfBathCount * halfBathFee);
 
     return price;
   };

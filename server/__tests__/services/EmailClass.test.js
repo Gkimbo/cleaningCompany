@@ -286,18 +286,18 @@ describe("EmailClass", () => {
       expect(mailOptions.html).toContain("Cleaner");
     });
 
-    it("should show correct role title for manager", async () => {
+    it("should show correct role title for owner", async () => {
       await Email.sendEmailCongragulations(
         "Admin",
         "User",
         "admin1",
         "AdminPass",
         "admin@example.com",
-        "manager"
+        "owner"
       );
 
       const mailOptions = mockSendMail.mock.calls[0][0];
-      expect(mailOptions.html).toContain("Manager");
+      expect(mailOptions.html).toContain("Owner");
     });
 
     it("should include security warning", async () => {
@@ -689,9 +689,9 @@ describe("EmailClass", () => {
   });
 
   describe("sendNewApplicationNotification", () => {
-    it("should send application notification to manager", async () => {
+    it("should send application notification to owner", async () => {
       await Email.sendNewApplicationNotification(
-        "manager@example.com",
+        "owner@example.com",
         "Jane Doe",
         "jane@applicant.com",
         "3 years professional cleaning"
@@ -699,7 +699,7 @@ describe("EmailClass", () => {
 
       expect(mockSendMail).toHaveBeenCalledTimes(1);
       const mailOptions = mockSendMail.mock.calls[0][0];
-      expect(mailOptions.to).toBe("manager@example.com");
+      expect(mailOptions.to).toBe("owner@example.com");
       expect(mailOptions.subject).toContain("Jane Doe");
       expect(mailOptions.html).toContain("Jane Doe");
       expect(mailOptions.html).toContain("jane@applicant.com");
@@ -707,7 +707,7 @@ describe("EmailClass", () => {
 
     it("should include experience in email", async () => {
       await Email.sendNewApplicationNotification(
-        "manager@example.com",
+        "owner@example.com",
         "Jane Doe",
         "jane@applicant.com",
         "5 years hotel housekeeping"
@@ -719,7 +719,7 @@ describe("EmailClass", () => {
 
     it("should handle missing experience", async () => {
       await Email.sendNewApplicationNotification(
-        "manager@example.com",
+        "owner@example.com",
         "Jane Doe",
         "jane@applicant.com",
         null
@@ -729,9 +729,9 @@ describe("EmailClass", () => {
       expect(mailOptions.html).toContain("Not specified");
     });
 
-    it("should include next steps for manager", async () => {
+    it("should include next steps for owner", async () => {
       await Email.sendNewApplicationNotification(
-        "manager@example.com",
+        "owner@example.com",
         "Jane Doe",
         "jane@applicant.com",
         "3 years"
@@ -806,6 +806,178 @@ describe("EmailClass", () => {
       const mailOptions = mockSendMail.mock.calls[0][0];
       // Should contain formatted date elements
       expect(mailOptions.html).toMatch(/Jan|2025|15/);
+    });
+  });
+
+  describe("sendUnassignedAppointmentWarning", () => {
+    const testAddress = {
+      street: "123 Main St",
+      city: "Boston",
+      state: "MA",
+      zipcode: "02101",
+    };
+
+    it("should send warning email with correct recipient", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.to).toBe("user@example.com");
+    });
+
+    it("should include warning subject with hourglass emoji", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.subject).toContain("⏳");
+      expect(mailOptions.subject).toContain("No Cleaner Assigned");
+    });
+
+    it("should include user name in greeting", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Hi John");
+      expect(mailOptions.text).toContain("Hi John");
+    });
+
+    it("should include full address in email content", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("123 Main St");
+      expect(mailOptions.html).toContain("Boston");
+      expect(mailOptions.html).toContain("MA");
+      expect(mailOptions.html).toContain("02101");
+    });
+
+    it("should include awaiting cleaner status", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Awaiting Cleaner");
+      expect(mailOptions.text).toContain("Awaiting Cleaner");
+    });
+
+    it("should include reassuring message about cleaners picking up jobs", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Don't worry");
+      expect(mailOptions.html).toContain("still able to pick up");
+      expect(mailOptions.text).toContain("Don't worry");
+    });
+
+    it("should include backup plan recommendation", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("backup plan");
+      expect(mailOptions.text).toContain("backup");
+    });
+
+    it("should include what you can do steps", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("What You Can Do");
+      expect(mailOptions.html).toContain("Wait a bit longer");
+      expect(mailOptions.text).toContain("WHAT YOU CAN DO");
+    });
+
+    it("should include both HTML and plain text versions", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toBeDefined();
+      expect(mailOptions.text).toBeDefined();
+      expect(mailOptions.html).toContain("<!DOCTYPE html>");
+    });
+
+    it("should use warning color scheme (orange/yellow)", async () => {
+      await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("#f59e0b");
+    });
+
+    it("should return response on success", async () => {
+      const result = await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      expect(result).toBe("250 OK");
+    });
+
+    it("should handle errors gracefully", async () => {
+      mockSendMail.mockRejectedValueOnce(new Error("SMTP error"));
+
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+
+      const result = await Email.sendUnassignedAppointmentWarning(
+        "user@example.com",
+        testAddress,
+        "John",
+        "2025-01-15"
+      );
+
+      expect(consoleSpy).toHaveBeenCalled();
+      expect(result).toBeUndefined();
+
+      consoleSpy.mockRestore();
     });
   });
 });

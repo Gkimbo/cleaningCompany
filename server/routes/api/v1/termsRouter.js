@@ -57,12 +57,12 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
-// Middleware to check if user is a manager
-const requireManager = async (req, res, next) => {
+// Middleware to check if user is a owner
+const requireOwner = async (req, res, next) => {
   try {
     const user = await User.findByPk(req.user.userId);
-    if (!user || (user.type !== "manager" && user.username !== "manager1")) {
-      return res.status(403).json({ error: "Manager access required" });
+    if (!user || (user.type !== "owner" && user.username !== "owner1")) {
+      return res.status(403).json({ error: "Owner access required" });
     }
     next();
   } catch (error) {
@@ -268,10 +268,10 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
 });
 
 /**
- * Get version history (manager only)
+ * Get version history (owner only)
  * GET /api/v1/terms/history/:type
  */
-termsRouter.get("/history/:type", authenticateToken, requireManager, async (req, res) => {
+termsRouter.get("/history/:type", authenticateToken, requireOwner, async (req, res) => {
   const { type } = req.params;
 
   if (!["homeowner", "cleaner"].includes(type)) {
@@ -314,10 +314,10 @@ termsRouter.get("/history/:type", authenticateToken, requireManager, async (req,
 });
 
 /**
- * Create new T&C version (text) - Manager only
+ * Create new T&C version (text) - Owner only
  * POST /api/v1/terms
  */
-termsRouter.post("/", authenticateToken, requireManager, async (req, res) => {
+termsRouter.post("/", authenticateToken, requireOwner, async (req, res) => {
   const { type, title, content, effectiveDate } = req.body;
 
   if (!type || !title || !content) {
@@ -360,13 +360,13 @@ termsRouter.post("/", authenticateToken, requireManager, async (req, res) => {
 });
 
 /**
- * Upload PDF for new T&C version - Manager only
+ * Upload PDF for new T&C version - Owner only
  * POST /api/v1/terms/upload-pdf
  */
 termsRouter.post(
   "/upload-pdf",
   authenticateToken,
-  requireManager,
+  requireOwner,
   async (req, res, next) => {
     // First get the next version before multer processes the file
     try {
@@ -469,13 +469,13 @@ termsRouter.get("/pdf/:id", async (req, res) => {
 });
 
 /**
- * Get user's acceptance record - Manager only
+ * Get user's acceptance record - Owner only
  * GET /api/v1/terms/user-acceptance/:userId
  */
 termsRouter.get(
   "/user-acceptance/:userId",
   authenticateToken,
-  requireManager,
+  requireOwner,
   async (req, res) => {
     const { userId } = req.params;
 
@@ -531,13 +531,13 @@ termsRouter.get(
 );
 
 /**
- * Get the exact terms content that a user agreed to - Manager only
+ * Get the exact terms content that a user agreed to - Owner only
  * GET /api/v1/terms/acceptance-snapshot/:acceptanceId
  */
 termsRouter.get(
   "/acceptance-snapshot/:acceptanceId",
   authenticateToken,
-  requireManager,
+  requireOwner,
   async (req, res) => {
     const { acceptanceId } = req.params;
 
@@ -610,14 +610,14 @@ termsRouter.get(
 );
 
 /**
- * Get all acceptance records for a specific terms version - Manager only
+ * Get all acceptance records for a specific terms version - Owner only
  * Useful for auditing who accepted a particular version
  * GET /api/v1/terms/:termsId/acceptances
  */
 termsRouter.get(
   "/:termsId/acceptances",
   authenticateToken,
-  requireManager,
+  requireOwner,
   async (req, res) => {
     const { termsId } = req.params;
 

@@ -1,6 +1,6 @@
 require("dotenv").config();
 const bcrypt = require("bcrypt");
-const manager1Password = process.env.MANAGER1_PASSWORD;
+const owner1Password = process.env.OWNER1_PASSWORD;
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
@@ -10,18 +10,18 @@ module.exports = {
       return passwordHash;
     };
 
-    // Function to seed the manager account
-    const managerSeeder = async () => {
-      const hashedPassword = await hashPassword(manager1Password);
+    // Function to seed the owner account
+    const ownerSeeder = async () => {
+      const hashedPassword = await hashPassword(owner1Password);
 
-      // Insert a manager account into the Users table
+      // Insert a owner account into the Users table
       await queryInterface.bulkInsert("Users", [
         {
-          firstName: "Manager",
+          firstName: "Owner",
           lastName: "One",
-          username: "manager1",
-          email: "manager1CleaningCo@gmail.com",
-          type: "manager",
+          username: "owner1",
+          email: "gavin.kimball@maritime.edu",
+          type: "owner",
           password: hashedPassword,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -29,12 +29,12 @@ module.exports = {
       ]);
     };
 
-    // Call the managerSeeder function
-    await managerSeeder();
+    // Call the ownerSeeder function
+    await ownerSeeder();
   },
 
   down: async (queryInterface, Sequelize) => {
-    // Remove the manager account
-    await queryInterface.bulkDelete("Users", { username: "manager1" });
+    // Remove the owner account
+    await queryInterface.bulkDelete("Users", { username: "owner1" });
   },
 };

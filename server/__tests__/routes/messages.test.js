@@ -283,8 +283,8 @@ describe("Message Routes", () => {
 
       User.findOne.mockResolvedValue({
         id: 3,
-        username: "manager1",
-        type: "manager",
+        username: "owner1",
+        type: "owner",
       });
 
       Conversation.findByPk.mockResolvedValue({
@@ -362,9 +362,9 @@ describe("Message Routes", () => {
 
       User.findOne.mockResolvedValue({
         id: 2,
-        username: "manager1",
-        email: "manager@example.com",
-        type: "manager",
+        username: "owner1",
+        email: "owner@example.com",
+        type: "owner",
       });
 
       ConversationParticipant.findAll.mockResolvedValue([]);
@@ -384,7 +384,7 @@ describe("Message Routes", () => {
         title: "Support - testuser",
         participants: [
           { userId: 1, user: { id: 1, username: "testuser" } },
-          { userId: 2, user: { id: 2, username: "manager1" } },
+          { userId: 2, user: { id: 2, username: "owner1" } },
         ],
       });
 
@@ -410,8 +410,8 @@ describe("Message Routes", () => {
 
       User.findOne.mockResolvedValue({
         id: 2,
-        username: "manager1",
-        type: "manager",
+        username: "owner1",
+        type: "owner",
       });
 
       ConversationParticipant.findAll.mockResolvedValue([
@@ -441,13 +441,13 @@ describe("Message Routes", () => {
       expect(Conversation.create).not.toHaveBeenCalled();
     });
 
-    it("should return 400 if manager tries to create support conversation", async () => {
+    it("should return 400 if owner tries to create support conversation", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
         id: 1,
-        username: "manager1",
-        type: "manager",
+        username: "owner1",
+        type: "owner",
       });
 
       const res = await request(app)
@@ -455,18 +455,18 @@ describe("Message Routes", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe("Managers cannot create support conversations");
+      expect(res.body.error).toBe("Owners cannot create support conversations");
     });
   });
 
   describe("POST /broadcast", () => {
-    it("should send a broadcast message (manager only)", async () => {
+    it("should send a broadcast message (owner only)", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
         id: 1,
-        username: "manager1",
-        type: "manager",
+        username: "owner1",
+        type: "owner",
       });
 
       User.findAll.mockResolvedValue([
@@ -495,7 +495,7 @@ describe("Message Routes", () => {
         id: 1,
         content: "Important announcement",
         messageType: "broadcast",
-        sender: { id: 1, username: "manager1" },
+        sender: { id: 1, username: "owner1" },
       });
 
       const res = await request(app)
@@ -513,7 +513,7 @@ describe("Message Routes", () => {
       expect(mockIo.emit).toHaveBeenCalledWith("broadcast", expect.any(Object));
     });
 
-    it("should return 403 for non-manager users", async () => {
+    it("should return 403 for non-owner users", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -531,7 +531,7 @@ describe("Message Routes", () => {
         });
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Only managers can send broadcasts");
+      expect(res.body.error).toBe("Only owners can send broadcasts");
     });
 
     it("should return 400 for empty broadcast content", async () => {
@@ -539,8 +539,8 @@ describe("Message Routes", () => {
 
       User.findByPk.mockResolvedValue({
         id: 1,
-        username: "manager1",
-        type: "manager",
+        username: "owner1",
+        type: "owner",
       });
 
       const res = await request(app)

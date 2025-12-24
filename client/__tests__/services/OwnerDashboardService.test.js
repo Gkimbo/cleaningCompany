@@ -1,10 +1,10 @@
-import ManagerDashboardService from "../../src/services/fetchRequests/ManagerDashboardService";
+import OwnerDashboardService from "../../src/services/fetchRequests/OwnerDashboardService";
 
 // Mock global fetch
 global.fetch = jest.fn();
 
-describe("ManagerDashboardService", () => {
-  const mockToken = "test-manager-token";
+describe("OwnerDashboardService", () => {
+  const mockToken = "test-owner-token";
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -59,10 +59,10 @@ describe("ManagerDashboardService", () => {
         json: async () => mockBusinessMetrics,
       });
 
-      const result = await ManagerDashboardService.getBusinessMetrics(mockToken);
+      const result = await OwnerDashboardService.getBusinessMetrics(mockToken);
 
       expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/manager-dashboard/business-metrics"),
+        expect.stringContaining("/api/v1/owner-dashboard/business-metrics"),
         expect.objectContaining({
           headers: { Authorization: `Bearer ${mockToken}` },
         })
@@ -76,7 +76,7 @@ describe("ManagerDashboardService", () => {
         status: 500,
       });
 
-      const result = await ManagerDashboardService.getBusinessMetrics(mockToken);
+      const result = await OwnerDashboardService.getBusinessMetrics(mockToken);
 
       expect(result.costPerBooking.avgFeeCents).toBe(0);
       expect(result.repeatBookingRate.rate).toBe(0);
@@ -88,7 +88,7 @@ describe("ManagerDashboardService", () => {
     it("should return fallback on network error", async () => {
       global.fetch.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await ManagerDashboardService.getBusinessMetrics(mockToken);
+      const result = await OwnerDashboardService.getBusinessMetrics(mockToken);
 
       expect(result.costPerBooking).toBeDefined();
       expect(result.repeatBookingRate).toBeDefined();
@@ -103,7 +103,7 @@ describe("ManagerDashboardService", () => {
         json: async () => mockBusinessMetrics,
       });
 
-      const result = await ManagerDashboardService.getBusinessMetrics(mockToken);
+      const result = await OwnerDashboardService.getBusinessMetrics(mockToken);
 
       expect(result.costPerBooking).toBeDefined();
       expect(result.costPerBooking.avgFeeCents).toBeDefined();
@@ -148,10 +148,10 @@ describe("ManagerDashboardService", () => {
         json: async () => mockData,
       });
 
-      const result = await ManagerDashboardService.getFinancialSummary(mockToken);
+      const result = await OwnerDashboardService.getFinancialSummary(mockToken);
 
       expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/manager-dashboard/financial-summary"),
+        expect.stringContaining("/api/v1/owner-dashboard/financial-summary"),
         expect.objectContaining({
           headers: { Authorization: `Bearer ${mockToken}` },
         })
@@ -162,7 +162,7 @@ describe("ManagerDashboardService", () => {
     it("should return fallback on error", async () => {
       global.fetch.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await ManagerDashboardService.getFinancialSummary(mockToken);
+      const result = await OwnerDashboardService.getFinancialSummary(mockToken);
 
       expect(result.current.todayCents).toBe(0);
       expect(result.monthly).toEqual([]);
@@ -185,7 +185,7 @@ describe("ManagerDashboardService", () => {
         json: async () => mockData,
       });
 
-      const result = await ManagerDashboardService.getUserAnalytics(mockToken);
+      const result = await OwnerDashboardService.getUserAnalytics(mockToken);
 
       expect(result.totals).toBeDefined();
       expect(result.active).toBeDefined();
@@ -206,7 +206,7 @@ describe("ManagerDashboardService", () => {
         json: async () => mockData,
       });
 
-      const result = await ManagerDashboardService.getQuickStats(mockToken);
+      const result = await OwnerDashboardService.getQuickStats(mockToken);
 
       expect(result.todaysAppointments).toBe(5);
       expect(result.completedThisWeek).toBe(25);
@@ -227,7 +227,7 @@ describe("ManagerDashboardService", () => {
         json: async () => mockData,
       });
 
-      const result = await ManagerDashboardService.getAppUsageAnalytics(mockToken);
+      const result = await OwnerDashboardService.getAppUsageAnalytics(mockToken);
 
       expect(result.signups).toBeDefined();
       expect(result.sessions).toBeDefined();
@@ -249,10 +249,10 @@ describe("ManagerDashboardService", () => {
         json: async () => mockResult,
       });
 
-      const result = await ManagerDashboardService.recheckServiceAreas(mockToken);
+      const result = await OwnerDashboardService.recheckServiceAreas(mockToken);
 
       expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/manager-dashboard/recheck-service-areas"),
+        expect.stringContaining("/api/v1/owner-dashboard/recheck-service-areas"),
         expect.objectContaining({
           method: "POST",
           headers: {
@@ -270,7 +270,7 @@ describe("ManagerDashboardService", () => {
         json: async () => ({ error: "Failed to recheck" }),
       });
 
-      const result = await ManagerDashboardService.recheckServiceAreas(mockToken);
+      const result = await OwnerDashboardService.recheckServiceAreas(mockToken);
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();

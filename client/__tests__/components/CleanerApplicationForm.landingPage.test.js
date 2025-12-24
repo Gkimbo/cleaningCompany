@@ -349,8 +349,8 @@ describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
   });
 
   describe("Dynamic Price Updates", () => {
-    it("should reflect manager-updated pricing immediately", async () => {
-      // Simulate manager updating prices
+    it("should reflect owner-updated pricing immediately", async () => {
+      // Simulate owner updating prices
       const updatedPricing = {
         basePrice: 200,
         extraBedBathFee: 75,

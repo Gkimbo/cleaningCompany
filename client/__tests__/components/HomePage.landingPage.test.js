@@ -316,8 +316,8 @@ describe("HomePage Landing Page - Pricing Display", () => {
   });
 
   describe("Dynamic Price Updates", () => {
-    it("should reflect manager-updated pricing immediately", async () => {
-      // Simulate manager updating price from 150 to 200
+    it("should reflect owner-updated pricing immediately", async () => {
+      // Simulate owner updating price from 150 to 200
       const updatedPricing = {
         ...defaultPricing,
         basePrice: 200,

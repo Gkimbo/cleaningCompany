@@ -40,6 +40,7 @@ describe("CreateNewEmployeeForm", () => {
     firstName: "John",
     lastName: "Doe",
     email: "john.doe@example.com",
+    phone: "555-123-4567",
     setApplicationsList: jest.fn(),
   };
 
@@ -300,6 +301,7 @@ describe("CreateNewEmployeeForm", () => {
           type: "cleaner",
           firstName: "John",
           lastName: "Doe",
+          phone: "555-123-4567",
         });
       });
     });

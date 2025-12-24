@@ -40,7 +40,7 @@ jest.mock("../../src/context/PricingContext", () => ({
   }),
 }));
 
-jest.mock("../../src/components/manager/PricingWarningModal", () => {
+jest.mock("../../src/components/owner/PricingWarningModal", () => {
   const { View, Text, TouchableOpacity } = require("react-native");
   return ({ visible, onClose, onConfirm, loading }) => {
     if (!visible) return null;
@@ -60,7 +60,7 @@ jest.mock("../../src/components/manager/PricingWarningModal", () => {
 });
 
 import PricingService from "../../src/services/fetchRequests/PricingService";
-import PricingManagement from "../../src/components/manager/PricingManagement";
+import PricingManagement from "../../src/components/owner/PricingManagement";
 
 describe("PricingManagement", () => {
   const mockState = {

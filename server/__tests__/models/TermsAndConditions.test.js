@@ -154,7 +154,7 @@ describe("TermsAndConditions Model", () => {
       expect(validTypes).toContain("homeowner");
       expect(validTypes).toContain("cleaner");
       expect(validTypes).not.toContain("admin");
-      expect(validTypes).not.toContain("manager");
+      expect(validTypes).not.toContain("owner");
     });
 
     it("should not allow invalid contentType enum values", () => {

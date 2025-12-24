@@ -7,6 +7,8 @@ const session = require("express-session");
 const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 
 require("dotenv").config();
 require("./passport-config");
@@ -28,6 +30,23 @@ const allowedOrigins = [
 
 const clientURL = "http://localhost:19006"; // Default for backwards compatibility
 const secretKey = process.env.SESSION_SECRET;
+
+// Rate limiters for API security
+const apiLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 100, // 100 requests per window
+	message: { error: "Too many requests, please try again later" },
+	standardHeaders: true,
+	legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 5, // 5 attempts per 15 minutes
+	message: { error: "Too many login attempts, please try again later" },
+	standardHeaders: true,
+	legacyHeaders: false,
+});
 
 const app = express();
 const port = 3000;
@@ -84,6 +103,22 @@ io.on("connection", (socket) => {
 // Make io accessible to routes
 app.set("io", io);
 
+// Security headers with Helmet
+app.use(helmet({
+	contentSecurityPolicy: {
+		directives: {
+			defaultSrc: ["'self'"],
+			scriptSrc: ["'self'"],
+			styleSrc: ["'self'", "'unsafe-inline'"],
+			imgSrc: ["'self'", "data:", "https:"],
+		}
+	},
+	hsts: { maxAge: 31536000, includeSubDomains: true },
+	frameguard: { action: "deny" },
+	noSniff: true,
+	xssFilter: true,
+}));
+
 // CORS & headers
 app.use(
 	cors({
@@ -110,13 +145,18 @@ app.use((req, res, next) => {
 	next();
 });
 
-// Session
+// Session with secure cookie settings
 app.use(
 	session({
 		secret: secretKey,
 		resave: false,
 		saveUninitialized: false,
-		cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }, // 30 days
+		cookie: {
+			maxAge: 24 * 60 * 60 * 1000, // 24 hours (reduced from 30 days)
+			httpOnly: true,
+			secure: process.env.NODE_ENV === "production",
+			sameSite: "strict",
+		},
 	})
 );
 
@@ -130,6 +170,12 @@ app.use("/api/v1/payments/webhook", express.raw({ type: "application/json" }));
 // Normal JSON parsing for other routes (increased limit for photo uploads)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Apply rate limiting
+app.use("/api/", apiLimiter);
+app.use("/api/v1/user-sessions/login", authLimiter);
+app.use("/api/v1/user-sessions/forgot-password", authLimiter);
+app.use("/api/v1/user-sessions/forgot-username", authLimiter);
 
 // Routes
 app.use(rootRouter);

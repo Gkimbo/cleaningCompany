@@ -30,7 +30,7 @@ import TodaysAppointment from "./employeeAssignments/tiles/TodaysAppointment";
 import ReviewsOverview from "./reviews/ReviewsOverview";
 import GetHelpButton from "./messaging/GetHelpButton";
 import TaxFormsSection from "./tax/TaxFormsSection";
-import ManagerDashboard from "./manager/ManagerDashboard";
+import OwnerDashboard from "./owner/OwnerDashboard";
 import ClientDashboard from "./client/ClientDashboard";
 import CleanerDashboard from "./cleaner/CleanerDashboard";
 
@@ -115,7 +115,7 @@ const HomePage = ({ state, dispatch }) => {
 
     if (appointmentDate.toDateString() === today.toDateString()) {
       foundToday = true;
-      todaysAppointment = <TodaysAppointment appointment={appointment} />;
+      todaysAppointment = <TodaysAppointment appointment={appointment} token={state.currentUser.token} />;
       if (index < sortedAppointments.length - 1) {
         nextAppointment = (
           <View style={{ marginVertical: 15 }}>
@@ -238,9 +238,9 @@ const HomePage = ({ state, dispatch }) => {
     elevation: 3,
   };
 
-  // Show Manager Dashboard for managers
-  if (state.account === "manager1" && state.currentUser.token) {
-    return <ManagerDashboard state={state} />;
+  // Show Owner Dashboard for owners
+  if (state.account === "owner1" && state.currentUser.token) {
+    return <OwnerDashboard state={state} />;
   }
 
   // Show Cleaner Dashboard for cleaners
@@ -248,7 +248,7 @@ const HomePage = ({ state, dispatch }) => {
     return <CleanerDashboard state={state} dispatch={dispatch} />;
   }
 
-  // Show Client Dashboard for logged-in homeowners (not cleaner, not manager)
+  // Show Client Dashboard for logged-in homeowners (not cleaner, not owner)
   if (state.currentUser.token && state.account !== "cleaner") {
     return <ClientDashboard state={state} dispatch={dispatch} />;
   }

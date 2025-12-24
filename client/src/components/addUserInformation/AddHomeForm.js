@@ -33,6 +33,8 @@ const BED_SIZE_OPTIONS = [
   { value: "california_king", label: "California King" },
 ];
 
+const BATH_OPTIONS = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5+"];
+
 const AddHomeForm = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
@@ -463,20 +465,37 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.inputLabel}>
             Bathrooms <Text style={styles.inputRequired}>*</Text>
           </Text>
-          <TextInput
-            style={[
-              styles.input,
-              focusedField === "numBaths" && styles.inputFocused,
-              errors.numBaths && styles.inputError,
-            ]}
-            placeholder="2"
-            placeholderTextColor="#94a3b8"
-            value={homeData.numBaths}
-            onChangeText={(text) => updateField("numBaths", text.replace(/\D/g, ""))}
-            onFocus={() => setFocusedField("numBaths")}
-            onBlur={() => setFocusedField(null)}
-            keyboardType="number-pad"
-          />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {BATH_OPTIONS.map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  {
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: homeData.numBaths === option ? "#3b82f6" : errors.numBaths ? "#e11d48" : "#e2e8f0",
+                    backgroundColor: homeData.numBaths === option ? "#eff6ff" : "#fff",
+                  },
+                ]}
+                onPress={() => updateField("numBaths", option)}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: homeData.numBaths === option ? "#3b82f6" : "#64748b",
+                    fontWeight: homeData.numBaths === option ? "600" : "400",
+                  }}
+                >
+                  {option}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {errors.numBaths && (
+            <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.numBaths}</Text>
+          )}
         </View>
       </View>
     </View>

@@ -57,14 +57,14 @@ const BroadcastForm = ({ state }) => {
     }
   };
 
-  // Only managers can access this
-  if (state.account !== "manager1") {
+  // Only owners can access this
+  if (state.account !== "owner1") {
     return (
       <View style={messagingStyles.container}>
         <View style={messagingStyles.emptyContainer}>
           <Icon name="lock" size={48} color="#94a3b8" />
           <Text style={messagingStyles.emptyText}>
-            Only managers can send broadcast messages.
+            Only owners can send broadcast messages.
           </Text>
         </View>
       </View>

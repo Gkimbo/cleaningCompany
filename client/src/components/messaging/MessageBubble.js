@@ -13,7 +13,7 @@ const MessageBubble = ({ message, isOwn, isBroadcast }) => {
     return (
       <View style={[messagingStyles.messageBubble, messagingStyles.messageBubbleBroadcast]}>
         <Text style={messagingStyles.messageSender}>
-          {message.sender?.username || "Manager"}
+          {message.sender?.username || "Owner"}
         </Text>
         <Text style={[messagingStyles.messageText, messagingStyles.messageTextReceived]}>
           {message.content}

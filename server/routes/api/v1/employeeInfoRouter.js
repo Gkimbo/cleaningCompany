@@ -18,7 +18,10 @@ const employeeInfoRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
 employeeInfoRouter.get("/", async (req, res) => {
-  const token = req.headers.authorization.split(" ")[1];
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
   try {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;

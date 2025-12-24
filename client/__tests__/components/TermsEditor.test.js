@@ -1,7 +1,7 @@
 import React from "react";
 import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { Alert } from "react-native";
-import TermsEditor from "../../src/components/manager/TermsEditor";
+import TermsEditor from "../../src/components/owner/TermsEditor";
 
 // Mock react-router-native
 const mockNavigate = jest.fn();
@@ -38,7 +38,7 @@ import * as DocumentPicker from "expo-document-picker";
 describe("TermsEditor", () => {
   const defaultState = {
     currentUser: {
-      token: "manager-token-123",
+      token: "owner-token-123",
     },
   };
 

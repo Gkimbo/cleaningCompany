@@ -7,10 +7,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
-import ManagerDashboardService from "../../services/fetchRequests/ManagerDashboardService";
+import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
 import {
   colors,
   spacing,
@@ -117,7 +118,7 @@ const PeriodSelector = ({ selected, onSelect, options }) => (
   </View>
 );
 
-const ManagerDashboard = ({ state }) => {
+const OwnerDashboard = ({ state }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -149,13 +150,13 @@ const ManagerDashboard = ({ state }) => {
 
     try {
       const [financial, users, stats, messages, serviceAreas, appUsage, bizMetrics] = await Promise.all([
-        ManagerDashboardService.getFinancialSummary(state.currentUser.token),
-        ManagerDashboardService.getUserAnalytics(state.currentUser.token),
-        ManagerDashboardService.getQuickStats(state.currentUser.token),
-        ManagerDashboardService.getMessagesSummary(state.currentUser.token),
-        ManagerDashboardService.getServiceAreas(state.currentUser.token),
-        ManagerDashboardService.getAppUsageAnalytics(state.currentUser.token),
-        ManagerDashboardService.getBusinessMetrics(state.currentUser.token),
+        OwnerDashboardService.getFinancialSummary(state.currentUser.token),
+        OwnerDashboardService.getUserAnalytics(state.currentUser.token),
+        OwnerDashboardService.getQuickStats(state.currentUser.token),
+        OwnerDashboardService.getMessagesSummary(state.currentUser.token),
+        OwnerDashboardService.getServiceAreas(state.currentUser.token),
+        OwnerDashboardService.getAppUsageAnalytics(state.currentUser.token),
+        OwnerDashboardService.getBusinessMetrics(state.currentUser.token),
       ]);
 
       // Set data even if some endpoints return fallback values
@@ -167,7 +168,7 @@ const ManagerDashboard = ({ state }) => {
       setAppUsageData(appUsage);
       setBusinessMetrics(bizMetrics);
     } catch (err) {
-      console.error("[ManagerDashboard] Error fetching data:", err);
+      console.error("[OwnerDashboard] Error fetching data:", err);
       setError("Failed to load dashboard data");
     } finally {
       setLoading(false);
@@ -211,10 +212,10 @@ const ManagerDashboard = ({ state }) => {
     setRecheckLoading(true);
     setRecheckResult(null);
     try {
-      const result = await ManagerDashboardService.recheckServiceAreas(state.currentUser.token);
+      const result = await OwnerDashboardService.recheckServiceAreas(state.currentUser.token);
       setRecheckResult(result);
       // Refresh service area data after recheck
-      const updatedServiceAreas = await ManagerDashboardService.getServiceAreas(state.currentUser.token);
+      const updatedServiceAreas = await OwnerDashboardService.getServiceAreas(state.currentUser.token);
       setServiceAreaData(updatedServiceAreas);
     } catch (err) {
       setRecheckResult({ success: false, error: "Failed to recheck service areas" });
@@ -276,7 +277,7 @@ const ManagerDashboard = ({ state }) => {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Manager Dashboard</Text>
+        <Text style={styles.headerTitle}>Owner Dashboard</Text>
         <Text style={styles.headerSubtitle}>
           {new Date().toLocaleDateString("en-US", {
             weekday: "long",
@@ -1113,7 +1114,7 @@ const ManagerDashboard = ({ state }) => {
         </Text>
         <Pressable
           style={styles.termsButton}
-          onPress={() => navigate("/manager/terms")}
+          onPress={() => navigate("/owner/terms")}
         >
           <Text style={styles.termsButtonText}>Manage Terms & Conditions</Text>
         </Pressable>
@@ -2019,4 +2020,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ManagerDashboard;
+export default OwnerDashboard;

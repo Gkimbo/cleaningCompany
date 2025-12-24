@@ -15,9 +15,11 @@ const {
   StripeConnectAccount,
   Payment,
   JobPhoto,
+  HomeSizeAdjustmentRequest,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { getPricingConfig } = require("../../../config/businessConfig");
 
 const paymentRouter = express.Router();
@@ -885,6 +887,80 @@ cron.schedule("0 7 * * *", async () => {
   const now = new Date();
 
   try {
+    // ============================================================
+    // PART 1: Send unassigned appointment warnings (3 days before)
+    // ============================================================
+    const unassignedAppointments = await UserAppointments.findAll({
+      where: {
+        hasBeenAssigned: false,
+        unassignedWarningSent: false,
+        completed: false,
+      },
+    });
+
+    for (const appointment of unassignedAppointments) {
+      const appointmentDate = new Date(appointment.date);
+      const diffInDays = Math.floor(
+        (appointmentDate - now) / (1000 * 60 * 60 * 24)
+      );
+
+      // Send warning 3 days before (or less, if not already sent)
+      if (diffInDays <= 3 && diffInDays >= 0) {
+        try {
+          const user = await User.findByPk(appointment.userId);
+          const home = await UserHomes.findByPk(appointment.homeId);
+          if (!user || !home) continue;
+
+          // Send email notification
+          const homeAddress = {
+            street: home.address,
+            city: home.city,
+            state: home.state,
+            zipcode: home.zipcode,
+          };
+          await Email.sendUnassignedAppointmentWarning(
+            user.email,
+            homeAddress,
+            user.firstName,
+            appointmentDate
+          );
+
+          // Send push notification
+          if (user.expoPushToken) {
+            await PushNotification.sendPushUnassignedWarning(
+              user.expoPushToken,
+              user.firstName,
+              appointmentDate,
+              homeAddress
+            );
+          }
+
+          // Add in-app notification
+          const notifications = user.notifications || [];
+          const formattedDate = appointmentDate.toLocaleDateString(undefined, {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+          notifications.unshift(
+            `Heads up! Your cleaning on ${formattedDate} at ${home.address} doesn't have a cleaner assigned yet. There's still time for one to pick it up, but you may want to have a backup plan.`
+          );
+          await user.update({ notifications: notifications.slice(0, 50) });
+
+          // Mark warning as sent
+          await appointment.update({ unassignedWarningSent: true });
+
+          console.log(`[Cron] Unassigned warning sent for appointment ${appointment.id} to ${user.email}`);
+        } catch (err) {
+          console.error(`[Cron] Failed to send unassigned warning for appointment ${appointment.id}:`, err);
+        }
+      }
+    }
+
+    // ============================================================
+    // PART 2: Payment processing (existing logic)
+    // ============================================================
     // Find appointments with pending payments that have a paymentIntentId
     const appointments = await UserAppointments.findAll({
       where: {
@@ -961,12 +1037,28 @@ cron.schedule("0 7 * * *", async () => {
               description: `Scheduled cancellation - no cleaner assigned for appointment ${appointment.id}`,
             });
 
+            const cancelAddress = {
+              street: home.address,
+              city: home.city,
+              state: home.state,
+              zipcode: home.zipcode,
+            };
             await Email.sendEmailCancellation(
               user.email,
-              home,
+              cancelAddress,
               user.firstName,
               appointmentDate
             );
+
+            // Send push notification
+            if (user.expoPushToken) {
+              await PushNotification.sendPushCancellation(
+                user.expoPushToken,
+                user.firstName,
+                appointmentDate,
+                cancelAddress
+              );
+            }
 
             console.log(
               `Appointment ${appointment.id} cancelled — user notified (${user.email})`
@@ -982,6 +1074,90 @@ cron.schedule("0 7 * * *", async () => {
     }
   } catch (err) {
     console.error("Cron job error:", err);
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Home Size Adjustment Auto-Escalation Cron Job
+ * Runs hourly to escalate expired adjustment requests to owners
+ * ------------------------------------------------------
+ */
+cron.schedule("0 * * * *", async () => {
+  console.log("[Cron] Running home size adjustment expiration check...");
+
+  try {
+    const { Op } = require("sequelize");
+    const now = new Date();
+
+    // Find expired pending requests
+    const expiredRequests = await HomeSizeAdjustmentRequest.findAll({
+      where: {
+        status: "pending_homeowner",
+        expiresAt: { [Op.lte]: now },
+      },
+      include: [
+        { model: UserHomes, as: "home" },
+        { model: User, as: "cleaner" },
+        { model: User, as: "homeowner" },
+      ],
+    });
+
+    if (expiredRequests.length === 0) {
+      console.log("[Cron] No expired adjustment requests found.");
+      return;
+    }
+
+    console.log(`[Cron] Found ${expiredRequests.length} expired adjustment request(s)`);
+
+    // Get all owners
+    const owners = await User.findAll({
+      where: { role: "owner" },
+    });
+
+    for (const request of expiredRequests) {
+      try {
+        // Update status to expired (which triggers owner review)
+        await request.update({ status: "expired" });
+
+        // Notify all owners
+        for (const owner of owners) {
+          // Send email notification (use notificationEmail if set, otherwise main email)
+          const ownerNotificationEmail = owner.getNotificationEmail();
+          if (ownerNotificationEmail) {
+            await Email.sendAdjustmentNeedsOwnerReview(
+              ownerNotificationEmail,
+              owner.firstName,
+              request.id,
+              request.cleaner?.firstName || "Cleaner",
+              request.homeowner?.firstName || "Homeowner",
+              request.home ? `${request.home.address}, ${request.home.city}` : "Unknown address"
+            );
+          }
+
+          // Send push notification
+          if (owner.expoPushToken) {
+            await PushNotification.sendPushAdjustmentNeedsReview(
+              owner.expoPushToken,
+              request.id
+            );
+          }
+
+          // Add in-app notification
+          const notifications = owner.notifications || [];
+          notifications.unshift(
+            `Home size adjustment request #${request.id} has expired and needs your review.`
+          );
+          await owner.update({ notifications: notifications.slice(0, 50) });
+        }
+
+        console.log(`[Cron] Escalated request ${request.id} to owners`);
+      } catch (err) {
+        console.error(`[Cron] Failed to escalate request ${request.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("[Cron] Home size adjustment expiration check error:", err);
   }
 });
 

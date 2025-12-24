@@ -22,7 +22,10 @@ const userInfoRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
 userInfoRouter.get("/", async (req, res) => {
-  const token = req.headers.authorization.split(" ")[1];
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
   try {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
@@ -263,7 +266,7 @@ userInfoRouter.delete("/home", async (req, res) => {
 
     if (appointmentsWithinWeek.length > 0) {
       const pricing = await getPricingConfig();
-      const cancellationFeePerAppt = pricing.cancellation?.fee || 25;
+      const cancellationFeePerAppt = pricing?.cancellation?.fee ?? 25;
       const cancellationFee = cancellationFeePerAppt * appointmentsWithinWeek.length;
       const oldFee = Number(billToUpdate.dataValues.cancellationFee);
 

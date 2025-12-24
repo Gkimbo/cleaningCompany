@@ -87,6 +87,12 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.JSON,
 			allowNull: true,
 		},
+		// Track if unassigned warning notification has been sent
+		unassignedWarningSent: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
 	});
 
 	// Define the one-to-many relationship with User

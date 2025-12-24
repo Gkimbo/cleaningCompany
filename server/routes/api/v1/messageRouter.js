@@ -9,6 +9,7 @@ const {
   UserAppointments,
 } = require("../../../models");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 
 const messageRouter = express.Router();
 
@@ -226,6 +227,16 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
           content
         );
       }
+
+      // Send push notification if user has phone notifications enabled
+      if (p.user.notifications && p.user.notifications.includes("phone") && p.user.expoPushToken) {
+        await PushNotification.sendPushNewMessage(
+          p.user.expoPushToken,
+          p.user.username,
+          sender.username,
+          content
+        );
+      }
     }
 
     return res.status(201).json({ message: messageWithSender });
@@ -297,20 +308,20 @@ messageRouter.post("/conversation/appointment", authenticateToken, async (req, r
         }
       }
 
-      // Add manager as participant (find by type or username pattern)
-      const manager = await User.findOne({
+      // Add owner as participant (find by type or username pattern)
+      const owner = await User.findOne({
         where: {
           [Op.or]: [
-            { username: "manager1" },
-            { type: "manager" },
+            { username: "owner1" },
+            { type: "owner" },
           ],
         },
       });
-      if (manager && manager.id !== appointment.userId) {
+      if (owner && owner.id !== appointment.userId) {
         await ConversationParticipant.findOrCreate({
           where: {
             conversationId: conversation.id,
-            userId: manager.id,
+            userId: owner.id,
           },
         });
       }
@@ -342,7 +353,7 @@ messageRouter.post("/conversation/appointment", authenticateToken, async (req, r
 
 /**
  * POST /api/v1/messages/broadcast
- * Manager-only: Send a broadcast message to all cleaners, homeowners, or everyone
+ * Owner-only: Send a broadcast message to all cleaners, homeowners, or everyone
  */
 messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
   try {
@@ -350,10 +361,10 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
     const { content, targetAudience, title } = req.body;
     // targetAudience: "all", "cleaners", "homeowners"
 
-    // Verify user is a manager
+    // Verify user is a owner
     const user = await User.findByPk(userId);
-    if (!user || (user.username !== "manager1" && user.type !== "manager")) {
-      return res.status(403).json({ error: "Only managers can send broadcasts" });
+    if (!user || (user.username !== "owner1" && user.type !== "owner")) {
+      return res.status(403).json({ error: "Only owners can send broadcasts" });
     }
 
     if (!content || !content.trim()) {
@@ -377,17 +388,17 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
       targetUsers = await User.findAll({
         where: {
           type: { [Op.or]: [null, { [Op.ne]: "cleaner" }] },
-          username: { [Op.ne]: "manager1" },
+          username: { [Op.ne]: "owner1" },
         },
       });
     } else {
-      // "all" - everyone except the manager sending it
+      // "all" - everyone except the owner sending it
       targetUsers = await User.findAll({
         where: { id: { [Op.ne]: userId } },
       });
     }
 
-    // Add manager as participant
+    // Add owner as participant
     await ConversationParticipant.create({
       conversationId: conversation.id,
       userId,
@@ -431,6 +442,16 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
       if (targetUser.notifications && targetUser.notifications.includes("email")) {
         await Email.sendBroadcastNotification(
           targetUser.email,
+          targetUser.username,
+          title || "Company Announcement",
+          content
+        );
+      }
+
+      // Send push notification if user has phone notifications enabled
+      if (targetUser.notifications && targetUser.notifications.includes("phone") && targetUser.expoPushToken) {
+        await PushNotification.sendPushBroadcast(
+          targetUser.expoPushToken,
           targetUser.username,
           title || "Company Announcement",
           content
@@ -504,7 +525,7 @@ messageRouter.patch("/mark-read/:conversationId", authenticateToken, async (req,
 
 /**
  * POST /api/v1/messages/conversation/support
- * Create or get a support conversation with the manager
+ * Create or get a support conversation with the owner
  * For cleaners and homeowners to contact management for help
  */
 messageRouter.post("/conversation/support", authenticateToken, async (req, res) => {
@@ -517,26 +538,26 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Don't allow managers to create support conversations with themselves
-    if (user.username === "manager1" || user.type === "manager") {
-      return res.status(400).json({ error: "Managers cannot create support conversations" });
+    // Don't allow owners to create support conversations with themselves
+    if (user.username === "owner1" || user.type === "owner") {
+      return res.status(400).json({ error: "Owners cannot create support conversations" });
     }
 
-    // Find the manager
-    const manager = await User.findOne({
+    // Find the owner
+    const owner = await User.findOne({
       where: {
         [Op.or]: [
-          { username: "manager1" },
-          { type: "manager" },
+          { username: "owner1" },
+          { type: "owner" },
         ],
       },
     });
 
-    if (!manager) {
-      return res.status(404).json({ error: "No manager available" });
+    if (!owner) {
+      return res.status(404).json({ error: "No owner available" });
     }
 
-    // Check if a support conversation already exists between this user and manager
+    // Check if a support conversation already exists between this user and owner
     const existingParticipation = await ConversationParticipant.findAll({
       where: { userId },
       include: [
@@ -548,7 +569,7 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
             {
               model: ConversationParticipant,
               as: "participants",
-              where: { userId: manager.id },
+              where: { userId: owner.id },
             },
           ],
         },
@@ -588,10 +609,10 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
         userId,
       });
 
-      // Add manager as participant
+      // Add owner as participant
       await ConversationParticipant.create({
         conversationId: conversation.id,
-        userId: manager.id,
+        userId: owner.id,
       });
 
       // Reload conversation with participants
@@ -611,18 +632,28 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
         ],
       });
 
-      // Notify manager of new support conversation
+      // Notify owner of new support conversation
       const io = req.app.get("io");
-      io.to(`user_${manager.id}`).emit("new_support_conversation", {
+      io.to(`user_${owner.id}`).emit("new_support_conversation", {
         conversation,
         user: { id: user.id, username: user.username, type: user.type },
       });
 
-      // Send email notification to manager
-      if (manager.email) {
+      // Send email notification to owner
+      if (owner.email) {
         await Email.sendNewMessageNotification(
-          manager.email,
-          manager.username,
+          owner.email,
+          owner.username,
+          user.username,
+          `New support request from ${user.username}`
+        );
+      }
+
+      // Send push notification to owner
+      if (owner.expoPushToken) {
+        await PushNotification.sendPushNewMessage(
+          owner.expoPushToken,
+          owner.username,
           user.username,
           `New support request from ${user.username}`
         );

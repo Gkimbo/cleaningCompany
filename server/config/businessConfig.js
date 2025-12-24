@@ -65,7 +65,8 @@ const businessConfig = {
   pricing: {
     // Base cleaning rate
     basePrice: 150, // 1 bed/1 bath starting price
-    extraBedBathFee: 50, // Per additional bedroom or bathroom
+    extraBedBathFee: 50, // Per additional bedroom or full bathroom
+    halfBathFee: 25, // Per half bathroom
 
     // Linen services
     linens: {
@@ -171,22 +172,13 @@ function isInServiceArea(city, state, zipcode) {
 
 /**
  * Helper function to get number of cleaners needed
- * @param {number} numBeds - Number of bedrooms
- * @param {number} numBaths - Number of bathrooms
- * @returns {number} Number of cleaners needed
+ * All homes require exactly 1 cleaner regardless of size
+ * @param {number} numBeds - Number of bedrooms (unused)
+ * @param {number} numBaths - Number of bathrooms (unused)
+ * @returns {number} Number of cleaners needed (always 1)
  */
 function getCleanersNeeded(numBeds, numBaths) {
-  const beds = parseInt(numBeds) || 0;
-  const baths = parseInt(numBaths) || 0;
-
-  for (const rule of businessConfig.cleanerRequirements) {
-    if (beds <= rule.maxBeds && baths <= rule.maxBaths) {
-      return rule.cleanersNeeded;
-    }
-  }
-
-  // Default to max if no rule matches
-  return 6;
+  return 1;
 }
 
 /**

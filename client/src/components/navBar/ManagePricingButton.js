@@ -9,7 +9,7 @@ const ManagePricingButton = ({ closeModal }) => {
 
   useEffect(() => {
     if (redirect) {
-      navigate("/manager/pricing");
+      navigate("/owner/pricing");
       setRedirect(false);
     }
   }, [redirect]);

@@ -43,9 +43,9 @@ import Application from "../../src/services/fetchRequests/ApplicationClass";
 describe("TopBar", () => {
   const mockDispatch = jest.fn();
 
-  const authenticatedManagerState = {
+  const authenticatedOwnerState = {
     currentUser: { token: "valid-token" },
-    account: "manager1",
+    account: "owner1",
     appointments: [],
   };
 
@@ -73,11 +73,11 @@ describe("TopBar", () => {
   });
 
   describe("Application Notification Badge", () => {
-    it("should fetch pending applications count for manager", async () => {
+    it("should fetch pending applications count for owner", async () => {
       Application.getPendingCount.mockResolvedValue(3);
 
       render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       await waitFor(() => {
@@ -85,7 +85,7 @@ describe("TopBar", () => {
       });
     });
 
-    it("should not fetch pending applications for non-managers", async () => {
+    it("should not fetch pending applications for non-owners", async () => {
       render(
         <TopBar dispatch={mockDispatch} state={authenticatedCleanerState} />
       );
@@ -109,7 +109,7 @@ describe("TopBar", () => {
       Application.getPendingCount.mockResolvedValue(5);
 
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       const badge = await findByText("5");
@@ -120,7 +120,7 @@ describe("TopBar", () => {
       Application.getPendingCount.mockResolvedValue(0);
 
       const { queryByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       // Wait for the component to settle
@@ -136,7 +136,7 @@ describe("TopBar", () => {
       Application.getPendingCount.mockResolvedValue(15);
 
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       const badge = await findByText("9+");
@@ -147,7 +147,7 @@ describe("TopBar", () => {
       Application.getPendingCount.mockResolvedValue(7);
 
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       const badge = await findByText("7");
@@ -159,7 +159,7 @@ describe("TopBar", () => {
       Application.getPendingCount.mockResolvedValue(0);
 
       const { queryByText, getByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       // Wait for async operations
@@ -179,7 +179,7 @@ describe("TopBar", () => {
   describe("Authenticated User Views", () => {
     it("should display brand name 'Kleanr' for authenticated users", () => {
       const { getByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       expect(getByText("Kleanr")).toBeTruthy();
@@ -187,7 +187,7 @@ describe("TopBar", () => {
 
     it("should display hamburger menu for authenticated users", () => {
       const { UNSAFE_getAllByType } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       // Feather icons are used for the hamburger menu
@@ -237,7 +237,7 @@ describe("TopBar", () => {
   describe("Modal Behavior", () => {
     it("should render hamburger menu button for authenticated users", () => {
       const { UNSAFE_getAllByType } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       // Feather icons are used for the hamburger menu
@@ -247,12 +247,12 @@ describe("TopBar", () => {
     });
   });
 
-  describe("Manager-specific features", () => {
-    it("should have notification button for managers with pending applications", async () => {
+  describe("Owner-specific features", () => {
+    it("should have notification button for owners with pending applications", async () => {
       Application.getPendingCount.mockResolvedValue(3);
 
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       const badge = await findByText("3");
@@ -283,7 +283,7 @@ describe("TopBar", () => {
       Application.getPendingCount.mockResolvedValue(9);
 
       const { findByText, queryByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       const badge = await findByText("9");
@@ -295,7 +295,7 @@ describe("TopBar", () => {
       Application.getPendingCount.mockResolvedValue(10);
 
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       const badge = await findByText("9+");
@@ -306,7 +306,7 @@ describe("TopBar", () => {
       Application.getPendingCount.mockResolvedValue(1);
 
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       const badge = await findByText("1");
@@ -315,7 +315,7 @@ describe("TopBar", () => {
   });
 
   describe("Re-fetch on account change", () => {
-    it("should re-fetch pending count when account changes to manager", async () => {
+    it("should re-fetch pending count when account changes to owner", async () => {
       Application.getPendingCount.mockResolvedValue(2);
 
       const { rerender } = render(
@@ -325,9 +325,9 @@ describe("TopBar", () => {
       // Should not have been called for cleaner
       expect(Application.getPendingCount).not.toHaveBeenCalled();
 
-      // Change to manager
+      // Change to owner
       rerender(
-        <TopBar dispatch={mockDispatch} state={authenticatedManagerState} />
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
       );
 
       await waitFor(() => {

@@ -135,7 +135,7 @@ describe("User Info Router", () => {
       validHomeData.user.token = userToken;
       HomeClass.checkZipCodeExists.mockResolvedValue(true);
       isInServiceArea.mockReturnValue({ isServiceable: true });
-      getCleanersNeeded.mockReturnValue(2);
+      getCleanersNeeded.mockReturnValue(1);
       User.findOne.mockResolvedValue({ id: 1, username: "testuser" });
     });
 
@@ -224,7 +224,7 @@ describe("User Info Router", () => {
     beforeEach(() => {
       HomeClass.checkZipCodeExists.mockResolvedValue(true);
       isInServiceArea.mockReturnValue({ isServiceable: true });
-      getCleanersNeeded.mockReturnValue(2);
+      getCleanersNeeded.mockReturnValue(1);
     });
 
     it("should update home successfully", async () => {

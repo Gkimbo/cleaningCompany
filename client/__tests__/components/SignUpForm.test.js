@@ -213,7 +213,7 @@ describe("SignUpForm", () => {
       });
     });
 
-    it("should show error for username containing manager", async () => {
+    it("should show error for username containing owner", async () => {
       const { getByText, getByPlaceholderText } = renderWithProviders(
         <SignUpForm state={defaultState} dispatch={mockDispatch} />
       );
@@ -222,7 +222,7 @@ describe("SignUpForm", () => {
       fireEvent.changeText(getByPlaceholderText("Last name"), "Doe");
       fireEvent.changeText(
         getByPlaceholderText(/Choose a username/),
-        "mymanager"
+        "myowner"
       );
 
       const submitButton = getByText("Create Account");
@@ -230,7 +230,7 @@ describe("SignUpForm", () => {
 
       await waitFor(() => {
         expect(
-          getByText("Username cannot contain the word 'manager'.")
+          getByText("Username cannot contain the word 'owner'.")
         ).toBeTruthy();
       });
     });

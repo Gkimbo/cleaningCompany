@@ -11,8 +11,8 @@ const { getPricingConfig, businessConfig } = require("../../../config/businessCo
 const pricingRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
-// Middleware to verify manager access
-const verifyManager = async (req, res, next) => {
+// Middleware to verify owner access
+const verifyOwner = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -23,8 +23,8 @@ const verifyManager = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    if (!user || user.type !== "manager") {
-      return res.status(403).json({ error: "Manager access required" });
+    if (!user || user.type !== "owner") {
+      return res.status(403).json({ error: "Owner access required" });
     }
 
     req.user = user;
@@ -76,9 +76,9 @@ pricingRouter.get("/current", async (req, res) => {
 
 /**
  * GET /config
- * Get full pricing configuration with metadata (manager only)
+ * Get full pricing configuration with metadata (owner only)
  */
-pricingRouter.get("/config", verifyManager, async (req, res) => {
+pricingRouter.get("/config", verifyOwner, async (req, res) => {
   try {
     const activeConfig = await PricingConfig.getActive();
 
@@ -99,6 +99,7 @@ pricingRouter.get("/config", verifyManager, async (req, res) => {
       staticDefaults: {
         basePrice: pricing.basePrice,
         extraBedBathFee: pricing.extraBedBathFee,
+        halfBathFee: pricing.halfBathFee,
         sheetFeePerBed: pricing.linens.sheetFeePerBed,
         towelFee: pricing.linens.towelFee,
         faceClothFee: pricing.linens.faceClothFee,
@@ -123,13 +124,14 @@ pricingRouter.get("/config", verifyManager, async (req, res) => {
 
 /**
  * PUT /config
- * Update pricing configuration (manager only)
+ * Update pricing configuration (owner only)
  */
-pricingRouter.put("/config", verifyManager, async (req, res) => {
+pricingRouter.put("/config", verifyOwner, async (req, res) => {
   try {
     const {
       basePrice,
       extraBedBathFee,
+      halfBathFee,
       sheetFeePerBed,
       towelFee,
       faceClothFee,
@@ -151,6 +153,7 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
     const requiredFields = {
       basePrice,
       extraBedBathFee,
+      halfBathFee,
       sheetFeePerBed,
       towelFee,
       faceClothFee,
@@ -182,6 +185,7 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
     const numericFields = {
       basePrice,
       extraBedBathFee,
+      halfBathFee,
       sheetFeePerBed,
       towelFee,
       faceClothFee,
@@ -222,6 +226,7 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
       {
         basePrice,
         extraBedBathFee,
+        halfBathFee,
         sheetFeePerBed,
         towelFee,
         faceClothFee,
@@ -242,7 +247,7 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
     );
 
     console.log(
-      `[Pricing API] Pricing updated by manager ${req.user.id} (${req.user.username})`
+      `[Pricing API] Pricing updated by owner ${req.user.id} (${req.user.username})`
     );
 
     res.json({
@@ -259,9 +264,9 @@ pricingRouter.put("/config", verifyManager, async (req, res) => {
 
 /**
  * GET /history
- * Get pricing change history (manager only)
+ * Get pricing change history (owner only)
  */
-pricingRouter.get("/history", verifyManager, async (req, res) => {
+pricingRouter.get("/history", verifyOwner, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
     const history = await PricingConfig.getHistory(limit);
@@ -283,6 +288,7 @@ pricingRouter.get("/history", verifyManager, async (req, res) => {
         pricing: {
           basePrice: config.basePrice,
           extraBedBathFee: config.extraBedBathFee,
+          halfBathFee: config.halfBathFee,
           sheetFeePerBed: config.sheetFeePerBed,
           towelFee: config.towelFee,
           faceClothFee: config.faceClothFee,

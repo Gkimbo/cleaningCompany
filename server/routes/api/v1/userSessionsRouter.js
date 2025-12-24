@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const UserSerializer = require("../../../serializers/userSerializer");
 const authenticateToken = require("../../../middleware/authenticatedToken");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 
 const sessionRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -17,7 +18,7 @@ const secretKey = process.env.SESSION_SECRET;
 sessionRouter.post("/", passport.authenticate("local"), async (req, res) => {
 	try {
 		const user = await User.findOne({ where: { id: req.user.id } });
-		res.status(201).json(user);
+		res.status(201).json(UserSerializer.serialize(user));
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: "Internal server error" });
@@ -59,6 +60,14 @@ sessionRouter.post("/login", async (req, res) => {
 			}
 		});
 		if (user) {
+			// Check if account is locked
+			if (user.lockedUntil && user.lockedUntil > new Date()) {
+				const remainingMinutes = Math.ceil((user.lockedUntil - new Date()) / (1000 * 60));
+				return res.status(423).json({
+					error: `Account temporarily locked. Try again in ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}.`
+				});
+			}
+
 			const passwordMatch = await bcrypt.compare(password, user.password);
 			if (passwordMatch) {
 				req.login(user, async (err) => {
@@ -70,15 +79,17 @@ sessionRouter.post("/login", async (req, res) => {
 						const userAgent = req.headers["user-agent"];
 						const deviceType = detectDeviceType(userAgent);
 
-						// Update lastLogin, lastDeviceType, and increment loginCount
+						// Reset failed attempts and update login info on successful login
 						await user.update({
 							lastLogin: new Date(),
 							lastDeviceType: deviceType,
-							loginCount: (user.loginCount || 0) + 1
+							loginCount: (user.loginCount || 0) + 1,
+							failedLoginAttempts: 0,
+							lockedUntil: null
 						});
 
 						const serializedUser = UserSerializer.login(user);
-						const token = jwt.sign({ userId: user.id }, secretKey);
+						const token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '24h' });
 
 						// Check if user needs to accept new terms
 						const userType = user.type === "cleaner" ? "cleaner" : "homeowner";
@@ -114,10 +125,27 @@ sessionRouter.post("/login", async (req, res) => {
 					}
 				});
 			} else {
-				res.status(401).json({ error: "Invalid password" });
+				// Track failed login attempt
+				const failedAttempts = (user.failedLoginAttempts || 0) + 1;
+				const lockAccount = failedAttempts >= 5;
+
+				await user.update({
+					failedLoginAttempts: failedAttempts,
+					lockedUntil: lockAccount ? new Date(Date.now() + 15 * 60 * 1000) : null // 15 min lockout
+				});
+
+				if (lockAccount) {
+					return res.status(423).json({
+						error: "Account locked due to too many failed attempts. Try again in 15 minutes."
+					});
+				}
+
+				// Use same error for invalid password to prevent username enumeration
+				res.status(401).json({ error: "Invalid credentials" });
 			}
 		} else {
-			res.status(404).json({ error: "No account found" });
+			// Use same error for missing user to prevent username enumeration
+			res.status(401).json({ error: "Invalid credentials" });
 		}
 	} catch (error) {
 		console.error(error);
@@ -131,7 +159,7 @@ sessionRouter.get("/current", authenticateToken, async (req, res) => {
 			where: { id: req.userId },
 		});
 		const serializedUser = UserSerializer.serializeOne(user);
-		const token = jwt.sign({ userId: user.id }, secretKey);
+		const token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '24h' });
 		res.status(200).json({ user: serializedUser, token });
 	} catch (error) {
 		console.error(error);
@@ -165,7 +193,12 @@ sessionRouter.post("/forgot-username", async (req, res) => {
 
 		// Send username recovery email
 		await Email.sendUsernameRecovery(email, user.username);
-		console.log(`✅ Username recovery email sent to ${email}`);
+		console.log(`✅ Username recovery email sent`);
+
+		// Send push notification if user has a stored token
+		if (user.expoPushToken) {
+			await PushNotification.sendPushUsernameRecovery(user.expoPushToken, user.username);
+		}
 
 		return res.status(200).json({
 			message: "If an account with that email exists, we've sent the username to it."
@@ -206,7 +239,12 @@ sessionRouter.post("/forgot-password", async (req, res) => {
 
 		// Send password reset email
 		await Email.sendPasswordReset(email, user.username, temporaryPassword);
-		console.log(`✅ Password reset email sent to ${email}`);
+		console.log(`✅ Password reset email sent`);
+
+		// Send push notification if user has a stored token
+		if (user.expoPushToken) {
+			await PushNotification.sendPushPasswordReset(user.expoPushToken, user.username);
+		}
 
 		return res.status(200).json({
 			message: "If an account with that email exists, we've sent password reset instructions to it."

@@ -20,7 +20,7 @@ const TaxFormsSection = ({ state }) => {
   const currentYear = new Date().getFullYear();
   const availableYears = [currentYear, currentYear - 1, currentYear - 2];
 
-  const userType = state.account; // "cleaner", "manager1", or null/undefined (homeowner)
+  const userType = state.account; // "cleaner", "owner1", or null/undefined (homeowner)
 
   useEffect(() => {
     if (!state.currentUser.token) return;
@@ -38,7 +38,7 @@ const TaxFormsSection = ({ state }) => {
           state.currentUser.token,
           selectedYear
         );
-      } else if (userType === "manager1") {
+      } else if (userType === "owner1") {
         data = await TaxService.getPlatformTaxReport(
           state.currentUser.token,
           selectedYear
@@ -132,7 +132,7 @@ const TaxFormsSection = ({ state }) => {
     );
   };
 
-  const renderManagerTaxInfo = () => {
+  const renderOwnerTaxInfo = () => {
     if (!taxData) return null;
 
     const annual = taxData.incomeSummary?.annual || {};
@@ -218,8 +218,8 @@ const TaxFormsSection = ({ state }) => {
 
     if (userType === "cleaner") {
       return renderCleanerTaxInfo();
-    } else if (userType === "manager1") {
-      return renderManagerTaxInfo();
+    } else if (userType === "owner1") {
+      return renderOwnerTaxInfo();
     } else {
       return renderHomeownerTaxInfo();
     }

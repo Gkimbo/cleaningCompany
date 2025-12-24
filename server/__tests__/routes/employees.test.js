@@ -75,7 +75,7 @@ app.use("/api/v1/users", usersRouter);
 
 describe("Employee CRUD Operations", () => {
   const secretKey = process.env.SESSION_SECRET || "test_secret";
-  const managerToken = jwt.sign({ userId: 1 }, secretKey);
+  const ownerToken = jwt.sign({ userId: 1 }, secretKey);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -270,7 +270,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .get("/api/v1/users/employees")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.users).toHaveLength(2);
@@ -284,7 +284,7 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .get("/api/v1/users/employees")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.users).toHaveLength(0);
@@ -368,20 +368,20 @@ describe("Employee CRUD Operations", () => {
       expect(response.body.error).toBe("Token has expired");
     });
 
-    it("should change employee type from cleaner to manager", async () => {
+    it("should change employee type from cleaner to owner", async () => {
       const promoteData = {
         id: 10,
         username: "promoteduser",
         password: "password123",
         email: "promoted@test.com",
-        type: "manager",
+        type: "owner",
       };
 
       UserInfo.editEmployeeInDB.mockResolvedValue({
         id: 10,
         username: "promoteduser",
         email: "promoted@test.com",
-        type: "manager",
+        type: "owner",
       });
 
       const response = await request(app)
@@ -390,7 +390,7 @@ describe("Employee CRUD Operations", () => {
 
       expect(response.status).toBe(200);
       expect(UserInfo.editEmployeeInDB).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "manager" })
+        expect.objectContaining({ type: "owner" })
       );
     });
   });

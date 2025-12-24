@@ -70,7 +70,17 @@ const ApplicationTile = ({
       `Change status to "${statusConfig[newStatus]?.label}"?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Update", onPress: () => onUpdateStatus(application.id, newStatus) },
+        {
+          text: "Update",
+          onPress: () => {
+            onUpdateStatus(application.id, newStatus);
+            // If approved, automatically open the hire form
+            if (newStatus === "approved") {
+              setExpanded(true);
+              setShowHireForm(true);
+            }
+          },
+        },
       ]
     );
   };
@@ -340,16 +350,14 @@ const ApplicationTile = ({
 
           {/* Action Buttons */}
           <View style={styles.actionSection}>
-            {status !== "approved" && (
-              <Pressable
-                onPress={() => setShowHireForm(!showHireForm)}
-                style={[styles.actionButton, styles.hireButton]}
-              >
-                <Text style={styles.hireButtonText}>
-                  {showHireForm ? "Cancel Hire" : "Hire Applicant"}
-                </Text>
-              </Pressable>
-            )}
+            <Pressable
+              onPress={() => setShowHireForm(!showHireForm)}
+              style={[styles.actionButton, styles.hireButton]}
+            >
+              <Text style={styles.hireButtonText}>
+                {showHireForm ? "Cancel Hire" : "Hire Applicant"}
+              </Text>
+            </Pressable>
 
             <Pressable
               onPress={handleDelete}
@@ -386,6 +394,7 @@ const ApplicationTile = ({
                 firstName={application.firstName}
                 lastName={application.lastName}
                 email={application.email}
+                phone={application.phone}
                 setApplicationsList={onRefresh}
               />
             </View>

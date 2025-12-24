@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 import MessageService from "../../services/fetchRequests/MessageClass";
+import FetchData from "../../services/fetchRequests/fetchData";
 import {
   colors,
   spacing,
@@ -21,6 +22,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import TaxFormsSection from "../tax/TaxFormsSection";
+import HomeownerAdjustmentNotification from "./HomeownerAdjustmentNotification";
 
 const { width } = Dimensions.get("window");
 
@@ -176,6 +178,7 @@ const ClientDashboard = ({ state, dispatch }) => {
   const [firstName, setFirstName] = useState("");
   const [error, setError] = useState(null);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [pendingAdjustments, setPendingAdjustments] = useState([]);
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -192,12 +195,13 @@ const ClientDashboard = ({ state, dispatch }) => {
     setError(null);
 
     try {
-      // Fetch dashboard data and pending requests in parallel
-      const [dashboardData, requestsData] = await Promise.all([
+      // Fetch dashboard data, pending requests, and pending adjustments in parallel
+      const [dashboardData, requestsData, adjustmentsData] = await Promise.all([
         ClientDashboardService.getDashboardSummary(state.currentUser.token),
         ClientDashboardService.getPendingRequestsForClient(
           state.currentUser.token
         ),
+        FetchData.getPendingAdjustments(state.currentUser.token),
       ]);
 
       if (dashboardData.user) {
@@ -224,6 +228,11 @@ const ClientDashboard = ({ state, dispatch }) => {
 
       // Set pending requests count
       setPendingRequestsCount(requestsData.totalCount || 0);
+
+      // Set pending home size adjustments
+      if (adjustmentsData.adjustments) {
+        setPendingAdjustments(adjustmentsData.adjustments);
+      }
     } catch (err) {
       console.error("[ClientDashboard] Error fetching data:", err);
       setError("Failed to load dashboard data");
@@ -231,6 +240,11 @@ const ClientDashboard = ({ state, dispatch }) => {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const handleAdjustmentResponse = (adjustmentId, action, result) => {
+    // Remove the adjustment from the list after response
+    setPendingAdjustments(prev => prev.filter(adj => adj.id !== adjustmentId));
   };
 
   const onRefresh = useCallback(() => {
@@ -315,6 +329,23 @@ const ClientDashboard = ({ state, dispatch }) => {
         <Text style={styles.greeting}>{getGreeting()}</Text>
         <Text style={styles.dateText}>{formatDate()}</Text>
       </View>
+
+      {/* Pending Home Size Adjustments */}
+      {pendingAdjustments.length > 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Action Required</Text>
+          </View>
+          {pendingAdjustments.map((adjustment) => (
+            <HomeownerAdjustmentNotification
+              key={adjustment.id}
+              adjustment={adjustment}
+              token={state.currentUser.token}
+              onResponse={handleAdjustmentResponse}
+            />
+          ))}
+        </View>
+      )}
 
       {/* Quick Actions */}
       <View style={styles.quickActionsContainer}>

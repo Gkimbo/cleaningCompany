@@ -34,7 +34,7 @@ jest.mock("../../src/services/styles/theme", () => ({
   shadows: { xl: {} },
 }));
 
-import PricingWarningModal from "../../src/components/manager/PricingWarningModal";
+import PricingWarningModal from "../../src/components/owner/PricingWarningModal";
 
 describe("PricingWarningModal", () => {
   const mockOnClose = jest.fn();
@@ -138,7 +138,7 @@ describe("PricingWarningModal", () => {
       );
 
       expect(
-        getByText("This change will be logged with your manager ID and timestamp.")
+        getByText("This change will be logged with your owner ID and timestamp.")
       ).toBeTruthy();
     });
 

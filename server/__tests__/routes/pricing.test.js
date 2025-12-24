@@ -19,6 +19,7 @@ jest.mock("../../config/businessConfig", () => {
   const mockPricing = {
     basePrice: 150,
     extraBedBathFee: 50,
+    halfBathFee: 25,
     linens: {
       sheetFeePerBed: 30,
       towelFee: 5,
@@ -63,7 +64,7 @@ app.use("/api/v1/pricing", pricingRouter);
 
 describe("Pricing Router", () => {
   const secretKey = process.env.SESSION_SECRET || "test_secret";
-  const managerToken = jwt.sign({ userId: 1 }, secretKey);
+  const ownerToken = jwt.sign({ userId: 1 }, secretKey);
   const cleanerToken = jwt.sign({ userId: 2 }, secretKey);
   const homeownerToken = jwt.sign({ userId: 3 }, secretKey);
 
@@ -175,7 +176,7 @@ describe("Pricing Router", () => {
     });
   });
 
-  describe("GET /config (Manager Only)", () => {
+  describe("GET /config (Owner Only)", () => {
     it("should return 401 without authorization", async () => {
       const res = await request(app).get("/api/v1/pricing/config");
 
@@ -183,7 +184,7 @@ describe("Pricing Router", () => {
       expect(res.body.error).toBe("Unauthorized");
     });
 
-    it("should return 403 for non-manager user", async () => {
+    it("should return 403 for non-owner user", async () => {
       User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
 
       const res = await request(app)
@@ -191,7 +192,7 @@ describe("Pricing Router", () => {
         .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Manager access required");
+      expect(res.body.error).toBe("Owner access required");
     });
 
     it("should return 403 for homeowner user", async () => {
@@ -202,7 +203,7 @@ describe("Pricing Router", () => {
         .set("Authorization", `Bearer ${homeownerToken}`);
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Manager access required");
+      expect(res.body.error).toBe("Owner access required");
     });
 
     it("should return 401 for invalid token", async () => {
@@ -214,8 +215,8 @@ describe("Pricing Router", () => {
       expect(res.body.error).toBe("Invalid token");
     });
 
-    it("should return full config for manager when database config exists", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+    it("should return full config for owner when database config exists", async () => {
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       const mockActiveConfig = {
         id: 1,
@@ -240,7 +241,7 @@ describe("Pricing Router", () => {
 
       const res = await request(app)
         .get("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.source).toBe("database");
@@ -250,12 +251,12 @@ describe("Pricing Router", () => {
     });
 
     it("should return static defaults when no database config exists", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       PricingConfig.getActive.mockResolvedValue(null);
 
       const res = await request(app)
         .get("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.source).toBe("config");
@@ -266,10 +267,11 @@ describe("Pricing Router", () => {
     });
   });
 
-  describe("PUT /config (Manager Only)", () => {
+  describe("PUT /config (Owner Only)", () => {
     const validPricingData = {
       basePrice: 175,
       extraBedBathFee: 60,
+      halfBathFee: 30,
       sheetFeePerBed: 35,
       towelFee: 6,
       faceClothFee: 3,
@@ -295,7 +297,7 @@ describe("Pricing Router", () => {
       expect(res.status).toBe(401);
     });
 
-    it("should return 403 for non-manager user", async () => {
+    it("should return 403 for non-owner user", async () => {
       User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
 
       const res = await request(app)
@@ -307,11 +309,11 @@ describe("Pricing Router", () => {
     });
 
     it("should return 400 for missing required fields", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       const res = await request(app)
         .put("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ basePrice: 175 }); // Missing other fields
 
       expect(res.status).toBe(400);
@@ -320,11 +322,11 @@ describe("Pricing Router", () => {
     });
 
     it("should return 400 for negative numeric values", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       const res = await request(app)
         .put("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ ...validPricingData, basePrice: -50 });
 
       expect(res.status).toBe(400);
@@ -332,11 +334,11 @@ describe("Pricing Router", () => {
     });
 
     it("should return 400 for refundPercentage greater than 1", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       const res = await request(app)
         .put("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ ...validPricingData, refundPercentage: 1.5 });
 
       expect(res.status).toBe(400);
@@ -344,11 +346,11 @@ describe("Pricing Router", () => {
     });
 
     it("should return 400 for platformFeePercent greater than 1", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       const res = await request(app)
         .put("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ ...validPricingData, platformFeePercent: 1.2 });
 
       expect(res.status).toBe(400);
@@ -356,7 +358,7 @@ describe("Pricing Router", () => {
     });
 
     it("should successfully update pricing with valid data", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager", username: "manager1" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner", username: "owner1" });
 
       const mockNewConfig = {
         id: 2,
@@ -379,7 +381,7 @@ describe("Pricing Router", () => {
 
       const res = await request(app)
         .put("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(validPricingData);
 
       expect(res.status).toBe(200);
@@ -397,20 +399,20 @@ describe("Pricing Router", () => {
     });
 
     it("should allow zero values for surcharges", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager", username: "manager1" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner", username: "owner1" });
       PricingConfig.updatePricing.mockResolvedValue({ id: 2, ...validPricingData });
       PricingConfig.getFormattedPricing.mockResolvedValue({});
 
       const res = await request(app)
         .put("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ ...validPricingData, timeWindowAnytime: 0, cancellationFee: 0 });
 
       expect(res.status).toBe(200);
     });
 
     it("should handle update without changeNote", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager", username: "manager1" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner", username: "owner1" });
       PricingConfig.updatePricing.mockResolvedValue({ id: 2 });
       PricingConfig.getFormattedPricing.mockResolvedValue({});
 
@@ -418,7 +420,7 @@ describe("Pricing Router", () => {
 
       const res = await request(app)
         .put("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(dataWithoutNote);
 
       expect(res.status).toBe(200);
@@ -430,14 +432,14 @@ describe("Pricing Router", () => {
     });
   });
 
-  describe("GET /history (Manager Only)", () => {
+  describe("GET /history (Owner Only)", () => {
     it("should return 401 without authorization", async () => {
       const res = await request(app).get("/api/v1/pricing/history");
 
       expect(res.status).toBe(401);
     });
 
-    it("should return 403 for non-manager user", async () => {
+    it("should return 403 for non-owner user", async () => {
       User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
 
       const res = await request(app)
@@ -447,8 +449,8 @@ describe("Pricing Router", () => {
       expect(res.status).toBe(403);
     });
 
-    it("should return pricing history for manager", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+    it("should return pricing history for owner", async () => {
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
 
       const mockHistory = [
         {
@@ -472,7 +474,7 @@ describe("Pricing Router", () => {
           platformFeePercent: 0.1,
           highVolumeFee: 50,
           changeNote: "Updated base price",
-          updatedByUser: { id: 1, username: "manager1", email: "manager@test.com" },
+          updatedByUser: { id: 1, username: "owner1", email: "owner@test.com" },
         },
         {
           id: 1,
@@ -503,35 +505,35 @@ describe("Pricing Router", () => {
 
       const res = await request(app)
         .get("/api/v1/pricing/history")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.count).toBe(2);
       expect(res.body.history).toHaveLength(2);
       expect(res.body.history[0].isActive).toBe(true);
-      expect(res.body.history[0].updatedBy.username).toBe("manager1");
+      expect(res.body.history[0].updatedBy.username).toBe("owner1");
       expect(res.body.history[1].updatedBy).toBeNull();
     });
 
     it("should accept limit parameter", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       PricingConfig.getHistory.mockResolvedValue([]);
 
       const res = await request(app)
         .get("/api/v1/pricing/history?limit=5")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       expect(PricingConfig.getHistory).toHaveBeenCalledWith(5);
     });
 
     it("should use default limit of 20", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       PricingConfig.getHistory.mockResolvedValue([]);
 
       const res = await request(app)
         .get("/api/v1/pricing/history")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(200);
       expect(PricingConfig.getHistory).toHaveBeenCalledWith(20);
@@ -540,24 +542,25 @@ describe("Pricing Router", () => {
 
   describe("Error Handling", () => {
     it("should handle database errors gracefully in GET /config", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       PricingConfig.getActive.mockRejectedValue(new Error("Database error"));
 
       const res = await request(app)
         .get("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch pricing configuration");
     });
 
     it("should handle database errors gracefully in PUT /config", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       PricingConfig.updatePricing.mockRejectedValue(new Error("Transaction failed"));
 
       const validPricingData = {
         basePrice: 175,
         extraBedBathFee: 60,
+        halfBathFee: 30,
         sheetFeePerBed: 35,
         towelFee: 6,
         faceClothFee: 3,
@@ -576,7 +579,7 @@ describe("Pricing Router", () => {
 
       const res = await request(app)
         .put("/api/v1/pricing/config")
-        .set("Authorization", `Bearer ${managerToken}`)
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send(validPricingData);
 
       expect(res.status).toBe(500);
@@ -584,12 +587,12 @@ describe("Pricing Router", () => {
     });
 
     it("should handle database errors gracefully in GET /history", async () => {
-      User.findByPk.mockResolvedValue({ id: 1, type: "manager" });
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       PricingConfig.getHistory.mockRejectedValue(new Error("Database error"));
 
       const res = await request(app)
         .get("/api/v1/pricing/history")
-        .set("Authorization", `Bearer ${managerToken}`);
+        .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(res.status).toBe(500);
       expect(res.body.error).toBe("Failed to fetch pricing history");

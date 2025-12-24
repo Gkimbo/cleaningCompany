@@ -9,6 +9,7 @@ const defaultPricing = {
   // Base cleaning rate
   basePrice: 150,
   extraBedBathFee: 50,
+  halfBathFee: 25,
 
   // Linen services
   linens: {
@@ -154,13 +155,21 @@ export const getTimeWindowSurcharge = (pricing, timeWindow) => {
  * Helper to calculate base cleaning price
  * @param {object} pricing - Pricing object from usePricing()
  * @param {number} numBeds - Number of bedrooms
- * @param {number} numBaths - Number of bathrooms
+ * @param {number|string} numBaths - Number of bathrooms (supports decimals like 2.5)
  * @returns {number} Base price before add-ons
  */
 export const calculateBasePrice = (pricing, numBeds, numBaths) => {
   const basePrice = pricing?.basePrice || defaultPricing.basePrice;
   const extraBedBathFee = pricing?.extraBedBathFee || defaultPricing.extraBedBathFee;
+  const halfBathFee = pricing?.halfBathFee || defaultPricing.halfBathFee;
+
+  const baths = parseFloat(numBaths) || 0;
+  const fullBaths = Math.floor(baths);
+  const hasHalfBath = (baths % 1) >= 0.5;
+
   const extraBeds = Math.max(0, numBeds - 1);
-  const extraBaths = Math.max(0, numBaths - 1);
-  return basePrice + (extraBeds + extraBaths) * extraBedBathFee;
+  const extraFullBaths = Math.max(0, fullBaths - 1);
+  const halfBathCount = hasHalfBath ? 1 : 0;
+
+  return basePrice + (extraBeds * extraBedBathFee) + (extraFullBaths * extraBedBathFee) + (halfBathCount * halfBathFee);
 };

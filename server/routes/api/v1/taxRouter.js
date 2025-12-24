@@ -31,9 +31,14 @@ const PlatformTaxService = require("../../../services/PlatformTaxService");
 const taxRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
-// Encryption key for TIN storage (should be from environment in production)
-const ENCRYPTION_KEY =
-  process.env.TAX_ENCRYPTION_KEY || crypto.randomBytes(32).toString("hex");
+// Encryption key for TIN storage - REQUIRED in production
+const ENCRYPTION_KEY = process.env.TAX_ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
+  console.error("FATAL: TAX_ENCRYPTION_KEY must be set and at least 32 characters");
+  if (process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
+}
 const ENCRYPTION_IV_LENGTH = 16;
 
 // ============================================================================

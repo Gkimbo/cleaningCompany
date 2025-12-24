@@ -90,11 +90,11 @@ const ConversationList = ({ state, dispatch }) => {
       return conv.conversation?.title || "Announcement";
     }
     if (conv.conversation?.conversationType === "support") {
-      // For managers, show the user's name; for users, show "Support"
-      if (state.account === "manager1") {
+      // For owners, show the user's name; for users, show "Support"
+      if (state.account === "owner1") {
         return conv.conversation?.title || "Support Request";
       }
-      return "Support - Manager";
+      return "Support - Owner";
     }
     if (conv.conversation?.appointment) {
       const date = new Date(conv.conversation.appointment.date);
@@ -155,7 +155,7 @@ const ConversationList = ({ state, dispatch }) => {
           <Icon name="arrow-left" size={20} color="#1e3a8a" />
         </Pressable>
         <Text style={messagingStyles.headerTitle}>Messages</Text>
-        {state.account === "manager1" && (
+        {state.account === "owner1" && (
           <Pressable
             onPress={() => navigate("/messages/broadcast")}
             style={{ padding: 8 }}
