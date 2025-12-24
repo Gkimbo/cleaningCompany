@@ -54,7 +54,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 </td>
 <td width="33%" valign="top">
 
-### Managers
+### Owners
 
 - Assign cleaners to appointments
 - Monitor all platform activity
@@ -71,17 +71,17 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 
 ### Core Platform Features
 
-| Feature                 | Description                                                                                                                 |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Calendar Sync**       | Automatic iCal sync with Airbnb, VRBO, Booking.com. Auto-create cleaning appointments based on guest checkouts.             |
+| Feature                 | Description                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Calendar Sync**       | Automatic iCal sync with Airbnb, VRBO, Booking.com. Auto-create cleaning appointments based on guest checkouts.                 |
 | **Real-time Messaging** | WebSocket-powered chat between homeowners, cleaners, and support. Unread message badges in navigation. Broadcast announcements. |
-| **Payment Processing**  | Stripe integration with Apple Pay/Google Pay. Platform fee collection and instant cleaner payouts via Stripe Connect.       |
-| **Tax Management**      | Automated 1099-NEC generation for cleaners, platform income tracking, Schedule C data, and quarterly tax estimates.         |
-| **Photo Documentation** | Before/after photo capture for quality assurance. Room-by-room photo organization with notes.                               |
-| **Review System**       | Multi-aspect reviews for cleaners covering quality, timeliness, and communication.                                          |
-| **Terms & Conditions**  | Version-controlled T&C management with PDF/text support, user acceptance tracking, and legal compliance snapshots.          |
-| **Email Notifications** | Professional HTML email templates for all notifications: confirmations, cancellations, password resets, and more.           |
-| **Application System**  | Cleaner job applications with manager review workflow, notification badges, and one-click employee account creation.        |
+| **Payment Processing**  | Stripe integration with Apple Pay/Google Pay. Platform fee collection and instant cleaner payouts via Stripe Connect.           |
+| **Tax Management**      | Automated 1099-NEC generation for cleaners, platform income tracking, Schedule C data, and quarterly tax estimates.             |
+| **Photo Documentation** | Before/after photo capture for quality assurance. Room-by-room photo organization with notes.                                   |
+| **Review System**       | Multi-aspect reviews for cleaners covering quality, timeliness, and communication.                                              |
+| **Terms & Conditions**  | Version-controlled T&C management with PDF/text support, user acceptance tracking, and legal compliance snapshots.              |
+| **Email Notifications** | Professional HTML email templates for all notifications: confirmations, cancellations, password resets, and more.               |
+| **Application System**  | Cleaner job applications with owner review workflow, notification badges, and one-click employee account creation.              |
 
 ---
 
@@ -144,7 +144,7 @@ cd server
 npm install
 createdb cleaning_company_development
 npx sequelize-cli db:migrate
-npx sequelize-cli db:seed --seed managerSeeder.js
+npx sequelize-cli db:seed --seed ownerSeeder.js
 
 # Setup Client
 cd ../client
@@ -263,19 +263,19 @@ npm test -- --coverage
 
 ### Test Coverage
 
-| Area              | Server   | Client   |
-| ----------------- | -------- | -------- |
-| Authentication    | 15 tests | 18 tests |
-| Appointments      | 24 tests | -        |
-| Payments & Stripe | 89 tests | 12 tests |
-| Calendar Sync     | 16 tests | 73 tests |
-| Tax Documents     | 45 tests | 42 tests |
-| Messaging         | 21 tests | 25 tests |
-| Reviews           | 32 tests | 54 tests |
-| Email Notifications | 54 tests | -      |
-| Applications      | -        | 48 tests |
-| Terms & Conditions | 54 tests | 85 tests |
-| Integration       | 27 tests | -        |
+| Area                | Server   | Client   |
+| ------------------- | -------- | -------- |
+| Authentication      | 15 tests | 18 tests |
+| Appointments        | 24 tests | -        |
+| Payments & Stripe   | 89 tests | 12 tests |
+| Calendar Sync       | 16 tests | 73 tests |
+| Tax Documents       | 45 tests | 42 tests |
+| Messaging           | 21 tests | 25 tests |
+| Reviews             | 32 tests | 54 tests |
+| Email Notifications | 54 tests | -        |
+| Applications        | -        | 48 tests |
+| Terms & Conditions  | 54 tests | 85 tests |
+| Integration         | 27 tests | -        |
 
 ---
 
@@ -338,8 +338,8 @@ npm test -- --coverage
 | `GET`  | `/api/v1/terms/current/:type` | Get current terms (public)          |
 | `GET`  | `/api/v1/terms/check`         | Check if user needs to accept terms |
 | `POST` | `/api/v1/terms/accept`        | Accept terms                        |
-| `POST` | `/api/v1/terms`               | Create new terms version (Manager)  |
-| `GET`  | `/api/v1/terms/history/:type` | Get version history (Manager)       |
+| `POST` | `/api/v1/terms`               | Create new terms version (Owner)    |
+| `GET`  | `/api/v1/terms/history/:type` | Get version history (Owner)         |
 
 ---
 
