@@ -77,12 +77,21 @@ employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
         id,
       },
     });
-    const { zipcode } = home;
-    const { latitude, longitude } = await HomeClass.getLatAndLong(zipcode);
+
+    // Use stored coordinates if available
+    if (home.latitude && home.longitude) {
+      return res.status(200).json({
+        latitude: parseFloat(home.latitude),
+        longitude: parseFloat(home.longitude),
+      });
+    }
+
+    // Fallback to ZIP code lookup for old homes without coordinates
+    const { latitude, longitude } = await HomeClass.getLatAndLong(home.zipcode);
     return res.status(200).json({ latitude, longitude });
   } catch (error) {
     console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    return res.status(401).json({ error: "Error fetching coordinates" });
   }
 });
 

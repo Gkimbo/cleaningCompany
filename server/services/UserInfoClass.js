@@ -1,6 +1,7 @@
 const { UserHomes, User, UserAppointments, UserBills } = require("../models");
 const bcrypt = require("bcrypt");
 const { getPricingConfig } = require("../config/businessConfig");
+const HomeClass = require("./HomeClass");
 
 class UserInfoClass {
   static async addHomeToDB({
@@ -32,6 +33,14 @@ class UserInfoClass {
     bedConfigurations,
     bathroomConfigurations,
   }) {
+    // Geocode the address to get accurate coordinates
+    const { latitude, longitude } = await HomeClass.geocodeAddress(
+      address,
+      city,
+      state,
+      zipcode
+    );
+
     const newHome = await UserHomes.create({
       userId,
       nickName,
@@ -59,6 +68,8 @@ class UserInfoClass {
       dirtyTowelsLocation,
       bedConfigurations,
       bathroomConfigurations,
+      latitude,
+      longitude,
     });
     return newHome;
   }
@@ -100,6 +111,22 @@ class UserInfoClass {
       return "Home not found for editing";
     }
 
+    // Check if address changed - if so, re-geocode
+    const addressChanged =
+      existingHome.address !== address ||
+      existingHome.city !== city ||
+      existingHome.state !== state ||
+      existingHome.zipcode !== zipcode;
+
+    let latitude = existingHome.latitude;
+    let longitude = existingHome.longitude;
+
+    if (addressChanged) {
+      const coords = await HomeClass.geocodeAddress(address, city, state, zipcode);
+      latitude = coords.latitude;
+      longitude = coords.longitude;
+    }
+
     await existingHome.update({
       nickName,
       address,
@@ -126,6 +153,8 @@ class UserInfoClass {
       dirtyTowelsLocation,
       bedConfigurations,
       bathroomConfigurations,
+      latitude,
+      longitude,
     });
 
     return existingHome;

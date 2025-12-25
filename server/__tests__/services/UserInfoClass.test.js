@@ -24,7 +24,16 @@ jest.mock("bcrypt", () => ({
   hash: jest.fn(),
 }));
 
+// Mock HomeClass for geocoding
+jest.mock("../../services/HomeClass", () => ({
+  geocodeAddress: jest.fn().mockResolvedValue({
+    latitude: 42.3706,
+    longitude: -71.027,
+  }),
+}));
+
 const { UserHomes, User, UserAppointments, UserBills } = require("../../models");
+const HomeClass = require("../../services/HomeClass");
 
 describe("UserInfoClass", () => {
   beforeEach(() => {
@@ -55,13 +64,28 @@ describe("UserInfoClass", () => {
   };
 
   describe("addHomeToDB", () => {
-    it("should create a new home successfully", async () => {
-      const mockCreatedHome = { id: 1, ...validHomeData };
+    it("should create a new home successfully with geocoded coordinates", async () => {
+      const mockCreatedHome = { id: 1, ...validHomeData, latitude: 42.3706, longitude: -71.027 };
       UserHomes.create.mockResolvedValue(mockCreatedHome);
 
       const result = await UserInfoClass.addHomeToDB(validHomeData);
 
-      expect(UserHomes.create).toHaveBeenCalledWith(validHomeData);
+      // Should call geocodeAddress with address details
+      expect(HomeClass.geocodeAddress).toHaveBeenCalledWith(
+        validHomeData.address,
+        validHomeData.city,
+        validHomeData.state,
+        validHomeData.zipcode
+      );
+
+      // Should create with latitude and longitude from geocoding
+      expect(UserHomes.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ...validHomeData,
+          latitude: 42.3706,
+          longitude: -71.027,
+        })
+      );
       expect(result).toEqual(mockCreatedHome);
     });
 
@@ -101,10 +125,12 @@ describe("UserInfoClass", () => {
   describe("editHomeInDB", () => {
     const updateData = { id: 1, ...validHomeData, nickName: "Updated Beach House" };
 
-    it("should update home successfully", async () => {
+    it("should update home successfully without re-geocoding if address unchanged", async () => {
       const mockHome = {
         id: 1,
         ...validHomeData,
+        latitude: 42.3706,
+        longitude: -71.027,
         update: jest.fn(),
       };
       UserHomes.findOne.mockResolvedValue(mockHome);
@@ -112,8 +138,38 @@ describe("UserInfoClass", () => {
       const result = await UserInfoClass.editHomeInDB(updateData);
 
       expect(UserHomes.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
-      expect(mockHome.update).toHaveBeenCalled();
+      // Should not re-geocode since address hasn't changed
+      expect(HomeClass.geocodeAddress).not.toHaveBeenCalled();
+      expect(mockHome.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          latitude: 42.3706,
+          longitude: -71.027,
+        })
+      );
       expect(result).toEqual(mockHome);
+    });
+
+    it("should re-geocode when address changes", async () => {
+      const mockHome = {
+        id: 1,
+        ...validHomeData,
+        latitude: 42.3706,
+        longitude: -71.027,
+        update: jest.fn(),
+      };
+      UserHomes.findOne.mockResolvedValue(mockHome);
+
+      // Change the address
+      const updatedAddress = { ...updateData, address: "456 New St" };
+      await UserInfoClass.editHomeInDB(updatedAddress);
+
+      // Should re-geocode since address changed
+      expect(HomeClass.geocodeAddress).toHaveBeenCalledWith(
+        "456 New St",
+        validHomeData.city,
+        validHomeData.state,
+        validHomeData.zipcode
+      );
     });
 
     it("should return error message for non-existent home", async () => {
@@ -128,6 +184,8 @@ describe("UserInfoClass", () => {
       const mockHome = {
         id: 1,
         ...validHomeData,
+        latitude: 42.3706,
+        longitude: -71.027,
         update: jest.fn(),
       };
       UserHomes.findOne.mockResolvedValue(mockHome);
