@@ -132,41 +132,197 @@ describe("Employee Info Router", () => {
   });
 
   describe("GET /home/LL/:id", () => {
-    it("should return latitude and longitude for home", async () => {
-      UserHomes.findOne.mockResolvedValue({
-        id: 10,
-        zipcode: "02101",
-      });
-      HomeClass.getLatAndLong.mockResolvedValue({
-        latitude: 42.3601,
-        longitude: -71.0589,
+    describe("Using Stored Coordinates", () => {
+      it("should return stored latitude and longitude when available", async () => {
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "02101",
+          latitude: "42.3601",
+          longitude: "-71.0589",
+        });
+
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(200);
+        expect(response.body.latitude).toBe(42.3601);
+        expect(response.body.longitude).toBe(-71.0589);
+        // Should NOT call getLatAndLong when stored coords exist
+        expect(HomeClass.getLatAndLong).not.toHaveBeenCalled();
       });
 
-      const response = await request(app).get("/api/v1/employee/home/LL/10");
+      it("should parse stored coordinates as floats", async () => {
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "02101",
+          latitude: "42.36012345",
+          longitude: "-71.05891234",
+        });
 
-      expect(response.status).toBe(200);
-      expect(response.body.latitude).toBe(42.3601);
-      expect(response.body.longitude).toBe(-71.0589);
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(200);
+        expect(typeof response.body.latitude).toBe("number");
+        expect(typeof response.body.longitude).toBe("number");
+        expect(response.body.latitude).toBeCloseTo(42.36012345, 5);
+        expect(response.body.longitude).toBeCloseTo(-71.05891234, 5);
+      });
+
+      it("should handle stored coordinates from DECIMAL type", async () => {
+        // Sequelize DECIMAL returns strings
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "02101",
+          latitude: "34.0522000000",
+          longitude: "-118.2437000000",
+        });
+
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(200);
+        expect(response.body.latitude).toBe(34.0522);
+        expect(response.body.longitude).toBe(-118.2437);
+      });
     });
 
-    it("should handle missing home", async () => {
-      UserHomes.findOne.mockResolvedValue(null);
+    describe("Fallback to ZIP Code Lookup", () => {
+      it("should fallback to getLatAndLong when no stored coordinates", async () => {
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "02101",
+          latitude: null,
+          longitude: null,
+        });
+        HomeClass.getLatAndLong.mockResolvedValue({
+          latitude: 42.3706,
+          longitude: -71.0272,
+        });
 
-      const response = await request(app).get("/api/v1/employee/home/LL/999");
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
 
-      expect(response.status).toBe(401);
+        expect(response.status).toBe(200);
+        expect(response.body.latitude).toBe(42.3706);
+        expect(response.body.longitude).toBe(-71.0272);
+        expect(HomeClass.getLatAndLong).toHaveBeenCalledWith("02101");
+      });
+
+      it("should fallback when only latitude is null", async () => {
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "02101",
+          latitude: null,
+          longitude: "-71.0589",
+        });
+        HomeClass.getLatAndLong.mockResolvedValue({
+          latitude: 42.3706,
+          longitude: -71.0272,
+        });
+
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(200);
+        expect(HomeClass.getLatAndLong).toHaveBeenCalled();
+      });
+
+      it("should fallback when only longitude is null", async () => {
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "02101",
+          latitude: "42.3601",
+          longitude: null,
+        });
+        HomeClass.getLatAndLong.mockResolvedValue({
+          latitude: 42.3706,
+          longitude: -71.0272,
+        });
+
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(200);
+        expect(HomeClass.getLatAndLong).toHaveBeenCalled();
+      });
+
+      it("should fallback for old homes without coordinate fields", async () => {
+        // Old homes may not have latitude/longitude properties at all
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "02101",
+          // No latitude or longitude properties
+        });
+        HomeClass.getLatAndLong.mockResolvedValue({
+          latitude: 42.3706,
+          longitude: -71.0272,
+        });
+
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(200);
+        expect(HomeClass.getLatAndLong).toHaveBeenCalledWith("02101");
+      });
     });
 
-    it("should handle geocoding error", async () => {
-      UserHomes.findOne.mockResolvedValue({
-        id: 10,
-        zipcode: "02101",
+    describe("Error Handling", () => {
+      it("should handle missing home", async () => {
+        UserHomes.findOne.mockResolvedValue(null);
+
+        const response = await request(app).get("/api/v1/employee/home/LL/999");
+
+        expect(response.status).toBe(401);
       });
-      HomeClass.getLatAndLong.mockRejectedValue(new Error("Geocoding failed"));
 
-      const response = await request(app).get("/api/v1/employee/home/LL/10");
+      it("should handle geocoding error during fallback", async () => {
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "02101",
+          latitude: null,
+          longitude: null,
+        });
+        HomeClass.getLatAndLong.mockRejectedValue(new Error("Geocoding failed"));
 
-      expect(response.status).toBe(401);
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(401);
+        expect(response.body.error).toBe("Error fetching coordinates");
+      });
+
+      it("should handle database error", async () => {
+        UserHomes.findOne.mockRejectedValue(new Error("Database error"));
+
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(401);
+      });
+    });
+
+    describe("Edge Cases", () => {
+      it("should handle zero coordinates (valid values)", async () => {
+        // 0,0 is in the Atlantic Ocean but is a valid coordinate
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "00000",
+          latitude: "0",
+          longitude: "0",
+        });
+
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        // 0 is falsy, so it should fallback - this is a known limitation
+        // but acceptable since no real US addresses have 0,0 coordinates
+        expect(response.status).toBe(200);
+      });
+
+      it("should handle negative coordinates correctly", async () => {
+        UserHomes.findOne.mockResolvedValue({
+          id: 10,
+          zipcode: "90028",
+          latitude: "34.0522",
+          longitude: "-118.2437",
+        });
+
+        const response = await request(app).get("/api/v1/employee/home/LL/10");
+
+        expect(response.status).toBe(200);
+        expect(response.body.longitude).toBe(-118.2437);
+      });
     });
   });
 

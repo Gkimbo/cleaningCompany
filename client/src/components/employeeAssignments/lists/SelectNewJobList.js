@@ -16,6 +16,7 @@ import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
 import RequestedTile from "../tiles/RequestedTile";
 import LargeHomeWarningModal from "../../modals/LargeHomeWarningModal";
+import JobFilterModal, { defaultFilters } from "./JobFilterModal";
 import {
   colors,
   spacing,
@@ -63,6 +64,12 @@ const SelectNewJobList = ({ state }) => {
   const [bookingLoading, setBookingLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  // Filter state
+  const [filters, setFilters] = useState(defaultFilters);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [homeDetails, setHomeDetails] = useState({});
+  const [availableCities, setAvailableCities] = useState([]);
 
   const requestsAndAppointments = useMemo(() => {
     const requestsWithFlag = allRequests.map((item) => ({
@@ -148,6 +155,40 @@ const SelectNewJobList = ({ state }) => {
       return () => navigator.geolocation.clearWatch(watcher);
     }
   }, []);
+
+  // Fetch home details for filtering
+  useEffect(() => {
+    const fetchHomeDetails = async () => {
+      const allItems = [...allAppointments, ...allRequests];
+      const homeIds = [...new Set(allItems.map((a) => a.homeId))];
+      const details = {};
+
+      await Promise.all(
+        homeIds.map(async (homeId) => {
+          try {
+            const response = await FetchData.getHome(homeId);
+            if (response && !response.error) {
+              details[homeId] = response.home || response;
+            }
+          } catch (err) {
+            console.error("Error fetching home:", homeId, err);
+          }
+        })
+      );
+
+      setHomeDetails(details);
+      const cities = [...new Set(
+        Object.values(details)
+          .map((h) => h?.city)
+          .filter(Boolean)
+      )].sort();
+      setAvailableCities(cities);
+    };
+
+    if (allAppointments.length > 0 || allRequests.length > 0) {
+      fetchHomeDetails();
+    }
+  }, [allAppointments, allRequests]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -263,8 +304,87 @@ const SelectNewJobList = ({ state }) => {
     });
   }, [requestsAndAppointments, userLocation, appointmentLocations, sortOption]);
 
-  const availableJobs = sortedData.filter((item) => !item.isRequest);
-  const requestedJobs = sortedData.filter((item) => item.isRequest);
+  // Filter the sorted data
+  const filteredData = useMemo(() => {
+    return sortedData.filter((appt) => {
+      const home = homeDetails[appt.homeId];
+
+      // Distance filter (distance is in km, convert miles for comparison)
+      if (filters.distance.preset !== "any" && userLocation) {
+        const maxDistMiles = filters.distance.preset === "custom"
+          ? filters.distance.customValue
+          : parseInt(filters.distance.preset);
+        const distMiles = (appt.distance ?? 999) * 0.621371;
+        if (distMiles > maxDistMiles) return false;
+      }
+
+      // Sheets filter
+      if (filters.sheets === "needed" && appt.bringSheets !== "yes") return false;
+      if (filters.sheets === "not_needed" && appt.bringSheets === "yes") return false;
+
+      // Towels filter
+      if (filters.towels === "needed" && appt.bringTowels !== "yes") return false;
+      if (filters.towels === "not_needed" && appt.bringTowels === "yes") return false;
+
+      // Skip home-based filters if home data not loaded
+      if (home) {
+        // Bedrooms filter
+        const beds = parseFloat(home.numBeds) || 0;
+        if (filters.bedrooms !== "any") {
+          if (filters.bedrooms === "5+") {
+            if (beds < 5) return false;
+          } else {
+            if (beds !== parseInt(filters.bedrooms)) return false;
+          }
+        }
+
+        // Bathrooms filter
+        const baths = parseFloat(home.numBaths) || 0;
+        const halfBaths = parseFloat(home.numHalfBaths) || 0;
+        const totalBaths = baths + (halfBaths * 0.5);
+        if (filters.bathrooms !== "any") {
+          if (filters.bathrooms === "3+") {
+            if (totalBaths < 3) return false;
+          } else {
+            if (totalBaths !== parseFloat(filters.bathrooms)) return false;
+          }
+        }
+
+        // City filter
+        if (filters.city !== "any" && home.city !== filters.city) return false;
+      }
+
+      // Time window filter
+      if (filters.timeWindow !== "any" && appt.timeToBeCompleted !== filters.timeWindow) {
+        return false;
+      }
+
+      // Min earnings filter (90% of job price is cleaner share)
+      if (filters.minEarnings) {
+        const earnings = Number(appt.price) * 0.9;
+        if (earnings < filters.minEarnings) return false;
+      }
+
+      return true;
+    });
+  }, [sortedData, homeDetails, filters, userLocation]);
+
+  // Calculate active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.distance.preset !== "any") count++;
+    if (filters.sheets !== "any") count++;
+    if (filters.towels !== "any") count++;
+    if (filters.bedrooms !== "any") count++;
+    if (filters.bathrooms !== "any") count++;
+    if (filters.timeWindow !== "any") count++;
+    if (filters.city !== "any") count++;
+    if (filters.minEarnings) count++;
+    return count;
+  }, [filters]);
+
+  const availableJobs = filteredData.filter((item) => !item.isRequest);
+  const requestedJobs = filteredData.filter((item) => item.isRequest);
 
   const currentSortLabel = sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
 
@@ -302,17 +422,33 @@ const SelectNewJobList = ({ state }) => {
           <Text style={[styles.statLabel, styles.statLabelHighlight]}>Requested</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{sortedData.length}</Text>
+          <Text style={styles.statValue}>
+            {activeFilterCount > 0 ? `${filteredData.length}/${sortedData.length}` : sortedData.length}
+          </Text>
           <Text style={styles.statLabel}>Total</Text>
         </View>
       </View>
 
-      {/* Sort Button */}
-      <Pressable style={styles.sortButton} onPress={() => setShowSortModal(true)}>
-        <Icon name="sort" size={14} color={colors.primary[600]} />
-        <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
-        <Icon name="angle-down" size={14} color={colors.primary[600]} />
-      </Pressable>
+      {/* Controls Row */}
+      <View style={styles.controlsRow}>
+        {/* Filter Button */}
+        <Pressable style={styles.filterButton} onPress={() => setShowFilterModal(true)}>
+          <Icon name="filter" size={14} color={colors.primary[600]} />
+          <Text style={styles.filterButtonText}>Filter</Text>
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+        </Pressable>
+
+        {/* Sort Button */}
+        <Pressable style={styles.sortButton} onPress={() => setShowSortModal(true)}>
+          <Icon name="sort" size={14} color={colors.primary[600]} />
+          <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
+          <Icon name="angle-down" size={14} color={colors.primary[600]} />
+        </Pressable>
+      </View>
 
       {/* Job List */}
       <ScrollView
@@ -328,19 +464,37 @@ const SelectNewJobList = ({ state }) => {
           />
         }
       >
-        {sortedData.length === 0 ? (
+        {filteredData.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <Icon name="briefcase" size={40} color={colors.primary[300]} />
+              <Icon
+                name={activeFilterCount > 0 ? "filter" : "briefcase"}
+                size={40}
+                color={activeFilterCount > 0 ? colors.neutral[400] : colors.primary[300]}
+              />
             </View>
-            <Text style={styles.emptyTitle}>No Jobs Available</Text>
-            <Text style={styles.emptyText}>
-              Check back later to see new cleaning opportunities in your area.
+            <Text style={styles.emptyTitle}>
+              {activeFilterCount > 0 ? "No Jobs Match Your Filters" : "No Jobs Available"}
             </Text>
-            <Pressable style={styles.refreshButton} onPress={onRefresh}>
-              <Icon name="refresh" size={14} color={colors.neutral[0]} />
-              <Text style={styles.refreshButtonText}>Refresh</Text>
-            </Pressable>
+            <Text style={styles.emptyText}>
+              {activeFilterCount > 0
+                ? "Try adjusting your filters to see more opportunities."
+                : "Check back later to see new cleaning opportunities in your area."}
+            </Text>
+            {activeFilterCount > 0 ? (
+              <Pressable
+                style={styles.clearFiltersButton}
+                onPress={() => setFilters(defaultFilters)}
+              >
+                <Icon name="times-circle" size={14} color={colors.primary[600]} />
+                <Text style={styles.clearFiltersButtonText}>Clear All Filters</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={styles.refreshButton} onPress={onRefresh}>
+                <Icon name="refresh" size={14} color={colors.neutral[0]} />
+                <Text style={styles.refreshButtonText}>Refresh</Text>
+              </Pressable>
+            )}
           </View>
         ) : (
           <>
@@ -485,6 +639,17 @@ const SelectNewJobList = ({ state }) => {
         bookingInfo={bookingInfo}
         loading={bookingLoading}
       />
+
+      {/* Filter Modal */}
+      <JobFilterModal
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        filters={filters}
+        onApply={setFilters}
+        availableCities={availableCities}
+        matchCount={filteredData.length}
+        hasGeolocation={userLocation && userLocation.latitude !== 0}
+      />
     </View>
   );
 };
@@ -574,13 +739,51 @@ const styles = StyleSheet.create({
     color: colors.warning[600],
   },
 
+  // Controls Row
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+
+  // Filter Button
+  filterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+    ...shadows.sm,
+  },
+  filterButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  filterBadge: {
+    backgroundColor: colors.primary[600],
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  filterBadgeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[0],
+    fontWeight: typography.fontWeight.bold,
+  },
+
   // Sort Button
   sortButton: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-end",
-    marginRight: spacing.lg,
-    marginBottom: spacing.md,
     backgroundColor: colors.neutral[0],
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
@@ -690,6 +893,22 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.neutral[0],
+  },
+  clearFiltersButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  clearFiltersButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
   },
 
   // Modal

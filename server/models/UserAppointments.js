@@ -93,6 +93,18 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		// Track if payment capture has failed (needs manual retry)
+		paymentCaptureFailed: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		// Track if customer manually pre-paid (vs auto-captured by cron)
+		manuallyPaid: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
 	});
 
 	// Define the one-to-many relationship with User

@@ -236,6 +236,17 @@ class PushNotification {
       approved,
     });
   }
+
+  // 17. Payment failed reminder
+  static async sendPushPaymentFailed(expoPushToken, userName, appointmentDate, daysRemaining) {
+    const title = "⚠️ Payment Failed";
+    const body = `Hi ${userName}, payment failed for your ${appointmentDate} appointment. Please retry payment in the app. Cancellation in ${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "payment_failed",
+      daysRemaining,
+    });
+  }
 }
 
 module.exports = PushNotification;

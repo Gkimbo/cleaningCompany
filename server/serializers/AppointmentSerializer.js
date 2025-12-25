@@ -15,7 +15,8 @@ class AppointmentSerializer {
 			"hasBeenAssigned",
 			"employeesAssigned",
 			"empoyeesNeeded",
-			"timeToBeCompleted"
+			"timeToBeCompleted",
+			"paymentCaptureFailed"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
@@ -43,7 +44,8 @@ class AppointmentSerializer {
 			"hasBeenAssigned",
 			"employeesAssigned",
 			"empoyeesNeeded",
-			"timeToBeCompleted"
+			"timeToBeCompleted",
+			"paymentCaptureFailed"
 		];
 		
 			const newAppointment = {};

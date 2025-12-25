@@ -1,6 +1,7 @@
 import { StripeProvider } from "../src/services/stripe";
 import React, { useEffect, useReducer, useState } from "react";
-import { ActivityIndicator, SafeAreaView, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeRouter, Route, Routes } from "react-router-native";
 import { AuthProvider } from "../src/services/AuthContext";
 import { PushNotificationProvider } from "../src/services/PushNotificationContext";
@@ -72,6 +73,7 @@ import ClientRequestsList from "../src/components/client/ClientRequestsList";
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
 import PricingManagement from "../src/components/owner/PricingManagement";
+import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
@@ -169,7 +171,7 @@ export default function App() {
         <PricingProvider>
         <SocketProvider token={state.currentUser.token}>
           <UserContext.Provider value={{ currentUser: state.currentUser }}>
-          <NativeRouter>
+          <NativeRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
               <TopBar dispatch={dispatch} state={state} />
               <Routes>
@@ -405,6 +407,11 @@ export default function App() {
               <Route
                 path="/owner/pricing"
                 element={<PricingManagement state={state} />}
+              />
+              {/* Owner Withdrawals */}
+              <Route
+                path="/owner/withdrawals"
+                element={<PlatformWithdrawals state={state} />}
               />
             </Routes>
             </SafeAreaView>

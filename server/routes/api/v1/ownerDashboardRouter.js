@@ -10,6 +10,7 @@ const {
   User,
   Payment,
   PlatformEarnings,
+  OwnerWithdrawal,
   UserAppointments,
   UserHomes,
   UserApplications,
@@ -19,6 +20,7 @@ const {
   Conversation,
   sequelize,
 } = require("../../../models");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const {
   businessConfig,
   updateAllHomesServiceAreaStatus,
@@ -1274,5 +1276,266 @@ ownerDashboardRouter.put(
     }
   }
 );
+
+/**
+ * GET /stripe-balance
+ * Get current Stripe account balance
+ */
+ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
+  try {
+    // Get Stripe balance
+    const balance = await stripe.balance.retrieve();
+
+    // Get total withdrawn this year
+    const currentYear = new Date().getFullYear();
+    const withdrawnStats = await OwnerWithdrawal.getTotalWithdrawn({ taxYear: currentYear });
+
+    // Get pending withdrawals
+    const pendingWithdrawals = await OwnerWithdrawal.findAll({
+      where: {
+        status: ["pending", "processing"],
+      },
+      attributes: [
+        [sequelize.fn("SUM", sequelize.col("amount")), "totalPending"],
+        [sequelize.fn("COUNT", sequelize.col("id")), "pendingCount"],
+      ],
+      raw: true,
+    });
+
+    const availableBalance = balance.available.reduce((sum, b) => sum + b.amount, 0);
+    const pendingBalance = balance.pending.reduce((sum, b) => sum + b.amount, 0);
+    const pendingWithdrawalAmount = parseInt(pendingWithdrawals[0]?.totalPending) || 0;
+
+    res.json({
+      available: {
+        cents: availableBalance,
+        dollars: (availableBalance / 100).toFixed(2),
+      },
+      pending: {
+        cents: pendingBalance,
+        dollars: (pendingBalance / 100).toFixed(2),
+      },
+      pendingWithdrawals: {
+        cents: pendingWithdrawalAmount,
+        dollars: (pendingWithdrawalAmount / 100).toFixed(2),
+        count: parseInt(pendingWithdrawals[0]?.pendingCount) || 0,
+      },
+      withdrawableBalance: {
+        cents: availableBalance - pendingWithdrawalAmount,
+        dollars: ((availableBalance - pendingWithdrawalAmount) / 100).toFixed(2),
+      },
+      withdrawnThisYear: withdrawnStats,
+      currency: "usd",
+    });
+  } catch (error) {
+    console.error("[Owner Dashboard] Get Stripe balance error:", error);
+    res.status(500).json({ error: "Failed to retrieve balance" });
+  }
+});
+
+/**
+ * GET /withdrawals
+ * Get withdrawal history
+ */
+ownerDashboardRouter.get("/withdrawals", verifyOwner, async (req, res) => {
+  try {
+    const { limit = 20, offset = 0, status } = req.query;
+
+    const history = await OwnerWithdrawal.getHistory({
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      status,
+    });
+
+    // Format the withdrawals
+    const formattedWithdrawals = history.withdrawals.map((w) => ({
+      id: w.id,
+      transactionId: w.transactionId,
+      amount: {
+        cents: w.amount,
+        dollars: (w.amount / 100).toFixed(2),
+      },
+      status: w.status,
+      bankAccountLast4: w.bankAccountLast4,
+      bankName: w.bankName,
+      requestedAt: w.requestedAt,
+      processedAt: w.processedAt,
+      completedAt: w.completedAt,
+      estimatedArrival: w.estimatedArrival,
+      failureReason: w.failureReason,
+      description: w.description,
+    }));
+
+    res.json({
+      withdrawals: formattedWithdrawals,
+      total: history.total,
+      limit: history.limit,
+      offset: history.offset,
+    });
+  } catch (error) {
+    console.error("[Owner Dashboard] Get withdrawals error:", error);
+    res.status(500).json({ error: "Failed to retrieve withdrawal history" });
+  }
+});
+
+/**
+ * POST /withdraw
+ * Initiate a withdrawal to bank account
+ */
+ownerDashboardRouter.post("/withdraw", verifyOwner, async (req, res) => {
+  try {
+    const { amount, description } = req.body;
+
+    // Validate amount
+    if (!amount || amount < 100) {
+      return res.status(400).json({ error: "Minimum withdrawal amount is $1.00" });
+    }
+
+    // Get current balance
+    const balance = await stripe.balance.retrieve();
+    const availableBalance = balance.available.reduce((sum, b) => sum + b.amount, 0);
+
+    // Check for pending withdrawals
+    const pendingWithdrawals = await OwnerWithdrawal.findAll({
+      where: {
+        status: ["pending", "processing"],
+      },
+      attributes: [[sequelize.fn("SUM", sequelize.col("amount")), "totalPending"]],
+      raw: true,
+    });
+    const pendingAmount = parseInt(pendingWithdrawals[0]?.totalPending) || 0;
+    const withdrawableBalance = availableBalance - pendingAmount;
+
+    if (amount > withdrawableBalance) {
+      return res.status(400).json({
+        error: "Insufficient balance",
+        available: {
+          cents: withdrawableBalance,
+          dollars: (withdrawableBalance / 100).toFixed(2),
+        },
+        requested: {
+          cents: amount,
+          dollars: (amount / 100).toFixed(2),
+        },
+      });
+    }
+
+    // Create withdrawal record
+    const withdrawal = await OwnerWithdrawal.create({
+      transactionId: OwnerWithdrawal.generateTransactionId(),
+      amount,
+      status: "pending",
+      description: description || `Withdrawal of $${(amount / 100).toFixed(2)}`,
+      requestedAt: new Date(),
+    });
+
+    // Create Stripe payout
+    try {
+      const payout = await stripe.payouts.create({
+        amount,
+        currency: "usd",
+        description: `Platform withdrawal - ${withdrawal.transactionId}`,
+        metadata: {
+          withdrawalId: withdrawal.id,
+          transactionId: withdrawal.transactionId,
+        },
+      });
+
+      // Update withdrawal with Stripe payout info
+      await withdrawal.update({
+        stripePayoutId: payout.id,
+        status: "processing",
+        processedAt: new Date(),
+        estimatedArrival: payout.arrival_date
+          ? new Date(payout.arrival_date * 1000)
+          : null,
+        bankAccountLast4: payout.destination
+          ? String(payout.destination).slice(-4)
+          : null,
+      });
+
+      res.json({
+        success: true,
+        withdrawal: {
+          id: withdrawal.id,
+          transactionId: withdrawal.transactionId,
+          amount: {
+            cents: amount,
+            dollars: (amount / 100).toFixed(2),
+          },
+          status: "processing",
+          stripePayoutId: payout.id,
+          estimatedArrival: payout.arrival_date
+            ? new Date(payout.arrival_date * 1000)
+            : null,
+        },
+        message: `Withdrawal of $${(amount / 100).toFixed(2)} initiated successfully`,
+      });
+    } catch (stripeError) {
+      // If Stripe payout fails, update withdrawal record
+      await withdrawal.update({
+        status: "failed",
+        failureReason: stripeError.message,
+      });
+
+      console.error("[Owner Dashboard] Stripe payout error:", stripeError);
+      res.status(400).json({
+        error: "Failed to create payout",
+        details: stripeError.message,
+      });
+    }
+  } catch (error) {
+    console.error("[Owner Dashboard] Withdraw error:", error);
+    res.status(500).json({ error: "Failed to process withdrawal" });
+  }
+});
+
+/**
+ * POST /webhook/payout
+ * Handle Stripe payout webhooks (for updating withdrawal status)
+ * Note: This should be called from your main Stripe webhook handler
+ */
+ownerDashboardRouter.handlePayoutWebhook = async (event) => {
+  try {
+    const payout = event.data.object;
+    const withdrawalId = payout.metadata?.withdrawalId;
+
+    if (!withdrawalId) {
+      // Not a platform withdrawal, ignore
+      return;
+    }
+
+    const withdrawal = await OwnerWithdrawal.findByPk(withdrawalId);
+    if (!withdrawal) {
+      console.error(`[Owner Dashboard] Withdrawal not found: ${withdrawalId}`);
+      return;
+    }
+
+    switch (event.type) {
+      case "payout.paid":
+        await withdrawal.update({
+          status: "completed",
+          completedAt: new Date(),
+        });
+        break;
+
+      case "payout.failed":
+        await withdrawal.update({
+          status: "failed",
+          failureReason: payout.failure_message || "Payout failed",
+        });
+        break;
+
+      case "payout.canceled":
+        await withdrawal.update({
+          status: "canceled",
+          failureReason: "Payout was canceled",
+        });
+        break;
+    }
+  } catch (error) {
+    console.error("[Owner Dashboard] Payout webhook error:", error);
+  }
+};
 
 module.exports = ownerDashboardRouter;

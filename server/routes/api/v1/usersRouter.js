@@ -199,7 +199,7 @@ usersRouter.get("/employees", async (req, res) => {
 });
 
 usersRouter.patch("/employee", async (req, res) => {
-  const { id, username, password, email, type } = req.body;
+  const { id, username, password, email, type, firstName, lastName, phone } = req.body;
   try {
     const userInfo = await UserInfo.editEmployeeInDB({
       id,
@@ -207,6 +207,9 @@ usersRouter.patch("/employee", async (req, res) => {
       password,
       email,
       type,
+      firstName,
+      lastName,
+      phone,
     });
 
     return res.status(200).json({ user: userInfo });

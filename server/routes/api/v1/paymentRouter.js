@@ -16,6 +16,7 @@ const {
   Payment,
   JobPhoto,
   HomeSizeAdjustmentRequest,
+  UserPendingRequests,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
@@ -719,6 +720,11 @@ paymentRouter.post("/capture-payment", async (req, res) => {
       amountPaid: paymentIntent.amount_received || paymentIntent.amount
     });
 
+    // Clean up any pending requests for this completed appointment
+    await UserPendingRequests.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
     // Record capture transaction in Payment table
     await recordPaymentTransaction({
       type: "capture",
@@ -802,6 +808,11 @@ paymentRouter.post("/complete-job", async (req, res) => {
     // Mark as completed
     await appointment.update({ completed: true });
 
+    // Clean up any pending requests for this completed appointment
+    await UserPendingRequests.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
     // Process payouts to cleaners (90% of their share)
     const payoutResults = await processCleanerPayouts(appointment);
 
@@ -835,6 +846,10 @@ paymentRouter.post("/capture", async (req, res) => {
     // If payment is already captured, just mark complete and process payouts
     if (appointment.paid && appointment.paymentStatus === "captured") {
       await appointment.update({ completed: true });
+      // Clean up any pending requests for this completed appointment
+      await UserPendingRequests.destroy({
+        where: { appointmentId: appointment.id },
+      });
       const payoutResults = await processCleanerPayouts(appointment);
       return res.json({ success: true, payoutResults });
     }
@@ -851,6 +866,11 @@ paymentRouter.post("/capture", async (req, res) => {
       paid: true,
       completed: true,
       amountPaid: paymentIntent.amount_received || paymentIntent.amount
+    });
+
+    // Clean up any pending requests for this completed appointment
+    await UserPendingRequests.destroy({
+      where: { appointmentId: appointment.id },
     });
 
     // Record capture transaction in Payment table
@@ -872,6 +892,214 @@ paymentRouter.post("/capture", async (req, res) => {
   } catch (error) {
     console.error("Capture error:", error);
     return res.status(400).json({ error: "Payment capture failed" });
+  }
+});
+
+/**
+ * POST /retry-payment
+ * Allows homeowner to manually retry a failed payment capture
+ */
+paymentRouter.post("/retry-payment", async (req, res) => {
+  const { appointmentId } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.SESSION_SECRET);
+    const userId = decoded.userId;
+
+    const appointment = await UserAppointments.findByPk(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify user is the homeowner for this appointment
+    if (appointment.userId !== userId) {
+      return res.status(403).json({ error: "Not authorized to retry payment for this appointment" });
+    }
+
+    // Check if payment is already completed
+    if (appointment.paid && appointment.paymentStatus === "captured") {
+      return res.json({
+        success: true,
+        message: "Payment already completed",
+        alreadyPaid: true
+      });
+    }
+
+    if (!appointment.paymentIntentId) {
+      return res.status(400).json({ error: "No payment intent found for this appointment" });
+    }
+
+    // Try to capture the payment
+    const paymentIntent = await stripe.paymentIntents.capture(
+      appointment.paymentIntentId
+    );
+
+    // Update appointment status
+    await appointment.update({
+      paymentStatus: "captured",
+      paid: true,
+      paymentCaptureFailed: false,
+      amountPaid: paymentIntent.amount_received || paymentIntent.amount,
+    });
+
+    // Update payout records to "held"
+    await Payout.update(
+      { status: "held", paymentCapturedAt: new Date() },
+      { where: { appointmentId: appointment.id } }
+    );
+
+    // Record capture transaction
+    await recordPaymentTransaction({
+      type: "capture",
+      status: "succeeded",
+      amount: paymentIntent.amount_received || paymentIntent.amount,
+      userId: appointment.userId,
+      appointmentId: appointment.id,
+      stripePaymentIntentId: appointment.paymentIntentId,
+      stripeChargeId: paymentIntent.latest_charge,
+      description: `Manual payment retry for appointment ${appointment.id}`,
+    });
+
+    console.log(`[Retry Payment] Successfully captured payment for appointment ${appointment.id}`);
+
+    return res.json({
+      success: true,
+      message: "Payment successful! Your appointment is confirmed.",
+      paymentIntent: {
+        id: paymentIntent.id,
+        amount: paymentIntent.amount,
+        status: paymentIntent.status,
+      }
+    });
+  } catch (error) {
+    console.error("[Retry Payment] Error:", error);
+
+    // Check if it's a Stripe error
+    if (error.type === "StripeCardError" || error.type === "StripeInvalidRequestError") {
+      return res.status(400).json({
+        error: "Payment failed",
+        message: error.message,
+        code: error.code
+      });
+    }
+
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    return res.status(500).json({ error: "Failed to process payment. Please try again." });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Pre-Pay Endpoint — Allow customers to pay before auto-capture
+ * Captures payment early and marks as manually paid
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/pre-pay", async (req, res) => {
+  const { appointmentId } = req.body;
+  const authHeader = req.headers.authorization;
+
+  // 1. Auth check
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+  const token = authHeader.split(" ")[1];
+  let decoded;
+  try {
+    decoded = jwt.verify(token, secretKey);
+  } catch {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+
+  try {
+    // 2. Find appointment
+    const appointment = await UserAppointments.findByPk(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // 3. Verify ownership
+    if (appointment.userId !== decoded.userId) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    // 4. Check not already paid
+    if (appointment.paid) {
+      return res.status(400).json({ error: "Appointment already paid" });
+    }
+
+    // 5. Check cleaner assigned
+    if (!appointment.hasBeenAssigned) {
+      return res.status(400).json({
+        error: "Cannot pre-pay until a cleaner is assigned"
+      });
+    }
+
+    // 6. Check payment intent exists
+    if (!appointment.paymentIntentId) {
+      return res.status(400).json({ error: "No payment on file" });
+    }
+
+    // 7. Capture via Stripe
+    const paymentIntent = await stripe.paymentIntents.capture(
+      appointment.paymentIntentId
+    );
+
+    // 8. Update appointment
+    await appointment.update({
+      paymentStatus: "captured",
+      paid: true,
+      manuallyPaid: true,
+      paymentCaptureFailed: false,
+      amountPaid: paymentIntent.amount_received || paymentIntent.amount,
+    });
+
+    // 9. Update Payout records
+    await Payout.update(
+      { status: "held", paymentCapturedAt: new Date() },
+      { where: { appointmentId, status: "pending" } }
+    );
+
+    // 10. Record transaction
+    await recordPaymentTransaction({
+      type: "capture",
+      status: "succeeded",
+      amount: paymentIntent.amount_received || paymentIntent.amount,
+      userId: appointment.userId,
+      appointmentId: appointment.id,
+      stripePaymentIntentId: appointment.paymentIntentId,
+      stripeChargeId: paymentIntent.latest_charge,
+      description: `Pre-payment captured for appointment ${appointment.id}`,
+    });
+
+    // 11. Clean up any pending requests for this appointment
+    await UserPendingRequests.destroy({
+      where: { appointmentId: appointment.id },
+    });
+
+    return res.json({
+      success: true,
+      message: "Payment successful! Your appointment is confirmed.",
+      paymentIntent: {
+        id: paymentIntent.id,
+        amount: paymentIntent.amount,
+        status: paymentIntent.status,
+      },
+    });
+  } catch (error) {
+    console.error("Pre-pay error:", error);
+    if (error.type === "StripeCardError") {
+      return res.status(400).json({ error: error.message });
+    }
+    return res.status(400).json({ error: "Payment failed. Please try again." });
   }
 });
 
@@ -1019,12 +1247,19 @@ cron.schedule("0 7 * * *", async () => {
             }
           } catch (err) {
             console.error("Stripe capture failed:", err.message);
+            // Mark as failed so we notify homeowner
+            await appointment.update({ paymentCaptureFailed: true });
           }
-        } else if (appointment.paymentIntentId && diffInDays <= 2) {
-          // No cleaner assigned and we're 2 days out — cancel payment & notify client
+        } else if (appointment.paymentIntentId && diffInDays <= 1) {
+          // No cleaner assigned and we're 1 day out — cancel payment & notify client
           try {
             await stripe.paymentIntents.cancel(appointment.paymentIntentId);
             await appointment.update({ paymentStatus: "cancelled" });
+
+            // Clean up any pending requests for this appointment
+            await UserPendingRequests.destroy({
+              where: { appointmentId: appointment.id },
+            });
 
             // Record cancellation in Payment table
             await recordPaymentTransaction({
@@ -1043,6 +1278,8 @@ cron.schedule("0 7 * * *", async () => {
               state: home.state,
               zipcode: home.zipcode,
             };
+
+            // Send email notification
             await Email.sendEmailCancellation(
               user.email,
               cancelAddress,
@@ -1060,15 +1297,173 @@ cron.schedule("0 7 * * *", async () => {
               );
             }
 
+            // Add in-app notification
+            const formattedDate = appointmentDate.toLocaleDateString("en-US", {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+            const notifications = user.notifications || [];
+            notifications.unshift(
+              `Your cleaning appointment for ${formattedDate} at ${home.address} has been cancelled because no cleaner was available. You have not been charged.`
+            );
+            await user.update({ notifications: notifications.slice(0, 50) });
+
             console.log(
-              `Appointment ${appointment.id} cancelled — user notified (${user.email})`
+              `Appointment ${appointment.id} cancelled — user notified via email, push, and in-app (${user.email})`
             );
           } catch (err) {
             console.error(
-              "Failed to cancel appointment or send email:",
+              "Failed to cancel appointment or send notifications:",
               err
             );
           }
+        }
+      }
+    }
+
+    // ============================================================
+    // PART 3: Notify homeowners about failed payment captures
+    // ============================================================
+    const failedCaptureAppointments = await UserAppointments.findAll({
+      where: {
+        paymentCaptureFailed: true,
+        paymentStatus: "pending",
+        paid: false,
+        completed: false,
+      },
+    });
+
+    for (const appointment of failedCaptureAppointments) {
+      const appointmentDate = new Date(appointment.date);
+      const diffInDays = Math.floor(
+        (appointmentDate - now) / (1000 * 60 * 60 * 24)
+      );
+
+      // Cancel if 1 day or less and still not paid
+      if (diffInDays <= 1) {
+        try {
+          // Cancel the appointment
+          if (appointment.paymentIntentId) {
+            await stripe.paymentIntents.cancel(appointment.paymentIntentId);
+          }
+          await appointment.update({
+            paymentStatus: "cancelled",
+            paymentCaptureFailed: false,
+          });
+
+          // Clean up any pending requests for this appointment
+          await UserPendingRequests.destroy({
+            where: { appointmentId: appointment.id },
+          });
+
+          const user = await User.findByPk(appointment.userId);
+          const home = await UserHomes.findByPk(appointment.homeId);
+          if (!user || !home) continue;
+
+          const cancelAddress = {
+            street: home.address,
+            city: home.city,
+            state: home.state,
+            zipcode: home.zipcode,
+          };
+
+          // Send cancellation email
+          await Email.sendEmailCancellation(
+            user.email,
+            cancelAddress,
+            user.firstName,
+            appointmentDate
+          );
+
+          // Send push notification
+          if (user.expoPushToken) {
+            await PushNotification.sendPushCancellation(
+              user.expoPushToken,
+              user.firstName,
+              appointmentDate,
+              cancelAddress
+            );
+          }
+
+          // Add in-app notification
+          const formattedDate = appointmentDate.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+          const notifications = user.notifications || [];
+          notifications.unshift(
+            `Your cleaning appointment for ${formattedDate} at ${home.address} has been cancelled due to payment failure. Please rebook when ready.`
+          );
+          await user.update({ notifications: notifications.slice(0, 50) });
+
+          console.log(
+            `[Cron] Appointment ${appointment.id} cancelled due to payment failure — user notified (${user.email})`
+          );
+        } catch (err) {
+          console.error(
+            `[Cron] Failed to cancel appointment ${appointment.id} with payment failure:`,
+            err
+          );
+        }
+      } else {
+        // More than 1 day out - send daily reminder to fix payment
+        try {
+          const user = await User.findByPk(appointment.userId);
+          const home = await UserHomes.findByPk(appointment.homeId);
+          if (!user || !home) continue;
+
+          const homeAddress = {
+            street: home.address,
+            city: home.city,
+            state: home.state,
+            zipcode: home.zipcode,
+          };
+
+          const formattedDate = appointmentDate.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+
+          // Send email about payment failure
+          await Email.sendPaymentFailedReminder(
+            user.email,
+            user.firstName,
+            homeAddress,
+            appointmentDate,
+            diffInDays
+          );
+
+          // Send push notification
+          if (user.expoPushToken) {
+            await PushNotification.sendPushPaymentFailed(
+              user.expoPushToken,
+              user.firstName,
+              formattedDate,
+              diffInDays
+            );
+          }
+
+          // Add in-app notification
+          const notifications = user.notifications || [];
+          notifications.unshift(
+            `Payment failed for your cleaning on ${formattedDate} at ${home.address}. Your appointment will be cancelled in ${diffInDays} day${diffInDays !== 1 ? "s" : ""} if payment is not completed. Please log in and retry payment.`
+          );
+          await user.update({ notifications: notifications.slice(0, 50) });
+
+          console.log(
+            `[Cron] Payment failure reminder sent for appointment ${appointment.id} to ${user.email} (${diffInDays} days remaining)`
+          );
+        } catch (err) {
+          console.error(
+            `[Cron] Failed to send payment failure reminder for appointment ${appointment.id}:`,
+            err
+          );
         }
       }
     }
@@ -1186,6 +1581,11 @@ const handleCancelOrRefund = async (req, res) => {
       result = await stripe.paymentIntents.cancel(paymentIntent.id);
       await appointment.update({ paymentStatus: "cancelled" });
 
+      // Clean up any pending requests for this appointment
+      await UserPendingRequests.destroy({
+        where: { appointmentId: appointment.id },
+      });
+
       // Record cancellation - update authorization status
       await recordPaymentTransaction({
         type: "authorization",
@@ -1201,6 +1601,11 @@ const handleCancelOrRefund = async (req, res) => {
         payment_intent: paymentIntent.id,
       });
       await appointment.update({ paymentStatus: "refunded", paid: false });
+
+      // Clean up any pending requests for this appointment
+      await UserPendingRequests.destroy({
+        where: { appointmentId: appointment.id },
+      });
 
       // Record refund transaction
       await recordPaymentTransaction({
@@ -1305,6 +1710,7 @@ paymentRouter.post(
 );
 
 module.exports = paymentRouter;
+module.exports.recordPaymentTransaction = recordPaymentTransaction;
 
 // const user = await User.findByPk(userId, {
 // 	include: [

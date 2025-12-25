@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import { usePaymentSheet } from "../../services/stripe";
 import { API_BASE } from "../../services/config";
 
@@ -21,6 +22,10 @@ const Bill = ({ state, dispatch }) => {
   const [unpaidAppointments, setUnpaidAppointments] = useState([]);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [failedPayments, setFailedPayments] = useState([]);
+  const [upcomingPayable, setUpcomingPayable] = useState([]);
+  const [retryingPaymentId, setRetryingPaymentId] = useState(null);
+  const [prePayingId, setPrePayingId] = useState(null);
   const navigate = useNavigate();
   const { openPaymentSheet } = usePaymentSheet();
 
@@ -38,9 +43,33 @@ const Bill = ({ state, dispatch }) => {
     : 0;
 
   useEffect(() => {
+    const appointments = state?.appointments || [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     // Get unpaid appointments
-    const unpaid = (state?.appointments || []).filter((appt) => !appt.paid);
+    const unpaid = appointments.filter((appt) => !appt.paid);
     setUnpaidAppointments(unpaid);
+
+    // Failed payments - need retry
+    const failed = appointments.filter(
+      appt => appt.paymentCaptureFailed && !appt.paid
+    );
+    setFailedPayments(failed);
+
+    // Upcoming payable - can pre-pay (has cleaner, has payment intent, not paid, future date)
+    const upcoming = appointments.filter(appt => {
+      const apptDate = new Date(appt.date);
+      apptDate.setHours(0, 0, 0, 0);
+      return (
+        !appt.paid &&
+        apptDate > today &&
+        appt.hasBeenAssigned &&
+        appt.paymentIntentId &&
+        !appt.paymentCaptureFailed
+      );
+    });
+    setUpcomingPayable(upcoming);
 
     // Calculate default amount
     const defaultAmount = appointmentOverdue - totalPaid;
@@ -175,6 +204,50 @@ const Bill = ({ state, dispatch }) => {
     }
   };
 
+  const handleRetryPayment = async (appointmentId) => {
+    setRetryingPaymentId(appointmentId);
+    try {
+      const response = await fetch(`${API_BASE}/payments/retry-payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state?.token}`,
+        },
+        body: JSON.stringify({ appointmentId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      Alert.alert("Success", "Payment completed successfully!");
+      fetchPaymentHistory();
+    } catch (err) {
+      Alert.alert("Error", err.message || "Payment failed. Please try again.");
+    } finally {
+      setRetryingPaymentId(null);
+    }
+  };
+
+  const handlePrePay = async (appointmentId) => {
+    setPrePayingId(appointmentId);
+    try {
+      const response = await fetch(`${API_BASE}/payments/pre-pay`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state?.token}`,
+        },
+        body: JSON.stringify({ appointmentId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      Alert.alert("Success", "Payment completed! You're all set for this appointment.");
+      fetchPaymentHistory();
+    } catch (err) {
+      Alert.alert("Error", err.message || "Payment failed. Please try again.");
+    } finally {
+      setPrePayingId(null);
+    }
+  };
+
   return (
     <ScrollView
       contentContainerStyle={{
@@ -238,6 +311,68 @@ const Bill = ({ state, dispatch }) => {
             </Text>
           )}
       </View>
+
+      {/* Failed Payments Section */}
+      {failedPayments.length > 0 && (
+        <View
+          style={{
+            backgroundColor: "#fef2f2",
+            borderRadius: 15,
+            padding: 20,
+            marginBottom: 15,
+            borderWidth: 1,
+            borderColor: "#fecaca",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <Icon name="exclamation-triangle" size={16} color="#dc2626" />
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#1f2937" }}>
+              Payment Failed
+            </Text>
+          </View>
+          <Text style={{ fontSize: 13, color: "#6b7280", marginBottom: 15 }}>
+            Retry to avoid appointment cancellation
+          </Text>
+          {failedPayments.map(appt => (
+            <View
+              key={appt.id}
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 12,
+                padding: 15,
+                marginBottom: 10,
+              }}
+            >
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#1f2937" }}>
+                  {new Date(appt.date).toLocaleDateString()}
+                </Text>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#dc2626" }}>
+                  ${appt.price}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => handleRetryPayment(appt.id)}
+                disabled={retryingPaymentId === appt.id}
+                style={{
+                  backgroundColor: retryingPaymentId === appt.id ? "#f87171" : "#dc2626",
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: "center",
+                }}
+              >
+                {retryingPaymentId === appt.id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
+                    Retry Payment
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Amount Input Card */}
       <View
@@ -313,6 +448,68 @@ const Bill = ({ state, dispatch }) => {
             </Pressable>
           )}
         </>
+      )}
+
+      {/* Pre-Pay Section */}
+      {upcomingPayable.length > 0 && (
+        <View
+          style={{
+            backgroundColor: "#eff6ff",
+            borderRadius: 15,
+            padding: 20,
+            marginTop: 20,
+            borderWidth: 1,
+            borderColor: "#bfdbfe",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <Icon name="calendar-check-o" size={16} color="#2563eb" />
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#1f2937" }}>
+              Pay Ahead
+            </Text>
+          </View>
+          <Text style={{ fontSize: 13, color: "#6b7280", marginBottom: 15 }}>
+            Pre-pay for upcoming appointments
+          </Text>
+          {upcomingPayable.map(appt => (
+            <View
+              key={appt.id}
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 12,
+                padding: 15,
+                marginBottom: 10,
+              }}
+            >
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: "#1f2937" }}>
+                  {new Date(appt.date).toLocaleDateString()}
+                </Text>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#1f2937" }}>
+                  ${appt.price}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => handlePrePay(appt.id)}
+                disabled={prePayingId === appt.id}
+                style={{
+                  backgroundColor: prePayingId === appt.id ? "#60a5fa" : "#2563eb",
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: "center",
+                }}
+              >
+                {prePayingId === appt.id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
+                    Pay Now
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ))}
+        </View>
       )}
 
       {/* Payment History Section */}

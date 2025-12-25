@@ -34,6 +34,20 @@ import CreateNewEmployeeForm from "../../src/components/admin/CleanerApplication
 import FetchData from "../../src/services/fetchRequests/fetchData";
 import Application from "../../src/services/fetchRequests/ApplicationClass";
 
+// Mock Math.random for predictable password generation
+const mockMathRandom = () => {
+  let callCount = 0;
+  const values = [
+    0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, // Initial 8 required chars
+    0.15, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, // Fill remaining
+    0.12, 0.23, 0.34, 0.45, 0.56, 0.67, 0.78, 0.89, // Shuffle values
+    0.11, 0.22, 0.33, 0.44, 0.55, 0.66, 0.77, 0.88,
+  ];
+  return jest.spyOn(Math, "random").mockImplementation(() => {
+    return values[callCount++ % values.length];
+  });
+};
+
 describe("CreateNewEmployeeForm", () => {
   const defaultProps = {
     id: 1,
@@ -44,13 +58,19 @@ describe("CreateNewEmployeeForm", () => {
     setApplicationsList: jest.fn(),
   };
 
+  let mathRandomSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    mathRandomSpy = mockMathRandom();
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    if (mathRandomSpy) {
+      mathRandomSpy.mockRestore();
+    }
   });
 
   describe("Username Generation", () => {
@@ -170,13 +190,15 @@ describe("CreateNewEmployeeForm", () => {
       expect(getByDisplayValue("john.doe@example.com")).toBeTruthy();
     });
 
-    it("should generate password from name", () => {
-      const { getByDisplayValue } = render(
+    it("should generate a strong random password", () => {
+      const { getByPlaceholderText } = render(
         <CreateNewEmployeeForm {...defaultProps} />
       );
 
-      // Password format: lastName$firstName124
-      expect(getByDisplayValue("Doe$John124")).toBeTruthy();
+      // Password should be auto-generated (16 chars with uppercase, lowercase, numbers, special)
+      const passwordInput = getByPlaceholderText("Password");
+      expect(passwordInput.props.value).toBeTruthy();
+      expect(passwordInput.props.value.length).toBe(16);
     });
   });
 
@@ -294,15 +316,20 @@ describe("CreateNewEmployeeForm", () => {
       });
 
       await waitFor(() => {
-        expect(FetchData.makeNewEmployee).toHaveBeenCalledWith({
-          userName: "johnd",
-          password: "Doe$John124",
-          email: "john.doe@example.com",
-          type: "cleaner",
-          firstName: "John",
-          lastName: "Doe",
-          phone: "555-123-4567",
-        });
+        expect(FetchData.makeNewEmployee).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userName: "johnd",
+            email: "john.doe@example.com",
+            type: "cleaner",
+            firstName: "John",
+            lastName: "Doe",
+            phone: "555-123-4567",
+          })
+        );
+        // Verify password is a 16-char strong password
+        const callArg = FetchData.makeNewEmployee.mock.calls[0][0];
+        expect(callArg.password).toBeTruthy();
+        expect(callArg.password.length).toBe(16);
       });
     });
 
@@ -458,12 +485,12 @@ describe("CreateNewEmployeeForm", () => {
   });
 
   describe("Password Visibility Toggle", () => {
-    it("should toggle password visibility when icon is pressed", () => {
-      const { getByDisplayValue } = render(
+    it("should have password hidden by default", () => {
+      const { getByPlaceholderText } = render(
         <CreateNewEmployeeForm {...defaultProps} />
       );
 
-      const passwordInput = getByDisplayValue("Doe$John124");
+      const passwordInput = getByPlaceholderText("Password");
 
       // Initially password should be hidden
       expect(passwordInput.props.secureTextEntry).toBe(true);

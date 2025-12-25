@@ -161,6 +161,13 @@ const HomeAppointmentTile = ({
     );
   };
 
+  const handlePaymentRetried = (appointmentId) => {
+    // Update local state to clear the paymentCaptureFailed flag
+    setAppointments(prev =>
+      prev.map(a => a.id === appointmentId ? { ...a, paymentCaptureFailed: false } : a)
+    );
+  };
+
   const renderAppointment = (appointment, index) => {
     const isDisabled = isWithinOneWeek(appointment.date);
     return (
@@ -193,6 +200,8 @@ const HomeAppointmentTile = ({
         sheetConfigurations={appointment.sheetConfigurations}
         towelConfigurations={appointment.towelConfigurations}
         onConfigurationsUpdate={handleConfigurationsUpdate}
+        paymentCaptureFailed={appointment.paymentCaptureFailed}
+        onPaymentRetried={handlePaymentRetried}
       />
     );
   };

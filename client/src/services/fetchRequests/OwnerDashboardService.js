@@ -254,6 +254,80 @@ class OwnerDashboardService {
       return { success: false, error: "Network error. Please try again." };
     }
   }
+
+  // ============ Withdrawal Methods ============
+
+  static async getStripeBalance(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/owner-dashboard/stripe-balance`,
+      token,
+      {
+        available: { cents: 0, dollars: "0.00" },
+        pending: { cents: 0, dollars: "0.00" },
+        pendingWithdrawals: { cents: 0, dollars: "0.00", count: 0 },
+        withdrawableBalance: { cents: 0, dollars: "0.00" },
+        withdrawnThisYear: {
+          totalWithdrawnCents: 0,
+          totalWithdrawnDollars: "0.00",
+          withdrawalCount: 0,
+        },
+        currency: "usd",
+      }
+    );
+  }
+
+  static async getWithdrawals(token, options = {}) {
+    const { limit = 20, offset = 0, status } = options;
+    const params = new URLSearchParams({ limit, offset });
+    if (status) params.append("status", status);
+
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/owner-dashboard/withdrawals?${params}`,
+      token,
+      {
+        withdrawals: [],
+        total: 0,
+        limit: 20,
+        offset: 0,
+      }
+    );
+  }
+
+  static async createWithdrawal(token, amountCents, description = "") {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/owner-dashboard/withdraw`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ amount: amountCents, description }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || "Failed to create withdrawal",
+          details: data.details,
+          available: data.available,
+          requested: data.requested,
+        };
+      }
+
+      return {
+        success: true,
+        ...data,
+      };
+    } catch (error) {
+      console.error("[OwnerDashboard] createWithdrawal failed:", error.message);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
 }
 
 export default OwnerDashboardService;

@@ -97,6 +97,9 @@ jest.mock("../../models", () => ({
     findByPk: jest.fn(),
     findAll: jest.fn().mockResolvedValue([]),
   },
+  UserPendingRequests: {
+    destroy: jest.fn().mockResolvedValue(0),
+  },
 }));
 
 jest.mock("../../services/sendNotifications/EmailClass", () => ({

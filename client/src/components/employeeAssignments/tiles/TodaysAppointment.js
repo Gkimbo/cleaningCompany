@@ -1,13 +1,24 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, Modal } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  Modal,
+  Linking,
+  Alert,
+  Platform,
+} from "react-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import JobCompletionFlow from "../jobPhotos/JobCompletionFlow";
 import HomeSizeConfirmationModal from "../HomeSizeConfirmationModal";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
+import Icon from "react-native-vector-icons/FontAwesome";
 
-const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
+const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token }) => {
   const { pricing } = usePricing();
+  const [jobStarted, setJobStarted] = useState(false);
   const [home, setHome] = useState({
     address: "",
     city: "",
@@ -45,6 +56,25 @@ const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
     });
   }, [appointment.homeId]);
 
+  // Check if job has been started (before photos taken but not completed)
+  useEffect(() => {
+    const checkStartedStatus = async () => {
+      try {
+        const response = await FetchData.get(
+          `/api/v1/job-photos/${appointment.id}/status`,
+          token
+        );
+        // Job is "started" if before photos exist but not completed
+        setJobStarted(response.hasBeforePhotos && !appointment.completed);
+      } catch (err) {
+        // Assume not started if check fails
+      }
+    };
+    if (token && appointment.id) {
+      checkStartedStatus();
+    }
+  }, [appointment.id, appointment.completed, token]);
+
   const handleStartJob = () => {
     // Show home size confirmation modal before starting job
     setShowHomeSizeModal(true);
@@ -76,6 +106,100 @@ const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
     setShowCompletionFlow(false);
   };
 
+  const handleUndoStart = () => {
+    Alert.alert(
+      "Undo Start Job",
+      "Are you sure you want to undo starting this job? This will delete any photos taken.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Undo Start",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await FetchData.post(
+                `/api/v1/appointments/${appointment.id}/unstart`,
+                {},
+                token
+              );
+              setJobStarted(false);
+              setShowCompletionFlow(false);
+              if (onJobUnstarted) onJobUnstarted(appointment.id);
+            } catch (err) {
+              Alert.alert("Error", "Could not undo start. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getFullAddress = () => {
+    return `${home.address}, ${home.city}, ${home.state} ${home.zipcode}`;
+  };
+
+  const openMapsApp = (app) => {
+    const fullAddress = getFullAddress();
+    const encodedAddress = encodeURIComponent(fullAddress);
+
+    let url;
+    switch (app) {
+      case "apple":
+        url = `maps://maps.apple.com/?daddr=${encodedAddress}`;
+        break;
+      case "google":
+        url = `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`;
+        break;
+      case "waze":
+        url = `https://waze.com/ul?q=${encodedAddress}&navigate=yes`;
+        break;
+      default:
+        return;
+    }
+
+    Linking.canOpenURL(url)
+      .then((supported) => {
+        if (supported) {
+          Linking.openURL(url);
+        } else {
+          // Fallback to Google Maps web if app not available
+          Linking.openURL(
+            `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("Error opening maps:", err);
+        Alert.alert("Error", "Could not open maps application");
+      });
+  };
+
+  const handleAddressPress = () => {
+    const options = Platform.OS === "ios"
+      ? ["Apple Maps", "Google Maps", "Waze", "Cancel"]
+      : ["Google Maps", "Waze", "Cancel"];
+
+    const cancelIndex = options.length - 1;
+
+    Alert.alert(
+      "Get Directions",
+      getFullAddress(),
+      options.map((option, index) => {
+        if (index === cancelIndex) {
+          return { text: option, style: "cancel" };
+        }
+        return {
+          text: option,
+          onPress: () => {
+            if (option === "Apple Maps") openMapsApp("apple");
+            else if (option === "Google Maps") openMapsApp("google");
+            else if (option === "Waze") openMapsApp("waze");
+          },
+        };
+      })
+    );
+  };
+
   return (
     <>
       <View style={styles.tileContainer}>
@@ -86,8 +210,21 @@ const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
         </View>
 
         <Text style={styles.date}>{formatDate(appointment.date)}</Text>
-        <Text style={styles.location}>{home.address} - {home.city}</Text>
-        <Text style={styles.location}>{home.state}, {home.zipcode}</Text>
+
+        <TouchableOpacity
+          style={styles.addressContainer}
+          onPress={handleAddressPress}
+          activeOpacity={0.7}
+        >
+          <View style={styles.addressTextContainer}>
+            <Text style={styles.addressText}>{home.address}</Text>
+            <Text style={styles.addressText}>{home.city}, {home.state} {home.zipcode}</Text>
+          </View>
+          <View style={styles.directionsButton}>
+            <Icon name="map-marker" size={16} color={colors.neutral[0]} />
+            <Text style={styles.directionsText}>Directions</Text>
+          </View>
+        </TouchableOpacity>
 
         {home.keyPadCode && (
           <View style={styles.infoRow}>
@@ -141,10 +278,22 @@ const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
           </View>
         )}
 
-        {!appointment.completed && (
+        {!appointment.completed && !jobStarted && (
           <TouchableOpacity style={styles.startButton} onPress={handleStartJob}>
             <Text style={styles.startButtonText}>Start Job</Text>
           </TouchableOpacity>
+        )}
+
+        {jobStarted && !appointment.completed && (
+          <View style={styles.startedButtonsContainer}>
+            <TouchableOpacity style={styles.continueButton} onPress={() => setShowCompletionFlow(true)}>
+              <Text style={styles.continueButtonText}>Continue Job</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.undoButton} onPress={handleUndoStart}>
+              <Icon name="undo" size={14} color={colors.warning[600]} />
+              <Text style={styles.undoButtonText}>Undo Start</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {appointment.completed && (
@@ -207,6 +356,39 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.sm,
     textAlign: "center",
+  },
+  addressContainer: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  addressTextContainer: {
+    marginBottom: spacing.sm,
+  },
+  addressText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  directionsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  directionsText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
   },
   location: {
     fontSize: typography.fontSize.sm,
@@ -307,6 +489,38 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
+  },
+  startedButtonsContainer: {
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  continueButton: {
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    ...shadows.md,
+  },
+  continueButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
+  undoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[300],
+    backgroundColor: colors.warning[50],
+    gap: spacing.xs,
+  },
+  undoButtonText: {
+    color: colors.warning[600],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   completedBanner: {
     backgroundColor: colors.success[100],
