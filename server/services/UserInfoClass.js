@@ -143,7 +143,7 @@ class UserInfoClass {
     }
   }
 
-  static async editEmployeeInDB({ id, username, password, email, type }) {
+  static async editEmployeeInDB({ id, username, password, email, type, firstName, lastName, phone }) {
     const existingEmployee = await User.findOne({
       where: { id },
     });
@@ -153,16 +153,23 @@ class UserInfoClass {
     }
 
     try {
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-      password = hashedPassword;
-
-      await existingEmployee.update({
+      const updateData = {
         username,
-        password,
         email,
         type,
-      });
+        firstName,
+        lastName,
+        phone: phone || null,
+      };
+
+      // Only hash and update password if one was provided
+      if (password && password.trim() !== "") {
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        updateData.password = hashedPassword;
+      }
+
+      await existingEmployee.update(updateData);
 
       return existingEmployee;
     } catch (error) {

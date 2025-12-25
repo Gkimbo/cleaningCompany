@@ -153,6 +153,10 @@ const EmployeeTile = ({
             <Text style={styles.buttonText}>Undo</Text>
           </Pressable>
         </>
+      ) : status === "onHold" ? (
+        <View style={[styles.button, styles.onHoldButton]}>
+          <Text style={styles.onHoldButtonText}>On Hold - Cleaner Assigned</Text>
+        </View>
       ) : null}
     </View>
   );
@@ -238,6 +242,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
+  },
+  onHoldButton: {
+    backgroundColor: "#CCCCCC",
+  },
+  onHoldButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#7F8C8D",
+    textAlign: "center",
   },
 });
 

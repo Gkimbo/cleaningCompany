@@ -187,6 +187,9 @@ class FetchData {
           password: data.password,
           email: data.email,
           type: data.type,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          phone: data.phone,
         }),
       });
       if (!response.ok) {

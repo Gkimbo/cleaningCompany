@@ -54,6 +54,7 @@ jest.mock("../../models", () => ({
     findOne: jest.fn(),
     create: jest.fn(),
     destroy: jest.fn(),
+    update: jest.fn(),
   },
   UserReviews: {
     findAll: jest.fn(),

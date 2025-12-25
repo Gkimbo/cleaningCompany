@@ -116,6 +116,15 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.JSON,
 			allowNull: true,
 		},
+		// Geocoded coordinates for accurate distance calculations
+		latitude: {
+			type: DataTypes.DECIMAL(10, 8),
+			allowNull: true,
+		},
+		longitude: {
+			type: DataTypes.DECIMAL(11, 8),
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

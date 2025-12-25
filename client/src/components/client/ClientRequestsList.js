@@ -219,18 +219,30 @@ const ClientRequestsList = ({ state, dispatch }) => {
               const reviews = cleaner?.reviews || [];
               const averageRating = getAverageRating(reviews);
               const isProcessing = processingRequest === request.id;
+              const isOnHold = request.status === "onHold";
 
               return (
-                <View key={request.id} style={styles.requestCard}>
+                <View
+                  key={request.id}
+                  style={[styles.requestCard, isOnHold && styles.requestCardOnHold]}
+                >
+                  {/* On Hold Badge */}
+                  {isOnHold && (
+                    <View style={styles.onHoldBadge}>
+                      <Icon name="pause-circle" size={12} color={colors.text.tertiary} />
+                      <Text style={styles.onHoldBadgeText}>On hold - cleaner already assigned</Text>
+                    </View>
+                  )}
+
                   {/* Date Badge */}
-                  <View style={styles.dateBadge}>
-                    <Icon name="calendar" size={12} color={colors.primary[600]} />
-                    <Text style={styles.dateText}>{formatDate(appointment.date)}</Text>
+                  <View style={[styles.dateBadge, isOnHold && styles.dateBadgeOnHold]}>
+                    <Icon name="calendar" size={12} color={isOnHold ? colors.text.tertiary : colors.primary[600]} />
+                    <Text style={[styles.dateText, isOnHold && styles.dateTextOnHold]}>{formatDate(appointment.date)}</Text>
                   </View>
 
                   {/* Cleaner Info */}
                   <Pressable
-                    style={styles.cleanerInfo}
+                    style={[styles.cleanerInfo, isOnHold && styles.cleanerInfoOnHold]}
                     onPress={() =>
                       handleViewCleanerReviews(
                         cleaner.id,
@@ -240,13 +252,13 @@ const ClientRequestsList = ({ state, dispatch }) => {
                       )
                     }
                   >
-                    <View style={styles.avatarContainer}>
-                      <Text style={styles.avatarText}>
+                    <View style={[styles.avatarContainer, isOnHold && styles.avatarContainerOnHold]}>
+                      <Text style={[styles.avatarText, isOnHold && styles.avatarTextOnHold]}>
                         {cleaner?.username?.charAt(0)?.toUpperCase() || "?"}
                       </Text>
                     </View>
                     <View style={styles.cleanerDetails}>
-                      <Text style={styles.cleanerName}>{cleaner?.username}</Text>
+                      <Text style={[styles.cleanerName, isOnHold && styles.cleanerNameOnHold]}>{cleaner?.username}</Text>
                       <View style={styles.ratingRow}>
                         <View style={styles.starsRow}>{renderStars(reviews)}</View>
                         {reviews.length > 0 ? (
@@ -266,38 +278,47 @@ const ClientRequestsList = ({ state, dispatch }) => {
 
                   {/* Action Buttons */}
                   <View style={styles.actionButtons}>
-                    <Pressable
-                      style={[styles.actionButton, styles.approveButton]}
-                      onPress={() =>
-                        handleApprove(request.id, cleaner.id, appointment.id)
-                      }
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? (
-                        <ActivityIndicator size="small" color={colors.neutral[0]} />
-                      ) : (
-                        <>
-                          <Icon name="check" size={14} color={colors.neutral[0]} />
-                          <Text style={styles.approveButtonText}>Approve</Text>
-                        </>
-                      )}
-                    </Pressable>
-                    <Pressable
-                      style={[styles.actionButton, styles.denyButton]}
-                      onPress={() =>
-                        handleDeny(cleaner.id, appointment.id, request.id)
-                      }
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? (
-                        <ActivityIndicator size="small" color={colors.neutral[0]} />
-                      ) : (
-                        <>
-                          <Icon name="times" size={14} color={colors.neutral[0]} />
-                          <Text style={styles.denyButtonText}>Deny</Text>
-                        </>
-                      )}
-                    </Pressable>
+                    {isOnHold ? (
+                      <View style={[styles.actionButton, styles.onHoldButton]}>
+                        <Icon name="pause" size={14} color={colors.text.tertiary} />
+                        <Text style={styles.onHoldButtonText}>On Hold</Text>
+                      </View>
+                    ) : (
+                      <>
+                        <Pressable
+                          style={[styles.actionButton, styles.approveButton]}
+                          onPress={() =>
+                            handleApprove(request.id, cleaner.id, appointment.id)
+                          }
+                          disabled={isProcessing}
+                        >
+                          {isProcessing ? (
+                            <ActivityIndicator size="small" color={colors.neutral[0]} />
+                          ) : (
+                            <>
+                              <Icon name="check" size={14} color={colors.neutral[0]} />
+                              <Text style={styles.approveButtonText}>Approve</Text>
+                            </>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          style={[styles.actionButton, styles.denyButton]}
+                          onPress={() =>
+                            handleDeny(cleaner.id, appointment.id, request.id)
+                          }
+                          disabled={isProcessing}
+                        >
+                          {isProcessing ? (
+                            <ActivityIndicator size="small" color={colors.neutral[0]} />
+                          ) : (
+                            <>
+                              <Icon name="times" size={14} color={colors.neutral[0]} />
+                              <Text style={styles.denyButtonText}>Deny</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </>
+                    )}
                   </View>
                 </View>
               );
@@ -526,6 +547,55 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.neutral[0],
+  },
+
+  // On Hold Styles
+  requestCardOnHold: {
+    opacity: 0.6,
+    backgroundColor: colors.neutral[100],
+  },
+  onHoldBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.neutral[200],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    alignSelf: "flex-start",
+    marginBottom: spacing.sm,
+  },
+  onHoldBadgeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  dateBadgeOnHold: {
+    backgroundColor: colors.neutral[100],
+  },
+  dateTextOnHold: {
+    color: colors.text.tertiary,
+  },
+  cleanerInfoOnHold: {
+    opacity: 0.8,
+  },
+  avatarContainerOnHold: {
+    backgroundColor: colors.neutral[200],
+  },
+  avatarTextOnHold: {
+    color: colors.text.tertiary,
+  },
+  cleanerNameOnHold: {
+    color: colors.text.secondary,
+  },
+  onHoldButton: {
+    flex: 1,
+    backgroundColor: colors.neutral[300],
+  },
+  onHoldButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.tertiary,
   },
 
   // Empty State

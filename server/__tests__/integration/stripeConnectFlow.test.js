@@ -188,6 +188,9 @@ jest.mock("../../models", () => ({
     create: jest.fn(),
   },
   UserBills: {},
+  UserPendingRequests: {
+    destroy: jest.fn().mockResolvedValue(0),
+  },
 }));
 
 // Mock services

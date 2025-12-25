@@ -1106,6 +1106,20 @@ const OwnerDashboard = ({ state }) => {
       {/* Tax Section */}
       <TaxFormsSection state={state} />
 
+      {/* Platform Withdrawals Section */}
+      <View style={styles.section}>
+        <SectionHeader title="Platform Earnings" />
+        <Text style={styles.termsDescription}>
+          Withdraw platform fees from your Stripe account to your bank account.
+        </Text>
+        <Pressable
+          style={styles.termsButton}
+          onPress={() => navigate("/owner/withdrawals")}
+        >
+          <Text style={styles.termsButtonText}>Manage Withdrawals</Text>
+        </Pressable>
+      </View>
+
       {/* Terms & Conditions Section */}
       <View style={styles.section}>
         <SectionHeader title="Terms & Conditions" />

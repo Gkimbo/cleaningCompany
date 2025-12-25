@@ -18,6 +18,8 @@ const { emit } = require("nodemon");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { businessConfig, getPricingConfig } = require("../../../config/businessConfig");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { recordPaymentTransaction } = require("./paymentRouter");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -234,11 +236,11 @@ appointmentRouter.get("/client-pending-requests", async (req, res) => {
 
     const appointmentIds = existingAppointments.map((apt) => apt.id);
 
-    // Get all pending requests for these appointments
+    // Get all pending and onHold requests for these appointments
     const pendingRequests = await UserPendingRequests.findAll({
       where: {
         appointmentId: { [Op.in]: appointmentIds },
-        status: "pending"
+        status: { [Op.in]: ["pending", "onHold"] },
       },
     });
 
@@ -1100,37 +1102,45 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       return res.status(404).json({ error: "Request not found" });
     }
 
+    // Get the appointment first to check assignment status
+    const appointment = await UserAppointments.findOne({
+      where: { id: request.dataValues.appointmentId },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
     if (approve) {
+      // Block if a cleaner is already assigned
+      if (appointment.dataValues.hasBeenAssigned) {
+        return res.status(400).json({
+          error: "A cleaner is already assigned to this appointment. Remove them first to approve another.",
+        });
+      }
+
       await UserCleanerAppointments.create({
         employeeId: request.dataValues.employeeId,
         appointmentId: request.dataValues.appointmentId,
       });
 
-      const appointment = await UserAppointments.findOne({
-        where: { id: request.dataValues.appointmentId },
-      });
-
-      let employees = appointment.dataValues.employeesAssigned || [];
-      if (!employees.includes(String(request.dataValues.employeeId))) {
-        employees.push(String(request.dataValues.employeeId));
-      }
+      // Only 1 cleaner can be assigned, so employeesAssigned will have just this cleaner
+      const employees = [String(request.dataValues.employeeId)];
 
       await appointment.update({
         employeesAssigned: employees,
         hasBeenAssigned: true,
       });
 
-      // Create payout record for the approved cleaner
+      // Create payout record for the approved cleaner (only 1 cleaner per appointment)
       const pricingConfig = await getPricingConfig();
       const { platform: platformConfig } = pricingConfig;
 
       const cleanerId = request.dataValues.employeeId;
       const appointmentId = request.dataValues.appointmentId;
-      const cleanerCount = employees.length;
       const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
-      const perCleanerGross = Math.round(priceInCents / cleanerCount);
-      const platformFeeAmount = Math.round(perCleanerGross * platformConfig.feePercent);
-      const netAmount = perCleanerGross - platformFeeAmount;
+      const platformFeeAmount = Math.round(priceInCents * platformConfig.feePercent);
+      const netAmount = priceInCents - platformFeeAmount;
 
       // Check if payout record already exists
       const existingPayout = await Payout.findOne({
@@ -1141,31 +1151,64 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
         await Payout.create({
           appointmentId,
           cleanerId,
-          grossAmount: perCleanerGross,
+          grossAmount: priceInCents,
           platformFee: platformFeeAmount,
           netAmount,
           status: "pending", // Will change to "held" when payment is captured
         });
       }
 
-      // Update existing payout records for other cleaners (recalculate split)
-      if (cleanerCount > 1) {
-        for (const empId of employees) {
-          if (String(empId) !== String(cleanerId)) {
-            const existingOtherPayout = await Payout.findOne({
-              where: { appointmentId, cleanerId: empId },
-            });
-            if (existingOtherPayout && existingOtherPayout.status === "pending") {
-              const updatedGross = Math.round(priceInCents / cleanerCount);
-              const updatedFee = Math.round(updatedGross * platformConfig.feePercent);
-              const updatedNet = updatedGross - updatedFee;
-              await existingOtherPayout.update({
-                grossAmount: updatedGross,
-                platformFee: updatedFee,
-                netAmount: updatedNet,
-              });
-            }
-          }
+      // Capture payment immediately if within 3 days of appointment
+      const appointmentDate = new Date(appointment.dataValues.date);
+      const now = new Date();
+      const diffInDays = (appointmentDate - now) / (1000 * 60 * 60 * 24);
+
+      if (
+        diffInDays <= 3 &&
+        diffInDays >= 0 &&
+        appointment.dataValues.paymentIntentId &&
+        appointment.dataValues.paymentStatus === "pending"
+      ) {
+        try {
+          const capturedIntent = await stripe.paymentIntents.capture(
+            appointment.dataValues.paymentIntentId
+          );
+
+          await appointment.update({
+            paymentStatus: "captured",
+            paid: true,
+            amountPaid: capturedIntent.amount,
+          });
+
+          // Update all payout records to "held"
+          await Payout.update(
+            { status: "held", paymentCapturedAt: new Date() },
+            { where: { appointmentId: appointment.id } }
+          );
+
+          // Record the capture transaction
+          await recordPaymentTransaction({
+            type: "capture",
+            stripePaymentIntentId: capturedIntent.id,
+            stripeChargeId: capturedIntent.latest_charge,
+            amount: capturedIntent.amount,
+            currency: capturedIntent.currency,
+            status: "succeeded",
+            appointmentId: appointment.id,
+            homeownerId: appointment.dataValues.userId,
+            description: `Payment captured for appointment ${appointment.id}`,
+          });
+
+          console.log(
+            `[Approve Request] Payment captured for appointment ${appointment.id}`
+          );
+        } catch (captureError) {
+          console.error(
+            `[Approve Request] Payment capture failed for appointment ${appointment.id}, will retry via cron:`,
+            captureError.message
+          );
+          // Mark as failed so cron can notify and retry
+          await appointment.update({ paymentCaptureFailed: true });
         }
       }
 
@@ -1213,7 +1256,20 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
         await cleaner.update({ notifications: notifications.slice(0, 50) }); // Keep last 50 notifications
       }
 
-      await request.destroy();
+      // Update the approved request status to "approved"
+      await request.update({ status: "approved" });
+
+      // Set all other pending requests for this appointment to "onHold"
+      await UserPendingRequests.update(
+        { status: "onHold" },
+        {
+          where: {
+            appointmentId: request.dataValues.appointmentId,
+            status: "pending",
+            id: { [Op.ne]: request.id },
+          },
+        }
+      );
 
       return res.status(200).json({ message: "Cleaner assigned successfully" });
     } else {
@@ -1388,19 +1444,40 @@ appointmentRouter.patch("/undo-request-choice", async (req, res) => {
         return res.status(404).json({ error: "Cleaner not found" });
       }
 
-      const existingRequest = await UserPendingRequests.findOne({
-        where: { employeeId: id, appointmentId: Number(appointmentId) },
+      // Update the approved request back to pending
+      const approvedRequest = await UserPendingRequests.findOne({
+        where: { employeeId: id, appointmentId: Number(appointmentId), status: "approved" },
       });
-      if (existingRequest) {
-        return res
-          .status(400)
-          .json({ error: "Request already sent to the client" });
+      if (approvedRequest) {
+        await approvedRequest.update({ status: "pending" });
+      } else {
+        // If no approved request exists, create a new pending request
+        const existingRequest = await UserPendingRequests.findOne({
+          where: { employeeId: id, appointmentId: Number(appointmentId) },
+        });
+        if (!existingRequest) {
+          await UserPendingRequests.create({
+            employeeId: id,
+            appointmentId: Number(appointmentId),
+            status: "pending",
+          });
+        }
       }
 
-      await UserPendingRequests.create({
-        employeeId: id,
-        appointmentId: Number(appointmentId),
-        status: "pending",
+      // Reactivate any onHold requests so they can be approved
+      await UserPendingRequests.update(
+        { status: "pending" },
+        {
+          where: {
+            appointmentId: Number(appointmentId),
+            status: "onHold",
+          },
+        }
+      );
+
+      // Delete payout for the removed cleaner
+      await Payout.destroy({
+        where: { appointmentId: Number(appointmentId), cleanerId: id, status: "pending" },
       });
 
       await Email.sendEmailCancellation(
@@ -1968,6 +2045,26 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
     await Payout.destroy({
       where: { appointmentId: id, cleanerId: userId, status: "pending" },
     });
+
+    // Delete the approved request for this cleaner
+    await UserPendingRequests.destroy({
+      where: {
+        appointmentId: id,
+        employeeId: userId,
+        status: "approved",
+      },
+    });
+
+    // Reactivate any onHold requests so homeowner can choose another cleaner
+    await UserPendingRequests.update(
+      { status: "pending" },
+      {
+        where: {
+          appointmentId: id,
+          status: "onHold",
+        },
+      }
+    );
 
     // Send notification to homeowner
     const homeowner = await User.findByPk(appointment.userId);

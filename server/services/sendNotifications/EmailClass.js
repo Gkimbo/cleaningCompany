@@ -1468,6 +1468,75 @@ Kleanr Support Team`;
       console.error("❌ Error sending adjustment resolved email:", error);
     }
   }
+
+  // Payment failed reminder email
+  static async sendPaymentFailedReminder(email, firstName, address, appointmentDate, daysRemaining) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      });
+
+      const formattedDate = appointmentDate.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+
+      const htmlContent = createEmailTemplate({
+        title: "Payment Required",
+        subtitle: "Action needed to keep your appointment",
+        greeting: `Hi ${firstName},`,
+        content: `
+          <p>We were unable to process payment for your upcoming cleaning appointment. Please log into the app and retry your payment to avoid cancellation.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "Appointment Details",
+          items: [
+            { label: "Date", value: formattedDate },
+            { label: "Address", value: `${address.street}, ${address.city}, ${address.state} ${address.zipcode}` },
+          ],
+        },
+        warningBox: {
+          icon: "⚠️",
+          text: `Your appointment will be automatically cancelled in ${daysRemaining} day${daysRemaining !== 1 ? "s" : ""} if payment is not completed.`,
+          bgColor: "#fef2f2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        },
+        steps: {
+          title: "How to Complete Payment:",
+          items: [
+            "Open the Kleanr app on your phone",
+            "Go to your Appointments",
+            "Find the appointment and tap \"Retry Payment\"",
+            "Complete the payment process",
+          ],
+        },
+        footerMessage: "If you have questions, please contact our support team.",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⚠️ Payment Failed - Action Required for ${formattedDate}`,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Payment failed reminder email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment failed reminder email:", error);
+    }
+  }
 }
 
 module.exports = Email;

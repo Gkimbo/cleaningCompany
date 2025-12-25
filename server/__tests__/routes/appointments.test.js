@@ -37,6 +37,7 @@ jest.mock("../../models", () => ({
     findOne: jest.fn(),
     create: jest.fn(),
     destroy: jest.fn(),
+    update: jest.fn(),
   },
   UserReviews: {
     findAll: jest.fn(),
@@ -1086,19 +1087,27 @@ describe("Appointment Routes", () => {
       const { Payout } = require("../../models");
 
       UserPendingRequests.findOne.mockResolvedValue({
-        dataValues: { employeeId: 2, appointmentId: 1 },
+        id: 1,
+        dataValues: { id: 1, employeeId: 2, appointmentId: 1 },
         destroy: jest.fn().mockResolvedValue(true),
+        update: jest.fn().mockResolvedValue(true),
       });
+
+      // Mock the update for setting other requests to onHold
+      UserPendingRequests.update.mockResolvedValue([0]);
 
       UserCleanerAppointments.create.mockResolvedValue({ id: 1 });
 
       UserAppointments.findOne.mockResolvedValue({
+        id: 1,
         dataValues: {
+          id: 1,
           employeesAssigned: [],
           price: "150",
           userId: 1,
           homeId: 1,
           date: "2025-01-15",
+          hasBeenAssigned: false,
         },
         update: jest.fn().mockResolvedValue(true),
       });
@@ -1162,19 +1171,27 @@ describe("Appointment Routes", () => {
       const { getPricingConfig } = require("../../config/businessConfig");
 
       UserPendingRequests.findOne.mockResolvedValue({
-        dataValues: { employeeId: 2, appointmentId: 1 },
+        id: 1,
+        dataValues: { id: 1, employeeId: 2, appointmentId: 1 },
         destroy: jest.fn().mockResolvedValue(true),
+        update: jest.fn().mockResolvedValue(true),
       });
+
+      // Mock the update for setting other requests to onHold
+      UserPendingRequests.update.mockResolvedValue([0]);
 
       UserCleanerAppointments.create.mockResolvedValue({ id: 1 });
 
       UserAppointments.findOne.mockResolvedValue({
+        id: 1,
         dataValues: {
+          id: 1,
           employeesAssigned: [],
           price: "200",
           userId: 1,
           homeId: 1,
           date: "2025-01-15",
+          hasBeenAssigned: false,
         },
         update: jest.fn().mockResolvedValue(true),
       });
@@ -1226,85 +1243,35 @@ describe("Appointment Routes", () => {
       expect(createCall.netAmount).toBe(18000);
     });
 
-    it("should correctly split payout among multiple cleaners", async () => {
-      const { Payout } = require("../../models");
-
+    it("should block approval if cleaner already assigned", async () => {
       UserPendingRequests.findOne.mockResolvedValue({
-        dataValues: { employeeId: 3, appointmentId: 1 },
+        id: 1,
+        dataValues: { id: 1, employeeId: 3, appointmentId: 1 },
         destroy: jest.fn().mockResolvedValue(true),
+        update: jest.fn().mockResolvedValue(true),
       });
-
-      UserCleanerAppointments.create.mockResolvedValue({ id: 1 });
 
       // Already has one cleaner assigned
       UserAppointments.findOne.mockResolvedValue({
+        id: 1,
         dataValues: {
+          id: 1,
           employeesAssigned: ["2"], // One cleaner already assigned
-          price: "300", // $300 total
+          price: "300",
           userId: 1,
           homeId: 1,
           date: "2025-01-15",
+          hasBeenAssigned: true, // Cleaner already assigned
         },
         update: jest.fn().mockResolvedValue(true),
       });
-
-      User.findByPk
-        .mockResolvedValueOnce({
-          dataValues: {
-            id: 3,
-            email: "cleaner2@test.com",
-            username: "cleaner2",
-            notifications: [],
-          },
-          update: jest.fn().mockResolvedValue(true),
-        })
-        .mockResolvedValueOnce({
-          dataValues: {
-            id: 1,
-            email: "homeowner@test.com",
-            username: "homeowner",
-          },
-        });
-
-      UserHomes.findByPk.mockResolvedValue({
-        dataValues: {
-          address: "123 Main St",
-          city: "Test City",
-          state: "TS",
-          zipcode: "12345",
-        },
-      });
-
-      // Mock existing payout for first cleaner
-      const existingPayout = {
-        status: "pending",
-        update: jest.fn().mockResolvedValue(true),
-      };
-      Payout.findOne
-        .mockResolvedValueOnce(null) // No payout for new cleaner
-        .mockResolvedValueOnce(existingPayout); // Existing payout for cleaner 2
-
-      Payout.create.mockResolvedValue({ id: 2 });
 
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")
         .send({ requestId: 1, approve: true });
 
-      expect(res.status).toBe(200);
-
-      // $300 / 2 cleaners = $150 each = 15000 cents
-      // 10% fee = 1500, net = 13500
-      const createCall = Payout.create.mock.calls[0][0];
-      expect(createCall.grossAmount).toBe(15000);
-      expect(createCall.platformFee).toBe(1500);
-      expect(createCall.netAmount).toBe(13500);
-
-      // Existing payout should be updated with new split
-      expect(existingPayout.update).toHaveBeenCalledWith({
-        grossAmount: 15000,
-        platformFee: 1500,
-        netAmount: 13500,
-      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("A cleaner is already assigned to this appointment. Remove them first to approve another.");
     });
 
     it("should return 404 if request not found", async () => {

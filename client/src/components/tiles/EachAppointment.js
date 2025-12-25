@@ -47,6 +47,8 @@ const EachAppointment = ({
   sheetConfigurations: initialSheetConfigs,
   towelConfigurations: initialTowelConfigs,
   onConfigurationsUpdate,
+  paymentCaptureFailed,
+  onPaymentRetried,
 }) => {
   const [code, setCode] = useState("");
   const [key, setKeyLocation] = useState("");
@@ -62,6 +64,9 @@ const EachAppointment = ({
   const [savingConfigs, setSavingConfigs] = useState(false);
   const [showBedOptions, setShowBedOptions] = useState(false);
   const [showTowelOptions, setShowTowelOptions] = useState(false);
+  const [retryingPayment, setRetryingPayment] = useState(false);
+  const [paymentRetrySuccess, setPaymentRetrySuccess] = useState(false);
+  const [paymentRetryError, setPaymentRetryError] = useState(null);
   const navigate = useNavigate();
   const { pricing } = usePricing();
 
@@ -325,6 +330,44 @@ const EachAppointment = ({
     }
   };
 
+  // Handle retry payment
+  const handleRetryPayment = async () => {
+    if (!token) {
+      setPaymentRetryError("Authentication required");
+      return;
+    }
+    setRetryingPayment(true);
+    setPaymentRetryError(null);
+    setPaymentRetrySuccess(false);
+
+    try {
+      const response = await fetch(`${API_BASE}/payments/retry-payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ appointmentId: id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setPaymentRetryError(data.error || "Payment failed. Please try again.");
+        return;
+      }
+
+      setPaymentRetrySuccess(true);
+      if (onPaymentRetried) {
+        onPaymentRetried(id);
+      }
+    } catch (err) {
+      setPaymentRetryError("Failed to process payment. Please try again.");
+    } finally {
+      setRetryingPayment(false);
+    }
+  };
+
   // --- Render Completed States ---
   if (completed && !paid) {
     return (
@@ -428,6 +471,51 @@ const EachAppointment = ({
           </View>
         </View>
       </View>
+
+      {/* Payment Failed Warning */}
+      {paymentCaptureFailed && !paymentRetrySuccess && (
+        <View style={styles.paymentFailedSection}>
+          <View style={styles.paymentFailedHeader}>
+            <Icon name="exclamation-triangle" size={16} color={colors.error[600]} />
+            <Text style={styles.paymentFailedTitle}>Payment Failed</Text>
+          </View>
+          <Text style={styles.paymentFailedText}>
+            We couldn't process payment for this appointment. Please retry to avoid cancellation.
+          </Text>
+          {paymentRetryError && (
+            <View style={styles.paymentRetryError}>
+              <Icon name="times-circle" size={12} color={colors.error[600]} />
+              <Text style={styles.paymentRetryErrorText}>{paymentRetryError}</Text>
+            </View>
+          )}
+          <Pressable
+            onPress={handleRetryPayment}
+            disabled={retryingPayment}
+            style={({ pressed }) => [
+              styles.retryPaymentButton,
+              pressed && styles.retryPaymentButtonPressed,
+              retryingPayment && styles.retryPaymentButtonDisabled,
+            ]}
+          >
+            {retryingPayment ? (
+              <ActivityIndicator size="small" color={colors.neutral[0]} />
+            ) : (
+              <>
+                <Icon name="credit-card" size={14} color={colors.neutral[0]} />
+                <Text style={styles.retryPaymentButtonText}>Retry Payment</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      )}
+
+      {/* Payment Success Message */}
+      {paymentRetrySuccess && (
+        <View style={styles.paymentSuccessSection}>
+          <Icon name="check-circle" size={16} color={colors.success[600]} />
+          <Text style={styles.paymentSuccessText}>Payment successful! Your appointment is confirmed.</Text>
+        </View>
+      )}
 
       {/* Add-ons Section - Collapsible */}
       <Pressable onPress={() => setShowAddons(!showAddons)} style={styles.collapsibleHeader}>
@@ -1388,6 +1476,87 @@ const styles = StyleSheet.create({
   savingText: {
     fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
+  },
+
+  // Payment Failed Section
+  paymentFailedSection: {
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[200],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  paymentFailedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  paymentFailedTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.error[700],
+  },
+  paymentFailedText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[600],
+    marginBottom: spacing.md,
+    lineHeight: 20,
+  },
+  paymentRetryError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.error[100],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+  },
+  paymentRetryErrorText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[700],
+    flex: 1,
+  },
+  retryPaymentButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.error[600],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    ...shadows.sm,
+  },
+  retryPaymentButtonPressed: {
+    backgroundColor: colors.error[700],
+  },
+  retryPaymentButtonDisabled: {
+    opacity: 0.6,
+  },
+  retryPaymentButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Payment Success Section
+  paymentSuccessSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: colors.success[200],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  paymentSuccessText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    fontWeight: typography.fontWeight.medium,
   },
 });
 
