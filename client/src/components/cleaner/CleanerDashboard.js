@@ -23,10 +23,39 @@ import {
 import TaxFormsSection from "../tax/TaxFormsSection";
 import ReviewsOverview from "../reviews/ReviewsOverview";
 import TodaysAppointment from "../employeeAssignments/tiles/TodaysAppointment";
+import NextAppointmentPreview from "../employeeAssignments/tiles/NextAppointmentPreview";
 import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlow";
 import { usePricing } from "../../context/PricingContext";
 
 const { width } = Dimensions.get("window");
+
+// Parse end time from format like "10am-3pm" → 15 (3pm in 24hr)
+const parseEndTime = (timeToBeCompleted) => {
+  if (!timeToBeCompleted || timeToBeCompleted === "anytime") {
+    return 24; // Put "anytime" at the end
+  }
+
+  // Format: "10am-3pm" → extract "3pm"
+  const match = timeToBeCompleted.match(/-(\d+)(am|pm)$/i);
+  if (!match) return 24;
+
+  let hour = parseInt(match[1], 10);
+  const period = match[2].toLowerCase();
+
+  if (period === "pm" && hour !== 12) hour += 12;
+  if (period === "am" && hour === 12) hour = 0;
+
+  return hour;
+};
+
+// Sort appointments by end time (earliest deadline first, anytime last)
+const sortByEndTime = (appointments) => {
+  return [...appointments].sort((a, b) => {
+    const endA = parseEndTime(a.timeToBeCompleted);
+    const endB = parseEndTime(b.timeToBeCompleted);
+    return endA - endB;
+  });
+};
 
 // Stat Card Component
 const StatCard = ({
@@ -269,13 +298,20 @@ const CleanerDashboard = ({ state, dispatch }) => {
     (a, b) => new Date(a.date) - new Date(b.date)
   );
 
-  // Get today's appointment
+  // Get today's appointments (multiple) sorted by end time
   const today = new Date();
-  const todaysAppointment = sortedAppointments.find(
-    (apt) => new Date(apt.date).toDateString() === today.toDateString()
+  const todaysAppointments = sortByEndTime(
+    sortedAppointments.filter(
+      (apt) => new Date(apt.date).toDateString() === today.toDateString()
+    )
   );
 
-  // Get upcoming appointments (excluding today)
+  // Get next appointment (first one after today)
+  const nextAppointment = sortedAppointments.find(
+    (apt) => new Date(apt.date) > today
+  );
+
+  // Get upcoming appointments (excluding today and next) for the list
   const upcomingAppointments = sortedAppointments
     .filter((apt) => new Date(apt.date) > today)
     .slice(0, 3);
@@ -292,6 +328,11 @@ const CleanerDashboard = ({ state, dispatch }) => {
     setShowCompletionFlow(false);
     setSelectedAppointment(null);
     setSelectedHome(null);
+    fetchDashboardData(true);
+  };
+
+  const handleJobUnstarted = (appointmentId) => {
+    // Refresh dashboard data after job is unstarted
     fetchDashboardData(true);
   };
 
@@ -406,7 +447,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
           />
           <StatCard
             title="Upcoming"
-            value={upcomingAppointments.length + (todaysAppointment ? 1 : 0)}
+            value={upcomingAppointments.length + todaysAppointments.length}
             subtitle="jobs"
             color={colors.primary[500]}
             onPress={() => navigate("/employee-assignments")}
@@ -420,20 +461,36 @@ const CleanerDashboard = ({ state, dispatch }) => {
           />
         </View>
 
-        {/* Today's Appointment */}
-        {todaysAppointment && (
+        {/* Today's Appointments */}
+        {todaysAppointments.length > 0 && (
           <View style={styles.section}>
-            <SectionHeader title="Today's Job" />
-            <TodaysAppointment
-              appointment={todaysAppointment}
-              onJobCompleted={handleJobCompleted}
-              token={state.currentUser.token}
+            <SectionHeader title={`Today's Jobs (${todaysAppointments.length})`} />
+            {todaysAppointments.map((appointment) => (
+              <TodaysAppointment
+                key={appointment.id}
+                appointment={appointment}
+                onJobCompleted={handleJobCompleted}
+                onJobUnstarted={handleJobUnstarted}
+                token={state.currentUser.token}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Next Appointment Preview */}
+        {nextAppointment && (
+          <View style={styles.section}>
+            <SectionHeader title="Next Appointment" />
+            <NextAppointmentPreview
+              appointment={nextAppointment}
+              home={homeDetails[nextAppointment.homeId]}
+              cleanerSharePercent={cleanerSharePercent}
             />
           </View>
         )}
 
         {/* No Jobs Today Message */}
-        {!todaysAppointment && (
+        {todaysAppointments.length === 0 && (
           <View style={styles.section}>
             <View style={styles.noJobCard}>
               <Text style={styles.noJobTitle}>No jobs scheduled for today</Text>

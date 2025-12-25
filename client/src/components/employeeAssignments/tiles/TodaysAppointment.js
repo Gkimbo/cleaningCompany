@@ -16,8 +16,9 @@ import { colors, spacing, radius, shadows, typography } from "../../../services/
 import { usePricing } from "../../../context/PricingContext";
 import Icon from "react-native-vector-icons/FontAwesome";
 
-const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
+const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token }) => {
   const { pricing } = usePricing();
+  const [jobStarted, setJobStarted] = useState(false);
   const [home, setHome] = useState({
     address: "",
     city: "",
@@ -55,6 +56,25 @@ const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
     });
   }, [appointment.homeId]);
 
+  // Check if job has been started (before photos taken but not completed)
+  useEffect(() => {
+    const checkStartedStatus = async () => {
+      try {
+        const response = await FetchData.get(
+          `/api/v1/job-photos/${appointment.id}/status`,
+          token
+        );
+        // Job is "started" if before photos exist but not completed
+        setJobStarted(response.hasBeforePhotos && !appointment.completed);
+      } catch (err) {
+        // Assume not started if check fails
+      }
+    };
+    if (token && appointment.id) {
+      checkStartedStatus();
+    }
+  }, [appointment.id, appointment.completed, token]);
+
   const handleStartJob = () => {
     // Show home size confirmation modal before starting job
     setShowHomeSizeModal(true);
@@ -84,6 +104,34 @@ const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
 
   const handleCancelCompletion = () => {
     setShowCompletionFlow(false);
+  };
+
+  const handleUndoStart = () => {
+    Alert.alert(
+      "Undo Start Job",
+      "Are you sure you want to undo starting this job? This will delete any photos taken.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Undo Start",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await FetchData.post(
+                `/api/v1/appointments/${appointment.id}/unstart`,
+                {},
+                token
+              );
+              setJobStarted(false);
+              setShowCompletionFlow(false);
+              if (onJobUnstarted) onJobUnstarted(appointment.id);
+            } catch (err) {
+              Alert.alert("Error", "Could not undo start. Please try again.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getFullAddress = () => {
@@ -230,10 +278,22 @@ const TodaysAppointment = ({ appointment, onJobCompleted, token }) => {
           </View>
         )}
 
-        {!appointment.completed && (
+        {!appointment.completed && !jobStarted && (
           <TouchableOpacity style={styles.startButton} onPress={handleStartJob}>
             <Text style={styles.startButtonText}>Start Job</Text>
           </TouchableOpacity>
+        )}
+
+        {jobStarted && !appointment.completed && (
+          <View style={styles.startedButtonsContainer}>
+            <TouchableOpacity style={styles.continueButton} onPress={() => setShowCompletionFlow(true)}>
+              <Text style={styles.continueButtonText}>Continue Job</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.undoButton} onPress={handleUndoStart}>
+              <Icon name="undo" size={14} color={colors.warning[600]} />
+              <Text style={styles.undoButtonText}>Undo Start</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {appointment.completed && (
@@ -429,6 +489,38 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
+  },
+  startedButtonsContainer: {
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  continueButton: {
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    ...shadows.md,
+  },
+  continueButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
+  undoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[300],
+    backgroundColor: colors.warning[50],
+    gap: spacing.xs,
+  },
+  undoButtonText: {
+    color: colors.warning[600],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   completedBanner: {
     backgroundColor: colors.success[100],

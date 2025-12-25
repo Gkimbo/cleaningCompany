@@ -9,6 +9,7 @@ const {
   UserPendingRequests,
   UserReviews,
   Payout,
+  JobPhoto,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -1590,6 +1591,61 @@ appointmentRouter.patch("/remove-request", async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ============================================================================
+// JOB MANAGEMENT ENDPOINTS
+// ============================================================================
+
+// POST /api/v1/appointments/:id/unstart - Undo starting a job (delete photos)
+appointmentRouter.post("/:id/unstart", async (req, res) => {
+  const { id } = req.params;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    const appointment = await UserAppointments.findByPk(id);
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify cleaner is assigned to this appointment
+    if (!appointment.employeesAssigned?.includes(String(userId))) {
+      return res.status(403).json({ error: "Not authorized to unstart this job" });
+    }
+
+    // Cannot unstart a completed appointment
+    if (appointment.completed) {
+      return res.status(400).json({ error: "Cannot unstart a completed appointment" });
+    }
+
+    // Delete all photos for this appointment
+    const deletedCount = await JobPhoto.destroy({
+      where: { appointmentId: id },
+    });
+
+    console.log(`[Unstart Job] Deleted ${deletedCount} photos for appointment ${id}`);
+
+    return res.status(200).json({
+      success: true,
+      message: "Job unstarted successfully",
+      photosDeleted: deletedCount,
+    });
+  } catch (error) {
+    console.error("Error unstarting job:", error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
     return res.status(500).json({ error: "Server error" });
   }
 });
