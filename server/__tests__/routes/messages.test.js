@@ -360,14 +360,18 @@ describe("Message Routes", () => {
         type: null,
       });
 
-      User.findOne.mockResolvedValue({
-        id: 2,
-        username: "owner1",
-        email: "owner@example.com",
-        type: "owner",
-      });
+      // Mock User.findAll to return support staff (owners + HR)
+      User.findAll.mockResolvedValue([
+        {
+          id: 2,
+          username: "owner1",
+          email: "owner@example.com",
+          type: "owner",
+        },
+      ]);
 
       ConversationParticipant.findAll.mockResolvedValue([]);
+      ConversationParticipant.findOrCreate.mockResolvedValue([{ id: 1 }, true]);
 
       Conversation.create.mockResolvedValue({
         id: 1,
@@ -408,11 +412,14 @@ describe("Message Routes", () => {
         type: null,
       });
 
-      User.findOne.mockResolvedValue({
-        id: 2,
-        username: "owner1",
-        type: "owner",
-      });
+      // Mock User.findAll to return support staff (owners + HR)
+      User.findAll.mockResolvedValue([
+        {
+          id: 2,
+          username: "owner1",
+          type: "owner",
+        },
+      ]);
 
       ConversationParticipant.findAll.mockResolvedValue([
         {
@@ -455,7 +462,7 @@ describe("Message Routes", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe("Owners cannot create support conversations");
+      expect(res.body.error).toBe("Owners and HR cannot create support conversations");
     });
   });
 

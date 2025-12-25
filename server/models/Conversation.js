@@ -19,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
       onDelete: "SET NULL",
     },
     conversationType: {
-      type: DataTypes.ENUM("appointment", "broadcast", "support"),
+      type: DataTypes.ENUM("appointment", "broadcast", "support", "internal"),
       allowNull: false,
       defaultValue: "appointment",
     },

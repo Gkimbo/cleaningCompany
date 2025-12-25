@@ -724,7 +724,7 @@ describe("HomeSizeAdjustment Router", () => {
         .send({ approve: true, ownerNote: "Test" });
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Owner access required");
+      expect(res.body.error).toBe("Owner or HR access required");
     });
 
     it("should allow owner to override with custom bed/bath values", async () => {

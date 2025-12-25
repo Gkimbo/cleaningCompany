@@ -31,6 +31,7 @@ import ReviewsOverview from "./reviews/ReviewsOverview";
 import GetHelpButton from "./messaging/GetHelpButton";
 import TaxFormsSection from "./tax/TaxFormsSection";
 import OwnerDashboard from "./owner/OwnerDashboard";
+import HRDashboard from "./hr/HRDashboard";
 import ClientDashboard from "./client/ClientDashboard";
 import CleanerDashboard from "./cleaner/CleanerDashboard";
 
@@ -241,6 +242,11 @@ const HomePage = ({ state, dispatch }) => {
   // Show Owner Dashboard for owners
   if (state.account === "owner1" && state.currentUser.token) {
     return <OwnerDashboard state={state} />;
+  }
+
+  // Show HR Dashboard for HR staff
+  if (state.account === "humanResources" && state.currentUser.token) {
+    return <HRDashboard state={state} dispatch={dispatch} />;
   }
 
   // Show Cleaner Dashboard for cleaners

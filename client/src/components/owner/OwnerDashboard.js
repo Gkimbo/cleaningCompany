@@ -1134,6 +1134,20 @@ const OwnerDashboard = ({ state }) => {
         </Pressable>
       </View>
 
+      {/* HR Management Section */}
+      <View style={styles.section}>
+        <SectionHeader title="HR Management" />
+        <Text style={styles.termsDescription}>
+          Create and manage HR employee accounts. HR staff can handle customer support and dispute resolution.
+        </Text>
+        <Pressable
+          style={styles.termsButton}
+          onPress={() => navigate("/owner/hr-management")}
+        >
+          <Text style={styles.termsButtonText}>Manage HR Employees</Text>
+        </Pressable>
+      </View>
+
       {/* Footer Spacer */}
       <View style={{ height: 40 }} />
     </ScrollView>

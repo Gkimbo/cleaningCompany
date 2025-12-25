@@ -74,6 +74,7 @@ import ClientRequestsList from "../src/components/client/ClientRequestsList";
 import TermsEditor from "../src/components/owner/TermsEditor";
 import PricingManagement from "../src/components/owner/PricingManagement";
 import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
+import HREmployeeManagement from "../src/components/owner/HREmployeeManagement";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
@@ -125,6 +126,9 @@ export default function App() {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
       }
       if (user.user.type === "cleaner") {
+        dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
+      }
+      if (user.user.type === "humanResources") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
       }
       if (user.user.daysWorking !== null) {
@@ -412,6 +416,11 @@ export default function App() {
               <Route
                 path="/owner/withdrawals"
                 element={<PlatformWithdrawals state={state} />}
+              />
+              {/* Owner HR Management */}
+              <Route
+                path="/owner/hr-management"
+                element={<HREmployeeManagement state={state} />}
               />
             </Routes>
             </SafeAreaView>

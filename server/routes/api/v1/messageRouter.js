@@ -538,21 +538,28 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Don't allow owners to create support conversations with themselves
-    if (user.username === "owner1" || user.type === "owner") {
-      return res.status(400).json({ error: "Owners cannot create support conversations" });
+    // Don't allow owners or HR to create support conversations with themselves
+    if (user.username === "owner1" || user.type === "owner" || user.type === "humanResources") {
+      return res.status(400).json({ error: "Owners and HR cannot create support conversations" });
     }
 
-    // Find the owner
-    const owner = await User.findOne({
+    // Find all owners and HR users who should be part of support conversations
+    const supportStaff = await User.findAll({
       where: {
         [Op.or]: [
           { username: "owner1" },
           { type: "owner" },
+          { type: "humanResources" },
         ],
       },
     });
 
+    if (supportStaff.length === 0) {
+      return res.status(404).json({ error: "No support staff available" });
+    }
+
+    // Find the primary owner for backwards compatibility
+    const owner = supportStaff.find(u => u.type === "owner" || u.username === "owner1");
     if (!owner) {
       return res.status(404).json({ error: "No owner available" });
     }
@@ -609,11 +616,15 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
         userId,
       });
 
-      // Add owner as participant
-      await ConversationParticipant.create({
-        conversationId: conversation.id,
-        userId: owner.id,
-      });
+      // Add all support staff (owner + HR) as participants
+      for (const staff of supportStaff) {
+        await ConversationParticipant.findOrCreate({
+          where: {
+            conversationId: conversation.id,
+            userId: staff.id,
+          },
+        });
+      }
 
       // Reload conversation with participants
       conversation = await Conversation.findByPk(conversation.id, {
@@ -632,31 +643,33 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
         ],
       });
 
-      // Notify owner of new support conversation
+      // Notify all support staff of new support conversation
       const io = req.app.get("io");
-      io.to(`user_${owner.id}`).emit("new_support_conversation", {
-        conversation,
-        user: { id: user.id, username: user.username, type: user.type },
-      });
+      for (const staff of supportStaff) {
+        io.to(`user_${staff.id}`).emit("new_support_conversation", {
+          conversation,
+          user: { id: user.id, username: user.username, type: user.type },
+        });
 
-      // Send email notification to owner
-      if (owner.email) {
-        await Email.sendNewMessageNotification(
-          owner.email,
-          owner.username,
-          user.username,
-          `New support request from ${user.username}`
-        );
-      }
+        // Send email notification
+        if (staff.email) {
+          await Email.sendNewMessageNotification(
+            staff.email,
+            staff.username,
+            user.username,
+            `New support request from ${user.username}`
+          );
+        }
 
-      // Send push notification to owner
-      if (owner.expoPushToken) {
-        await PushNotification.sendPushNewMessage(
-          owner.expoPushToken,
-          owner.username,
-          user.username,
-          `New support request from ${user.username}`
-        );
+        // Send push notification
+        if (staff.expoPushToken) {
+          await PushNotification.sendPushNewMessage(
+            staff.expoPushToken,
+            staff.username,
+            user.username,
+            `New support request from ${user.username}`
+          );
+        }
       }
     }
 
@@ -700,6 +713,575 @@ messageRouter.post("/add-participant", authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Error adding participant:", error);
     return res.status(500).json({ error: "Failed to add participant" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/conversation/hr-group
+ * Create or get the group conversation for owner to message all HR staff
+ * Owner only
+ */
+messageRouter.post("/conversation/hr-group", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // Verify user is owner
+    const user = await User.findByPk(userId);
+    if (!user || user.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can access HR group chat" });
+    }
+
+    // Get all HR staff
+    const hrStaff = await User.findAll({
+      where: { type: "humanResources" },
+      attributes: ["id", "username", "firstName", "lastName"],
+    });
+
+    if (hrStaff.length === 0) {
+      return res.status(404).json({ error: "No HR staff available" });
+    }
+
+    // Look for existing HR group conversation
+    let conversation = await Conversation.findOne({
+      where: {
+        conversationType: "internal",
+        title: "HR Team",
+      },
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "username", "firstName", "lastName", "type"],
+            },
+          ],
+        },
+      ],
+    });
+
+    let created = false;
+
+    if (conversation) {
+      // Ensure all current HR staff are participants (in case new HR was added)
+      for (const hr of hrStaff) {
+        await ConversationParticipant.findOrCreate({
+          where: { conversationId: conversation.id, userId: hr.id },
+        });
+      }
+    } else {
+      // Create new group conversation
+      conversation = await Conversation.create({
+        conversationType: "internal",
+        title: "HR Team",
+        createdBy: userId,
+      });
+      created = true;
+
+      // Add owner
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: userId,
+      });
+
+      // Add all HR staff
+      for (const hr of hrStaff) {
+        await ConversationParticipant.create({
+          conversationId: conversation.id,
+          userId: hr.id,
+        });
+      }
+    }
+
+    // Reload with full participant info
+    conversation = await Conversation.findByPk(conversation.id, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "username", "firstName", "lastName", "type"],
+            },
+          ],
+        },
+      ],
+    });
+
+    return res.json({ conversation, created });
+  } catch (error) {
+    console.error("Error creating/getting HR group conversation:", error);
+    return res.status(500).json({ error: "Failed to create HR group conversation" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/conversation/hr-direct
+ * Create or get a 1-on-1 conversation between owner and specific HR, or HR-to-HR, or HR-to-owner
+ * Owner or HR can call this
+ */
+messageRouter.post("/conversation/hr-direct", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { targetUserId } = req.body;
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Must be owner or HR
+    if (user.type !== "owner" && user.type !== "humanResources") {
+      return res.status(403).json({ error: "Only owner or HR can use this endpoint" });
+    }
+
+    let otherUserId;
+    let otherUser;
+
+    if (user.type === "owner") {
+      // Owner must specify which HR to message
+      if (!targetUserId) {
+        return res.status(400).json({ error: "targetUserId is required for owner" });
+      }
+      otherUser = await User.findByPk(targetUserId);
+      if (!otherUser || otherUser.type !== "humanResources") {
+        return res.status(400).json({ error: "Target must be an HR staff member" });
+      }
+      otherUserId = targetUserId;
+    } else {
+      // HR can message owner or another HR
+      if (targetUserId) {
+        otherUser = await User.findByPk(targetUserId);
+        if (!otherUser || (otherUser.type !== "owner" && otherUser.type !== "humanResources")) {
+          return res.status(400).json({ error: "Target must be owner or HR staff" });
+        }
+        if (otherUser.id === userId) {
+          return res.status(400).json({ error: "Cannot message yourself" });
+        }
+        otherUserId = targetUserId;
+      } else {
+        // Default to messaging owner if no target specified
+        otherUser = await User.findOne({
+          where: { type: "owner" },
+        });
+        if (!otherUser) {
+          return res.status(404).json({ error: "Owner not found" });
+        }
+        otherUserId = otherUser.id;
+      }
+    }
+
+    // Check for existing 1-on-1 internal conversation
+    const userParticipations = await ConversationParticipant.findAll({
+      where: { userId },
+      include: [
+        {
+          model: Conversation,
+          as: "conversation",
+          where: { conversationType: "internal" },
+          include: [
+            {
+              model: ConversationParticipant,
+              as: "participants",
+            },
+          ],
+        },
+      ],
+    });
+
+    // Find a conversation with exactly 2 participants (this user + other user)
+    let existingConversation = null;
+    for (const participation of userParticipations) {
+      const conv = participation.conversation;
+      if (conv.participants.length === 2) {
+        const participantIds = conv.participants.map((p) => p.userId);
+        if (participantIds.includes(userId) && participantIds.includes(otherUserId)) {
+          existingConversation = conv;
+          break;
+        }
+      }
+    }
+
+    let conversation;
+    let created = false;
+
+    if (existingConversation) {
+      conversation = existingConversation;
+    } else {
+      // Create new 1-on-1 conversation
+      const otherName = `${otherUser.firstName || ""} ${otherUser.lastName || ""}`.trim() || otherUser.username;
+      const title = `Direct - ${otherName}`;
+
+      conversation = await Conversation.create({
+        conversationType: "internal",
+        title,
+        createdBy: userId,
+      });
+      created = true;
+
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: userId,
+      });
+
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: otherUserId,
+      });
+
+      // Notify the other user of new conversation
+      const io = req.app.get("io");
+      io.to(`user_${otherUserId}`).emit("new_internal_conversation", {
+        conversationId: conversation.id,
+        initiator: { id: user.id, username: user.username, type: user.type },
+      });
+    }
+
+    // Reload with full details
+    conversation = await Conversation.findByPk(conversation.id, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "username", "firstName", "lastName", "type"],
+            },
+          ],
+        },
+      ],
+    });
+
+    return res.json({ conversation, created });
+  } catch (error) {
+    console.error("Error creating/getting HR direct conversation:", error);
+    return res.status(500).json({ error: "Failed to create direct conversation" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/conversation/custom-group
+ * Create a custom group conversation with specific selected members
+ * Owner or HR can create custom groups
+ */
+messageRouter.post("/conversation/custom-group", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { memberIds, title } = req.body;
+    const io = req.app.get("io");
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Must be owner or HR
+    if (user.type !== "owner" && user.type !== "humanResources") {
+      return res.status(403).json({ error: "Only owner or HR can create custom groups" });
+    }
+
+    // Validate memberIds
+    if (!memberIds || !Array.isArray(memberIds) || memberIds.length < 1) {
+      return res.status(400).json({ error: "At least one member is required" });
+    }
+
+    // Remove duplicates and ensure creator is not in the list (they'll be added automatically)
+    const uniqueMemberIds = [...new Set(memberIds.filter((id) => id !== userId))];
+
+    if (uniqueMemberIds.length < 1) {
+      return res.status(400).json({ error: "At least one other member is required" });
+    }
+
+    // Validate all members exist and are owner or HR
+    const members = await User.findAll({
+      where: {
+        id: { [Op.in]: uniqueMemberIds },
+        [Op.or]: [
+          { type: "owner" },
+          { type: "humanResources" },
+        ],
+      },
+      attributes: ["id", "username", "firstName", "lastName", "type"],
+    });
+
+    if (members.length !== uniqueMemberIds.length) {
+      return res.status(400).json({ error: "All members must be valid owner or HR staff" });
+    }
+
+    // Generate title from member names if not provided
+    let groupTitle = title;
+    if (!groupTitle || !groupTitle.trim()) {
+      const memberNames = members.map((m) => m.firstName || m.username).slice(0, 3);
+      groupTitle = memberNames.join(", ");
+      if (members.length > 3) {
+        groupTitle += ` +${members.length - 3} more`;
+      }
+    }
+
+    // Create the conversation
+    const conversation = await Conversation.create({
+      conversationType: "internal",
+      title: groupTitle,
+      createdBy: userId,
+    });
+
+    // Add creator as participant
+    await ConversationParticipant.create({
+      conversationId: conversation.id,
+      userId: userId,
+    });
+
+    // Add all selected members as participants
+    for (const member of members) {
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: member.id,
+      });
+
+      // Notify each member of new group conversation
+      io.to(`user_${member.id}`).emit("new_internal_conversation", {
+        conversationId: conversation.id,
+        title: groupTitle,
+        initiator: { id: user.id, username: user.username, type: user.type },
+        isGroup: true,
+      });
+    }
+
+    // Reload with full participant info
+    const fullConversation = await Conversation.findByPk(conversation.id, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "username", "firstName", "lastName", "type"],
+            },
+          ],
+        },
+      ],
+    });
+
+    return res.status(201).json({
+      conversation: fullConversation,
+      memberNames: members.map((m) => ({
+        id: m.id,
+        name: `${m.firstName || ""} ${m.lastName || ""}`.trim() || m.username,
+      })),
+    });
+  } catch (error) {
+    console.error("Error creating custom group conversation:", error);
+    return res.status(500).json({ error: "Failed to create custom group" });
+  }
+});
+
+/**
+ * GET /api/v1/messages/staff
+ * Get list of staff members that current user can message
+ * Owner sees: all HR staff
+ * HR sees: owner + other HR staff (excluding self)
+ * Supports search query parameter for filtering by name/username
+ */
+messageRouter.get("/staff", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { search } = req.query;
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Must be owner or HR
+    if (user.type !== "owner" && user.type !== "humanResources") {
+      return res.status(403).json({ error: "Only owner or HR can access this endpoint" });
+    }
+
+    let whereClause;
+
+    if (user.type === "owner") {
+      // Owner sees all HR staff
+      whereClause = { type: "humanResources" };
+    } else {
+      // HR sees owner + other HR staff (excluding self)
+      whereClause = {
+        [Op.and]: [
+          { id: { [Op.ne]: userId } },
+          {
+            [Op.or]: [
+              { type: "owner" },
+              { type: "humanResources" },
+            ],
+          },
+        ],
+      };
+    }
+
+    // Add search filter if provided
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      const searchCondition = {
+        [Op.or]: [
+          { firstName: { [Op.iLike]: searchTerm } },
+          { lastName: { [Op.iLike]: searchTerm } },
+          { username: { [Op.iLike]: searchTerm } },
+        ],
+      };
+      whereClause = { [Op.and]: [whereClause, searchCondition] };
+    }
+
+    const staff = await User.findAll({
+      where: whereClause,
+      attributes: ["id", "username", "firstName", "lastName", "type"],
+      order: [["firstName", "ASC"], ["lastName", "ASC"]],
+    });
+
+    return res.json({ staff });
+  } catch (error) {
+    console.error("Error fetching staff list:", error);
+    return res.status(500).json({ error: "Failed to fetch staff list" });
+  }
+});
+
+/**
+ * GET /api/v1/messages/conversations/internal
+ * Get all internal (owner-HR) conversations for the current user
+ * Owner or HR only
+ */
+messageRouter.get("/conversations/internal", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Must be owner or HR
+    if (user.type !== "owner" && user.type !== "humanResources") {
+      return res.status(403).json({ error: "Only owner or HR can access internal conversations" });
+    }
+
+    // Get all internal conversations where user is a participant
+    const participations = await ConversationParticipant.findAll({
+      where: { userId },
+      include: [
+        {
+          model: Conversation,
+          as: "conversation",
+          where: { conversationType: "internal" },
+          include: [
+            {
+              model: Message,
+              as: "messages",
+              limit: 1,
+              order: [["createdAt", "DESC"]],
+              include: [
+                {
+                  model: User,
+                  as: "sender",
+                  attributes: ["id", "username", "firstName", "lastName"],
+                },
+              ],
+            },
+            {
+              model: ConversationParticipant,
+              as: "participants",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "username", "firstName", "lastName", "type"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      order: [[{ model: Conversation, as: "conversation" }, "updatedAt", "DESC"]],
+    });
+
+    // Calculate unread count and format response
+    const conversations = await Promise.all(
+      participations.map(async (p) => {
+        const unreadCount = await Message.count({
+          where: {
+            conversationId: p.conversationId,
+            createdAt: { [Op.gt]: p.lastReadAt || new Date(0) },
+            senderId: { [Op.ne]: userId },
+          },
+        });
+
+        const conv = p.conversation;
+        const lastMessage = conv.messages && conv.messages[0] ? conv.messages[0] : null;
+        const isGroupChat = conv.participants.length > 2;
+
+        // Get other participants (not the current user)
+        const otherParticipants = conv.participants
+          .filter((part) => part.user.id !== userId)
+          .map((part) => ({
+            id: part.user.id,
+            username: part.user.username,
+            firstName: part.user.firstName,
+            lastName: part.user.lastName,
+            type: part.user.type,
+            displayName: `${part.user.firstName || ""} ${part.user.lastName || ""}`.trim() || part.user.username,
+          }));
+
+        // Generate display name for the conversation
+        let displayName;
+        if (isGroupChat) {
+          // For groups, show first 3 names + count
+          const names = otherParticipants.slice(0, 3).map((p) => p.firstName || p.username);
+          displayName = names.join(", ");
+          if (otherParticipants.length > 3) {
+            displayName += ` +${otherParticipants.length - 3} more`;
+          }
+        } else if (otherParticipants.length === 1) {
+          // For 1-on-1, show the other person's name
+          displayName = otherParticipants[0].displayName;
+        } else {
+          displayName = conv.title || "Conversation";
+        }
+
+        return {
+          id: conv.id,
+          title: conv.title,
+          displayName,
+          isGroupChat,
+          lastMessage: lastMessage
+            ? {
+                content: lastMessage.content,
+                sender: {
+                  ...lastMessage.sender.dataValues || lastMessage.sender,
+                  displayName: `${lastMessage.sender.firstName || ""} ${lastMessage.sender.lastName || ""}`.trim() || lastMessage.sender.username,
+                },
+                createdAt: lastMessage.createdAt,
+              }
+            : null,
+          unreadCount,
+          participants: conv.participants.map((part) => ({
+            ...part.user.dataValues || part.user,
+            displayName: `${part.user.firstName || ""} ${part.user.lastName || ""}`.trim() || part.user.username,
+          })),
+          otherParticipants,
+          updatedAt: conv.updatedAt,
+        };
+      })
+    );
+
+    return res.json({ conversations });
+  } catch (error) {
+    console.error("Error fetching internal conversations:", error);
+    return res.status(500).json({ error: "Failed to fetch internal conversations" });
   }
 });
 
