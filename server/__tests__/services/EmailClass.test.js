@@ -315,7 +315,7 @@ describe("EmailClass", () => {
       expect(mailOptions.html).toContain("change your password");
     });
 
-    it("should include getting started steps", async () => {
+    it("should include login instructions", async () => {
       await Email.sendEmailCongragulations(
         "John",
         "Doe",
@@ -326,8 +326,8 @@ describe("EmailClass", () => {
       );
 
       const mailOptions = mockSendMail.mock.calls[0][0];
-      expect(mailOptions.html).toContain("Getting Started");
-      expect(mailOptions.text).toContain("GETTING STARTED");
+      expect(mailOptions.html).toContain("How to Log In");
+      expect(mailOptions.text).toContain("HOW TO LOG IN");
     });
   });
 
@@ -740,6 +740,373 @@ describe("EmailClass", () => {
       const mailOptions = mockSendMail.mock.calls[0][0];
       expect(mailOptions.html).toContain("dashboard");
       expect(mailOptions.html).toContain("Applications");
+    });
+  });
+
+  describe("sendEmailCongragulations for HR", () => {
+    it("should show correct role title for HR staff", async () => {
+      await Email.sendEmailCongragulations(
+        "Jane",
+        "Smith",
+        "janes_hr",
+        "HRPass123!",
+        "jane.hr@example.com",
+        "humanResources"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("HR Team Member");
+    });
+
+    it("should include HR-specific subtitle", async () => {
+      await Email.sendEmailCongragulations(
+        "Jane",
+        "Smith",
+        "janes_hr",
+        "HRPass123!",
+        "jane.hr@example.com",
+        "humanResources"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("hired to join our HR team");
+    });
+
+    it("should include HR-specific login instructions", async () => {
+      await Email.sendEmailCongragulations(
+        "Jane",
+        "Smith",
+        "janes_hr",
+        "HRPass123!",
+        "jane.hr@example.com",
+        "humanResources"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("HR Dashboard");
+      expect(mailOptions.text).toContain("HR Dashboard");
+    });
+
+    it("should include congratulations message", async () => {
+      await Email.sendEmailCongragulations(
+        "Jane",
+        "Smith",
+        "janes_hr",
+        "HRPass123!",
+        "jane.hr@example.com",
+        "humanResources"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Congratulations");
+      expect(mailOptions.subject).toContain("Congratulations");
+    });
+  });
+
+  describe("sendApplicationRejected", () => {
+    it("should send rejection email to applicant", async () => {
+      await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "Doe",
+        "Insufficient experience"
+      );
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.to).toBe("applicant@example.com");
+    });
+
+    it("should include applicant name in greeting", async () => {
+      await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "Doe",
+        null
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("John Doe");
+      expect(mailOptions.text).toContain("John Doe");
+    });
+
+    it("should include rejection reason when provided", async () => {
+      await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "Doe",
+        "Background check did not pass"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Background check did not pass");
+      expect(mailOptions.text).toContain("Background check did not pass");
+    });
+
+    it("should work without rejection reason", async () => {
+      await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "Doe",
+        null
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).not.toContain("Feedback:");
+    });
+
+    it("should include encouraging message", async () => {
+      await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "Doe",
+        null
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("reapply");
+      expect(mailOptions.text).toContain("reapply");
+    });
+
+    it("should include polite decline message", async () => {
+      await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "Doe",
+        null
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("decided");
+      expect(mailOptions.text).toContain("decided");
+    });
+
+    it("should use appropriate subject line", async () => {
+      await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "Doe",
+        null
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.subject).toBe("Application Update - Kleanr");
+    });
+
+    it("should handle first name only", async () => {
+      await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "",
+        null
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("John");
+    });
+
+    it("should handle errors gracefully", async () => {
+      mockSendMail.mockRejectedValueOnce(new Error("SMTP error"));
+
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+
+      const result = await Email.sendApplicationRejected(
+        "applicant@example.com",
+        "John",
+        "Doe",
+        null
+      );
+
+      expect(consoleSpy).toHaveBeenCalled();
+      expect(result).toBeUndefined();
+
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe("sendHRHiringNotification", () => {
+    it("should send approval notification to owner", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "approved"
+      );
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.to).toBe("owner@example.com");
+    });
+
+    it("should include HR name in content for approval", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "approved"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Jane HR");
+      expect(mailOptions.text).toContain("Jane HR");
+    });
+
+    it("should include applicant details for approval", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "approved"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("John Doe");
+      expect(mailOptions.html).toContain("john@applicant.com");
+    });
+
+    it("should indicate account was created for approval", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "approved"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Account Created");
+    });
+
+    it("should use green color scheme for approval", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "approved"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("#059669");
+    });
+
+    it("should have approval subject with checkmark", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "approved"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.subject).toContain("New Cleaner Hired");
+      expect(mailOptions.subject).toContain("John Doe");
+    });
+
+    it("should send rejection notification to owner", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "rejected",
+        "Failed background check"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("rejected");
+      expect(mailOptions.subject).toContain("Rejected");
+    });
+
+    it("should include rejection reason in notification", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "rejected",
+        "Failed background check"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Failed background check");
+      expect(mailOptions.text).toContain("Failed background check");
+    });
+
+    it("should work without rejection reason", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "rejected"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).not.toContain("Rejection Reason");
+    });
+
+    it("should use gray color scheme for rejection", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "rejected"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("#64748b");
+    });
+
+    it("should have rejection subject with X mark", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "rejected"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.subject).toContain("Rejected");
+      expect(mailOptions.subject).toContain("John Doe");
+    });
+
+    it("should include call to action to view dashboard", async () => {
+      await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "approved"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("dashboard");
+    });
+
+    it("should handle errors gracefully", async () => {
+      mockSendMail.mockRejectedValueOnce(new Error("SMTP error"));
+
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+
+      const result = await Email.sendHRHiringNotification(
+        "owner@example.com",
+        "Jane HR",
+        "John Doe",
+        "john@applicant.com",
+        "approved"
+      );
+
+      expect(consoleSpy).toHaveBeenCalled();
+      expect(result).toBeUndefined();
+
+      consoleSpy.mockRestore();
     });
   });
 

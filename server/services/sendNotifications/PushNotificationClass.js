@@ -247,6 +247,20 @@ class PushNotification {
       daysRemaining,
     });
   }
+
+  // 18. Supply reminder (to cleaner - morning of appointment)
+  static async sendPushSupplyReminder(expoPushToken, cleanerName, appointmentDate, address) {
+    const fullAddress = `${address.street}, ${address.city}`;
+    const title = "Don't Forget Your Supplies!";
+    const body = `Hi ${cleanerName}! Before heading to ${fullAddress} today, remember to bring: toilet paper, paper towels, and trash bags.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "supply_reminder",
+      appointmentDate,
+      canSnooze: true,
+      snoozeAction: "snooze-supply-reminder",
+    });
+  }
 }
 
 module.exports = PushNotification;

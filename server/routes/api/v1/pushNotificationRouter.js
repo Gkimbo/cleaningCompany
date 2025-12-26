@@ -117,4 +117,63 @@ pushNotificationRouter.patch("/preferences", authenticateToken, async (req, res)
   }
 });
 
+// POST: Snooze supply reminders for 1 week
+pushNotificationRouter.post("/snooze-supply-reminder", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Only cleaners can snooze supply reminders
+    if (user.type !== "cleaner") {
+      return res.status(403).json({ error: "Only cleaners can snooze supply reminders" });
+    }
+
+    // Set snooze for 1 week from now
+    const snoozeUntil = new Date();
+    snoozeUntil.setDate(snoozeUntil.getDate() + 7);
+
+    await user.update({ supplyReminderSnoozedUntil: snoozeUntil });
+
+    console.log(`[Push] Supply reminders snoozed for user ${userId} until ${snoozeUntil.toISOString()}`);
+    return res.status(200).json({
+      message: "Supply reminders snoozed for 1 week",
+      snoozedUntil: snoozeUntil.toISOString(),
+    });
+  } catch (error) {
+    console.error("[Push] Error snoozing supply reminders:", error);
+    return res.status(500).json({ error: "Failed to snooze supply reminders" });
+  }
+});
+
+// GET: Get supply reminder snooze status
+pushNotificationRouter.get("/supply-reminder-status", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "supplyReminderSnoozedUntil"],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const now = new Date();
+    const snoozedUntil = user.supplyReminderSnoozedUntil;
+    const isSnoozed = !!(snoozedUntil && new Date(snoozedUntil) > now);
+
+    return res.status(200).json({
+      isSnoozed,
+      snoozedUntil: isSnoozed ? snoozedUntil : null,
+    });
+  } catch (error) {
+    console.error("[Push] Error getting supply reminder status:", error);
+    return res.status(500).json({ error: "Failed to get supply reminder status" });
+  }
+});
+
 module.exports = pushNotificationRouter;

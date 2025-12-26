@@ -7,7 +7,10 @@ const {
   UserPendingRequests,
   TermsAndConditions,
   UserTermsAcceptance,
+  Conversation,
+  ConversationParticipant,
 } = require("../../../models");
+const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -170,6 +173,295 @@ usersRouter.post("/new-employee", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to create employee account" });
+  }
+});
+
+// POST /api/v1/users/new-hr - Owner creates HR account
+usersRouter.post("/new-hr", async (req, res) => {
+  try {
+    const { firstName, lastName, username, password, email, phone } = req.body;
+
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || caller.type !== "owner") {
+      return res.status(403).json({ error: "Only owner can create HR accounts" });
+    }
+
+    // Validate required fields
+    if (!username || !password || !email) {
+      return res.status(400).json({ error: "Username, password, and email are required" });
+    }
+
+    // Validate password strength
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    // Check if username or email already exists
+    let existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({ error: "Email already exists" });
+    }
+
+    existingUser = await User.findOne({ where: { username } });
+    if (existingUser) {
+      return res.status(410).json({ error: "Username already exists" });
+    }
+
+    // Create HR user (password is hashed by User model's beforeCreate hook)
+    const newUser = await User.create({
+      firstName: firstName || "",
+      lastName: lastName || "",
+      username,
+      password,
+      email,
+      phone: phone || null,
+      type: "humanResources",
+      notifications: ["phone", "email"],
+    });
+
+    // Create UserBills record
+    await UserBills.create({
+      userId: newUser.id,
+      appointmentDue: 0,
+      cancellationFee: 0,
+      totalDue: 0,
+    });
+
+    // Add HR user to all existing support conversations
+    const supportConversations = await Conversation.findAll({
+      where: { conversationType: "support" },
+    });
+
+    for (const conv of supportConversations) {
+      await ConversationParticipant.findOrCreate({
+        where: {
+          conversationId: conv.id,
+          userId: newUser.id,
+        },
+      });
+    }
+
+    // Add HR user to existing "HR Team" internal conversation if it exists
+    const hrGroupConvo = await Conversation.findOne({
+      where: { conversationType: "internal", title: "HR Team" },
+    });
+    if (hrGroupConvo) {
+      await ConversationParticipant.findOrCreate({
+        where: {
+          conversationId: hrGroupConvo.id,
+          userId: newUser.id,
+        },
+      });
+      console.log(`✅ Added new HR to existing HR Team conversation`);
+    }
+
+    // Send welcome email with credentials
+    const hrFirstName = firstName || username;
+    const hrLastName = lastName || "";
+
+    await Email.sendEmailCongragulations(
+      hrFirstName,
+      hrLastName,
+      username,
+      password,
+      email,
+      "humanResources"
+    );
+
+    console.log(`✅ New HR account created: ${username}`);
+
+    const serializedUser = UserSerializer.serializeOne(newUser.dataValues);
+    return res.status(201).json({ user: serializedUser });
+  } catch (error) {
+    console.error("Error creating HR account:", error);
+    res.status(500).json({ error: "Failed to create HR account" });
+  }
+});
+
+// GET /api/v1/users/hr-staff - Owner gets list of all HR employees
+usersRouter.get("/hr-staff", async (req, res) => {
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || (caller.type !== "owner" && caller.type !== "owner1")) {
+      return res.status(403).json({ error: "Only owner can access HR staff list" });
+    }
+
+    // Fetch all HR employees
+    const hrStaff = await User.findAll({
+      where: { type: "humanResources" },
+      order: [["createdAt", "DESC"]],
+    });
+
+    const serializedHrStaff = hrStaff.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      createdAt: user.createdAt,
+    }));
+
+    return res.status(200).json({ hrStaff: serializedHrStaff });
+  } catch (error) {
+    console.error("Error fetching HR staff:", error);
+    return res.status(500).json({ error: "Failed to fetch HR staff" });
+  }
+});
+
+// PATCH /api/v1/users/hr-staff/:id - Owner updates HR employee details
+usersRouter.patch("/hr-staff/:id", async (req, res) => {
+  const { id } = req.params;
+  const { firstName, lastName, email, phone } = req.body;
+
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || (caller.type !== "owner" && caller.type !== "owner1")) {
+      return res.status(403).json({ error: "Only owner can update HR staff" });
+    }
+
+    // Find the HR employee
+    const hrUser = await User.findByPk(id);
+    if (!hrUser) {
+      return res.status(404).json({ error: "HR employee not found" });
+    }
+
+    if (hrUser.type !== "humanResources") {
+      return res.status(400).json({ error: "User is not an HR employee" });
+    }
+
+    // Validate email if provided
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Please enter a valid email address" });
+      }
+
+      // Check if email is already taken by another user
+      const existingUser = await User.findOne({ where: { email } });
+      if (existingUser && existingUser.id !== parseInt(id)) {
+        return res.status(409).json({ error: "Email is already in use" });
+      }
+    }
+
+    // Update HR employee details
+    const updateData = {};
+    if (firstName !== undefined) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone || null;
+
+    await hrUser.update(updateData);
+
+    console.log(`✅ HR employee ${id} updated by owner ${caller.id}`);
+
+    return res.status(200).json({
+      message: "HR employee updated successfully",
+      user: {
+        id: hrUser.id,
+        firstName: hrUser.firstName,
+        lastName: hrUser.lastName,
+        username: hrUser.username,
+        email: hrUser.email,
+        phone: hrUser.phone,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating HR employee:", error);
+    return res.status(500).json({ error: "Failed to update HR employee" });
+  }
+});
+
+// DELETE /api/v1/users/hr-staff/:id - Owner removes HR employee
+usersRouter.delete("/hr-staff/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Verify caller is owner
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const caller = await User.findByPk(decoded.userId);
+    if (!caller || (caller.type !== "owner" && caller.type !== "owner1")) {
+      return res.status(403).json({ error: "Only owner can remove HR staff" });
+    }
+
+    // Find the HR employee
+    const hrUser = await User.findByPk(id);
+    if (!hrUser) {
+      return res.status(404).json({ error: "HR employee not found" });
+    }
+
+    if (hrUser.type !== "humanResources") {
+      return res.status(400).json({ error: "User is not an HR employee" });
+    }
+
+    // Remove associated records
+    await UserBills.destroy({ where: { userId: id } });
+    await ConversationParticipant.destroy({ where: { userId: id } });
+
+    // Delete the HR user
+    await hrUser.destroy();
+
+    console.log(`✅ HR employee ${id} removed by owner ${caller.id}`);
+
+    return res.status(200).json({ message: "HR employee removed successfully" });
+  } catch (error) {
+    console.error("Error removing HR employee:", error);
+    return res.status(500).json({ error: "Failed to remove HR employee" });
   }
 });
 
@@ -396,6 +688,9 @@ usersRouter.patch("/update-username", async (req, res) => {
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({ error: "Token has expired" });
     }
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
     return res.status(500).json({ error: "Failed to update username" });
   }
 });
@@ -447,6 +742,9 @@ usersRouter.patch("/update-password", async (req, res) => {
     console.error("Error updating password:", error);
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({ error: "Token has expired" });
+    }
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
     }
     return res.status(500).json({ error: "Failed to update password" });
   }

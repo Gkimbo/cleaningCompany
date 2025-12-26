@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-909_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-964_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -159,11 +159,12 @@ server/
 │   ├── usersRouter.js              # User management
 │   ├── appointmentsRouter.js       # Appointments
 │   ├── calendarSyncRouter.js       # iCal sync
-│   ├── paymentRouter.js            # Payments
+│   ├── paymentRouter.js            # Payments & cron jobs
 │   ├── stripeConnectRouter.js      # Cleaner payouts
 │   ├── taxRouter.js                # Tax documents
 │   ├── reviewsRouter.js            # Reviews
 │   ├── messageRouter.js            # Messaging
+│   ├── pushNotificationRouter.js   # Push notifications
 │   ├── managerDashboardRouter.js   # Manager features
 │   ├── applicationRouter.js        # Job applications
 │   ├── jobPhotosRouter.js          # Photo uploads
@@ -174,7 +175,8 @@ server/
 │   ├── TaxDocumentService.js       # 1099-NEC generation
 │   ├── PlatformTaxService.js       # Platform tax reporting
 │   └── sendNotifications/
-│       └── EmailClass.js           # HTML email notifications
+│       ├── EmailClass.js           # HTML email notifications
+│       └── PushNotificationClass.js # Expo push notifications
 │
 ├── middleware/
 │   └── authenticatedToken.js       # JWT authentication
@@ -309,6 +311,17 @@ server/
 | `POST` | `/api/v1/messages/broadcast` | Broadcast message | Manager |
 | `GET` | `/api/v1/messages/unread-count` | Get unread count | Yes |
 | `PATCH` | `/api/v1/messages/mark-read/:id` | Mark as read | Yes |
+
+### Push Notifications
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/push-notifications/register-token` | Register Expo push token | Yes |
+| `DELETE` | `/api/v1/push-notifications/remove-token` | Remove push token (logout) | Yes |
+| `GET` | `/api/v1/push-notifications/preferences` | Get notification preferences | Yes |
+| `PATCH` | `/api/v1/push-notifications/preferences` | Update preferences | Yes |
+| `POST` | `/api/v1/push-notifications/snooze-supply-reminder` | Snooze supply reminders for 1 week | Cleaner |
+| `GET` | `/api/v1/push-notifications/supply-reminder-status` | Get snooze status | Yes |
 
 ### Terms & Conditions
 
@@ -489,6 +502,57 @@ const scheduleC = await PlatformTaxService.generateScheduleCData(2024);
 const report = await PlatformTaxService.getComprehensiveTaxReport(2024);
 ```
 
+### PushNotificationClass
+
+Sends push notifications via Expo to iOS and Android devices:
+
+```javascript
+const PushNotification = require('./services/sendNotifications/PushNotificationClass');
+
+// Validate Expo push token
+const isValid = PushNotification.isValidExpoPushToken(token);
+
+// Send generic notification
+await PushNotification.sendPushNotification(token, 'Title', 'Body message', { type: 'custom' });
+
+// Specific notification types
+await PushNotification.sendPushCancellation(token, userName, appointmentDate, address);
+await PushNotification.sendPushConfirmation(token, userName, appointmentDate, address);
+await PushNotification.sendPushEmployeeRequest(token, userName, cleanerName, rating, date);
+await PushNotification.sendPushRequestApproved(token, cleanerName, homeownerName, date, address);
+await PushNotification.sendPushRequestDenied(token, cleanerName, appointmentDate);
+await PushNotification.sendPushNewMessage(token, userName, senderName, messagePreview);
+await PushNotification.sendPushBroadcast(token, userName, broadcastTitle, content);
+await PushNotification.sendPushSupplyReminder(token, cleanerName, appointmentDate, address);
+await PushNotification.sendPushPaymentFailed(token, userName, appointmentDate, daysRemaining);
+```
+
+---
+
+## Cron Jobs
+
+The server runs scheduled tasks using `node-cron`:
+
+| Schedule | Job | Description |
+|----------|-----|-------------|
+| `0 7 * * *` | Supply Reminder | Sends push notifications to cleaners with appointments today reminding them to bring toilet paper, paper towels, and trash bags |
+| `0 0 * * *` | Payment Retry | Retries failed payments and sends reminders |
+| `0 1 * * *` | Calendar Sync | Syncs all active iCal calendars |
+
+### Supply Reminder Snooze
+
+Cleaners can snooze supply reminders for 1 week to avoid notification fatigue:
+
+```javascript
+// Client-side: Snooze for 1 week
+POST /api/v1/push-notifications/snooze-supply-reminder
+// Response: { message: "Supply reminders snoozed for 1 week", snoozedUntil: "2025-01-02T..." }
+
+// Check snooze status
+GET /api/v1/push-notifications/supply-reminder-status
+// Response: { isSnoozed: true, snoozedUntil: "2025-01-02T..." }
+```
+
 ---
 
 ## WebSocket Events
@@ -570,13 +634,15 @@ npm test -- __tests__/integration/
 | Tax Documents | 45 | W-9, 1099-NEC, platform taxes |
 | Reviews | 32 | Create, read, summaries |
 | Messaging | 21 | Conversations, send, broadcast |
+| Push Notifications | 35 | Token registration, preferences, snooze |
+| Supply Reminder Cron | 20 | Daily reminders, snooze logic |
 | Manager Features | 28 | Dashboard, applications |
 | Email Notifications | 54 | HTML templates, all notification types |
 | Pricing & Staffing | 10 | Dynamic pricing, staffing config |
 | Terms & Conditions | 54 | Version management, acceptance tracking |
 | Models | 27 | TermsAndConditions, UserTermsAcceptance |
 | Integration | 27 | Full payment flows |
-| **Total** | **909** | - |
+| **Total** | **964** | - |
 
 ---
 

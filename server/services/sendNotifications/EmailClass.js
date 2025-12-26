@@ -284,7 +284,48 @@ Kleanr Support Team`;
         },
       });
 
-      const roleTitle = type === "owner" ? "Owner" : "Cleaner";
+      // Determine role title and getting started steps based on user type
+      let roleTitle;
+      let gettingStartedSteps;
+      let welcomeSubtitle;
+
+      if (type === "humanResources") {
+        roleTitle = "HR Team Member";
+        welcomeSubtitle = "You've been hired to join our HR team!";
+        gettingStartedSteps = [
+          "Open the Kleanr app on your device",
+          "Tap <strong>\"Login\"</strong> on the welcome screen",
+          "Enter your username and password shown above",
+          "You'll be directed to your HR Dashboard",
+          "Update your password in Account Settings for security",
+        ];
+      } else if (type === "owner") {
+        roleTitle = "Owner";
+        welcomeSubtitle = "You're officially part of the team";
+        gettingStartedSteps = [
+          "Download the Kleanr app or visit our website",
+          "Log in using the credentials above",
+          "Update your password in Account Settings",
+          "Start managing your cleaning business!",
+        ];
+      } else {
+        roleTitle = "Cleaner";
+        welcomeSubtitle = "You're officially part of the team";
+        gettingStartedSteps = [
+          "Download the Kleanr app or visit our website",
+          "Log in using the credentials above",
+          "Update your password in Account Settings",
+          "Browse available cleaning jobs and start earning!",
+        ];
+      }
+
+      const stepsHtml = gettingStartedSteps.map(step =>
+        `<li style="margin-bottom: 8px;">${step}</li>`
+      ).join("");
+
+      const stepsText = gettingStartedSteps.map((step, i) =>
+        `${i + 1}. ${step.replace(/<[^>]*>/g, '')}`
+      ).join("\n");
 
       const htmlContent = `
 <!DOCTYPE html>
@@ -299,17 +340,17 @@ Kleanr Support Team`;
     <tr>
       <td style="background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); padding: 40px 30px; text-align: center;">
         <h1 style="color: #ffffff; margin: 0; font-size: 32px; font-weight: 700; letter-spacing: 1px;">Welcome to Kleanr!</h1>
-        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">You're officially part of the team</p>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">${welcomeSubtitle}</p>
       </td>
     </tr>
 
     <!-- Main Content -->
     <tr>
       <td style="padding: 40px 30px;">
-        <h2 style="color: #1e293b; margin: 0 0 20px 0; font-size: 24px;">Hi ${firstName} ${lastName}! 👋</h2>
+        <h2 style="color: #1e293b; margin: 0 0 20px 0; font-size: 24px;">Hi ${firstName}${lastName ? ` ${lastName}` : ""}! 👋</h2>
 
         <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
-          Congratulations on joining Kleanr as a <strong>${roleTitle}</strong>! We're thrilled to have you on board. Your account has been created and you're ready to get started.
+          🎉 <strong>Congratulations!</strong> You've been hired as a <strong>${roleTitle}</strong> at Kleanr! We're thrilled to have you on board. Your account has been created and you're ready to get started.
         </p>
 
         <!-- Credentials Box -->
@@ -338,12 +379,9 @@ Kleanr Support Team`;
         </div>
 
         <!-- Getting Started Steps -->
-        <h3 style="color: #1e293b; margin: 30px 0 15px 0; font-size: 18px;">🚀 Getting Started</h3>
+        <h3 style="color: #1e293b; margin: 30px 0 15px 0; font-size: 18px;">🚀 How to Log In</h3>
         <ol style="color: #475569; font-size: 15px; line-height: 1.8; margin: 0; padding-left: 20px;">
-          <li style="margin-bottom: 8px;">Download the Kleanr app or visit our website</li>
-          <li style="margin-bottom: 8px;">Log in using the credentials above</li>
-          <li style="margin-bottom: 8px;">Update your password in Account Settings</li>
-          <li style="margin-bottom: 8px;">Browse available cleaning jobs and start earning!</li>
+          ${stepsHtml}
         </ol>
 
         <!-- Security Warning -->
@@ -379,21 +417,18 @@ Kleanr Support Team`;
 
       const textContent = `Welcome to Kleanr!
 
-Hi ${firstName} ${lastName}!
+Hi ${firstName}${lastName ? ` ${lastName}` : ""}!
 
-Congratulations on joining Kleanr as a ${roleTitle}! We're thrilled to have you on board.
+🎉 CONGRATULATIONS! You've been hired as a ${roleTitle} at Kleanr! We're thrilled to have you on board.
 
 YOUR LOGIN CREDENTIALS
 ━━━━━━━━━━━━━━━━━━━━━━
 Username: ${username}
 Password: ${password}
 
-GETTING STARTED
+HOW TO LOG IN
 ━━━━━━━━━━━━━━━━━━━━━━
-1. Download the Kleanr app or visit our website
-2. Log in using the credentials above
-3. Update your password in Account Settings
-4. Browse available cleaning jobs and start earning!
+${stepsText}
 
 ⚠️ SECURITY TIP: Please change your password after your first login to keep your account secure.
 
@@ -411,7 +446,7 @@ This is an automated message. Please do not reply directly to this email.
       const mailOptions = {
         from: process.env.EMAIL_USER,
         to: email,
-        subject: `🎉 Welcome to Kleanr, ${firstName}! Your Account is Ready`,
+        subject: `🎉 Congratulations ${firstName}! You've Been Hired at Kleanr`,
         text: textContent,
         html: htmlContent,
       };
@@ -1535,6 +1570,142 @@ Kleanr Support Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending payment failed reminder email:", error);
+    }
+  }
+
+  // Application rejection email to applicant
+  static async sendApplicationRejected(email, firstName, lastName, rejectionReason = null) {
+    try {
+      const transporter = createTransporter();
+      const applicantName = `${firstName}${lastName ? ` ${lastName}` : ""}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Application Update",
+        subtitle: "Thank you for your interest in Kleanr",
+        headerColor: "linear-gradient(135deg, #64748b 0%, #94a3b8 100%)",
+        greeting: `Dear ${applicantName},`,
+        content: `<p>Thank you for taking the time to apply for a cleaner position with Kleanr. We appreciate your interest in joining our team.</p>
+          <p>After careful consideration, we have decided not to move forward with your application at this time.</p>
+          ${rejectionReason ? `<p><strong>Feedback:</strong> ${rejectionReason}</p>` : ""}
+          <p>We encourage you to continue developing your skills and experience, and you're welcome to reapply in the future.</p>`,
+        warningBox: {
+          icon: "💡",
+          text: "This decision does not reflect on your abilities or potential. We receive many qualified applications and making these decisions is never easy.",
+          bgColor: "#f1f5f9",
+          borderColor: "#94a3b8",
+          textColor: "#475569",
+        },
+        ctaText: "We wish you the best in your job search and future endeavors.",
+        footerMessage: "Thank you for considering Kleanr",
+      });
+
+      const textContent = `Dear ${applicantName},
+
+Thank you for taking the time to apply for a cleaner position with Kleanr. We appreciate your interest in joining our team.
+
+After careful consideration, we have decided not to move forward with your application at this time.
+${rejectionReason ? `\nFeedback: ${rejectionReason}\n` : ""}
+We encourage you to continue developing your skills and experience, and you're welcome to reapply in the future.
+
+This decision does not reflect on your abilities or potential. We receive many qualified applications and making these decisions is never easy.
+
+We wish you the best in your job search and future endeavors.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "Application Update - Kleanr",
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Application rejection email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending application rejection email:", error);
+    }
+  }
+
+  // Notify owner of HR hiring decision
+  static async sendHRHiringNotification(
+    ownerEmail,
+    hrName,
+    applicantName,
+    applicantEmail,
+    decision,
+    rejectionReason = null
+  ) {
+    try {
+      const transporter = createTransporter();
+      const isApproved = decision === "approved";
+
+      const htmlContent = createEmailTemplate({
+        title: isApproved ? "New Cleaner Hired" : "Application Rejected",
+        subtitle: `HR decision by ${hrName}`,
+        headerColor: isApproved
+          ? "linear-gradient(135deg, #059669 0%, #10b981 100%)"
+          : "linear-gradient(135deg, #64748b 0%, #94a3b8 100%)",
+        greeting: "Hello,",
+        content: isApproved
+          ? `<p><strong>${hrName}</strong> has approved a cleaner application and created a new employee account.</p>`
+          : `<p><strong>${hrName}</strong> has rejected a cleaner application.</p>`,
+        infoBox: {
+          icon: isApproved ? "✅" : "❌",
+          title: "Application Details",
+          items: [
+            { label: "Applicant", value: applicantName },
+            { label: "Email", value: applicantEmail },
+            { label: "Decision", value: isApproved ? "Approved - Account Created" : "Rejected" },
+            { label: "Decided By", value: hrName },
+          ],
+        },
+        warningBox: !isApproved && rejectionReason ? {
+          icon: "📝",
+          text: `<strong>Rejection Reason:</strong> ${rejectionReason}`,
+          bgColor: "#f1f5f9",
+          borderColor: "#94a3b8",
+          textColor: "#475569",
+        } : null,
+        ctaText: "Log into the Kleanr dashboard to view full details.",
+        footerMessage: "Kleanr HR Notification",
+      });
+
+      const textContent = `Hello,
+
+${hrName} has ${isApproved ? "approved" : "rejected"} a cleaner application.
+
+APPLICATION DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Applicant: ${applicantName}
+Email: ${applicantEmail}
+Decision: ${isApproved ? "Approved - Account Created" : "Rejected"}
+Decided By: ${hrName}
+${!isApproved && rejectionReason ? `Rejection Reason: ${rejectionReason}` : ""}
+
+Log into the Kleanr dashboard to view full details.
+
+Best regards,
+Kleanr System`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: ownerEmail,
+        subject: isApproved
+          ? `✅ New Cleaner Hired - ${applicantName}`
+          : `❌ Application Rejected - ${applicantName}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ HR hiring notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending HR hiring notification email:", error);
     }
   }
 }

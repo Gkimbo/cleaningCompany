@@ -111,6 +111,11 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 		},
+		supplyReminderSnoozedUntil: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "If set, supply reminders are silenced until this date",
+		},
 	});
 
 	// Hash the password before saving the user

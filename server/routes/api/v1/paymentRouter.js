@@ -1556,6 +1556,85 @@ cron.schedule("0 * * * *", async () => {
   }
 });
 
+// ============================================================
+// CRON JOB: Daily Supply Reminder (7:00 AM)
+// Sends push notifications to cleaners with appointments today
+// Reminds them to bring: toilet paper, paper towels, trash bags
+// ============================================================
+cron.schedule("0 7 * * *", async () => {
+  console.log("[Cron] Running daily supply reminder...");
+
+  const today = new Date();
+  const todayString = today.toISOString().split("T")[0]; // YYYY-MM-DD format
+
+  try {
+    // Find all appointments for today that have assigned cleaners
+    const todaysAppointments = await UserAppointments.findAll({
+      where: {
+        date: todayString,
+        hasBeenAssigned: true,
+        completed: false,
+      },
+      include: [{ model: UserHomes, as: "home" }],
+    });
+
+    console.log(
+      `[Cron] Found ${todaysAppointments.length} appointments for today`
+    );
+
+    for (const appointment of todaysAppointments) {
+      // Get assigned cleaners from employeesAssigned array
+      const cleanerIds = appointment.employeesAssigned || [];
+
+      for (const cleanerId of cleanerIds) {
+        try {
+          const cleaner = await User.findByPk(cleanerId);
+          if (!cleaner || !cleaner.expoPushToken) continue;
+
+          // Check if cleaner has snoozed supply reminders
+          if (cleaner.supplyReminderSnoozedUntil) {
+            const snoozeEnd = new Date(cleaner.supplyReminderSnoozedUntil);
+            if (snoozeEnd > new Date()) {
+              console.log(
+                `[Cron] Supply reminder skipped for ${cleaner.firstName} (snoozed until ${snoozeEnd.toISOString()})`
+              );
+              continue;
+            }
+          }
+
+          const home = appointment.home;
+          if (!home) continue;
+
+          const address = {
+            street: home.street,
+            city: home.city,
+          };
+
+          await PushNotification.sendPushSupplyReminder(
+            cleaner.expoPushToken,
+            cleaner.firstName,
+            appointment.date,
+            address
+          );
+
+          console.log(
+            `[Cron] Supply reminder sent to ${cleaner.firstName} (ID: ${cleanerId})`
+          );
+        } catch (cleanerError) {
+          console.error(
+            `[Cron] Failed to send reminder to cleaner ${cleanerId}:`,
+            cleanerError
+          );
+        }
+      }
+    }
+
+    console.log("[Cron] Daily supply reminder complete");
+  } catch (error) {
+    console.error("[Cron] Error in supply reminder job:", error);
+  }
+});
+
 /**
  * ------------------------------------------------------
  * 6️⃣ Cancel or Refund Payment

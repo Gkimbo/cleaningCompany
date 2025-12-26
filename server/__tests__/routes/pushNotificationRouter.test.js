@@ -360,4 +360,182 @@ describe("Push Notification Router", () => {
       expect(response.body.error).toBe("Failed to update notification preferences");
     });
   });
+
+  describe("POST /snooze-supply-reminder", () => {
+    it("should snooze supply reminders for cleaners", async () => {
+      const mockUser = {
+        id: 1,
+        type: "cleaner",
+        update: jest.fn().mockResolvedValue(true),
+      };
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const response = await request(app)
+        .post("/api/v1/push-notifications/snooze-supply-reminder")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe("Supply reminders snoozed for 1 week");
+      expect(response.body.snoozedUntil).toBeDefined();
+      expect(mockUser.update).toHaveBeenCalledWith({
+        supplyReminderSnoozedUntil: expect.any(Date),
+      });
+    });
+
+    it("should set snooze for approximately 1 week from now", async () => {
+      const mockUser = {
+        id: 1,
+        type: "cleaner",
+        update: jest.fn().mockResolvedValue(true),
+      };
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const beforeRequest = new Date();
+      const response = await request(app)
+        .post("/api/v1/push-notifications/snooze-supply-reminder")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(200);
+      const snoozedUntil = new Date(response.body.snoozedUntil);
+      const expectedDate = new Date(beforeRequest);
+      expectedDate.setDate(expectedDate.getDate() + 7);
+
+      // Allow 1 minute tolerance for test timing
+      const timeDiff = Math.abs(snoozedUntil.getTime() - expectedDate.getTime());
+      expect(timeDiff).toBeLessThan(60000);
+    });
+
+    it("should return 403 for non-cleaners", async () => {
+      const mockUser = {
+        id: 1,
+        type: "homeowner",
+        update: jest.fn(),
+      };
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const response = await request(app)
+        .post("/api/v1/push-notifications/snooze-supply-reminder")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe("Only cleaners can snooze supply reminders");
+      expect(mockUser.update).not.toHaveBeenCalled();
+    });
+
+    it("should return 404 if user not found", async () => {
+      User.findByPk.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post("/api/v1/push-notifications/snooze-supply-reminder")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("User not found");
+    });
+
+    it("should return 401 or 403 for invalid auth token", async () => {
+      const response = await request(app)
+        .post("/api/v1/push-notifications/snooze-supply-reminder")
+        .set("Authorization", "Bearer invalid_token");
+
+      expect([401, 403]).toContain(response.status);
+    });
+
+    it("should handle database errors gracefully", async () => {
+      User.findByPk.mockRejectedValue(new Error("Database error"));
+
+      const response = await request(app)
+        .post("/api/v1/push-notifications/snooze-supply-reminder")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("Failed to snooze supply reminders");
+    });
+  });
+
+  describe("GET /supply-reminder-status", () => {
+    it("should return snoozed status when snooze is active", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 3);
+
+      const mockUser = {
+        id: 1,
+        supplyReminderSnoozedUntil: futureDate,
+      };
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const response = await request(app)
+        .get("/api/v1/push-notifications/supply-reminder-status")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.isSnoozed).toBe(true);
+      expect(response.body.snoozedUntil).toBe(futureDate.toISOString());
+    });
+
+    it("should return not snoozed when snooze has expired", async () => {
+      const pastDate = new Date();
+      pastDate.setDate(pastDate.getDate() - 1);
+
+      const mockUser = {
+        id: 1,
+        supplyReminderSnoozedUntil: pastDate,
+      };
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const response = await request(app)
+        .get("/api/v1/push-notifications/supply-reminder-status")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.isSnoozed).toBe(false);
+      expect(response.body.snoozedUntil).toBe(null);
+    });
+
+    it("should return not snoozed when snooze is null", async () => {
+      const mockUser = {
+        id: 1,
+        supplyReminderSnoozedUntil: null,
+      };
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const response = await request(app)
+        .get("/api/v1/push-notifications/supply-reminder-status")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.isSnoozed).toBe(false);
+      expect(response.body.snoozedUntil).toBe(null);
+    });
+
+    it("should return 404 if user not found", async () => {
+      User.findByPk.mockResolvedValue(null);
+
+      const response = await request(app)
+        .get("/api/v1/push-notifications/supply-reminder-status")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("User not found");
+    });
+
+    it("should return 401 or 403 for invalid auth token", async () => {
+      const response = await request(app)
+        .get("/api/v1/push-notifications/supply-reminder-status")
+        .set("Authorization", "Bearer invalid_token");
+
+      expect([401, 403]).toContain(response.status);
+    });
+
+    it("should handle database errors gracefully", async () => {
+      User.findByPk.mockRejectedValue(new Error("Database error"));
+
+      const response = await request(app)
+        .get("/api/v1/push-notifications/supply-reminder-status")
+        .set("Authorization", `Bearer ${userToken}`);
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("Failed to get supply reminder status");
+    });
+  });
 });

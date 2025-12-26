@@ -204,6 +204,38 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+
+    // Review tracking - links to created user account on approval
+    userId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "Users",
+        key: "id",
+      },
+    },
+
+    // Who reviewed the application (owner or HR)
+    reviewedBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: "Users",
+        key: "id",
+      },
+    },
+
+    // When the application was approved/rejected
+    reviewedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+
+    // Reason for rejection (optional)
+    rejectionReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
   });
 
   return UserApplications;

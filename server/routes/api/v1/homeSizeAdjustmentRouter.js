@@ -239,9 +239,9 @@ homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => 
     }
 
     let whereClause;
-    const isOwner = user.type === "owner";
+    const isOwnerOrHR = user.type === "owner" || user.type === "humanResources";
 
-    if (isOwner) {
+    if (isOwnerOrHR) {
       // Owners see disputed and expired requests
       whereClause = {
         status: {
@@ -256,7 +256,7 @@ homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => 
       };
     }
 
-    // Build includes - only owners get photos
+    // Build includes - only owners and HR get photos
     const includes = [
       {
         model: UserHomes,
@@ -271,21 +271,21 @@ homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => 
       {
         model: User,
         as: "cleaner",
-        attributes: isOwner
+        attributes: isOwnerOrHR
           ? ["id", "username", "firstName", "lastName", "ownerPrivateNotes", "falseClaimCount"]
           : ["id", "username", "firstName", "lastName"],
       },
       {
         model: User,
         as: "homeowner",
-        attributes: isOwner
+        attributes: isOwnerOrHR
           ? ["id", "username", "firstName", "lastName", "ownerPrivateNotes", "falseHomeSizeCount"]
           : ["id", "username", "firstName", "lastName"],
       },
     ];
 
-    // Only include photos for owners
-    if (isOwner) {
+    // Only include photos for owners and HR
+    if (isOwnerOrHR) {
       includes.push({
         model: HomeSizeAdjustmentPhoto,
         as: "photos",
@@ -316,11 +316,11 @@ homeSizeAdjustmentRouter.get("/:id", authenticateToken, async (req, res) => {
   const userId = req.user.userId;
 
   try {
-    // First check if user is a owner
+    // First check if user is owner or HR
     const user = await User.findByPk(userId);
-    const isOwner = user && user.type === "owner";
+    const isOwnerOrHR = user && (user.type === "owner" || user.type === "humanResources");
 
-    // Build includes - only owners get photos and tracking fields
+    // Build includes - only owners and HR get photos and tracking fields
     const includes = [
       {
         model: UserHomes,
@@ -335,21 +335,21 @@ homeSizeAdjustmentRouter.get("/:id", authenticateToken, async (req, res) => {
       {
         model: User,
         as: "cleaner",
-        attributes: isOwner
+        attributes: isOwnerOrHR
           ? ["id", "username", "firstName", "lastName", "ownerPrivateNotes", "falseClaimCount"]
           : ["id", "username", "firstName", "lastName"],
       },
       {
         model: User,
         as: "homeowner",
-        attributes: isOwner
+        attributes: isOwnerOrHR
           ? ["id", "username", "firstName", "lastName", "ownerPrivateNotes", "falseHomeSizeCount"]
           : ["id", "username", "firstName", "lastName"],
       },
     ];
 
-    // Only include photos for owners
-    if (isOwner) {
+    // Only include photos for owners and HR
+    if (isOwnerOrHR) {
       includes.push({
         model: HomeSizeAdjustmentPhoto,
         as: "photos",
@@ -365,11 +365,11 @@ homeSizeAdjustmentRouter.get("/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "Request not found" });
     }
 
-    // Check authorization: must be homeowner, cleaner, or owner
+    // Check authorization: must be homeowner, cleaner, owner, or HR
     if (
       request.homeownerId !== userId &&
       request.cleanerId !== userId &&
-      !isOwner
+      !isOwnerOrHR
     ) {
       return res.status(403).json({ error: "Not authorized to view this request" });
     }
@@ -545,12 +545,12 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
 homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { approve, ownerNote, finalBeds, finalBaths } = req.body;
-  const ownerId = req.user.userId;
+  const resolverId = req.user.userId;
 
   try {
-    const owner = await User.findByPk(ownerId);
-    if (!owner || owner.type !== "owner") {
-      return res.status(403).json({ error: "Owner access required" });
+    const resolver = await User.findByPk(resolverId);
+    if (!resolver || (resolver.type !== "owner" && resolver.type !== "humanResources")) {
+      return res.status(403).json({ error: "Owner or HR access required" });
     }
 
     const request = await HomeSizeAdjustmentRequest.findByPk(id);
@@ -625,7 +625,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
       // Record false home size claim on homeowner (they disputed but were wrong)
       const timestamp = new Date().toISOString();
       const currentNotes = homeowner.ownerPrivateNotes || '';
-      const newNote = `[${timestamp}] HOME SIZE DISCREPANCY: Homeowner disputed cleaner's claim but owner found home was incorrectly sized. Original: ${request.originalNumBeds}bd/${request.originalNumBaths}ba, Actual: ${bedsToUse}bd/${bathsToUse}ba. Owner: ${owner.firstName} ${owner.lastName}`;
+      const newNote = `[${timestamp}] HOME SIZE DISCREPANCY: Homeowner disputed cleaner's claim but ${resolver.type === "humanResources" ? "HR" : "owner"} found home was incorrectly sized. Original: ${request.originalNumBeds}bd/${request.originalNumBaths}ba, Actual: ${bedsToUse}bd/${bathsToUse}ba. Resolved by: ${resolver.firstName} ${resolver.lastName}`;
 
       await homeowner.update({
         ownerPrivateNotes: currentNotes ? currentNotes + '\n' + newNote : newNote,
@@ -642,7 +642,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
 
       await request.update({
         status: "owner_approved",
-        ownerId,
+        ownerId: resolverId,
         ownerNote: ownerNote || null,
         ownerResolvedAt: new Date(),
         chargeStatus,
@@ -673,7 +673,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
         );
       }
 
-      console.log(`✅ Owner ${ownerId} approved adjustment request ${id}`);
+      console.log(`✅ ${resolver.type === "humanResources" ? "HR" : "Owner"} ${resolverId} approved adjustment request ${id}`);
 
       return res.json({
         success: true,
@@ -683,10 +683,10 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
         chargeStatus,
       });
     } else {
-      // Owner denied - side with homeowner (cleaner made false claim)
+      // Owner/HR denied - side with homeowner (cleaner made false claim)
       await request.update({
         status: "owner_denied",
-        ownerId,
+        ownerId: resolverId,
         ownerNote: ownerNote || null,
         ownerResolvedAt: new Date(),
       });
@@ -694,7 +694,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
       // Record false claim on cleaner (their report was incorrect)
       const timestamp = new Date().toISOString();
       const currentNotes = cleaner.ownerPrivateNotes || '';
-      const newNote = `[${timestamp}] FALSE CLAIM: Cleaner claimed home was ${request.reportedNumBeds}bd/${request.reportedNumBaths}ba but owner verified it was correctly listed as ${request.originalNumBeds}bd/${request.originalNumBaths}ba. Owner: ${owner.firstName} ${owner.lastName}`;
+      const newNote = `[${timestamp}] FALSE CLAIM: Cleaner claimed home was ${request.reportedNumBeds}bd/${request.reportedNumBaths}ba but ${resolver.type === "humanResources" ? "HR" : "owner"} verified it was correctly listed as ${request.originalNumBeds}bd/${request.originalNumBaths}ba. Resolved by: ${resolver.firstName} ${resolver.lastName}`;
 
       await cleaner.update({
         ownerPrivateNotes: currentNotes ? currentNotes + '\n' + newNote : newNote,
@@ -728,7 +728,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
         );
       }
 
-      console.log(`❌ Owner ${ownerId} denied adjustment request ${id}`);
+      console.log(`❌ ${resolver.type === "humanResources" ? "HR" : "Owner"} ${resolverId} denied adjustment request ${id}`);
 
       return res.json({
         success: true,

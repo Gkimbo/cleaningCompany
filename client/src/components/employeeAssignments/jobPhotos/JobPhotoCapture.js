@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useMemo } from "react";
 import {
   View,
   Text,
@@ -15,31 +15,52 @@ import { API_BASE } from "../../../services/config";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
-const ROOMS = [
-  "Living Room",
-  "Kitchen",
-  "Bathroom",
-  "Bedroom",
-  "Dining Room",
-  "Hallway",
-  "Office",
-  "Other",
-];
+const generateRoomSections = (home) => {
+  const sections = [
+    { key: "kitchen", name: "Kitchen" },
+    { key: "living-room", name: "Living Room" },
+  ];
+
+  const numBeds = parseInt(home?.numBeds) || 1;
+  const numBaths = Math.ceil(parseFloat(home?.numBaths)) || 1;
+
+  for (let i = 1; i <= numBeds; i++) {
+    sections.push({ key: `bedroom-${i}`, name: numBeds === 1 ? "Bedroom" : `Bedroom ${i}` });
+  }
+  for (let i = 1; i <= numBaths; i++) {
+    sections.push({ key: `bathroom-${i}`, name: numBaths === 1 ? "Bathroom" : `Bathroom ${i}` });
+  }
+
+  return sections;
+};
 
 const JobPhotoCapture = ({
   appointmentId,
   photoType,
+  home,
   onPhotosUpdated,
   onComplete,
 }) => {
   const { currentUser } = useContext(UserContext);
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [expandedSections, setExpandedSections] = useState({});
+  const [activeRoom, setActiveRoom] = useState(null);
+
+  const roomSections = useMemo(() => generateRoomSections(home), [home]);
 
   useEffect(() => {
     loadExistingPhotos();
   }, [appointmentId, photoType]);
+
+  useEffect(() => {
+    // Initially expand rooms that need photos
+    const initialExpanded = {};
+    roomSections.forEach((section) => {
+      initialExpanded[section.key] = true;
+    });
+    setExpandedSections(initialExpanded);
+  }, [roomSections]);
 
   const loadExistingPhotos = async () => {
     try {
@@ -63,6 +84,35 @@ const JobPhotoCapture = ({
     }
   };
 
+  const getPhotosByRoom = (roomName) => {
+    return photos.filter((photo) => photo.room === roomName);
+  };
+
+  const getRoomsWithPhotos = () => {
+    const roomsWithPhotos = new Set();
+    photos.forEach((photo) => {
+      if (photo.room) {
+        roomsWithPhotos.add(photo.room);
+      }
+    });
+    return roomsWithPhotos;
+  };
+
+  const getValidationStatus = () => {
+    const roomsWithPhotos = getRoomsWithPhotos();
+    const completedRooms = roomSections.filter((section) =>
+      roomsWithPhotos.has(section.name)
+    );
+    return {
+      completed: completedRooms.length,
+      total: roomSections.length,
+      isValid: completedRooms.length === roomSections.length,
+      missingRooms: roomSections
+        .filter((section) => !roomsWithPhotos.has(section.name))
+        .map((section) => section.name),
+    };
+  };
+
   const requestPermissions = async () => {
     const { status: cameraStatus } =
       await ImagePicker.requestCameraPermissionsAsync();
@@ -79,9 +129,11 @@ const JobPhotoCapture = ({
     return true;
   };
 
-  const takePhoto = async () => {
+  const takePhoto = async (roomName) => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
+
+    setActiveRoom(roomName);
 
     try {
       const result = await ImagePicker.launchCameraAsync({
@@ -92,17 +144,21 @@ const JobPhotoCapture = ({
       });
 
       if (!result.canceled && result.assets[0]) {
-        await uploadPhoto(result.assets[0]);
+        await uploadPhoto(result.assets[0], roomName);
       }
     } catch (error) {
       console.error("Error taking photo:", error);
       Alert.alert("Error", "Failed to take photo. Please try again.");
+    } finally {
+      setActiveRoom(null);
     }
   };
 
-  const pickFromLibrary = async () => {
+  const pickFromLibrary = async (roomName) => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
+
+    setActiveRoom(roomName);
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -113,15 +169,17 @@ const JobPhotoCapture = ({
       });
 
       if (!result.canceled && result.assets[0]) {
-        await uploadPhoto(result.assets[0]);
+        await uploadPhoto(result.assets[0], roomName);
       }
     } catch (error) {
       console.error("Error picking photo:", error);
       Alert.alert("Error", "Failed to select photo. Please try again.");
+    } finally {
+      setActiveRoom(null);
     }
   };
 
-  const uploadPhoto = async (imageAsset) => {
+  const uploadPhoto = async (imageAsset, roomName) => {
     setUploading(true);
 
     try {
@@ -137,7 +195,7 @@ const JobPhotoCapture = ({
           appointmentId,
           photoType,
           photoData,
-          room: selectedRoom,
+          room: roomName,
         }),
       });
 
@@ -146,7 +204,6 @@ const JobPhotoCapture = ({
       if (response.ok) {
         await loadExistingPhotos();
         if (onPhotosUpdated) onPhotosUpdated();
-        setSelectedRoom(null);
       } else {
         Alert.alert("Error", data.error || "Failed to upload photo");
       }
@@ -192,15 +249,119 @@ const JobPhotoCapture = ({
     ]);
   };
 
+  const toggleSection = (sectionKey) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey],
+    }));
+  };
+
   const handleContinue = () => {
-    if (photos.length === 0) {
+    const validation = getValidationStatus();
+
+    if (!validation.isValid) {
       Alert.alert(
         "Photos Required",
-        `Please take at least one ${photoType} photo before continuing.`
+        `Please take at least one photo for each room before continuing.\n\nMissing photos for:\n${validation.missingRooms.join("\n")}`
       );
       return;
     }
     if (onComplete) onComplete();
+  };
+
+  const validation = getValidationStatus();
+  const progressPercent = (validation.completed / validation.total) * 100;
+
+  const renderRoomSection = (section) => {
+    const roomPhotos = getPhotosByRoom(section.name);
+    const hasPhotos = roomPhotos.length > 0;
+    const isExpanded = expandedSections[section.key];
+    const isUploadingToRoom = activeRoom === section.name && uploading;
+
+    return (
+      <View key={section.key} style={styles.roomSection}>
+        <TouchableOpacity
+          style={[
+            styles.roomSectionHeader,
+            hasPhotos && styles.roomSectionHeaderComplete,
+            !hasPhotos && styles.roomSectionHeaderIncomplete,
+          ]}
+          onPress={() => toggleSection(section.key)}
+        >
+          <View style={styles.roomSectionTitleRow}>
+            <Text style={styles.roomSectionStatus}>
+              {hasPhotos ? "✓" : "⚠"}
+            </Text>
+            <Text style={styles.roomSectionTitle}>{section.name}</Text>
+            <View style={styles.photoCountBadge}>
+              <Text style={styles.photoCountText}>
+                {roomPhotos.length} {roomPhotos.length === 1 ? "photo" : "photos"}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.expandIcon}>{isExpanded ? "▼" : "▶"}</Text>
+        </TouchableOpacity>
+
+        {isExpanded && (
+          <View style={styles.roomSectionContent}>
+            <View style={styles.roomPhotoGrid}>
+              {roomPhotos.map((photo) => (
+                <View key={photo.id} style={styles.roomPhotoCard}>
+                  <Image
+                    source={{ uri: photo.photoData }}
+                    style={styles.roomPhotoThumbnail}
+                    resizeMode="cover"
+                  />
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => deletePhoto(photo.id)}
+                  >
+                    <Text style={styles.deleteButtonText}>X</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={[
+                  styles.addPhotoButton,
+                  isUploadingToRoom && styles.buttonDisabled,
+                ]}
+                onPress={() => takePhoto(section.name)}
+                disabled={uploading}
+              >
+                {isUploadingToRoom ? (
+                  <ActivityIndicator size="small" color="#0d9488" />
+                ) : (
+                  <>
+                    <Text style={styles.addPhotoIcon}>📷</Text>
+                    <Text style={styles.addPhotoText}>Add</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.addPhotoButton,
+                  styles.libraryAddButton,
+                  isUploadingToRoom && styles.buttonDisabled,
+                ]}
+                onPress={() => pickFromLibrary(section.name)}
+                disabled={uploading}
+              >
+                <Text style={styles.addPhotoIcon}>🖼️</Text>
+                <Text style={styles.addPhotoText}>Gallery</Text>
+              </TouchableOpacity>
+            </View>
+
+            {!hasPhotos && (
+              <Text style={styles.roomRequiredText}>
+                At least 1 photo required
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -216,109 +377,25 @@ const JobPhotoCapture = ({
         </Text>
       </View>
 
-      <View style={styles.roomSelector}>
-        <Text style={styles.roomLabel}>Select Room (Optional):</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.roomScrollView}
-        >
-          {ROOMS.map((room) => (
-            <TouchableOpacity
-              key={room}
-              style={[
-                styles.roomChip,
-                selectedRoom === room && styles.roomChipSelected,
-              ]}
-              onPress={() =>
-                setSelectedRoom(selectedRoom === room ? null : room)
-              }
-            >
-              <Text
-                style={[
-                  styles.roomChipText,
-                  selectedRoom === room && styles.roomChipTextSelected,
-                ]}
-              >
-                {room}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={[styles.captureButton, uploading && styles.buttonDisabled]}
-          onPress={takePhoto}
-          disabled={uploading}
-        >
-          <Text style={styles.captureButtonText}>Take Photo</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.libraryButton, uploading && styles.buttonDisabled]}
-          onPress={pickFromLibrary}
-          disabled={uploading}
-        >
-          <Text style={styles.libraryButtonText}>Choose from Library</Text>
-        </TouchableOpacity>
-      </View>
-
-      {uploading && (
-        <View style={styles.uploadingContainer}>
-          <ActivityIndicator size="large" color="#0d9488" />
-          <Text style={styles.uploadingText}>Uploading photo...</Text>
-        </View>
-      )}
-
-      <View style={styles.photosContainer}>
-        <Text style={styles.photosHeader}>
-          Photos Taken ({photos.length})
-          {photos.length === 0 && (
-            <Text style={styles.requiredText}> - At least 1 required</Text>
-          )}
+      <View style={styles.progressContainer}>
+        <Text style={styles.progressText}>
+          {validation.completed} of {validation.total} rooms photographed
         </Text>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.photosScrollView}
-        >
-          {photos.map((photo) => (
-            <View key={photo.id} style={styles.photoCard}>
-              <Image
-                source={{ uri: photo.photoData }}
-                style={styles.photoThumbnail}
-                resizeMode="cover"
-              />
-              {photo.room && (
-                <Text style={styles.photoRoom}>{photo.room}</Text>
-              )}
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => deletePhoto(photo.id)}
-              >
-                <Text style={styles.deleteButtonText}>X</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {photos.length === 0 && (
-            <View style={styles.noPhotosContainer}>
-              <Text style={styles.noPhotosText}>No photos yet</Text>
-              <Text style={styles.noPhotosSubtext}>
-                Tap "Take Photo" to get started
-              </Text>
-            </View>
-          )}
-        </ScrollView>
+        <View style={styles.progressBar}>
+          <View
+            style={[styles.progressFill, { width: `${progressPercent}%` }]}
+          />
+        </View>
       </View>
+
+      <ScrollView style={styles.roomsScrollView} showsVerticalScrollIndicator={false}>
+        {roomSections.map(renderRoomSection)}
+      </ScrollView>
 
       <TouchableOpacity
         style={[
           styles.continueButton,
-          photos.length === 0 && styles.continueButtonDisabled,
+          !validation.isValid && styles.continueButtonDisabled,
         ]}
         onPress={handleContinue}
       >

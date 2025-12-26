@@ -10,6 +10,15 @@ module.exports = {
   },
 
   async down(queryInterface, Sequelize) {
+    // Truncate any long values before reverting to VARCHAR(255)
+    await queryInterface.sequelize.query(`
+      UPDATE "Users"
+      SET notifications = ARRAY(
+        SELECT LEFT(unnest(notifications), 255)
+      )
+      WHERE notifications IS NOT NULL
+    `);
+
     // Revert back to VARCHAR(255) array
     await queryInterface.changeColumn("Users", "notifications", {
       type: Sequelize.ARRAY(Sequelize.STRING),
