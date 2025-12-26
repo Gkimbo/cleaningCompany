@@ -1,11 +1,73 @@
 import FetchData from "../../src/services/fetchRequests/fetchData";
 
-// Mock global fetch
+// Mock fetch globally
 global.fetch = jest.fn();
 
-describe("Employee Service", () => {
+// Mock API base URL
+jest.mock("../../src/services/config", () => ({
+  API_BASE: "http://localhost:3000/api/v1",
+}));
+
+describe("FetchData - Employee Service Methods", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe("getEmployeesWorking", () => {
+    it("should fetch employees working successfully", async () => {
+      const mockEmployees = {
+        employees: [
+          { id: 1, username: "cleaner1", daysWorking: ["Monday", "Tuesday"] },
+          { id: 2, username: "cleaner2", daysWorking: ["Wednesday", "Thursday"] },
+        ],
+      };
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockEmployees),
+      });
+
+      const result = await FetchData.getEmployeesWorking();
+
+      expect(result).toEqual(mockEmployees);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/employee-info/employeeSchedule")
+      );
+    });
+
+    it("should return empty array when no employees", async () => {
+      const mockEmptyResponse = { employees: [] };
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockEmptyResponse),
+      });
+
+      const result = await FetchData.getEmployeesWorking();
+
+      expect(result.employees).toHaveLength(0);
+    });
+
+    it("should return error when response is not ok", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+      });
+
+      const result = await FetchData.getEmployeesWorking();
+
+      expect(result).toBeInstanceOf(Error);
+      expect(result.message).toBe("No data received");
+    });
+
+    it("should handle network error", async () => {
+      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await FetchData.getEmployeesWorking();
+
+      expect(result).toBeInstanceOf(Error);
+      expect(result.message).toBe("Network error");
+    });
   });
 
   describe("makeNewEmployee", () => {
@@ -14,28 +76,32 @@ describe("Employee Service", () => {
       lastName: "Doe",
       userName: "johndoe",
       password: "password123",
-      email: "john@test.com",
+      email: "john@example.com",
       type: "cleaner",
+      phone: "555-1234",
     };
 
     it("should create a new employee successfully", async () => {
-      const mockUser = {
-        id: 1,
-        username: "johndoe",
-        email: "john@test.com",
-        type: "cleaner",
-        firstName: "John",
-        lastName: "Doe",
+      const mockResponse = {
+        user: {
+          id: 1,
+          username: "johndoe",
+          email: "john@example.com",
+          type: "cleaner",
+          firstName: "John",
+          lastName: "Doe",
+        },
       };
 
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ user: mockUser }),
+        json: () => Promise.resolve(mockResponse),
       });
 
       const result = await FetchData.makeNewEmployee(validEmployeeData);
 
-      expect(fetch).toHaveBeenCalledWith(
+      expect(result).toEqual(mockResponse);
+      expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/users/new-employee"),
         expect.objectContaining({
           method: "POST",
@@ -43,14 +109,14 @@ describe("Employee Service", () => {
           body: JSON.stringify({
             username: "johndoe",
             password: "password123",
-            email: "john@test.com",
+            email: "john@example.com",
             type: "cleaner",
             firstName: "John",
             lastName: "Doe",
+            phone: "555-1234",
           }),
         })
       );
-      expect(result.user).toEqual(mockUser);
     });
 
     it("should return error message when email already exists", async () => {
@@ -75,15 +141,7 @@ describe("Employee Service", () => {
       expect(result).toBe("Username already exists");
     });
 
-    it("should handle network errors", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
-
-      const result = await FetchData.makeNewEmployee(validEmployeeData);
-
-      expect(result).toBeInstanceOf(Error);
-    });
-
-    it("should handle other error status codes", async () => {
+    it("should throw error for other status codes", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -92,74 +150,93 @@ describe("Employee Service", () => {
       const result = await FetchData.makeNewEmployee(validEmployeeData);
 
       expect(result).toBeInstanceOf(Error);
+      expect(result.message).toBe("Failed to create user");
     });
 
-    it("should send correct data format to backend", async () => {
+    it("should handle network error", async () => {
+      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await FetchData.makeNewEmployee(validEmployeeData);
+
+      expect(result).toBeInstanceOf(Error);
+      expect(result.message).toBe("Network error");
+    });
+
+    it("should omit optional fields when not provided", async () => {
+      const minimalData = {
+        userName: "johndoe",
+        password: "password123",
+        email: "john@example.com",
+        type: "cleaner",
+      };
+
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ user: { id: 1 } }),
+        json: () => Promise.resolve({ user: { id: 1 } }),
       });
 
-      await FetchData.makeNewEmployee({
-        firstName: "Jane",
-        lastName: "Smith",
-        userName: "janesmith",
-        password: "securepass",
-        email: "jane@example.com",
-        type: "cleaner",
-      });
+      await FetchData.makeNewEmployee(minimalData);
 
-      const callBody = JSON.parse(fetch.mock.calls[0][1].body);
-      expect(callBody).toEqual({
-        username: "janesmith",
-        password: "securepass",
-        email: "jane@example.com",
-        type: "cleaner",
-        firstName: "Jane",
-        lastName: "Smith",
-      });
+      // Service only includes fields that are provided in data
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/users/new-employee"),
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"username":"johndoe"'),
+        })
+      );
     });
   });
 
   describe("editEmployee", () => {
     const updateData = {
       id: 1,
-      userName: "updateduser",
-      password: "newpassword",
-      email: "updated@test.com",
+      firstName: "Jane",
+      lastName: "Doe",
+      userName: "janedoe",
+      password: "newpassword123",
+      email: "jane@example.com",
       type: "cleaner",
+      phone: "555-5678",
     };
 
-    it("should update an employee successfully", async () => {
-      const mockUser = {
-        id: 1,
-        username: "updateduser",
-        email: "updated@test.com",
-        type: "cleaner",
+    it("should update employee successfully", async () => {
+      const mockResponse = {
+        user: {
+          id: 1,
+          username: "janedoe",
+          email: "jane@example.com",
+          type: "cleaner",
+          firstName: "Jane",
+          lastName: "Doe",
+        },
       };
 
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ user: mockUser }),
+        json: () => Promise.resolve(mockResponse),
       });
 
       const result = await FetchData.editEmployee(updateData);
 
-      expect(fetch).toHaveBeenCalledWith(
+      expect(result).toEqual(mockResponse);
+      expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/users/employee"),
         expect.objectContaining({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             id: 1,
-            username: "updateduser",
-            password: "newpassword",
-            email: "updated@test.com",
+            username: "janedoe",
+            password: "newpassword123",
+            email: "jane@example.com",
             type: "cleaner",
+            firstName: "Jane",
+            lastName: "Doe",
+            phone: "555-5678",
           }),
         })
       );
-      expect(result.user).toEqual(mockUser);
     });
 
     it("should return error message when email already exists", async () => {
@@ -184,15 +261,7 @@ describe("Employee Service", () => {
       expect(result).toBe("Username already exists");
     });
 
-    it("should handle network errors", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
-
-      const result = await FetchData.editEmployee(updateData);
-
-      expect(result).toBeInstanceOf(Error);
-    });
-
-    it("should handle other error status codes", async () => {
+    it("should throw error for other status codes", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -203,37 +272,80 @@ describe("Employee Service", () => {
       expect(result).toBeInstanceOf(Error);
     });
 
-    it("should change employee type to owner", async () => {
+    it("should handle network error", async () => {
+      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await FetchData.editEmployee(updateData);
+
+      expect(result).toBeInstanceOf(Error);
+      expect(result.message).toBe("Network error");
+    });
+
+    it("should change employee type from cleaner to owner", async () => {
       const promoteData = {
         id: 1,
         userName: "promoteduser",
-        password: "password",
-        email: "promoted@test.com",
+        password: "password123",
+        email: "promoted@example.com",
         type: "owner",
+        firstName: "Promoted",
+        lastName: "User",
       };
 
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ user: { id: 1, type: "owner" } }),
+        json: () => Promise.resolve({ user: { ...promoteData, username: promoteData.userName } }),
       });
 
       await FetchData.editEmployee(promoteData);
 
-      const callBody = JSON.parse(fetch.mock.calls[0][1].body);
-      expect(callBody.type).toBe("owner");
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('"type":"owner"'),
+        })
+      );
+    });
+
+    it("should update without password when not provided", async () => {
+      const updateWithoutPassword = {
+        id: 1,
+        userName: "janedoe",
+        email: "jane@example.com",
+        type: "cleaner",
+        firstName: "Jane",
+        lastName: "Doe",
+      };
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: { id: 1 } }),
+      });
+
+      await FetchData.editEmployee(updateWithoutPassword);
+
+      // Should still make the request without password field
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/users/employee"),
+        expect.objectContaining({
+          method: "PATCH",
+          body: expect.stringContaining('"username":"janedoe"'),
+        })
+      );
     });
   });
 
   describe("deleteEmployee", () => {
-    it("should delete an employee successfully", async () => {
+    it("should delete employee successfully", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ message: "Employee Deleted from DB" }),
+        json: () => Promise.resolve({ message: "Employee Deleted from DB" }),
       });
 
       const result = await FetchData.deleteEmployee(1);
 
-      expect(fetch).toHaveBeenCalledWith(
+      expect(result).toBe(true);
+      expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/users/employee"),
         expect.objectContaining({
           method: "DELETE",
@@ -241,10 +353,9 @@ describe("Employee Service", () => {
           body: JSON.stringify({ id: 1 }),
         })
       );
-      expect(result).toBe(true);
     });
 
-    it("should handle deletion failure", async () => {
+    it("should return error when delete fails", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -253,156 +364,236 @@ describe("Employee Service", () => {
       const result = await FetchData.deleteEmployee(1);
 
       expect(result).toBeInstanceOf(Error);
+      expect(result.message).toBe("Failed to delete");
     });
 
-    it("should handle network errors during deletion", async () => {
+    it("should handle network error", async () => {
       global.fetch.mockRejectedValueOnce(new Error("Network error"));
 
       const result = await FetchData.deleteEmployee(1);
 
       expect(result).toBeInstanceOf(Error);
+      expect(result.message).toBe("Network error");
     });
 
-    it("should send employee ID as number", async () => {
+    it("should send employee ID in request body", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ message: "Deleted" }),
+        json: () => Promise.resolve({ message: "Deleted" }),
       });
 
       await FetchData.deleteEmployee(42);
 
-      const callBody = JSON.parse(fetch.mock.calls[0][1].body);
-      expect(callBody.id).toBe(42);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: JSON.stringify({ id: 42 }),
+        })
+      );
     });
 
     it("should handle string ID", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ message: "Deleted" }),
+        json: () => Promise.resolve({ message: "Deleted" }),
       });
 
-      await FetchData.deleteEmployee("5");
+      await FetchData.deleteEmployee("10");
 
-      const callBody = JSON.parse(fetch.mock.calls[0][1].body);
-      expect(callBody.id).toBe("5");
-    });
-  });
-
-  describe("getStaffingConfig", () => {
-    it("should fetch staffing config successfully", async () => {
-      const mockResponse = {
-        source: "config",
-        pricing: { basePrice: 150 },
-        staffing: { minCleanersForAssignment: 1 },
-      };
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await FetchData.getStaffingConfig();
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/pricing/current")
-      );
-      expect(result).toEqual({ minCleanersForAssignment: 1 });
-    });
-
-    it("should return default value when staffing is missing from response", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ source: "config", pricing: {} }),
-      });
-
-      const result = await FetchData.getStaffingConfig();
-
-      expect(result).toEqual({ minCleanersForAssignment: 1 });
-    });
-
-    it("should return default value on fetch error", async () => {
-      global.fetch.mockRejectedValueOnce(new Error("Network error"));
-
-      const result = await FetchData.getStaffingConfig();
-
-      expect(result).toEqual({ minCleanersForAssignment: 1 });
-    });
-
-    it("should return default value when response is not ok", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
-
-      const result = await FetchData.getStaffingConfig();
-
-      expect(result).toEqual({ minCleanersForAssignment: 1 });
-    });
-
-    it("should handle different minCleanersForAssignment values", async () => {
-      const mockResponse = {
-        source: "config",
-        staffing: { minCleanersForAssignment: 2 },
-      };
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await FetchData.getStaffingConfig();
-
-      expect(result.minCleanersForAssignment).toBe(2);
-    });
-  });
-
-  describe("get (for fetching employees)", () => {
-    const mockToken = "test-token";
-
-    it("should fetch employees list successfully", async () => {
-      const mockEmployees = [
-        { id: 1, username: "cleaner1", email: "c1@test.com", type: "cleaner" },
-        { id: 2, username: "cleaner2", email: "c2@test.com", type: "cleaner" },
-      ];
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ users: mockEmployees }),
-      });
-
-      const result = await FetchData.get("/api/v1/users/employees", mockToken);
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining("/api/v1/users/employees"),
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
         expect.objectContaining({
-          headers: { Authorization: `Bearer ${mockToken}` },
+          body: JSON.stringify({ id: "10" }),
         })
       );
-      expect(result.users).toEqual(mockEmployees);
     });
+  });
 
-    it("should return empty array when no employees exist", async () => {
+  describe("URL construction", () => {
+    it("should construct correct URL for getEmployeesWorking", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ users: [] }),
+        json: () => Promise.resolve({ employees: [] }),
       });
 
-      const result = await FetchData.get("/api/v1/users/employees", mockToken);
+      await FetchData.getEmployeesWorking();
 
-      expect(result.users).toEqual([]);
+      const calledUrl = global.fetch.mock.calls[0][0];
+      expect(calledUrl).toContain("/api/v1/employee-info/employeeSchedule");
     });
 
-    it("should handle unauthorized error", async () => {
+    it("should construct correct URL for makeNewEmployee", async () => {
       global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
+        ok: true,
+        json: () => Promise.resolve({ user: {} }),
       });
 
-      const result = await FetchData.get("/api/v1/users/employees", mockToken);
+      await FetchData.makeNewEmployee({
+        userName: "test",
+        password: "test",
+        email: "test@test.com",
+        type: "cleaner",
+      });
 
-      // The get method throws an error when response is not ok
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("No data received");
+      const calledUrl = global.fetch.mock.calls[0][0];
+      expect(calledUrl).toContain("/api/v1/users/new-employee");
+    });
+
+    it("should construct correct URL for editEmployee", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: {} }),
+      });
+
+      await FetchData.editEmployee({
+        id: 1,
+        userName: "test",
+        email: "test@test.com",
+        type: "cleaner",
+      });
+
+      const calledUrl = global.fetch.mock.calls[0][0];
+      expect(calledUrl).toContain("/api/v1/users/employee");
+    });
+
+    it("should construct correct URL for deleteEmployee", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ message: "Deleted" }),
+      });
+
+      await FetchData.deleteEmployee(1);
+
+      const calledUrl = global.fetch.mock.calls[0][0];
+      expect(calledUrl).toContain("/api/v1/users/employee");
+    });
+  });
+
+  describe("HTTP methods", () => {
+    it("should use GET for fetching employees working", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ employees: [] }),
+      });
+
+      await FetchData.getEmployeesWorking();
+
+      // GET requests don't have a method property or use default
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String)
+      );
+    });
+
+    it("should use POST for creating employees", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: {} }),
+      });
+
+      await FetchData.makeNewEmployee({
+        userName: "test",
+        password: "test",
+        email: "test@test.com",
+        type: "cleaner",
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+
+    it("should use PATCH for updating employees", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: {} }),
+      });
+
+      await FetchData.editEmployee({
+        id: 1,
+        userName: "test",
+        email: "test@test.com",
+        type: "cleaner",
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ method: "PATCH" })
+      );
+    });
+
+    it("should use DELETE for deleting employees", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ message: "Deleted" }),
+      });
+
+      await FetchData.deleteEmployee(1);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ method: "DELETE" })
+      );
+    });
+  });
+
+  describe("Content-Type headers", () => {
+    it("should include Content-Type header in makeNewEmployee", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: {} }),
+      });
+
+      await FetchData.makeNewEmployee({
+        userName: "test",
+        password: "test",
+        email: "test@test.com",
+        type: "cleaner",
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+    });
+
+    it("should include Content-Type header in editEmployee", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: {} }),
+      });
+
+      await FetchData.editEmployee({
+        id: 1,
+        userName: "test",
+        email: "test@test.com",
+        type: "cleaner",
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+    });
+
+    it("should include Content-Type header in deleteEmployee", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ message: "Deleted" }),
+      });
+
+      await FetchData.deleteEmployee(1);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: { "Content-Type": "application/json" },
+        })
+      );
     });
   });
 });

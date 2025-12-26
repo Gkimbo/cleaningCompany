@@ -316,6 +316,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         <JobPhotoCapture
           appointmentId={appointment.id}
           photoType="before"
+          home={home}
           onPhotosUpdated={checkPhotoStatus}
           onComplete={handleBeforePhotosComplete}
         />
@@ -327,6 +328,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         <JobPhotoCapture
           appointmentId={appointment.id}
           photoType="after"
+          home={home}
           onPhotosUpdated={checkPhotoStatus}
           onComplete={handleAfterPhotosComplete}
         />
