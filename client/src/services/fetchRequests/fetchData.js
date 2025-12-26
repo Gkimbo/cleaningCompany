@@ -67,10 +67,15 @@ class FetchData {
     }
   }
 
-  static async getApplicationsFromBackend() {
+  static async getApplicationsFromBackend(token) {
     try {
       const response = await fetch(
-        baseURL + `/api/v1/applications/all-applications`
+        baseURL + `/api/v1/applications/all-applications`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       if (!response.ok) {
         throw new Error("No data received");

@@ -308,14 +308,9 @@ messageRouter.post("/conversation/appointment", authenticateToken, async (req, r
         }
       }
 
-      // Add owner as participant (find by type or username pattern)
+      // Add owner as participant
       const owner = await User.findOne({
-        where: {
-          [Op.or]: [
-            { username: "owner1" },
-            { type: "owner" },
-          ],
-        },
+        where: { type: "owner" },
       });
       if (owner && owner.id !== appointment.userId) {
         await ConversationParticipant.findOrCreate({
@@ -363,7 +358,7 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
 
     // Verify user is a owner
     const user = await User.findByPk(userId);
-    if (!user || (user.username !== "owner1" && user.type !== "owner")) {
+    if (!user || user.type !== "owner") {
       return res.status(403).json({ error: "Only owners can send broadcasts" });
     }
 
@@ -388,7 +383,7 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
       targetUsers = await User.findAll({
         where: {
           type: { [Op.or]: [null, { [Op.ne]: "cleaner" }] },
-          username: { [Op.ne]: "owner1" },
+          type: { [Op.ne]: "owner" },
         },
       });
     } else {
@@ -539,7 +534,7 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
     }
 
     // Don't allow owners or HR to create support conversations with themselves
-    if (user.username === "owner1" || user.type === "owner" || user.type === "humanResources") {
+    if (user.type === "owner" || user.type === "humanResources") {
       return res.status(400).json({ error: "Owners and HR cannot create support conversations" });
     }
 
@@ -547,7 +542,6 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
     const supportStaff = await User.findAll({
       where: {
         [Op.or]: [
-          { username: "owner1" },
           { type: "owner" },
           { type: "humanResources" },
         ],
@@ -558,8 +552,8 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
       return res.status(404).json({ error: "No support staff available" });
     }
 
-    // Find the primary owner for backwards compatibility
-    const owner = supportStaff.find(u => u.type === "owner" || u.username === "owner1");
+    // Find the primary owner
+    const owner = supportStaff.find(u => u.type === "owner");
     if (!owner) {
       return res.status(404).json({ error: "No owner available" });
     }

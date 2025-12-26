@@ -36,6 +36,7 @@ const PricingManagement = ({ state }) => {
   const [formData, setFormData] = useState({
     basePrice: "",
     extraBedBathFee: "",
+    halfBathFee: "",
     sheetFeePerBed: "",
     towelFee: "",
     faceClothFee: "",
@@ -71,6 +72,7 @@ const PricingManagement = ({ state }) => {
           values = {
             basePrice: result.config.basePrice?.toString() || "",
             extraBedBathFee: result.config.extraBedBathFee?.toString() || "",
+            halfBathFee: result.config.halfBathFee?.toString() || "",
             sheetFeePerBed: result.config.sheetFeePerBed?.toString() || "",
             towelFee: result.config.towelFee?.toString() || "",
             faceClothFee: result.config.faceClothFee?.toString() || "",
@@ -92,6 +94,7 @@ const PricingManagement = ({ state }) => {
           values = {
             basePrice: result.staticDefaults.basePrice?.toString() || "",
             extraBedBathFee: result.staticDefaults.extraBedBathFee?.toString() || "",
+            halfBathFee: result.staticDefaults.halfBathFee?.toString() || "",
             sheetFeePerBed: result.staticDefaults.sheetFeePerBed?.toString() || "",
             towelFee: result.staticDefaults.towelFee?.toString() || "",
             faceClothFee: result.staticDefaults.faceClothFee?.toString() || "",
@@ -146,6 +149,7 @@ const PricingManagement = ({ state }) => {
     const numericFields = [
       "basePrice",
       "extraBedBathFee",
+      "halfBathFee",
       "sheetFeePerBed",
       "towelFee",
       "faceClothFee",
@@ -196,6 +200,7 @@ const PricingManagement = ({ state }) => {
       const pricingData = {
         basePrice: parseInt(formData.basePrice),
         extraBedBathFee: parseInt(formData.extraBedBathFee),
+        halfBathFee: parseInt(formData.halfBathFee),
         sheetFeePerBed: parseInt(formData.sheetFeePerBed),
         towelFee: parseInt(formData.towelFee),
         faceClothFee: parseInt(formData.faceClothFee),
@@ -320,7 +325,8 @@ const PricingManagement = ({ state }) => {
           Starting prices for cleaning services
         </Text>
         {renderPriceInput("Base Price (1 bed/1 bath)", "basePrice", "$", "", "Starting price for a standard cleaning")}
-        {renderPriceInput("Extra Bed/Bath Fee", "extraBedBathFee", "$", "", "Additional charge per extra bedroom or bathroom")}
+        {renderPriceInput("Extra Bed/Bath Fee", "extraBedBathFee", "$", "", "Additional charge per extra bedroom or full bathroom")}
+        {renderPriceInput("Half Bath Fee", "halfBathFee", "$", "", "Additional charge per half bathroom")}
       </View>
 
       {/* Linen Services Section */}
