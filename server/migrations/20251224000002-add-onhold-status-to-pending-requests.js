@@ -3,9 +3,9 @@
 module.exports = {
   async up(queryInterface, Sequelize) {
     // Add 'onHold' to the status enum for UserPendingRequests
-    await queryInterface.sequelize.query(
-      `ALTER TYPE "enum_UserPendingRequests_status" ADD VALUE 'onHold';`
-    );
+    await queryInterface.sequelize.query(`
+      ALTER TYPE "enum_UserPendingRequests_status" ADD VALUE IF NOT EXISTS 'onHold';
+    `);
   },
 
   async down(queryInterface, Sequelize) {

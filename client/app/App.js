@@ -77,6 +77,9 @@ import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
 import HREmployeeManagement from "../src/components/owner/HREmployeeManagement";
 import ChecklistEditor from "../src/components/owner/ChecklistEditor";
 
+// Cleaner components
+import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
+
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
 
@@ -347,6 +350,10 @@ export default function App() {
                     setEmployeeDays={setEmployeeDays}
                   />
                 }
+              />
+              <Route
+                path="/recommended-supplies"
+                element={<RecommendedSupplies />}
               />
               <Route
                 path="/employees"
