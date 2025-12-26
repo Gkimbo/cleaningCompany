@@ -75,6 +75,7 @@ import TermsEditor from "../src/components/owner/TermsEditor";
 import PricingManagement from "../src/components/owner/PricingManagement";
 import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
 import HREmployeeManagement from "../src/components/owner/HREmployeeManagement";
+import ChecklistEditor from "../src/components/owner/ChecklistEditor";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
@@ -421,6 +422,11 @@ export default function App() {
               <Route
                 path="/owner/hr-management"
                 element={<HREmployeeManagement state={state} />}
+              />
+              {/* Owner Checklist Editor */}
+              <Route
+                path="/owner/checklist"
+                element={<ChecklistEditor state={state} />}
               />
             </Routes>
             </SafeAreaView>

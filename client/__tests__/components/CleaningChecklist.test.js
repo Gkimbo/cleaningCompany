@@ -1,10 +1,32 @@
 import React from "react";
 import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
 
+// Mock AsyncStorage
+jest.mock("@react-native-async-storage/async-storage", () => ({
+  getItem: jest.fn(() => Promise.resolve(null)),
+  setItem: jest.fn(() => Promise.resolve()),
+  removeItem: jest.fn(() => Promise.resolve()),
+}));
+
+// Mock ChecklistService to prevent API calls and use fallback data immediately
+jest.mock("../../src/services/fetchRequests/ChecklistService", () => ({
+  __esModule: true,
+  default: {
+    getPublishedChecklist: jest.fn(() => Promise.resolve({ sections: [] })),
+  },
+}));
+
 // Import after mocks
 import CleaningChecklist from "../../src/components/employeeAssignments/jobPhotos/CleaningChecklist";
 
 // Alert is already mocked globally in jest.setup.js
+
+// Helper function to wait for component to load
+const waitForLoad = async (component) => {
+  await waitFor(() => {
+    expect(component.queryByText("Loading checklist...")).toBeNull();
+  }, { timeout: 3000 });
+};
 
 describe("CleaningChecklist Component", () => {
   const mockHome = {
@@ -31,96 +53,105 @@ describe("CleaningChecklist Component", () => {
   });
 
   describe("Rendering", () => {
-    it("should render the progress bar", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should render the progress bar", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      expect(getByText("Cleaning Progress")).toBeTruthy();
-      expect(getByText("0%")).toBeTruthy();
+      expect(component.getByText("Cleaning Progress")).toBeTruthy();
+      expect(component.getByText("0%")).toBeTruthy();
     });
 
-    it("should render all section headers", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should render all section headers", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      expect(getByText("Kitchen")).toBeTruthy();
-      expect(getByText("Bathrooms")).toBeTruthy();
-      expect(getByText("Bedrooms")).toBeTruthy();
-      expect(getByText("Living Areas")).toBeTruthy();
-      expect(getByText("General/Final Walkthrough")).toBeTruthy();
+      expect(component.getByText("Kitchen")).toBeTruthy();
+      expect(component.getByText("Bathrooms")).toBeTruthy();
+      expect(component.getByText("Bedrooms")).toBeTruthy();
+      expect(component.getByText("Living Areas")).toBeTruthy();
+      expect(component.getByText("General/Final Walkthrough")).toBeTruthy();
     });
 
-    it("should show home-specific reminders when provided", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should show home-specific reminders when provided", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      expect(getByText("Important Reminders")).toBeTruthy();
-      expect(getByText(/Garage/)).toBeTruthy();
-      expect(getByText(/Side of house/)).toBeTruthy();
-      expect(getByText(/Kitchen counter/)).toBeTruthy();
-      expect(getByText(/Extra attention to kitchen/)).toBeTruthy();
+      expect(component.getByText("Important Reminders")).toBeTruthy();
+      expect(component.getByText(/Garage/)).toBeTruthy();
+      expect(component.getByText(/Side of house/)).toBeTruthy();
+      expect(component.getByText(/Kitchen counter/)).toBeTruthy();
+      expect(component.getByText(/Extra attention to kitchen/)).toBeTruthy();
     });
 
-    it("should not show reminders section if no special info", () => {
+    it("should not show reminders section if no special info", async () => {
       const homeWithoutNotes = {
         id: 1,
         nickName: "Simple House",
       };
 
-      const { queryByText } = render(
+      const component = render(
         <CleaningChecklist
           {...defaultProps}
           home={homeWithoutNotes}
         />
       );
+      await waitForLoad(component);
 
-      expect(queryByText("Important Reminders")).toBeNull();
+      expect(component.queryByText("Important Reminders")).toBeNull();
     });
 
-    it("should render the complete button", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should render the complete button", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      expect(getByText(/Complete All Tasks/)).toBeTruthy();
+      expect(component.getByText(/Complete All Tasks/)).toBeTruthy();
     });
   });
 
   describe("Section Expansion", () => {
-    it("should have Kitchen expanded by default", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should have Kitchen expanded by default", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
       // Kitchen should show its tasks
-      expect(getByText(/Clean all countertops/)).toBeTruthy();
+      expect(component.getByText(/Clean all countertops/)).toBeTruthy();
     });
 
-    it("should toggle section when header is pressed", () => {
-      const { getByText, queryByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should toggle section when header is pressed", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
       // Bathrooms should be collapsed initially
-      expect(queryByText(/Clean and sanitize toilet/)).toBeNull();
+      expect(component.queryByText(/Clean and sanitize toilet/)).toBeNull();
 
       // Click Bathrooms header to expand
-      fireEvent.press(getByText("Bathrooms"));
+      fireEvent.press(component.getByText("Bathrooms"));
 
       // Now should show bathroom tasks
-      expect(getByText(/Clean and sanitize toilet/)).toBeTruthy();
+      expect(component.getByText(/Clean and sanitize toilet/)).toBeTruthy();
     });
 
-    it("should collapse expanded section when pressed again", () => {
-      const { getByText, queryByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should collapse expanded section when pressed again", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
       // Kitchen is expanded
-      expect(getByText(/Clean all countertops/)).toBeTruthy();
+      expect(component.getByText(/Clean all countertops/)).toBeTruthy();
 
       // Click Kitchen header to collapse
-      fireEvent.press(getByText("Kitchen"));
+      fireEvent.press(component.getByText("Kitchen"));
 
       // Kitchen tasks should be hidden
-      expect(queryByText(/Clean all countertops/)).toBeNull();
+      expect(component.queryByText(/Clean all countertops/)).toBeNull();
     });
   });
 
   describe("Task Checking", () => {
     it("should toggle task when pressed", async () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      const task = getByText(/Clean all countertops/);
+      const task = component.getByText(/Clean all countertops/);
       fireEvent.press(task);
 
       // Progress should update
@@ -130,10 +161,11 @@ describe("CleaningChecklist Component", () => {
     });
 
     it("should update progress percentage when tasks are checked", async () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
       // Check first task
-      fireEvent.press(getByText(/Clean all countertops/));
+      fireEvent.press(component.getByText(/Clean all countertops/));
 
       await waitFor(() => {
         // After checking a task, there should be a call with completed > 0
@@ -152,9 +184,10 @@ describe("CleaningChecklist Component", () => {
     });
 
     it("should uncheck task when pressed again", async () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      const task = getByText(/Clean all countertops/);
+      const task = component.getByText(/Clean all countertops/);
 
       // Check task
       fireEvent.press(task);
@@ -170,158 +203,180 @@ describe("CleaningChecklist Component", () => {
   });
 
   describe("Kitchen Tasks", () => {
-    it("should include oven cleaning task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
-      expect(getByText(/Clean inside and outside of oven/)).toBeTruthy();
+    it("should include oven cleaning task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
+      expect(component.getByText(/Clean inside and outside of oven/)).toBeTruthy();
     });
 
-    it("should include microwave cleaning task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
-      expect(getByText(/Clean inside and outside of microwave/)).toBeTruthy();
+    it("should include microwave cleaning task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
+      expect(component.getByText(/Clean inside and outside of microwave/)).toBeTruthy();
     });
 
-    it("should include coffee restock task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
-      expect(getByText(/Restock coffee supplies/)).toBeTruthy();
+    it("should include coffee restock task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
+      expect(component.getByText(/Restock coffee supplies/)).toBeTruthy();
     });
 
-    it("should include trash bag replacement task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
-      expect(getByText(/Empty trash can and insert new trash bag/)).toBeTruthy();
+    it("should include trash bag replacement task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
+      expect(component.getByText(/Empty trash can and insert new trash bag/)).toBeTruthy();
     });
 
-    it("should include paper towel restock task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
-      expect(getByText(/Restock paper towels/)).toBeTruthy();
+    it("should include paper towel restock task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
+      expect(component.getByText(/Restock paper towels/)).toBeTruthy();
     });
 
-    it("should include floor mopping task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
-      expect(getByText(/Mop entire floor/)).toBeTruthy();
+    it("should include floor mopping task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
+      expect(component.getByText(/Mop entire floor/)).toBeTruthy();
     });
   });
 
   describe("Bathroom Tasks", () => {
-    it("should include toilet cleaning task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include toilet cleaning task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("Bathrooms"));
-      expect(getByText(/Clean and sanitize toilet/)).toBeTruthy();
+      fireEvent.press(component.getByText("Bathrooms"));
+      expect(component.getByText(/Clean and sanitize toilet/)).toBeTruthy();
     });
 
-    it("should include hair removal task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include hair removal task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("Bathrooms"));
-      expect(getByText(/Remove ALL hair from toilet area/)).toBeTruthy();
+      fireEvent.press(component.getByText("Bathrooms"));
+      expect(component.getByText(/Remove ALL hair from toilet area/)).toBeTruthy();
     });
 
-    it("should include shower cleaning task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include shower cleaning task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("Bathrooms"));
-      expect(getByText(/Clean shower\/tub thoroughly/)).toBeTruthy();
+      fireEvent.press(component.getByText("Bathrooms"));
+      expect(component.getByText(/Clean shower\/tub thoroughly/)).toBeTruthy();
     });
 
-    it("should include toilet paper restock task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include toilet paper restock task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("Bathrooms"));
-      expect(getByText(/Restock toilet paper/)).toBeTruthy();
+      fireEvent.press(component.getByText("Bathrooms"));
+      expect(component.getByText(/Restock toilet paper/)).toBeTruthy();
     });
 
-    it("should include sink drain hair removal task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include sink drain hair removal task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("Bathrooms"));
-      expect(getByText(/Clean sink drain - remove hair/)).toBeTruthy();
+      fireEvent.press(component.getByText("Bathrooms"));
+      expect(component.getByText(/Clean sink drain - remove hair/)).toBeTruthy();
     });
   });
 
   describe("Bedroom Tasks", () => {
-    it("should include bedding change task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include bedding change task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("Bedrooms"));
-      expect(getByText(/Make bed with fresh sheets/)).toBeTruthy();
+      fireEvent.press(component.getByText("Bedrooms"));
+      expect(component.getByText(/Make bed with fresh sheets/)).toBeTruthy();
     });
 
-    it("should include dusting task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include dusting task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("Bedrooms"));
-      expect(getByText(/Dust all surfaces/)).toBeTruthy();
+      fireEvent.press(component.getByText("Bedrooms"));
+      expect(component.getByText(/Dust all surfaces/)).toBeTruthy();
     });
 
-    it("should include vacuuming corners task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include vacuuming corners task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("Bedrooms"));
-      expect(getByText(/Vacuum corners, edges, and under furniture/)).toBeTruthy();
+      fireEvent.press(component.getByText("Bedrooms"));
+      expect(component.getByText(/Vacuum corners, edges, and under furniture/)).toBeTruthy();
     });
   });
 
   describe("General Tasks", () => {
-    it("should include trash bag verification task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include trash bag verification task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("General/Final Walkthrough"));
-      expect(getByText(/Verify all trash cans have new bags inserted/)).toBeTruthy();
+      fireEvent.press(component.getByText("General/Final Walkthrough"));
+      expect(component.getByText(/Verify all trash cans have new bags inserted/)).toBeTruthy();
     });
 
-    it("should include trash disposal task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include trash disposal task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("General/Final Walkthrough"));
-      expect(getByText(/Take all trash\/recycling\/compost to designated locations/)).toBeTruthy();
+      fireEvent.press(component.getByText("General/Final Walkthrough"));
+      expect(component.getByText(/Take all trash\/recycling\/compost to designated locations/)).toBeTruthy();
     });
 
-    it("should include final walkthrough task", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should include final walkthrough task", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText("General/Final Walkthrough"));
-      expect(getByText(/Final walkthrough - no items left behind/)).toBeTruthy();
+      fireEvent.press(component.getByText("General/Final Walkthrough"));
+      expect(component.getByText(/Final walkthrough - no items left behind/)).toBeTruthy();
     });
   });
 
   describe("Completion", () => {
-    it("should disable complete button when not all tasks are done", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should disable complete button when not all tasks are done", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      const button = getByText(/Complete All Tasks/);
+      const button = component.getByText(/Complete All Tasks/);
       expect(button).toBeTruthy();
 
       // Button should show remaining count
-      expect(getByText(/remaining/)).toBeTruthy();
+      expect(component.getByText(/remaining/)).toBeTruthy();
     });
 
     it("should call onChecklistComplete when all tasks are done and button pressed", async () => {
       // This would require checking all tasks which is extensive
       // We'll test the callback mechanism instead
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
       // Verify the callback is set up
       expect(mockOnChecklistComplete).not.toHaveBeenCalled();
     });
 
-    it("should show skip option when not complete", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should show skip option when not complete", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      expect(getByText(/Some tasks may not apply/)).toBeTruthy();
+      expect(component.getByText(/Some tasks may not apply/)).toBeTruthy();
     });
   });
 
   describe("Progress Calculation", () => {
-    it("should start at 0% progress", () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should start at 0% progress", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      expect(getByText("0%")).toBeTruthy();
+      expect(component.getByText("0%")).toBeTruthy();
     });
 
     it("should report progress updates to parent", async () => {
-      const { getByText } = render(<CleaningChecklist {...defaultProps} />);
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
-      fireEvent.press(getByText(/Clean all countertops/));
+      fireEvent.press(component.getByText(/Clean all countertops/));
 
       await waitFor(() => {
         // Wait for a call with completed > 0
@@ -343,11 +398,12 @@ describe("CleaningChecklist Component", () => {
   });
 
   describe("Section Progress", () => {
-    it("should show task count for each section", () => {
-      const { getAllByText } = render(<CleaningChecklist {...defaultProps} />);
+    it("should show task count for each section", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
 
       // Multiple sections show X/Y tasks format
-      const taskCounts = getAllByText(/0\/\d+ tasks/);
+      const taskCounts = component.getAllByText(/0\/\d+ tasks/);
       expect(taskCounts.length).toBeGreaterThan(0);
     });
   });

@@ -5,11 +5,15 @@ import {
   TouchableOpacity,
   ScrollView,
   Animated,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 import { StyleSheet } from "react-native";
+import ChecklistService from "../../../services/fetchRequests/ChecklistService";
 
-const CLEANING_CHECKLIST = {
+// Fallback hardcoded checklist in case API fails
+const FALLBACK_CHECKLIST = {
   kitchen: {
     title: "Kitchen",
     icon: "K",
@@ -115,15 +119,111 @@ const CLEANING_CHECKLIST = {
   },
 };
 
-const CleaningChecklist = ({ home, onChecklistComplete, onProgressUpdate }) => {
-  const [checkedItems, setCheckedItems] = useState({});
-  const [expandedSections, setExpandedSections] = useState({
-    kitchen: true,
-    bathrooms: false,
-    bedrooms: false,
-    livingAreas: false,
-    general: false,
+// Convert API sections format to local format
+const convertApiToLocal = (apiData) => {
+  if (!apiData || !apiData.sections) return null;
+
+  const result = {};
+  apiData.sections.forEach((section) => {
+    // Create a key from the title (lowercase, no spaces)
+    const key = section.title.toLowerCase().replace(/[^a-z]/g, "");
+    result[key] = {
+      title: section.title,
+      icon: section.icon || section.title.charAt(0).toUpperCase(),
+      tasks: (section.items || []).map((item, index) => ({
+        id: item.id || `${key}${index + 1}`,
+        task: item.content,
+        formatting: item.formatting,
+        indentLevel: item.indentLevel,
+      })),
+    };
   });
+  return result;
+};
+
+const CACHE_KEY = "cleaning_checklist_cache";
+const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+
+const CleaningChecklist = ({ home, token, onChecklistComplete, onProgressUpdate }) => {
+  const [checkedItems, setCheckedItems] = useState({});
+  const [checklistData, setChecklistData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedSections, setExpandedSections] = useState({});
+
+  // Load checklist from API or cache
+  useEffect(() => {
+    loadChecklist();
+  }, []);
+
+  const loadChecklist = async () => {
+    setLoading(true);
+    try {
+      // Try to get cached data first
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_EXPIRY) {
+          setChecklistData(data);
+          initializeExpandedSections(data);
+          setLoading(false);
+          // Still try to refresh in background
+          refreshFromApi();
+          return;
+        }
+      }
+
+      // No valid cache, fetch from API
+      await refreshFromApi();
+    } catch (error) {
+      console.warn("Error loading checklist:", error);
+      // Fallback to hardcoded data
+      setChecklistData(FALLBACK_CHECKLIST);
+      initializeExpandedSections(FALLBACK_CHECKLIST);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshFromApi = async () => {
+    try {
+      const result = await ChecklistService.getPublishedChecklist(token);
+      if (result && result.sections && result.sections.length > 0) {
+        const converted = convertApiToLocal(result);
+        if (converted && Object.keys(converted).length > 0) {
+          setChecklistData(converted);
+          initializeExpandedSections(converted);
+          // Cache the result
+          await AsyncStorage.setItem(
+            CACHE_KEY,
+            JSON.stringify({ data: converted, timestamp: Date.now() })
+          );
+        }
+      } else if (!checklistData) {
+        // No API data and no existing data, use fallback
+        setChecklistData(FALLBACK_CHECKLIST);
+        initializeExpandedSections(FALLBACK_CHECKLIST);
+      }
+    } catch (error) {
+      console.warn("Error fetching checklist from API:", error);
+      if (!checklistData) {
+        setChecklistData(FALLBACK_CHECKLIST);
+        initializeExpandedSections(FALLBACK_CHECKLIST);
+      }
+    }
+  };
+
+  const initializeExpandedSections = (data) => {
+    if (!data) return;
+    const sections = {};
+    const keys = Object.keys(data);
+    keys.forEach((key, index) => {
+      sections[key] = index === 0; // First section expanded by default
+    });
+    setExpandedSections(sections);
+  };
+
+  // Use checklistData or fallback
+  const CLEANING_CHECKLIST = checklistData || FALLBACK_CHECKLIST;
 
   // Calculate total tasks and completed tasks
   const totalTasks = Object.values(CLEANING_CHECKLIST).reduce(
@@ -252,6 +352,18 @@ const CleaningChecklist = ({ home, onChecklistComplete, onProgressUpdate }) => {
       </View>
     );
   };
+
+  // Show loading state
+  if (loading && !checklistData) {
+    return (
+      <View style={[styles.container, { alignItems: "center", justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={{ marginTop: spacing.md, color: colors.text.secondary }}>
+          Loading checklist...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
