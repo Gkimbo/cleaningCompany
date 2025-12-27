@@ -33,7 +33,12 @@ const BED_SIZE_OPTIONS = [
   { value: "california_king", label: "California King" },
 ];
 
-const BATH_OPTIONS = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5+"];
+const BED_OPTIONS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+
+const BATH_OPTIONS = [
+  "0.5", "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5",
+  "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10"
+];
 
 const AddHomeForm = ({ state, dispatch }) => {
   const navigate = useNavigate();
@@ -47,6 +52,8 @@ const AddHomeForm = ({ state, dispatch }) => {
   const [focusedField, setFocusedField] = useState(null);
   const [showServiceAreaWarning, setShowServiceAreaWarning] = useState(false);
   const [serviceAreaMessage, setServiceAreaMessage] = useState("");
+  const [showBedroomPicker, setShowBedroomPicker] = useState(false);
+  const [showBathroomPicker, setShowBathroomPicker] = useState(false);
 
   const [homeData, setHomeData] = useState({
     nickName: "",
@@ -96,8 +103,9 @@ const AddHomeForm = ({ state, dispatch }) => {
   };
 
   // Initialize bathroom configurations when numBaths changes and towels = "yes"
+  // Use Math.ceil to handle half bathrooms (e.g., "2.5" -> 3 configs)
   const initializeBathroomConfigurations = (numBaths) => {
-    const baths = parseInt(numBaths) || 0;
+    const baths = Math.ceil(parseFloat(numBaths)) || 0;
     const configs = [];
     for (let i = 1; i <= baths; i++) {
       configs.push({ bathroomNumber: i, towels: 2, faceCloths: 1 });
@@ -445,54 +453,59 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.inputLabel}>
             Bedrooms <Text style={styles.inputRequired}>*</Text>
           </Text>
-          <TextInput
+          <TouchableOpacity
             style={[
               styles.input,
-              focusedField === "numBeds" && styles.inputFocused,
+              {
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              },
               errors.numBeds && styles.inputError,
             ]}
-            placeholder="3"
-            placeholderTextColor="#94a3b8"
-            value={homeData.numBeds}
-            onChangeText={(text) => updateField("numBeds", text.replace(/\D/g, ""))}
-            onFocus={() => setFocusedField("numBeds")}
-            onBlur={() => setFocusedField(null)}
-            keyboardType="number-pad"
-          />
+            onPress={() => setShowBedroomPicker(true)}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                color: homeData.numBeds ? "#1e293b" : "#94a3b8",
+              }}
+            >
+              {homeData.numBeds || "Select"}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#64748b" }}>▼</Text>
+          </TouchableOpacity>
+          {errors.numBeds && (
+            <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.numBeds}</Text>
+          )}
         </View>
 
         <View style={[styles.inputGroup, styles.inputHalf]}>
           <Text style={styles.inputLabel}>
             Bathrooms <Text style={styles.inputRequired}>*</Text>
           </Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {BATH_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option}
-                style={[
-                  {
-                    paddingVertical: 10,
-                    paddingHorizontal: 14,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: homeData.numBaths === option ? "#3b82f6" : errors.numBaths ? "#e11d48" : "#e2e8f0",
-                    backgroundColor: homeData.numBaths === option ? "#eff6ff" : "#fff",
-                  },
-                ]}
-                onPress={() => updateField("numBaths", option)}
-              >
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: homeData.numBaths === option ? "#3b82f6" : "#64748b",
-                    fontWeight: homeData.numBaths === option ? "600" : "400",
-                  }}
-                >
-                  {option}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableOpacity
+            style={[
+              styles.input,
+              {
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              },
+              errors.numBaths && styles.inputError,
+            ]}
+            onPress={() => setShowBathroomPicker(true)}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                color: homeData.numBaths ? "#1e293b" : "#94a3b8",
+              }}
+            >
+              {homeData.numBaths || "Select"}
+            </Text>
+            <Text style={{ fontSize: 12, color: "#64748b" }}>▼</Text>
+          </TouchableOpacity>
           {errors.numBaths && (
             <Text style={[styles.inputHelper, { color: "#e11d48" }]}>{errors.numBaths}</Text>
           )}
@@ -849,7 +862,7 @@ const AddHomeForm = ({ state, dispatch }) => {
           <Text style={styles.toggleCardDescription}>
             {homeData.towelsProvided === "yes" && homeData.bathroomConfigurations.length > 0
               ? `$${homeData.bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * pricing.linens.towelFee + (b.faceCloths || 0) * pricing.linens.faceClothFee, 0)} - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth`
-              : homeData.numBaths ? `${homeData.numBaths} bathrooms - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
+              : homeData.numBaths ? `${Math.ceil(parseFloat(homeData.numBaths))} bathrooms - $${pricing.linens.towelFee}/towel, $${pricing.linens.faceClothFee}/face cloth` : "Select to configure towels for each bathroom"}
           </Text>
         </View>
         <View
@@ -1119,6 +1132,104 @@ const AddHomeForm = ({ state, dispatch }) => {
       </ScrollView>
 
       <Modal
+        visible={showBedroomPicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowBedroomPicker(false)}
+      >
+        <TouchableOpacity
+          style={localStyles.pickerOverlay}
+          activeOpacity={1}
+          onPress={() => setShowBedroomPicker(false)}
+        >
+          <View style={localStyles.pickerContainer}>
+            <View style={localStyles.pickerHeader}>
+              <Text style={localStyles.pickerTitle}>Select Bedrooms</Text>
+              <TouchableOpacity onPress={() => setShowBedroomPicker(false)}>
+                <Text style={localStyles.pickerDone}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={localStyles.pickerScroll}>
+              {BED_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    localStyles.pickerOption,
+                    homeData.numBeds === option && localStyles.pickerOptionSelected,
+                  ]}
+                  onPress={() => {
+                    updateField("numBeds", option);
+                    setShowBedroomPicker(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      localStyles.pickerOptionText,
+                      homeData.numBeds === option && localStyles.pickerOptionTextSelected,
+                    ]}
+                  >
+                    {option} {option === "1" ? "bedroom" : "bedrooms"}
+                  </Text>
+                  {homeData.numBeds === option && (
+                    <Text style={localStyles.pickerCheckmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={showBathroomPicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowBathroomPicker(false)}
+      >
+        <TouchableOpacity
+          style={localStyles.pickerOverlay}
+          activeOpacity={1}
+          onPress={() => setShowBathroomPicker(false)}
+        >
+          <View style={localStyles.pickerContainer}>
+            <View style={localStyles.pickerHeader}>
+              <Text style={localStyles.pickerTitle}>Select Bathrooms</Text>
+              <TouchableOpacity onPress={() => setShowBathroomPicker(false)}>
+                <Text style={localStyles.pickerDone}>Done</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={localStyles.pickerScroll}>
+              {BATH_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    localStyles.pickerOption,
+                    homeData.numBaths === option && localStyles.pickerOptionSelected,
+                  ]}
+                  onPress={() => {
+                    updateField("numBaths", option);
+                    setShowBathroomPicker(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      localStyles.pickerOptionText,
+                      homeData.numBaths === option && localStyles.pickerOptionTextSelected,
+                    ]}
+                  >
+                    {option} {option === "1" ? "bathroom" : "bathrooms"}
+                  </Text>
+                  {homeData.numBaths === option && (
+                    <Text style={localStyles.pickerCheckmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
         visible={showServiceAreaWarning}
         transparent={true}
         animationType="fade"
@@ -1145,6 +1256,64 @@ const AddHomeForm = ({ state, dispatch }) => {
 };
 
 const localStyles = StyleSheet.create({
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  pickerContainer: {
+    backgroundColor: colors.neutral[0],
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    maxHeight: "60%",
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  pickerTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  pickerDone: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  pickerScroll: {
+    maxHeight: 300,
+  },
+  pickerOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  pickerOptionSelected: {
+    backgroundColor: colors.primary[50],
+  },
+  pickerOptionText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+  },
+  pickerOptionTextSelected: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  pickerCheckmark: {
+    fontSize: typography.fontSize.lg,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.bold,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",

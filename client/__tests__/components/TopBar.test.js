@@ -45,7 +45,7 @@ describe("TopBar", () => {
 
   const authenticatedOwnerState = {
     currentUser: { token: "valid-token" },
-    account: "owner1",
+    account: "owner",
     appointments: [],
   };
 

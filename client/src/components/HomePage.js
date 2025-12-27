@@ -240,7 +240,7 @@ const HomePage = ({ state, dispatch }) => {
   };
 
   // Show Owner Dashboard for owners
-  if (state.account === "owner1" && state.currentUser.token) {
+  if (state.account === "owner" && state.currentUser.token) {
     return <OwnerDashboard state={state} />;
   }
 

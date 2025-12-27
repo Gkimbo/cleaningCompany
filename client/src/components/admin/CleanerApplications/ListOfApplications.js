@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Pressable,
   ScrollView,
@@ -23,9 +24,10 @@ const STATUS_CONFIG = {
   background_check: { label: "Background Check", color: colors.secondary[500], bgColor: colors.secondary[50] },
   approved: { label: "Approved", color: colors.success[500], bgColor: colors.success[50] },
   rejected: { label: "Rejected", color: colors.error[500], bgColor: colors.error[50] },
+  hired: { label: "Hired", color: colors.success[700], bgColor: colors.success[100] },
 };
 
-const ListOfApplications = () => {
+const ListOfApplications = ({ state }) => {
   const [applications, setApplications] = useState([]);
   const [filteredApplications, setFilteredApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +46,8 @@ const ListOfApplications = () => {
   const fetchApplications = async () => {
     setLoading(true);
     try {
-      const response = await FetchData.getApplicationsFromBackend();
+      const token = state?.currentUser?.token;
+      const response = await FetchData.getApplicationsFromBackend(token);
       const apps = response.serializedApplications || [];
       setApplications(apps);
       calculateStats(apps);
@@ -63,6 +66,7 @@ const ListOfApplications = () => {
       background_check: 0,
       approved: 0,
       rejected: 0,
+      hired: 0,
     };
     apps.forEach((app) => {
       const status = app.status || "pending";
@@ -96,7 +100,8 @@ const ListOfApplications = () => {
 
   const handleDeleteApplication = async (id) => {
     try {
-      await Application.deleteApplication(id);
+      const token = state?.currentUser?.token;
+      await Application.deleteApplication(id, token);
       await fetchApplications();
     } catch (error) {
       console.error("Error deleting application:", error);
@@ -105,10 +110,22 @@ const ListOfApplications = () => {
 
   const handleUpdateStatus = async (id, newStatus) => {
     try {
-      await Application.updateApplicationStatus(id, newStatus);
+      const token = state?.currentUser?.token;
+      await Application.updateApplicationStatus(id, newStatus, token);
       await fetchApplications();
     } catch (error) {
       console.error("Error updating status:", error);
+      Alert.alert("Error", error.message || "Failed to update status");
+    }
+  };
+
+  const handleUpdateNotes = async (id, adminNotes) => {
+    try {
+      const token = state?.currentUser?.token;
+      await Application.updateApplicationNotes(id, adminNotes, token);
+    } catch (error) {
+      console.error("Error updating notes:", error);
+      throw error;
     }
   };
 
@@ -183,6 +200,7 @@ const ListOfApplications = () => {
           <StatusFilterButton status="under_review" label="Review" count={stats.under_review || 0} />
           <StatusFilterButton status="background_check" label="Background" count={stats.background_check || 0} />
           <StatusFilterButton status="approved" label="Approved" count={stats.approved || 0} />
+          <StatusFilterButton status="hired" label="Hired" count={stats.hired || 0} />
           <StatusFilterButton status="rejected" label="Rejected" count={stats.rejected || 0} />
         </ScrollView>
       </View>
@@ -200,8 +218,10 @@ const ListOfApplications = () => {
               application={application}
               onDelete={handleDeleteApplication}
               onUpdateStatus={handleUpdateStatus}
+              onUpdateNotes={handleUpdateNotes}
               onRefresh={fetchApplications}
               statusConfig={STATUS_CONFIG}
+              token={state?.currentUser?.token}
             />
           ))
         ) : (

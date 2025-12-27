@@ -14,6 +14,11 @@ jest.mock("../../models", () => ({
   User: {
     findAll: jest.fn(),
     findByPk: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
+  },
+  UserBills: {
+    create: jest.fn(),
   },
   Op: {
     or: Symbol("or"),
@@ -31,9 +36,11 @@ jest.mock("../../serializers/ApplicationSerializer", () => ({
 
 jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendNewApplicationNotification: jest.fn(),
+  sendEmailCongragulations: jest.fn(),
+  sendHRHiringNotification: jest.fn(),
 }));
 
-const { UserApplications, User } = require("../../models");
+const { UserApplications, User, UserBills } = require("../../models");
 const ApplicationInfoClass = require("../../services/ApplicationInfoClass");
 const Email = require("../../services/sendNotifications/EmailClass");
 
@@ -445,6 +452,223 @@ describe("Application Router", () => {
         .send({ adminNotes: "" });
 
       expect(response.status).toBe(200);
+    });
+  });
+
+  describe("POST /:id/hire", () => {
+    const mockApplication = {
+      id: 1,
+      status: "approved",
+      firstName: "John",
+      lastName: "Doe",
+      email: "john@example.com",
+      phone: "555-123-4567",
+      update: jest.fn(),
+    };
+
+    const hireData = {
+      username: "johnd",
+      password: "SecurePass123!",
+      email: "john@example.com",
+      firstName: "John",
+      lastName: "Doe",
+      phone: "555-123-4567",
+    };
+
+    beforeEach(() => {
+      mockApplication.update.mockReset();
+      mockApplication.update.mockResolvedValue(true);
+      mockApplication.status = "approved";
+    });
+
+    it("should hire an applicant successfully", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      User.findOne.mockResolvedValue(null); // No existing user
+      User.create.mockResolvedValue({
+        id: 10,
+        ...hireData,
+        type: "cleaner",
+      });
+      UserBills.create.mockResolvedValue({ id: 1 });
+      UserApplications.findByPk.mockResolvedValue(mockApplication);
+
+      const response = await request(app)
+        .post("/api/v1/applications/1/hire")
+        .set("Authorization", `Bearer ${token}`)
+        .send(hireData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.message).toBe("Applicant hired and cleaner account created");
+      expect(response.body.user).toBeDefined();
+      expect(response.body.user.username).toBe("johnd");
+      expect(User.create).toHaveBeenCalled();
+      expect(UserBills.create).toHaveBeenCalled();
+      expect(Email.sendEmailCongragulations).toHaveBeenCalled();
+    });
+
+    it("should return 409 if email already exists", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      User.findOne.mockImplementation(({ where }) => {
+        if (where.email) return { id: 5, email: "john@example.com" };
+        return null;
+      });
+      UserApplications.findByPk.mockResolvedValue(mockApplication);
+
+      const response = await request(app)
+        .post("/api/v1/applications/1/hire")
+        .set("Authorization", `Bearer ${token}`)
+        .send(hireData);
+
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe("An account already has this email");
+    });
+
+    it("should return 410 if username already exists", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      User.findOne.mockImplementation(({ where }) => {
+        if (where.email) return null;
+        if (where.username) return { id: 5, username: "johnd" };
+        return null;
+      });
+      UserApplications.findByPk.mockResolvedValue(mockApplication);
+
+      const response = await request(app)
+        .post("/api/v1/applications/1/hire")
+        .set("Authorization", `Bearer ${token}`)
+        .send(hireData);
+
+      expect(response.status).toBe(410);
+      expect(response.body.error).toBe("Username already exists");
+    });
+
+    it("should return 400 if application already hired", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      const hiredApplication = { ...mockApplication, status: "hired" };
+      UserApplications.findByPk.mockResolvedValue(hiredApplication);
+
+      const response = await request(app)
+        .post("/api/v1/applications/1/hire")
+        .set("Authorization", `Bearer ${token}`)
+        .send(hireData);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Application has already been hired");
+    });
+
+    it("should return 404 for non-existent application", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      UserApplications.findByPk.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post("/api/v1/applications/999/hire")
+        .set("Authorization", `Bearer ${token}`)
+        .send(hireData);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("Application not found");
+    });
+
+    it("should return 401 without authorization", async () => {
+      const response = await request(app)
+        .post("/api/v1/applications/1/hire")
+        .send(hireData);
+
+      expect(response.status).toBe(401);
+    });
+
+    it("should return 403 for non-owner/HR users", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue({ id: 1, type: "cleaner" });
+
+      const response = await request(app)
+        .post("/api/v1/applications/1/hire")
+        .set("Authorization", `Bearer ${token}`)
+        .send(hireData);
+
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe("PATCH /:id/status - hired status prevention", () => {
+    const mockHiredApplication = {
+      id: 1,
+      status: "hired",
+      firstName: "John",
+      lastName: "Doe",
+      email: "john@example.com",
+      update: jest.fn(),
+    };
+
+    it("should return 400 when trying to change status of hired application", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      UserApplications.findByPk.mockResolvedValue(mockHiredApplication);
+
+      const response = await request(app)
+        .patch("/api/v1/applications/1/status")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ status: "pending" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Cannot change status of hired application");
+    });
+
+    it("should allow hired as a valid status value", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      const pendingApplication = {
+        id: 1,
+        status: "pending",
+        update: jest.fn().mockResolvedValue(true),
+      };
+      UserApplications.findByPk.mockResolvedValue(pendingApplication);
+
+      const response = await request(app)
+        .patch("/api/v1/applications/1/status")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ status: "hired" });
+
+      // hired is now a valid status, but typically set via /hire endpoint
+      expect(response.status).toBe(200);
+    });
+  });
+
+  describe("PATCH /:id/status - approved status (no account creation)", () => {
+    const mockApplication = {
+      id: 1,
+      status: "pending",
+      firstName: "John",
+      lastName: "Doe",
+      email: "john@example.com",
+      update: jest.fn(),
+    };
+
+    beforeEach(() => {
+      mockApplication.update.mockReset();
+      mockApplication.update.mockResolvedValue(true);
+    });
+
+    it("should update status to approved without creating account", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      UserApplications.findByPk.mockResolvedValue(mockApplication);
+
+      const response = await request(app)
+        .patch("/api/v1/applications/1/status")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ status: "approved" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe("Application approved");
+      // Should NOT create a user account
+      expect(User.create).not.toHaveBeenCalled();
+      expect(UserBills.create).not.toHaveBeenCalled();
+      expect(Email.sendEmailCongragulations).not.toHaveBeenCalled();
     });
   });
 });

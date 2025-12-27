@@ -312,6 +312,49 @@ const Bill = ({ state, dispatch }) => {
           )}
       </View>
 
+      {/* Payment Methods Section */}
+      <Pressable
+        onPress={() => navigate("/payment-setup")}
+        style={{
+          backgroundColor: "#fff",
+          borderRadius: 15,
+          padding: 18,
+          marginBottom: 15,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 4,
+          elevation: 3,
+        }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              backgroundColor: "#eff6ff",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon name="credit-card" size={20} color="#2563eb" />
+          </View>
+          <View>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: "#1f2937" }}>
+              Payment Methods
+            </Text>
+            <Text style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>
+              Add or manage your cards
+            </Text>
+          </View>
+        </View>
+        <Icon name="chevron-right" size={16} color="#9ca3af" />
+      </Pressable>
+
       {/* Failed Payments Section */}
       {failedPayments.length > 0 && (
         <View

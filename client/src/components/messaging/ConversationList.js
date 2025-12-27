@@ -91,7 +91,7 @@ const ConversationList = ({ state, dispatch }) => {
     }
     if (conv.conversation?.conversationType === "support") {
       // For owners, show the user's name; for users, show "Support"
-      if (state.account === "owner1") {
+      if (state.account === "owner") {
         return conv.conversation?.title || "Support Request";
       }
       return "Support - Owner";
@@ -155,7 +155,7 @@ const ConversationList = ({ state, dispatch }) => {
           <Icon name="arrow-left" size={20} color="#1e3a8a" />
         </Pressable>
         <Text style={messagingStyles.headerTitle}>Messages</Text>
-        {state.account === "owner1" && (
+        {state.account === "owner" && (
           <Pressable
             onPress={() => navigate("/messages/broadcast")}
             style={{ padding: 8 }}

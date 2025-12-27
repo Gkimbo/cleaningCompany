@@ -35,7 +35,7 @@ const AccountSettings = ({ state, dispatch }) => {
   const [emailSaveResult, setEmailSaveResult] = useState(null);
   const [loadingOwnerSettings, setLoadingOwnerSettings] = useState(false);
 
-  const isOwner = state.account === "owner1";
+  const isOwner = state.account === "owner";
 
   useEffect(() => {
     if (isOwner && state.currentUser.token) {
@@ -323,7 +323,7 @@ const AccountSettings = ({ state, dispatch }) => {
       )}
 
       {/* Username Section - hidden for owners */}
-      {state.account !== "owner1" && (
+      {state.account !== "owner" && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Change Username</Text>
           <Text style={styles.sectionDescription}>
@@ -354,7 +354,7 @@ const AccountSettings = ({ state, dispatch }) => {
       )}
 
       {/* Email Section - hidden for owners */}
-      {state.account !== "owner1" && (
+      {state.account !== "owner" && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Change Email</Text>
           <Text style={styles.sectionDescription}>

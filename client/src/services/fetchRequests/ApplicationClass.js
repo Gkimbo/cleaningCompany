@@ -28,12 +28,13 @@ class Application {
     }
   }
 
-  static async deleteApplication(id) {
+  static async deleteApplication(id, token) {
     try {
       const response = await fetch(baseURL + `/api/v1/applications/${id}`, {
         method: "delete",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
       if (!response.ok) {
@@ -64,7 +65,7 @@ class Application {
     }
   }
 
-  static async updateApplicationStatus(id, status) {
+  static async updateApplicationStatus(id, status, token) {
     try {
       const response = await fetch(
         baseURL + `/api/v1/applications/${id}/status`,
@@ -73,11 +74,14 @@ class Application {
           body: JSON.stringify({ status }),
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
         }
       );
       if (!response.ok) {
-        throw new Error(`${response.status} (${response.statusText})`);
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || `${response.status} error`;
+        throw new Error(errorMessage);
       }
       const responseData = await response.json();
       return responseData;
@@ -87,7 +91,7 @@ class Application {
     }
   }
 
-  static async updateApplicationNotes(id, adminNotes) {
+  static async updateApplicationNotes(id, adminNotes, token) {
     try {
       const response = await fetch(
         baseURL + `/api/v1/applications/${id}/notes`,
@@ -96,6 +100,7 @@ class Application {
           body: JSON.stringify({ adminNotes }),
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -121,6 +126,37 @@ class Application {
     } catch (error) {
       console.error("Error fetching pending applications:", error);
       return 0;
+    }
+  }
+
+  static async hireApplicant(id, employeeData, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/applications/${id}/hire`,
+        {
+          method: "POST",
+          body: JSON.stringify(employeeData),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        if (response.status === 409) {
+          return { error: "An account already has this email" };
+        } else if (response.status === 410) {
+          return { error: "Username already exists" };
+        }
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || `${response.status} error`;
+        throw new Error(errorMessage);
+      }
+      const responseData = await response.json();
+      return responseData;
+    } catch (err) {
+      console.error("Failed to hire applicant:", err);
+      throw err;
     }
   }
 }

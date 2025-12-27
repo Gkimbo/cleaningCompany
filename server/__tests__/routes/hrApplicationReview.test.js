@@ -261,9 +261,10 @@ describe("HR Application Review System", () => {
       User.create.mockResolvedValue(createdUser);
       UserBills.create.mockResolvedValue({});
       User.findAll.mockResolvedValue([mockOwner]);
+      User.findOne.mockResolvedValue(null); // No existing user
     });
 
-    it("should create cleaner account on approval by owner", async () => {
+    it("should approve application without creating account (approval is separate from hiring)", async () => {
       const token = generateToken(1);
       User.findByPk.mockResolvedValue(mockOwner);
       const appToApprove = { ...pendingApp, update: jest.fn().mockResolvedValue(true) };
@@ -275,7 +276,95 @@ describe("HR Application Review System", () => {
         .send({ status: "approved" });
 
       expect(res.status).toBe(200);
-      expect(res.body.message).toBe("Application approved and cleaner account created");
+      expect(res.body.message).toBe("Application approved");
+      // User creation happens on hire, not on approval
+      expect(User.create).not.toHaveBeenCalled();
+    });
+
+    it("should update application status to approved with reviewedBy", async () => {
+      const token = generateToken(2);
+      User.findByPk.mockResolvedValue(mockHR);
+      const appToApprove = { ...pendingApp, update: jest.fn().mockResolvedValue(true) };
+      UserApplications.findByPk.mockResolvedValue(appToApprove);
+
+      await request(app)
+        .patch("/api/v1/applications/10/status")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ status: "approved" });
+
+      expect(appToApprove.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "approved",
+          reviewedBy: 2,
+        })
+      );
+    });
+
+    it("should prevent changing status of hired application", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      const hiredApp = { ...pendingApp, status: "hired" };
+      UserApplications.findByPk.mockResolvedValue(hiredApp);
+
+      const res = await request(app)
+        .patch("/api/v1/applications/10/status")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ status: "approved" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Cannot change status of hired application");
+    });
+  });
+
+  // ============================================
+  // HIRING TESTS (account creation happens here)
+  // ============================================
+  describe("Application Hiring", () => {
+    const approvedApp = {
+      id: 10,
+      firstName: "John",
+      lastName: "Doe",
+      email: "john@test.com",
+      phone: "555-1234",
+      status: "approved",
+      update: jest.fn().mockResolvedValue(true),
+    };
+
+    const createdUser = {
+      id: 100,
+      username: "john_doe",
+      email: "john@test.com",
+      firstName: "John",
+      lastName: "Doe",
+    };
+
+    beforeEach(() => {
+      UserApplications.findByPk.mockResolvedValue({ ...approvedApp });
+      User.create.mockResolvedValue(createdUser);
+      UserBills.create.mockResolvedValue({});
+      User.findAll.mockResolvedValue([mockOwner]);
+      User.findOne.mockResolvedValue(null); // No existing user
+    });
+
+    it("should create cleaner account on hire by owner", async () => {
+      const token = generateToken(1);
+      User.findByPk.mockResolvedValue(mockOwner);
+      const appToHire = { ...approvedApp, update: jest.fn().mockResolvedValue(true) };
+      UserApplications.findByPk.mockResolvedValue(appToHire);
+
+      const res = await request(app)
+        .post("/api/v1/applications/10/hire")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          username: "john_doe",
+          password: "SecurePass123!",
+          email: "john@test.com",
+          firstName: "John",
+          lastName: "Doe",
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.message).toBe("Applicant hired and cleaner account created");
       expect(res.body.user).toBeDefined();
       expect(res.body.user.username).toBe("john_doe");
 
@@ -290,31 +379,22 @@ describe("HR Application Review System", () => {
       expect(UserBills.create).toHaveBeenCalled();
     });
 
-    it("should generate unique username and password", async () => {
+    it("should send welcome email to new cleaner on hire", async () => {
       const token = generateToken(1);
       User.findByPk.mockResolvedValue(mockOwner);
-      const appToApprove = { ...pendingApp, update: jest.fn().mockResolvedValue(true) };
-      UserApplications.findByPk.mockResolvedValue(appToApprove);
+      const appToHire = { ...approvedApp, update: jest.fn().mockResolvedValue(true) };
+      UserApplications.findByPk.mockResolvedValue(appToHire);
 
       await request(app)
-        .patch("/api/v1/applications/10/status")
+        .post("/api/v1/applications/10/hire")
         .set("Authorization", `Bearer ${token}`)
-        .send({ status: "approved" });
-
-      expect(generateUniqueUsername).toHaveBeenCalledWith("John", "Doe");
-      expect(generateSecurePassword).toHaveBeenCalled();
-    });
-
-    it("should send welcome email to new cleaner", async () => {
-      const token = generateToken(1);
-      User.findByPk.mockResolvedValue(mockOwner);
-      const appToApprove = { ...pendingApp, update: jest.fn().mockResolvedValue(true) };
-      UserApplications.findByPk.mockResolvedValue(appToApprove);
-
-      await request(app)
-        .patch("/api/v1/applications/10/status")
-        .set("Authorization", `Bearer ${token}`)
-        .send({ status: "approved" });
+        .send({
+          username: "john_doe",
+          password: "SecurePass123!",
+          email: "john@test.com",
+          firstName: "John",
+          lastName: "Doe",
+        });
 
       expect(Email.sendEmailCongragulations).toHaveBeenCalledWith(
         "John",
@@ -326,73 +406,75 @@ describe("HR Application Review System", () => {
       );
     });
 
-    it("should notify owner when HR approves", async () => {
+    it("should notify owner when HR hires", async () => {
       const token = generateToken(2);
       User.findByPk.mockResolvedValue(mockHR);
-      const appToApprove = { ...pendingApp, update: jest.fn().mockResolvedValue(true) };
-      UserApplications.findByPk.mockResolvedValue(appToApprove);
+      const appToHire = { ...approvedApp, update: jest.fn().mockResolvedValue(true) };
+      UserApplications.findByPk.mockResolvedValue(appToHire);
 
       await request(app)
-        .patch("/api/v1/applications/10/status")
+        .post("/api/v1/applications/10/hire")
         .set("Authorization", `Bearer ${token}`)
-        .send({ status: "approved" });
+        .send({
+          username: "john_doe",
+          password: "SecurePass123!",
+          email: "john@test.com",
+          firstName: "John",
+          lastName: "Doe",
+        });
 
       expect(Email.sendHRHiringNotification).toHaveBeenCalledWith(
         "owner@test.com",
         "HR Staff",
         "John Doe",
         "john@test.com",
-        "approved"
+        "hired"
       );
     });
 
-    it("should NOT notify owner when owner approves", async () => {
-      const token = generateToken(1);
-      User.findByPk.mockResolvedValue(mockOwner);
-      const appToApprove = { ...pendingApp, update: jest.fn().mockResolvedValue(true) };
-      UserApplications.findByPk.mockResolvedValue(appToApprove);
-
-      await request(app)
-        .patch("/api/v1/applications/10/status")
-        .set("Authorization", `Bearer ${token}`)
-        .send({ status: "approved" });
-
-      expect(Email.sendHRHiringNotification).not.toHaveBeenCalled();
-    });
-
-    it("should update application with userId and reviewedBy", async () => {
+    it("should update application with userId and reviewedBy on hire", async () => {
       const token = generateToken(2);
       User.findByPk.mockResolvedValue(mockHR);
-      const appToApprove = { ...pendingApp, update: jest.fn().mockResolvedValue(true) };
-      UserApplications.findByPk.mockResolvedValue(appToApprove);
+      const appToHire = { ...approvedApp, update: jest.fn().mockResolvedValue(true) };
+      UserApplications.findByPk.mockResolvedValue(appToHire);
 
       await request(app)
-        .patch("/api/v1/applications/10/status")
+        .post("/api/v1/applications/10/hire")
         .set("Authorization", `Bearer ${token}`)
-        .send({ status: "approved" });
+        .send({
+          username: "john_doe",
+          password: "SecurePass123!",
+          email: "john@test.com",
+          firstName: "John",
+          lastName: "Doe",
+        });
 
-      expect(appToApprove.update).toHaveBeenCalledWith(
+      expect(appToHire.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: "approved",
+          status: "hired",
           userId: 100,
           reviewedBy: 2,
         })
       );
     });
 
-    it("should prevent re-approving already approved application", async () => {
+    it("should prevent re-hiring already hired application", async () => {
       const token = generateToken(1);
       User.findByPk.mockResolvedValue(mockOwner);
-      const approvedApp = { ...pendingApp, status: "approved" };
-      UserApplications.findByPk.mockResolvedValue(approvedApp);
+      const hiredApp = { ...approvedApp, status: "hired" };
+      UserApplications.findByPk.mockResolvedValue(hiredApp);
 
       const res = await request(app)
-        .patch("/api/v1/applications/10/status")
+        .post("/api/v1/applications/10/hire")
         .set("Authorization", `Bearer ${token}`)
-        .send({ status: "approved" });
+        .send({
+          username: "john_doe",
+          password: "SecurePass123!",
+          email: "john@test.com",
+        });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe("Cannot change status of approved application");
+      expect(res.body.error).toBe("Application has already been hired");
     });
   });
 

@@ -19,7 +19,7 @@ module.exports = {
         {
           firstName: "Owner",
           lastName: "One",
-          username: "owner1",
+          username: "Owner1",
           email: "gavin.kimball@maritime.edu",
           type: "owner",
           password: hashedPassword,

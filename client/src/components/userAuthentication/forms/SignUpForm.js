@@ -176,9 +176,10 @@ const SignUpForm = ({ state, dispatch }) => {
 				value={password}
 				onChangeText={setPassword}
 				placeholder="Create a password"
-				autoComplete="off"
-				textContentType="none"
+				autoComplete="new-password"
+				textContentType="oneTimeCode"
 				autoCorrect={false}
+				spellCheck={false}
 				right={
 					<TextInput.Icon
 						icon={showPassword ? "eye-off" : "eye"}
@@ -195,9 +196,10 @@ const SignUpForm = ({ state, dispatch }) => {
 				value={confirmPassword}
 				onChangeText={setConfirmPassword}
 				placeholder="Confirm your password"
-				autoComplete="off"
-				textContentType="none"
+				autoComplete="new-password"
+				textContentType="oneTimeCode"
 				autoCorrect={false}
+				spellCheck={false}
 				right={
 					<TextInput.Icon
 						icon={showConfirmPassword ? "eye-off" : "eye"}

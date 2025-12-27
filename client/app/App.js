@@ -126,8 +126,8 @@ export default function App() {
       if (user.user.email) {
         dispatch({ type: "SET_USER_EMAIL", payload: user.user.email });
       }
-      if (user.user.username === "owner1") {
-        dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
+      if (user.user.type === "owner") {
+        dispatch({ type: "USER_ACCOUNT", payload: "owner" });
       }
       if (user.user.type === "cleaner") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
@@ -265,7 +265,7 @@ export default function App() {
                 path="/schedule-cleaning"
                 element={<ScheduleCleaningList state={state} dispatch={dispatch} />}
               />
-              <Route path="/add-home" element={<AddHomeForm />} />
+              <Route path="/add-home" element={<AddHomeForm state={state} dispatch={dispatch} />} />
               <Route
                 path="/details/:id"
                 element={<DetailsComponent state={state} dispatch={dispatch} />}

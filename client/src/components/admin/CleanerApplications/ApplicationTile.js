@@ -12,14 +12,15 @@ import {
 } from "react-native";
 import { colors, spacing, radius, typography, shadows } from "../../../services/styles/theme";
 import CreateNewEmployeeForm from "./CreateNewEmployeeForm";
-import Application from "../../../services/fetchRequests/ApplicationClass";
 
 const ApplicationTile = ({
   application,
   onDelete,
   onUpdateStatus,
+  onUpdateNotes,
   onRefresh,
   statusConfig,
+  token,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [showHireForm, setShowHireForm] = useState(false);
@@ -55,7 +56,7 @@ const ApplicationTile = ({
   const handleSaveNotes = async () => {
     setSavingNotes(true);
     try {
-      await Application.updateApplicationNotes(application.id, adminNotes);
+      await onUpdateNotes(application.id, adminNotes);
       Alert.alert("Saved", "Admin notes updated successfully.");
     } catch (error) {
       Alert.alert("Error", "Failed to save notes.");
@@ -65,6 +66,15 @@ const ApplicationTile = ({
   };
 
   const handleStatusChange = (newStatus) => {
+    // Prevent changing status of already hired applications
+    if (status === "hired") {
+      Alert.alert(
+        "Cannot Update Status",
+        "You cannot change the status of a hired application. The applicant has already been hired and their account has been created."
+      );
+      return;
+    }
+
     Alert.alert(
       "Update Status",
       `Change status to "${statusConfig[newStatus]?.label}"?`,
@@ -74,11 +84,6 @@ const ApplicationTile = ({
           text: "Update",
           onPress: () => {
             onUpdateStatus(application.id, newStatus);
-            // If approved, automatically open the hire form
-            if (newStatus === "approved") {
-              setExpanded(true);
-              setShowHireForm(true);
-            }
           },
         },
       ]
@@ -306,7 +311,9 @@ const ApplicationTile = ({
           <View style={styles.statusSection}>
             <Text style={styles.sectionTitle}>Update Status</Text>
             <View style={styles.statusButtons}>
-              {Object.entries(statusConfig).map(([key, cfg]) => (
+              {Object.entries(statusConfig)
+                .filter(([key]) => key !== "hired")
+                .map(([key, cfg]) => (
                 <Pressable
                   key={key}
                   onPress={() => handleStatusChange(key)}
@@ -350,14 +357,16 @@ const ApplicationTile = ({
 
           {/* Action Buttons */}
           <View style={styles.actionSection}>
-            <Pressable
-              onPress={() => setShowHireForm(!showHireForm)}
-              style={[styles.actionButton, styles.hireButton]}
-            >
-              <Text style={styles.hireButtonText}>
-                {showHireForm ? "Cancel Hire" : "Hire Applicant"}
-              </Text>
-            </Pressable>
+            {status !== "hired" && (
+              <Pressable
+                onPress={() => setShowHireForm(!showHireForm)}
+                style={[styles.actionButton, styles.hireButton]}
+              >
+                <Text style={styles.hireButtonText}>
+                  {showHireForm ? "Cancel Hire" : "Hire Applicant"}
+                </Text>
+              </Pressable>
+            )}
 
             <Pressable
               onPress={handleDelete}
@@ -386,7 +395,7 @@ const ApplicationTile = ({
           </View>
 
           {/* Hire Form */}
-          {showHireForm && (
+          {showHireForm && status !== "hired" && (
             <View style={styles.hireFormContainer}>
               <Text style={styles.hireFormTitle}>Create Employee Account</Text>
               <CreateNewEmployeeForm
@@ -396,6 +405,7 @@ const ApplicationTile = ({
                 email={application.email}
                 phone={application.phone}
                 setApplicationsList={onRefresh}
+                token={token}
               />
             </View>
           )}

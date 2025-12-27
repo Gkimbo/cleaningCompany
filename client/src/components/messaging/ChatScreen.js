@@ -144,7 +144,7 @@ const ChatScreen = ({ state, dispatch }) => {
 
     if (conversation.conversationType === "support") {
       // For owners, show the user's name from the title
-      if (state.account === "owner1") {
+      if (state.account === "owner") {
         return conversation.title || "Support Request";
       }
       return "Support - Owner";
@@ -289,7 +289,7 @@ const ChatScreen = ({ state, dispatch }) => {
       </ScrollView>
 
       {/* Input - hide for broadcast conversations if not owner */}
-      {(!isBroadcast || state.account === "owner1") && (
+      {(!isBroadcast || state.account === "owner") && (
         <View style={messagingStyles.inputContainer}>
           <TextInput
             style={messagingStyles.inputField}

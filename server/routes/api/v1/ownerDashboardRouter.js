@@ -269,11 +269,9 @@ ownerDashboardRouter.get(
         },
       }).catch(() => 0);
 
-      // Owners: check for both "owner" and "owner1" types
+      // Owners
       const totalOwners = await User.count({
-        where: {
-          [Op.or]: [{ type: "owner" }, { type: "owner1" }],
-        },
+        where: { type: "owner" },
       }).catch(() => 0);
 
       // Applications

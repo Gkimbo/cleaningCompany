@@ -149,19 +149,24 @@ describe("ApplicationClass", () => {
   });
 
   describe("deleteApplication", () => {
+    const mockToken = "test-token-123";
+
     it("should delete application successfully", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ message: "Application deleted successfully" }),
       });
 
-      const result = await Application.deleteApplication(123);
+      const result = await Application.deleteApplication(123, mockToken);
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/applications/123"),
         expect.objectContaining({
           method: "delete",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mockToken}`,
+          },
         })
       );
       expect(result.message).toBe("Application deleted successfully");
@@ -176,7 +181,7 @@ describe("ApplicationClass", () => {
 
       const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
-      await expect(Application.deleteApplication(123)).rejects.toThrow(
+      await expect(Application.deleteApplication(123, mockToken)).rejects.toThrow(
         /Failed to delete appointment/
       );
 
@@ -192,7 +197,7 @@ describe("ApplicationClass", () => {
 
       const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
-      await expect(Application.deleteApplication(123)).rejects.toThrow();
+      await expect(Application.deleteApplication(123, mockToken)).rejects.toThrow();
 
       consoleSpy.mockRestore();
     });
@@ -202,7 +207,7 @@ describe("ApplicationClass", () => {
 
       const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
-      await expect(Application.deleteApplication(123)).rejects.toThrow(
+      await expect(Application.deleteApplication(123, mockToken)).rejects.toThrow(
         /Failed to delete appointment/
       );
 
@@ -215,7 +220,7 @@ describe("ApplicationClass", () => {
         json: async () => ({ message: "Deleted" }),
       });
 
-      await Application.deleteApplication("456");
+      await Application.deleteApplication("456", mockToken);
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/applications/456"),
@@ -267,6 +272,8 @@ describe("ApplicationClass", () => {
   });
 
   describe("updateApplicationStatus", () => {
+    const mockToken = "test-token-123";
+
     it("should update application status successfully", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
@@ -276,13 +283,16 @@ describe("ApplicationClass", () => {
         }),
       });
 
-      const result = await Application.updateApplicationStatus(1, "approved");
+      const result = await Application.updateApplicationStatus(1, "approved", mockToken);
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/applications/1/status"),
         expect.objectContaining({
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mockToken}`,
+          },
           body: JSON.stringify({ status: "approved" }),
         })
       );
@@ -304,7 +314,7 @@ describe("ApplicationClass", () => {
           json: async () => ({ status }),
         });
 
-        const result = await Application.updateApplicationStatus(1, status);
+        const result = await Application.updateApplicationStatus(1, status, mockToken);
 
         expect(result.status).toBe(status);
       }
@@ -320,7 +330,7 @@ describe("ApplicationClass", () => {
       const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       await expect(
-        Application.updateApplicationStatus(1, "invalid")
+        Application.updateApplicationStatus(1, "invalid", mockToken)
       ).rejects.toThrow();
 
       consoleSpy.mockRestore();
@@ -332,7 +342,7 @@ describe("ApplicationClass", () => {
       const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       await expect(
-        Application.updateApplicationStatus(1, "approved")
+        Application.updateApplicationStatus(1, "approved", mockToken)
       ).rejects.toThrow();
 
       consoleSpy.mockRestore();
@@ -340,6 +350,8 @@ describe("ApplicationClass", () => {
   });
 
   describe("updateApplicationNotes", () => {
+    const mockToken = "test-token-123";
+
     it("should update application notes successfully", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
@@ -348,14 +360,18 @@ describe("ApplicationClass", () => {
 
       const result = await Application.updateApplicationNotes(
         1,
-        "Interviewed on Monday"
+        "Interviewed on Monday",
+        mockToken
       );
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/applications/1/notes"),
         expect.objectContaining({
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mockToken}`,
+          },
           body: JSON.stringify({ adminNotes: "Interviewed on Monday" }),
         })
       );
@@ -368,7 +384,7 @@ describe("ApplicationClass", () => {
         json: async () => ({ message: "Notes updated" }),
       });
 
-      await Application.updateApplicationNotes(1, "");
+      await Application.updateApplicationNotes(1, "", mockToken);
 
       expect(fetch).toHaveBeenCalledWith(
         expect.any(String),
@@ -388,7 +404,7 @@ describe("ApplicationClass", () => {
       const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       await expect(
-        Application.updateApplicationNotes(999, "Notes")
+        Application.updateApplicationNotes(999, "Notes", mockToken)
       ).rejects.toThrow();
 
       consoleSpy.mockRestore();
@@ -400,7 +416,7 @@ describe("ApplicationClass", () => {
       const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       await expect(
-        Application.updateApplicationNotes(1, "Notes")
+        Application.updateApplicationNotes(1, "Notes", mockToken)
       ).rejects.toThrow();
 
       consoleSpy.mockRestore();

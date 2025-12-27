@@ -187,7 +187,7 @@ module.exports = (sequelize, DataTypes) => {
 
     // Application Status (for admin)
     status: {
-      type: DataTypes.ENUM('pending', 'under_review', 'background_check', 'approved', 'rejected'),
+      type: DataTypes.ENUM('pending', 'under_review', 'background_check', 'approved', 'rejected', 'hired'),
       allowNull: true,
       defaultValue: 'pending',
     },

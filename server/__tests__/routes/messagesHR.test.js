@@ -165,7 +165,7 @@ describe("Message Routes - HR Integration", () => {
       expect(ConversationParticipant.findOrCreate).toHaveBeenCalledTimes(3);
     });
 
-    it("should notify all HR users when new support conversation is created", async () => {
+    it("should NOT send notifications when support conversation is created (only on message send)", async () => {
       const token = generateToken(1);
 
       User.findByPk.mockResolvedValue({
@@ -201,13 +201,12 @@ describe("Message Routes - HR Integration", () => {
         .post("/api/v1/messages/conversation/support")
         .set("Authorization", `Bearer ${token}`);
 
-      // Verify socket notifications sent to all support staff
-      expect(mockIo.to).toHaveBeenCalledWith("user_2"); // owner
-      expect(mockIo.to).toHaveBeenCalledWith("user_3"); // hr1
-      expect(mockIo.emit).toHaveBeenCalledWith("new_support_conversation", expect.any(Object));
+      // Notifications should NOT be sent when conversation is created
+      // They are sent when the user actually sends a message via /send endpoint
+      expect(mockIo.emit).not.toHaveBeenCalledWith("new_support_conversation", expect.any(Object));
     });
 
-    it("should send email notifications to all HR users", async () => {
+    it("should NOT send email notifications when creating support conversation", async () => {
       const token = generateToken(1);
 
       User.findByPk.mockResolvedValue({
@@ -244,26 +243,9 @@ describe("Message Routes - HR Integration", () => {
         .post("/api/v1/messages/conversation/support")
         .set("Authorization", `Bearer ${token}`);
 
-      // Verify email notifications sent to all support staff
-      expect(Email.sendNewMessageNotification).toHaveBeenCalledTimes(3);
-      expect(Email.sendNewMessageNotification).toHaveBeenCalledWith(
-        "owner@example.com",
-        expect.any(String),
-        expect.any(String),
-        expect.any(String)
-      );
-      expect(Email.sendNewMessageNotification).toHaveBeenCalledWith(
-        "hr1@example.com",
-        expect.any(String),
-        expect.any(String),
-        expect.any(String)
-      );
-      expect(Email.sendNewMessageNotification).toHaveBeenCalledWith(
-        "hr2@example.com",
-        expect.any(String),
-        expect.any(String),
-        expect.any(String)
-      );
+      // Notifications should NOT be sent when conversation is created
+      // They are sent when the user actually sends a message via /send endpoint
+      expect(Email.sendNewMessageNotification).not.toHaveBeenCalled();
     });
   });
 

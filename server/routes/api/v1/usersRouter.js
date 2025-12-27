@@ -311,7 +311,7 @@ usersRouter.get("/hr-staff", async (req, res) => {
     }
 
     const caller = await User.findByPk(decoded.userId);
-    if (!caller || (caller.type !== "owner" && caller.type !== "owner1")) {
+    if (!caller || caller.type !== "owner") {
       return res.status(403).json({ error: "Only owner can access HR staff list" });
     }
 
@@ -359,7 +359,7 @@ usersRouter.patch("/hr-staff/:id", async (req, res) => {
     }
 
     const caller = await User.findByPk(decoded.userId);
-    if (!caller || (caller.type !== "owner" && caller.type !== "owner1")) {
+    if (!caller || caller.type !== "owner") {
       return res.status(403).json({ error: "Only owner can update HR staff" });
     }
 
@@ -435,7 +435,7 @@ usersRouter.delete("/hr-staff/:id", async (req, res) => {
     }
 
     const caller = await User.findByPk(decoded.userId);
-    if (!caller || (caller.type !== "owner" && caller.type !== "owner1")) {
+    if (!caller || caller.type !== "owner") {
       return res.status(403).json({ error: "Only owner can remove HR staff" });
     }
 

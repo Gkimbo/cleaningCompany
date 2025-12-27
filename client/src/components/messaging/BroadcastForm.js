@@ -58,7 +58,7 @@ const BroadcastForm = ({ state }) => {
   };
 
   // Only owners can access this
-  if (state.account !== "owner1") {
+  if (state.account !== "owner") {
     return (
       <View style={messagingStyles.container}>
         <View style={messagingStyles.emptyContainer}>
