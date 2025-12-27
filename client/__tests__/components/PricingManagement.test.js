@@ -74,6 +74,7 @@ describe("PricingManagement", () => {
     config: {
       basePrice: 150,
       extraBedBathFee: 50,
+      halfBathFee: 25,
       sheetFeePerBed: 30,
       towelFee: 5,
       faceClothFee: 2,
@@ -97,6 +98,7 @@ describe("PricingManagement", () => {
     staticDefaults: {
       basePrice: 150,
       extraBedBathFee: 50,
+      halfBathFee: 25,
       sheetFeePerBed: 30,
       towelFee: 5,
       faceClothFee: 2,

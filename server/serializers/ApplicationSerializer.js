@@ -51,6 +51,11 @@ class ApplicationSerializer {
     "adminNotes",
     "backgroundCheckStatus",
     "backgroundCheckDate",
+    // Review tracking
+    "userId",
+    "reviewedBy",
+    "reviewedAt",
+    "rejectionReason",
     // Timestamps
     "createdAt",
     "updatedAt",

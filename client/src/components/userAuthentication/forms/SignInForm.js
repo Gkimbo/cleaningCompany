@@ -52,6 +52,9 @@ const SignInForm = ({ state, dispatch }) => {
 				if (response.user.type === "cleaner") {
 					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
 				}
+				if (response.user.type === "humanResources") {
+					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
+				}
 				login(response.token);
 
 				// Check if user needs to accept updated terms
@@ -102,6 +105,10 @@ const SignInForm = ({ state, dispatch }) => {
 				value={password}
 				onChangeText={setPassword}
 				placeholder="Enter your password"
+				autoComplete="password"
+				textContentType="oneTimeCode"
+				autoCorrect={false}
+				spellCheck={false}
 				right={
 					<TextInput.Icon
 						icon={showPassword ? "eye-off" : "eye"}

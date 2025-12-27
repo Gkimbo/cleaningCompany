@@ -354,6 +354,17 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
           <Icon name="arrow-right" size={16} color={colors.neutral[0]} />
         </Pressable>
       )}
+
+      {/* Book Appointment Button (always show when has payment method and not in booking flow) */}
+      {hasPaymentMethod && !redirectTo && (
+        <Pressable
+          style={styles.bookButton}
+          onPress={() => navigate("/schedule-cleaning")}
+        >
+          <Icon name="calendar-plus-o" size={18} color={colors.neutral[0]} style={styles.buttonIcon} />
+          <Text style={styles.bookButtonText}>Book an Appointment</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 };
@@ -520,6 +531,21 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+  },
+  bookButton: {
+    backgroundColor: colors.success[600],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.lg,
+    borderRadius: radius.lg,
+    marginTop: spacing.lg,
+    ...shadows.md,
+  },
+  bookButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
   },
 
   // Info Box

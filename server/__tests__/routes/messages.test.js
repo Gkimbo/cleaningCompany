@@ -399,8 +399,9 @@ describe("Message Routes", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("conversation");
       expect(res.body.conversation.conversationType).toBe("support");
-      expect(mockIo.to).toHaveBeenCalledWith("user_2");
-      expect(mockIo.emit).toHaveBeenCalledWith("new_support_conversation", expect.any(Object));
+      // Notifications should NOT be sent when conversation is created
+      // They are sent when the user actually sends a message via /send endpoint
+      expect(mockIo.emit).not.toHaveBeenCalledWith("new_support_conversation", expect.any(Object));
     });
 
     it("should return existing support conversation if one exists", async () => {

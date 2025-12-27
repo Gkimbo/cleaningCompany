@@ -265,7 +265,7 @@ export default function App() {
                 path="/schedule-cleaning"
                 element={<ScheduleCleaningList state={state} dispatch={dispatch} />}
               />
-              <Route path="/add-home" element={<AddHomeForm />} />
+              <Route path="/add-home" element={<AddHomeForm state={state} dispatch={dispatch} />} />
               <Route
                 path="/details/:id"
                 element={<DetailsComponent state={state} dispatch={dispatch} />}

@@ -37,6 +37,14 @@ const generateStrongPassword = (length = 16) => {
 		.join("");
 };
 
+// Format phone number as 555-555-5555
+const formatPhoneNumber = (text) => {
+	const cleaned = text.replace(/\D/g, "");
+	if (cleaned.length <= 3) return cleaned;
+	if (cleaned.length <= 6) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+	return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+};
+
 // Generate a username from first and last name that fits 4-12 character limit
 const generateUsername = (first, last) => {
 	const cleanFirst = (first || "").toLowerCase().replace(/[^a-z]/g, "");
@@ -69,7 +77,7 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 	const [userName, setUserName] = useState(generateUsername(initialFirstName, initialLastName));
 	const [password, setPassword] = useState(generateStrongPassword());
 	const [emailInput, setEmail] = useState(email);
-	const [phoneInput, setPhone] = useState(initialPhone || "");
+	const [phoneInput, setPhone] = useState(initialPhone ? formatPhoneNumber(initialPhone) : "");
 	const [showPassword, setShowPassword] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -264,11 +272,12 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 			<TextInput
 				mode="outlined"
 				label="Phone Number"
-				placeholder="Phone Number (optional)"
+				placeholder="555-555-5555 (optional)"
 				style={styles.input}
 				value={phoneInput}
-				onChangeText={setPhone}
+				onChangeText={(text) => setPhone(formatPhoneNumber(text))}
 				keyboardType="phone-pad"
+				maxLength={12}
 				theme={inputTheme}
 				left={<TextInput.Icon icon="phone" color={colors.text.tertiary} />}
 			/>

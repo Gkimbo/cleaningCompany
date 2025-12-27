@@ -637,34 +637,10 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
         ],
       });
 
-      // Notify all support staff of new support conversation
-      const io = req.app.get("io");
-      for (const staff of supportStaff) {
-        io.to(`user_${staff.id}`).emit("new_support_conversation", {
-          conversation,
-          user: { id: user.id, username: user.username, type: user.type },
-        });
-
-        // Send email notification
-        if (staff.email) {
-          await Email.sendNewMessageNotification(
-            staff.email,
-            staff.username,
-            user.username,
-            `New support request from ${user.username}`
-          );
-        }
-
-        // Send push notification
-        if (staff.expoPushToken) {
-          await PushNotification.sendPushNewMessage(
-            staff.expoPushToken,
-            staff.username,
-            user.username,
-            `New support request from ${user.username}`
-          );
-        }
-      }
+      // Note: Notifications (email, push, socket) are sent when the user
+      // actually sends a message via the /send endpoint, not when the
+      // conversation is created. This prevents notifications from being
+      // sent just by clicking "Get Help".
     }
 
     return res.json({ conversation });

@@ -127,7 +127,7 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
         <Text style={styles.appointmentHome} numberOfLines={1}>
           {appointment.home?.nickName ||
             appointment.nickName ||
-            home.nickName ||
+            home?.nickName ||
             ""}
         </Text>
         {appointment.time && (
