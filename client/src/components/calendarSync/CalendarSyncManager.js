@@ -301,7 +301,7 @@ const CalendarSyncManager = ({ state, dispatch }) => {
                     Auto-create appointments: {sync.autoCreateAppointments ? "Yes" : "No"}
                   </Text>
                   <Text style={styles.syncDetailText}>
-                    Auto-sync every 6 hours: {sync.autoSync ? "Yes" : "No"}
+                    Auto-sync every hour: {sync.autoSync ? "Yes" : "No"}
                   </Text>
                 </View>
 
@@ -414,9 +414,9 @@ const CalendarSyncManager = ({ state, dispatch }) => {
             onPress={() => setAutoSync(!autoSync)}
           >
             <View style={styles.toggleCardContent}>
-              <Text style={styles.toggleCardTitle}>Auto-sync every 6 hours</Text>
+              <Text style={styles.toggleCardTitle}>Auto-sync every hour</Text>
               <Text style={styles.toggleCardDescription}>
-                Automatically check for new bookings and update appointments throughout the day
+                Automatically check for new bookings and update appointments every hour
               </Text>
             </View>
             <View style={[styles.toggleSwitch, autoSync && styles.toggleSwitchActive]}>
