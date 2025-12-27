@@ -1133,6 +1133,58 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
         hasBeenAssigned: true,
       });
 
+      // Create payment intent if one doesn't exist (for appointments booked without upfront payment)
+      if (!appointment.dataValues.paymentIntentId) {
+        try {
+          const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+          const user = await User.findByPk(appointment.dataValues.userId);
+
+          if (user && user.stripeCustomerId) {
+            // Get the customer's default payment method
+            const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+            const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+            if (defaultPaymentMethod) {
+              const paymentIntent = await stripe.paymentIntents.create({
+                amount: priceInCents,
+                currency: "usd",
+                customer: user.stripeCustomerId,
+                payment_method: defaultPaymentMethod,
+                capture_method: "manual",
+                confirm: true,
+                off_session: true,
+                metadata: {
+                  userId: appointment.dataValues.userId,
+                  homeId: appointment.dataValues.homeId,
+                  appointmentId: appointment.dataValues.id,
+                },
+              });
+
+              await appointment.update({
+                paymentIntentId: paymentIntent.id,
+                paymentStatus: "pending",
+              });
+
+              // Record the authorization
+              await recordPaymentTransaction({
+                type: "authorization",
+                status: "pending",
+                amount: priceInCents,
+                userId: appointment.dataValues.userId,
+                appointmentId: appointment.dataValues.id,
+                stripePaymentIntentId: paymentIntent.id,
+                description: `Payment authorization for approved appointment ${appointment.dataValues.id}`,
+                metadata: { homeId: appointment.dataValues.homeId },
+              });
+            }
+          }
+        } catch (paymentError) {
+          console.error("Error creating payment intent on approval:", paymentError);
+          // Don't fail the approval if payment intent creation fails
+          // The user can still pre-pay manually later
+        }
+      }
+
       // Create payout record for the approved cleaner (only 1 cleaner per appointment)
       const pricingConfig = await getPricingConfig();
       const { platform: platformConfig } = pricingConfig;

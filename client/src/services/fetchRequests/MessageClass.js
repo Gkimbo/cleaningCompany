@@ -124,6 +124,9 @@ class MessageService {
    * Get total unread message count
    */
   static async getUnreadCount(token) {
+    if (!token) {
+      return { unreadCount: 0 };
+    }
     try {
       const response = await fetch(`${baseURL}/api/v1/messages/unread-count`, {
         headers: {

@@ -1,32 +1,27 @@
 import React from "react";
-import { render, fireEvent, waitFor } from "@testing-library/react-native";
-
-// Mock react-native Alert
-const mockAlert = jest.fn();
-jest.mock("react-native", () => {
-  const RN = jest.requireActual("react-native");
-  return {
-    ...RN,
-    Alert: {
-      alert: mockAlert,
-    },
-  };
-});
+import { render, fireEvent, waitFor, act, cleanup } from "@testing-library/react-native";
+import { Alert } from "react-native";
 
 // Mock modules before importing component
-jest.mock("@stripe/stripe-react-native", () => ({
-  useStripe: () => ({
-    initPaymentSheet: jest.fn().mockResolvedValue({ error: null }),
-    presentPaymentSheet: jest.fn().mockResolvedValue({ error: null }),
+const mockOpenPaymentSheet = jest.fn();
+jest.mock("../../src/services/stripe", () => ({
+  usePaymentSheet: () => ({
+    openPaymentSheet: mockOpenPaymentSheet,
   }),
 }));
 
+const mockNavigate = jest.fn();
 jest.mock("react-router-native", () => ({
-  useNavigate: () => jest.fn(),
+  useNavigate: () => mockNavigate,
 }));
+
+jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
 
 // Mock fetch
 global.fetch = jest.fn();
+
+// Import component after mocks
+import Bill from "../../src/components/payments/Bill";
 
 describe("Bill Component", () => {
   const mockDispatch = jest.fn();
@@ -39,10 +34,16 @@ describe("Bill Component", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Alert, "alert").mockImplementation(() => {});
     global.fetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ payments: [] }),
     });
+  });
+
+  afterEach(() => {
+    cleanup();
+    jest.restoreAllMocks();
   });
 
   it("should calculate total due from appointments", () => {
@@ -230,6 +231,1154 @@ describe("Bill Component", () => {
 
     it("should return default color for unknown status", () => {
       expect(getStatusColor("unknown")).toBe("#757575");
+    });
+  });
+
+  describe("Appointment Sorting", () => {
+    it("should sort failed payments by date ascending (earliest first)", () => {
+      const appointments = [
+        { id: 1, date: "2025-03-15", paymentCaptureFailed: true, paid: false },
+        { id: 2, date: "2025-01-10", paymentCaptureFailed: true, paid: false },
+        { id: 3, date: "2025-02-20", paymentCaptureFailed: true, paid: false },
+      ];
+
+      const sorted = appointments
+        .filter(appt => appt.paymentCaptureFailed && !appt.paid)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      expect(sorted[0].id).toBe(2); // Jan 10
+      expect(sorted[1].id).toBe(3); // Feb 20
+      expect(sorted[2].id).toBe(1); // Mar 15
+    });
+
+    it("should sort upcoming payable appointments by date ascending (earliest first)", () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Use dates that are always in the future
+      const futureDate1 = new Date(today);
+      futureDate1.setDate(futureDate1.getDate() + 5);
+      const futureDate2 = new Date(today);
+      futureDate2.setDate(futureDate2.getDate() + 3);
+      const futureDate3 = new Date(today);
+      futureDate3.setDate(futureDate3.getDate() + 10);
+
+      const appointments = [
+        { id: 1, date: futureDate1.toISOString().split("T")[0], paid: false, hasBeenAssigned: true, paymentIntentId: "pi_1", paymentCaptureFailed: false },
+        { id: 2, date: futureDate2.toISOString().split("T")[0], paid: false, hasBeenAssigned: true, paymentIntentId: "pi_2", paymentCaptureFailed: false },
+        { id: 3, date: futureDate3.toISOString().split("T")[0], paid: false, hasBeenAssigned: true, paymentIntentId: "pi_3", paymentCaptureFailed: false },
+      ];
+
+      const sorted = appointments
+        .filter(appt => {
+          const apptDate = new Date(appt.date);
+          apptDate.setHours(0, 0, 0, 0);
+          return (
+            !appt.paid &&
+            apptDate > today &&
+            appt.hasBeenAssigned &&
+            appt.paymentIntentId &&
+            !appt.paymentCaptureFailed
+          );
+        })
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      expect(sorted[0].id).toBe(2); // +3 days (earliest)
+      expect(sorted[1].id).toBe(1); // +5 days
+      expect(sorted[2].id).toBe(3); // +10 days (latest)
+    });
+
+    it("should exclude paid appointments from failed payments", () => {
+      const appointments = [
+        { id: 1, date: "2025-01-15", paymentCaptureFailed: true, paid: false },
+        { id: 2, date: "2025-01-10", paymentCaptureFailed: true, paid: true },
+      ];
+
+      const failed = appointments
+        .filter(appt => appt.paymentCaptureFailed && !appt.paid);
+
+      expect(failed.length).toBe(1);
+      expect(failed[0].id).toBe(1);
+    });
+
+    it("should exclude appointments without payment intent from upcoming payable", () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Use dates that are always in the future
+      const futureDate1 = new Date(today);
+      futureDate1.setDate(futureDate1.getDate() + 5);
+      const futureDate2 = new Date(today);
+      futureDate2.setDate(futureDate2.getDate() + 3);
+
+      const appointments = [
+        { id: 1, date: futureDate1.toISOString().split("T")[0], paid: false, hasBeenAssigned: true, paymentIntentId: "pi_1", paymentCaptureFailed: false },
+        { id: 2, date: futureDate2.toISOString().split("T")[0], paid: false, hasBeenAssigned: true, paymentIntentId: null, paymentCaptureFailed: false },
+      ];
+
+      const upcoming = appointments.filter(appt => {
+        const apptDate = new Date(appt.date);
+        apptDate.setHours(0, 0, 0, 0);
+        return (
+          !appt.paid &&
+          apptDate > today &&
+          appt.hasBeenAssigned &&
+          appt.paymentIntentId &&
+          !appt.paymentCaptureFailed
+        );
+      });
+
+      expect(upcoming.length).toBe(1);
+      expect(upcoming[0].id).toBe(1);
+    });
+  });
+
+  describe("Component Rendering", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.spyOn(Alert, "alert").mockImplementation(() => {});
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ payments: [] }),
+      });
+    });
+
+    it("should render total due card", async () => {
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Total Due")).toBeTruthy();
+        expect(getByText("$0.00")).toBeTruthy();
+      });
+    });
+
+    it("should render payment methods button", async () => {
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Payment Methods")).toBeTruthy();
+      });
+    });
+
+    it("should navigate to payment setup on payment methods press", async () => {
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const paymentMethodsButton = getByText("Payment Methods");
+        fireEvent.press(paymentMethodsButton.parent.parent);
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith("/payment-setup");
+    });
+
+    it("should render amount input field", async () => {
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Enter Amount to Pay")).toBeTruthy();
+      });
+    });
+
+    it("should render Pay Now button for non-employee users", async () => {
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Pay Now")).toBeTruthy();
+      });
+    });
+
+    it("should render payment history section", async () => {
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Payment History")).toBeTruthy();
+      });
+    });
+
+    it("should show no payment history message when empty", async () => {
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("No payment history yet")).toBeTruthy();
+      });
+    });
+
+    it("should display failed payments section when there are failed payments", async () => {
+      const stateWithFailedPayments = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2025-01-15", price: "100", paymentCaptureFailed: true, paid: false },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithFailedPayments} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Payment Failed")).toBeTruthy();
+        expect(getByText("Retry to avoid appointment cancellation")).toBeTruthy();
+        expect(getByText("Retry Payment")).toBeTruthy();
+      });
+    });
+
+    it("should display Pay Ahead section for upcoming payable appointments", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Pay Ahead")).toBeTruthy();
+        expect(getByText("Select appointments to pay early")).toBeTruthy();
+      });
+    });
+
+    it("should calculate correct total due with cancellation fee", async () => {
+      const stateWithFees = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2024-01-01", price: "100", paid: false },
+        ],
+        bill: { cancellationFee: 50, totalPaid: 0 },
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithFees} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("$150.00")).toBeTruthy();
+      });
+    });
+
+    it("should show progress bar based on amount paid", async () => {
+      const stateWithProgress = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2024-01-01", price: "100", paid: false },
+        ],
+        bill: { cancellationFee: 0, totalPaid: 50 },
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithProgress} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Paid: 50%")).toBeTruthy();
+      });
+    });
+  });
+
+  describe("Retry Payment", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.spyOn(Alert, "alert").mockImplementation(() => {});
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ payments: [] }),
+      });
+    });
+
+    it("should call retry-payment endpoint when retry button pressed", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
+
+      const stateWithFailedPayment = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2025-01-15", price: "100", paymentCaptureFailed: true, paid: false },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithFailedPayment} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const retryButton = getByText("Retry Payment");
+        fireEvent.press(retryButton);
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining("/payments/retry-payment"),
+          expect.objectContaining({
+            method: "POST",
+            body: JSON.stringify({ appointmentId: 1 }),
+          })
+        );
+      });
+    });
+
+    it("should show alert on successful retry", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
+
+      const stateWithFailedPayment = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2025-01-15", price: "100", paymentCaptureFailed: true, paid: false },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithFailedPayment} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const retryButton = getByText("Retry Payment");
+        fireEvent.press(retryButton);
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith("Success", "Payment completed successfully!");
+      });
+    });
+
+    it("should show error alert on failed retry", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({ error: "Card declined" }) });
+
+      const stateWithFailedPayment = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2025-01-15", price: "100", paymentCaptureFailed: true, paid: false },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithFailedPayment} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const retryButton = getByText("Retry Payment");
+        fireEvent.press(retryButton);
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith("Error", "Card declined");
+      });
+    });
+  });
+
+  describe("Pre-Pay (via Multi-Select)", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.spyOn(Alert, "alert").mockImplementation(() => {});
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ payments: [] }),
+      });
+    });
+
+    it("should call pre-pay-batch endpoint when appointment is selected and pay button pressed", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ successCount: 1, failedCount: 0 }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 5,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Test Home" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Select the appointment by clicking on it
+      await waitFor(() => {
+        fireEvent.press(getByText("Test Home"));
+      });
+
+      // Click the pay button
+      await waitFor(() => {
+        fireEvent.press(getByText("Pay $150.00 Now"));
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining("/payments/pre-pay-batch"),
+          expect.objectContaining({
+            method: "POST",
+          })
+        );
+      });
+    });
+
+    it("should show success alert on successful pre-pay", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ successCount: 1, failedCount: 0 }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 5,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Test Home" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Select the appointment by clicking on it
+      await waitFor(() => {
+        fireEvent.press(getByText("Test Home"));
+      });
+
+      // Click the pay button
+      await waitFor(() => {
+        fireEvent.press(getByText("Pay $150.00 Now"));
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith("Success", "1 appointment(s) paid successfully!");
+      });
+    });
+  });
+
+  describe("Multi-Select Batch Payment", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.spyOn(Alert, "alert").mockImplementation(() => {});
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ payments: [] }),
+      });
+    });
+
+    it("should display Select All button in Pay Ahead section", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Beach House" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Select All")).toBeTruthy();
+      });
+    });
+
+    it("should show appointment price in selectable card", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Beach House" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("$150")).toBeTruthy();
+        expect(getByText("Beach House")).toBeTruthy();
+      });
+    });
+
+    it("should show Clear button and selection summary when appointments are selected", async () => {
+      const futureDate1 = new Date();
+      futureDate1.setDate(futureDate1.getDate() + 5);
+      const futureDate2 = new Date();
+      futureDate2.setDate(futureDate2.getDate() + 10);
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDate1.toISOString().split("T")[0],
+            price: "100",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test1",
+            paymentCaptureFailed: false,
+            home: { nickName: "Home 1" },
+          },
+          {
+            id: 2,
+            date: futureDate2.toISOString().split("T")[0],
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test2",
+            paymentCaptureFailed: false,
+            home: { nickName: "Home 2" },
+          },
+        ],
+      };
+
+      const { getByText, queryByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Clear button should not be visible initially
+      await waitFor(() => {
+        expect(queryByText("Clear")).toBeNull();
+      });
+
+      // Click Select All
+      await waitFor(() => {
+        fireEvent.press(getByText("Select All"));
+      });
+
+      // Clear button and selection summary should now be visible
+      await waitFor(() => {
+        expect(getByText("Clear")).toBeTruthy();
+        expect(getByText("2 appointments selected")).toBeTruthy();
+        expect(getByText("Total: $250.00")).toBeTruthy();
+      });
+    });
+
+    it("should select individual appointment when pressed", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Beach House" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Click on the appointment to select it
+      await waitFor(() => {
+        fireEvent.press(getByText("Beach House"));
+      });
+
+      // Should show selection summary with total
+      await waitFor(() => {
+        expect(getByText("1 appointment selected")).toBeTruthy();
+        expect(getByText("Total: $150.00")).toBeTruthy();
+        expect(getByText("Pay $150.00 Now")).toBeTruthy();
+      });
+    });
+
+    it("should deselect appointment when pressed again", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Beach House" },
+          },
+        ],
+      };
+
+      const { getByText, queryByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Select the appointment
+      await waitFor(() => {
+        fireEvent.press(getByText("Beach House"));
+      });
+
+      await waitFor(() => {
+        expect(getByText("1 appointment selected")).toBeTruthy();
+      });
+
+      // Deselect the appointment
+      await waitFor(() => {
+        fireEvent.press(getByText("Beach House"));
+      });
+
+      // Selection summary should be gone
+      await waitFor(() => {
+        expect(queryByText("1 appointment selected")).toBeNull();
+        expect(queryByText("Pay $150.00 Now")).toBeNull();
+      });
+    });
+
+    it("should clear all selections when Clear is pressed", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Beach House" },
+          },
+        ],
+      };
+
+      const { getByText, queryByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Select All
+      await waitFor(() => {
+        fireEvent.press(getByText("Select All"));
+      });
+
+      await waitFor(() => {
+        expect(getByText("Clear")).toBeTruthy();
+      });
+
+      // Clear selection
+      await waitFor(() => {
+        fireEvent.press(getByText("Clear"));
+      });
+
+      // Selection summary should be gone
+      await waitFor(() => {
+        expect(queryByText("Clear")).toBeNull();
+        expect(queryByText("1 appointment selected")).toBeNull();
+      });
+    });
+
+    it("should call pre-pay-batch endpoint when Pay Selected is pressed", async () => {
+      const futureDate1 = new Date();
+      futureDate1.setDate(futureDate1.getDate() + 5);
+      const futureDate2 = new Date();
+      futureDate2.setDate(futureDate2.getDate() + 10);
+
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ successCount: 2, failedCount: 0, totalCaptured: 25000 }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDate1.toISOString().split("T")[0],
+            price: "100",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test1",
+            paymentCaptureFailed: false,
+            home: { nickName: "Home 1" },
+          },
+          {
+            id: 2,
+            date: futureDate2.toISOString().split("T")[0],
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test2",
+            paymentCaptureFailed: false,
+            home: { nickName: "Home 2" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Select All
+      await waitFor(() => {
+        fireEvent.press(getByText("Select All"));
+      });
+
+      // Press Pay button
+      await waitFor(() => {
+        fireEvent.press(getByText("Pay $250.00 Now"));
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining("/payments/pre-pay-batch"),
+          expect.objectContaining({
+            method: "POST",
+            body: expect.stringContaining("appointmentIds"),
+          })
+        );
+      });
+    });
+
+    it("should show success alert on successful batch payment", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ successCount: 1, failedCount: 0 }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Beach House" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Select the appointment
+      await waitFor(() => {
+        fireEvent.press(getByText("Beach House"));
+      });
+
+      // Press Pay button
+      await waitFor(() => {
+        fireEvent.press(getByText("Pay $150.00 Now"));
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith(
+          "Success",
+          "1 appointment(s) paid successfully!"
+        );
+      });
+    });
+
+    it("should show error alert on failed batch payment", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({ error: "All payments failed" }) });
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { nickName: "Beach House" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      // Select the appointment
+      await waitFor(() => {
+        fireEvent.press(getByText("Beach House"));
+      });
+
+      // Press Pay button
+      await waitFor(() => {
+        fireEvent.press(getByText("Pay $150.00 Now"));
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith("Error", "All payments failed");
+      });
+    });
+
+    it("should calculate selected total correctly for multiple appointments", () => {
+      const appointments = [
+        { id: 1, price: "100" },
+        { id: 2, price: "150" },
+        { id: 3, price: "200" },
+      ];
+      const selectedAppointments = new Set([1, 3]);
+
+      const selectedTotal = appointments
+        .filter(appt => selectedAppointments.has(appt.id))
+        .reduce((sum, appt) => sum + Number(appt.price), 0);
+
+      expect(selectedTotal).toBe(300); // 100 + 200
+    });
+
+    it("should show home address if nickname not available", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: { address: "123 Main St" },
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("123 Main St")).toBeTruthy();
+      });
+    });
+
+    it("should show 'Home' as fallback when no home info available", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureDateStr = futureDate.toISOString().split("T")[0];
+
+      const stateWithUpcoming = {
+        ...defaultState,
+        appointments: [
+          {
+            id: 1,
+            date: futureDateStr,
+            price: "150",
+            paid: false,
+            hasBeenAssigned: true,
+            paymentIntentId: "pi_test123",
+            paymentCaptureFailed: false,
+            home: null,
+          },
+        ],
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithUpcoming} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        expect(getByText("Home")).toBeTruthy();
+      });
+    });
+  });
+
+  describe("Payment Flow", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.spyOn(Alert, "alert").mockImplementation(() => {});
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ payments: [] }),
+      });
+    });
+
+    it("should show error when amount is zero or negative", async () => {
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const payNowButton = getByText("Pay Now");
+        fireEvent.press(payNowButton);
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith("Error", "Please enter a valid amount");
+      });
+    });
+
+    it("should create payment intent and open payment sheet for valid amount", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) });
+
+      mockOpenPaymentSheet.mockResolvedValueOnce({ success: true });
+
+      const stateWithDue = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2024-01-01", price: "100", paid: false },
+        ],
+        bill: { cancellationFee: 0, totalPaid: 0 },
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithDue} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const payNowButton = getByText("Pay Now");
+        fireEvent.press(payNowButton);
+      });
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining("/payments/create-intent"),
+          expect.any(Object)
+        );
+        expect(mockOpenPaymentSheet).toHaveBeenCalled();
+      });
+    });
+
+    it("should dispatch UPDATE_BILL on successful payment", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
+
+      mockOpenPaymentSheet.mockResolvedValueOnce({ success: true });
+
+      const stateWithDue = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2024-01-01", price: "100", paid: false },
+        ],
+        bill: { cancellationFee: 0, totalPaid: 0 },
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithDue} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const payNowButton = getByText("Pay Now");
+        fireEvent.press(payNowButton);
+      });
+
+      await waitFor(() => {
+        expect(mockDispatch).toHaveBeenCalledWith({
+          type: "UPDATE_BILL",
+          payload: expect.objectContaining({ totalPaid: expect.any(Number) }),
+        });
+      });
+    });
+
+    it("should handle payment cancellation gracefully", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) });
+
+      mockOpenPaymentSheet.mockResolvedValueOnce({ canceled: true });
+
+      const stateWithDue = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2024-01-01", price: "100", paid: false },
+        ],
+        bill: { cancellationFee: 0, totalPaid: 0 },
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithDue} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const payNowButton = getByText("Pay Now");
+        fireEvent.press(payNowButton);
+      });
+
+      await waitFor(() => {
+        // Should not show error or success alert when cancelled
+        expect(Alert.alert).not.toHaveBeenCalledWith("Success", expect.any(String));
+        expect(Alert.alert).not.toHaveBeenCalledWith("Payment Error", expect.any(String));
+      });
+    });
+
+    it("should show error alert on payment sheet error", async () => {
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) });
+
+      mockOpenPaymentSheet.mockResolvedValueOnce({
+        error: { message: "Your card was declined" },
+      });
+
+      const stateWithDue = {
+        ...defaultState,
+        appointments: [
+          { id: 1, date: "2024-01-01", price: "100", paid: false },
+        ],
+        bill: { cancellationFee: 0, totalPaid: 0 },
+      };
+
+      const { getByText } = render(
+        <Bill state={stateWithDue} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const payNowButton = getByText("Pay Now");
+        fireEvent.press(payNowButton);
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith("Payment Error", "Your card was declined");
+      });
+    });
+  });
+
+  describe("Refund Flow", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      jest.spyOn(Alert, "alert").mockImplementation(() => {});
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ payments: [] }),
+      });
+    });
+
+    it("should show confirmation dialog before refund", async () => {
+      const mockPayments = [
+        { id: 1, date: "2025-01-15", price: "150", paymentStatus: "succeeded" },
+      ];
+
+      global.fetch
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: mockPayments }) });
+
+      const { getByText } = render(
+        <Bill state={defaultState} dispatch={mockDispatch} />
+      );
+
+      await waitFor(() => {
+        const refundButton = getByText("Refund");
+        fireEvent.press(refundButton);
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith(
+          "Cancel Payment",
+          "Are you sure you want to request a refund?",
+          expect.any(Array)
+        );
+      });
     });
   });
 });

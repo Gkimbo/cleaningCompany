@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,8 @@ const Bill = ({ state, dispatch }) => {
   const [upcomingPayable, setUpcomingPayable] = useState([]);
   const [retryingPaymentId, setRetryingPaymentId] = useState(null);
   const [prePayingId, setPrePayingId] = useState(null);
+  const [selectedAppointments, setSelectedAppointments] = useState(new Set());
+  const [isPayingSelected, setIsPayingSelected] = useState(false);
   const navigate = useNavigate();
   const { openPaymentSheet } = usePaymentSheet();
 
@@ -51,24 +53,27 @@ const Bill = ({ state, dispatch }) => {
     const unpaid = appointments.filter((appt) => !appt.paid);
     setUnpaidAppointments(unpaid);
 
-    // Failed payments - need retry
-    const failed = appointments.filter(
-      appt => appt.paymentCaptureFailed && !appt.paid
-    );
+    // Failed payments - need retry (sorted by date, earliest first)
+    const failed = appointments
+      .filter(appt => appt.paymentCaptureFailed && !appt.paid)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
     setFailedPayments(failed);
 
     // Upcoming payable - can pre-pay (has cleaner, has payment intent, not paid, future date)
-    const upcoming = appointments.filter(appt => {
-      const apptDate = new Date(appt.date);
-      apptDate.setHours(0, 0, 0, 0);
-      return (
-        !appt.paid &&
-        apptDate > today &&
-        appt.hasBeenAssigned &&
-        appt.paymentIntentId &&
-        !appt.paymentCaptureFailed
-      );
-    });
+    // Sorted by date, earliest first
+    const upcoming = appointments
+      .filter(appt => {
+        const apptDate = new Date(appt.date);
+        apptDate.setHours(0, 0, 0, 0);
+        return (
+          !appt.paid &&
+          apptDate > today &&
+          appt.hasBeenAssigned &&
+          appt.paymentIntentId &&
+          !appt.paymentCaptureFailed
+        );
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
     setUpcomingPayable(upcoming);
 
     // Calculate default amount
@@ -245,6 +250,75 @@ const Bill = ({ state, dispatch }) => {
       Alert.alert("Error", err.message || "Payment failed. Please try again.");
     } finally {
       setPrePayingId(null);
+    }
+  };
+
+  // Computed values for multi-select
+  const selectedTotal = useMemo(() => {
+    return upcomingPayable
+      .filter(appt => selectedAppointments.has(appt.id))
+      .reduce((sum, appt) => sum + Number(appt.price), 0);
+  }, [upcomingPayable, selectedAppointments]);
+
+  const selectedCount = selectedAppointments.size;
+
+  // Selection handlers
+  const toggleAppointmentSelection = (appointmentId) => {
+    setSelectedAppointments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(appointmentId)) {
+        newSet.delete(appointmentId);
+      } else {
+        newSet.add(appointmentId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllAppointments = () => {
+    const allIds = upcomingPayable.map(appt => appt.id);
+    setSelectedAppointments(new Set(allIds));
+  };
+
+  const clearSelection = () => {
+    setSelectedAppointments(new Set());
+  };
+
+  // Batch payment handler
+  const handlePaySelected = async () => {
+    if (selectedAppointments.size === 0) return;
+
+    setIsPayingSelected(true);
+    const appointmentIds = Array.from(selectedAppointments);
+
+    try {
+      const response = await fetch(`${API_BASE}/payments/pre-pay-batch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state?.token}`,
+        },
+        body: JSON.stringify({ appointmentIds }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Payment failed");
+      }
+
+      Alert.alert(
+        "Success",
+        `${data.successCount} appointment(s) paid successfully!`
+      );
+
+      setSelectedAppointments(new Set());
+      fetchPaymentHistory();
+
+    } catch (err) {
+      Alert.alert("Error", err.message || "Payment failed. Please try again.");
+    } finally {
+      setIsPayingSelected(false);
     }
   };
 
@@ -493,65 +567,150 @@ const Bill = ({ state, dispatch }) => {
         </>
       )}
 
-      {/* Pre-Pay Section */}
+      {/* Pay Ahead Section - Multi-Select */}
       {upcomingPayable.length > 0 && (
         <View
           style={{
-            backgroundColor: "#eff6ff",
-            borderRadius: 15,
+            backgroundColor: "#fff",
+            borderRadius: 16,
             padding: 20,
             marginTop: 20,
-            borderWidth: 1,
-            borderColor: "#bfdbfe",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            elevation: 4,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <Icon name="calendar-check-o" size={16} color="#2563eb" />
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#1f2937" }}>
-              Pay Ahead
+          {/* Header */}
+          <View style={{ marginBottom: 16 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Icon name="calendar-check-o" size={18} color="#2563eb" />
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#1f2937" }}>
+                Pay Ahead
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, color: "#6b7280", marginTop: 4 }}>
+              Select appointments to pay early
             </Text>
-          </View>
-          <Text style={{ fontSize: 13, color: "#6b7280", marginBottom: 15 }}>
-            Pre-pay for upcoming appointments
-          </Text>
-          {upcomingPayable.map(appt => (
-            <View
-              key={appt.id}
-              style={{
-                backgroundColor: "#fff",
-                borderRadius: 12,
-                padding: 15,
-                marginBottom: 10,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
-                <Text style={{ fontSize: 14, fontWeight: "600", color: "#1f2937" }}>
-                  {new Date(appt.date).toLocaleDateString()}
+
+            {/* Select All / Clear */}
+            <View style={{ flexDirection: "row", gap: 16, marginTop: 12 }}>
+              <Pressable onPress={selectAllAppointments}>
+                <Text style={{ color: "#2563eb", fontWeight: "600", fontSize: 14 }}>
+                  Select All
                 </Text>
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#1f2937" }}>
+              </Pressable>
+              {selectedCount > 0 && (
+                <Pressable onPress={clearSelection}>
+                  <Text style={{ color: "#6b7280", fontSize: 14 }}>Clear</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+
+          {/* Appointment List */}
+          {upcomingPayable.map(appt => {
+            const isSelected = selectedAppointments.has(appt.id);
+            return (
+              <Pressable
+                key={appt.id}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  padding: 16,
+                  borderRadius: 12,
+                  backgroundColor: isSelected ? "#eff6ff" : "#f9fafb",
+                  marginBottom: 10,
+                  borderWidth: 2,
+                  borderColor: isSelected ? "#2563eb" : "transparent",
+                }}
+                onPress={() => toggleAppointmentSelection(appt.id)}
+              >
+                {/* Checkbox */}
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 6,
+                    borderWidth: 2,
+                    borderColor: isSelected ? "#2563eb" : "#d1d5db",
+                    backgroundColor: isSelected ? "#2563eb" : "transparent",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 14,
+                  }}
+                >
+                  {isSelected && <Icon name="check" size={14} color="#fff" />}
+                </View>
+
+                {/* Appointment Details */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#1f2937" }}>
+                    {new Date(appt.date).toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: "#6b7280", marginTop: 2 }}>
+                    {appt.home?.nickName || appt.home?.address || "Home"}
+                  </Text>
+                </View>
+
+                {/* Price */}
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#1f2937" }}>
                   ${appt.price}
                 </Text>
-              </View>
-              <Pressable
-                onPress={() => handlePrePay(appt.id)}
-                disabled={prePayingId === appt.id}
+              </Pressable>
+            );
+          })}
+
+          {/* Pay Selected Button */}
+          {selectedCount > 0 && (
+            <View
+              style={{
+                marginTop: 16,
+                paddingTop: 16,
+                borderTopWidth: 1,
+                borderTopColor: "#e5e7eb",
+              }}
+            >
+              <View
                 style={{
-                  backgroundColor: prePayingId === appt.id ? "#60a5fa" : "#2563eb",
-                  paddingVertical: 12,
-                  borderRadius: 10,
-                  alignItems: "center",
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
                 }}
               >
-                {prePayingId === appt.id ? (
+                <Text style={{ fontSize: 14, color: "#6b7280" }}>
+                  {selectedCount} appointment{selectedCount > 1 ? "s" : ""} selected
+                </Text>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#1f2937" }}>
+                  Total: ${selectedTotal.toFixed(2)}
+                </Text>
+              </View>
+
+              <Pressable
+                style={{
+                  backgroundColor: isPayingSelected ? "#93c5fd" : "#2563eb",
+                  paddingVertical: 16,
+                  borderRadius: 12,
+                  alignItems: "center",
+                }}
+                onPress={handlePaySelected}
+                disabled={isPayingSelected}
+              >
+                {isPayingSelected ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
-                    Pay Now
+                  <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+                    Pay ${selectedTotal.toFixed(2)} Now
                   </Text>
                 )}
               </Pressable>
             </View>
-          ))}
+          )}
         </View>
       )}
 

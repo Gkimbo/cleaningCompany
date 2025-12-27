@@ -690,6 +690,9 @@ class FetchData {
   }
 
   static async getRequestCountsByHome(token) {
+    if (!token) {
+      return { requestCountsByHome: {} };
+    }
     try {
       const response = await fetch(baseURL + "/api/v1/appointments/requests-by-home", {
         headers: {
@@ -710,6 +713,9 @@ class FetchData {
   }
 
   static async getRequestsForHome(token, homeId) {
+    if (!token) {
+      return { requests: [] };
+    }
     try {
       const response = await fetch(baseURL + `/api/v1/appointments/requests-for-home/${homeId}`, {
         headers: {

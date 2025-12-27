@@ -1105,6 +1105,149 @@ paymentRouter.post("/pre-pay", async (req, res) => {
 
 /**
  * ------------------------------------------------------
+ * Pre-Pay Batch Endpoint — Pay multiple appointments at once
+ * Allows customers to select and pay for multiple upcoming appointments
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/pre-pay-batch", async (req, res) => {
+  const { appointmentIds } = req.body;
+  const authHeader = req.headers.authorization;
+
+  // 1. Auth check
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+  const token = authHeader.split(" ")[1];
+  let decoded;
+  try {
+    decoded = jwt.verify(token, secretKey);
+  } catch {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+
+  // 2. Validate input
+  if (!appointmentIds || !Array.isArray(appointmentIds) || appointmentIds.length === 0) {
+    return res.status(400).json({ error: "No appointments selected" });
+  }
+
+  // 3. Limit batch size
+  if (appointmentIds.length > 20) {
+    return res.status(400).json({ error: "Maximum 20 appointments per batch" });
+  }
+
+  const results = {
+    successCount: 0,
+    failedCount: 0,
+    failed: [],
+    totalCaptured: 0,
+  };
+
+  // 4. Process each appointment
+  for (const appointmentId of appointmentIds) {
+    try {
+      const appointment = await UserAppointments.findByPk(appointmentId);
+
+      if (!appointment) {
+        results.failed.push({ id: appointmentId, error: "Not found" });
+        results.failedCount++;
+        continue;
+      }
+
+      if (appointment.userId !== decoded.userId) {
+        results.failed.push({ id: appointmentId, error: "Not authorized" });
+        results.failedCount++;
+        continue;
+      }
+
+      if (appointment.paid) {
+        results.failed.push({ id: appointmentId, error: "Already paid" });
+        results.failedCount++;
+        continue;
+      }
+
+      if (!appointment.hasBeenAssigned) {
+        results.failed.push({ id: appointmentId, error: "No cleaner assigned" });
+        results.failedCount++;
+        continue;
+      }
+
+      if (!appointment.paymentIntentId) {
+        results.failed.push({ id: appointmentId, error: "No payment on file" });
+        results.failedCount++;
+        continue;
+      }
+
+      // Capture payment via Stripe
+      const paymentIntent = await stripe.paymentIntents.capture(
+        appointment.paymentIntentId
+      );
+
+      if (paymentIntent.status === "succeeded") {
+        // Update appointment
+        await appointment.update({
+          paymentStatus: "captured",
+          paid: true,
+          manuallyPaid: true,
+          paymentCaptureFailed: false,
+          amountPaid: paymentIntent.amount_received || paymentIntent.amount,
+        });
+
+        // Update Payout records
+        await Payout.update(
+          { status: "held", paymentCapturedAt: new Date() },
+          { where: { appointmentId, status: "pending" } }
+        );
+
+        // Record transaction
+        await recordPaymentTransaction({
+          type: "capture",
+          status: "succeeded",
+          amount: paymentIntent.amount_received || paymentIntent.amount,
+          userId: appointment.userId,
+          appointmentId: appointment.id,
+          stripePaymentIntentId: appointment.paymentIntentId,
+          stripeChargeId: paymentIntent.latest_charge,
+          description: `Batch pre-payment captured for appointment ${appointment.id}`,
+        });
+
+        // Clean up pending requests
+        await UserPendingRequests.destroy({
+          where: { appointmentId: appointment.id },
+        });
+
+        results.successCount++;
+        results.totalCaptured += paymentIntent.amount;
+      } else {
+        results.failed.push({ id: appointmentId, error: "Capture failed" });
+        results.failedCount++;
+      }
+    } catch (err) {
+      console.error(`Batch pre-pay error for appointment ${appointmentId}:`, err);
+      results.failed.push({
+        id: appointmentId,
+        error: err.type === "StripeCardError" ? err.message : "Payment failed"
+      });
+      results.failedCount++;
+    }
+  }
+
+  // 5. Return results
+  if (results.successCount === 0) {
+    return res.status(400).json({
+      error: "All payments failed",
+      details: results.failed,
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: `${results.successCount} payment(s) captured successfully`,
+    ...results,
+  });
+});
+
+/**
+ * ------------------------------------------------------
  * 5️⃣ Daily Scheduler — Charge 3 Days Before Appointment
  * Payment is captured and held until job completion
  * ------------------------------------------------------

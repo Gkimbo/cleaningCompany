@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -57,7 +58,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
     fetchRequests(true);
   }, [fetchRequests]);
 
-  const handleApprove = async (requestId, cleanerId, appointmentId) => {
+  const handleApprove = async (requestId, cleanerId, appointmentId, cleanerName) => {
     setProcessingRequest(requestId);
     try {
       await FetchData.approveRequest(requestId, true);
@@ -73,14 +74,19 @@ const ClientRequestsList = ({ state, dispatch }) => {
           .filter((homeGroup) => homeGroup.requests.length > 0)
       );
       setTotalCount((prev) => prev - 1);
+      Alert.alert(
+        "Cleaner Approved",
+        `${cleanerName || "The cleaner"} has been approved for this appointment.`
+      );
     } catch (error) {
       console.error("Error approving request:", error);
+      Alert.alert("Error", "Failed to approve the request. Please try again.");
     } finally {
       setProcessingRequest(null);
     }
   };
 
-  const handleDeny = async (cleanerId, appointmentId, requestId) => {
+  const handleDeny = async (cleanerId, appointmentId, requestId, cleanerName) => {
     setProcessingRequest(requestId);
     try {
       await FetchData.denyRequest(cleanerId, appointmentId);
@@ -96,8 +102,13 @@ const ClientRequestsList = ({ state, dispatch }) => {
           .filter((homeGroup) => homeGroup.requests.length > 0)
       );
       setTotalCount((prev) => prev - 1);
+      Alert.alert(
+        "Request Denied",
+        `${cleanerName || "The cleaner"}'s request has been denied.`
+      );
     } catch (error) {
       console.error("Error denying request:", error);
+      Alert.alert("Error", "Failed to deny the request. Please try again.");
     } finally {
       setProcessingRequest(null);
     }
@@ -288,7 +299,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
                         <Pressable
                           style={[styles.actionButton, styles.approveButton]}
                           onPress={() =>
-                            handleApprove(request.id, cleaner.id, appointment.id)
+                            handleApprove(request.id, cleaner.id, appointment.id, cleaner?.username)
                           }
                           disabled={isProcessing}
                         >
@@ -304,7 +315,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
                         <Pressable
                           style={[styles.actionButton, styles.denyButton]}
                           onPress={() =>
-                            handleDeny(cleaner.id, appointment.id, request.id)
+                            handleDeny(cleaner.id, appointment.id, request.id, cleaner?.username)
                           }
                           disabled={isProcessing}
                         >
