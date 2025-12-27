@@ -194,6 +194,12 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Not authorized to send messages in this conversation" });
     }
 
+    // Check if this is the first message in the conversation (for email notification)
+    const existingMessageCount = await Message.count({
+      where: { conversationId },
+    });
+    const isFirstMessage = existingMessageCount === 0;
+
     // Create the message
     const message = await Message.create({
       conversationId,
@@ -242,8 +248,8 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       // Emit to user's personal room for unread count update
       io.to(`user_${p.userId}`).emit("unread_update", { conversationId });
 
-      // Send email notification if user has email notifications enabled
-      if (p.user.notifications && p.user.notifications.includes("email")) {
+      // Send email notification only for the first message in the conversation
+      if (isFirstMessage && p.user.notifications && p.user.notifications.includes("email")) {
         await Email.sendNewMessageNotification(
           p.user.email,
           p.user.username,
@@ -908,7 +914,7 @@ messageRouter.post("/conversation/hr-direct", authenticateToken, async (req, res
     } else {
       // Create new 1-on-1 conversation
       const otherName = `${otherUser.firstName || ""} ${otherUser.lastName || ""}`.trim() || otherUser.username;
-      const title = `Direct - ${otherName}`;
+      const title = otherName;  // Just "FirstName LastName" for direct messages
 
       conversation = await Conversation.create({
         conversationType: "internal",
@@ -1564,6 +1570,91 @@ messageRouter.delete("/conversation/:conversationId", authenticateToken, async (
   } catch (error) {
     console.error("Error deleting conversation:", error);
     return res.status(500).json({ error: "Failed to delete conversation" });
+  }
+});
+
+/**
+ * PATCH /api/v1/messages/conversation/:conversationId/title
+ * Update conversation title (owner/HR only, internal conversations only)
+ */
+messageRouter.patch("/conversation/:conversationId/title", authenticateToken, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { title } = req.body;
+    const userId = req.userId;
+    const io = req.app.get("io");
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: "Title is required" });
+    }
+
+    // Verify user is owner or HR
+    const user = await User.findByPk(userId);
+    if (!user || (user.type !== "owner" && user.type !== "humanResources")) {
+      return res.status(403).json({ error: "Only owner or HR can edit conversation titles" });
+    }
+
+    // Find the conversation
+    const conversation = await Conversation.findByPk(conversationId, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+        },
+      ],
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    // Only allow editing internal conversations
+    if (conversation.conversationType !== "internal") {
+      return res.status(400).json({ error: "Can only edit titles of internal conversations" });
+    }
+
+    const oldTitle = conversation.title;
+    const newTitle = title.trim();
+
+    // Update the title
+    await conversation.update({ title: newTitle });
+
+    // Create system message recording the change
+    const userName = user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user.username;
+
+    const systemMessage = await Message.create({
+      conversationId: parseInt(conversationId),
+      senderId: null, // System messages have no sender
+      content: `${userName} changed the conversation name to "${newTitle}"`,
+      messageType: "system",
+    });
+
+    // Get participant user IDs for notifications
+    const participantUserIds = conversation.participants.map((p) => p.userId);
+
+    // Emit title changed event to all participants
+    for (const participantUserId of participantUserIds) {
+      io.to(`user_${participantUserId}`).emit("conversation_title_changed", {
+        conversationId: parseInt(conversationId),
+        title: newTitle,
+        oldTitle,
+        changedBy: { id: user.id, name: userName },
+      });
+    }
+
+    // Emit the system message to the conversation room
+    io.to(`conversation_${conversationId}`).emit("new_message", systemMessage);
+
+    return res.json({
+      success: true,
+      conversation: { ...conversation.toJSON(), title: newTitle },
+      systemMessage,
+    });
+  } catch (error) {
+    console.error("Error updating conversation title:", error.message, error.stack);
+    return res.status(500).json({ error: error.message || "Failed to update conversation title" });
   }
 });
 

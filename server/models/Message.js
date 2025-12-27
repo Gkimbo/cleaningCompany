@@ -20,7 +20,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     senderId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,  // Allow null for system messages
       references: {
         model: "Users",
         key: "id",

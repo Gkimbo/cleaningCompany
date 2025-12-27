@@ -185,6 +185,15 @@ const reducer = (state, action) => {
           (conv) => conv.conversationId !== action.payload
         ),
       };
+    case "UPDATE_CONVERSATION_TITLE":
+      return {
+        ...state,
+        conversations: state.conversations.map((conv) =>
+          conv.conversationId === action.payload.conversationId
+            ? { ...conv, conversation: { ...conv.conversation, title: action.payload.title } }
+            : conv
+        ),
+      };
     default:
       throw new Error();
   }

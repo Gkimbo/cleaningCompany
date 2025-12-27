@@ -441,6 +441,33 @@ class MessageService {
   }
 
   /**
+   * Update conversation title (owner/HR only, internal conversations only)
+   */
+  static async updateConversationTitle(conversationId, title, token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/conversation/${conversationId}/title`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ title }),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update title");
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error updating conversation title:", error);
+      return { error: error.message };
+    }
+  }
+
+  /**
    * Delete an entire conversation (owner only)
    */
   static async deleteConversation(conversationId, token) {

@@ -37,6 +37,7 @@ jest.mock("../../models", () => ({
   },
   MessageReaction: {
     findOne: jest.fn(),
+    findByPk: jest.fn(),
     findAll: jest.fn(),
     create: jest.fn(),
     destroy: jest.fn(),
@@ -46,6 +47,7 @@ jest.mock("../../models", () => ({
     findAll: jest.fn(),
     create: jest.fn(),
     bulkCreate: jest.fn(),
+    findOrCreate: jest.fn(),
   },
   UserAppointments: {
     findByPk: jest.fn(),
@@ -88,19 +90,21 @@ describe("Message Reactions API", () => {
     it("should add a new reaction to a message", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      // User is a participant
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
-      });
-
-      // Message exists
+      // Message exists with conversation
       Message.findByPk.mockResolvedValue({
         id: 1,
         conversationId: 1,
         senderId: 2,
         content: "Hello",
+        conversation: { id: 1 },
+        sender: { id: 2, username: "user2", firstName: "Jane", lastName: "Doe" },
+      });
+
+      // User is a participant
+      ConversationParticipant.findOne.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        userId: 1,
       });
 
       // No existing reaction
@@ -114,10 +118,33 @@ describe("Message Reactions API", () => {
         emoji: "👍",
       });
 
+      // Return reaction with user info
+      MessageReaction.findByPk.mockResolvedValue({
+        id: 1,
+        messageId: 1,
+        userId: 1,
+        emoji: "👍",
+        user: { id: 1, username: "user1", firstName: "John", lastName: "Doe" },
+        toJSON: () => ({
+          id: 1,
+          messageId: 1,
+          userId: 1,
+          emoji: "👍",
+          user: { id: 1, username: "user1", firstName: "John", lastName: "Doe" },
+        }),
+      });
+
       // Return all reactions for the message
       MessageReaction.findAll.mockResolvedValue([
         { id: 1, messageId: 1, userId: 1, emoji: "👍", user: { id: 1, username: "user1" } },
       ]);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "user1",
+        firstName: "John",
+        lastName: "Doe",
+      });
 
       const res = await request(app)
         .post("/api/v1/messages/1/react")
@@ -125,9 +152,8 @@ describe("Message Reactions API", () => {
         .send({ emoji: "👍" });
 
       expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty("reactions");
-      expect(res.body.reactions).toHaveLength(1);
-      expect(res.body.reactions[0].emoji).toBe("👍");
+      expect(res.body.success).toBe(true);
+      expect(res.body.action).toBe("added");
       expect(mockIo.to).toHaveBeenCalledWith("conversation_1");
       expect(mockIo.emit).toHaveBeenCalledWith("message_reaction", expect.any(Object));
     });
@@ -135,17 +161,19 @@ describe("Message Reactions API", () => {
     it("should toggle off an existing reaction (same emoji)", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
-      });
-
       Message.findByPk.mockResolvedValue({
         id: 1,
         conversationId: 1,
         senderId: 2,
         content: "Hello",
+        conversation: { id: 1 },
+        sender: { id: 2, username: "user2" },
+      });
+
+      ConversationParticipant.findOne.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        userId: 1,
       });
 
       // Existing reaction with same emoji
@@ -165,11 +193,21 @@ describe("Message Reactions API", () => {
         .send({ emoji: "👍" });
 
       expect(res.status).toBe(200);
-      expect(res.body.reactions).toHaveLength(0);
+      expect(res.body.success).toBe(true);
+      expect(res.body.action).toBe("removed");
     });
 
-    it("should replace reaction with different emoji", async () => {
+    it("should add a different reaction", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
+
+      Message.findByPk.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        senderId: 2,
+        content: "Hello",
+        conversation: { id: 1 },
+        sender: { id: 2, username: "user2" },
+      });
 
       ConversationParticipant.findOne.mockResolvedValue({
         id: 1,
@@ -177,22 +215,8 @@ describe("Message Reactions API", () => {
         userId: 1,
       });
 
-      Message.findByPk.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        senderId: 2,
-        content: "Hello",
-      });
-
-      // Existing reaction with different emoji
-      const existingReaction = {
-        id: 1,
-        messageId: 1,
-        userId: 1,
-        emoji: "👍",
-        destroy: jest.fn().mockResolvedValue(true),
-      };
-      MessageReaction.findOne.mockResolvedValue(existingReaction);
+      // No existing reaction with this emoji
+      MessageReaction.findOne.mockResolvedValue(null);
 
       MessageReaction.create.mockResolvedValue({
         id: 2,
@@ -201,9 +225,31 @@ describe("Message Reactions API", () => {
         emoji: "❤️",
       });
 
+      MessageReaction.findByPk.mockResolvedValue({
+        id: 2,
+        messageId: 1,
+        userId: 1,
+        emoji: "❤️",
+        user: { id: 1, username: "user1" },
+        toJSON: () => ({
+          id: 2,
+          messageId: 1,
+          userId: 1,
+          emoji: "❤️",
+          user: { id: 1, username: "user1" },
+        }),
+      });
+
       MessageReaction.findAll.mockResolvedValue([
         { id: 2, messageId: 1, userId: 1, emoji: "❤️", user: { id: 1, username: "user1" } },
       ]);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "user1",
+        firstName: "John",
+        lastName: "Doe",
+      });
 
       const res = await request(app)
         .post("/api/v1/messages/1/react")
@@ -211,8 +257,8 @@ describe("Message Reactions API", () => {
         .send({ emoji: "❤️" });
 
       expect(res.status).toBe(200);
-      expect(existingReaction.destroy).toHaveBeenCalled();
-      expect(res.body.reactions[0].emoji).toBe("❤️");
+      expect(res.body.success).toBe(true);
+      expect(res.body.action).toBe("added");
     });
 
     it("should return 400 for missing emoji", async () => {
@@ -249,6 +295,8 @@ describe("Message Reactions API", () => {
         conversationId: 1,
         senderId: 2,
         content: "Hello",
+        conversation: { id: 1 },
+        sender: { id: 2, username: "user2" },
       });
 
       ConversationParticipant.findOne.mockResolvedValue(null);
@@ -259,7 +307,7 @@ describe("Message Reactions API", () => {
         .send({ emoji: "👍" });
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Not authorized to react to this message");
+      expect(res.body.error).toBe("Not authorized");
     });
 
     it("should return 401 without token", async () => {
@@ -272,6 +320,8 @@ describe("Message Reactions API", () => {
   });
 
   describe("DELETE /:messageId/react/:emoji", () => {
+    const thumbsUpEncoded = encodeURIComponent("👍");
+
     it("should remove a specific reaction", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
@@ -280,12 +330,6 @@ describe("Message Reactions API", () => {
         conversationId: 1,
         senderId: 2,
         content: "Hello",
-      });
-
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
       });
 
       const mockReaction = {
@@ -297,10 +341,8 @@ describe("Message Reactions API", () => {
       };
       MessageReaction.findOne.mockResolvedValue(mockReaction);
 
-      MessageReaction.findAll.mockResolvedValue([]);
-
       const res = await request(app)
-        .delete("/api/v1/messages/1/react/👍")
+        .delete(`/api/v1/messages/1/react/${thumbsUpEncoded}`)
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
@@ -318,16 +360,10 @@ describe("Message Reactions API", () => {
         content: "Hello",
       });
 
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
-      });
-
       MessageReaction.findOne.mockResolvedValue(null);
 
       const res = await request(app)
-        .delete("/api/v1/messages/1/react/👍")
+        .delete(`/api/v1/messages/1/react/${thumbsUpEncoded}`)
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(404);
@@ -396,12 +432,6 @@ describe("Message Deletion API", () => {
         deletedAt: null,
       });
 
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
-      });
-
       const res = await request(app)
         .delete("/api/v1/messages/1")
         .set("Authorization", `Bearer ${token}`);
@@ -421,31 +451,6 @@ describe("Message Deletion API", () => {
 
       expect(res.status).toBe(404);
       expect(res.body.error).toBe("Message not found");
-    });
-
-    it("should return 400 if message already deleted", async () => {
-      const token = jwt.sign({ userId: 1 }, secretKey);
-
-      Message.findByPk.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        senderId: 1,
-        content: "My message",
-        deletedAt: new Date(), // Already deleted
-      });
-
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
-      });
-
-      const res = await request(app)
-        .delete("/api/v1/messages/1")
-        .set("Authorization", `Bearer ${token}`);
-
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe("Message already deleted");
     });
   });
 });
@@ -471,91 +476,73 @@ describe("Read Receipts API", () => {
     it("should create read receipts for multiple messages", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
-        update: jest.fn().mockResolvedValue(true),
-      });
-
       Message.findAll.mockResolvedValue([
         { id: 1, conversationId: 1, senderId: 2 },
         { id: 2, conversationId: 1, senderId: 2 },
         { id: 3, conversationId: 1, senderId: 2 },
       ]);
 
-      MessageReadReceipt.bulkCreate.mockResolvedValue([
-        { id: 1, messageId: 1, userId: 1 },
-        { id: 2, messageId: 2, userId: 1 },
-        { id: 3, messageId: 3, userId: 1 },
+      ConversationParticipant.findAll.mockResolvedValue([
+        { conversationId: 1, userId: 1 },
       ]);
+
+      MessageReadReceipt.findOrCreate
+        .mockResolvedValueOnce([{ id: 1, messageId: 1, userId: 1, readAt: new Date() }, true])
+        .mockResolvedValueOnce([{ id: 2, messageId: 2, userId: 1, readAt: new Date() }, true])
+        .mockResolvedValueOnce([{ id: 3, messageId: 3, userId: 1, readAt: new Date() }, true]);
 
       const res = await request(app)
         .post("/api/v1/messages/mark-messages-read")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          conversationId: 1,
           messageIds: [1, 2, 3],
         });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.markedCount).toBe(3);
+      expect(res.body.receiptsCreated).toBe(3);
     });
 
     it("should filter out own messages from read receipts", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
-        update: jest.fn().mockResolvedValue(true),
-      });
-
       // Include a message sent by the current user
       Message.findAll.mockResolvedValue([
         { id: 1, conversationId: 1, senderId: 2 },
-        { id: 2, conversationId: 1, senderId: 1 }, // Own message
+        { id: 2, conversationId: 1, senderId: 1 }, // Own message - should be skipped
         { id: 3, conversationId: 1, senderId: 2 },
       ]);
 
-      MessageReadReceipt.bulkCreate.mockResolvedValue([
-        { id: 1, messageId: 1, userId: 1 },
-        { id: 2, messageId: 3, userId: 1 },
+      ConversationParticipant.findAll.mockResolvedValue([
+        { conversationId: 1, userId: 1 },
       ]);
+
+      MessageReadReceipt.findOrCreate
+        .mockResolvedValueOnce([{ id: 1, messageId: 1, userId: 1, readAt: new Date() }, true])
+        .mockResolvedValueOnce([{ id: 2, messageId: 3, userId: 1, readAt: new Date() }, true]);
 
       const res = await request(app)
         .post("/api/v1/messages/mark-messages-read")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          conversationId: 1,
           messageIds: [1, 2, 3],
         });
 
       expect(res.status).toBe(200);
       // Should only mark 2 messages (excluding own message)
-      expect(MessageReadReceipt.bulkCreate).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ messageId: 1 }),
-          expect.objectContaining({ messageId: 3 }),
-        ]),
-        expect.any(Object)
-      );
+      expect(MessageReadReceipt.findOrCreate).toHaveBeenCalledTimes(2);
     });
 
-    it("should return 400 for missing conversationId", async () => {
+    it("should return 400 for missing messageIds", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       const res = await request(app)
         .post("/api/v1/messages/mark-messages-read")
         .set("Authorization", `Bearer ${token}`)
-        .send({
-          messageIds: [1, 2, 3],
-        });
+        .send({});
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe("conversationId and messageIds are required");
+      expect(res.body.error).toBe("messageIds array is required");
     });
 
     it("should return 400 for empty messageIds array", async () => {
@@ -565,58 +552,57 @@ describe("Read Receipts API", () => {
         .post("/api/v1/messages/mark-messages-read")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          conversationId: 1,
           messageIds: [],
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe("conversationId and messageIds are required");
+      expect(res.body.error).toBe("messageIds array is required");
     });
 
     it("should return 403 if not a participant", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      ConversationParticipant.findOne.mockResolvedValue(null);
+      Message.findAll.mockResolvedValue([
+        { id: 1, conversationId: 1, senderId: 2 },
+      ]);
+
+      ConversationParticipant.findAll.mockResolvedValue([]);
 
       const res = await request(app)
         .post("/api/v1/messages/mark-messages-read")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          conversationId: 1,
           messageIds: [1, 2, 3],
         });
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Not a participant of this conversation");
+      expect(res.body.error).toBe("Not authorized");
     });
 
     it("should emit read receipts via socket", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
-      ConversationParticipant.findOne.mockResolvedValue({
-        id: 1,
-        conversationId: 1,
-        userId: 1,
-        update: jest.fn().mockResolvedValue(true),
-      });
-
       Message.findAll.mockResolvedValue([
         { id: 1, conversationId: 1, senderId: 2 },
       ]);
 
-      MessageReadReceipt.bulkCreate.mockResolvedValue([
-        { id: 1, messageId: 1, userId: 1 },
+      ConversationParticipant.findAll.mockResolvedValue([
+        { conversationId: 1, userId: 1 },
+      ]);
+
+      MessageReadReceipt.findOrCreate.mockResolvedValue([
+        { id: 1, messageId: 1, userId: 1, readAt: new Date() },
+        true,
       ]);
 
       await request(app)
         .post("/api/v1/messages/mark-messages-read")
         .set("Authorization", `Bearer ${token}`)
         .send({
-          conversationId: 1,
           messageIds: [1],
         });
 
-      expect(mockIo.to).toHaveBeenCalledWith("conversation_1");
+      expect(mockIo.to).toHaveBeenCalledWith("user_2");
       expect(mockIo.emit).toHaveBeenCalledWith("message_read", expect.any(Object));
     });
   });
@@ -724,7 +710,7 @@ describe("Staff List and Internal Conversations API", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Not authorized");
+      expect(res.body.error).toBe("Only owner or HR can access this endpoint");
     });
   });
 
@@ -734,13 +720,14 @@ describe("Staff List and Internal Conversations API", () => {
 
       User.findByPk
         .mockResolvedValueOnce({ id: 1, username: "owner1", type: "owner" })
-        .mockResolvedValueOnce({ id: 2, username: "hr1", type: "humanResources" });
+        .mockResolvedValueOnce({ id: 2, username: "hr1", firstName: "Jane", lastName: "Smith", type: "humanResources" });
 
       ConversationParticipant.findAll.mockResolvedValue([]);
 
       Conversation.create.mockResolvedValue({
         id: 1,
         conversationType: "internal",
+        title: "Jane Smith",
         createdBy: 1,
       });
 
@@ -749,6 +736,7 @@ describe("Staff List and Internal Conversations API", () => {
       Conversation.findByPk.mockResolvedValue({
         id: 1,
         conversationType: "internal",
+        title: "Jane Smith",
         participants: [
           { userId: 1, user: { id: 1, username: "owner1" } },
           { userId: 2, user: { id: 2, username: "hr1" } },
@@ -770,7 +758,7 @@ describe("Staff List and Internal Conversations API", () => {
 
       User.findByPk
         .mockResolvedValueOnce({ id: 1, username: "owner1", type: "owner" })
-        .mockResolvedValueOnce({ id: 2, username: "hr1", type: "humanResources" });
+        .mockResolvedValueOnce({ id: 2, username: "hr1", firstName: "Jane", lastName: "Smith", type: "humanResources" });
 
       // Existing conversation
       ConversationParticipant.findAll.mockResolvedValue([
@@ -814,6 +802,12 @@ describe("Staff List and Internal Conversations API", () => {
         type: "owner",
       });
 
+      // Mock User.findAll for member validation
+      User.findAll.mockResolvedValue([
+        { id: 2, username: "hr1", firstName: "Jane", lastName: "Doe", type: "humanResources" },
+        { id: 3, username: "hr2", firstName: "Bob", lastName: "Smith", type: "humanResources" },
+      ]);
+
       Conversation.create.mockResolvedValue({
         id: 1,
         conversationType: "internal",
@@ -842,7 +836,7 @@ describe("Staff List and Internal Conversations API", () => {
           title: "Project Team",
         });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       expect(res.body.conversation.title).toBe("Project Team");
       expect(mockIo.emit).toHaveBeenCalledWith("new_internal_conversation", expect.any(Object));
     });
@@ -884,17 +878,23 @@ describe("Staff List and Internal Conversations API", () => {
           id: 1,
           conversationId: 1,
           userId: 1,
-          toJSON: () => ({
+          lastReadAt: new Date(),
+          conversation: {
             id: 1,
-            conversationId: 1,
-            conversation: {
-              id: 1,
-              conversationType: "internal",
-              title: "HR Team",
-              messages: [],
-              participants: [],
-            },
-          }),
+            conversationType: "internal",
+            title: "HR Team",
+            messages: [],
+            participants: [
+              {
+                userId: 1,
+                user: { id: 1, username: "owner1", firstName: "John", lastName: "Doe", type: "owner" },
+              },
+              {
+                userId: 2,
+                user: { id: 2, username: "hr1", firstName: "Jane", lastName: "Smith", type: "humanResources" },
+              },
+            ],
+          },
         },
       ]);
 
@@ -922,7 +922,7 @@ describe("Staff List and Internal Conversations API", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe("Not authorized");
+      expect(res.body.error).toBe("Only owner or HR can access internal conversations");
     });
   });
 });

@@ -58,6 +58,15 @@ const MessageBubble = ({
 
   const displayName = isOwn ? "You" : getDisplayName(message.sender);
 
+  // System messages (e.g., title changes)
+  if (message.messageType === "system") {
+    return (
+      <View style={styles.systemMessageContainer}>
+        <Text style={styles.systemMessageText}>{message.content}</Text>
+      </View>
+    );
+  }
+
   const handleLongPress = () => {
     setShowReactionPicker(true);
   };
@@ -371,6 +380,19 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     marginTop: spacing.xs,
     textAlign: "right",
+  },
+  // System message styles
+  systemMessageContainer: {
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginVertical: spacing.xs,
+  },
+  systemMessageText: {
+    fontSize: typography.fontSize.sm,
+    fontStyle: "italic",
+    color: colors.text.tertiary,
+    textAlign: "center",
   },
 });
 

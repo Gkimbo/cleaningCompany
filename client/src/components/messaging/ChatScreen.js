@@ -9,6 +9,8 @@ import {
   Platform,
   ActivityIndicator,
   StyleSheet,
+  Modal,
+  Alert,
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/Feather";
@@ -36,6 +38,7 @@ const ChatScreen = () => {
     onMessageReaction,
     onMessageDeleted,
     onMessageRead,
+    onConversationTitleChanged,
   } = useSocket();
 
   const [loading, setLoading] = useState(true);
@@ -43,6 +46,8 @@ const ChatScreen = () => {
   const [messageText, setMessageText] = useState("");
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [showEditTitle, setShowEditTitle] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
 
   const fetchMessages = useCallback(async () => {
     if (!state.currentUser?.token || !conversationId) return;
@@ -176,6 +181,16 @@ const ChatScreen = () => {
     return unsubscribe;
   }, [onMessageRead]);
 
+  // Listen for conversation title changes
+  useEffect(() => {
+    const unsubscribe = onConversationTitleChanged((data) => {
+      if (data.conversationId === parseInt(conversationId)) {
+        setConversation((prev) => prev ? { ...prev, title: data.title } : prev);
+      }
+    });
+    return unsubscribe;
+  }, [onConversationTitleChanged, conversationId]);
+
   // Scroll to bottom when messages load
   useEffect(() => {
     if (!loading && messages.length > 0) {
@@ -217,6 +232,41 @@ const ChatScreen = () => {
 
   const handleMessageDeleted = (messageId) => {
     // Local update handled by socket listener
+  };
+
+  const handleEditTitle = () => {
+    setNewTitle(conversation?.title || "");
+    setShowEditTitle(true);
+  };
+
+  const handleSaveTitle = async () => {
+    if (!newTitle.trim()) {
+      Alert.alert("Error", "Title cannot be empty");
+      return;
+    }
+
+    try {
+      const result = await MessageService.updateConversationTitle(
+        conversationId,
+        newTitle.trim(),
+        state.currentUser.token
+      );
+      if (result.error) {
+        Alert.alert("Error", result.error);
+      } else {
+        setShowEditTitle(false);
+        // Title update will come through socket
+      }
+    } catch (error) {
+      console.error("Error updating title:", error);
+      Alert.alert("Error", "Failed to update title");
+    }
+  };
+
+  const canEditTitle = () => {
+    const isOwnerOrHR = state.account === "owner" || state.account === "humanResources";
+    const isInternal = conversation?.conversationType === "internal";
+    return isOwnerOrHR && isInternal;
   };
 
   const getDisplayName = (user) => {
@@ -374,12 +424,59 @@ const ChatScreen = () => {
             <Text style={styles.headerTitle} numberOfLines={1}>
               {getConversationTitle()}
             </Text>
+            {canEditTitle() && (
+              <Pressable
+                onPress={handleEditTitle}
+                style={styles.editTitleButton}
+              >
+                <Icon name="edit-2" size={16} color={colors.text.tertiary} />
+              </Pressable>
+            )}
           </View>
           {getConversationSubtitle() && (
             <Text style={styles.headerSubtitle}>{getConversationSubtitle()}</Text>
           )}
         </View>
       </View>
+
+      {/* Edit Title Modal */}
+      <Modal
+        visible={showEditTitle}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditTitle(false)}
+      >
+        <Pressable
+          style={styles.editTitleOverlay}
+          onPress={() => setShowEditTitle(false)}
+        >
+          <View style={styles.editTitleModal}>
+            <Text style={styles.editTitleHeader}>Edit Conversation Name</Text>
+            <TextInput
+              style={styles.editTitleInput}
+              value={newTitle}
+              onChangeText={setNewTitle}
+              placeholder="Conversation name"
+              placeholderTextColor={colors.text.tertiary}
+              autoFocus
+            />
+            <View style={styles.editTitleButtons}>
+              <Pressable
+                onPress={() => setShowEditTitle(false)}
+                style={styles.editTitleCancelButton}
+              >
+                <Text style={styles.editTitleCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSaveTitle}
+                style={styles.editTitleSaveButton}
+              >
+                <Text style={styles.editTitleSaveText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Messages */}
       <ScrollView
@@ -606,6 +703,67 @@ const styles = StyleSheet.create({
   },
   sendButtonPressed: {
     backgroundColor: colors.primary[600],
+  },
+  // Edit Title styles
+  editTitleButton: {
+    padding: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  editTitleOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  editTitleModal: {
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    width: "100%",
+    maxWidth: 400,
+    ...shadows.lg,
+  },
+  editTitleHeader: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.lg,
+    textAlign: "center",
+  },
+  editTitleInput: {
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    marginBottom: spacing.lg,
+  },
+  editTitleButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.md,
+  },
+  editTitleCancelButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  editTitleCancelText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  editTitleSaveButton: {
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+  },
+  editTitleSaveText: {
+    fontSize: typography.fontSize.base,
+    color: colors.white,
+    fontWeight: typography.fontWeight.semibold,
   },
 });
 

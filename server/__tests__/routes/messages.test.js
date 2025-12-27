@@ -948,6 +948,695 @@ describe("Message Routes", () => {
       expect(res.body.error).toBe("Conversation not found");
     });
   });
+
+  describe("POST /send - Email notifications", () => {
+    it("should send email notification only for the first message in a conversation", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      ConversationParticipant.findOne.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        userId: 1,
+      });
+
+      // First message in conversation
+      Message.count.mockResolvedValue(0);
+
+      Message.create.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        senderId: 1,
+        content: "First message",
+        messageType: "text",
+      });
+
+      Message.findByPk.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        senderId: 1,
+        content: "First message",
+        messageType: "text",
+        sender: { id: 1, username: "user1", type: null },
+      });
+
+      Conversation.update.mockResolvedValue([1]);
+
+      ConversationParticipant.findAll.mockResolvedValue([
+        {
+          userId: 2,
+          user: {
+            id: 2,
+            email: "user2@example.com",
+            username: "user2",
+            notifications: ["email"],
+          },
+        },
+      ]);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "user1",
+      });
+
+      const res = await request(app)
+        .post("/api/v1/messages/send")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          conversationId: 1,
+          content: "First message",
+        });
+
+      expect(res.status).toBe(201);
+      expect(Email.sendNewMessageNotification).toHaveBeenCalled();
+    });
+
+    it("should NOT send email notification for subsequent messages", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      ConversationParticipant.findOne.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        userId: 1,
+      });
+
+      // Not the first message - already 5 messages exist
+      Message.count.mockResolvedValue(5);
+
+      Message.create.mockResolvedValue({
+        id: 6,
+        conversationId: 1,
+        senderId: 1,
+        content: "Another message",
+        messageType: "text",
+      });
+
+      Message.findByPk.mockResolvedValue({
+        id: 6,
+        conversationId: 1,
+        senderId: 1,
+        content: "Another message",
+        messageType: "text",
+        sender: { id: 1, username: "user1", type: null },
+      });
+
+      Conversation.update.mockResolvedValue([1]);
+
+      ConversationParticipant.findAll.mockResolvedValue([
+        {
+          userId: 2,
+          user: {
+            id: 2,
+            email: "user2@example.com",
+            username: "user2",
+            notifications: ["email"],
+          },
+        },
+      ]);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "user1",
+      });
+
+      const res = await request(app)
+        .post("/api/v1/messages/send")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          conversationId: 1,
+          content: "Another message",
+        });
+
+      expect(res.status).toBe(201);
+      // Email should NOT be called for non-first messages
+      expect(Email.sendNewMessageNotification).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /conversation/hr-direct", () => {
+    it("should create HR direct conversation with FirstName LastName format (not 'Direct - ' prefix)", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // HR user creating the conversation - defaults to messaging owner
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "hr1",
+        firstName: "Sarah",
+        lastName: "Smith",
+        type: "humanResources",
+      });
+
+      // Find owner
+      User.findOne.mockResolvedValue({
+        id: 2,
+        username: "owner1",
+        firstName: "John",
+        lastName: "Doe",
+        type: "owner",
+      });
+
+      // No existing direct conversation
+      ConversationParticipant.findAll.mockResolvedValue([]);
+
+      Conversation.create.mockResolvedValue({
+        id: 1,
+        conversationType: "internal",
+        title: "John Doe",
+        createdBy: 1,
+      });
+
+      ConversationParticipant.create.mockResolvedValue({ id: 1 });
+
+      Conversation.findByPk.mockResolvedValue({
+        id: 1,
+        conversationType: "internal",
+        title: "John Doe",
+        participants: [
+          { userId: 1, user: { id: 1, username: "hr1" } },
+          { userId: 2, user: { id: 2, username: "owner1" } },
+        ],
+      });
+
+      const res = await request(app)
+        .post("/api/v1/messages/conversation/hr-direct")
+        .set("Authorization", `Bearer ${token}`)
+        .send({});  // HR without target defaults to owner
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("conversation");
+      // Title should be "John Doe" not "Direct - John Doe"
+      expect(res.body.conversation.title).toBe("John Doe");
+      expect(res.body.conversation.title).not.toContain("Direct -");
+    });
+
+    it("should return 403 for non-HR/non-owner users", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "regularuser",
+        type: null,
+      });
+
+      const res = await request(app)
+        .post("/api/v1/messages/conversation/hr-direct")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ targetUserId: 2 });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Only owner or HR can use this endpoint");
+    });
+
+    it("should return existing conversation if one already exists", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 1,
+          username: "owner1",
+          type: "owner",
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          username: "hr1",
+          firstName: "Jane",
+          lastName: "Doe",
+          type: "humanResources",
+        });
+
+      // Existing conversation found
+      ConversationParticipant.findAll.mockResolvedValue([
+        {
+          conversationId: 5,
+          conversation: {
+            id: 5,
+            conversationType: "internal",
+            title: "Jane Doe",
+            participants: [{ userId: 1 }, { userId: 2 }],
+          },
+        },
+      ]);
+
+      Conversation.findByPk.mockResolvedValue({
+        id: 5,
+        conversationType: "internal",
+        title: "Jane Doe",
+        participants: [],
+      });
+
+      const res = await request(app)
+        .post("/api/v1/messages/conversation/hr-direct")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ targetUserId: 2 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.conversation.id).toBe(5);
+      expect(Conversation.create).not.toHaveBeenCalled();
+    });
+
+    it("should allow owner to create direct conversations with HR", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 1,
+          username: "owner1",
+          firstName: "Boss",
+          lastName: "Man",
+          type: "owner",
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          username: "hr1",
+          firstName: "Worker",
+          lastName: "Bee",
+          type: "humanResources",
+        });
+
+      ConversationParticipant.findAll.mockResolvedValue([]);
+
+      Conversation.create.mockResolvedValue({
+        id: 1,
+        conversationType: "internal",
+        title: "Worker Bee",
+        createdBy: 1,
+      });
+
+      ConversationParticipant.create.mockResolvedValue({ id: 1 });
+
+      Conversation.findByPk.mockResolvedValue({
+        id: 1,
+        conversationType: "internal",
+        title: "Worker Bee",
+        participants: [],
+      });
+
+      const res = await request(app)
+        .post("/api/v1/messages/conversation/hr-direct")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ targetUserId: 2 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.conversation.title).toBe("Worker Bee");
+    });
+
+    it("should return 400 if owner does not specify targetUserId", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "owner1",
+        type: "owner",
+      });
+
+      const res = await request(app)
+        .post("/api/v1/messages/conversation/hr-direct")
+        .set("Authorization", `Bearer ${token}`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("targetUserId is required for owner");
+    });
+
+    it("should return 400 if owner targets non-HR user", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 1,
+          username: "owner1",
+          type: "owner",
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          username: "cleaner1",
+          type: "cleaner",  // Not HR
+        });
+
+      const res = await request(app)
+        .post("/api/v1/messages/conversation/hr-direct")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ targetUserId: 2 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Target must be an HR staff member");
+    });
+  });
+
+  describe("System messages", () => {
+    it("should create system message with null senderId when title is changed", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "owner1",
+        firstName: "John",
+        lastName: "Doe",
+        type: "owner",
+      });
+
+      const mockConversation = {
+        id: 1,
+        conversationType: "internal",
+        title: "Old Title",
+        participants: [{ userId: 1 }, { userId: 2 }],
+        update: jest.fn().mockResolvedValue(true),
+        toJSON: () => ({
+          id: 1,
+          conversationType: "internal",
+          title: "Old Title",
+          participants: [{ userId: 1 }, { userId: 2 }],
+        }),
+      };
+
+      Conversation.findByPk.mockResolvedValue(mockConversation);
+
+      Message.create.mockResolvedValue({
+        id: 100,
+        conversationId: 1,
+        senderId: null,
+        content: 'John Doe changed the conversation name to "New Title"',
+        messageType: "system",
+      });
+
+      await request(app)
+        .patch("/api/v1/messages/conversation/1/title")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ title: "New Title" });
+
+      // Verify system message was created with null senderId
+      expect(Message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          senderId: null,
+          messageType: "system",
+        })
+      );
+    });
+
+    it("should include system message in response", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "owner1",
+        firstName: "Jane",
+        lastName: "Smith",
+        type: "owner",
+      });
+
+      const mockConversation = {
+        id: 1,
+        conversationType: "internal",
+        title: "Team Chat",
+        participants: [{ userId: 1 }, { userId: 2 }],
+        update: jest.fn().mockResolvedValue(true),
+        toJSON: () => ({
+          id: 1,
+          conversationType: "internal",
+          title: "Team Chat",
+          participants: [{ userId: 1 }, { userId: 2 }],
+        }),
+      };
+
+      Conversation.findByPk.mockResolvedValue(mockConversation);
+
+      const mockSystemMessage = {
+        id: 100,
+        conversationId: 1,
+        senderId: null,
+        content: 'Jane Smith changed the conversation name to "New Chat Name"',
+        messageType: "system",
+      };
+
+      Message.create.mockResolvedValue(mockSystemMessage);
+
+      const res = await request(app)
+        .patch("/api/v1/messages/conversation/1/title")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ title: "New Chat Name" });
+
+      // Verify the response includes the system message
+      expect(res.status).toBe(200);
+      expect(res.body.systemMessage).toBeDefined();
+      expect(res.body.systemMessage.messageType).toBe("system");
+      expect(res.body.systemMessage.senderId).toBeNull();
+    });
+  });
+
+  describe("DELETE /:messageId - Message deletion", () => {
+    it("should soft delete a message", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockMessage = {
+        id: 1,
+        conversationId: 1,
+        senderId: 1,
+        content: "Message to delete",
+        deletedAt: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      Message.findByPk.mockResolvedValue(mockMessage);
+
+      const res = await request(app)
+        .delete("/api/v1/messages/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(mockMessage.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deletedAt: expect.any(Date),
+        })
+      );
+    });
+
+    it("should return 403 if user is not the message sender", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      Message.findByPk.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        senderId: 2, // Different user
+        content: "Not my message",
+      });
+
+      const res = await request(app)
+        .delete("/api/v1/messages/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("You can only delete your own messages");
+    });
+
+    it("should return 404 for non-existent message", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      Message.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .delete("/api/v1/messages/999")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Message not found");
+    });
+
+    it("should emit message_deleted event through socket", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockMessage = {
+        id: 1,
+        conversationId: 1,
+        senderId: 1,
+        content: "Message to delete",
+        deletedAt: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      Message.findByPk.mockResolvedValue(mockMessage);
+
+      await request(app)
+        .delete("/api/v1/messages/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(mockIo.to).toHaveBeenCalledWith("conversation_1");
+      expect(mockIo.emit).toHaveBeenCalledWith("message_deleted", {
+        messageId: 1,
+        conversationId: 1,
+      });
+    });
+  });
+
+  describe("PATCH /conversation/:conversationId/title", () => {
+    it("should update conversation title (owner)", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "owner1",
+        firstName: "John",
+        lastName: "Doe",
+        type: "owner",
+      });
+
+      const mockConversation = {
+        id: 1,
+        conversationType: "internal",
+        title: "Old Title",
+        participants: [
+          { userId: 1 },
+          { userId: 2 },
+        ],
+        update: jest.fn().mockResolvedValue(true),
+        toJSON: () => ({
+          id: 1,
+          conversationType: "internal",
+          title: "Old Title",
+          participants: [{ userId: 1 }, { userId: 2 }],
+        }),
+      };
+
+      Conversation.findByPk.mockResolvedValue(mockConversation);
+
+      Message.create.mockResolvedValue({
+        id: 100,
+        conversationId: 1,
+        senderId: null,
+        content: 'John Doe changed the conversation name to "New Title"',
+        messageType: "system",
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/messages/conversation/1/title")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ title: "New Title" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(mockConversation.update).toHaveBeenCalledWith({ title: "New Title" });
+      expect(Message.create).toHaveBeenCalledWith({
+        conversationId: 1,
+        senderId: null,
+        content: 'John Doe changed the conversation name to "New Title"',
+        messageType: "system",
+      });
+      expect(mockIo.to).toHaveBeenCalledWith("user_1");
+      expect(mockIo.to).toHaveBeenCalledWith("user_2");
+      expect(mockIo.emit).toHaveBeenCalledWith("conversation_title_changed", expect.any(Object));
+    });
+
+    it("should update conversation title (HR)", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "hr1",
+        firstName: "Sarah",
+        lastName: "Smith",
+        type: "humanResources",
+      });
+
+      const mockConversation = {
+        id: 1,
+        conversationType: "internal",
+        title: "Team Chat",
+        participants: [{ userId: 1 }],
+        update: jest.fn().mockResolvedValue(true),
+        toJSON: () => ({
+          id: 1,
+          conversationType: "internal",
+          title: "Team Chat",
+          participants: [{ userId: 1 }],
+        }),
+      };
+
+      Conversation.findByPk.mockResolvedValue(mockConversation);
+      Message.create.mockResolvedValue({ id: 100 });
+
+      const res = await request(app)
+        .patch("/api/v1/messages/conversation/1/title")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ title: "Q4 Planning" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("should return 403 for regular users", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "regularuser",
+        type: null,
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/messages/conversation/1/title")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ title: "New Title" });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Only owner or HR can edit conversation titles");
+    });
+
+    it("should return 400 for non-internal conversations", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "owner1",
+        type: "owner",
+      });
+
+      Conversation.findByPk.mockResolvedValue({
+        id: 1,
+        conversationType: "support",
+        title: "Support Chat",
+        participants: [],
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/messages/conversation/1/title")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ title: "New Title" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Can only edit titles of internal conversations");
+    });
+
+    it("should return 400 for empty title", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const res = await request(app)
+        .patch("/api/v1/messages/conversation/1/title")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ title: "   " });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Title is required");
+    });
+
+    it("should return 404 for non-existent conversation", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "owner1",
+        type: "owner",
+      });
+
+      Conversation.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/messages/conversation/999/title")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ title: "New Title" });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Conversation not found");
+    });
+  });
 });
 
 afterAll(async () => {

@@ -608,4 +608,117 @@ describe("ConversationList Component Logic", () => {
       expect(filtered).toHaveLength(1);
     });
   });
+
+  // ============================================
+  // DELETE CONVERSATION PERMISSION (OWNER ONLY)
+  // ============================================
+  describe("Delete Conversation Permission", () => {
+    const canDeleteConversation = (account) => {
+      return account === "owner";
+    };
+
+    it("should allow owner to delete conversations", () => {
+      expect(canDeleteConversation("owner")).toBe(true);
+    });
+
+    it("should NOT allow HR to delete conversations", () => {
+      expect(canDeleteConversation("humanResources")).toBe(false);
+    });
+
+    it("should NOT allow cleaner to delete conversations", () => {
+      expect(canDeleteConversation("cleaner")).toBe(false);
+    });
+
+    it("should NOT allow homeowner to delete conversations", () => {
+      expect(canDeleteConversation(null)).toBe(false);
+    });
+  });
+
+  // ============================================
+  // DELETE CONVERSATION LOGIC
+  // ============================================
+  describe("Delete Conversation Logic", () => {
+    const removeConversation = (conversations, conversationId) => {
+      return conversations.filter((conv) => conv.conversationId !== conversationId);
+    };
+
+    it("should remove conversation from list", () => {
+      const result = removeConversation(mockConversations, 2);
+      expect(result).toHaveLength(3);
+      expect(result.find((c) => c.conversationId === 2)).toBeUndefined();
+    });
+
+    it("should not change list if conversation not found", () => {
+      const result = removeConversation(mockConversations, 999);
+      expect(result).toHaveLength(4);
+    });
+
+    it("should handle empty conversation list", () => {
+      const result = removeConversation([], 1);
+      expect(result).toHaveLength(0);
+    });
+
+    it("should preserve other conversations after deletion", () => {
+      const result = removeConversation(mockConversations, 2);
+      expect(result[0].conversationId).toBe(1);
+      expect(result[1].conversationId).toBe(3);
+      expect(result[2].conversationId).toBe(4);
+    });
+  });
+
+  // ============================================
+  // LONG PRESS HANDLER
+  // ============================================
+  describe("Long Press Handler for Delete", () => {
+    const shouldShowDeleteOption = (account, conversationType) => {
+      // Owner can delete any conversation
+      if (account === "owner") return true;
+      // No one else can delete
+      return false;
+    };
+
+    it("should show delete option for owner on support conversation", () => {
+      expect(shouldShowDeleteOption("owner", "support")).toBe(true);
+    });
+
+    it("should show delete option for owner on internal conversation", () => {
+      expect(shouldShowDeleteOption("owner", "internal")).toBe(true);
+    });
+
+    it("should show delete option for owner on broadcast conversation", () => {
+      expect(shouldShowDeleteOption("owner", "broadcast")).toBe(true);
+    });
+
+    it("should NOT show delete option for HR", () => {
+      expect(shouldShowDeleteOption("humanResources", "internal")).toBe(false);
+    });
+
+    it("should NOT show delete option for cleaner", () => {
+      expect(shouldShowDeleteOption("cleaner", "support")).toBe(false);
+    });
+  });
+
+  // ============================================
+  // DELETE CONFIRMATION
+  // ============================================
+  describe("Delete Confirmation Dialog", () => {
+    const getDeleteConfirmationMessage = (conversationTitle) => {
+      return `Are you sure you want to delete "${conversationTitle}"? This will permanently delete all messages in this conversation.`;
+    };
+
+    it("should include conversation title in confirmation message", () => {
+      const message = getDeleteConfirmationMessage("HR Team");
+      expect(message).toContain("HR Team");
+    });
+
+    it("should warn about permanent deletion", () => {
+      const message = getDeleteConfirmationMessage("Test Chat");
+      expect(message).toContain("permanently delete");
+    });
+
+    it("should mention messages will be deleted", () => {
+      const message = getDeleteConfirmationMessage("Test Chat");
+      expect(message).toContain("messages");
+    });
+  });
 });

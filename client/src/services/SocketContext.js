@@ -154,6 +154,15 @@ export const SocketProvider = ({ children, token }) => {
     return () => {};
   }, [socket]);
 
+  // Listen for conversation title changes
+  const onConversationTitleChanged = useCallback((callback) => {
+    if (socket) {
+      socket.on("conversation_title_changed", callback);
+      return () => socket.off("conversation_title_changed", callback);
+    }
+    return () => {};
+  }, [socket]);
+
   const value = {
     socket,
     connected,
@@ -169,6 +178,7 @@ export const SocketProvider = ({ children, token }) => {
     onMessageRead,
     onReactionNotification,
     onConversationDeleted,
+    onConversationTitleChanged,
   };
 
   return (
