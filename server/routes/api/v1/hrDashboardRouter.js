@@ -216,9 +216,9 @@ hrDashboardRouter.get("/quick-stats", verifyHROrOwner, async (req, res) => {
     const disputesResolvedThisWeek = await HomeSizeAdjustmentRequest.count({
       where: {
         status: {
-          [Op.in]: ["approved", "denied"],
+          [Op.in]: ["owner_approved", "owner_denied"],
         },
-        resolvedAt: {
+        ownerResolvedAt: {
           [Op.gte]: weekStart,
         },
       },

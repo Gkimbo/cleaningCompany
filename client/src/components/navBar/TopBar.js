@@ -139,6 +139,11 @@ const TopBar = ({ dispatch, state }) => {
                           <EarningsButton closeModal={closeModal} />
                           <RecommendedSuppliesButton closeModal={closeModal} />
                         </>
+                      ) : state.account === "humanResources" ? (
+                        <>
+                          <ViewApplicationsButton closeModal={closeModal} />
+                          <ManageEmployees closeModal={closeModal} />
+                        </>
                       ) : (
                         <>
                           <ScheduleCleaningButton closeModal={closeModal} />
