@@ -84,7 +84,7 @@ calendarSyncRouter.get("/home/:homeId", verifyToken, async (req, res) => {
 
 // Add a new calendar sync
 calendarSyncRouter.post("/", verifyToken, async (req, res) => {
-  const { homeId, icalUrl, autoCreateAppointments, daysAfterCheckout } = req.body;
+  const { homeId, icalUrl, autoCreateAppointments, daysAfterCheckout, autoSync } = req.body;
 
   try {
     // Validate required fields
@@ -142,6 +142,7 @@ calendarSyncRouter.post("/", verifyToken, async (req, res) => {
       autoCreateAppointments: autoCreateAppointments !== false,
       daysAfterCheckout: daysAfterCheckout || 0,
       syncedEventUids: [],
+      autoSync: autoSync === true,
     });
 
     return res.status(201).json({
@@ -158,7 +159,7 @@ calendarSyncRouter.post("/", verifyToken, async (req, res) => {
 // Update a calendar sync
 calendarSyncRouter.patch("/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { isActive, autoCreateAppointments, daysAfterCheckout } = req.body;
+  const { isActive, autoCreateAppointments, daysAfterCheckout, autoSync } = req.body;
 
   try {
     const sync = await CalendarSync.findOne({
@@ -173,6 +174,7 @@ calendarSyncRouter.patch("/:id", verifyToken, async (req, res) => {
     if (typeof isActive === "boolean") updates.isActive = isActive;
     if (typeof autoCreateAppointments === "boolean") updates.autoCreateAppointments = autoCreateAppointments;
     if (typeof daysAfterCheckout === "number") updates.daysAfterCheckout = daysAfterCheckout;
+    if (typeof autoSync === "boolean") updates.autoSync = autoSync;
 
     await sync.update(updates);
 
@@ -281,14 +283,14 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
         });
 
         if (existingBill) {
-          const oldAppt = existingBill.dataValues.appointmentDue;
-          const total =
-            existingBill.dataValues.cancellationFee +
-            existingBill.dataValues.appointmentDue;
+          const oldAppt = Number(existingBill.dataValues.appointmentDue) || 0;
+          const cancellationFee = Number(existingBill.dataValues.cancellationFee) || 0;
+          const total = cancellationFee + oldAppt;
+          const priceNum = Number(price) || 0;
 
           await existingBill.update({
-            appointmentDue: oldAppt + price,
-            totalDue: total + price,
+            appointmentDue: oldAppt + priceNum,
+            totalDue: total + priceNum,
           });
         }
 

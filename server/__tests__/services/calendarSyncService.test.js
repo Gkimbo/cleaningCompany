@@ -10,6 +10,11 @@ jest.mock("../../services/icalParser", () => ({
 // Mock calculatePrice
 jest.mock("../../services/CalculatePrice", () => jest.fn(() => 150));
 
+// Mock Email class
+jest.mock("../../services/sendNotifications/EmailClass", () => ({
+  sendAutoSyncAppointmentsCreated: jest.fn().mockResolvedValue(true),
+}));
+
 // Mock models
 jest.mock("../../models", () => ({
   CalendarSync: {
@@ -26,9 +31,13 @@ jest.mock("../../models", () => ({
   UserBills: {
     findOne: jest.fn(),
   },
+  User: {
+    findByPk: jest.fn(),
+  },
 }));
 
-const { CalendarSync, UserAppointments, UserHomes, UserBills } = require("../../models");
+const { CalendarSync, UserAppointments, UserHomes, UserBills, User } = require("../../models");
+const Email = require("../../services/sendNotifications/EmailClass");
 const { getCheckoutDates } = require("../../services/icalParser");
 const {
   syncSingleCalendar,
@@ -235,6 +244,90 @@ describe("Calendar Sync Service", () => {
 
       expect(mockBill.update).toHaveBeenCalled();
     });
+
+    it("should track created appointment details in result", async () => {
+      const mockSync = createMockSync();
+      const mockHome = createMockHome();
+      const mockBill = createMockBill();
+
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserBills.findOne.mockResolvedValue(mockBill);
+      UserAppointments.findOne.mockResolvedValue(null);
+      UserAppointments.create.mockResolvedValue({ id: 123 });
+      getCheckoutDates.mockResolvedValue([
+        { checkoutDate: "2025-03-01", uid: "uid1", summary: "Airbnb Guest" },
+      ]);
+
+      const result = await syncSingleCalendar(mockSync);
+
+      expect(result.createdAppointments).toHaveLength(1);
+      expect(result.createdAppointments[0]).toEqual({
+        id: 123,
+        date: "2025-03-01",
+        price: 150,
+        source: "Airbnb Guest",
+      });
+    });
+
+    it("should send email notification when sendEmail is true and appointments created", async () => {
+      const mockSync = createMockSync();
+      const mockHome = createMockHome();
+      const mockBill = createMockBill();
+      const mockUser = { id: 1, email: "test@example.com", firstName: "John" };
+
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserBills.findOne.mockResolvedValue(mockBill);
+      UserAppointments.findOne.mockResolvedValue(null);
+      UserAppointments.create.mockResolvedValue({ id: 1 });
+      User.findByPk.mockResolvedValue(mockUser);
+      getCheckoutDates.mockResolvedValue([
+        { checkoutDate: "2025-03-01", uid: "uid1", summary: "Reserved" },
+      ]);
+
+      await syncSingleCalendar(mockSync, true);
+
+      expect(Email.sendAutoSyncAppointmentsCreated).toHaveBeenCalledWith(
+        "test@example.com",
+        "John",
+        mockHome,
+        expect.arrayContaining([
+          expect.objectContaining({ date: "2025-03-01", price: 150 }),
+        ]),
+        "airbnb"
+      );
+    });
+
+    it("should not send email when sendEmail is false", async () => {
+      const mockSync = createMockSync();
+      const mockHome = createMockHome();
+      const mockBill = createMockBill();
+
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserBills.findOne.mockResolvedValue(mockBill);
+      UserAppointments.findOne.mockResolvedValue(null);
+      UserAppointments.create.mockResolvedValue({ id: 1 });
+      getCheckoutDates.mockResolvedValue([
+        { checkoutDate: "2025-03-01", uid: "uid1", summary: "Reserved" },
+      ]);
+
+      await syncSingleCalendar(mockSync, false);
+
+      expect(Email.sendAutoSyncAppointmentsCreated).not.toHaveBeenCalled();
+    });
+
+    it("should not send email when no appointments created", async () => {
+      const mockSync = createMockSync({ syncedEventUids: ["uid1"] });
+      const mockHome = createMockHome();
+
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      getCheckoutDates.mockResolvedValue([
+        { checkoutDate: "2025-03-01", uid: "uid1", summary: "Reserved" },
+      ]);
+
+      await syncSingleCalendar(mockSync, true);
+
+      expect(Email.sendAutoSyncAppointmentsCreated).not.toHaveBeenCalled();
+    });
   });
 
   describe("syncAllCalendars", () => {
@@ -247,6 +340,7 @@ describe("Calendar Sync Service", () => {
           platform: "airbnb",
           icalUrl: "https://airbnb.com/1.ics",
           isActive: true,
+          autoSync: true,
           autoCreateAppointments: true,
           daysAfterCheckout: 0,
           syncedEventUids: [],
@@ -259,6 +353,7 @@ describe("Calendar Sync Service", () => {
           platform: "vrbo",
           icalUrl: "https://vrbo.com/2.ics",
           isActive: true,
+          autoSync: true,
           autoCreateAppointments: true,
           daysAfterCheckout: 0,
           syncedEventUids: [],
@@ -287,7 +382,7 @@ describe("Calendar Sync Service", () => {
 
       expect(result.totalSyncs).toBe(2);
       expect(result.results).toHaveLength(2);
-      expect(CalendarSync.findAll).toHaveBeenCalledWith({ where: { isActive: true } });
+      expect(CalendarSync.findAll).toHaveBeenCalledWith({ where: { isActive: true, autoSync: true } });
     });
 
     it("should handle mixed success and failure", async () => {
@@ -298,6 +393,7 @@ describe("Calendar Sync Service", () => {
           homeId: 1,
           icalUrl: "https://airbnb.com/1.ics",
           isActive: true,
+          autoSync: true,
           autoCreateAppointments: true,
           daysAfterCheckout: 0,
           syncedEventUids: [],
@@ -309,6 +405,7 @@ describe("Calendar Sync Service", () => {
           homeId: 2,
           icalUrl: "https://vrbo.com/2.ics",
           isActive: true,
+          autoSync: true,
           autoCreateAppointments: true,
           daysAfterCheckout: 0,
           syncedEventUids: [],
@@ -365,6 +462,7 @@ describe("Calendar Sync Service", () => {
         homeId: 1,
         icalUrl: "https://airbnb.com/1.ics",
         isActive: true,
+        autoSync: true,
         autoCreateAppointments: true,
         daysAfterCheckout: 0,
         syncedEventUids: [],
@@ -404,13 +502,13 @@ describe("Calendar Sync Service", () => {
   });
 
   describe("startPeriodicSync / stopPeriodicSync", () => {
-    it("should start periodic sync with specified interval", () => {
+    it("should start periodic sync and log scheduler info", () => {
       const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
-      startPeriodicSync(1000); // 1 second interval for testing
+      startPeriodicSync();
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Starting periodic calendar sync")
+        expect.stringContaining("[CalendarSync] Scheduler initialized:")
       );
 
       consoleSpy.mockRestore();
@@ -419,10 +517,10 @@ describe("Calendar Sync Service", () => {
     it("should not start multiple periodic syncs", () => {
       const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
-      startPeriodicSync(1000);
-      startPeriodicSync(1000);
+      startPeriodicSync();
+      startPeriodicSync();
 
-      expect(consoleSpy).toHaveBeenCalledWith("Periodic sync already running");
+      expect(consoleSpy).toHaveBeenCalledWith("[CalendarSync] Scheduler already running");
 
       consoleSpy.mockRestore();
     });
@@ -430,10 +528,10 @@ describe("Calendar Sync Service", () => {
     it("should stop periodic sync", () => {
       const consoleSpy = jest.spyOn(console, "log").mockImplementation();
 
-      startPeriodicSync(1000);
+      startPeriodicSync();
       stopPeriodicSync();
 
-      expect(consoleSpy).toHaveBeenCalledWith("Periodic sync stopped");
+      expect(consoleSpy).toHaveBeenCalledWith("[CalendarSync] Scheduler stopped (new jobs won't be scheduled)");
 
       consoleSpy.mockRestore();
     });
@@ -441,7 +539,7 @@ describe("Calendar Sync Service", () => {
     it("should run initial sync after delay", async () => {
       CalendarSync.findAll.mockResolvedValue([]);
 
-      startPeriodicSync(60000);
+      startPeriodicSync();
 
       // Fast-forward past the initial sync delay (10 seconds)
       jest.advanceTimersByTime(11000);

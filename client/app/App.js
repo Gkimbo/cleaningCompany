@@ -62,7 +62,7 @@ import {
 } from "../src/components/onboarding";
 
 // Calendar Sync
-import { CalendarSyncOwner } from "../src/components/calendarSync";
+import { CalendarSyncManager } from "../src/components/calendarSync";
 
 // Account Settings
 import AccountSettings from "../src/components/account/AccountSettings";
@@ -280,7 +280,7 @@ export default function App() {
               />
               <Route
                 path="/calendar-sync/:homeId"
-                element={<CalendarSyncOwner state={state} dispatch={dispatch} />}
+                element={<CalendarSyncManager state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/appointments"
