@@ -178,6 +178,13 @@ const reducer = (state, action) => {
             : conv
         ),
       };
+    case "REMOVE_CONVERSATION":
+      return {
+        ...state,
+        conversations: state.conversations.filter(
+          (conv) => conv.conversationId !== action.payload
+        ),
+      };
     default:
       throw new Error();
   }

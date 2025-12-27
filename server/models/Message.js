@@ -37,6 +37,10 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: "text",
     },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   });
 
   Message.associate = (models) => {
@@ -47,6 +51,14 @@ module.exports = (sequelize, DataTypes) => {
     Message.belongsTo(models.User, {
       foreignKey: "senderId",
       as: "sender",
+    });
+    Message.hasMany(models.MessageReaction, {
+      foreignKey: "messageId",
+      as: "reactions",
+    });
+    Message.hasMany(models.MessageReadReceipt, {
+      foreignKey: "messageId",
+      as: "readReceipts",
     });
   };
 

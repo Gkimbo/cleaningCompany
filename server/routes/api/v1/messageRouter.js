@@ -7,6 +7,8 @@ const {
   Conversation,
   ConversationParticipant,
   UserAppointments,
+  MessageReaction,
+  MessageReadReceipt,
 } = require("../../../models");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
@@ -110,7 +112,29 @@ messageRouter.get("/conversation/:conversationId", authenticateToken, async (req
         {
           model: User,
           as: "sender",
-          attributes: ["id", "username", "type"],
+          attributes: ["id", "username", "type", "firstName", "lastName"],
+        },
+        {
+          model: MessageReaction,
+          as: "reactions",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "username", "firstName", "lastName"],
+            },
+          ],
+        },
+        {
+          model: MessageReadReceipt,
+          as: "readReceipts",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "username"],
+            },
+          ],
         },
       ],
       order: [["createdAt", "ASC"]],
@@ -1252,6 +1276,356 @@ messageRouter.get("/conversations/internal", authenticateToken, async (req, res)
   } catch (error) {
     console.error("Error fetching internal conversations:", error);
     return res.status(500).json({ error: "Failed to fetch internal conversations" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/:messageId/react
+ * Add or toggle a reaction to a message
+ */
+messageRouter.post("/:messageId/react", authenticateToken, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.userId;
+    const io = req.app.get("io");
+
+    if (!emoji) {
+      return res.status(400).json({ error: "Emoji is required" });
+    }
+
+    // Get the message with sender info
+    const message = await Message.findByPk(messageId, {
+      include: [
+        { model: Conversation, as: "conversation" },
+        {
+          model: User,
+          as: "sender",
+          attributes: ["id", "username", "firstName", "lastName", "notifications", "expoPushToken"],
+        },
+      ],
+    });
+
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Verify user is a participant of the conversation
+    const participant = await ConversationParticipant.findOne({
+      where: { conversationId: message.conversationId, userId },
+    });
+
+    if (!participant) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    // Check if reaction already exists
+    const existingReaction = await MessageReaction.findOne({
+      where: { messageId, userId, emoji },
+    });
+
+    let reaction;
+    let action;
+
+    if (existingReaction) {
+      // Remove existing reaction (toggle off)
+      await existingReaction.destroy();
+      action = "removed";
+      reaction = null;
+    } else {
+      // Add new reaction
+      reaction = await MessageReaction.create({
+        messageId,
+        userId,
+        emoji,
+      });
+
+      // Include user info
+      reaction = await MessageReaction.findByPk(reaction.id, {
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id", "username", "firstName", "lastName"],
+          },
+        ],
+      });
+      action = "added";
+    }
+
+    // Emit reaction update to all participants in the conversation
+    io.to(`conversation_${message.conversationId}`).emit("message_reaction", {
+      messageId: parseInt(messageId),
+      reaction: reaction ? reaction.toJSON() : null,
+      action,
+      emoji,
+      userId,
+      conversationId: message.conversationId,
+    });
+
+    // Send push notification to message sender when someone else reacts (only for new reactions)
+    if (action === "added" && message.senderId !== userId) {
+      const reactor = await User.findByPk(userId, {
+        attributes: ["id", "username", "firstName", "lastName"],
+      });
+
+      const reactorName = reactor.firstName && reactor.lastName
+        ? `${reactor.firstName} ${reactor.lastName}`
+        : reactor.username;
+
+      // Send push notification if sender has phone notifications enabled
+      if (message.sender.notifications &&
+          message.sender.notifications.includes("phone") &&
+          message.sender.expoPushToken) {
+        await PushNotification.sendPushReaction(
+          message.sender.expoPushToken,
+          reactorName,
+          emoji,
+          message.content
+        );
+      }
+
+      // Emit to sender's personal room for real-time notification
+      io.to(`user_${message.senderId}`).emit("reaction_notification", {
+        messageId: parseInt(messageId),
+        conversationId: message.conversationId,
+        reactorId: userId,
+        reactorName,
+        emoji,
+        messagePreview: message.content.substring(0, 50),
+      });
+    }
+
+    return res.json({ success: true, action, reaction });
+  } catch (error) {
+    console.error("Error reacting to message:", error);
+    return res.status(500).json({ error: "Failed to react to message" });
+  }
+});
+
+/**
+ * DELETE /api/v1/messages/:messageId/react/:emoji
+ * Remove a specific reaction from a message (users can only remove their own reactions)
+ */
+messageRouter.delete("/:messageId/react/:emoji", authenticateToken, async (req, res) => {
+  try {
+    const { messageId, emoji } = req.params;
+    const userId = req.userId;
+    const io = req.app.get("io");
+
+    // Get the message
+    const message = await Message.findByPk(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Find the user's own reaction only - users cannot remove others' reactions
+    const reaction = await MessageReaction.findOne({
+      where: { messageId, userId, emoji },
+    });
+
+    if (!reaction) {
+      // Check if reaction exists but belongs to someone else
+      const otherReaction = await MessageReaction.findOne({
+        where: { messageId, emoji },
+      });
+      if (otherReaction) {
+        return res.status(403).json({ error: "You can only remove your own reactions" });
+      }
+      return res.status(404).json({ error: "Reaction not found" });
+    }
+
+    await reaction.destroy();
+
+    // Emit reaction update
+    io.to(`conversation_${message.conversationId}`).emit("message_reaction", {
+      messageId: parseInt(messageId),
+      reaction: null,
+      action: "removed",
+      emoji,
+      userId,
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error removing reaction:", error);
+    return res.status(500).json({ error: "Failed to remove reaction" });
+  }
+});
+
+/**
+ * DELETE /api/v1/messages/:messageId
+ * Soft delete a message (only the sender can delete their own messages)
+ */
+messageRouter.delete("/:messageId", authenticateToken, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.userId;
+    const io = req.app.get("io");
+
+    const message = await Message.findByPk(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Only the sender can delete their own messages
+    if (message.senderId !== userId) {
+      return res.status(403).json({ error: "You can only delete your own messages" });
+    }
+
+    // Soft delete - set deletedAt timestamp
+    await message.update({ deletedAt: new Date() });
+
+    // Emit message deleted event
+    io.to(`conversation_${message.conversationId}`).emit("message_deleted", {
+      messageId: parseInt(messageId),
+      conversationId: message.conversationId,
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting message:", error);
+    return res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+/**
+ * DELETE /api/v1/messages/conversation/:conversationId
+ * Delete an entire conversation (owner only)
+ * This permanently removes the conversation and all its messages
+ */
+messageRouter.delete("/conversation/:conversationId", authenticateToken, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.userId;
+    const io = req.app.get("io");
+
+    // Verify user is owner
+    const user = await User.findByPk(userId);
+    if (!user || user.type !== "owner") {
+      return res.status(403).json({ error: "Only the owner can delete conversations" });
+    }
+
+    // Find the conversation
+    const conversation = await Conversation.findByPk(conversationId, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+        },
+        {
+          model: Message,
+          as: "messages",
+        },
+      ],
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    // Get participant user IDs before deletion for socket notification
+    const participantUserIds = conversation.participants.map((p) => p.userId);
+
+    // Get message IDs for deleting reactions and read receipts
+    const messageIds = conversation.messages.map((m) => m.id);
+
+    // Delete in order: reactions, read receipts, messages, participants, conversation
+    if (messageIds.length > 0) {
+      await MessageReaction.destroy({
+        where: { messageId: { [Op.in]: messageIds } },
+      });
+
+      await MessageReadReceipt.destroy({
+        where: { messageId: { [Op.in]: messageIds } },
+      });
+
+      await Message.destroy({
+        where: { conversationId },
+      });
+    }
+
+    await ConversationParticipant.destroy({
+      where: { conversationId },
+    });
+
+    await conversation.destroy();
+
+    // Notify all participants that the conversation was deleted
+    for (const participantUserId of participantUserIds) {
+      io.to(`user_${participantUserId}`).emit("conversation_deleted", {
+        conversationId: parseInt(conversationId),
+      });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting conversation:", error);
+    return res.status(500).json({ error: "Failed to delete conversation" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/mark-messages-read
+ * Mark specific messages as read (creates read receipts)
+ */
+messageRouter.post("/mark-messages-read", authenticateToken, async (req, res) => {
+  try {
+    const { messageIds } = req.body;
+    const userId = req.userId;
+    const io = req.app.get("io");
+
+    if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return res.status(400).json({ error: "messageIds array is required" });
+    }
+
+    // Get messages and verify they exist
+    const messages = await Message.findAll({
+      where: { id: { [Op.in]: messageIds } },
+    });
+
+    if (messages.length === 0) {
+      return res.status(404).json({ error: "No messages found" });
+    }
+
+    // Verify user is participant of at least one of these conversations
+    const conversationIds = [...new Set(messages.map((m) => m.conversationId))];
+    const participations = await ConversationParticipant.findAll({
+      where: { conversationId: { [Op.in]: conversationIds }, userId },
+    });
+
+    if (participations.length === 0) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    // Create read receipts for each message (skip if already exists)
+    const readReceipts = [];
+    for (const message of messages) {
+      // Don't create read receipt for own messages
+      if (message.senderId !== userId) {
+        const [receipt, created] = await MessageReadReceipt.findOrCreate({
+          where: { messageId: message.id, userId },
+          defaults: { readAt: new Date() },
+        });
+        if (created) {
+          readReceipts.push(receipt);
+
+          // Emit read receipt to the message sender
+          io.to(`user_${message.senderId}`).emit("message_read", {
+            messageId: message.id,
+            readBy: userId,
+            readAt: receipt.readAt,
+          });
+        }
+      }
+    }
+
+    return res.json({ success: true, receiptsCreated: readReceipts.length });
+  } catch (error) {
+    console.error("Error marking messages as read:", error);
+    return res.status(500).json({ error: "Failed to mark messages as read" });
   }
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
 import {
   View,
   Text,
@@ -8,24 +8,41 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
-import Icon from "react-native-vector-icons/FontAwesome";
-import messagingStyles from "../../services/styles/MessagingStyles";
+import Icon from "react-native-vector-icons/Feather";
+import { UserContext } from "../../context/UserContext";
 import MessageService from "../../services/fetchRequests/MessageClass";
 import { useSocket } from "../../services/SocketContext";
 import MessageBubble from "./MessageBubble";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../services/styles/theme";
 
-const ChatScreen = ({ state, dispatch }) => {
+const ChatScreen = () => {
   const navigate = useNavigate();
   const { conversationId } = useParams();
+  const { state, dispatch } = useContext(UserContext);
   const scrollViewRef = useRef(null);
-  const { joinConversation, leaveConversation, onNewMessage } = useSocket();
+  const {
+    joinConversation,
+    leaveConversation,
+    onNewMessage,
+    onMessageReaction,
+    onMessageDeleted,
+    onMessageRead,
+  } = useSocket();
 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [messageText, setMessageText] = useState("");
   const [conversation, setConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
 
   const fetchMessages = useCallback(async () => {
     if (!state.currentUser?.token || !conversationId) return;
@@ -36,7 +53,7 @@ const ChatScreen = ({ state, dispatch }) => {
         state.currentUser.token
       );
       if (response.messages) {
-        dispatch({ type: "SET_CURRENT_MESSAGES", payload: response.messages });
+        setMessages(response.messages);
       }
       if (response.conversation) {
         setConversation(response.conversation);
@@ -85,7 +102,7 @@ const ChatScreen = ({ state, dispatch }) => {
   useEffect(() => {
     const unsubscribe = onNewMessage((newMessage) => {
       if (newMessage.conversationId === parseInt(conversationId)) {
-        dispatch({ type: "ADD_MESSAGE", payload: newMessage });
+        setMessages((prev) => [...prev, newMessage]);
 
         // Mark as read since we're viewing
         MessageService.markAsRead(conversationId, state.currentUser.token);
@@ -97,16 +114,76 @@ const ChatScreen = ({ state, dispatch }) => {
       }
     });
     return unsubscribe;
-  }, [onNewMessage, conversationId, dispatch, state.currentUser?.token]);
+  }, [onNewMessage, conversationId, state.currentUser?.token]);
+
+  // Listen for message reactions
+  useEffect(() => {
+    const unsubscribe = onMessageReaction((data) => {
+      const { messageId, reaction, action, emoji, userId } = data;
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id === messageId) {
+            let newReactions = [...(msg.reactions || [])];
+            if (action === "added" && reaction) {
+              newReactions.push(reaction);
+            } else if (action === "removed") {
+              newReactions = newReactions.filter(
+                (r) => !(r.emoji === emoji && r.userId === userId)
+              );
+            }
+            return { ...msg, reactions: newReactions };
+          }
+          return msg;
+        })
+      );
+    });
+    return unsubscribe;
+  }, [onMessageReaction]);
+
+  // Listen for message deletions
+  useEffect(() => {
+    const unsubscribe = onMessageDeleted((data) => {
+      const { messageId } = data;
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id === messageId) {
+            return { ...msg, deletedAt: new Date().toISOString() };
+          }
+          return msg;
+        })
+      );
+    });
+    return unsubscribe;
+  }, [onMessageDeleted]);
+
+  // Listen for read receipts
+  useEffect(() => {
+    const unsubscribe = onMessageRead((data) => {
+      const { messageId, readBy, readAt } = data;
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id === messageId) {
+            const newReceipts = [...(msg.readReceipts || [])];
+            if (!newReceipts.some((r) => r.userId === readBy)) {
+              newReceipts.push({ userId: readBy, readAt });
+            }
+            return { ...msg, readReceipts: newReceipts };
+          }
+          return msg;
+        })
+      );
+    });
+    return unsubscribe;
+  }, [onMessageRead]);
 
   // Scroll to bottom when messages load
   useEffect(() => {
-    if (!loading && state.currentMessages?.length > 0) {
+    if (!loading && messages.length > 0) {
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: false });
       }, 100);
     }
-  }, [loading, state.currentMessages?.length]);
+  }, [loading, messages.length]);
 
   const handleSend = async () => {
     if (!messageText.trim() || sending) return;
@@ -124,15 +201,30 @@ const ChatScreen = ({ state, dispatch }) => {
 
       if (response.error) {
         console.error("Failed to send message:", response.error);
-        setMessageText(content); // Restore message on error
+        setMessageText(content);
       }
-      // Message will be added via socket event
     } catch (error) {
       console.error("Error sending message:", error);
       setMessageText(content);
     } finally {
       setSending(false);
     }
+  };
+
+  const handleReactionUpdate = (messageId, result) => {
+    // Local update handled by socket listener
+  };
+
+  const handleMessageDeleted = (messageId) => {
+    // Local update handled by socket listener
+  };
+
+  const getDisplayName = (user) => {
+    if (!user) return "Unknown";
+    if (user.firstName || user.lastName) {
+      return `${user.firstName || ""} ${user.lastName || ""}`.trim();
+    }
+    return user.username;
   };
 
   const getConversationTitle = () => {
@@ -143,11 +235,23 @@ const ChatScreen = ({ state, dispatch }) => {
     }
 
     if (conversation.conversationType === "support") {
-      // For owners, show the user's name from the title
-      if (state.account === "owner") {
+      if (state.account === "owner" || state.account === "humanResources") {
         return conversation.title || "Support Request";
       }
-      return "Support - Owner";
+      return "Support";
+    }
+
+    if (conversation.conversationType === "internal") {
+      // For internal conversations, show the other participants
+      const otherParticipants = conversation.participants?.filter(
+        (p) => p.userId !== parseInt(state.currentUser?.userId)
+      );
+      if (otherParticipants?.length === 1) {
+        return getDisplayName(otherParticipants[0].user);
+      }
+      if (otherParticipants?.length > 1) {
+        return conversation.title || `Group (${otherParticipants.length + 1})`;
+      }
     }
 
     if (conversation.appointment) {
@@ -155,31 +259,44 @@ const ChatScreen = ({ state, dispatch }) => {
       return `Appointment - ${date.toLocaleDateString([], {
         month: "short",
         day: "numeric",
-        year: "numeric",
       })}`;
     }
 
     const otherParticipants = conversation.participants?.filter(
-      (p) => p.userId !== state.currentUser?.id
+      (p) => p.userId !== parseInt(state.currentUser?.userId)
     );
     if (otherParticipants?.length > 0) {
-      return otherParticipants.map((p) => p.user?.username).join(", ");
+      return otherParticipants.map((p) => getDisplayName(p.user)).join(", ");
     }
 
     return "Conversation";
   };
 
-  const getParticipantsText = () => {
+  const getConversationSubtitle = () => {
     if (!conversation?.participants) return "";
 
-    const names = conversation.participants
-      .map((p) => {
-        if (p.userId === state.currentUser?.id) return "You";
-        return p.user?.username || "Unknown";
-      })
-      .join(", ");
+    const participantCount = conversation.participants.length;
+    if (participantCount <= 2) return "";
 
-    return `Participants: ${names}`;
+    return `${participantCount} participants`;
+  };
+
+  const getConversationIcon = () => {
+    if (!conversation) return null;
+
+    if (conversation.conversationType === "broadcast") {
+      return { name: "radio", color: colors.warning[500] };
+    }
+    if (conversation.conversationType === "support") {
+      return { name: "help-circle", color: colors.primary[500] };
+    }
+    if (conversation.conversationType === "internal") {
+      if (conversation.participants?.length > 2) {
+        return { name: "users", color: colors.secondary[500] };
+      }
+      return { name: "message-circle", color: colors.secondary[500] };
+    }
+    return null;
   };
 
   const formatDateSeparator = (dateString) => {
@@ -208,79 +325,108 @@ const ChatScreen = ({ state, dispatch }) => {
     return currentDate !== prevDate;
   };
 
+  // Determine message grouping (same sender, within 2 minutes)
+  const isConsecutiveMessage = (currentMsg, prevMsg) => {
+    if (!prevMsg) return false;
+    if (currentMsg.senderId !== prevMsg.senderId) return false;
+    const timeDiff = new Date(currentMsg.createdAt) - new Date(prevMsg.createdAt);
+    return timeDiff < 2 * 60 * 1000; // 2 minutes
+  };
+
   if (loading) {
     return (
-      <View style={messagingStyles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3a8dff" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <Text style={styles.loadingText}>Loading messages...</Text>
       </View>
     );
   }
 
-  const messages = state.currentMessages || [];
   const isBroadcast = conversation?.conversationType === "broadcast";
-  const isSupport = conversation?.conversationType === "support";
+  const isGroupChat = conversation?.participants?.length > 2;
+  const conversationIcon = getConversationIcon();
 
   return (
     <KeyboardAvoidingView
-      style={messagingStyles.chatContainer}
+      style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
       {/* Header */}
-      <View style={messagingStyles.chatHeader}>
-        <Pressable onPress={() => navigate("/messages")} style={messagingStyles.backButton}>
-          <Icon name="arrow-left" size={20} color="#1e3a8a" />
+      <View style={styles.header}>
+        <Pressable
+          onPress={() => navigate("/messages")}
+          style={styles.backButton}
+        >
+          <Icon name="arrow-left" size={22} color={colors.text.primary} />
         </Pressable>
-        <Text style={messagingStyles.chatHeaderTitle} numberOfLines={1}>
-          {getConversationTitle()}
-        </Text>
-        {isBroadcast && <Icon name="bullhorn" size={18} color="#f59e0b" />}
-        {isSupport && <Icon name="life-ring" size={18} color="#1e3a8a" />}
-      </View>
 
-      {/* Participants */}
-      {!isBroadcast && conversation?.participants?.length > 0 && (
-        <View style={messagingStyles.participantsContainer}>
-          <Text style={messagingStyles.participantsText} numberOfLines={1}>
-            {getParticipantsText()}
-          </Text>
+        <View style={styles.headerInfo}>
+          <View style={styles.headerTitleRow}>
+            {conversationIcon && (
+              <Icon
+                name={conversationIcon.name}
+                size={18}
+                color={conversationIcon.color}
+                style={styles.headerIcon}
+              />
+            )}
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {getConversationTitle()}
+            </Text>
+          </View>
+          {getConversationSubtitle() && (
+            <Text style={styles.headerSubtitle}>{getConversationSubtitle()}</Text>
+          )}
         </View>
-      )}
+      </View>
 
       {/* Messages */}
       <ScrollView
         ref={scrollViewRef}
-        style={messagingStyles.messagesList}
-        contentContainerStyle={{ paddingBottom: 16 }}
+        style={styles.messagesList}
+        contentContainerStyle={styles.messagesContent}
         onContentSizeChange={() =>
           scrollViewRef.current?.scrollToEnd({ animated: false })
         }
       >
         {messages.length === 0 ? (
-          <View style={messagingStyles.emptyContainer}>
-            <Icon name="comment-o" size={40} color="#94a3b8" />
-            <Text style={messagingStyles.emptyText}>
-              No messages yet. Start the conversation!
-            </Text>
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconContainer}>
+              <Icon name="message-circle" size={32} color={colors.text.tertiary} />
+            </View>
+            <Text style={styles.emptyTitle}>No messages yet</Text>
+            <Text style={styles.emptyText}>Start the conversation!</Text>
           </View>
         ) : (
           messages.map((message, index) => {
             const prevMessage = index > 0 ? messages[index - 1] : null;
+            const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
             const showDateSeparator = shouldShowDateSeparator(message, prevMessage);
+            const isFirstInGroup = !isConsecutiveMessage(message, prevMessage) || showDateSeparator;
+            const isLastInGroup = !nextMessage || !isConsecutiveMessage(nextMessage, message);
 
             return (
               <React.Fragment key={message.id}>
                 {showDateSeparator && (
-                  <View style={messagingStyles.dateSeparator}>
-                    <Text style={messagingStyles.dateSeparatorText}>
+                  <View style={styles.dateSeparator}>
+                    <View style={styles.dateSeparatorLine} />
+                    <Text style={styles.dateSeparatorText}>
                       {formatDateSeparator(message.createdAt)}
                     </Text>
+                    <View style={styles.dateSeparatorLine} />
                   </View>
                 )}
                 <MessageBubble
                   message={message}
-                  isOwn={message.senderId === state.currentUser?.id}
+                  isOwn={message.senderId === parseInt(state.currentUser?.userId)}
                   isBroadcast={message.messageType === "broadcast"}
+                  isGroupChat={isGroupChat}
+                  showSender={isGroupChat || conversation?.conversationType === "support"}
+                  isFirstInGroup={isFirstInGroup}
+                  isLastInGroup={isLastInGroup}
+                  onReactionUpdate={handleReactionUpdate}
+                  onMessageDeleted={handleMessageDeleted}
                 />
               </React.Fragment>
             );
@@ -290,29 +436,30 @@ const ChatScreen = ({ state, dispatch }) => {
 
       {/* Input - hide for broadcast conversations if not owner */}
       {(!isBroadcast || state.account === "owner") && (
-        <View style={messagingStyles.inputContainer}>
+        <View style={styles.inputContainer}>
           <TextInput
-            style={messagingStyles.inputField}
+            style={styles.inputField}
             placeholder="Type a message..."
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.text.tertiary}
             value={messageText}
             onChangeText={setMessageText}
             multiline
-            maxLength={1000}
+            maxLength={2000}
             editable={!sending}
           />
           <Pressable
-            style={[
-              messagingStyles.sendButton,
-              (!messageText.trim() || sending) && messagingStyles.sendButtonDisabled,
+            style={({ pressed }) => [
+              styles.sendButton,
+              (!messageText.trim() || sending) && styles.sendButtonDisabled,
+              pressed && styles.sendButtonPressed,
             ]}
             onPress={handleSend}
             disabled={!messageText.trim() || sending}
           >
             {sending ? (
-              <ActivityIndicator size="small" color="#ffffff" />
+              <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <Icon name="send" size={16} color="#ffffff" />
+              <Icon name="send" size={18} color={colors.white} />
             )}
           </Pressable>
         </View>
@@ -320,5 +467,146 @@ const ChatScreen = ({ state, dispatch }) => {
     </KeyboardAvoidingView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.neutral[50],
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.neutral[50],
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+  },
+  // Header
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+    ...shadows.sm,
+  },
+  backButton: {
+    padding: spacing.sm,
+    marginRight: spacing.sm,
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  headerTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerIcon: {
+    marginRight: spacing.sm,
+  },
+  headerTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  headerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  // Messages List
+  messagesList: {
+    flex: 1,
+  },
+  messagesContent: {
+    paddingVertical: spacing.md,
+  },
+  // Empty state
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: spacing["3xl"],
+  },
+  emptyIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.neutral[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  emptyTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  emptyText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
+  },
+  // Date separator
+  dateSeparator: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  dateSeparatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.neutral[200],
+  },
+  dateSeparatorText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    paddingHorizontal: spacing.md,
+    fontWeight: typography.fontWeight.medium,
+  },
+  // Input
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    gap: spacing.sm,
+  },
+  inputField: {
+    flex: 1,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    maxHeight: 120,
+    minHeight: 44,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary[500],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendButtonDisabled: {
+    backgroundColor: colors.neutral[300],
+  },
+  sendButtonPressed: {
+    backgroundColor: colors.primary[600],
+  },
+});
 
 export default ChatScreen;

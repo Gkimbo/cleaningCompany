@@ -178,7 +178,7 @@ export default function App() {
       <StripeProvider publishableKey={stripePublishableKey}>
         <PricingProvider>
         <SocketProvider token={state.currentUser.token}>
-          <UserContext.Provider value={{ currentUser: state.currentUser }}>
+          <UserContext.Provider value={{ state, dispatch, currentUser: state.currentUser }}>
           <NativeRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
               <TopBar dispatch={dispatch} state={state} />
@@ -390,11 +390,11 @@ export default function App() {
               {/* Messaging routes */}
               <Route
                 path="/messages"
-                element={<ConversationList state={state} dispatch={dispatch} />}
+                element={<ConversationList />}
               />
               <Route
                 path="/messages/:conversationId"
-                element={<ChatScreen state={state} dispatch={dispatch} />}
+                element={<ChatScreen />}
               />
               <Route
                 path="/messages/broadcast"

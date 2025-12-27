@@ -20,6 +20,7 @@ jest.mock("../../models", () => ({
     findByPk: jest.fn(),
     create: jest.fn(),
     count: jest.fn(),
+    destroy: jest.fn(),
   },
   Conversation: {
     findOne: jest.fn(),
@@ -34,9 +35,21 @@ jest.mock("../../models", () => ({
     findAll: jest.fn(),
     create: jest.fn(),
     findOrCreate: jest.fn(),
+    destroy: jest.fn(),
   },
   UserAppointments: {
     findByPk: jest.fn(),
+  },
+  MessageReaction: {
+    findOne: jest.fn(),
+    findByPk: jest.fn(),
+    create: jest.fn(),
+    destroy: jest.fn(),
+  },
+  MessageReadReceipt: {
+    findOne: jest.fn(),
+    create: jest.fn(),
+    destroy: jest.fn(),
   },
 }));
 
@@ -52,8 +65,17 @@ const {
   Conversation,
   ConversationParticipant,
   UserAppointments,
+  MessageReaction,
+  MessageReadReceipt,
 } = require("../../models");
 const Email = require("../../services/sendNotifications/EmailClass");
+
+// Mock PushNotification service
+jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
+  sendPushReaction: jest.fn().mockResolvedValue(true),
+  sendPushNewMessage: jest.fn().mockResolvedValue(true),
+}));
+const PushNotification = require("../../services/sendNotifications/PushNotificationClass");
 
 describe("Message Routes", () => {
   let app;
@@ -665,6 +687,265 @@ describe("Message Routes", () => {
 
       expect(res.status).toBe(403);
       expect(res.body.error).toBe("Not authorized");
+    });
+  });
+
+  describe("POST /:messageId/react", () => {
+    it("should add a reaction to a message", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      Message.findByPk.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        senderId: 2,
+        content: "Hello",
+        sender: {
+          id: 2,
+          username: "jane",
+          firstName: "Jane",
+          lastName: "Doe",
+          notifications: ["phone"],
+          expoPushToken: "expo-token-123",
+        },
+      });
+
+      ConversationParticipant.findOne.mockResolvedValue({ id: 1, userId: 1 });
+      MessageReaction.findOne.mockResolvedValue(null);
+
+      const mockReaction = {
+        id: 1,
+        messageId: 1,
+        userId: 1,
+        emoji: "👍",
+        toJSON: () => ({ id: 1, messageId: 1, userId: 1, emoji: "👍" }),
+      };
+      MessageReaction.create.mockResolvedValue(mockReaction);
+      MessageReaction.findByPk.mockResolvedValue({
+        ...mockReaction,
+        user: { id: 1, username: "john", firstName: "John", lastName: "Doe" },
+        toJSON: () => ({
+          id: 1,
+          messageId: 1,
+          userId: 1,
+          emoji: "👍",
+          user: { id: 1, username: "john", firstName: "John", lastName: "Doe" },
+        }),
+      });
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "john",
+        firstName: "John",
+        lastName: "Doe",
+      });
+
+      const res = await request(app)
+        .post("/api/v1/messages/1/react")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ emoji: "👍" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.action).toBe("added");
+    });
+
+    it("should toggle off existing reaction", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      Message.findByPk.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+        senderId: 2,
+        content: "Hello",
+        sender: { id: 2, username: "jane" },
+      });
+
+      ConversationParticipant.findOne.mockResolvedValue({ id: 1, userId: 1 });
+
+      const mockReaction = {
+        id: 1,
+        messageId: 1,
+        userId: 1,
+        emoji: "👍",
+        destroy: jest.fn().mockResolvedValue(true),
+      };
+      MessageReaction.findOne.mockResolvedValue(mockReaction);
+
+      const res = await request(app)
+        .post("/api/v1/messages/1/react")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ emoji: "👍" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.action).toBe("removed");
+      expect(mockReaction.destroy).toHaveBeenCalled();
+    });
+  });
+
+  describe("DELETE /:messageId/react/:emoji", () => {
+    const thumbsUpEncoded = encodeURIComponent("👍");
+
+    it("should remove user's own reaction", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      Message.findByPk.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+      });
+
+      const mockReaction = {
+        id: 1,
+        messageId: 1,
+        userId: 1,
+        emoji: "👍",
+        destroy: jest.fn().mockResolvedValue(true),
+      };
+      MessageReaction.findOne.mockResolvedValue(mockReaction);
+
+      const res = await request(app)
+        .delete(`/api/v1/messages/1/react/${thumbsUpEncoded}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(mockReaction.destroy).toHaveBeenCalled();
+    });
+
+    it("should return 403 when trying to remove another user's reaction", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      Message.findByPk.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+      });
+
+      // User 1's reaction not found (they didn't react with this emoji)
+      MessageReaction.findOne
+        .mockResolvedValueOnce(null) // First call: looking for user 1's reaction
+        .mockResolvedValueOnce({ id: 2, messageId: 1, userId: 2, emoji: "👍" }); // Second call: checking if reaction exists from someone else
+
+      const res = await request(app)
+        .delete(`/api/v1/messages/1/react/${thumbsUpEncoded}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("You can only remove your own reactions");
+    });
+
+    it("should return 404 when reaction does not exist at all", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      Message.findByPk.mockResolvedValue({
+        id: 1,
+        conversationId: 1,
+      });
+
+      // No reaction found at all
+      MessageReaction.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .delete(`/api/v1/messages/1/react/${thumbsUpEncoded}`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Reaction not found");
+    });
+  });
+
+  describe("DELETE /conversation/:conversationId", () => {
+    it("should delete a conversation (owner only)", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "owner1",
+        type: "owner",
+      });
+
+      const mockConversation = {
+        id: 1,
+        conversationType: "support",
+        participants: [
+          { userId: 1 },
+          { userId: 2 },
+        ],
+        messages: [
+          { id: 1 },
+          { id: 2 },
+        ],
+        destroy: jest.fn().mockResolvedValue(true),
+      };
+
+      Conversation.findByPk.mockResolvedValue(mockConversation);
+      MessageReaction.destroy.mockResolvedValue(2);
+      MessageReadReceipt.destroy.mockResolvedValue(2);
+      Message.destroy.mockResolvedValue(2);
+      ConversationParticipant.destroy.mockResolvedValue(2);
+
+      const res = await request(app)
+        .delete("/api/v1/messages/conversation/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(mockConversation.destroy).toHaveBeenCalled();
+      expect(mockIo.to).toHaveBeenCalledWith("user_1");
+      expect(mockIo.to).toHaveBeenCalledWith("user_2");
+      expect(mockIo.emit).toHaveBeenCalledWith("conversation_deleted", { conversationId: 1 });
+    });
+
+    it("should return 403 for non-owner users", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "regularuser",
+        type: null,
+      });
+
+      const res = await request(app)
+        .delete("/api/v1/messages/conversation/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Only the owner can delete conversations");
+    });
+
+    it("should return 403 for HR users", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "hruser",
+        type: "humanResources",
+      });
+
+      const res = await request(app)
+        .delete("/api/v1/messages/conversation/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Only the owner can delete conversations");
+    });
+
+    it("should return 404 for non-existent conversation", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "owner1",
+        type: "owner",
+      });
+
+      Conversation.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .delete("/api/v1/messages/conversation/999")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Conversation not found");
     });
   });
 });

@@ -261,6 +261,21 @@ class PushNotification {
       snoozeAction: "snooze-supply-reminder",
     });
   }
+
+  // 19. Message reaction notification
+  static async sendPushReaction(expoPushToken, reactorName, emoji, messagePreview) {
+    const truncatedMessage = messagePreview.length > 30
+      ? messagePreview.substring(0, 30) + "..."
+      : messagePreview;
+    const title = `${reactorName} reacted ${emoji}`;
+    const body = `to your message: "${truncatedMessage}"`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "message_reaction",
+      reactorName,
+      emoji,
+    });
+  }
 }
 
 module.exports = PushNotification;
