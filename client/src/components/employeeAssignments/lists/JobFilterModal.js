@@ -24,7 +24,7 @@ const defaultFilters = {
   towels: "any", // 'any' | 'needed' | 'not_needed'
   bedrooms: "any", // 'any' | '1' | '2' | '3' | '4' | '5+'
   bathrooms: "any", // 'any' | '1' | '1.5' | '2' | '2.5' | '3+'
-  timeWindow: "any", // 'any' | 'anytime' | '10am-3pm' | '11am-4pm' | '12pm-2pm'
+  timeWindow: "any", // 'any' | 'anytime' | '10-3' | '11-4' | '12-2'
   city: "any",
   minEarnings: null,
 };
@@ -65,9 +65,9 @@ const bathroomOptions = [
 const timeWindowOptions = [
   { value: "any", label: "Any" },
   { value: "anytime", label: "Flexible" },
-  { value: "10am-3pm", label: "10am-3pm" },
-  { value: "11am-4pm", label: "11am-4pm" },
-  { value: "12pm-2pm", label: "12pm-2pm" },
+  { value: "10-3", label: "10am-3pm" },
+  { value: "11-4", label: "11am-4pm" },
+  { value: "12-2", label: "12pm-2pm" },
 ];
 
 const earningsPresets = [

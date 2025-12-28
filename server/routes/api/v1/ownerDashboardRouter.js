@@ -1281,9 +1281,12 @@ ownerDashboardRouter.put(
  * Get current Stripe account balance
  */
 ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
+  console.log("[Stripe Balance] Request received");
   try {
     // Get Stripe balance
+    console.log("[Stripe Balance] Fetching from Stripe...");
     const balance = await stripe.balance.retrieve();
+    console.log("[Stripe Balance] Stripe response:", JSON.stringify(balance));
 
     // Get total withdrawn this year
     const currentYear = new Date().getFullYear();
@@ -1304,6 +1307,8 @@ ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
     const availableBalance = balance.available.reduce((sum, b) => sum + b.amount, 0);
     const pendingBalance = balance.pending.reduce((sum, b) => sum + b.amount, 0);
     const pendingWithdrawalAmount = parseInt(pendingWithdrawals[0]?.totalPending) || 0;
+
+    console.log("[Stripe Balance] Available:", availableBalance, "cents, Pending:", pendingBalance, "cents");
 
     res.json({
       available: {

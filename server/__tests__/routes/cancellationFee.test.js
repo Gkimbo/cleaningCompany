@@ -411,7 +411,7 @@ describe("Cancellation Fee Charging", () => {
       expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
     });
 
-    it("should add fee to bill when user has no payment method", async () => {
+    it("should block cancellation when user has no payment method within 7-day window", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -434,26 +434,14 @@ describe("Cancellation Fee Charging", () => {
         destroy: jest.fn().mockResolvedValue(true),
       });
 
-      UserBills.findOne.mockResolvedValue({
-        appointmentDue: 0,
-        cancellationFee: 0,
-        totalDue: 0,
-        update: jest.fn().mockResolvedValue(true),
-      });
-
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
-      UserPendingRequests.destroy.mockResolvedValue(0);
-      Payout.destroy.mockResolvedValue(0);
-
       const res = await request(app)
         .post("/api/v1/appointments/1/cancel-homeowner")
         .set("Authorization", `Bearer ${token}`);
 
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      // Fee should be added to bill since no payment method
-      expect(res.body.cancellationFee.charged).toBe(false);
-      expect(res.body.cancellationFee.addedToBill).toBe(true);
+      // Cancellation should be blocked without payment method
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Cannot cancel without a payment method");
+      expect(res.body.requiresPaymentMethod).toBe(true);
       expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
     });
 
@@ -766,7 +754,7 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.daysUntilAppointment).toBeLessThanOrEqual(3);
     });
 
-    it("should handle user with stripeCustomerId but hasPaymentMethod false", async () => {
+    it("should block cancellation when user has stripeCustomerId but hasPaymentMethod false", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -789,30 +777,21 @@ describe("Cancellation Fee Charging", () => {
         destroy: jest.fn().mockResolvedValue(true),
       });
 
-      UserBills.findOne.mockResolvedValue({
-        appointmentDue: 0,
-        cancellationFee: 0,
-        totalDue: 0,
-        update: jest.fn().mockResolvedValue(true),
-      });
-
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
-      UserPendingRequests.destroy.mockResolvedValue(0);
-      Payout.destroy.mockResolvedValue(0);
-
       const res = await request(app)
         .post("/api/v1/appointments/1/cancel-homeowner")
         .set("Authorization", `Bearer ${token}`);
 
-      expect(res.status).toBe(200);
-      // Should not attempt to charge because hasPaymentMethod is false
+      // Cancellation should be blocked without valid payment method
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Cannot cancel without a payment method");
+      expect(res.body.requiresPaymentMethod).toBe(true);
       expect(mockCustomersRetrieve).not.toHaveBeenCalled();
       expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
     });
   });
 
   describe("Fee Added to Bill When Charge Fails", () => {
-    it("should add fee to bill when user has no payment method configured", async () => {
+    it("should block cancellation when user has no payment method configured", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -835,37 +814,14 @@ describe("Cancellation Fee Charging", () => {
         destroy: jest.fn().mockResolvedValue(true),
       });
 
-      const mockBillUpdate = jest.fn().mockResolvedValue(true);
-      UserBills.findOne.mockResolvedValue({
-        appointmentDue: 0,
-        cancellationFee: 0,
-        totalDue: 0,
-        update: mockBillUpdate,
-      });
-
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
-      UserPendingRequests.destroy.mockResolvedValue(0);
-      Payout.destroy.mockResolvedValue(0);
-
       const res = await request(app)
         .post("/api/v1/appointments/1/cancel-homeowner")
         .set("Authorization", `Bearer ${token}`);
 
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.cancellationFee).toBeDefined();
-      expect(res.body.cancellationFee.charged).toBe(false);
-      expect(res.body.cancellationFee.addedToBill).toBe(true);
-      expect(res.body.cancellationFee.amount).toBe(mockPricingConfig.cancellation.fee);
-      expect(res.body.cancellationFee.reason).toContain("No payment method");
-
-      // Verify fee was added to bill
-      expect(mockBillUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cancellationFee: mockPricingConfig.cancellation.fee,
-          totalDue: mockPricingConfig.cancellation.fee,
-        })
-      );
+      // Cancellation should be blocked without payment method within 7-day window
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Cannot cancel without a payment method");
+      expect(res.body.requiresPaymentMethod).toBe(true);
     });
 
     it("should add fee to bill when no default payment method on Stripe customer", async () => {
@@ -992,7 +948,7 @@ describe("Cancellation Fee Charging", () => {
       );
     });
 
-    it("should accumulate fees on bill for multiple failed charges", async () => {
+    it("should block cancellation for user with no payment method even with accumulated fees", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -1015,32 +971,14 @@ describe("Cancellation Fee Charging", () => {
         destroy: jest.fn().mockResolvedValue(true),
       });
 
-      const mockBillUpdate = jest.fn().mockResolvedValue(true);
-      // Bill already has accumulated fees from previous cancellations
-      UserBills.findOne.mockResolvedValue({
-        appointmentDue: 100,
-        cancellationFee: 30, // Already has $30 in fees
-        totalDue: 130,
-        update: mockBillUpdate,
-      });
-
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
-      UserPendingRequests.destroy.mockResolvedValue(0);
-      Payout.destroy.mockResolvedValue(0);
-
       const res = await request(app)
         .post("/api/v1/appointments/1/cancel-homeowner")
         .set("Authorization", `Bearer ${token}`);
 
-      expect(res.status).toBe(200);
-
-      // Fee should be added to existing $30
-      expect(mockBillUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cancellationFee: 30 + mockPricingConfig.cancellation.fee,
-          totalDue: 130 + mockPricingConfig.cancellation.fee,
-        })
-      );
+      // Cancellation should be blocked without payment method
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Cannot cancel without a payment method");
+      expect(res.body.requiresPaymentMethod).toBe(true);
     });
   });
 });

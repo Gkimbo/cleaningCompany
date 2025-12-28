@@ -553,12 +553,31 @@ describe("Bill Component", () => {
   });
 
   describe("Retry Payment", () => {
+    let retryResponse = { ok: true, success: true };
+
     beforeEach(() => {
       jest.clearAllMocks();
       jest.spyOn(Alert, "alert").mockImplementation(() => {});
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ payments: [] }),
+      retryResponse = { ok: true, success: true };
+      // Use URL-based mock to handle concurrent fetch calls
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/payments/config")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ publishableKey: "pk_test_mock" }),
+          });
+        }
+        if (url.includes("/payments/retry-payment")) {
+          return Promise.resolve({
+            ok: retryResponse.ok,
+            json: () => Promise.resolve(retryResponse.ok ? { success: true } : { error: retryResponse.error }),
+          });
+        }
+        // Default response
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: [] }),
+        });
       });
     });
 
@@ -623,9 +642,25 @@ describe("Bill Component", () => {
     });
 
     it("should show error alert on failed retry", async () => {
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
-        .mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({ error: "Card declined" }) });
+      // Override the default mock for this test to return an error
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/payments/config")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ publishableKey: "pk_test_mock" }),
+          });
+        }
+        if (url.includes("/payments/retry-payment")) {
+          return Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ error: "Card declined" }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: [] }),
+        });
+      });
 
       const stateWithFailedPayment = {
         ...defaultState,
@@ -710,14 +745,29 @@ describe("Bill Component", () => {
     });
 
     it("should show success alert on successful pre-pay", async () => {
+      // Use URL-based mock for this test
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/payments/config")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ publishableKey: "pk_test_mock" }),
+          });
+        }
+        if (url.includes("/payments/pre-pay-batch")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ successCount: 1, failedCount: 0 }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: [] }),
+        });
+      });
+
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
       const futureDateStr = futureDate.toISOString().split("T")[0];
-
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ successCount: 1, failedCount: 0 }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
 
       const stateWithUpcoming = {
         ...defaultState,
@@ -1073,14 +1123,29 @@ describe("Bill Component", () => {
     });
 
     it("should show success alert on successful batch payment", async () => {
+      // Use URL-based mock for this test
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/payments/config")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ publishableKey: "pk_test_mock" }),
+          });
+        }
+        if (url.includes("/payments/pre-pay-batch")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ successCount: 1, failedCount: 0 }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: [] }),
+        });
+      });
+
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
       const futureDateStr = futureDate.toISOString().split("T")[0];
-
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ successCount: 1, failedCount: 0 }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
 
       const stateWithUpcoming = {
         ...defaultState,
@@ -1121,13 +1186,29 @@ describe("Bill Component", () => {
     });
 
     it("should show error alert on failed batch payment", async () => {
+      // Use URL-based mock for this test with error response
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/payments/config")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ publishableKey: "pk_test_mock" }),
+          });
+        }
+        if (url.includes("/payments/pre-pay-batch")) {
+          return Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ error: "All payments failed" }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: [] }),
+        });
+      });
+
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
       const futureDateStr = futureDate.toISOString().split("T")[0];
-
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
-        .mockResolvedValueOnce({ ok: false, json: () => Promise.resolve({ error: "All payments failed" }) });
 
       const stateWithUpcoming = {
         ...defaultState,
@@ -1244,9 +1325,19 @@ describe("Bill Component", () => {
     beforeEach(() => {
       jest.clearAllMocks();
       jest.spyOn(Alert, "alert").mockImplementation(() => {});
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ payments: [] }),
+      // Use URL-based mock to handle multiple concurrent fetch calls
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/payments/pay-bill")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ success: true, bill: { cancellationFee: 0, appointmentDue: 0, totalDue: 0 } }),
+          });
+        }
+        // Default response for other endpoints (user-info, payment history, etc.)
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: [] }),
+        });
       });
     });
 
@@ -1265,15 +1356,7 @@ describe("Bill Component", () => {
       });
     });
 
-    it("should create payment intent and open payment sheet for valid amount", async () => {
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ publishableKey: "pk_test_mock" }) }) // config
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }) // payment history
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }) // user-info refresh
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) }); // create-intent
-
-      mockOpenPaymentSheet.mockResolvedValueOnce({ success: true });
-
+    it("should call pay-bill endpoint for valid amount", async () => {
       const stateWithDue = {
         ...defaultState,
         appointments: [
@@ -1285,11 +1368,6 @@ describe("Bill Component", () => {
       const { getByText } = render(
         <Bill state={stateWithDue} dispatch={mockDispatch} />
       );
-
-      // Wait for config to load
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/payments/config"));
-      });
 
       await waitFor(() => {
         const payNowButton = getByText("Pay Now");
@@ -1298,24 +1376,13 @@ describe("Bill Component", () => {
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining("/payments/create-intent"),
+          expect.stringContaining("/payments/pay-bill"),
           expect.any(Object)
         );
-        expect(mockOpenPaymentSheet).toHaveBeenCalled();
       });
     });
 
     it("should dispatch DB_BILL on successful payment", async () => {
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ publishableKey: "pk_test_mock" }) }) // config
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }) // payment history
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }) // user-info refresh
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) }) // create-intent
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true, bill: { cancellationFee: 0, appointmentDue: 0, totalDue: 0 } }) }) // record-bill-payment
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }); // payment history refresh
-
-      mockOpenPaymentSheet.mockResolvedValueOnce({ success: true, paymentIntentId: "pi_test_123" });
-
       const stateWithDue = {
         ...defaultState,
         appointments: [
@@ -1327,11 +1394,6 @@ describe("Bill Component", () => {
       const { getByText } = render(
         <Bill state={stateWithDue} dispatch={mockDispatch} />
       );
-
-      // Wait for config to load
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/payments/config"));
-      });
 
       await waitFor(() => {
         const payNowButton = getByText("Pay Now");
@@ -1346,15 +1408,7 @@ describe("Bill Component", () => {
       });
     });
 
-    it("should handle payment cancellation gracefully", async () => {
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ publishableKey: "pk_test_mock" }) }) // config
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }) // payment history
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }) // user-info refresh
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) }); // create-intent
-
-      mockOpenPaymentSheet.mockResolvedValueOnce({ canceled: true });
-
+    it("should show success alert on successful payment", async () => {
       const stateWithDue = {
         ...defaultState,
         appointments: [
@@ -1366,11 +1420,6 @@ describe("Bill Component", () => {
       const { getByText } = render(
         <Bill state={stateWithDue} dispatch={mockDispatch} />
       );
-
-      // Wait for config to load
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/payments/config"));
-      });
 
       await waitFor(() => {
         const payNowButton = getByText("Pay Now");
@@ -1378,21 +1427,23 @@ describe("Bill Component", () => {
       });
 
       await waitFor(() => {
-        // Should not show error or success alert when cancelled
-        expect(Alert.alert).not.toHaveBeenCalledWith("Success", expect.any(String));
-        expect(Alert.alert).not.toHaveBeenCalledWith("Payment Error", expect.any(String));
+        expect(Alert.alert).toHaveBeenCalledWith("Success", "Payment completed successfully!");
       });
     });
 
-    it("should show error alert on payment sheet error", async () => {
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ publishableKey: "pk_test_mock" }) }) // config
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }) // payment history
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }) // user-info refresh
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) }); // create-intent
-
-      mockOpenPaymentSheet.mockResolvedValueOnce({
-        error: { message: "Your card was declined" },
+    it("should show error alert on payment failure", async () => {
+      // Override mock to return error
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/payments/pay-bill")) {
+          return Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ error: "Your card was declined" }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: [] }),
+        });
       });
 
       const stateWithDue = {
@@ -1406,11 +1457,6 @@ describe("Bill Component", () => {
       const { getByText } = render(
         <Bill state={stateWithDue} dispatch={mockDispatch} />
       );
-
-      // Wait for the config to load
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/payments/config"));
-      });
 
       await waitFor(() => {
         const payNowButton = getByText("Pay Now");
@@ -1424,23 +1470,36 @@ describe("Bill Component", () => {
   });
 
   describe("Refund Flow", () => {
+    const mockPayments = [
+      { id: 1, date: "2025-01-15", price: "150", paymentStatus: "succeeded" },
+    ];
+
     beforeEach(() => {
       jest.clearAllMocks();
       jest.spyOn(Alert, "alert").mockImplementation(() => {});
-      global.fetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ payments: [] }),
+      // Use URL-based mock to handle concurrent fetch calls
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/payments/config")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ publishableKey: "pk_test_mock" }),
+          });
+        }
+        if (url.includes("/payments/history")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ payments: mockPayments }),
+          });
+        }
+        // Default response
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ payments: mockPayments }),
+        });
       });
     });
 
     it("should show confirmation dialog before refund", async () => {
-      const mockPayments = [
-        { id: 1, date: "2025-01-15", price: "150", paymentStatus: "succeeded" },
-      ];
-
-      global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: mockPayments }) });
-
       const { getByText } = render(
         <Bill state={defaultState} dispatch={mockDispatch} />
       );

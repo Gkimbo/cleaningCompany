@@ -46,6 +46,9 @@ jest.mock("../../models", () => ({
     findOne: jest.fn(),
     create: jest.fn().mockResolvedValue({ id: 1 }),
   },
+  CalendarSync: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
 }));
 
 // Mock services
@@ -289,7 +292,12 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
-        dataValues: { price: "150" },
+        dataValues: {
+          price: "150",
+          homeId: 1,
+          date: "2025-01-15",
+          paid: false,
+        },
       });
 
       UserCleanerAppointments.destroy.mockResolvedValue(1);
@@ -1343,7 +1351,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
-        dataValues: { price: "150", paid: false }, // Price is higher than appointmentDue
+        dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" }, // Price is higher than appointmentDue
       });
 
       UserCleanerAppointments.destroy.mockResolvedValue(1);
@@ -1376,7 +1384,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
-        dataValues: { price: "150", paid: true }, // Already paid
+        dataValues: { price: "150", paid: true, homeId: 1, date: "2025-01-15" }, // Already paid
       });
 
       UserCleanerAppointments.destroy.mockResolvedValue(1);
@@ -1409,7 +1417,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
-        dataValues: { price: "150", paid: false },
+        dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
       });
 
       UserCleanerAppointments.destroy.mockResolvedValue(1);
@@ -1442,7 +1450,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
-        dataValues: { price: "150", paid: false },
+        dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
       });
 
       UserCleanerAppointments.destroy.mockResolvedValue(1);
@@ -1476,7 +1484,7 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
-        dataValues: { price: "150", paid: false },
+        dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
       });
 
       UserCleanerAppointments.destroy.mockResolvedValue(1);

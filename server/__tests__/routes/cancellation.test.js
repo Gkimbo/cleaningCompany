@@ -66,6 +66,9 @@ jest.mock("../../models", () => ({
     create: jest.fn().mockResolvedValue({ id: 1 }),
     destroy: jest.fn(),
   },
+  CalendarSync: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
 }));
 
 // Mock services
@@ -446,8 +449,18 @@ describe("Cancellation Endpoints", () => {
         employeesAssigned: [],
         completed: false,
         paymentIntentId: "pi_test",
+        paid: true,
         update: jest.fn().mockResolvedValue(true),
         destroy: jest.fn().mockResolvedValue(true),
+      });
+
+      // Mock user with payment method for cancellation within 7-day window
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        hasPaymentMethod: true,
+        stripeCustomerId: "cus_test",
+        notifications: [],
+        update: jest.fn().mockResolvedValue(true),
       });
 
       UserBills.findOne.mockResolvedValue({
@@ -493,6 +506,7 @@ describe("Cancellation Endpoints", () => {
         employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: "pi_test",
+        paid: true,
         update: jest.fn().mockResolvedValue(true),
         destroy: jest.fn().mockResolvedValue(true),
       };
@@ -506,11 +520,20 @@ describe("Cancellation Endpoints", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      User.findByPk.mockResolvedValue({
-        id: 2,
-        notifications: [],
-        update: jest.fn().mockResolvedValue(true),
-      });
+      // First call is for the homeowner (userId 1), second call is for the cleaner (userId 2)
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 1,
+          hasPaymentMethod: true,
+          stripeCustomerId: "cus_test",
+          notifications: [],
+          update: jest.fn().mockResolvedValue(true),
+        })
+        .mockResolvedValue({
+          id: 2,
+          notifications: [],
+          update: jest.fn().mockResolvedValue(true),
+        });
 
       UserHomes.findByPk.mockResolvedValue({
         address: "123 Test St",
@@ -519,6 +542,7 @@ describe("Cancellation Endpoints", () => {
       UserCleanerAppointments.destroy.mockResolvedValue(1);
       UserPendingRequests.destroy.mockResolvedValue(0);
       Payout.create.mockResolvedValue({ id: 1 });
+      Payout.destroy.mockResolvedValue(0);
 
       const res = await request(app)
         .post("/api/v1/appointments/1/cancel-homeowner")
@@ -554,8 +578,18 @@ describe("Cancellation Endpoints", () => {
         employeesAssigned: [],
         completed: false,
         paymentIntentId: "pi_test",
+        paid: false,
         update: jest.fn().mockResolvedValue(true),
         destroy: jest.fn().mockResolvedValue(true),
+      });
+
+      // Mock user with payment method for cancellation within 7-day window
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        hasPaymentMethod: true,
+        stripeCustomerId: "cus_test",
+        notifications: [],
+        update: jest.fn().mockResolvedValue(true),
       });
 
       UserBills.findOne.mockResolvedValue({

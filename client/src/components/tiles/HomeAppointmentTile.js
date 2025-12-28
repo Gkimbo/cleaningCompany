@@ -126,16 +126,21 @@ const HomeAppointmentTile = ({
     return newDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   };
 
+  const parseDate = (dateString) => {
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const isWithinOneWeek = (dateString) => {
     const oneWeekInMilliseconds = 7 * 24 * 60 * 60 * 1000;
-    const appointmentDate = new Date(dateString).getTime();
+    const appointmentDate = parseDate(dateString).getTime();
     const currentDate = new Date().getTime();
     return appointmentDate - currentDate < oneWeekInMilliseconds;
   };
 
   const filteredAppointments = appointments
     .filter((appointment) => appointment.homeId === id)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
+    .sort((a, b) => parseDate(a.date) - parseDate(b.date));
 
   // Group appointments by status
   const needsPayment = filteredAppointments.filter((a) => a.completed && !a.paid);

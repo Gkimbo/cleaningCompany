@@ -274,11 +274,25 @@ const EachAppointment = ({
     }
   };
 
+  // Parse date string as local time to avoid timezone issues
+  const parseLocalDate = (dateString) => {
+    if (!dateString) return new Date();
+    // Handle ISO format with time component
+    if (dateString.includes("T")) {
+      const datePart = dateString.split("T")[0];
+      const [year, month, day] = datePart.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+    // Handle date-only format (YYYY-MM-DD)
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // Get days until appointment
   const getDaysUntil = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date);
+    const appointmentDate = parseLocalDate(date);
     appointmentDate.setHours(0, 0, 0, 0);
     const diffTime = appointmentDate - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

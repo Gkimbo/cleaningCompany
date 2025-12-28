@@ -70,7 +70,7 @@ const RequestedTile = ({
         <View style={styles.distanceContainer}>
           {distance !== null ? (
             <>
-              <Text style={styles.distanceLabel}>Distance to center:</Text>
+              <Text style={styles.distanceLabel}>Distance to home:</Text>
               <Text style={styles.distanceValue}>{miles} mi <Text style={styles.distanceKm}>({kilometers} km)</Text></Text>
               <Text style={styles.addressInfo}>Address available on the day of appointment.</Text>
             </>

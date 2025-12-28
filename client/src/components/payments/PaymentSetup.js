@@ -20,6 +20,7 @@ import {
 } from "../../services/styles/theme";
 import { usePaymentSheet } from "../../services/stripe";
 import { API_BASE } from "../../services/config";
+import PaymentMethodRemovalModal from "../modals/PaymentMethodRemovalModal";
 
 const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
   const navigate = useNavigate();
@@ -29,6 +30,12 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
   const [error, setError] = useState(null);
+
+  // Removal modal state
+  const [showRemovalModal, setShowRemovalModal] = useState(false);
+  const [removalEligibility, setRemovalEligibility] = useState(null);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState(null);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
 
   // Handle redirect return from Stripe (web only)
   useEffect(() => {
@@ -190,41 +197,80 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
   };
 
   const handleRemovePaymentMethod = async (paymentMethodId) => {
-    Alert.alert(
-      "Remove Card",
-      "Are you sure you want to remove this payment method?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const response = await fetch(
-                `${API_BASE}/payments/payment-method/${paymentMethodId}`,
-                {
-                  method: "DELETE",
-                  headers: {
-                    Authorization: `Bearer ${state.currentUser.token}`,
-                  },
-                }
-              );
-              const data = await response.json();
+    setIsCheckingEligibility(true);
+    setSelectedPaymentMethodId(paymentMethodId);
 
-              if (response.ok) {
-                setHasPaymentMethod(data.hasPaymentMethod);
-                fetchPaymentMethodStatus();
-                Alert.alert("Success", "Payment method removed");
-              } else {
-                throw new Error(data.error);
-              }
-            } catch (err) {
-              Alert.alert("Error", err.message);
-            }
+    try {
+      // First check eligibility
+      const eligibilityResponse = await fetch(
+        `${API_BASE}/payments/removal-eligibility/${paymentMethodId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${state.currentUser.token}`,
           },
-        },
-      ]
-    );
+        }
+      );
+      const eligibilityData = await eligibilityResponse.json();
+
+      if (!eligibilityResponse.ok) {
+        throw new Error(eligibilityData.error || "Failed to check eligibility");
+      }
+
+      if (eligibilityData.canRemove) {
+        // Can remove directly - show simple confirmation
+        Alert.alert(
+          "Remove Card",
+          "Are you sure you want to remove this payment method?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Remove",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  const response = await fetch(
+                    `${API_BASE}/payments/payment-method/${paymentMethodId}`,
+                    {
+                      method: "DELETE",
+                      headers: {
+                        Authorization: `Bearer ${state.currentUser.token}`,
+                      },
+                    }
+                  );
+                  const data = await response.json();
+
+                  if (response.ok) {
+                    setHasPaymentMethod(data.hasPaymentMethod);
+                    fetchPaymentMethodStatus();
+                    Alert.alert("Success", "Payment method removed");
+                  } else {
+                    throw new Error(data.error);
+                  }
+                } catch (err) {
+                  Alert.alert("Error", err.message);
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        // Cannot remove directly - show options modal
+        setRemovalEligibility(eligibilityData);
+        setShowRemovalModal(true);
+      }
+    } catch (err) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setIsCheckingEligibility(false);
+    }
+  };
+
+  const handleRemovalSuccess = (data) => {
+    setHasPaymentMethod(data.hasPaymentMethod);
+    fetchPaymentMethodStatus();
+    setShowRemovalModal(false);
+    setRemovalEligibility(null);
+    setSelectedPaymentMethodId(null);
   };
 
   const getCardIcon = (brand) => {
@@ -292,9 +338,14 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
               </View>
               <Pressable
                 onPress={() => handleRemovePaymentMethod(method.id)}
-                style={styles.removeButton}
+                style={[styles.removeButton, isCheckingEligibility && styles.buttonDisabled]}
+                disabled={isCheckingEligibility}
               >
-                <Icon name="trash" size={18} color={colors.error[500]} />
+                {isCheckingEligibility && selectedPaymentMethodId === method.id ? (
+                  <ActivityIndicator size="small" color={colors.error[500]} />
+                ) : (
+                  <Icon name="trash" size={18} color={colors.error[500]} />
+                )}
               </Pressable>
             </View>
           ))}
@@ -365,6 +416,20 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
           <Text style={styles.bookButtonText}>Book an Appointment</Text>
         </Pressable>
       )}
+
+      {/* Payment Method Removal Modal */}
+      <PaymentMethodRemovalModal
+        visible={showRemovalModal}
+        onClose={() => {
+          setShowRemovalModal(false);
+          setRemovalEligibility(null);
+          setSelectedPaymentMethodId(null);
+        }}
+        onSuccess={handleRemovalSuccess}
+        paymentMethodId={selectedPaymentMethodId}
+        eligibilityData={removalEligibility}
+        token={state.currentUser.token}
+      />
     </ScrollView>
   );
 };

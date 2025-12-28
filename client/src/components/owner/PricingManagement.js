@@ -362,7 +362,7 @@ const PricingManagement = ({ state }) => {
         {renderPriceInput("Free Cancel Window", "cancellationWindowDays", "", " days", "Days before appointment for free cancellation")}
         {renderPriceInput("Homeowner Penalty Days", "homeownerPenaltyDays", "", " days", "Days before when partial refund applies")}
         {renderPriceInput("Cleaner Penalty Days", "cleanerPenaltyDays", "", " days", "Days before when cleaner gets penalty")}
-        {renderPriceInput("Refund Percentage", "refundPercentage", "", "%", "Percentage refunded within penalty window")}
+        {renderPriceInput("Client Refund %", "refundPercentage", "", "%", "Client refund when cancelling prepaid appointments within penalty window (e.g., 50% means client gets half back, cleaner gets half minus platform fee)")}
       </View>
 
       {/* Platform Fees Section */}
@@ -371,7 +371,7 @@ const PricingManagement = ({ state }) => {
         <Text style={styles.sectionDescription}>
           Service fees for the platform
         </Text>
-        {renderPriceInput("Platform Fee", "platformFeePercent", "", "%", "Percentage taken from cleaner payouts")}
+        {renderPriceInput("Platform Fee", "platformFeePercent", "", "%", "Percentage taken from cleaner payouts (applies to regular payouts and cancelled appointment compensation)")}
         {renderPriceInput("High Volume Day Fee", "highVolumeFee", "$", "", "Additional fee for holidays and busy days")}
       </View>
 

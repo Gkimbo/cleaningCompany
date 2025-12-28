@@ -23,6 +23,7 @@ import {
 } from "../../services/styles/theme";
 import TaxFormsSection from "../tax/TaxFormsSection";
 import HomeownerAdjustmentNotification from "./HomeownerAdjustmentNotification";
+import { parseLocalDate, isFutureOrToday, isPast, compareDates } from "../../utils/dateUtils";
 
 const { width } = Dimensions.get("window");
 
@@ -89,13 +90,13 @@ const QuickActionButton = ({ title, subtitle, onPress, icon, iconColor, bgColor,
 
 // Appointment Card Component
 const AppointmentCard = ({ homes, appointment, onPress }) => {
-  const appointmentDate = new Date(appointment.date);
+  const appointmentDate = parseLocalDate(appointment.date);
   const today = new Date();
-  const isToday = appointmentDate.toDateString() === today.toDateString();
+  const isTodayAppointment = appointmentDate.toDateString() === today.toDateString();
 
   const home = homes.find((h) => Number(h.id) === Number(appointment.homeId));
 
-  const formatDate = (date) => {
+  const formatDateDisplay = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
@@ -114,13 +115,13 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
       onPress={onPress}
       style={({ pressed }) => [
         styles.appointmentCard,
-        isToday && styles.appointmentCardToday,
+        isTodayAppointment && styles.appointmentCardToday,
         pressed && styles.cardPressed,
       ]}
     >
       <View style={styles.appointmentDateBadge}>
-        <Text style={[styles.appointmentDateText, isToday && styles.todayText]}>
-          {isToday ? "Today" : formatDate(appointmentDate)}
+        <Text style={[styles.appointmentDateText, isTodayAppointment && styles.todayText]}>
+          {isTodayAppointment ? "Today" : formatDateDisplay(appointmentDate)}
         </Text>
       </View>
       <View style={styles.appointmentDetails}>
@@ -273,14 +274,14 @@ const ClientDashboard = ({ state, dispatch }) => {
 
   // Sort and filter upcoming appointments
   const upcomingAppointments = appointments
-    .filter((apt) => new Date(apt.date) >= new Date())
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .filter((apt) => isFutureOrToday(apt.date))
+    .sort((a, b) => compareDates(a.date, b.date))
     .slice(0, 3);
 
   // Get recent/past appointments
   const recentAppointments = appointments
-    .filter((apt) => new Date(apt.date) < new Date())
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .filter((apt) => isPast(apt.date))
+    .sort((a, b) => compareDates(b.date, a.date))
     .slice(0, 3);
 
   // Use the backend's totalDue value directly (ensure non-negative)
@@ -591,7 +592,7 @@ const ClientDashboard = ({ state, dispatch }) => {
                     {apt.home?.nickName || apt.nickName || "Home"}
                   </Text>
                   <Text style={styles.recentDate}>
-                    {new Date(apt.date).toLocaleDateString("en-US", {
+                    {parseLocalDate(apt.date).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                     })}

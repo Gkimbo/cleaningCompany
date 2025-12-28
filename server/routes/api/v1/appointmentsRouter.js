@@ -437,24 +437,45 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
       const cancellationWindowDays = cancellationConfig.windowDays;
       const isWithinPenaltyWindow = daysUntilAppointment <= penaltyDays && hasCleanerAssigned;
       const willChargeCancellationFee = daysUntilAppointment <= cancellationWindowDays;
+
+      // Check if appointment is prepaid
+      const isPrepaid = appointment.paid === true;
+
+      // Calculate refund amounts - always show expected refund for informational purposes
+      // isWithinPenaltyWindow means cleaner is assigned AND within 3 days
       const estimatedRefund = isWithinPenaltyWindow ? price * refundPercent : price;
-      const cleanerPayout = isWithinPenaltyWindow ? price * refundPercent * (1 - platformFee) : 0;
+      // Cleaner gets the remaining amount (after client refund) minus platform fee
+      const cleanerPayout = isWithinPenaltyWindow ? price * (1 - refundPercent) * (1 - platformFee) : 0;
 
       // Check if user has a payment method on file
       const hasPaymentMethod = user.hasPaymentMethod && user.stripeCustomerId;
 
+      // Check if cancellation is blocked due to missing payment method
+      const cancellationBlocked = willChargeCancellationFee && !hasPaymentMethod;
+
       // Build warning message
       let warningMessage;
-      if (willChargeCancellationFee && hasPaymentMethod) {
+      if (cancellationBlocked) {
+        // Still show penalty info but note that payment method is required
         if (isWithinPenaltyWindow) {
-          warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (${refundPercent * 100}% of the price minus ${platformFee * 100}% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}. Additionally, a $${cancellationFeeAmount} cancellation fee will be charged to your card on file.`;
+          warningMessage = `You cannot cancel within ${cancellationWindowDays} days without a payment method on file. If you add a payment method, cancelling within ${penaltyDays} days of the cleaning means you will receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)}.`;
         } else {
-          warningMessage = `A $${cancellationFeeAmount} cancellation fee will be charged to your card on file for cancelling within ${cancellationWindowDays} days of the appointment.` + (hasCleanerAssigned ? " You will receive a full refund of the cleaning cost." : "");
+          warningMessage = `You cannot cancel within ${cancellationWindowDays} days of the appointment without a payment method on file. A $${cancellationFeeAmount} cancellation fee is required. Please add a payment method first.`;
+        }
+      } else if (willChargeCancellationFee) {
+        if (isWithinPenaltyWindow) {
+          warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means you will receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)} (${(1 - refundPercent) * 100}% minus ${platformFee * 100}% platform fee). Additionally, a $${cancellationFeeAmount} cancellation fee will be charged.`;
+        } else if (isPrepaid) {
+          warningMessage = `A $${cancellationFeeAmount} cancellation fee will be charged to your card on file. You will receive a full refund of $${price.toFixed(2)} for the cleaning cost.`;
+        } else {
+          warningMessage = `A $${cancellationFeeAmount} cancellation fee will be charged to your card on file for cancelling within ${cancellationWindowDays} days of the appointment.`;
         }
       } else if (isWithinPenaltyWindow) {
-        warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means the assigned cleaner will receive $${cleanerPayout.toFixed(2)} (${refundPercent * 100}% of the price minus ${platformFee * 100}% platform fee). You will be refunded $${estimatedRefund.toFixed(2)}.`;
+        warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means you will receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)}.`;
+      } else if (isPrepaid) {
+        warningMessage = "You will receive a full refund of the cleaning cost.";
       } else if (hasCleanerAssigned) {
-        warningMessage = "You can cancel this appointment for a full refund.";
+        warningMessage = "You can cancel this appointment. The payment authorization will be cancelled.";
       } else {
         warningMessage = "You can cancel this appointment. No payment has been processed yet.";
       }
@@ -464,6 +485,7 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
         userType: "homeowner",
         isWithinPenaltyWindow,
         penaltyWindowDays: penaltyDays,
+        isPrepaid,
         estimatedRefund: estimatedRefund.toFixed(2),
         cleanerPayout: cleanerPayout.toFixed(2),
         // Cancellation fee info
@@ -471,6 +493,7 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
         cancellationFee: cancellationFeeAmount,
         cancellationWindowDays,
         hasPaymentMethod,
+        cancellationBlocked,
         warningMessage,
       };
     } else if (isCleaner) {
@@ -1780,14 +1803,33 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     const price = parseFloat(appointment.price) || 0;
     const priceInCents = Math.round(price * 100);
 
+    // Get user for Stripe customer info
+    const user = await User.findByPk(userId);
+
+    // Block cancellation if within 7 days and no payment method (can't pay cancellation fee)
+    if (isWithinCancellationFeeWindow && (!user.stripeCustomerId || !user.hasPaymentMethod)) {
+      return res.status(400).json({
+        error: "Cannot cancel without a payment method",
+        message: "You cannot cancel within 7 days of the appointment without a payment method on file to pay the cancellation fee. Please add a payment method first.",
+        requiresPaymentMethod: true,
+        daysUntilAppointment,
+      });
+    }
+
     let refundResult = null;
     let cleanerPayoutResult = null;
     let cancellationFeeResult = null;
 
-    // Get user for Stripe customer info
-    const user = await User.findByPk(userId);
-
     const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+    // Debug logging for cancellation fee
+    console.log(`[Cancellation] User ${userId} cancelling appointment ${id}`);
+    console.log(`[Cancellation] Days until appointment: ${daysUntilAppointment}`);
+    console.log(`[Cancellation] Cancellation window days: ${cancellationConfig.windowDays}`);
+    console.log(`[Cancellation] isWithinCancellationFeeWindow: ${isWithinCancellationFeeWindow}`);
+    console.log(`[Cancellation] User stripeCustomerId: ${user.stripeCustomerId}`);
+    console.log(`[Cancellation] User hasPaymentMethod: ${user.hasPaymentMethod}`);
+    console.log(`[Cancellation] Cancellation fee: $${cancellationConfig.fee}`);
 
     // Charge cancellation fee if within the window and user has payment method
     if (isWithinCancellationFeeWindow && user.stripeCustomerId && user.hasPaymentMethod) {
@@ -1795,11 +1837,14 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
       try {
         // Get the customer's default payment method
+        console.log(`[Cancellation] Retrieving Stripe customer: ${user.stripeCustomerId}`);
         const customer = await stripe.customers.retrieve(user.stripeCustomerId);
         const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+        console.log(`[Cancellation] Default payment method: ${defaultPaymentMethod}`);
 
         if (defaultPaymentMethod) {
           // Create and confirm a PaymentIntent for the cancellation fee
+          console.log(`[Cancellation] Creating PaymentIntent for $${cancellationConfig.fee} (${cancellationFeeAmountCents} cents)`);
           const cancellationPaymentIntent = await stripe.paymentIntents.create({
             amount: cancellationFeeAmountCents,
             currency: "usd",
@@ -1814,6 +1859,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
               type: "cancellation_fee",
             },
           });
+
+          console.log(`[Cancellation] PaymentIntent created: ${cancellationPaymentIntent.id}, Status: ${cancellationPaymentIntent.status}`);
 
           cancellationFeeResult = {
             charged: true,
@@ -1876,38 +1923,63 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         amount: cancellationConfig.fee,
         reason: "No payment method configured - added to bill",
       };
+    } else if (!isWithinCancellationFeeWindow) {
+      console.log(`[Cancellation] Not within cancellation fee window (${daysUntilAppointment} days > ${cancellationConfig.windowDays} days) - no fee charged`);
     }
 
-    // Handle payment cancellation/refund
-    if (appointment.paymentIntentId) {
-      const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
+    // Handle payment cancellation/refund for prepaid appointments
+    if (appointment.paymentIntentId || appointment.paid) {
+      let paymentIntent = null;
 
-      if (isWithinPenaltyWindow) {
-        // Partial refund based on config refund percentage
-        const refundPercent = cancellationConfig.refundPercentage;
-        const platformFeePercent = platformConfig.feePercent;
-        const refundAmount = Math.round(priceInCents * refundPercent);
-        const cleanerAmount = Math.round(priceInCents * refundPercent * (1 - platformFeePercent));
+      if (appointment.paymentIntentId) {
+        try {
+          paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
+        } catch (stripeRetrieveError) {
+          console.error(`[Cancellation] Error retrieving payment intent: ${stripeRetrieveError.message}`);
+        }
+      }
 
-        if (paymentIntent.status === "succeeded") {
-          // Payment was captured, process partial refund
+      const isPaid = appointment.paid || (paymentIntent && paymentIntent.status === "succeeded");
+      const platformFeePercent = platformConfig.feePercent;
+
+      console.log(`[Cancellation] Appointment paid status: ${appointment.paid}, paymentIntent status: ${paymentIntent?.status}`);
+      console.log(`[Cancellation] isWithinPenaltyWindow: ${isWithinPenaltyWindow}, hasCleanerAssigned: ${hasCleanerAssigned}`);
+
+      if (isWithinPenaltyWindow && isPaid) {
+        // Within 3 days with cleaner assigned: 50% refund to client, 50% - platform fee to cleaner
+        const refundPercent = cancellationConfig.refundPercentage; // 0.5 (50%)
+        const clientRefundAmount = Math.round(priceInCents * refundPercent); // 50% to client
+        const cleanerPortion = priceInCents - clientRefundAmount; // Remaining 50%
+        const platformFee = Math.round(cleanerPortion * platformFeePercent); // 10% of remaining
+        const cleanerAmount = cleanerPortion - platformFee; // Cleaner gets remaining minus platform fee
+
+        console.log(`[Cancellation] Partial refund: client gets $${clientRefundAmount/100}, cleaner gets $${cleanerAmount/100}, platform gets $${platformFee/100}`);
+
+        if (paymentIntent && paymentIntent.status === "succeeded") {
+          // Payment was captured, process partial refund to client
           refundResult = await stripe.refunds.create({
             payment_intent: paymentIntent.id,
-            amount: refundAmount,
+            amount: clientRefundAmount,
           });
 
-          // Create payout records for cleaners
+          // Create payout records for cleaners (50% minus platform fee)
           const cleanerIds = appointment.employeesAssigned || [];
           const perCleanerAmount = Math.round(cleanerAmount / cleanerIds.length);
+          const perCleanerGross = Math.round(cleanerPortion / cleanerIds.length);
+          const perCleanerPlatformFee = Math.round(platformFee / cleanerIds.length);
+
+          // Delete any existing pending payouts for this appointment
+          await Payout.destroy({ where: { appointmentId: appointment.id, status: "pending" } });
 
           for (const cleanerId of cleanerIds) {
             await Payout.create({
               appointmentId: appointment.id,
               cleanerId,
-              grossAmount: Math.round(priceInCents * refundPercent / cleanerIds.length),
-              platformFee: Math.round(priceInCents * refundPercent * platformFeePercent / cleanerIds.length),
+              grossAmount: perCleanerGross,
+              platformFee: perCleanerPlatformFee,
               netAmount: perCleanerAmount,
               status: "pending",
+              paymentCapturedAt: new Date(),
             });
           }
 
@@ -1915,21 +1987,34 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             totalAmount: cleanerAmount / 100,
             perCleaner: perCleanerAmount / 100,
             cleanerCount: cleanerIds.length,
+            platformFeeTotal: platformFee / 100,
           };
-        } else if (paymentIntent.status === "requires_capture") {
+
+          await appointment.update({ paymentStatus: "partially_refunded" });
+        } else if (paymentIntent && paymentIntent.status === "requires_capture") {
           // Payment authorized but not captured - cancel the auth
           await stripe.paymentIntents.cancel(paymentIntent.id);
+          await appointment.update({ paymentStatus: "cancelled" });
         }
+      } else if (isPaid) {
+        // Paid but NOT within penalty window (or no cleaner assigned): Full refund to client
+        console.log(`[Cancellation] Full refund: returning $${priceInCents/100} to client`);
 
-        await appointment.update({ paymentStatus: "partially_refunded" });
-      } else {
-        // Full cancellation/refund
-        if (paymentIntent.status === "succeeded") {
+        if (paymentIntent && paymentIntent.status === "succeeded") {
           refundResult = await stripe.refunds.create({
             payment_intent: paymentIntent.id,
           });
           await appointment.update({ paymentStatus: "refunded" });
-        } else if (paymentIntent.status === "requires_capture") {
+        } else if (paymentIntent && paymentIntent.status === "requires_capture") {
+          await stripe.paymentIntents.cancel(paymentIntent.id);
+          await appointment.update({ paymentStatus: "cancelled" });
+        }
+
+        // Delete any pending payouts since cleaner won't be paid
+        await Payout.destroy({ where: { appointmentId: appointment.id, status: "pending" } });
+      } else {
+        // Not paid yet - just cancel any pending authorization
+        if (paymentIntent && paymentIntent.status === "requires_capture") {
           await stripe.paymentIntents.cancel(paymentIntent.id);
           await appointment.update({ paymentStatus: "cancelled" });
         }
@@ -1961,7 +2046,11 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const cleanerIds = appointment.employeesAssigned || [];
       const home = await UserHomes.findByPk(appointment.homeId);
       const homeowner = await User.findByPk(userId);
-      const cleanerPayment = (price * cancellationConfig.refundPercentage * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
+
+      // Use actual payout amount if available, otherwise calculate it
+      const cleanerPayment = cleanerPayoutResult
+        ? cleanerPayoutResult.perCleaner.toFixed(2)
+        : (price * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
 
       for (const cleanerId of cleanerIds) {
         const cleaner = await User.findByPk(cleanerId);
@@ -1973,8 +2062,11 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             month: "short",
             day: "numeric",
           });
+
+          // Only show payment amount if appointment was paid and cleaner is getting compensated
+          const showPayment = isWithinPenaltyWindow && cleanerPayoutResult;
           notifications.unshift(
-            isWithinPenaltyWindow
+            showPayment
               ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${cleanerPayment}.`
               : `The homeowner cancelled the ${formattedDate} cleaning at ${home?.address || "their property"}.`
           );
@@ -2020,6 +2112,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     if (cancellationFeeResult?.charged) {
       message += ` A $${cancellationFeeResult.amount} cancellation fee has been charged to your card.`;
     }
+
+    console.log(`[Cancellation] Cancellation complete. Fee result:`, JSON.stringify(cancellationFeeResult));
 
     return res.json({
       success: true,
