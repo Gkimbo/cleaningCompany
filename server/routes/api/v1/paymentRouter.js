@@ -362,6 +362,100 @@ paymentRouter.post("/setup-intent", async (req, res) => {
 });
 
 /**
+ * Create a Checkout Session for adding a payment method (web only)
+ * Uses Stripe's hosted checkout page for card collection
+ */
+paymentRouter.post("/setup-checkout-session", async (req, res) => {
+  const { token, successUrl, cancelUrl } = req.body;
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Create or get Stripe Customer
+    let stripeCustomerId = user.stripeCustomerId;
+
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        metadata: { userId: userId.toString() },
+      });
+      stripeCustomerId = customer.id;
+      await user.update({ stripeCustomerId });
+    }
+
+    // Create Checkout Session in setup mode
+    const session = await stripe.checkout.sessions.create({
+      mode: "setup",
+      customer: stripeCustomerId,
+      payment_method_types: ["card"],
+      success_url: successUrl || `${process.env.CLIENT_URL}/payment-setup?setup_complete=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.CLIENT_URL}/payment-setup?canceled=true`,
+      metadata: { userId: userId.toString() },
+    });
+
+    return res.json({
+      sessionId: session.id,
+      url: session.url,
+    });
+  } catch (error) {
+    console.error("Error creating checkout session:", error);
+    return res.status(400).json({ error: "Failed to create checkout session" });
+  }
+});
+
+/**
+ * Confirm payment method was saved from Checkout Session (web only)
+ * Called after the client returns from Stripe Checkout
+ */
+paymentRouter.post("/confirm-checkout-session", async (req, res) => {
+  const { token, sessionId } = req.body;
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Retrieve the checkout session
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["setup_intent"],
+    });
+
+    if (session.status !== "complete") {
+      return res.status(400).json({ error: "Checkout session not completed" });
+    }
+
+    const setupIntent = session.setup_intent;
+    if (!setupIntent || setupIntent.status !== "succeeded") {
+      return res.status(400).json({ error: "Payment method setup not completed" });
+    }
+
+    // Set the payment method as the default for the customer
+    if (setupIntent.payment_method) {
+      await stripe.customers.update(user.stripeCustomerId, {
+        invoice_settings: {
+          default_payment_method: setupIntent.payment_method,
+        },
+      });
+    }
+
+    // Update user record
+    await user.update({ hasPaymentMethod: true });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error confirming checkout session:", error);
+    return res.status(400).json({ error: "Failed to confirm checkout session" });
+  }
+});
+
+/**
  * Confirm payment method was saved successfully
  * Called after the client successfully completes the SetupIntent
  */

@@ -44,23 +44,27 @@ const RequestedTile = ({
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
   const kilometers = distance ? distance.toFixed(1) : null;
-  const timeOptions = {
-    anytime: "Anytime",
-    "10-3": "Between 10am and 3pm",
-    "11-4": "Between 11am and 4pm",
-    "12-2": "Between 12pm and 2pm",
+
+  const formatTimeWindow = (time) => {
+    if (!time || time === "anytime") {
+      return "Anytime today";
+    }
+    // time format is "10-3", "11-4", "12-2"
+    const endHour = parseInt(time.split("-")[1], 10);
+    const period = endHour >= 12 ? "PM" : "AM";
+    return `Must complete by ${endHour}${period}`;
   };
-  const formattedTime = timeOptions[timeToBeCompleted] || null;
+
+  const formattedTime = formatTimeWindow(timeToBeCompleted);
 
   return (
     <View style={styles.tileContainer}>
       <Pressable onPress={toggleDetails} style={{ padding: 10 }}>
         <Text style={styles.date}>{formatDate(date)}</Text>
 
-        {formattedTime && (
+        {timeToBeCompleted && (
           <View style={styles.timeContainer}>
-            <Text style={styles.timeLabel}>Time to complete:</Text>
-            <Text style={styles.timeText}>{`${formattedTime} on ${formatDate(date)}`}</Text>
+            <Text style={styles.timeText}>{formattedTime}</Text>
           </View>
         )}
 

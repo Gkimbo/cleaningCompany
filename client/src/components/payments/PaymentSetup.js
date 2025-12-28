@@ -42,32 +42,32 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
     if (Platform.OS === "web") {
       const params = new URLSearchParams(window.location.search);
       const setupComplete = params.get("setup_complete");
-      const setupIntentId = params.get("setup_intent");
-      const redirectStatus = params.get("redirect_status");
+      const sessionId = params.get("session_id");
+      const canceled = params.get("canceled");
 
-      if (setupComplete && setupIntentId && redirectStatus === "succeeded") {
+      if (setupComplete && sessionId) {
         // Clear URL params
         window.history.replaceState({}, document.title, window.location.pathname);
 
-        // Confirm the payment method on our backend
-        confirmSetupFromRedirect(setupIntentId);
-      } else if (setupComplete && redirectStatus && redirectStatus !== "succeeded") {
+        // Confirm the payment method from checkout session
+        confirmCheckoutSession(sessionId);
+      } else if (canceled) {
         window.history.replaceState({}, document.title, window.location.pathname);
-        setError("Payment setup was not completed. Please try again.");
+        setError("Payment setup was canceled.");
         setIsLoading(false);
       }
     }
   }, []);
 
-  const confirmSetupFromRedirect = async (setupIntentId) => {
+  const confirmCheckoutSession = async (sessionId) => {
     setIsProcessing(true);
     try {
-      const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
+      const confirmResponse = await fetch(`${API_BASE}/payments/confirm-checkout-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token: state.currentUser.token,
-          setupIntentId,
+          sessionId,
         }),
       });
 
@@ -87,7 +87,7 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         throw new Error(confirmData.error || "Failed to save payment method");
       }
     } catch (err) {
-      console.error("Error confirming setup from redirect:", err);
+      console.error("Error confirming checkout session:", err);
       setError(err.message);
     } finally {
       setIsProcessing(false);
@@ -125,7 +125,29 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
     setError(null);
 
     try {
-      // Create SetupIntent
+      // On web, use Checkout Session (hosted payment page)
+      if (Platform.OS === "web") {
+        const response = await fetch(`${API_BASE}/payments/setup-checkout-session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: state.currentUser.token,
+            successUrl: `${window.location.origin}/payment-setup?setup_complete=true&session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: `${window.location.origin}/payment-setup?canceled=true`,
+          }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to initialize payment setup");
+        }
+
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+        return; // This won't execute as we're redirecting
+      }
+
+      // On native, use SetupIntent with payment sheet
       const setupResponse = await fetch(`${API_BASE}/payments/setup-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -137,8 +159,6 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         throw new Error(setupData.error || "Failed to initialize payment setup");
       }
 
-      // Use the platform-agnostic payment sheet
-      // Note: On web, this will redirect to Stripe's hosted page and won't return
       const result = await openPaymentSheet({
         clientSecret: setupData.clientSecret,
         merchantDisplayName: "Kleanr Inc.",
@@ -147,45 +167,39 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         publishableKey: setupData.publishableKey,
       });
 
-      // On web, if we get here with an error, handle it
-      // If successful redirect happened, this code won't run
       if (result.error) {
         throw new Error(result.error.message);
       }
 
       if (result.canceled) {
-        // User canceled - just return
         setIsProcessing(false);
         return;
       }
 
-      // This code path is for native apps where openPaymentSheet returns without redirect
-      if (Platform.OS !== "web") {
-        // Confirm the payment method was saved
-        const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            token: state.currentUser.token,
-            setupIntentId: setupData.clientSecret.split("_secret_")[0],
-          }),
-        });
+      // Confirm the payment method was saved
+      const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: state.currentUser.token,
+          setupIntentId: setupData.clientSecret.split("_secret_")[0],
+        }),
+      });
 
-        const confirmData = await confirmResponse.json();
+      const confirmData = await confirmResponse.json();
 
-        if (confirmResponse.ok && confirmData.success) {
-          setHasPaymentMethod(true);
-          fetchPaymentMethodStatus();
-          Alert.alert("Success", "Payment method added successfully!");
+      if (confirmResponse.ok && confirmData.success) {
+        setHasPaymentMethod(true);
+        fetchPaymentMethodStatus();
+        Alert.alert("Success", "Payment method added successfully!");
 
-          if (onSetupComplete) {
-            onSetupComplete();
-          } else if (redirectTo) {
-            navigate(redirectTo);
-          }
-        } else {
-          throw new Error(confirmData.error || "Failed to save payment method");
+        if (onSetupComplete) {
+          onSetupComplete();
+        } else if (redirectTo) {
+          navigate(redirectTo);
         }
+      } else {
+        throw new Error(confirmData.error || "Failed to save payment method");
       }
     } catch (err) {
       console.error("Payment setup error:", err);
@@ -406,7 +420,7 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         </Pressable>
       )}
 
-      {/* Book Appointment Button (always show when has payment method and not in booking flow) */}
+      {/* Book Appointment Button (show when has payment method and not in booking flow) */}
       {hasPaymentMethod && !redirectTo && (
         <Pressable
           style={styles.bookButton}
@@ -414,6 +428,17 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         >
           <Icon name="calendar-plus-o" size={18} color={colors.neutral[0]} style={styles.buttonIcon} />
           <Text style={styles.bookButtonText}>Book an Appointment</Text>
+        </Pressable>
+      )}
+
+      {/* Pay Button (always show so users can access their bill) */}
+      {!redirectTo && (
+        <Pressable
+          style={styles.payButton}
+          onPress={() => navigate("/bill")}
+        >
+          <Icon name="dollar" size={18} color={colors.neutral[0]} style={styles.buttonIcon} />
+          <Text style={styles.payButtonText}>Pay</Text>
         </Pressable>
       )}
 
@@ -608,6 +633,21 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   bookButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
+  payButton: {
+    backgroundColor: colors.primary[600],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.lg,
+    borderRadius: radius.lg,
+    marginTop: spacing.md,
+    ...shadows.md,
+  },
+  payButtonText: {
     color: colors.neutral[0],
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,

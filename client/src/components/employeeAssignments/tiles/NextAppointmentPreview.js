@@ -30,10 +30,26 @@ const NextAppointmentPreview = ({ appointment, home: initialHome, cleanerSharePe
 
   const formatTimeWindow = (timeToBeCompleted) => {
     if (!timeToBeCompleted || timeToBeCompleted === "anytime") {
-      return "Flexible timing";
+      return "Anytime today";
     }
-    return `Must complete by ${timeToBeCompleted.split("-")[1]}`;
+    // timeToBeCompleted format is "10-3", "11-4", "12-2"
+    const endHour = parseInt(timeToBeCompleted.split("-")[1], 10);
+    const period = endHour >= 12 ? "PM" : "AM";
+    const displayHour = endHour > 12 ? endHour : endHour;
+    return `Must complete by ${displayHour}${period}`;
   };
+
+  // Check if appointment is within 2 days
+  const isWithinTwoDays = () => {
+    const appointmentDate = new Date(appointment.date + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffTime = appointmentDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 2;
+  };
+
+  const showFullAddress = isWithinTwoDays();
 
   const totalPrice = Number(appointment.price);
   const payout = totalPrice * cleanerSharePercent;
@@ -133,20 +149,32 @@ const NextAppointmentPreview = ({ appointment, home: initialHome, cleanerSharePe
         </View>
       )}
 
-      <TouchableOpacity
-        style={styles.addressContainer}
-        onPress={handleAddressPress}
-        activeOpacity={0.7}
-      >
-        <View style={styles.addressTextContainer}>
-          <Text style={styles.addressText}>{home.address || "Loading..."}</Text>
-          <Text style={styles.addressText}>{home.city}, {home.state} {home.zipcode}</Text>
+      {showFullAddress ? (
+        <TouchableOpacity
+          style={styles.addressContainer}
+          onPress={handleAddressPress}
+          activeOpacity={0.7}
+        >
+          <View style={styles.addressTextContainer}>
+            <Text style={styles.addressText}>{home.address || "Loading..."}</Text>
+            <Text style={styles.addressText}>{home.city}, {home.state} {home.zipcode}</Text>
+          </View>
+          <View style={styles.directionsButton}>
+            <Icon name="map-marker" size={16} color={colors.neutral[0]} />
+            <Text style={styles.directionsText}>Directions</Text>
+          </View>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.addressContainer}>
+          <View style={styles.addressTextContainer}>
+            <Text style={styles.addressText}>{home.city}, {home.state} {home.zipcode}</Text>
+          </View>
+          <View style={styles.addressHiddenNote}>
+            <Icon name="lock" size={12} color={colors.text.tertiary} />
+            <Text style={styles.addressHiddenText}>Full address available 2 days before</Text>
+          </View>
         </View>
-        <View style={styles.directionsButton}>
-          <Icon name="map-marker" size={16} color={colors.neutral[0]} />
-          <Text style={styles.directionsText}>Directions</Text>
-        </View>
-      </TouchableOpacity>
+      )}
 
       <View style={styles.divider} />
 
@@ -178,7 +206,7 @@ const NextAppointmentPreview = ({ appointment, home: initialHome, cleanerSharePe
         )}
       </View>
 
-      {home.specialNotes && (
+      {showFullAddress && home.specialNotes && (
         <View style={styles.notesContainer}>
           <Text style={styles.notesLabel}>Special Notes:</Text>
           <Text style={styles.notes} numberOfLines={2}>{home.specialNotes}</Text>
@@ -188,7 +216,10 @@ const NextAppointmentPreview = ({ appointment, home: initialHome, cleanerSharePe
       <View style={styles.accessInfoBanner}>
         <Icon name="lock" size={14} color={colors.text.tertiary} />
         <Text style={styles.accessInfoText}>
-          Access details available on day of appointment
+          {showFullAddress
+            ? "Access details (key code, etc.) available on day of appointment"
+            : "Full address and access details available 2 days before appointment"
+          }
         </Text>
       </View>
     </View>
@@ -239,6 +270,17 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     textAlign: "center",
     marginBottom: 2,
+  },
+  addressHiddenNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+  },
+  addressHiddenText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
   },
   directionsButton: {
     flexDirection: "row",

@@ -12,6 +12,7 @@ import {
 import { useNavigate } from "react-router-native";
 import { colors, spacing, radius, shadows } from "../../services/styles/theme";
 import Application from "../../services/fetchRequests/ApplicationClass";
+import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 
 import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
@@ -39,6 +40,7 @@ const TopBar = ({ dispatch, state }) => {
   const [signUpRedirect, setSignUpRedirect] = useState(false);
   const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
   const [pendingApplications, setPendingApplications] = useState(0);
+  const [pendingCleanerRequests, setPendingCleanerRequests] = useState(0);
 
   const navigate = useNavigate();
 
@@ -52,6 +54,28 @@ const TopBar = ({ dispatch, state }) => {
     };
     fetchPendingApplications();
   }, [state.account]);
+
+  // Fetch pending cleaner requests count for clients (homeowners)
+  useEffect(() => {
+    const fetchPendingCleanerRequests = async () => {
+      // Only fetch for regular users (clients/homeowners), not cleaners or owners
+      if (!state.account && state.currentUser.token) {
+        try {
+          const data = await ClientDashboardService.getPendingRequestsForClient(
+            state.currentUser.token
+          );
+          setPendingCleanerRequests(data.totalCount || 0);
+        } catch (error) {
+          console.error("Error fetching pending cleaner requests:", error);
+        }
+      }
+    };
+    fetchPendingCleanerRequests();
+
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchPendingCleanerRequests, 60000);
+    return () => clearInterval(interval);
+  }, [state.account, state.currentUser.token]);
 
   useEffect(() => {
     if (signInRedirect) {
@@ -94,6 +118,23 @@ const TopBar = ({ dispatch, state }) => {
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
                       {pendingApplications > 9 ? "9+" : pendingApplications}
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
+              {/* Pending cleaner requests notification badge for clients */}
+              {!state.account && pendingCleanerRequests > 0 && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.notificationButton,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                  onPress={() => navigate("/client-requests")}
+                >
+                  <Feather name="user-check" size={20} color="white" />
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {pendingCleanerRequests > 9 ? "9+" : pendingCleanerRequests}
                     </Text>
                   </View>
                 </Pressable>
