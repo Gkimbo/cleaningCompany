@@ -64,6 +64,12 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: false,
       // Enable automatic syncing every 6 hours
     },
+    deletedDates: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: true,
+      defaultValue: [],
+      // Track dates where appointments were manually deleted to prevent re-creation
+    },
   });
 
   CalendarSync.associate = (models) => {

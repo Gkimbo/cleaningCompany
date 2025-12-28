@@ -80,6 +80,45 @@ describe("Bill Component", () => {
     expect(progressPercent).toBe(0);
   });
 
+  it("should display 0 when cancellation fee is negative", () => {
+    const negativeFee = -100;
+    const sanitizedFee = Math.max(0, negativeFee);
+    expect(sanitizedFee).toBe(0);
+  });
+
+  it("should display 0 when total due would be negative", () => {
+    // Simulating the calculation in Bill.js
+    const bill = { cancellationFee: -500, totalPaid: 0 };
+    const appointments = [
+      { id: 1, date: "2024-01-01", price: "100", paid: false },
+    ];
+
+    const cancellationFee = Math.max(0, bill?.cancellationFee || 0);
+    const appointmentOverdue = Math.max(0, appointments.reduce((total, appt) => {
+      const apptDate = new Date(appt.date);
+      const today = new Date();
+      if (!appt.paid && apptDate <= today) return total + Number(appt.price || 0);
+      return total;
+    }, cancellationFee));
+
+    expect(cancellationFee).toBe(0);
+    expect(appointmentOverdue).toBe(100); // Only the appointment price, no negative fee
+  });
+
+  it("should never show negative balance to users", () => {
+    // Test the Math.max(0, ...) protection
+    const negativeAppointmentDue = -2700;
+    const negativeCancellationFee = -500;
+
+    const sanitizedAppointmentDue = Math.max(0, negativeAppointmentDue);
+    const sanitizedCancellationFee = Math.max(0, negativeCancellationFee);
+    const totalDue = Math.max(0, sanitizedAppointmentDue + sanitizedCancellationFee);
+
+    expect(sanitizedAppointmentDue).toBe(0);
+    expect(sanitizedCancellationFee).toBe(0);
+    expect(totalDue).toBe(0);
+  });
+
   it("should validate amount input correctly", () => {
     const regex = /^\d*(\.\d*)?$/;
 

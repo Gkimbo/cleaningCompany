@@ -46,6 +46,7 @@ const syncSingleCalendar = async (sync, sendEmail = false) => {
     }
 
     const syncedUids = sync.syncedEventUids || [];
+    const deletedDates = sync.deletedDates || [];
     const newSyncedUids = [...syncedUids];
     let appointmentsCreated = 0;
 
@@ -63,6 +64,12 @@ const syncSingleCalendar = async (sync, sendEmail = false) => {
         cleaningDate.setDate(cleaningDate.getDate() + sync.daysAfterCheckout);
 
         const cleaningDateStr = cleaningDate.toISOString().split("T")[0];
+
+        // Skip if this date was previously deleted by user
+        if (deletedDates.includes(cleaningDateStr)) {
+          newSyncedUids.push(checkout.uid);
+          continue;
+        }
 
         // Check if appointment already exists for this date
         const existingAppointment = await UserAppointments.findOne({

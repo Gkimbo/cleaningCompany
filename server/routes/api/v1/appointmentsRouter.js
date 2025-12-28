@@ -10,6 +10,7 @@ const {
   UserReviews,
   Payout,
   JobPhoto,
+  CalendarSync,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -774,15 +775,40 @@ appointmentRouter.delete("/:id", async (req, res) => {
     const oldFee = Number(existingBill.dataValues.cancellationFee);
     const oldAppt = Number(existingBill.dataValues.appointmentDue);
 
-    const total =
-      Number(existingBill.dataValues.cancellationFee) +
-      Number(existingBill.dataValues.appointmentDue);
+    // Only subtract if not already paid
+    const amountToSubtract = appointmentToDelete.dataValues.paid ? 0 : appointmentTotal;
+
+    // Ensure values don't go negative
+    const newAppointmentDue = Math.max(0, oldAppt - amountToSubtract);
+    const newCancellationFee = oldFee + fee;
+    const newTotalDue = Math.max(0, newCancellationFee + newAppointmentDue);
 
     await existingBill.update({
-      cancellationFee: oldFee + fee,
-      appointmentDue: oldAppt - appointmentTotal,
-      totalDue: total + fee - appointmentTotal,
+      cancellationFee: newCancellationFee,
+      appointmentDue: newAppointmentDue,
+      totalDue: newTotalDue,
     });
+
+    // Track deleted date for calendar sync to prevent re-creation
+    const homeId = appointmentToDelete.dataValues.homeId;
+    const appointmentDate = appointmentToDelete.dataValues.date;
+    const dateStr = typeof appointmentDate === 'string'
+      ? appointmentDate.split('T')[0]
+      : new Date(appointmentDate).toISOString().split('T')[0];
+
+    const calendarSyncs = await CalendarSync.findAll({
+      where: { homeId, isActive: true },
+    });
+
+    for (const sync of calendarSyncs) {
+      const deletedDates = sync.deletedDates || [];
+      if (!deletedDates.includes(dateStr)) {
+        await sync.update({
+          deletedDates: [...deletedDates, dateStr],
+        });
+      }
+    }
+
     const connectionsToDelete = await UserCleanerAppointments.destroy({
       where: { appointmentId: id },
     });
@@ -1795,20 +1821,61 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             paymentIntentId: cancellationPaymentIntent.id,
           };
         } else {
-          console.log(`[Cancellation] User ${userId} has no default payment method, skipping cancellation fee`);
+          console.log(`[Cancellation] User ${userId} has no default payment method, adding fee to bill`);
+          // Add fee to user's bill since we couldn't charge it
+          const existingBillForFee = await UserBills.findOne({ where: { userId } });
+          if (existingBillForFee) {
+            const currentFee = Number(existingBillForFee.cancellationFee) || 0;
+            const currentTotal = Number(existingBillForFee.totalDue) || 0;
+            await existingBillForFee.update({
+              cancellationFee: currentFee + cancellationConfig.fee,
+              totalDue: currentTotal + cancellationConfig.fee,
+            });
+          }
           cancellationFeeResult = {
             charged: false,
-            reason: "No default payment method",
+            addedToBill: true,
+            amount: cancellationConfig.fee,
+            reason: "No default payment method - added to bill",
           };
         }
       } catch (stripeError) {
-        console.error(`[Cancellation] Error charging cancellation fee:`, stripeError);
+        console.error(`[Cancellation] Error charging cancellation fee, adding to bill:`, stripeError);
+        // Add fee to user's bill since charge failed
+        const existingBillForFee = await UserBills.findOne({ where: { userId } });
+        if (existingBillForFee) {
+          const currentFee = Number(existingBillForFee.cancellationFee) || 0;
+          const currentTotal = Number(existingBillForFee.totalDue) || 0;
+          await existingBillForFee.update({
+            cancellationFee: currentFee + cancellationConfig.fee,
+            totalDue: currentTotal + cancellationConfig.fee,
+          });
+        }
         cancellationFeeResult = {
           charged: false,
-          reason: stripeError.message,
+          addedToBill: true,
+          amount: cancellationConfig.fee,
+          reason: `Charge failed: ${stripeError.message} - added to bill`,
         };
-        // Continue with cancellation even if fee charge fails
       }
+    } else if (isWithinCancellationFeeWindow) {
+      // User doesn't have payment method set up, add fee to bill
+      console.log(`[Cancellation] User ${userId} has no payment method configured, adding fee to bill`);
+      const existingBillForFee = await UserBills.findOne({ where: { userId } });
+      if (existingBillForFee) {
+        const currentFee = Number(existingBillForFee.cancellationFee) || 0;
+        const currentTotal = Number(existingBillForFee.totalDue) || 0;
+        await existingBillForFee.update({
+          cancellationFee: currentFee + cancellationConfig.fee,
+          totalDue: currentTotal + cancellationConfig.fee,
+        });
+      }
+      cancellationFeeResult = {
+        charged: false,
+        addedToBill: true,
+        amount: cancellationConfig.fee,
+        reason: "No payment method configured - added to bill",
+      };
     }
 
     // Handle payment cancellation/refund
@@ -1872,15 +1939,20 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     // Update user bills
     const existingBill = await UserBills.findOne({ where: { userId } });
     if (existingBill) {
-      const appointmentTotal = price;
+      const appointmentTotal = appointment.paid ? 0 : price; // Only subtract if not already paid
       const oldAppt = Number(existingBill.appointmentDue);
       const oldFee = Number(existingBill.cancellationFee);
       const cancellationFeeAmount = isWithinPenaltyWindow ? price * cancellationConfig.refundPercentage : 0;
 
+      // Ensure values don't go negative
+      const newAppointmentDue = Math.max(0, oldAppt - appointmentTotal);
+      const newCancellationFee = oldFee + cancellationFeeAmount;
+      const newTotalDue = Math.max(0, newCancellationFee + newAppointmentDue);
+
       await existingBill.update({
-        cancellationFee: oldFee + cancellationFeeAmount,
-        appointmentDue: oldAppt - appointmentTotal,
-        totalDue: oldFee + cancellationFeeAmount + oldAppt - appointmentTotal,
+        cancellationFee: newCancellationFee,
+        appointmentDue: newAppointmentDue,
+        totalDue: newTotalDue,
       });
     }
 
@@ -1908,6 +1980,23 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           );
           await cleaner.update({ notifications: notifications.slice(0, 50) });
         }
+      }
+    }
+
+    // Track deleted date for calendar sync to prevent re-creation
+    const homeId = appointment.homeId;
+    const dateStr = appointmentDate.toISOString().split('T')[0];
+
+    const calendarSyncs = await CalendarSync.findAll({
+      where: { homeId, isActive: true },
+    });
+
+    for (const sync of calendarSyncs) {
+      const deletedDates = sync.deletedDates || [];
+      if (!deletedDates.includes(dateStr)) {
+        await sync.update({
+          deletedDates: [...deletedDates, dateStr],
+        });
       }
     }
 

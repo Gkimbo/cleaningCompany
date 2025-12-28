@@ -15,6 +15,7 @@ require("./passport-config");
 
 const rootRouter = require("./routes/rootRouter");
 const { startPeriodicSync } = require("./services/calendarSyncService");
+const { startBillingScheduler } = require("./services/billingService");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -188,5 +189,6 @@ server.listen(port, () => {
 	// Only in non-test environment
 	if (process.env.NODE_ENV !== "test") {
 		startPeriodicSync(60 * 60 * 1000); // 1 hour
+		startBillingScheduler(); // Monthly interest on unpaid fees
 	}
 });

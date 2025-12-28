@@ -20,6 +20,9 @@ class ClientDashboardService {
   }
 
   static async getDashboardSummary(token) {
+    // First sync the bill to ensure accuracy
+    await this.syncBill(token);
+
     return this.fetchWithFallback(
       `${baseURL}/api/v1/user-info`,
       token,
@@ -36,6 +39,17 @@ class ClientDashboardService {
         },
       }
     );
+  }
+
+  static async syncBill(token) {
+    try {
+      await fetch(`${baseURL}/api/v1/user-info/sync-bill`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      console.warn("[ClientDashboard] Bill sync failed:", error.message);
+    }
   }
 
   static async getMyRequests(token) {

@@ -236,6 +236,7 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
 
     const home = sync.home;
     const syncedUids = sync.syncedEventUids || [];
+    const deletedDates = sync.deletedDates || [];
     const newAppointments = [];
     const newSyncedUids = [...syncedUids];
 
@@ -253,6 +254,12 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
         cleaningDate.setDate(cleaningDate.getDate() + sync.daysAfterCheckout);
 
         const cleaningDateStr = cleaningDate.toISOString().split("T")[0];
+
+        // Skip if this date was previously deleted by user
+        if (deletedDates.includes(cleaningDateStr)) {
+          newSyncedUids.push(checkout.uid);
+          continue;
+        }
 
         // Check if appointment already exists for this date
         const existingAppointment = await UserAppointments.findOne({

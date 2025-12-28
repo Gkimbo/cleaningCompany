@@ -31,13 +31,13 @@ const Bill = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { openPaymentSheet } = usePaymentSheet();
 
-  const cancellationFee = state?.bill?.cancellationFee || 0;
-  const appointmentOverdue = (state?.appointments || []).reduce((total, appt) => {
+  const cancellationFee = Math.max(0, state?.bill?.cancellationFee || 0);
+  const appointmentOverdue = Math.max(0, (state?.appointments || []).reduce((total, appt) => {
     const apptDate = new Date(appt.date);
     const today = new Date();
     if (!appt.paid && apptDate <= today) return total + Number(appt.price || 0);
     return total;
-  }, cancellationFee);
+  }, cancellationFee));
 
   const totalPaid = state?.bill?.totalPaid || 0;
   const progressPercent = appointmentOverdue > 0

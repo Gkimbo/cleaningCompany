@@ -283,9 +283,9 @@ const ClientDashboard = ({ state, dispatch }) => {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 3);
 
-  // Calculate total balance due
+  // Use the backend's totalDue value directly (ensure non-negative)
   const totalDue = bill
-    ? Number(bill.cancellationFee || 0) + Number(bill.appointmentDue || 0)
+    ? Math.max(0, Number(bill.totalDue || 0))
     : 0;
 
   if (loading) {
