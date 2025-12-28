@@ -747,7 +747,8 @@ describe("Owner Dashboard Router", () => {
     it("should calculate churn (cancellations) correctly", async () => {
       PlatformEarnings.findOne.mockResolvedValue(null);
       UserAppointments.findAll.mockResolvedValue([]);
-      UserBills.findAll.mockResolvedValue([{ count: 10, totalFees: 25000 }]);
+      // cancellationFee is stored in dollars in the database (e.g., 10 users × $25 = $250)
+      UserBills.findAll.mockResolvedValue([{ count: 10, totalFees: 250 }]);
       UserReviews.count
         .mockResolvedValueOnce(15) // total cleaner cancellations
         .mockResolvedValueOnce(3)  // last 30 days
@@ -762,6 +763,7 @@ describe("Owner Dashboard Router", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.churn.homeownerCancellations.usersWithCancellations).toBe(10);
+      // totalFeeCents is converted from dollars (250 * 100 = 25000 cents)
       expect(response.body.churn.homeownerCancellations.totalFeeCents).toBe(25000);
       expect(response.body.churn.cleanerCancellations.total).toBe(15);
       expect(response.body.churn.cleanerCancellations.last30Days).toBe(3);

@@ -553,6 +553,271 @@ paymentRouter.post("/create-intent", async (req, res) => {
 
 /**
  * ------------------------------------------------------
+ * Create Checkout Session for Web Bill Payments
+ * Uses Stripe Checkout for a hosted payment page (simpler for web)
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/create-checkout-session", async (req, res) => {
+  const { amount, successUrl, cancelUrl } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Create or get Stripe customer
+    let customerId = user.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        metadata: { userId: userId.toString() },
+      });
+      customerId = customer.id;
+      await user.update({ stripeCustomerId: customerId });
+    }
+
+    // Create Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      customer: customerId,
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "Bill Payment",
+              description: "Payment for outstanding balance",
+            },
+            unit_amount: amount, // amount in cents
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${successUrl}?payment_complete=true&session_id={CHECKOUT_SESSION_ID}&amount=${amount}`,
+      cancel_url: cancelUrl || successUrl,
+      metadata: {
+        userId: userId.toString(),
+        type: "bill_payment",
+        amount: amount.toString(),
+      },
+    });
+
+    res.json({ sessionId: session.id, url: session.url });
+  } catch (error) {
+    console.error("Error creating checkout session:", error);
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    res.status(400).json({ error: "Failed to create checkout session" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Verify Checkout Session and Record Payment
+ * Called after successful checkout to update the bill
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/verify-checkout-session", async (req, res) => {
+  const { sessionId } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    // Retrieve the session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (session.payment_status !== "paid") {
+      return res.status(400).json({ error: "Payment not completed" });
+    }
+
+    // Verify the session is for this user
+    if (session.metadata?.userId !== userId.toString()) {
+      return res.status(403).json({ error: "Session does not belong to this user" });
+    }
+
+    const amount = parseInt(session.metadata?.amount) || session.amount_total;
+
+    // Find the user's bill
+    const bill = await UserBills.findOne({ where: { userId } });
+    if (!bill) {
+      return res.status(404).json({ error: "Bill not found" });
+    }
+
+    // Amount is in cents, convert to dollars for bill (stored in dollars)
+    const paymentAmountDollars = amount / 100;
+
+    // Get current values
+    let currentCancellationFee = Number(bill.cancellationFee) || 0;
+    let currentAppointmentDue = Number(bill.appointmentDue) || 0;
+    let remainingPayment = paymentAmountDollars;
+
+    // Apply payment to cancellation fee first
+    if (remainingPayment > 0 && currentCancellationFee > 0) {
+      const feePayment = Math.min(remainingPayment, currentCancellationFee);
+      currentCancellationFee -= feePayment;
+      remainingPayment -= feePayment;
+    }
+
+    // Then apply to appointment dues
+    if (remainingPayment > 0 && currentAppointmentDue > 0) {
+      const duePayment = Math.min(remainingPayment, currentAppointmentDue);
+      currentAppointmentDue -= duePayment;
+      remainingPayment -= duePayment;
+    }
+
+    // Calculate new total
+    const newTotalDue = currentCancellationFee + currentAppointmentDue;
+
+    // Update the bill
+    await bill.update({
+      cancellationFee: Math.max(0, currentCancellationFee),
+      appointmentDue: Math.max(0, currentAppointmentDue),
+      totalDue: Math.max(0, newTotalDue),
+    });
+
+    // Record the payment transaction
+    await recordPaymentTransaction({
+      type: "bill_payment",
+      status: "succeeded",
+      amount: amount, // in cents
+      userId,
+      stripePaymentIntentId: session.payment_intent,
+      description: `Bill payment - $${paymentAmountDollars.toFixed(2)}`,
+      metadata: {
+        checkoutSessionId: sessionId,
+      },
+    });
+
+    console.log(`[Bill Payment] User ${userId} paid $${paymentAmountDollars.toFixed(2)} via Checkout - Bill updated`);
+
+    return res.json({
+      success: true,
+      bill: {
+        cancellationFee: Math.max(0, currentCancellationFee),
+        appointmentDue: Math.max(0, currentAppointmentDue),
+        totalDue: Math.max(0, newTotalDue),
+      },
+    });
+  } catch (error) {
+    console.error("[Verify Checkout] Error:", error);
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    return res.status(500).json({ error: "Failed to verify payment" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Record Bill Payment
+ * Called after successful Stripe payment to update the user's bill
+ * Applies payment to cancellation fees first, then appointment dues
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/record-bill-payment", async (req, res) => {
+  const { amount, paymentIntentId } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    // Find the user's bill
+    const bill = await UserBills.findOne({ where: { userId } });
+    if (!bill) {
+      return res.status(404).json({ error: "Bill not found" });
+    }
+
+    // Amount is in cents from frontend, convert to dollars for bill (stored in dollars)
+    const paymentAmountDollars = amount / 100;
+
+    // Get current values
+    let currentCancellationFee = Number(bill.cancellationFee) || 0;
+    let currentAppointmentDue = Number(bill.appointmentDue) || 0;
+    let remainingPayment = paymentAmountDollars;
+
+    // Apply payment to cancellation fee first
+    if (remainingPayment > 0 && currentCancellationFee > 0) {
+      const feePayment = Math.min(remainingPayment, currentCancellationFee);
+      currentCancellationFee -= feePayment;
+      remainingPayment -= feePayment;
+    }
+
+    // Then apply to appointment dues
+    if (remainingPayment > 0 && currentAppointmentDue > 0) {
+      const duePayment = Math.min(remainingPayment, currentAppointmentDue);
+      currentAppointmentDue -= duePayment;
+      remainingPayment -= duePayment;
+    }
+
+    // Calculate new total
+    const newTotalDue = currentCancellationFee + currentAppointmentDue;
+
+    // Update the bill
+    await bill.update({
+      cancellationFee: Math.max(0, currentCancellationFee),
+      appointmentDue: Math.max(0, currentAppointmentDue),
+      totalDue: Math.max(0, newTotalDue),
+    });
+
+    // Record the payment transaction
+    await recordPaymentTransaction({
+      type: "bill_payment",
+      status: "succeeded",
+      amount: amount, // in cents
+      userId,
+      stripePaymentIntentId: paymentIntentId,
+      description: `Bill payment - $${paymentAmountDollars.toFixed(2)}`,
+      metadata: {
+        cancellationFeePaid: paymentAmountDollars - remainingPayment,
+      },
+    });
+
+    console.log(`[Bill Payment] User ${userId} paid $${paymentAmountDollars.toFixed(2)} - Bill updated`);
+
+    return res.json({
+      success: true,
+      bill: {
+        cancellationFee: Math.max(0, currentCancellationFee),
+        appointmentDue: Math.max(0, currentAppointmentDue),
+        totalDue: Math.max(0, newTotalDue),
+      },
+    });
+  } catch (error) {
+    console.error("[Bill Payment] Error:", error);
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    return res.status(500).json({ error: "Failed to record payment" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
  * Helper: Process payouts to cleaners after job completion
  * Records all transactions in Payment table for tax reporting
  * ------------------------------------------------------

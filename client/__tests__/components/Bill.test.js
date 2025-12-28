@@ -35,9 +35,19 @@ describe("Bill Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(Alert, "alert").mockImplementation(() => {});
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ payments: [] }),
+    // Mock fetch to handle multiple endpoints
+    global.fetch.mockImplementation((url) => {
+      if (url.includes("/payments/config")) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ publishableKey: "pk_test_mock" }),
+        });
+      }
+      // Default response for other endpoints
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ payments: [] }),
+      });
     });
   });
 
@@ -1257,8 +1267,10 @@ describe("Bill Component", () => {
 
     it("should create payment intent and open payment sheet for valid amount", async () => {
       global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ publishableKey: "pk_test_mock" }) }) // config
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }) // payment history
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }) // user-info refresh
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) }); // create-intent
 
       mockOpenPaymentSheet.mockResolvedValueOnce({ success: true });
 
@@ -1273,6 +1285,11 @@ describe("Bill Component", () => {
       const { getByText } = render(
         <Bill state={stateWithDue} dispatch={mockDispatch} />
       );
+
+      // Wait for config to load
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/payments/config"));
+      });
 
       await waitFor(() => {
         const payNowButton = getByText("Pay Now");
@@ -1288,13 +1305,16 @@ describe("Bill Component", () => {
       });
     });
 
-    it("should dispatch UPDATE_BILL on successful payment", async () => {
+    it("should dispatch DB_BILL on successful payment", async () => {
       global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ publishableKey: "pk_test_mock" }) }) // config
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }) // payment history
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }) // user-info refresh
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) }) // create-intent
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true, bill: { cancellationFee: 0, appointmentDue: 0, totalDue: 0 } }) }) // record-bill-payment
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }); // payment history refresh
 
-      mockOpenPaymentSheet.mockResolvedValueOnce({ success: true });
+      mockOpenPaymentSheet.mockResolvedValueOnce({ success: true, paymentIntentId: "pi_test_123" });
 
       const stateWithDue = {
         ...defaultState,
@@ -1308,6 +1328,11 @@ describe("Bill Component", () => {
         <Bill state={stateWithDue} dispatch={mockDispatch} />
       );
 
+      // Wait for config to load
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/payments/config"));
+      });
+
       await waitFor(() => {
         const payNowButton = getByText("Pay Now");
         fireEvent.press(payNowButton);
@@ -1315,16 +1340,18 @@ describe("Bill Component", () => {
 
       await waitFor(() => {
         expect(mockDispatch).toHaveBeenCalledWith({
-          type: "UPDATE_BILL",
-          payload: expect.objectContaining({ totalPaid: expect.any(Number) }),
+          type: "DB_BILL",
+          payload: expect.objectContaining({ cancellationFee: 0, totalDue: 0 }),
         });
       });
     });
 
     it("should handle payment cancellation gracefully", async () => {
       global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ publishableKey: "pk_test_mock" }) }) // config
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }) // payment history
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }) // user-info refresh
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) }); // create-intent
 
       mockOpenPaymentSheet.mockResolvedValueOnce({ canceled: true });
 
@@ -1340,6 +1367,11 @@ describe("Bill Component", () => {
         <Bill state={stateWithDue} dispatch={mockDispatch} />
       );
 
+      // Wait for config to load
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/payments/config"));
+      });
+
       await waitFor(() => {
         const payNowButton = getByText("Pay Now");
         fireEvent.press(payNowButton);
@@ -1354,8 +1386,10 @@ describe("Bill Component", () => {
 
     it("should show error alert on payment sheet error", async () => {
       global.fetch
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ publishableKey: "pk_test_mock" }) }) // config
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ payments: [] }) }) // payment history
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }) // user-info refresh
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ clientSecret: "pi_test_secret" }) }); // create-intent
 
       mockOpenPaymentSheet.mockResolvedValueOnce({
         error: { message: "Your card was declined" },
@@ -1372,6 +1406,11 @@ describe("Bill Component", () => {
       const { getByText } = render(
         <Bill state={stateWithDue} dispatch={mockDispatch} />
       );
+
+      // Wait for the config to load
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/payments/config"));
+      });
 
       await waitFor(() => {
         const payNowButton = getByText("Pay Now");

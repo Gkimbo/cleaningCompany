@@ -74,6 +74,22 @@ const ClientRequestsList = ({ state, dispatch }) => {
           .filter((homeGroup) => homeGroup.requests.length > 0)
       );
       setTotalCount((prev) => prev - 1);
+
+      // Refresh appointments in global state so Bill page gets updated paymentIntentId
+      try {
+        const dashboardData = await ClientDashboardService.getDashboardSummary(
+          state.currentUser.token
+        );
+        if (dashboardData.user?.appointments && dispatch) {
+          dispatch({
+            type: "USER_APPOINTMENTS",
+            payload: dashboardData.user.appointments,
+          });
+        }
+      } catch (refreshError) {
+        console.warn("Failed to refresh appointments:", refreshError);
+      }
+
       Alert.alert(
         "Cleaner Approved",
         `${cleanerName || "The cleaner"} has been approved for this appointment.`

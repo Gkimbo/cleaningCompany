@@ -1102,7 +1102,8 @@ ownerDashboardRouter.get(
         churn = {
           homeownerCancellations: {
             usersWithCancellations: parseInt(billsWithCancellations?.[0]?.count || 0),
-            totalFeeCents: parseInt(billsWithCancellations?.[0]?.totalFees || 0),
+            // cancellationFee is stored in dollars, convert to cents for frontend
+            totalFeeCents: parseInt(billsWithCancellations?.[0]?.totalFees || 0) * 100,
           },
           cleanerCancellations: {
             total: cleanerCancellationReviews,

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -13,6 +14,8 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { usePaymentSheet } from "../../services/stripe";
 import { API_BASE } from "../../services/config";
+
+const baseURL = API_BASE.replace("/api/v1", "");
 
 const Bill = ({ state, dispatch }) => {
   const [amountToPay, setAmountToPay] = useState(0);
@@ -28,6 +31,7 @@ const Bill = ({ state, dispatch }) => {
   const [prePayingId, setPrePayingId] = useState(null);
   const [selectedAppointments, setSelectedAppointments] = useState(new Set());
   const [isPayingSelected, setIsPayingSelected] = useState(false);
+  const [stripePublishableKey, setStripePublishableKey] = useState(null);
   const navigate = useNavigate();
   const { openPaymentSheet } = usePaymentSheet();
 
@@ -43,6 +47,95 @@ const Bill = ({ state, dispatch }) => {
   const progressPercent = appointmentOverdue > 0
     ? Math.min((totalPaid / appointmentOverdue) * 100, 100)
     : 0;
+
+  // Fetch Stripe publishable key on mount
+  useEffect(() => {
+    const fetchStripeConfig = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/payments/config`);
+        const data = await response.json();
+        if (data.publishableKey) {
+          setStripePublishableKey(data.publishableKey);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch Stripe config:", err);
+      }
+    };
+    fetchStripeConfig();
+  }, []);
+
+  // Handle redirect return from Stripe Checkout (web only)
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const params = new URLSearchParams(window.location.search);
+      const paymentComplete = params.get("payment_complete");
+      const sessionId = params.get("session_id");
+
+      if (paymentComplete && sessionId) {
+        // Clear URL params
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Verify the checkout session and record the payment
+        verifyCheckoutSession(sessionId);
+      }
+    }
+  }, []);
+
+  const verifyCheckoutSession = async (sessionId) => {
+    setIsProcessing(true);
+    try {
+      const response = await fetch(`${API_BASE}/payments/verify-checkout-session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.token}`,
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.bill) {
+        dispatch({
+          type: "DB_BILL",
+          payload: data.bill,
+        });
+        Alert.alert("Success", "Payment completed successfully!");
+      } else {
+        console.warn("Failed to verify checkout session:", data.error);
+        Alert.alert("Payment Received", "Your payment was received! Your balance will update shortly.");
+      }
+      fetchPaymentHistory();
+    } catch (err) {
+      console.error("Error verifying checkout session:", err);
+      Alert.alert("Payment Received", "Your payment was received! Your balance will update shortly.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Refresh appointments on mount to get latest paymentIntentId data
+  useEffect(() => {
+    const refreshAppointments = async () => {
+      if (!state?.token) return;
+      try {
+        const response = await fetch(`${baseURL}/api/v1/user-info`, {
+          headers: { Authorization: `Bearer ${state.token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.user?.appointments && dispatch) {
+            dispatch({ type: "USER_APPOINTMENTS", payload: data.user.appointments });
+          }
+          if (data.user?.bill && dispatch) {
+            dispatch({ type: "DB_BILL", payload: data.user.bill });
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to refresh appointments:", err);
+      }
+    };
+    refreshAppointments();
+  }, []);
 
   useEffect(() => {
     const appointments = state?.appointments || [];
@@ -137,6 +230,48 @@ const Bill = ({ state, dispatch }) => {
     }
 
     setIsProcessing(true);
+    const amountCents = Math.round(Number(amountToPay) * 100);
+
+    // Use Stripe Checkout for web (redirects to Stripe-hosted page)
+    if (Platform.OS === "web") {
+      try {
+        const currentUrl = window.location.origin + window.location.pathname;
+        const response = await fetch(`${API_BASE}/payments/create-checkout-session`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${state.token}`,
+          },
+          body: JSON.stringify({
+            amount: amountCents,
+            successUrl: currentUrl,
+            cancelUrl: currentUrl,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to create checkout session");
+        }
+
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+        return; // Page will redirect, no need to continue
+      } catch (err) {
+        setIsProcessing(false);
+        Alert.alert("Error", err.message || "Could not start payment");
+        return;
+      }
+    }
+
+    // Use native payment sheet for mobile
+    if (!stripePublishableKey) {
+      setIsProcessing(false);
+      Alert.alert("Error", "Payment system not ready. Please try again.");
+      return;
+    }
+
     const clientSecret = await createPaymentIntent();
     if (!clientSecret) {
       setIsProcessing(false);
@@ -147,6 +282,7 @@ const Bill = ({ state, dispatch }) => {
       clientSecret,
       merchantDisplayName: "Kleanr Inc.",
       isSetupIntent: false,
+      publishableKey: stripePublishableKey,
     });
 
     setIsProcessing(false);
@@ -156,11 +292,47 @@ const Bill = ({ state, dispatch }) => {
     } else if (result.canceled) {
       // User canceled - do nothing
     } else if (result.success) {
-      Alert.alert("Success", "Payment completed successfully!");
-      dispatch({
-        type: "UPDATE_BILL",
-        payload: { totalPaid: totalPaid + Number(amountToPay) },
-      });
+      // Record the payment in the database
+      try {
+        const recordResponse = await fetch(`${API_BASE}/payments/record-bill-payment`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${state.token}`,
+          },
+          body: JSON.stringify({
+            amount: amountCents,
+            paymentIntentId: result.paymentIntentId,
+          }),
+        });
+
+        const recordData = await recordResponse.json();
+
+        if (recordResponse.ok && recordData.bill) {
+          // Update local state with the new bill values from server
+          dispatch({
+            type: "DB_BILL",
+            payload: recordData.bill,
+          });
+          Alert.alert("Success", "Payment completed successfully!");
+        } else {
+          // Payment went through but recording failed - update local state as fallback
+          console.warn("Failed to record bill payment:", recordData.error);
+          dispatch({
+            type: "UPDATE_BILL",
+            payload: { totalPaid: totalPaid + Number(amountToPay) },
+          });
+          Alert.alert("Success", "Payment completed! Your balance will update shortly.");
+        }
+      } catch (recordError) {
+        console.error("Error recording bill payment:", recordError);
+        // Payment went through but recording failed - update local state as fallback
+        dispatch({
+          type: "UPDATE_BILL",
+          payload: { totalPaid: totalPaid + Number(amountToPay) },
+        });
+        Alert.alert("Success", "Payment completed! Your balance will update shortly.");
+      }
       fetchPaymentHistory();
     }
   };
