@@ -272,23 +272,54 @@ const ClientDashboard = ({ state, dispatch }) => {
     return new Date().toLocaleDateString("en-US", options);
   };
 
-  // Sort and filter upcoming appointments
+  // Sort and filter upcoming appointments (exclude completed ones)
   const allUpcomingAppointments = appointments
-    .filter((apt) => isFutureOrToday(apt.date))
+    .filter((apt) => isFutureOrToday(apt.date) && !apt.completed)
     .sort((a, b) => compareDates(a.date, b.date));
   const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
   const upcomingAppointmentsCount = allUpcomingAppointments.length;
+
+  // Calculate auto-captured, prepaid, and pending amounts for upcoming appointments
+  // Auto-captured: paid and within 3 days (system auto-captured the payment)
+  // Prepaid: paid but more than 3 days away (client paid early)
+  // Pending: not yet paid
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const autoCapturedAppointments = allUpcomingAppointments.filter((apt) => {
+    if (!apt.paid) return false;
+    const aptDate = parseLocalDate(apt.date);
+    const daysUntil = Math.ceil((aptDate - today) / (1000 * 60 * 60 * 24));
+    return daysUntil <= 3;
+  });
+
+  const prepaidAppointments = allUpcomingAppointments.filter((apt) => {
+    if (!apt.paid) return false;
+    const aptDate = parseLocalDate(apt.date);
+    const daysUntil = Math.ceil((aptDate - today) / (1000 * 60 * 60 * 24));
+    return daysUntil > 3;
+  });
+
+  const pendingPaymentAppointments = allUpcomingAppointments.filter((apt) => !apt.paid);
+
+  const autoCapturedTotal = autoCapturedAppointments.reduce(
+    (sum, apt) => sum + (Number(apt.price) || 0),
+    0
+  );
+  const prepaidTotal = prepaidAppointments.reduce(
+    (sum, apt) => sum + (Number(apt.price) || 0),
+    0
+  );
+  const pendingPaymentTotal = pendingPaymentAppointments.reduce(
+    (sum, apt) => sum + (Number(apt.price) || 0),
+    0
+  );
 
   // Get recent/past appointments
   const recentAppointments = appointments
     .filter((apt) => isPast(apt.date))
     .sort((a, b) => compareDates(b.date, a.date))
     .slice(0, 3);
-
-  // Use the backend's totalDue value directly (ensure non-negative)
-  const totalDue = bill
-    ? Math.max(0, Number(bill.totalDue || 0))
-    : 0;
 
   if (loading) {
     return (
@@ -423,11 +454,11 @@ const ClientDashboard = ({ state, dispatch }) => {
           badgeCount={pendingRequestsCount}
         />
         <StatCard
-          title="Balance"
-          value={formatCurrency(totalDue)}
-          subtitle={totalDue > 0 ? "due" : "all clear"}
-          color={totalDue > 0 ? colors.warning[500] : colors.success[500]}
-          onPress={() => navigate("/bill")}
+          title="Edit"
+          value={upcomingAppointmentsCount}
+          subtitle="appointments"
+          color={colors.secondary[500]}
+          onPress={() => navigate("/appointments")}
         />
       </View>
 
@@ -567,7 +598,7 @@ const ClientDashboard = ({ state, dispatch }) => {
             </Text>
           </View>
           {/* Show upcoming appointments as informational, not due */}
-          {(bill?.appointmentDue || 0) > 0 && (
+          {upcomingAppointmentsCount > 0 && (
             <View style={styles.billingUpcoming}>
               <View style={styles.billingUpcomingHeader}>
                 <Icon name="calendar" size={12} color={colors.text.tertiary} />
@@ -575,11 +606,59 @@ const ClientDashboard = ({ state, dispatch }) => {
                   Upcoming Services ({upcomingAppointmentsCount})
                 </Text>
               </View>
-              <Text style={styles.billingUpcomingValue}>
-                {formatCurrency(bill?.appointmentDue || 0)}
-              </Text>
+
+              {/* Show auto-captured payments (within 3 days) */}
+              {autoCapturedAppointments.length > 0 && (
+                <View style={styles.billingAutoCapturedRow}>
+                  <View style={styles.billingAutoCapturedBadge}>
+                    <Icon name="credit-card" size={12} color={colors.primary[600]} />
+                    <Text style={styles.billingAutoCapturedLabel}>
+                      Auto-Captured ({autoCapturedAppointments.length})
+                    </Text>
+                  </View>
+                  <Text style={styles.billingAutoCapturedValue}>
+                    {formatCurrency(autoCapturedTotal)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Show prepaid appointments (paid early, more than 3 days out) */}
+              {prepaidAppointments.length > 0 && (
+                <View style={styles.billingPrepaidRow}>
+                  <View style={styles.billingPrepaidBadge}>
+                    <Icon name="check-circle" size={12} color={colors.success[600]} />
+                    <Text style={styles.billingPrepaidLabel}>
+                      Prepaid ({prepaidAppointments.length})
+                    </Text>
+                  </View>
+                  <Text style={styles.billingPrepaidValue}>
+                    {formatCurrency(prepaidTotal)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Show pending payment amount */}
+              {pendingPaymentAppointments.length > 0 && (
+                <View style={styles.billingPendingRow}>
+                  <Text style={styles.billingPendingLabel}>
+                    Pending ({pendingPaymentAppointments.length})
+                  </Text>
+                  <Text style={styles.billingPendingValue}>
+                    {formatCurrency(pendingPaymentTotal)}
+                  </Text>
+                </View>
+              )}
+
               <Text style={styles.billingUpcomingNote}>
-                Charged 3 days before each cleaning
+                Payments are auto-captured 3 days before each cleaning.{"\n"}
+                You can prepay for appointments in your{" "}
+                <Text
+                  style={styles.billingLink}
+                  onPress={() => navigate("/bill")}
+                >
+                  Bill
+                </Text>
+                .
               </Text>
             </View>
           )}
@@ -1017,8 +1096,80 @@ const styles = StyleSheet.create({
   billingUpcomingNote: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
     fontStyle: "italic",
+  },
+  billingAutoCapturedRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  billingAutoCapturedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  billingAutoCapturedLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  billingAutoCapturedValue: {
+    fontSize: typography.fontSize.base,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  billingPrepaidRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  billingPrepaidBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  billingPrepaidLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  billingPrepaidValue: {
+    fontSize: typography.fontSize.base,
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  billingPendingRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  billingPendingLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  billingPendingValue: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  billingLink: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
   },
   billingPaid: {
     marginTop: spacing.md,

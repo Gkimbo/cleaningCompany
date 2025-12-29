@@ -134,6 +134,18 @@ const Earnings = ({ state, dispatch }) => {
     return cleanerShare.toFixed(2);
   };
 
+  // Calculate potential earnings from assigned appointments (not completed)
+  const calculatePotentialEarnings = () => {
+    return assignedAppointments
+      .filter((appt) => !appt.completed) // Only non-completed jobs
+      .reduce((total, appt) => {
+        const numCleaners = appt.employeesAssigned?.length || 1;
+        const share = parseFloat(calculateCleanerShare(appt.price, numCleaners));
+        return total + share;
+      }, 0)
+      .toFixed(2);
+  };
+
   if (isLoading) {
     return (
       <View
@@ -227,7 +239,7 @@ const Earnings = ({ state, dispatch }) => {
         </Text>
       </View>
 
-      {/* Pending Earnings Card */}
+      {/* Potential Earnings Card */}
       <View
         style={{
           backgroundColor: "#2196F3",
@@ -249,13 +261,13 @@ const Earnings = ({ state, dispatch }) => {
             marginBottom: 5,
           }}
         >
-          Pending Earnings
+          Potential Earnings
         </Text>
         <Text style={{ color: "#fff", fontSize: 28, fontWeight: "700" }}>
-          ${earnings.pendingEarnings}
+          ${calculatePotentialEarnings()}
         </Text>
         <Text style={{ color: "rgba(255,255,255,0.8)", marginTop: 5 }}>
-          Jobs in progress
+          {assignedAppointments.filter((a) => !a.completed).length} upcoming {assignedAppointments.filter((a) => !a.completed).length === 1 ? "job" : "jobs"}
         </Text>
       </View>
 

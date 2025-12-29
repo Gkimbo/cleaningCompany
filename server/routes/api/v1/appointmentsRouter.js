@@ -1377,42 +1377,85 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       if (
         diffInDays <= 3 &&
         diffInDays >= 0 &&
-        appointment.dataValues.paymentIntentId &&
-        appointment.dataValues.paymentStatus === "pending"
+        appointment.dataValues.paymentStatus !== "captured"
       ) {
         try {
-          const capturedIntent = await stripe.paymentIntents.capture(
-            appointment.dataValues.paymentIntentId
-          );
+          let capturedIntent;
+          const user = await User.findByPk(appointment.dataValues.userId);
 
-          await appointment.update({
-            paymentStatus: "captured",
-            paid: true,
-            amountPaid: capturedIntent.amount,
-          });
+          if (appointment.dataValues.paymentIntentId) {
+            // Existing payment intent - capture it
+            capturedIntent = await stripe.paymentIntents.capture(
+              appointment.dataValues.paymentIntentId
+            );
+          } else {
+            // No payment intent exists - create and capture in one step
+            console.log(`[Approve Request] Creating payment intent for appointment ${appointment.id} (no existing intent)`);
 
-          // Update all payout records to "held"
-          await Payout.update(
-            { status: "held", paymentCapturedAt: new Date() },
-            { where: { appointmentId: appointment.id } }
-          );
+            if (!user || !user.stripeCustomerId) {
+              console.error(`[Approve Request] No Stripe customer for appointment ${appointment.id}`);
+              await appointment.update({ paymentCaptureFailed: true });
+              // Continue with approval - don't return early
+            } else {
+              const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+              const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
 
-          // Record the capture transaction
-          await recordPaymentTransaction({
-            type: "capture",
-            stripePaymentIntentId: capturedIntent.id,
-            stripeChargeId: capturedIntent.latest_charge,
-            amount: capturedIntent.amount,
-            currency: capturedIntent.currency,
-            status: "succeeded",
-            appointmentId: appointment.id,
-            homeownerId: appointment.dataValues.userId,
-            description: `Payment captured for appointment ${appointment.id}`,
-          });
+              if (!defaultPaymentMethod) {
+                console.error(`[Approve Request] No payment method for appointment ${appointment.id}`);
+                await appointment.update({ paymentCaptureFailed: true });
+                // Continue with approval - don't return early
+              } else {
+                const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
 
-          console.log(
-            `[Approve Request] Payment captured for appointment ${appointment.id}`
-          );
+                capturedIntent = await stripe.paymentIntents.create({
+                  amount: priceInCents,
+                  currency: "usd",
+                  customer: user.stripeCustomerId,
+                  payment_method: defaultPaymentMethod,
+                  confirm: true,
+                  off_session: true,
+                  metadata: {
+                    userId: appointment.dataValues.userId,
+                    homeId: appointment.dataValues.homeId,
+                    appointmentId: appointment.dataValues.id,
+                  },
+                });
+
+                await appointment.update({ paymentIntentId: capturedIntent.id });
+              }
+            }
+          }
+
+          if (capturedIntent) {
+            await appointment.update({
+              paymentStatus: "captured",
+              paid: true,
+              amountPaid: capturedIntent.amount_received || capturedIntent.amount,
+            });
+
+            // Update all payout records to "held"
+            await Payout.update(
+              { status: "held", paymentCapturedAt: new Date() },
+              { where: { appointmentId: appointment.id } }
+            );
+
+            // Record the capture transaction
+            await recordPaymentTransaction({
+              type: "capture",
+              stripePaymentIntentId: capturedIntent.id,
+              stripeChargeId: capturedIntent.latest_charge,
+              amount: capturedIntent.amount_received || capturedIntent.amount,
+              currency: capturedIntent.currency,
+              status: "succeeded",
+              appointmentId: appointment.id,
+              homeownerId: appointment.dataValues.userId,
+              description: `Payment captured for appointment ${appointment.id}`,
+            });
+
+            console.log(
+              `[Approve Request] Payment captured for appointment ${appointment.id}`
+            );
+          }
         } catch (captureError) {
           console.error(
             `[Approve Request] Payment capture failed for appointment ${appointment.id}, will retry via cron:`,
@@ -2157,7 +2200,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       });
     }
 
-    // Send notification emails to cleaners
+    // Send notifications to cleaners (in-app and email)
     if (hasCleanerAssigned) {
       const cleanerIds = appointment.employeesAssigned || [];
       const home = await UserHomes.findByPk(appointment.homeId);
@@ -2167,6 +2210,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const cleanerPayment = cleanerPayoutResult
         ? cleanerPayoutResult.perCleaner.toFixed(2)
         : (price * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
+
+      // Only show payment amount if appointment was paid and cleaner is getting compensated
+      const showPayment = isWithinPenaltyWindow && cleanerPayoutResult;
 
       for (const cleanerId of cleanerIds) {
         const cleaner = await User.findByPk(cleanerId);
@@ -2179,14 +2225,33 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             day: "numeric",
           });
 
-          // Only show payment amount if appointment was paid and cleaner is getting compensated
-          const showPayment = isWithinPenaltyWindow && cleanerPayoutResult;
           notifications.unshift(
             showPayment
               ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${cleanerPayment}.`
               : `The homeowner cancelled the ${formattedDate} cleaning at ${home?.address || "their property"}.`
           );
           await cleaner.update({ notifications: notifications.slice(0, 50) });
+
+          // Send email notification to cleaner
+          if (cleaner.email) {
+            const homeAddress = home
+              ? `${home.city}, ${home.state}`
+              : "the scheduled location";
+
+            try {
+              await Email.sendHomeownerCancelledNotification(
+                cleaner.email,
+                cleaner.firstName || cleaner.username,
+                appointment.date,
+                homeAddress,
+                showPayment,
+                showPayment ? cleanerPayment : null
+              );
+            } catch (emailError) {
+              console.error(`Error sending cancellation email to cleaner ${cleanerId}:`, emailError);
+              // Don't fail the cancellation if email fails
+            }
+          }
         }
       }
     }

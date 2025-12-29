@@ -1913,15 +1913,50 @@ paymentRouter.post("/pre-pay", async (req, res) => {
       });
     }
 
-    // 6. Check payment intent exists
-    if (!appointment.paymentIntentId) {
-      return res.status(400).json({ error: "No payment on file" });
-    }
+    // 6. Get or create payment intent
+    let paymentIntent;
 
-    // 7. Capture via Stripe
-    const paymentIntent = await stripe.paymentIntents.capture(
-      appointment.paymentIntentId
-    );
+    if (!appointment.paymentIntentId) {
+      // Create payment intent if one doesn't exist
+      const user = await User.findByPk(appointment.userId);
+      if (!user || !user.stripeCustomerId) {
+        return res.status(400).json({ error: "No payment method on file. Please add a payment method first." });
+      }
+
+      const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+      const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+      if (!defaultPaymentMethod) {
+        return res.status(400).json({ error: "No default payment method. Please add a payment method first." });
+      }
+
+      const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+
+      // Create and immediately capture the payment intent
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: priceInCents,
+        currency: "usd",
+        customer: user.stripeCustomerId,
+        payment_method: defaultPaymentMethod,
+        confirm: true,
+        off_session: true,
+        metadata: {
+          userId: appointment.userId,
+          homeId: appointment.homeId,
+          appointmentId: appointment.id,
+        },
+      });
+
+      // Update appointment with payment intent ID
+      await appointment.update({
+        paymentIntentId: paymentIntent.id,
+      });
+    } else {
+      // 7. Capture existing payment intent via Stripe
+      paymentIntent = await stripe.paymentIntents.capture(
+        appointment.paymentIntentId
+      );
+    }
 
     // 8. Update appointment
     await appointment.update({
@@ -2224,10 +2259,46 @@ async function runDailyPaymentCheck() {
         const home = await UserHomes.findByPk(appointment.homeId);
         if (!user || !home) continue;
 
-        if (appointment.hasBeenAssigned && appointment.paymentIntentId) {
+        if (appointment.hasBeenAssigned) {
           // Capture payment if cleaner assigned - money is now held by the platform
           try {
-            const paymentIntent = await stripe.paymentIntents.capture(appointment.paymentIntentId);
+            let paymentIntent;
+
+            if (!appointment.paymentIntentId) {
+              // No payment intent exists - create and capture a new one
+              console.log(`Creating payment intent for appointment ${appointment.id} (cleaner assigned but no payment intent)`);
+
+              const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+              const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+              if (!defaultPaymentMethod) {
+                console.error(`No payment method on file for user ${user.id}, appointment ${appointment.id}`);
+                await appointment.update({ paymentCaptureFailed: true });
+                continue;
+              }
+
+              const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+
+              paymentIntent = await stripe.paymentIntents.create({
+                amount: priceInCents,
+                currency: "usd",
+                customer: user.stripeCustomerId,
+                payment_method: defaultPaymentMethod,
+                confirm: true,
+                off_session: true,
+                metadata: {
+                  userId: appointment.userId,
+                  homeId: appointment.homeId,
+                  appointmentId: appointment.id,
+                },
+              });
+
+              await appointment.update({ paymentIntentId: paymentIntent.id });
+            } else {
+              // Existing payment intent - capture it
+              paymentIntent = await stripe.paymentIntents.capture(appointment.paymentIntentId);
+            }
+
             await appointment.update({
               paymentStatus: "captured",
               paid: true,

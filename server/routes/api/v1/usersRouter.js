@@ -613,10 +613,14 @@ usersRouter.get("/appointments/employee", async (req, res) => {
       );
     });
 
+    // Get appointments for pending requests only (not approved/denied)
+    const pendingRequestIds = requestsForCleaning
+      .filter((req) => req.dataValues.status === "pending")
+      .map((req) => req.dataValues.appointmentId);
+
     const requestedAppointments = await UserAppointments.findAll({
       where: {
-        id: Array.from(requestedAppointmentIds),
-        hasBeenAssigned: false,
+        id: pendingRequestIds,
       },
     });
 

@@ -171,7 +171,19 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, cleanerSharePerce
 
 // Pending Request Card Component
 const PendingRequestCard = ({ request, onPress, distance }) => {
-  const appointmentDate = new Date(request.date);
+  const [home, setHome] = useState(null);
+
+  useEffect(() => {
+    if (request.homeId) {
+      FetchData.getHome(request.homeId).then((response) => {
+        setHome(response.home);
+      }).catch((err) => {
+        console.error("Error fetching home for request:", err);
+      });
+    }
+  }, [request.homeId]);
+
+  const appointmentDate = new Date(request.date + "T00:00:00");
 
   const formatDate = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
@@ -197,11 +209,11 @@ const PendingRequestCard = ({ request, onPress, distance }) => {
       <View style={styles.requestInfo}>
         <Text style={styles.requestDate}>{formatDate(appointmentDate)}</Text>
         <Text style={styles.requestLocation}>
-          {request.city}, {request.state}
+          {home ? `${home.city}, ${home.state}` : "Loading..."}
         </Text>
         <View style={styles.requestDetailsRow}>
           <Text style={styles.requestDetails}>
-            {request.numBeds} bed | {request.numBaths} bath
+            {home ? `${home.numBeds} bed | ${home.numBaths} bath` : "..."}
           </Text>
           {distanceText && (
             <View style={styles.distanceBadge}>
@@ -359,18 +371,27 @@ const CleanerDashboard = ({ state, dispatch }) => {
         setHomeDetails(homeMap);
       }
 
-      // Fetch pending requests
+      // Fetch pending requests (cleaner's own requests awaiting approval)
       const requestsResponse = await FetchData.get(
-        "/api/v1/appointments/my-requests",
+        "/api/v1/users/appointments/employee",
         state.currentUser.token
       );
 
-      if (requestsResponse.pendingRequestsEmployee) {
-        setPendingRequests(requestsResponse.pendingRequestsEmployee);
+      if (requestsResponse.requested !== undefined) {
+        // Filter to only show upcoming requests (not past dates)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const upcomingRequests = (requestsResponse.requested || []).filter(
+          (req) => {
+            const reqDate = new Date(req.date + "T00:00:00");
+            return reqDate >= today;
+          }
+        );
+        setPendingRequests(upcomingRequests);
         if (dispatch) {
           dispatch({
             type: "CLEANING_REQUESTS",
-            payload: requestsResponse.pendingRequestsEmployee,
+            payload: upcomingRequests,
           });
         }
       }

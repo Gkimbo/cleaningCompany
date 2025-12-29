@@ -1846,6 +1846,103 @@ Kleanr Team`;
     }
   }
 
+  // Notify cleaner when homeowner cancels their appointment
+  static async sendHomeownerCancelledNotification(
+    email,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    willBePaid = false,
+    paymentAmount = null
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      // Build content based on whether cleaner will be paid
+      const paymentInfo = willBePaid && paymentAmount
+        ? `<p style="margin-top: 15px;"><strong>Good news!</strong> Since this cancellation was within 3 days of the scheduled cleaning, you will still receive a partial payment of <strong>$${paymentAmount}</strong> for this appointment.</p>`
+        : "";
+
+      const paymentWarning = willBePaid && paymentAmount
+        ? {
+            icon: "💰",
+            text: `You will receive <strong>$${paymentAmount}</strong> for this cancelled appointment. The payment will be processed according to the normal payout schedule.`,
+            bgColor: "#d1fae5",
+            borderColor: "#10b981",
+            textColor: "#065f46",
+          }
+        : null;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Cancelled",
+        subtitle: "The homeowner has cancelled",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+        greeting: `Hi ${cleanerName},`,
+        content: `<p>We wanted to let you know that the homeowner has cancelled their cleaning appointment that you were assigned to.</p>${paymentInfo}`,
+        infoBox: {
+          icon: "📅",
+          title: "Cancelled Appointment Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Location", value: homeAddress },
+            ...(willBePaid && paymentAmount ? [{ label: "Your Payment", value: `$${paymentAmount}` }] : []),
+          ],
+        },
+        warningBox: paymentWarning,
+        steps: {
+          title: "🔍 Find Another Appointment",
+          items: [
+            "Log into the Kleanr app",
+            "Browse available cleaning appointments",
+            "Request jobs that fit your schedule",
+          ],
+        },
+        ctaText: "There are plenty of other cleaning opportunities waiting for you!",
+        footerMessage: "Thank you for being part of Kleanr",
+      });
+
+      const paymentText = willBePaid && paymentAmount
+        ? `\n\nGOOD NEWS: Since this cancellation was within 3 days of the scheduled cleaning, you will still receive a partial payment of $${paymentAmount} for this appointment.\n`
+        : "";
+
+      const textContent = `Hi ${cleanerName},
+
+We wanted to let you know that the homeowner has cancelled their cleaning appointment that you were assigned to.
+${paymentText}
+CANCELLED APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Location: ${homeAddress}
+${willBePaid && paymentAmount ? `Your Payment: $${paymentAmount}\n` : ""}
+FIND ANOTHER APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+1. Log into the Kleanr app
+2. Browse available cleaning appointments
+3. Request jobs that fit your schedule
+
+There are plenty of other cleaning opportunities waiting for you!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: willBePaid
+          ? `⚠️ Appointment Cancelled - You'll Still Be Paid $${paymentAmount}`
+          : `⚠️ Appointment Cancelled - ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Homeowner cancelled notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending homeowner cancelled notification email:", error);
+    }
+  }
+
   // Auto-sync calendar appointment notification
   static async sendAutoSyncAppointmentsCreated(
     email,

@@ -300,3 +300,288 @@ describe("PayoutHistory - Currency Formatting", () => {
     expect(formatCurrency(1000000)).toBe("$10000.00");
   });
 });
+
+describe("PayoutHistory - Potential Earnings from Appointments", () => {
+  // Helper to get today's date at midnight
+  const getToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  };
+
+  // Helper to create a date string (using local time)
+  const getDateString = (daysFromNow) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromNow);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper to calculate cleaner's share
+  const calculateCleanerShare = (price, numCleaners = 1, cleanerSharePercent = 0.9) => {
+    const gross = parseFloat(price) || 0;
+    const perCleaner = gross / numCleaners;
+    return perCleaner * cleanerSharePercent;
+  };
+
+  // Calculate potential earnings from appointments (matches updated component logic)
+  const calculatePotentialEarnings = (appointments, userId, cleanerSharePercent = 0.9) => {
+    const today = getToday();
+
+    const upcomingAssigned = appointments.filter((appt) => {
+      const appointmentDate = new Date(appt.date + "T00:00:00");
+      appointmentDate.setHours(0, 0, 0, 0);
+      return (
+        appointmentDate > today &&
+        !appt.completed &&
+        appt.employeesAssigned &&
+        appt.employeesAssigned.includes(userId)
+      );
+    });
+
+    const total = upcomingAssigned.reduce((sum, appt) => {
+      const numCleaners = appt.employeesAssigned?.length || 1;
+      return sum + calculateCleanerShare(appt.price, numCleaners, cleanerSharePercent);
+    }, 0);
+
+    return {
+      amount: total.toFixed(2),
+      count: upcomingAssigned.length,
+    };
+  };
+
+  describe("Filtering upcoming assigned appointments", () => {
+    it("should only include future appointments", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(-1), price: "100", employeesAssigned: [userId], completed: false },
+        { id: 2, date: getDateString(0), price: "100", employeesAssigned: [userId], completed: false }, // Today - excluded
+        { id: 3, date: getDateString(1), price: "100", employeesAssigned: [userId], completed: false },
+        { id: 4, date: getDateString(5), price: "100", employeesAssigned: [userId], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      expect(result.count).toBe(2); // Only future appointments
+    });
+
+    it("should only include appointments assigned to the cleaner", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "100", employeesAssigned: [userId], completed: false },
+        { id: 2, date: getDateString(2), price: "100", employeesAssigned: ["3"], completed: false }, // Different cleaner
+        { id: 3, date: getDateString(3), price: "100", employeesAssigned: [userId, "3"], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      expect(result.count).toBe(2);
+    });
+
+    it("should exclude completed appointments", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "100", employeesAssigned: [userId], completed: false },
+        { id: 2, date: getDateString(2), price: "100", employeesAssigned: [userId], completed: true }, // Completed
+        { id: 3, date: getDateString(3), price: "100", employeesAssigned: [userId], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      expect(result.count).toBe(2);
+    });
+
+    it("should handle appointments without employeesAssigned", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "100", employeesAssigned: null, completed: false },
+        { id: 2, date: getDateString(2), price: "100", employeesAssigned: undefined, completed: false },
+        { id: 3, date: getDateString(3), price: "100", employeesAssigned: [userId], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      expect(result.count).toBe(1);
+    });
+  });
+
+  describe("Earnings calculation", () => {
+    it("should calculate earnings with platform fee applied", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "100", employeesAssigned: [userId], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      // $100 * 0.9 = $90
+      expect(result.amount).toBe("90.00");
+    });
+
+    it("should split earnings among multiple cleaners", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "300", employeesAssigned: [userId, "3", "4"], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      // $300 / 3 * 0.9 = $90
+      expect(result.amount).toBe("90.00");
+    });
+
+    it("should sum multiple appointments", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "100", employeesAssigned: [userId], completed: false },
+        { id: 2, date: getDateString(2), price: "200", employeesAssigned: [userId], completed: false },
+        { id: 3, date: getDateString(3), price: "150", employeesAssigned: [userId, "3"], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      // $100 * 0.9 = $90
+      // $200 * 0.9 = $180
+      // $150 / 2 * 0.9 = $67.50
+      // Total: $337.50
+      expect(result.amount).toBe("337.50");
+      expect(result.count).toBe(3);
+    });
+
+    it("should handle different platform fee percentages", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "100", employeesAssigned: [userId], completed: false },
+      ];
+
+      // 15% platform fee = 85% cleaner share
+      const result = calculatePotentialEarnings(appointments, userId, 0.85);
+
+      expect(result.amount).toBe("85.00");
+    });
+
+    it("should handle decimal prices", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "175.50", employeesAssigned: [userId], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      // $175.50 * 0.9 = $157.95
+      expect(result.amount).toBe("157.95");
+    });
+
+    it("should return zero for empty appointments", () => {
+      const result = calculatePotentialEarnings([], "2");
+
+      expect(result.amount).toBe("0.00");
+      expect(result.count).toBe(0);
+    });
+
+    it("should return zero when all appointments are past or completed", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(-1), price: "100", employeesAssigned: [userId], completed: false },
+        { id: 2, date: getDateString(1), price: "100", employeesAssigned: [userId], completed: true },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      expect(result.amount).toBe("0.00");
+      expect(result.count).toBe(0);
+    });
+  });
+
+  describe("Consistency with Overview tab", () => {
+    it("should use the same calculation formula as Earnings component", () => {
+      const userId = "2";
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "100", employeesAssigned: [userId], completed: false },
+        { id: 2, date: getDateString(2), price: "200", employeesAssigned: [userId, "3"], completed: false },
+        { id: 3, date: getDateString(3), price: "150", employeesAssigned: [userId], completed: false },
+      ];
+
+      const result = calculatePotentialEarnings(appointments, userId);
+
+      // Calculate expected using same logic as Earnings.js
+      // 1: $100 * 0.9 = $90
+      // 2: $200 / 2 * 0.9 = $90
+      // 3: $150 * 0.9 = $135
+      // Total: $315
+      expect(result.amount).toBe("315.00");
+    });
+  });
+});
+
+describe("PayoutHistory - Integration with Payout Records", () => {
+  // The component now uses appointments for potential earnings,
+  // but still uses payouts for completed/historical data
+
+  describe("Historical payouts from payout records", () => {
+    // Helper to get date string
+    const getDateString = (daysFromNow) => {
+      const date = new Date();
+      date.setDate(date.getDate() + daysFromNow);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    // Calculate historical totals (from payout records)
+    const calculateHistoricalTotals = (payouts) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const pastPayouts = payouts.filter((payout) => {
+        const appointmentDate = new Date(payout.appointmentDate + "T00:00:00");
+        appointmentDate.setHours(0, 0, 0, 0);
+        return appointmentDate <= today;
+      });
+
+      const completedPayouts = pastPayouts.filter((p) => p.status === "completed");
+      const totalPaidCents = completedPayouts.reduce((sum, p) => sum + (p.netAmount || 0), 0);
+
+      return {
+        totalPaidDollars: (totalPaidCents / 100).toFixed(2),
+        completedCount: completedPayouts.length,
+      };
+    };
+
+    it("should calculate total paid from completed past payouts", () => {
+      const payouts = [
+        { id: 1, appointmentDate: getDateString(-5), netAmount: 9000, status: "completed" },
+        { id: 2, appointmentDate: getDateString(-3), netAmount: 13500, status: "completed" },
+        { id: 3, appointmentDate: getDateString(-1), netAmount: 8100, status: "pending" }, // Not completed
+      ];
+
+      const result = calculateHistoricalTotals(payouts);
+
+      // $90 + $135 = $225
+      expect(result.totalPaidDollars).toBe("225.00");
+      expect(result.completedCount).toBe(2);
+    });
+
+    it("should not include future payouts in historical total", () => {
+      const payouts = [
+        { id: 1, appointmentDate: getDateString(-3), netAmount: 9000, status: "completed" },
+        { id: 2, appointmentDate: getDateString(5), netAmount: 13500, status: "pending" }, // Future
+      ];
+
+      const result = calculateHistoricalTotals(payouts);
+
+      expect(result.totalPaidDollars).toBe("90.00");
+      expect(result.completedCount).toBe(1);
+    });
+
+    it("should handle empty payouts", () => {
+      const result = calculateHistoricalTotals([]);
+
+      expect(result.totalPaidDollars).toBe("0.00");
+      expect(result.completedCount).toBe(0);
+    });
+  });
+});
