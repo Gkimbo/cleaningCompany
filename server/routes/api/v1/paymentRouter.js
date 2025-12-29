@@ -362,6 +362,100 @@ paymentRouter.post("/setup-intent", async (req, res) => {
 });
 
 /**
+ * Create a Checkout Session for adding a payment method (web only)
+ * Uses Stripe's hosted checkout page for card collection
+ */
+paymentRouter.post("/setup-checkout-session", async (req, res) => {
+  const { token, successUrl, cancelUrl } = req.body;
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Create or get Stripe Customer
+    let stripeCustomerId = user.stripeCustomerId;
+
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        metadata: { userId: userId.toString() },
+      });
+      stripeCustomerId = customer.id;
+      await user.update({ stripeCustomerId });
+    }
+
+    // Create Checkout Session in setup mode
+    const session = await stripe.checkout.sessions.create({
+      mode: "setup",
+      customer: stripeCustomerId,
+      payment_method_types: ["card"],
+      success_url: successUrl || `${process.env.CLIENT_URL}/payment-setup?setup_complete=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.CLIENT_URL}/payment-setup?canceled=true`,
+      metadata: { userId: userId.toString() },
+    });
+
+    return res.json({
+      sessionId: session.id,
+      url: session.url,
+    });
+  } catch (error) {
+    console.error("Error creating checkout session:", error);
+    return res.status(400).json({ error: "Failed to create checkout session" });
+  }
+});
+
+/**
+ * Confirm payment method was saved from Checkout Session (web only)
+ * Called after the client returns from Stripe Checkout
+ */
+paymentRouter.post("/confirm-checkout-session", async (req, res) => {
+  const { token, sessionId } = req.body;
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Retrieve the checkout session
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["setup_intent"],
+    });
+
+    if (session.status !== "complete") {
+      return res.status(400).json({ error: "Checkout session not completed" });
+    }
+
+    const setupIntent = session.setup_intent;
+    if (!setupIntent || setupIntent.status !== "succeeded") {
+      return res.status(400).json({ error: "Payment method setup not completed" });
+    }
+
+    // Set the payment method as the default for the customer
+    if (setupIntent.payment_method) {
+      await stripe.customers.update(user.stripeCustomerId, {
+        invoice_settings: {
+          default_payment_method: setupIntent.payment_method,
+        },
+      });
+    }
+
+    // Update user record
+    await user.update({ hasPaymentMethod: true });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error confirming checkout session:", error);
+    return res.status(400).json({ error: "Failed to confirm checkout session" });
+  }
+});
+
+/**
  * Confirm payment method was saved successfully
  * Called after the client successfully completes the SetupIntent
  */
@@ -431,13 +525,14 @@ paymentRouter.post("/confirm-payment-method", async (req, res) => {
 });
 
 /**
- * Remove a payment method
+ * Check eligibility to remove a payment method
+ * Returns whether user can remove the payment method and what options they have
  */
-paymentRouter.delete("/payment-method/:paymentMethodId", async (req, res) => {
+paymentRouter.get("/removal-eligibility/:paymentMethodId", async (req, res) => {
   const { paymentMethodId } = req.params;
   const authHeader = req.headers.authorization;
 
-  if (!authHeader) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Authorization required" });
   }
 
@@ -449,16 +544,185 @@ paymentRouter.delete("/payment-method/:paymentMethodId", async (req, res) => {
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Detach the payment method from the customer
-    await stripe.paymentMethods.detach(paymentMethodId);
-
-    // Check if user still has other payment methods
+    // Get all payment methods for this user
     const methods = await stripe.paymentMethods.list({
       customer: user.stripeCustomerId,
       type: "card",
     });
 
-    const hasPaymentMethod = methods.data.length > 0;
+    const paymentMethodCount = methods.data.length;
+    const isLastPaymentMethod = paymentMethodCount === 1;
+
+    // If not the last payment method, can always remove
+    if (!isLastPaymentMethod) {
+      return res.json({
+        canRemove: true,
+        paymentMethodCount,
+        isLastPaymentMethod: false,
+        outstandingFees: null,
+        unpaidAppointments: [],
+        options: null,
+      });
+    }
+
+    // Check for outstanding fees
+    const userBill = await UserBills.findOne({ where: { userId } });
+    const outstandingFees = {
+      cancellationFee: Number(userBill?.cancellationFee) || 0,
+      appointmentDue: Number(userBill?.appointmentDue) || 0,
+      totalDue: Number(userBill?.totalDue) || 0,
+    };
+
+    // Get pricing config for cancellation window
+    const pricingConfig = await getPricingConfig();
+    const cancellationWindowDays = pricingConfig.cancellation.windowDays;
+    const cancellationFeeAmount = pricingConfig.cancellation.fee;
+
+    // Get unpaid appointments (future appointments that aren't paid/completed)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const unpaidAppointments = await UserAppointments.findAll({
+      where: {
+        userId,
+        completed: false,
+        paid: false,
+      },
+    });
+
+    // Filter to future appointments and calculate details
+    const unpaidAppointmentDetails = unpaidAppointments
+      .filter((apt) => new Date(apt.date) >= today)
+      .map((apt) => {
+        const appointmentDate = new Date(apt.date);
+        appointmentDate.setHours(0, 0, 0, 0);
+        const diffTime = appointmentDate - today;
+        const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const isWithinCancellationWindow = daysUntil <= cancellationWindowDays;
+
+        return {
+          id: apt.id,
+          date: apt.date,
+          price: parseFloat(apt.price) || 0,
+          daysUntil,
+          isWithinCancellationWindow,
+          cancellationFee: isWithinCancellationWindow ? cancellationFeeAmount : 0,
+          hasCleanerAssigned: apt.hasBeenAssigned && apt.employeesAssigned?.length > 0,
+          paymentIntentId: apt.paymentIntentId,
+          paymentStatus: apt.paymentStatus,
+        };
+      });
+
+    // Calculate totals
+    const totalToPrepay = unpaidAppointmentDetails.reduce((sum, apt) => sum + apt.price, 0);
+    const totalCancellationFees = unpaidAppointmentDetails.reduce((sum, apt) => sum + apt.cancellationFee, 0);
+
+    // Determine if user can remove
+    const hasOutstandingFees = outstandingFees.totalDue > 0;
+    const hasUnpaidAppointments = unpaidAppointmentDetails.length > 0;
+    const canRemove = !hasOutstandingFees && !hasUnpaidAppointments;
+
+    return res.json({
+      canRemove,
+      paymentMethodCount,
+      isLastPaymentMethod: true,
+      outstandingFees,
+      unpaidAppointments: unpaidAppointmentDetails,
+      totalToPrepay,
+      totalCancellationFees,
+      options: canRemove ? null : {
+        canPrepayAll: hasUnpaidAppointments && totalToPrepay > 0,
+        canCancelAll: hasUnpaidAppointments,
+        mustPayOutstandingFirst: hasOutstandingFees,
+      },
+    });
+  } catch (error) {
+    console.error("Error checking removal eligibility:", error);
+    return res.status(500).json({ error: "Failed to check eligibility" });
+  }
+});
+
+/**
+ * Remove a payment method
+ * Now includes eligibility checks for last payment method
+ */
+paymentRouter.delete("/payment-method/:paymentMethodId", async (req, res) => {
+  const { paymentMethodId } = req.params;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Check current payment methods count
+    const methods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: "card",
+    });
+
+    const isLastPaymentMethod = methods.data.length === 1;
+
+    // If this is the last payment method, check eligibility
+    if (isLastPaymentMethod) {
+      // Check for outstanding fees
+      const userBill = await UserBills.findOne({ where: { userId } });
+      const hasOutstandingFees = (Number(userBill?.totalDue) || 0) > 0;
+
+      if (hasOutstandingFees) {
+        return res.status(400).json({
+          error: "Cannot remove last payment method with outstanding fees",
+          code: "OUTSTANDING_FEES",
+          outstandingFees: {
+            cancellationFee: Number(userBill?.cancellationFee) || 0,
+            appointmentDue: Number(userBill?.appointmentDue) || 0,
+            totalDue: Number(userBill?.totalDue) || 0,
+          },
+        });
+      }
+
+      // Check for unpaid appointments
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const unpaidAppointments = await UserAppointments.findAll({
+        where: {
+          userId,
+          completed: false,
+          paid: false,
+        },
+      });
+
+      const futureUnpaidAppointments = unpaidAppointments.filter(
+        (apt) => new Date(apt.date) >= today
+      );
+
+      if (futureUnpaidAppointments.length > 0) {
+        return res.status(400).json({
+          error: "Cannot remove last payment method with unpaid appointments",
+          code: "UNPAID_APPOINTMENTS",
+          appointmentCount: futureUnpaidAppointments.length,
+        });
+      }
+    }
+
+    // All checks passed - detach the payment method
+    await stripe.paymentMethods.detach(paymentMethodId);
+
+    // Refresh payment methods list
+    const updatedMethods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: "card",
+    });
+
+    const hasPaymentMethod = updatedMethods.data.length > 0;
     await user.update({ hasPaymentMethod });
 
     return res.json({
@@ -468,6 +732,377 @@ paymentRouter.delete("/payment-method/:paymentMethodId", async (req, res) => {
   } catch (error) {
     console.error("Error removing payment method:", error);
     return res.status(400).json({ error: "Failed to remove payment method" });
+  }
+});
+
+/**
+ * Prepay all appointments and remove payment method
+ * Used when client wants to prepay all booked appointments before removing their card
+ */
+paymentRouter.post("/prepay-all-and-remove", async (req, res) => {
+  const { paymentMethodId } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  if (!paymentMethodId) {
+    return res.status(400).json({ error: "Payment method ID required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Step 1: Pay any outstanding fees first
+    const userBill = await UserBills.findOne({ where: { userId } });
+    const outstandingTotal = Number(userBill?.totalDue) || 0;
+
+    if (outstandingTotal > 0) {
+      console.log(`[Prepay & Remove] Paying outstanding fees: $${outstandingTotal}`);
+
+      const feePaymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(outstandingTotal * 100),
+        currency: "usd",
+        customer: user.stripeCustomerId,
+        payment_method: paymentMethodId,
+        confirm: true,
+        off_session: true,
+        description: "Outstanding fees payment before card removal",
+        metadata: {
+          userId: userId.toString(),
+          type: "outstanding_fees",
+        },
+      });
+
+      if (feePaymentIntent.status !== "succeeded") {
+        return res.status(400).json({ error: "Failed to pay outstanding fees" });
+      }
+
+      // Clear the bill
+      await userBill.update({
+        cancellationFee: 0,
+        appointmentDue: 0,
+        totalDue: 0,
+      });
+    }
+
+    // Step 2: Capture all unpaid appointments
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const unpaidAppointments = await UserAppointments.findAll({
+      where: {
+        userId,
+        completed: false,
+        paid: false,
+      },
+    });
+
+    const futureUnpaidAppointments = unpaidAppointments.filter(
+      (apt) => new Date(apt.date) >= today
+    );
+
+    const capturedAppointments = [];
+    const failedAppointments = [];
+
+    for (const appointment of futureUnpaidAppointments) {
+      try {
+        if (appointment.paymentIntentId && appointment.paymentStatus === "pending") {
+          // Capture the existing payment intent
+          const paymentIntent = await stripe.paymentIntents.capture(appointment.paymentIntentId);
+
+          await appointment.update({
+            paymentStatus: "captured",
+            paid: true,
+            amountPaid: paymentIntent.amount_received || paymentIntent.amount,
+          });
+
+          capturedAppointments.push({
+            id: appointment.id,
+            date: appointment.date,
+            amount: (paymentIntent.amount_received || paymentIntent.amount) / 100,
+          });
+
+          console.log(`[Prepay & Remove] Captured payment for appointment ${appointment.id}`);
+        } else if (!appointment.paymentIntentId) {
+          // No payment intent - create and capture a new one
+          const price = parseFloat(appointment.price) || 0;
+          const amountCents = Math.round(price * 100);
+
+          if (amountCents > 0) {
+            const newPaymentIntent = await stripe.paymentIntents.create({
+              amount: amountCents,
+              currency: "usd",
+              customer: user.stripeCustomerId,
+              payment_method: paymentMethodId,
+              confirm: true,
+              off_session: true,
+              description: `Prepayment for appointment on ${appointment.date}`,
+              metadata: {
+                appointmentId: appointment.id.toString(),
+                userId: userId.toString(),
+                type: "prepayment",
+              },
+            });
+
+            if (newPaymentIntent.status === "succeeded") {
+              await appointment.update({
+                paymentIntentId: newPaymentIntent.id,
+                paymentStatus: "captured",
+                paid: true,
+                amountPaid: newPaymentIntent.amount,
+              });
+
+              capturedAppointments.push({
+                id: appointment.id,
+                date: appointment.date,
+                amount: price,
+              });
+
+              console.log(`[Prepay & Remove] Created and captured payment for appointment ${appointment.id}`);
+            } else {
+              failedAppointments.push({ id: appointment.id, date: appointment.date });
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[Prepay & Remove] Failed to capture appointment ${appointment.id}:`, err.message);
+        failedAppointments.push({ id: appointment.id, date: appointment.date, error: err.message });
+      }
+    }
+
+    // If any appointments failed, don't remove the card
+    if (failedAppointments.length > 0) {
+      return res.status(400).json({
+        error: "Some appointments could not be prepaid",
+        failedAppointments,
+        capturedAppointments,
+      });
+    }
+
+    // Step 3: Remove the payment method
+    await stripe.paymentMethods.detach(paymentMethodId);
+
+    // Update user's payment method status
+    const updatedMethods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: "card",
+    });
+
+    const hasPaymentMethod = updatedMethods.data.length > 0;
+    await user.update({ hasPaymentMethod });
+
+    return res.json({
+      success: true,
+      message: "All appointments prepaid and payment method removed",
+      capturedAppointments,
+      totalPrepaid: capturedAppointments.reduce((sum, apt) => sum + apt.amount, 0),
+      outstandingFeesPaid: outstandingTotal,
+      hasPaymentMethod,
+    });
+  } catch (error) {
+    console.error("[Prepay & Remove] Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to process prepayment" });
+  }
+});
+
+/**
+ * Cancel all appointments and remove payment method
+ * Used when client wants to cancel all booked appointments before removing their card
+ * Cancellation fees apply for appointments within 7 days
+ */
+paymentRouter.post("/cancel-all-and-remove", async (req, res) => {
+  const { paymentMethodId, acknowledgedCancellationFees } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  if (!paymentMethodId) {
+    return res.status(400).json({ error: "Payment method ID required" });
+  }
+
+  if (!acknowledgedCancellationFees) {
+    return res.status(400).json({ error: "Must acknowledge cancellation fees" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Get pricing config
+    const pricingConfig = await getPricingConfig();
+    const cancellationWindowDays = pricingConfig.cancellation.windowDays;
+    const cancellationFeeAmount = pricingConfig.cancellation.fee;
+
+    // Get all unpaid future appointments
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const unpaidAppointments = await UserAppointments.findAll({
+      where: {
+        userId,
+        completed: false,
+        paid: false,
+      },
+    });
+
+    const futureUnpaidAppointments = unpaidAppointments.filter(
+      (apt) => new Date(apt.date) >= today
+    );
+
+    const cancelledAppointments = [];
+    let totalCancellationFees = 0;
+
+    // Step 1: Cancel all appointments and calculate fees
+    for (const appointment of futureUnpaidAppointments) {
+      const appointmentDate = new Date(appointment.date);
+      appointmentDate.setHours(0, 0, 0, 0);
+      const diffTime = appointmentDate - today;
+      const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const isWithinWindow = daysUntil <= cancellationWindowDays;
+      const fee = isWithinWindow ? cancellationFeeAmount : 0;
+
+      // Cancel the payment intent if it exists
+      if (appointment.paymentIntentId) {
+        try {
+          await stripe.paymentIntents.cancel(appointment.paymentIntentId);
+        } catch (err) {
+          // Payment intent might already be cancelled or in a different state
+          console.log(`[Cancel & Remove] Could not cancel payment intent for appointment ${appointment.id}:`, err.message);
+        }
+      }
+
+      // Delete any pending requests for this appointment
+      await UserPendingRequests.destroy({
+        where: { appointmentId: appointment.id },
+      });
+
+      // Notify assigned cleaners if any
+      const cleanerIds = appointment.employeesAssigned || [];
+      if (cleanerIds.length > 0) {
+        const home = await UserHomes.findByPk(appointment.homeId);
+        for (const cleanerId of cleanerIds) {
+          try {
+            const cleaner = await User.findByPk(cleanerId);
+            if (cleaner?.expoPushToken) {
+              const formattedDate = new Date(appointment.date).toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+              });
+              await PushNotification.sendPushCancellation(
+                cleaner.expoPushToken,
+                cleaner.firstName,
+                new Date(appointment.date),
+                { street: home?.address || "Address" }
+              );
+            }
+          } catch (err) {
+            console.log(`[Cancel & Remove] Could not notify cleaner ${cleanerId}:`, err.message);
+          }
+        }
+      }
+
+      // Delete the appointment
+      await appointment.destroy();
+
+      cancelledAppointments.push({
+        id: appointment.id,
+        date: appointment.date,
+        cancellationFee: fee,
+        wasWithinWindow: isWithinWindow,
+      });
+
+      totalCancellationFees += fee;
+    }
+
+    // Step 2: Get current bill and add cancellation fees
+    let userBill = await UserBills.findOne({ where: { userId } });
+    const currentCancellationFee = Number(userBill?.cancellationFee) || 0;
+    const currentTotalDue = Number(userBill?.totalDue) || 0;
+
+    const newCancellationFee = currentCancellationFee + totalCancellationFees;
+    const newTotalDue = currentTotalDue + totalCancellationFees;
+
+    if (userBill) {
+      await userBill.update({
+        cancellationFee: newCancellationFee,
+        totalDue: newTotalDue,
+      });
+    }
+
+    // Step 3: Pay all outstanding fees (including new cancellation fees)
+    if (newTotalDue > 0) {
+      console.log(`[Cancel & Remove] Paying total fees: $${newTotalDue}`);
+
+      const feePaymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(newTotalDue * 100),
+        currency: "usd",
+        customer: user.stripeCustomerId,
+        payment_method: paymentMethodId,
+        confirm: true,
+        off_session: true,
+        description: "Cancellation fees and outstanding balance",
+        metadata: {
+          userId: userId.toString(),
+          type: "cancellation_fees_and_outstanding",
+          cancellationFees: totalCancellationFees.toString(),
+        },
+      });
+
+      if (feePaymentIntent.status !== "succeeded") {
+        return res.status(400).json({
+          error: "Failed to charge cancellation fees",
+          cancelledAppointments,
+          totalCancellationFees,
+        });
+      }
+
+      // Clear the bill
+      await userBill.update({
+        cancellationFee: 0,
+        appointmentDue: 0,
+        totalDue: 0,
+      });
+
+      console.log(`[Cancel & Remove] Fees paid successfully: $${newTotalDue}`);
+    }
+
+    // Step 4: Remove the payment method
+    await stripe.paymentMethods.detach(paymentMethodId);
+
+    // Update user's payment method status
+    const updatedMethods = await stripe.paymentMethods.list({
+      customer: user.stripeCustomerId,
+      type: "card",
+    });
+
+    const hasPaymentMethod = updatedMethods.data.length > 0;
+    await user.update({ hasPaymentMethod });
+
+    return res.json({
+      success: true,
+      message: "All appointments cancelled and payment method removed",
+      cancelledAppointments,
+      totalCancellationFees,
+      totalFeesPaid: newTotalDue,
+      hasPaymentMethod,
+    });
+  } catch (error) {
+    console.error("[Cancel & Remove] Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to process cancellation" });
   }
 });
 
@@ -548,6 +1183,241 @@ paymentRouter.post("/create-intent", async (req, res) => {
   } catch (error) {
     console.error("Error creating payment intent:", error);
     res.status(400).json({ error: "Payment creation failed" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Pay Bill - Charge saved card directly
+ * Uses the customer's saved payment method to pay their bill
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/pay-bill", async (req, res) => {
+  console.log("[Pay Bill] Request received:", { amount: req.body.amount });
+
+  const { amount } = req.body; // amount in cents
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    console.log("[Pay Bill] No authorization header");
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  if (!amount || amount <= 0) {
+    console.log("[Pay Bill] Invalid amount:", amount);
+    return res.status(400).json({ error: "Invalid amount" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+    console.log("[Pay Bill] User ID:", userId, "Amount (cents):", amount);
+
+    const user = await User.findByPk(userId);
+    if (!user) {
+      console.log("[Pay Bill] User not found:", userId);
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.stripeCustomerId) {
+      console.log("[Pay Bill] No Stripe customer ID for user:", userId);
+      return res.status(400).json({ error: "No payment method on file. Please add a card first." });
+    }
+
+    // Get the customer's default payment method
+    console.log("[Pay Bill] Retrieving Stripe customer:", user.stripeCustomerId);
+    const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+    const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+    if (!defaultPaymentMethod) {
+      console.log("[Pay Bill] No default payment method for customer:", user.stripeCustomerId);
+      return res.status(400).json({ error: "No payment method on file. Please add a card first." });
+    }
+
+    // Create and confirm a PaymentIntent using the saved card
+    console.log("[Pay Bill] Creating PaymentIntent with payment method:", defaultPaymentMethod);
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount, // in cents
+      currency: "usd",
+      customer: user.stripeCustomerId,
+      payment_method: defaultPaymentMethod,
+      confirm: true,
+      off_session: true,
+      description: "Bill payment",
+      metadata: {
+        userId: userId.toString(),
+        type: "bill_payment",
+      },
+    });
+    console.log("[Pay Bill] PaymentIntent created:", paymentIntent.id, "Status:", paymentIntent.status);
+
+    if (paymentIntent.status !== "succeeded") {
+      console.error(`[Pay Bill] Payment failed with status: ${paymentIntent.status}`);
+      return res.status(400).json({ error: "Payment failed. Please try again or update your card." });
+    }
+
+    // Find and update the user's bill
+    const bill = await UserBills.findOne({ where: { userId } });
+    if (!bill) {
+      return res.status(404).json({ error: "Bill not found" });
+    }
+
+    // Amount is in cents, convert to dollars for bill (stored in dollars)
+    const paymentAmountDollars = amount / 100;
+
+    // Get current values
+    let currentCancellationFee = Number(bill.cancellationFee) || 0;
+    let currentAppointmentDue = Number(bill.appointmentDue) || 0;
+    let remainingPayment = paymentAmountDollars;
+
+    // Apply payment to cancellation fee first
+    if (remainingPayment > 0 && currentCancellationFee > 0) {
+      const feePayment = Math.min(remainingPayment, currentCancellationFee);
+      currentCancellationFee -= feePayment;
+      remainingPayment -= feePayment;
+    }
+
+    // Then apply to appointment dues
+    if (remainingPayment > 0 && currentAppointmentDue > 0) {
+      const duePayment = Math.min(remainingPayment, currentAppointmentDue);
+      currentAppointmentDue -= duePayment;
+      remainingPayment -= duePayment;
+    }
+
+    // Calculate new total
+    const newTotalDue = currentCancellationFee + currentAppointmentDue;
+
+    // Update the bill
+    await bill.update({
+      cancellationFee: Math.max(0, currentCancellationFee),
+      appointmentDue: Math.max(0, currentAppointmentDue),
+      totalDue: Math.max(0, newTotalDue),
+    });
+
+    // Record the payment transaction
+    await recordPaymentTransaction({
+      type: "bill_payment",
+      status: "succeeded",
+      amount: amount, // in cents
+      userId,
+      stripePaymentIntentId: paymentIntent.id,
+      description: `Bill payment - $${paymentAmountDollars.toFixed(2)}`,
+    });
+
+    console.log(`[Pay Bill] User ${userId} paid $${paymentAmountDollars.toFixed(2)} - Bill updated`);
+
+    return res.json({
+      success: true,
+      bill: {
+        cancellationFee: Math.max(0, currentCancellationFee),
+        appointmentDue: Math.max(0, currentAppointmentDue),
+        totalDue: Math.max(0, newTotalDue),
+      },
+    });
+  } catch (error) {
+    console.error("[Pay Bill] Error:", error);
+
+    // Handle Stripe card errors
+    if (error.type === "StripeCardError") {
+      return res.status(400).json({ error: error.message || "Your card was declined." });
+    }
+
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    return res.status(500).json({ error: "Payment failed. Please try again." });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Record Bill Payment
+ * Called after successful Stripe payment to update the user's bill
+ * Applies payment to cancellation fees first, then appointment dues
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/record-bill-payment", async (req, res) => {
+  const { amount, paymentIntentId } = req.body;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    // Find the user's bill
+    const bill = await UserBills.findOne({ where: { userId } });
+    if (!bill) {
+      return res.status(404).json({ error: "Bill not found" });
+    }
+
+    // Amount is in cents from frontend, convert to dollars for bill (stored in dollars)
+    const paymentAmountDollars = amount / 100;
+
+    // Get current values
+    let currentCancellationFee = Number(bill.cancellationFee) || 0;
+    let currentAppointmentDue = Number(bill.appointmentDue) || 0;
+    let remainingPayment = paymentAmountDollars;
+
+    // Apply payment to cancellation fee first
+    if (remainingPayment > 0 && currentCancellationFee > 0) {
+      const feePayment = Math.min(remainingPayment, currentCancellationFee);
+      currentCancellationFee -= feePayment;
+      remainingPayment -= feePayment;
+    }
+
+    // Then apply to appointment dues
+    if (remainingPayment > 0 && currentAppointmentDue > 0) {
+      const duePayment = Math.min(remainingPayment, currentAppointmentDue);
+      currentAppointmentDue -= duePayment;
+      remainingPayment -= duePayment;
+    }
+
+    // Calculate new total
+    const newTotalDue = currentCancellationFee + currentAppointmentDue;
+
+    // Update the bill
+    await bill.update({
+      cancellationFee: Math.max(0, currentCancellationFee),
+      appointmentDue: Math.max(0, currentAppointmentDue),
+      totalDue: Math.max(0, newTotalDue),
+    });
+
+    // Record the payment transaction
+    await recordPaymentTransaction({
+      type: "bill_payment",
+      status: "succeeded",
+      amount: amount, // in cents
+      userId,
+      stripePaymentIntentId: paymentIntentId,
+      description: `Bill payment - $${paymentAmountDollars.toFixed(2)}`,
+      metadata: {
+        cancellationFeePaid: paymentAmountDollars - remainingPayment,
+      },
+    });
+
+    console.log(`[Bill Payment] User ${userId} paid $${paymentAmountDollars.toFixed(2)} - Bill updated`);
+
+    return res.json({
+      success: true,
+      bill: {
+        cancellationFee: Math.max(0, currentCancellationFee),
+        appointmentDue: Math.max(0, currentAppointmentDue),
+        totalDue: Math.max(0, newTotalDue),
+      },
+    });
+  } catch (error) {
+    console.error("[Bill Payment] Error:", error);
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    return res.status(500).json({ error: "Failed to record payment" });
   }
 });
 
@@ -1105,11 +1975,156 @@ paymentRouter.post("/pre-pay", async (req, res) => {
 
 /**
  * ------------------------------------------------------
+ * Pre-Pay Batch Endpoint — Pay multiple appointments at once
+ * Allows customers to select and pay for multiple upcoming appointments
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/pre-pay-batch", async (req, res) => {
+  const { appointmentIds } = req.body;
+  const authHeader = req.headers.authorization;
+
+  // 1. Auth check
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+  const token = authHeader.split(" ")[1];
+  let decoded;
+  try {
+    decoded = jwt.verify(token, secretKey);
+  } catch {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+
+  // 2. Validate input
+  if (!appointmentIds || !Array.isArray(appointmentIds) || appointmentIds.length === 0) {
+    return res.status(400).json({ error: "No appointments selected" });
+  }
+
+  // 3. Limit batch size
+  if (appointmentIds.length > 20) {
+    return res.status(400).json({ error: "Maximum 20 appointments per batch" });
+  }
+
+  const results = {
+    successCount: 0,
+    failedCount: 0,
+    failed: [],
+    totalCaptured: 0,
+  };
+
+  // 4. Process each appointment
+  for (const appointmentId of appointmentIds) {
+    try {
+      const appointment = await UserAppointments.findByPk(appointmentId);
+
+      if (!appointment) {
+        results.failed.push({ id: appointmentId, error: "Not found" });
+        results.failedCount++;
+        continue;
+      }
+
+      if (appointment.userId !== decoded.userId) {
+        results.failed.push({ id: appointmentId, error: "Not authorized" });
+        results.failedCount++;
+        continue;
+      }
+
+      if (appointment.paid) {
+        results.failed.push({ id: appointmentId, error: "Already paid" });
+        results.failedCount++;
+        continue;
+      }
+
+      if (!appointment.hasBeenAssigned) {
+        results.failed.push({ id: appointmentId, error: "No cleaner assigned" });
+        results.failedCount++;
+        continue;
+      }
+
+      if (!appointment.paymentIntentId) {
+        results.failed.push({ id: appointmentId, error: "No payment on file" });
+        results.failedCount++;
+        continue;
+      }
+
+      // Capture payment via Stripe
+      const paymentIntent = await stripe.paymentIntents.capture(
+        appointment.paymentIntentId
+      );
+
+      if (paymentIntent.status === "succeeded") {
+        // Update appointment
+        await appointment.update({
+          paymentStatus: "captured",
+          paid: true,
+          manuallyPaid: true,
+          paymentCaptureFailed: false,
+          amountPaid: paymentIntent.amount_received || paymentIntent.amount,
+        });
+
+        // Update Payout records
+        await Payout.update(
+          { status: "held", paymentCapturedAt: new Date() },
+          { where: { appointmentId, status: "pending" } }
+        );
+
+        // Record transaction
+        await recordPaymentTransaction({
+          type: "capture",
+          status: "succeeded",
+          amount: paymentIntent.amount_received || paymentIntent.amount,
+          userId: appointment.userId,
+          appointmentId: appointment.id,
+          stripePaymentIntentId: appointment.paymentIntentId,
+          stripeChargeId: paymentIntent.latest_charge,
+          description: `Batch pre-payment captured for appointment ${appointment.id}`,
+        });
+
+        // Clean up pending requests
+        await UserPendingRequests.destroy({
+          where: { appointmentId: appointment.id },
+        });
+
+        results.successCount++;
+        results.totalCaptured += paymentIntent.amount;
+      } else {
+        results.failed.push({ id: appointmentId, error: "Capture failed" });
+        results.failedCount++;
+      }
+    } catch (err) {
+      console.error(`Batch pre-pay error for appointment ${appointmentId}:`, err);
+      results.failed.push({
+        id: appointmentId,
+        error: err.type === "StripeCardError" ? err.message : "Payment failed"
+      });
+      results.failedCount++;
+    }
+  }
+
+  // 5. Return results
+  if (results.successCount === 0) {
+    return res.status(400).json({
+      error: "All payments failed",
+      details: results.failed,
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: `${results.successCount} payment(s) captured successfully`,
+    ...results,
+  });
+});
+
+/**
+ * ------------------------------------------------------
  * 5️⃣ Daily Scheduler — Charge 3 Days Before Appointment
  * Payment is captured and held until job completion
  * ------------------------------------------------------
  */
-cron.schedule("0 7 * * *", async () => {
+
+// Extracted function for testing
+async function runDailyPaymentCheck() {
   console.log("Running daily payment check (3-day trigger)...");
 
   const now = new Date();
@@ -1469,6 +2484,41 @@ cron.schedule("0 7 * * *", async () => {
     }
   } catch (err) {
     console.error("Cron job error:", err);
+  }
+}
+
+// Schedule the cron job to run daily at 7 AM
+cron.schedule("0 7 * * *", runDailyPaymentCheck);
+
+/**
+ * Test endpoint to manually trigger the daily payment check
+ * Only available in development/test environments
+ */
+paymentRouter.post("/run-daily-check", async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    // Verify user is an owner
+    const user = await User.findByPk(userId);
+    if (!user || user.role !== "owner") {
+      return res.status(403).json({ error: "Owner access required" });
+    }
+
+    console.log(`[Manual Trigger] Daily payment check triggered by owner ${userId}`);
+    await runDailyPaymentCheck();
+
+    return res.json({ success: true, message: "Daily payment check completed" });
+  } catch (error) {
+    console.error("[Manual Trigger] Error:", error);
+    return res.status(500).json({ error: "Failed to run daily check" });
   }
 });
 

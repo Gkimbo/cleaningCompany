@@ -1630,6 +1630,108 @@ Kleanr Team`;
     }
   }
 
+  // Auto-sync calendar appointment notification
+  static async sendAutoSyncAppointmentsCreated(
+    email,
+    userName,
+    home,
+    appointments,
+    platform
+  ) {
+    try {
+      const transporter = createTransporter();
+      const platformName = platform.charAt(0).toUpperCase() + platform.slice(1);
+      const homeAddress = home.nickName ||
+        `${home.address || ''}, ${home.city || ''}, ${home.state || ''} ${home.zipcode || ''}`.trim();
+
+      const appointmentCount = appointments.length;
+      const totalAmount = appointments.reduce((sum, appt) => sum + (Number(appt.price) || 0), 0);
+
+      // Create appointment list for the email
+      const appointmentItems = appointments.map(appt => ({
+        label: formatDate(appt.date),
+        value: `$${Number(appt.price).toFixed(2)} - ${appt.source}`,
+      }));
+
+      const htmlContent = createEmailTemplate({
+        title: "New Cleaning Scheduled! 🗓️",
+        subtitle: `From your ${platformName} calendar`,
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: `Hi ${userName}! 👋`,
+        content: appointmentCount === 1
+          ? `<p>Great news! A new cleaning appointment has been automatically scheduled based on an upcoming checkout from your <strong>${platformName}</strong> calendar.</p>`
+          : `<p>Great news! <strong>${appointmentCount} new cleaning appointments</strong> have been automatically scheduled based on upcoming checkouts from your <strong>${platformName}</strong> calendar.</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: `${appointmentCount === 1 ? 'Appointment' : 'Appointments'} Created for ${homeAddress}`,
+          items: appointmentItems,
+        },
+        warningBox: {
+          icon: "💳",
+          text: `<strong>Total Amount:</strong> $${totalAmount.toFixed(2)} has been added to your bill. A cleaner will be assigned shortly.`,
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        steps: {
+          title: "📝 What's Next?",
+          items: [
+            "Your appointments are now available for cleaners to select",
+            "You'll receive a notification when a cleaner confirms",
+            "Review and manage appointments in the Kleanr app",
+          ],
+        },
+        ctaText: "Log into the Kleanr app to view your upcoming appointments.",
+        footerMessage: "Automatic scheduling powered by Kleanr",
+      });
+
+      const appointmentListText = appointments.map(appt =>
+        `  • ${formatDate(appt.date)} - $${Number(appt.price).toFixed(2)} (${appt.source})`
+      ).join('\n');
+
+      const textContent = `Hi ${userName}!
+
+${appointmentCount === 1
+  ? `A new cleaning appointment has been automatically scheduled based on an upcoming checkout from your ${platformName} calendar.`
+  : `${appointmentCount} new cleaning appointments have been automatically scheduled based on upcoming checkouts from your ${platformName} calendar.`
+}
+
+APPOINTMENTS CREATED FOR ${homeAddress.toUpperCase()}
+━━━━━━━━━━━━━━━━━━━━━━
+${appointmentListText}
+
+Total Amount: $${totalAmount.toFixed(2)} (added to your bill)
+
+WHAT'S NEXT?
+━━━━━━━━━━━━━━━━━━━━━━
+1. Your appointments are now available for cleaners to select
+2. You'll receive a notification when a cleaner confirms
+3. Review and manage appointments in the Kleanr app
+
+Log into the Kleanr app to view your upcoming appointments.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: appointmentCount === 1
+          ? `🗓️ New Cleaning Scheduled - ${formatDate(appointments[0].date)}`
+          : `🗓️ ${appointmentCount} New Cleanings Scheduled from ${platformName}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Auto-sync appointment notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending auto-sync appointment notification email:", error);
+      throw error;
+    }
+  }
+
   // Notify owner of HR hiring decision
   static async sendHRHiringNotification(
     ownerEmail,

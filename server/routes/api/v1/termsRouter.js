@@ -61,7 +61,7 @@ const authenticateToken = (req, res, next) => {
 const requireOwner = async (req, res, next) => {
   try {
     const user = await User.findByPk(req.user.userId);
-    if (!user || (user.type !== "owner" && user.username !== "owner1")) {
+    if (!user || user.type !== "owner") {
       return res.status(403).json({ error: "Owner access required" });
     }
     next();

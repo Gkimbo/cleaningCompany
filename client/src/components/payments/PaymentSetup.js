@@ -20,6 +20,7 @@ import {
 } from "../../services/styles/theme";
 import { usePaymentSheet } from "../../services/stripe";
 import { API_BASE } from "../../services/config";
+import PaymentMethodRemovalModal from "../modals/PaymentMethodRemovalModal";
 
 const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
   const navigate = useNavigate();
@@ -30,37 +31,43 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
   const [error, setError] = useState(null);
 
+  // Removal modal state
+  const [showRemovalModal, setShowRemovalModal] = useState(false);
+  const [removalEligibility, setRemovalEligibility] = useState(null);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState(null);
+  const [isCheckingEligibility, setIsCheckingEligibility] = useState(false);
+
   // Handle redirect return from Stripe (web only)
   useEffect(() => {
     if (Platform.OS === "web") {
       const params = new URLSearchParams(window.location.search);
       const setupComplete = params.get("setup_complete");
-      const setupIntentId = params.get("setup_intent");
-      const redirectStatus = params.get("redirect_status");
+      const sessionId = params.get("session_id");
+      const canceled = params.get("canceled");
 
-      if (setupComplete && setupIntentId && redirectStatus === "succeeded") {
+      if (setupComplete && sessionId) {
         // Clear URL params
         window.history.replaceState({}, document.title, window.location.pathname);
 
-        // Confirm the payment method on our backend
-        confirmSetupFromRedirect(setupIntentId);
-      } else if (setupComplete && redirectStatus && redirectStatus !== "succeeded") {
+        // Confirm the payment method from checkout session
+        confirmCheckoutSession(sessionId);
+      } else if (canceled) {
         window.history.replaceState({}, document.title, window.location.pathname);
-        setError("Payment setup was not completed. Please try again.");
+        setError("Payment setup was canceled.");
         setIsLoading(false);
       }
     }
   }, []);
 
-  const confirmSetupFromRedirect = async (setupIntentId) => {
+  const confirmCheckoutSession = async (sessionId) => {
     setIsProcessing(true);
     try {
-      const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
+      const confirmResponse = await fetch(`${API_BASE}/payments/confirm-checkout-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token: state.currentUser.token,
-          setupIntentId,
+          sessionId,
         }),
       });
 
@@ -80,7 +87,7 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         throw new Error(confirmData.error || "Failed to save payment method");
       }
     } catch (err) {
-      console.error("Error confirming setup from redirect:", err);
+      console.error("Error confirming checkout session:", err);
       setError(err.message);
     } finally {
       setIsProcessing(false);
@@ -118,7 +125,29 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
     setError(null);
 
     try {
-      // Create SetupIntent
+      // On web, use Checkout Session (hosted payment page)
+      if (Platform.OS === "web") {
+        const response = await fetch(`${API_BASE}/payments/setup-checkout-session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: state.currentUser.token,
+            successUrl: `${window.location.origin}/payment-setup?setup_complete=true&session_id={CHECKOUT_SESSION_ID}`,
+            cancelUrl: `${window.location.origin}/payment-setup?canceled=true`,
+          }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to initialize payment setup");
+        }
+
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+        return; // This won't execute as we're redirecting
+      }
+
+      // On native, use SetupIntent with payment sheet
       const setupResponse = await fetch(`${API_BASE}/payments/setup-intent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,8 +159,6 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         throw new Error(setupData.error || "Failed to initialize payment setup");
       }
 
-      // Use the platform-agnostic payment sheet
-      // Note: On web, this will redirect to Stripe's hosted page and won't return
       const result = await openPaymentSheet({
         clientSecret: setupData.clientSecret,
         merchantDisplayName: "Kleanr Inc.",
@@ -140,45 +167,39 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
         publishableKey: setupData.publishableKey,
       });
 
-      // On web, if we get here with an error, handle it
-      // If successful redirect happened, this code won't run
       if (result.error) {
         throw new Error(result.error.message);
       }
 
       if (result.canceled) {
-        // User canceled - just return
         setIsProcessing(false);
         return;
       }
 
-      // This code path is for native apps where openPaymentSheet returns without redirect
-      if (Platform.OS !== "web") {
-        // Confirm the payment method was saved
-        const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            token: state.currentUser.token,
-            setupIntentId: setupData.clientSecret.split("_secret_")[0],
-          }),
-        });
+      // Confirm the payment method was saved
+      const confirmResponse = await fetch(`${API_BASE}/payments/confirm-payment-method`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: state.currentUser.token,
+          setupIntentId: setupData.clientSecret.split("_secret_")[0],
+        }),
+      });
 
-        const confirmData = await confirmResponse.json();
+      const confirmData = await confirmResponse.json();
 
-        if (confirmResponse.ok && confirmData.success) {
-          setHasPaymentMethod(true);
-          fetchPaymentMethodStatus();
-          Alert.alert("Success", "Payment method added successfully!");
+      if (confirmResponse.ok && confirmData.success) {
+        setHasPaymentMethod(true);
+        fetchPaymentMethodStatus();
+        Alert.alert("Success", "Payment method added successfully!");
 
-          if (onSetupComplete) {
-            onSetupComplete();
-          } else if (redirectTo) {
-            navigate(redirectTo);
-          }
-        } else {
-          throw new Error(confirmData.error || "Failed to save payment method");
+        if (onSetupComplete) {
+          onSetupComplete();
+        } else if (redirectTo) {
+          navigate(redirectTo);
         }
+      } else {
+        throw new Error(confirmData.error || "Failed to save payment method");
       }
     } catch (err) {
       console.error("Payment setup error:", err);
@@ -190,41 +211,80 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
   };
 
   const handleRemovePaymentMethod = async (paymentMethodId) => {
-    Alert.alert(
-      "Remove Card",
-      "Are you sure you want to remove this payment method?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const response = await fetch(
-                `${API_BASE}/payments/payment-method/${paymentMethodId}`,
-                {
-                  method: "DELETE",
-                  headers: {
-                    Authorization: `Bearer ${state.currentUser.token}`,
-                  },
-                }
-              );
-              const data = await response.json();
+    setIsCheckingEligibility(true);
+    setSelectedPaymentMethodId(paymentMethodId);
 
-              if (response.ok) {
-                setHasPaymentMethod(data.hasPaymentMethod);
-                fetchPaymentMethodStatus();
-                Alert.alert("Success", "Payment method removed");
-              } else {
-                throw new Error(data.error);
-              }
-            } catch (err) {
-              Alert.alert("Error", err.message);
-            }
+    try {
+      // First check eligibility
+      const eligibilityResponse = await fetch(
+        `${API_BASE}/payments/removal-eligibility/${paymentMethodId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${state.currentUser.token}`,
           },
-        },
-      ]
-    );
+        }
+      );
+      const eligibilityData = await eligibilityResponse.json();
+
+      if (!eligibilityResponse.ok) {
+        throw new Error(eligibilityData.error || "Failed to check eligibility");
+      }
+
+      if (eligibilityData.canRemove) {
+        // Can remove directly - show simple confirmation
+        Alert.alert(
+          "Remove Card",
+          "Are you sure you want to remove this payment method?",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Remove",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  const response = await fetch(
+                    `${API_BASE}/payments/payment-method/${paymentMethodId}`,
+                    {
+                      method: "DELETE",
+                      headers: {
+                        Authorization: `Bearer ${state.currentUser.token}`,
+                      },
+                    }
+                  );
+                  const data = await response.json();
+
+                  if (response.ok) {
+                    setHasPaymentMethod(data.hasPaymentMethod);
+                    fetchPaymentMethodStatus();
+                    Alert.alert("Success", "Payment method removed");
+                  } else {
+                    throw new Error(data.error);
+                  }
+                } catch (err) {
+                  Alert.alert("Error", err.message);
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        // Cannot remove directly - show options modal
+        setRemovalEligibility(eligibilityData);
+        setShowRemovalModal(true);
+      }
+    } catch (err) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setIsCheckingEligibility(false);
+    }
+  };
+
+  const handleRemovalSuccess = (data) => {
+    setHasPaymentMethod(data.hasPaymentMethod);
+    fetchPaymentMethodStatus();
+    setShowRemovalModal(false);
+    setRemovalEligibility(null);
+    setSelectedPaymentMethodId(null);
   };
 
   const getCardIcon = (brand) => {
@@ -292,9 +352,14 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
               </View>
               <Pressable
                 onPress={() => handleRemovePaymentMethod(method.id)}
-                style={styles.removeButton}
+                style={[styles.removeButton, isCheckingEligibility && styles.buttonDisabled]}
+                disabled={isCheckingEligibility}
               >
-                <Icon name="trash" size={18} color={colors.error[500]} />
+                {isCheckingEligibility && selectedPaymentMethodId === method.id ? (
+                  <ActivityIndicator size="small" color={colors.error[500]} />
+                ) : (
+                  <Icon name="trash" size={18} color={colors.error[500]} />
+                )}
               </Pressable>
             </View>
           ))}
@@ -354,6 +419,42 @@ const PaymentSetup = ({ state, dispatch, onSetupComplete, redirectTo }) => {
           <Icon name="arrow-right" size={16} color={colors.neutral[0]} />
         </Pressable>
       )}
+
+      {/* Book Appointment Button (show when has payment method and not in booking flow) */}
+      {hasPaymentMethod && !redirectTo && (
+        <Pressable
+          style={styles.bookButton}
+          onPress={() => navigate("/schedule-cleaning")}
+        >
+          <Icon name="calendar-plus-o" size={18} color={colors.neutral[0]} style={styles.buttonIcon} />
+          <Text style={styles.bookButtonText}>Book an Appointment</Text>
+        </Pressable>
+      )}
+
+      {/* Pay Button (always show so users can access their bill) */}
+      {!redirectTo && (
+        <Pressable
+          style={styles.payButton}
+          onPress={() => navigate("/bill")}
+        >
+          <Icon name="dollar" size={18} color={colors.neutral[0]} style={styles.buttonIcon} />
+          <Text style={styles.payButtonText}>Pay</Text>
+        </Pressable>
+      )}
+
+      {/* Payment Method Removal Modal */}
+      <PaymentMethodRemovalModal
+        visible={showRemovalModal}
+        onClose={() => {
+          setShowRemovalModal(false);
+          setRemovalEligibility(null);
+          setSelectedPaymentMethodId(null);
+        }}
+        onSuccess={handleRemovalSuccess}
+        paymentMethodId={selectedPaymentMethodId}
+        eligibilityData={removalEligibility}
+        token={state.currentUser.token}
+      />
     </ScrollView>
   );
 };
@@ -520,6 +621,36 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+  },
+  bookButton: {
+    backgroundColor: colors.success[600],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.lg,
+    borderRadius: radius.lg,
+    marginTop: spacing.lg,
+    ...shadows.md,
+  },
+  bookButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
+  payButton: {
+    backgroundColor: colors.primary[600],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.lg,
+    borderRadius: radius.lg,
+    marginTop: spacing.md,
+    ...shadows.md,
+  },
+  payButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
   },
 
   // Info Box

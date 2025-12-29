@@ -65,9 +65,12 @@ const calculatePrice = async (
   const towelFee = pricing?.linens?.towelFee ?? 5;
   const faceClothFee = pricing?.linens?.faceClothFee ?? 2;
 
-  // Time window surcharge
-  const timeSurcharge = pricing.timeWindows[timeToBeCompleted] || 0;
-  price += timeSurcharge;
+  // Time window surcharge (timeWindows values can be objects with surcharge property or plain numbers)
+  const timeWindowValue = pricing.timeWindows?.[timeToBeCompleted];
+  const timeSurcharge = typeof timeWindowValue === 'object'
+    ? (timeWindowValue?.surcharge || 0)
+    : (timeWindowValue || 0);
+  price += Number(timeSurcharge) || 0;
 
   // Linen pricing
   if (sheets === "yes") {

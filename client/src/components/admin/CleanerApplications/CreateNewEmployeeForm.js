@@ -1,11 +1,8 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, Pressable, View } from "react-native";
-import { useNavigate } from "react-router-native";
 import { TextInput } from "react-native-paper";
 import Icon from "react-native-vector-icons/FontAwesome";
 
-import FetchData from "../../../services/fetchRequests/fetchData";
-import { AuthContext } from "../../../services/AuthContext";
 import Application from "../../../services/fetchRequests/ApplicationClass";
 import { colors, spacing, radius, typography, shadows } from "../../../services/styles/theme";
 
@@ -40,6 +37,14 @@ const generateStrongPassword = (length = 16) => {
 		.join("");
 };
 
+// Format phone number as 555-555-5555
+const formatPhoneNumber = (text) => {
+	const cleaned = text.replace(/\D/g, "");
+	if (cleaned.length <= 3) return cleaned;
+	if (cleaned.length <= 6) return `${cleaned.slice(0, 3)}-${cleaned.slice(3)}`;
+	return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+};
+
 // Generate a username from first and last name that fits 4-12 character limit
 const generateUsername = (first, last) => {
 	const cleanFirst = (first || "").toLowerCase().replace(/[^a-z]/g, "");
@@ -66,20 +71,17 @@ const generateUsername = (first, last) => {
 	return username;
 };
 
-const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initialLastName, email, phone: initialPhone, setApplicationsList}) => {
+const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initialLastName, email, phone: initialPhone, setApplicationsList, token}) => {
 	const [firstNameInput, setFirstNameInput] = useState(initialFirstName || "");
 	const [lastNameInput, setLastNameInput] = useState(initialLastName || "");
 	const [userName, setUserName] = useState(generateUsername(initialFirstName, initialLastName));
 	const [password, setPassword] = useState(generateStrongPassword());
 	const [emailInput, setEmail] = useState(email);
-	const [phoneInput, setPhone] = useState(initialPhone || "");
+	const [phoneInput, setPhone] = useState(initialPhone ? formatPhoneNumber(initialPhone) : "");
 	const [showPassword, setShowPassword] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [successMessage, setSuccessMessage] = useState("");
-	const navigate = useNavigate();
-	const { login } = useContext(AuthContext);
-	const type = "cleaner";
 
 	// Update username when first or last name changes
 	useEffect(() => {
@@ -124,32 +126,25 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 		setSuccessMessage("");
 
 		try {
-			const data = {
-				userName,
+			const employeeData = {
+				username: userName,
 				password,
 				email: emailInput,
-				type,
 				firstName: firstNameInput,
 				lastName: lastNameInput,
 				phone: phoneInput || null,
 			};
-			const response = await FetchData.makeNewEmployee(data);
-			if (
-				response === "An account already has this email" ||
-				response === "Username already exists"
-			) {
-				setErrors([response]);
+			const response = await Application.hireApplicant(id, employeeData, token);
+			if (response.error) {
+				setErrors([response.error]);
 			} else {
-				setSuccessMessage(`Successfully created account for ${firstNameInput} ${lastNameInput}!`);
-				await Application.deleteApplication(id);
+				setSuccessMessage(`Successfully hired ${firstNameInput} ${lastNameInput}! Account created and welcome email sent.`);
 				setTimeout(() => {
-					FetchData.getApplicationsFromBackend().then((response) => {
-						setApplicationsList(response.serializedApplications);
-					});
+					setApplicationsList();
 				}, 1500);
 			}
 		} catch (error) {
-			setErrors(["Failed to create employee. Please try again."]);
+			setErrors([error.message || "Failed to hire employee. Please try again."]);
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -277,11 +272,12 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 			<TextInput
 				mode="outlined"
 				label="Phone Number"
-				placeholder="Phone Number (optional)"
+				placeholder="555-555-5555 (optional)"
 				style={styles.input}
 				value={phoneInput}
-				onChangeText={setPhone}
+				onChangeText={(text) => setPhone(formatPhoneNumber(text))}
 				keyboardType="phone-pad"
+				maxLength={12}
 				theme={inputTheme}
 				left={<TextInput.Icon icon="phone" color={colors.text.tertiary} />}
 			/>

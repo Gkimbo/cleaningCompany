@@ -69,31 +69,37 @@ const HomePage = ({ state, dispatch }) => {
     if (state.account === "cleaner") {
       FetchData.get("/api/v1/employee-info", state.currentUser.token).then(
         (response) => {
-          dispatch({
-            type: "USER_APPOINTMENTS",
-            payload: response.employee.cleanerAppointments,
-          });
+          if (response?.employee?.cleanerAppointments) {
+            dispatch({
+              type: "USER_APPOINTMENTS",
+              payload: response.employee.cleanerAppointments,
+            });
+          }
         }
       );
     } else {
       FetchData.get("/api/v1/user-info", state.currentUser.token).then(
         (response) => {
-          dispatch({ type: "USER_HOME", payload: response.user.homes });
-          dispatch({
-            type: "USER_APPOINTMENTS",
-            payload: response.user.appointments,
-          });
-          dispatch({ type: "DB_BILL", payload: response.user.bill });
+          if (response?.user) {
+            dispatch({ type: "USER_HOME", payload: response.user.homes || [] });
+            dispatch({
+              type: "USER_APPOINTMENTS",
+              payload: response.user.appointments || [],
+            });
+            dispatch({ type: "DB_BILL", payload: response.user.bill });
+          }
         }
       );
       FetchData.get(
         "/api/v1/appointments/my-requests",
         state.currentUser.token
       ).then((response) => {
-        dispatch({
-          type: "CLEANING_REQUESTS",
-          payload: response.pendingRequestsEmployee,
-        });
+        if (response?.pendingRequestsEmployee) {
+          dispatch({
+            type: "CLEANING_REQUESTS",
+            payload: response.pendingRequestsEmployee,
+          });
+        }
       });
     }
   }, []);
@@ -240,7 +246,7 @@ const HomePage = ({ state, dispatch }) => {
   };
 
   // Show Owner Dashboard for owners
-  if (state.account === "owner1" && state.currentUser.token) {
+  if (state.account === "owner" && state.currentUser.token) {
     return <OwnerDashboard state={state} />;
   }
 

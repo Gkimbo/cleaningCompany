@@ -26,12 +26,13 @@ export const usePaymentSheet = () => {
     customerId,
     isSetupIntent = false,
     publishableKey,
+    returnUrlParams = "",
   }) => {
     try {
       const stripe = await getStripe(publishableKey);
 
       if (!stripe) {
-        return { error: { message: "Stripe not initialized" } };
+        return { error: { message: "Stripe not initialized. Please refresh and try again." } };
       }
 
       if (isSetupIntent) {
@@ -55,7 +56,11 @@ export const usePaymentSheet = () => {
         return { success: true };
       } else {
         // For payment intents, use confirmPayment with redirect
-        const returnUrl = `${window.location.origin}/payment-complete`;
+        // Include custom params (like amount) for recording the payment after redirect
+        const baseUrl = `${window.location.origin}${window.location.pathname}`;
+        const returnUrl = returnUrlParams
+          ? `${baseUrl}?${returnUrlParams}`
+          : `${baseUrl}?payment_complete=true`;
 
         const { error } = await stripe.confirmPayment({
           clientSecret,

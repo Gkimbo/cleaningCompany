@@ -289,10 +289,11 @@ stripeConnectRouter.get("/account-status/:userId", async (req, res) => {
  * - stripe_dashboard.type: 'express' - Cleaner gets Express Dashboard access
  *
  * @body {string} token - JWT authentication token
+ * @body {object} personalInfo - Optional pre-filled personal info (dob, address, ssn_last_4)
  * @returns {object} - Created account details
  */
 stripeConnectRouter.post("/create-account", async (req, res) => {
-  const { token } = req.body;
+  const { token, personalInfo } = req.body;
 
   // Validate token
   const decoded = verifyToken(token);
@@ -335,6 +336,43 @@ stripeConnectRouter.post("/create-account", async (req, res) => {
       });
     }
 
+    // Build individual info from user data and personalInfo
+    const individual = {
+      first_name: user.firstName || undefined,
+      last_name: user.lastName || undefined,
+      email: user.email || undefined,
+      phone: user.phone || undefined,
+    };
+
+    // Add DOB if provided
+    if (personalInfo?.dob) {
+      const dobParts = personalInfo.dob.split("-");
+      if (dobParts.length === 3) {
+        individual.dob = {
+          year: parseInt(dobParts[0]),
+          month: parseInt(dobParts[1]),
+          day: parseInt(dobParts[2]),
+        };
+      }
+    }
+
+    // Add address if provided
+    if (personalInfo?.address) {
+      individual.address = {
+        line1: personalInfo.address.line1 || undefined,
+        line2: personalInfo.address.line2 || undefined,
+        city: personalInfo.address.city || undefined,
+        state: personalInfo.address.state || undefined,
+        postal_code: personalInfo.address.postalCode || undefined,
+        country: "US",
+      };
+    }
+
+    // Add SSN last 4 if provided
+    if (personalInfo?.ssn_last_4) {
+      individual.ssn_last_4 = personalInfo.ssn_last_4;
+    }
+
     /**
      * Create Stripe Connected Account using controller properties.
      *
@@ -366,6 +404,8 @@ stripeConnectRouter.post("/create-account", async (req, res) => {
       // Business information
       business_type: "individual",
       country: "US",
+      // Pre-fill individual info to reduce what user needs to enter on Stripe
+      individual,
       // Metadata for tracking
       metadata: {
         platform: "cleaning_company",

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,6 +12,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
+import * as Location from "expo-location";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
@@ -62,6 +64,10 @@ const SelectNewJobList = ({ state }) => {
   const [bookingInfo, setBookingInfo] = useState(null);
   const [pendingBooking, setPendingBooking] = useState(null);
   const [bookingLoading, setBookingLoading] = useState(false);
+
+  // Stripe setup required state
+  const [showStripeSetupModal, setShowStripeSetupModal] = useState(false);
+  const [stripeSetupMessage, setStripeSetupMessage] = useState("");
 
   const navigate = useNavigate();
 
@@ -119,10 +125,18 @@ const SelectNewJobList = ({ state }) => {
   useEffect(() => {
     const fetchLocations = async () => {
       try {
+        const allItems = [...allAppointments, ...allRequests];
+        // Deduplicate homeIds to avoid redundant fetches
+        const uniqueHomeIds = [...new Set(allItems.map((a) => a.homeId))];
+
         const locations = await Promise.all(
-          [...allAppointments, ...allRequests].map(async (appointment) => {
-            const response = await FetchData.getLatAndLong(appointment.homeId);
-            return { [appointment.homeId]: response };
+          uniqueHomeIds.map(async (homeId) => {
+            const response = await FetchData.getLatAndLong(homeId);
+            // Validate the response has lat/long
+            if (response && typeof response.latitude === "number" && typeof response.longitude === "number") {
+              return { [homeId]: response };
+            }
+            return { [homeId]: null };
           })
         );
         setAppointmentLocations(Object.assign({}, ...locations));
@@ -137,23 +151,53 @@ const SelectNewJobList = ({ state }) => {
   }, [allAppointments, allRequests]);
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      const watcher = navigator.geolocation.watchPosition(
-        (position) => {
-          setUserLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          setUserLocation({ latitude: 0, longitude: 0 });
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
+    let locationSubscription = null;
 
-      return () => navigator.geolocation.clearWatch(watcher);
-    }
+    const startLocationTracking = async () => {
+      try {
+        // Request permission
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          console.log("Location permission denied");
+          return;
+        }
+
+        // Get initial location
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        console.log("User location detected:", location.coords.latitude, location.coords.longitude);
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        // Watch for location updates
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 30000,
+            distanceInterval: 100,
+          },
+          (location) => {
+            setUserLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.error("Error getting location:", error);
+      }
+    };
+
+    startLocationTracking();
+
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
   }, []);
 
   // Fetch home details for filtering
@@ -229,6 +273,10 @@ const SelectNewJobList = ({ state }) => {
             if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
             return prev.filter((a) => a.id !== appointmentId);
           });
+        } else if (result.requiresStripeSetup) {
+          // Show Stripe setup modal
+          setStripeSetupMessage(result.message || "You need to set up your Stripe account to receive payments before you can request appointments.");
+          setShowStripeSetupModal(true);
         } else if (result.error) {
           console.error("Error booking:", result.error);
         }
@@ -256,6 +304,12 @@ const SelectNewJobList = ({ state }) => {
         setShowLargeHomeModal(false);
         setBookingInfo(null);
         setPendingBooking(null);
+      } else if (result.requiresStripeSetup) {
+        setShowLargeHomeModal(false);
+        setBookingInfo(null);
+        setPendingBooking(null);
+        setStripeSetupMessage(result.message || "You need to set up your Stripe account to receive payments before you can request appointments.");
+        setShowStripeSetupModal(true);
       } else if (result.error) {
         console.error("Error confirming booking:", result.error);
       }
@@ -276,8 +330,16 @@ const SelectNewJobList = ({ state }) => {
   const sortedData = useMemo(() => {
     const processed = requestsAndAppointments.map((appointment) => {
       let distance = null;
-      if (userLocation && appointmentLocations?.[appointment.homeId]) {
-        const loc = appointmentLocations[appointment.homeId];
+      const loc = appointmentLocations?.[appointment.homeId];
+      // Only calculate distance if we have valid user location and home location
+      if (
+        userLocation &&
+        userLocation.latitude !== 0 &&
+        userLocation.longitude !== 0 &&
+        loc &&
+        typeof loc.latitude === "number" &&
+        typeof loc.longitude === "number"
+      ) {
         distance = haversineDistance(
           userLocation.latitude,
           userLocation.longitude,
@@ -650,6 +712,42 @@ const SelectNewJobList = ({ state }) => {
         matchCount={filteredData.length}
         hasGeolocation={userLocation && userLocation.latitude !== 0}
       />
+
+      {/* Stripe Setup Required Modal */}
+      <Modal
+        visible={showStripeSetupModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowStripeSetupModal(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowStripeSetupModal(false)}>
+          <View style={styles.stripeModalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.stripeModalIcon}>
+              <Icon name="credit-card" size={32} color={colors.primary[600]} />
+            </View>
+            <Text style={styles.stripeModalTitle}>Payment Setup Required</Text>
+            <Text style={styles.stripeModalMessage}>{stripeSetupMessage}</Text>
+            <View style={styles.stripeModalButtons}>
+              <Pressable
+                style={styles.stripeSetupButton}
+                onPress={() => {
+                  setShowStripeSetupModal(false);
+                  navigate("/earnings");
+                }}
+              >
+                <Icon name="credit-card" size={16} color={colors.neutral[0]} />
+                <Text style={styles.stripeSetupButtonText}>Set Up Payments</Text>
+              </Pressable>
+              <Pressable
+                style={styles.stripeCancelButton}
+                onPress={() => setShowStripeSetupModal(false)}
+              >
+                <Text style={styles.stripeCancelButtonText}>Maybe Later</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
@@ -959,6 +1057,71 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: spacing["4xl"],
+  },
+
+  // Stripe Setup Modal
+  stripeModalContent: {
+    backgroundColor: colors.neutral[0],
+    marginHorizontal: spacing.lg,
+    marginVertical: "auto",
+    borderRadius: radius["2xl"],
+    padding: spacing.xl,
+    alignItems: "center",
+    ...shadows.lg,
+  },
+  stripeModalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
+  stripeModalTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    textAlign: "center",
+  },
+  stripeModalMessage: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: spacing.xl,
+  },
+  stripeModalButtons: {
+    width: "100%",
+    gap: spacing.sm,
+  },
+  stripeSetupButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  stripeSetupButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+  stripeCancelButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+  },
+  stripeCancelButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
   },
 });
 

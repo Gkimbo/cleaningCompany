@@ -105,6 +105,11 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		// Per-appointment contact phone (overrides home default if set)
+		contact: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

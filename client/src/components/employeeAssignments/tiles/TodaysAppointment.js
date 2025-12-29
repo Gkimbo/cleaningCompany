@@ -175,6 +175,12 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   };
 
   const handleAddressPress = () => {
+    // On web, directly open Google Maps (Alert.alert with buttons doesn't work on web)
+    if (Platform.OS === "web") {
+      openMapsApp("google");
+      return;
+    }
+
     const options = Platform.OS === "ios"
       ? ["Apple Maps", "Google Maps", "Waze", "Cancel"]
       : ["Google Maps", "Waze", "Cancel"];

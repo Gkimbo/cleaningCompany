@@ -207,38 +207,71 @@ class UserInfoClass {
   }
 
   static async editTimeInDB({ id, timeToBeCompleted }) {
-    // Get time window surcharge from database pricing
-    const pricing = await getPricingConfig();
-    const price = pricing.timeWindows[timeToBeCompleted] || 0;
-
     const existingAppointment = await UserAppointments.findOne({
       where: { id },
     });
+
+    if (!existingAppointment) {
+      return "Appointment not found for editing";
+    }
+
+    // Get time window surcharges from database pricing
+    const pricing = await getPricingConfig();
+    const timeWindows = pricing.timeWindows || {};
+
+    // Get old and new surcharges (handle both object and number formats)
+    const oldTimeWindow = existingAppointment.dataValues.timeToBeCompleted;
+    const oldSurchargeConfig = timeWindows[oldTimeWindow];
+    const newSurchargeConfig = timeWindows[timeToBeCompleted];
+
+    const oldSurcharge = typeof oldSurchargeConfig === "object"
+      ? oldSurchargeConfig?.surcharge || 0
+      : oldSurchargeConfig || 0;
+    const newSurcharge = typeof newSurchargeConfig === "object"
+      ? newSurchargeConfig?.surcharge || 0
+      : newSurchargeConfig || 0;
+
+    const priceDifference = newSurcharge - oldSurcharge;
+
     const userId = existingAppointment.dataValues.userId;
     const existingBill = await UserBills.findOne({
-      where: {
-        userId,
-      },
+      where: { userId },
     });
-    const finalPrice = Number(existingAppointment.dataValues.price) + price;
+
+    const finalPrice = Number(existingAppointment.dataValues.price) + priceDifference;
     const totalAppointmentPrice =
-      Number(existingBill.dataValues.appointmentDue) + price;
-    const totalOverallPrice = Number(existingBill.dataValues.totalDue) + price;
+      Number(existingBill.dataValues.appointmentDue) + priceDifference;
+    const totalOverallPrice = Number(existingBill.dataValues.totalDue) + priceDifference;
+
+    try {
+      if (priceDifference !== 0 && existingBill) {
+        await existingBill.update({
+          appointmentDue: totalAppointmentPrice,
+          totalDue: totalOverallPrice,
+        });
+      }
+      await existingAppointment.update({
+        timeToBeCompleted,
+        price: finalPrice,
+      });
+
+      return existingAppointment;
+    } catch (error) {
+      throw new Error(error);
+    }
+  }
+
+  static async editContactInDB({ id, contact }) {
+    const existingAppointment = await UserAppointments.findOne({
+      where: { id },
+    });
 
     if (!existingAppointment) {
       return "Appointment not found for editing";
     }
 
     try {
-      await existingBill.update({
-        appointmentDue: totalAppointmentPrice,
-        totalDue: totalOverallPrice,
-      });
-      await existingAppointment.update({
-        timeToBeCompleted,
-        price: finalPrice,
-      });
-
+      await existingAppointment.update({ contact });
       return existingAppointment;
     } catch (error) {
       throw new Error(error);

@@ -7,6 +7,11 @@ const getCurrentUser = async () => {
   // Get the token safely from AsyncStorage
   const token = await AsyncStorage.getItem("token");
 
+  // If no token, user is not logged in
+  if (!token) {
+    throw new Error("No token found");
+  }
+
   const response = await fetch(`${baseURL}/api/v1/user-sessions/current`, {
     headers: {
       "Content-Type": "application/json",

@@ -23,6 +23,7 @@ import {
 } from "../../services/styles/theme";
 import TaxFormsSection from "../tax/TaxFormsSection";
 import HomeownerAdjustmentNotification from "./HomeownerAdjustmentNotification";
+import { parseLocalDate, isFutureOrToday, isPast, compareDates } from "../../utils/dateUtils";
 
 const { width } = Dimensions.get("window");
 
@@ -89,13 +90,13 @@ const QuickActionButton = ({ title, subtitle, onPress, icon, iconColor, bgColor,
 
 // Appointment Card Component
 const AppointmentCard = ({ homes, appointment, onPress }) => {
-  const appointmentDate = new Date(appointment.date);
+  const appointmentDate = parseLocalDate(appointment.date);
   const today = new Date();
-  const isToday = appointmentDate.toDateString() === today.toDateString();
+  const isTodayAppointment = appointmentDate.toDateString() === today.toDateString();
 
   const home = homes.find((h) => Number(h.id) === Number(appointment.homeId));
 
-  const formatDate = (date) => {
+  const formatDateDisplay = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
@@ -114,20 +115,20 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
       onPress={onPress}
       style={({ pressed }) => [
         styles.appointmentCard,
-        isToday && styles.appointmentCardToday,
+        isTodayAppointment && styles.appointmentCardToday,
         pressed && styles.cardPressed,
       ]}
     >
       <View style={styles.appointmentDateBadge}>
-        <Text style={[styles.appointmentDateText, isToday && styles.todayText]}>
-          {isToday ? "Today" : formatDate(appointmentDate)}
+        <Text style={[styles.appointmentDateText, isTodayAppointment && styles.todayText]}>
+          {isTodayAppointment ? "Today" : formatDateDisplay(appointmentDate)}
         </Text>
       </View>
       <View style={styles.appointmentDetails}>
         <Text style={styles.appointmentHome} numberOfLines={1}>
           {appointment.home?.nickName ||
             appointment.nickName ||
-            home.nickName ||
+            home?.nickName ||
             ""}
         </Text>
         {appointment.time && (
@@ -272,20 +273,21 @@ const ClientDashboard = ({ state, dispatch }) => {
   };
 
   // Sort and filter upcoming appointments
-  const upcomingAppointments = appointments
-    .filter((apt) => new Date(apt.date) >= new Date())
-    .sort((a, b) => new Date(a.date) - new Date(b.date))
-    .slice(0, 3);
+  const allUpcomingAppointments = appointments
+    .filter((apt) => isFutureOrToday(apt.date))
+    .sort((a, b) => compareDates(a.date, b.date));
+  const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
+  const upcomingAppointmentsCount = allUpcomingAppointments.length;
 
   // Get recent/past appointments
   const recentAppointments = appointments
-    .filter((apt) => new Date(apt.date) < new Date())
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .filter((apt) => isPast(apt.date))
+    .sort((a, b) => compareDates(b.date, a.date))
     .slice(0, 3);
 
-  // Calculate total balance due
+  // Use the backend's totalDue value directly (ensure non-negative)
   const totalDue = bill
-    ? Number(bill.cancellationFee || 0) + Number(bill.appointmentDue || 0)
+    ? Math.max(0, Number(bill.totalDue || 0))
     : 0;
 
   if (loading) {
@@ -404,7 +406,7 @@ const ClientDashboard = ({ state, dispatch }) => {
       <View style={styles.statsRow}>
         <StatCard
           title="Upcoming"
-          value={upcomingAppointments.length}
+          value={upcomingAppointmentsCount}
           subtitle="appointments"
           color={colors.primary[500]}
           onPress={() => navigate("/appointments")}
@@ -548,12 +550,7 @@ const ClientDashboard = ({ state, dispatch }) => {
           actionText="Details"
         />
         <View style={styles.billingCard}>
-          <View style={styles.billingRow}>
-            <Text style={styles.billingLabel}>Upcoming Services</Text>
-            <Text style={styles.billingValue}>
-              {formatCurrency(bill?.appointmentDue || 0)}
-            </Text>
-          </View>
+          {/* Only show cancellation fees if there are any - these are actually due now */}
           {bill?.cancellationFee > 0 && (
             <View style={styles.billingRow}>
               <Text style={styles.billingLabel}>Cancellation Fees</Text>
@@ -562,12 +559,30 @@ const ClientDashboard = ({ state, dispatch }) => {
               </Text>
             </View>
           )}
+          {/* Show current amount due (fees only, not future appointments) */}
           <View style={[styles.billingRow, styles.billingTotal]}>
-            <Text style={styles.billingTotalLabel}>Total Due</Text>
+            <Text style={styles.billingTotalLabel}>Amount Due Now</Text>
             <Text style={styles.billingTotalValue}>
-              {formatCurrency(totalDue)}
+              {formatCurrency(bill?.cancellationFee || 0)}
             </Text>
           </View>
+          {/* Show upcoming appointments as informational, not due */}
+          {(bill?.appointmentDue || 0) > 0 && (
+            <View style={styles.billingUpcoming}>
+              <View style={styles.billingUpcomingHeader}>
+                <Icon name="calendar" size={12} color={colors.text.tertiary} />
+                <Text style={styles.billingUpcomingLabel}>
+                  Upcoming Services ({upcomingAppointmentsCount})
+                </Text>
+              </View>
+              <Text style={styles.billingUpcomingValue}>
+                {formatCurrency(bill?.appointmentDue || 0)}
+              </Text>
+              <Text style={styles.billingUpcomingNote}>
+                Charged 3 days before each cleaning
+              </Text>
+            </View>
+          )}
           {bill?.totalPaid > 0 && (
             <View style={styles.billingPaid}>
               <Text style={styles.billingPaidText}>
@@ -591,7 +606,7 @@ const ClientDashboard = ({ state, dispatch }) => {
                     {apt.home?.nickName || apt.nickName || "Home"}
                   </Text>
                   <Text style={styles.recentDate}>
-                    {new Date(apt.date).toLocaleDateString("en-US", {
+                    {parseLocalDate(apt.date).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                     })}
@@ -970,6 +985,40 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.primary[600],
+  },
+  billingUpcoming: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+    backgroundColor: colors.neutral[50],
+    marginHorizontal: -spacing.lg,
+    marginBottom: -spacing.lg,
+    padding: spacing.md,
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+  },
+  billingUpcomingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  billingUpcomingLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  billingUpcomingValue: {
+    fontSize: typography.fontSize.lg,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.semibold,
+    marginTop: spacing.xs,
+  },
+  billingUpcomingNote: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
+    fontStyle: "italic",
   },
   billingPaid: {
     marginTop: spacing.md,

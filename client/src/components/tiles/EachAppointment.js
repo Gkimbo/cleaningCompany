@@ -8,7 +8,7 @@ import FetchData from "../../services/fetchRequests/fetchData";
 import CancellationWarningModal from "../modals/CancellationWarningModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
-import { usePricing } from "../../context/PricingContext";
+import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
 
 const BED_SIZE_OPTIONS = [
   { value: "long_twin", label: "Long Twin" },
@@ -67,8 +67,17 @@ const EachAppointment = ({
   const [retryingPayment, setRetryingPayment] = useState(false);
   const [paymentRetrySuccess, setPaymentRetrySuccess] = useState(false);
   const [paymentRetryError, setPaymentRetryError] = useState(null);
+  const [editingTimeWindow, setEditingTimeWindow] = useState(false);
+  const [editingContact, setEditingContact] = useState(false);
+  const [currentTimeWindow, setCurrentTimeWindow] = useState(timeToBeCompleted);
+  const [currentContact, setCurrentContact] = useState(contact || "");
+  const [savingTimeWindow, setSavingTimeWindow] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
   const navigate = useNavigate();
   const { pricing } = usePricing();
+
+  // Get time window options from pricing context
+  const timeWindowOptions = getTimeWindowOptions(pricing);
 
   // Get linen prices from pricing context (fallbacks match database defaults)
   const sheetFeePerBed = pricing?.linens?.sheetFeePerBed ?? 30;
@@ -260,7 +269,7 @@ const EachAppointment = ({
 
   // Format time display
   const getTimeDisplay = () => {
-    switch (timeToBeCompleted) {
+    switch (currentTimeWindow) {
       case "anytime":
         return "Anytime";
       case "10-3":
@@ -274,11 +283,25 @@ const EachAppointment = ({
     }
   };
 
+  // Parse date string as local time to avoid timezone issues
+  const parseLocalDate = (dateString) => {
+    if (!dateString) return new Date();
+    // Handle ISO format with time component
+    if (dateString.includes("T")) {
+      const datePart = dateString.split("T")[0];
+      const [year, month, day] = datePart.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+    // Handle date-only format (YYYY-MM-DD)
+    const [year, month, day] = dateString.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // Get days until appointment
   const getDaysUntil = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date);
+    const appointmentDate = parseLocalDate(date);
     appointmentDate.setHours(0, 0, 0, 0);
     const diffTime = appointmentDate - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -365,6 +388,85 @@ const EachAppointment = ({
       setPaymentRetryError("Failed to process payment. Please try again.");
     } finally {
       setRetryingPayment(false);
+    }
+  };
+
+  // Handle time window save
+  const handleSaveTimeWindow = async (newTimeWindow) => {
+    if (newTimeWindow === timeToBeCompleted) {
+      setEditingTimeWindow(false);
+      return;
+    }
+    setSavingTimeWindow(true);
+    try {
+      const response = await fetch(`${API_BASE}/appointments/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id, timeToBeCompleted: newTimeWindow }),
+      });
+
+      if (response.ok) {
+        setCurrentTimeWindow(newTimeWindow);
+        setEditingTimeWindow(false);
+        setChangesSubmitted(true);
+        setChangeNotification({
+          message: "Time window updated successfully!",
+          appointment: id,
+        });
+        if (onConfigurationsUpdate) {
+          const data = await response.json();
+          onConfigurationsUpdate(id, { ...data.user, timeToBeCompleted: newTimeWindow });
+        }
+      } else {
+        setError("Failed to update time window");
+      }
+    } catch (err) {
+      console.error("Error saving time window:", err);
+      setError("Failed to update time window");
+    } finally {
+      setSavingTimeWindow(false);
+    }
+  };
+
+  // Handle contact save
+  const handleSaveContact = async () => {
+    if (currentContact === (contact || "")) {
+      setEditingContact(false);
+      return;
+    }
+    setSavingContact(true);
+    try {
+      const response = await fetch(`${API_BASE}/appointments/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id, contact: currentContact }),
+      });
+
+      if (response.ok) {
+        setEditingContact(false);
+        setChangesSubmitted(true);
+        setChangeNotification({
+          message: "Contact updated successfully!",
+          appointment: id,
+        });
+        if (onConfigurationsUpdate) {
+          const data = await response.json();
+          onConfigurationsUpdate(id, { ...data.user, contact: currentContact });
+        }
+      } else {
+        setError("Failed to update contact");
+      }
+    } catch (err) {
+      console.error("Error saving contact:", err);
+      setError("Failed to update contact");
+    } finally {
+      setSavingContact(false);
     }
   };
 
@@ -456,20 +558,126 @@ const EachAppointment = ({
 
       {/* Quick Info Cards */}
       <View style={styles.infoCards}>
-        <View style={styles.infoCard}>
-          <Icon name="clock-o" size={14} color={colors.primary[500]} />
-          <View>
-            <Text style={styles.infoCardLabel}>Time Window</Text>
-            <Text style={styles.infoCardValue}>{getTimeDisplay()}</Text>
+        {/* Time Window Card - Editable when not disabled */}
+        {!editingTimeWindow ? (
+          <Pressable
+            style={[styles.infoCard, !isDisabled && styles.infoCardEditable]}
+            onPress={() => !isDisabled && setEditingTimeWindow(true)}
+            disabled={isDisabled}
+          >
+            <Icon name="clock-o" size={14} color={colors.primary[500]} />
+            <View style={styles.infoCardContent}>
+              <Text style={styles.infoCardLabel}>Time Window</Text>
+              <Text style={styles.infoCardValue}>{getTimeDisplay()}</Text>
+            </View>
+            {!isDisabled && (
+              <Icon name="pencil" size={12} color={colors.text.tertiary} />
+            )}
+          </Pressable>
+        ) : (
+          <View style={[styles.infoCard, styles.infoCardEditing]}>
+            <View style={styles.editingHeader}>
+              <Text style={styles.editingLabel}>Select Time Window</Text>
+              <Pressable onPress={() => setEditingTimeWindow(false)}>
+                <Icon name="times" size={16} color={colors.text.tertiary} />
+              </Pressable>
+            </View>
+            <View style={styles.timeWindowOptions}>
+              {timeWindowOptions.map((option) => (
+                <Pressable
+                  key={option.value}
+                  style={[
+                    styles.timeWindowOption,
+                    currentTimeWindow === option.value && styles.timeWindowOptionSelected,
+                  ]}
+                  onPress={() => handleSaveTimeWindow(option.value)}
+                  disabled={savingTimeWindow}
+                >
+                  <View style={styles.timeWindowOptionContent}>
+                    <Text
+                      style={[
+                        styles.timeWindowOptionLabel,
+                        currentTimeWindow === option.value && styles.timeWindowOptionLabelSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                    {option.description && (
+                      <Text style={styles.timeWindowOptionDesc}>{option.description}</Text>
+                    )}
+                  </View>
+                  {currentTimeWindow === option.value && (
+                    <Icon name="check" size={14} color={colors.primary[600]} />
+                  )}
+                </Pressable>
+              ))}
+            </View>
+            {savingTimeWindow && (
+              <View style={styles.savingIndicator}>
+                <ActivityIndicator size="small" color={colors.primary[500]} />
+                <Text style={styles.savingText}>Saving...</Text>
+              </View>
+            )}
           </View>
-        </View>
-        <View style={styles.infoCard}>
-          <Icon name="phone" size={14} color={colors.primary[500]} />
-          <View>
-            <Text style={styles.infoCardLabel}>Contact</Text>
-            <Text style={styles.infoCardValue}>{contact}</Text>
+        )}
+
+        {/* Contact Card - Editable when not disabled */}
+        {!editingContact ? (
+          <Pressable
+            style={[styles.infoCard, !isDisabled && styles.infoCardEditable]}
+            onPress={() => !isDisabled && setEditingContact(true)}
+            disabled={isDisabled}
+          >
+            <Icon name="phone" size={14} color={colors.primary[500]} />
+            <View style={styles.infoCardContent}>
+              <Text style={styles.infoCardLabel}>Contact</Text>
+              <Text style={styles.infoCardValue}>{currentContact || contact || "Not set"}</Text>
+            </View>
+            {!isDisabled && (
+              <Icon name="pencil" size={12} color={colors.text.tertiary} />
+            )}
+          </Pressable>
+        ) : (
+          <View style={[styles.infoCard, styles.infoCardEditing]}>
+            <View style={styles.editingHeader}>
+              <Text style={styles.editingLabel}>Contact Phone</Text>
+              <Pressable onPress={() => {
+                setCurrentContact(contact || "");
+                setEditingContact(false);
+              }}>
+                <Icon name="times" size={16} color={colors.text.tertiary} />
+              </Pressable>
+            </View>
+            <TextInput
+              mode="outlined"
+              value={currentContact}
+              onChangeText={setCurrentContact}
+              placeholder="Enter phone number"
+              keyboardType="phone-pad"
+              style={styles.contactInput}
+              outlineColor={colors.border.default}
+              activeOutlineColor={colors.primary[500]}
+            />
+            <Pressable
+              onPress={handleSaveContact}
+              disabled={savingContact}
+              style={({ pressed }) => [
+                styles.saveContactButton,
+                pressed && styles.saveContactButtonPressed,
+                savingContact && styles.saveContactButtonDisabled,
+              ]}
+            >
+              {savingContact ? (
+                <ActivityIndicator size="small" color={colors.neutral[0]} />
+              ) : (
+                <>
+                  <Icon name="check" size={14} color={colors.neutral[0]} />
+                  <Text style={styles.saveContactButtonText}>Save</Text>
+                </>
+              )}
+            </Pressable>
           </View>
-        </View>
+        )}
       </View>
 
       {/* Payment Failed Warning */}
@@ -1072,6 +1280,92 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.primary,
     fontWeight: typography.fontWeight.medium,
+  },
+  infoCardContent: {
+    flex: 1,
+  },
+  infoCardEditable: {
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderStyle: "dashed",
+  },
+  infoCardEditing: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "stretch",
+    padding: spacing.md,
+    backgroundColor: colors.neutral[0],
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
+  editingHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  editingLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  timeWindowOptions: {
+    gap: spacing.xs,
+  },
+  timeWindowOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    backgroundColor: colors.neutral[0],
+    marginBottom: spacing.xs,
+  },
+  timeWindowOptionSelected: {
+    borderColor: colors.primary[500],
+    backgroundColor: colors.primary[50],
+  },
+  timeWindowOptionContent: {
+    flex: 1,
+  },
+  timeWindowOptionLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  timeWindowOptionLabelSelected: {
+    color: colors.primary[700],
+  },
+  timeWindowOptionDesc: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  contactInput: {
+    backgroundColor: colors.neutral[0],
+    marginBottom: spacing.sm,
+  },
+  saveContactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  saveContactButtonPressed: {
+    backgroundColor: colors.primary[700],
+  },
+  saveContactButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveContactButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
 
   // Collapsible

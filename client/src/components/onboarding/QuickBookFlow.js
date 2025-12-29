@@ -289,9 +289,18 @@ const QuickBookFlow = ({ state, dispatch }) => {
 
       {/* Calendar Section */}
       <View style={styles.calendarSection}>
-        <View style={styles.calendarHeader}>
-          <Icon name="calendar-check-o" size={16} color="#10b981" />
-          <Text style={styles.calendarTitle}>Book a Cleaning</Text>
+        <View style={styles.calendarHeaderRow}>
+          <View style={styles.calendarHeader}>
+            <Icon name="calendar-check-o" size={16} color="#10b981" />
+            <Text style={styles.calendarTitle}>Book a Cleaning</Text>
+          </View>
+          <Pressable
+            style={styles.connectCalendarButton}
+            onPress={() => navigate(`/calendar-sync/${homeId}`)}
+          >
+            <Icon name="link" size={12} color="#6366f1" />
+            <Text style={styles.connectCalendarText}>Connect Airbnb/VRBO</Text>
+          </Pressable>
         </View>
         <CalendarComponent
           onDatesSelected={onDatesSelected}
@@ -476,16 +485,35 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 16,
   },
+  calendarHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
   calendarHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
   },
   calendarTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: "#1e293b",
     marginLeft: 8,
+  },
+  connectCalendarButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#eef2ff",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  connectCalendarText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6366f1",
   },
 
   // Outside Area Card

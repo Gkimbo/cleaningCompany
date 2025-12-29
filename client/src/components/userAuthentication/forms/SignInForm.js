@@ -46,10 +46,17 @@ const SignInForm = ({ state, dispatch }) => {
 			}
 			if (response.user) {
 				dispatch({ type: "CURRENT_USER", payload: response.token });
-				if (response.user.username === "owner1") {
-					dispatch({ type: "USER_ACCOUNT", payload: response.user.username });
+				dispatch({ type: "SET_USER_ID", payload: response.user.id });
+				if (response.user.email) {
+					dispatch({ type: "SET_USER_EMAIL", payload: response.user.email });
+				}
+				if (response.user.type === "owner") {
+					dispatch({ type: "USER_ACCOUNT", payload: "owner" });
 				}
 				if (response.user.type === "cleaner") {
+					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
+				}
+				if (response.user.type === "humanResources") {
 					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
 				}
 				login(response.token);
@@ -102,6 +109,10 @@ const SignInForm = ({ state, dispatch }) => {
 				value={password}
 				onChangeText={setPassword}
 				placeholder="Enter your password"
+				autoComplete="password"
+				textContentType="oneTimeCode"
+				autoCorrect={false}
+				spellCheck={false}
 				right={
 					<TextInput.Icon
 						icon={showPassword ? "eye-off" : "eye"}

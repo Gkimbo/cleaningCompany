@@ -725,12 +725,12 @@ describe("HR Users Router - GET /hr-staff", () => {
       expect(res.status).toBe(200);
     });
 
-    it("should allow owner1 type", async () => {
+    it("should allow owner type", async () => {
       const token = generateToken(1);
       User.findByPk.mockResolvedValue({
         id: 1,
         username: "owner1",
-        type: "owner1",
+        type: "owner",
       });
       User.findAll.mockResolvedValue([]);
 

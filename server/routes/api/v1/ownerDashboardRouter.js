@@ -269,11 +269,9 @@ ownerDashboardRouter.get(
         },
       }).catch(() => 0);
 
-      // Owners: check for both "owner" and "owner1" types
+      // Owners
       const totalOwners = await User.count({
-        where: {
-          [Op.or]: [{ type: "owner" }, { type: "owner1" }],
-        },
+        where: { type: "owner" },
       }).catch(() => 0);
 
       // Applications
@@ -1104,7 +1102,8 @@ ownerDashboardRouter.get(
         churn = {
           homeownerCancellations: {
             usersWithCancellations: parseInt(billsWithCancellations?.[0]?.count || 0),
-            totalFeeCents: parseInt(billsWithCancellations?.[0]?.totalFees || 0),
+            // cancellationFee is stored in dollars, convert to cents for frontend
+            totalFeeCents: parseInt(billsWithCancellations?.[0]?.totalFees || 0) * 100,
           },
           cleanerCancellations: {
             total: cleanerCancellationReviews,
@@ -1282,9 +1281,12 @@ ownerDashboardRouter.put(
  * Get current Stripe account balance
  */
 ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
+  console.log("[Stripe Balance] Request received");
   try {
     // Get Stripe balance
+    console.log("[Stripe Balance] Fetching from Stripe...");
     const balance = await stripe.balance.retrieve();
+    console.log("[Stripe Balance] Stripe response:", JSON.stringify(balance));
 
     // Get total withdrawn this year
     const currentYear = new Date().getFullYear();
@@ -1305,6 +1307,8 @@ ownerDashboardRouter.get("/stripe-balance", verifyOwner, async (req, res) => {
     const availableBalance = balance.available.reduce((sum, b) => sum + b.amount, 0);
     const pendingBalance = balance.pending.reduce((sum, b) => sum + b.amount, 0);
     const pendingWithdrawalAmount = parseInt(pendingWithdrawals[0]?.totalPending) || 0;
+
+    console.log("[Stripe Balance] Available:", availableBalance, "cents, Pending:", pendingBalance, "cents");
 
     res.json({
       available: {

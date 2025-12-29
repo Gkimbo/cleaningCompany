@@ -24,9 +24,8 @@ const defaultFilters = {
   towels: "any", // 'any' | 'needed' | 'not_needed'
   bedrooms: "any", // 'any' | '1' | '2' | '3' | '4' | '5+'
   bathrooms: "any", // 'any' | '1' | '1.5' | '2' | '2.5' | '3+'
-  timeWindow: "any", // 'any' | 'anytime' | '10am-3pm' | '11am-4pm' | '12pm-2pm'
+  timeWindow: "any", // 'any' | 'anytime' | '10-3' | '11-4' | '12-2'
   city: "any",
-  minEarnings: null,
 };
 
 const distancePresets = [
@@ -65,18 +64,11 @@ const bathroomOptions = [
 const timeWindowOptions = [
   { value: "any", label: "Any" },
   { value: "anytime", label: "Flexible" },
-  { value: "10am-3pm", label: "10am-3pm" },
-  { value: "11am-4pm", label: "11am-4pm" },
-  { value: "12pm-2pm", label: "12pm-2pm" },
+  { value: "10-3", label: "10am-3pm" },
+  { value: "11-4", label: "11am-4pm" },
+  { value: "12-2", label: "12pm-2pm" },
 ];
 
-const earningsPresets = [
-  { value: null, label: "Any" },
-  { value: 50, label: "$50+" },
-  { value: 75, label: "$75+" },
-  { value: 100, label: "$100+" },
-  { value: 150, label: "$150+" },
-];
 
 const JobFilterModal = ({
   visible,
@@ -297,24 +289,6 @@ const JobFilterModal = ({
               </View>
             )}
 
-            {/* Minimum Earnings Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Minimum Earnings</Text>
-              <Text style={styles.sectionHint}>
-                Your share (90% of job price)
-              </Text>
-              <View style={styles.chipRow}>
-                {earningsPresets.map((preset) => (
-                  <ChipButton
-                    key={String(preset.value)}
-                    selected={tempFilters.minEarnings === preset.value}
-                    label={preset.label}
-                    onPress={() => updateFilter("minEarnings", preset.value)}
-                  />
-                ))}
-              </View>
-            </View>
-
             <View style={styles.bottomSpacer} />
           </ScrollView>
 
@@ -346,6 +320,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius["2xl"],
     borderTopRightRadius: radius["2xl"],
     maxHeight: "85%",
+    height: "75%",
   },
   header: {
     flexDirection: "row",
@@ -370,6 +345,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    flexGrow: 1,
   },
   section: {
     marginBottom: spacing.xl,

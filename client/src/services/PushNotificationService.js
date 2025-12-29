@@ -169,11 +169,18 @@ class PushNotificationService {
    * Remove notification listeners (on unmount)
    */
   static removeNotificationListeners() {
-    if (this.notificationListener) {
+    // removeNotificationSubscription is not available on web
+    if (Platform.OS === "web") {
+      this.notificationListener = null;
+      this.responseListener = null;
+      return;
+    }
+
+    if (this.notificationListener && Notifications.removeNotificationSubscription) {
       Notifications.removeNotificationSubscription(this.notificationListener);
       this.notificationListener = null;
     }
-    if (this.responseListener) {
+    if (this.responseListener && Notifications.removeNotificationSubscription) {
       Notifications.removeNotificationSubscription(this.responseListener);
       this.responseListener = null;
     }

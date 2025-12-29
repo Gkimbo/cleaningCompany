@@ -404,6 +404,96 @@ describe("Reducer Function", () => {
 
       expect(newState.conversations[0].unreadCount).toBe(0);
     });
+
+    it("should handle REMOVE_CONVERSATION action", () => {
+      const stateWithConvos = {
+        ...initialState,
+        conversations: [
+          { conversationId: 1, title: "Chat 1" },
+          { conversationId: 2, title: "Chat 2" },
+          { conversationId: 3, title: "Chat 3" },
+        ],
+        currentMessages: [],
+        unreadCount: 0,
+      };
+      const action = {
+        type: "REMOVE_CONVERSATION",
+        payload: 2,  // Just the conversationId, not an object
+      };
+      const newState = reducer(stateWithConvos, action);
+
+      expect(newState.conversations).toHaveLength(2);
+      expect(newState.conversations.find((c) => c.conversationId === 2)).toBeUndefined();
+      expect(newState.conversations[0].conversationId).toBe(1);
+      expect(newState.conversations[1].conversationId).toBe(3);
+    });
+
+    it("should handle REMOVE_CONVERSATION when conversation does not exist", () => {
+      const stateWithConvos = {
+        ...initialState,
+        conversations: [
+          { conversationId: 1, title: "Chat 1" },
+        ],
+        currentMessages: [],
+        unreadCount: 0,
+      };
+      const action = {
+        type: "REMOVE_CONVERSATION",
+        payload: 999,  // Just the conversationId
+      };
+      const newState = reducer(stateWithConvos, action);
+
+      expect(newState.conversations).toHaveLength(1);
+    });
+
+    it("should handle UPDATE_CONVERSATION_TITLE action", () => {
+      const stateWithConvos = {
+        ...initialState,
+        conversations: [
+          {
+            conversationId: 1,
+            conversation: { id: 1, title: "Old Title" }
+          },
+          {
+            conversationId: 2,
+            conversation: { id: 2, title: "Another Chat" }
+          },
+        ],
+        currentMessages: [],
+        unreadCount: 0,
+      };
+      const action = {
+        type: "UPDATE_CONVERSATION_TITLE",
+        payload: { conversationId: 1, title: "New Title" },
+      };
+      const newState = reducer(stateWithConvos, action);
+
+      expect(newState.conversations[0].conversation.title).toBe("New Title");
+      expect(newState.conversations[1].conversation.title).toBe("Another Chat");
+    });
+
+    it("should handle UPDATE_CONVERSATION_TITLE when conversation does not exist", () => {
+      const stateWithConvos = {
+        ...initialState,
+        conversations: [
+          {
+            conversationId: 1,
+            conversation: { id: 1, title: "Chat 1" }
+          },
+        ],
+        currentMessages: [],
+        unreadCount: 0,
+      };
+      const action = {
+        type: "UPDATE_CONVERSATION_TITLE",
+        payload: { conversationId: 999, title: "New Title" },
+      };
+      const newState = reducer(stateWithConvos, action);
+
+      expect(newState.conversations).toHaveLength(1);
+      expect(newState.conversations[0].conversation.title).toBe("Chat 1");
+    });
+
   });
 
   describe("Unknown action", () => {

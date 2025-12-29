@@ -182,10 +182,26 @@ module.exports = (sequelize, DataTypes) => {
         faceClothFee: config.faceClothFee,
       },
       timeWindows: {
-        anytime: config.timeWindowAnytime,
-        "10-3": config.timeWindow10To3,
-        "11-4": config.timeWindow11To4,
-        "12-2": config.timeWindow12To2,
+        anytime: {
+          surcharge: config.timeWindowAnytime,
+          label: "Anytime",
+          description: config.timeWindowAnytime > 0 ? `+$${config.timeWindowAnytime} per cleaning` : "Most flexible, best pricing",
+        },
+        "10-3": {
+          surcharge: config.timeWindow10To3,
+          label: "10am - 3pm",
+          description: `+$${config.timeWindow10To3} per cleaning`,
+        },
+        "11-4": {
+          surcharge: config.timeWindow11To4,
+          label: "11am - 4pm",
+          description: `+$${config.timeWindow11To4} per cleaning`,
+        },
+        "12-2": {
+          surcharge: config.timeWindow12To2,
+          label: "12pm - 2pm",
+          description: `+$${config.timeWindow12To2} per cleaning`,
+        },
       },
       cancellation: {
         fee: config.cancellationFee,

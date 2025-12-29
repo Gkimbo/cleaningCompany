@@ -31,7 +31,7 @@ const verifyOwnerOrHR = async (req) => {
     return { error: "User not found", status: 404 };
   }
 
-  if (caller.type !== "owner" && caller.type !== "owner1" && caller.type !== "humanResources") {
+  if (caller.type !== "owner" && caller.type !== "humanResources") {
     return { error: "Only owner or HR can access this resource", status: 403 };
   }
 
@@ -128,9 +128,7 @@ applicationRouter.post("/submitted", async (req, res) => {
     // Notify owners about the new application
     try {
       const owners = await User.findAll({
-        where: {
-          [Op.or]: [{ type: "owner" }, { type: "owner1" }],
-        },
+        where: { type: "owner" },
       });
 
       const applicantName = `${firstName} ${lastName}`;
@@ -263,6 +261,7 @@ applicationRouter.patch("/:id/status", async (req, res) => {
     "background_check",
     "approved",
     "rejected",
+    "hired",
   ];
   if (!validStatuses.includes(status)) {
     return res.status(400).json({ error: "Invalid status value" });
@@ -282,89 +281,24 @@ applicationRouter.patch("/:id/status", async (req, res) => {
       return res.status(404).json({ error: "Application not found" });
     }
 
-    // Prevent changing status of already approved applications
-    if (application.status === "approved") {
-      return res.status(400).json({ error: "Cannot change status of approved application" });
+    // Prevent changing status of already hired applications
+    if (application.status === "hired") {
+      return res.status(400).json({ error: "Cannot change status of hired application" });
     }
 
-    // Handle APPROVAL
+    // Handle APPROVAL - just update status, account creation happens when hired
     if (status === "approved") {
-      // Generate unique username and password
-      const username = await generateUniqueUsername(application.firstName, application.lastName);
-      const password = generateSecurePassword();
-
-      // Create cleaner user account
-      const newUser = await User.create({
-        firstName: application.firstName,
-        lastName: application.lastName,
-        username,
-        password, // Will be hashed by model's beforeCreate hook
-        email: application.email,
-        phone: application.phone || null,
-        type: "cleaner",
-        notifications: ["phone", "email"],
-      });
-
-      // Create UserBills record
-      await UserBills.create({
-        userId: newUser.id,
-        appointmentDue: 0,
-        cancellationFee: 0,
-        totalDue: 0,
-      });
-
-      // Update application with approval details
       await application.update({
         status: "approved",
-        userId: newUser.id,
         reviewedBy: caller.id,
         reviewedAt: new Date(),
       });
 
-      // Send welcome email to new cleaner with credentials
-      await Email.sendEmailCongragulations(
-        application.firstName,
-        application.lastName,
-        username,
-        password,
-        application.email,
-        "cleaner"
-      );
-
-      // If HR made the decision, notify owner
-      if (caller.type === "humanResources") {
-        const owners = await User.findAll({
-          where: { [Op.or]: [{ type: "owner" }, { type: "owner1" }] },
-        });
-        const hrName = `${caller.firstName || ""} ${caller.lastName || ""}`.trim() || caller.username;
-        const applicantName = `${application.firstName} ${application.lastName}`;
-
-        for (const owner of owners) {
-          const ownerEmail = owner.getNotificationEmail();
-          if (ownerEmail) {
-            await Email.sendHRHiringNotification(
-              ownerEmail,
-              hrName,
-              applicantName,
-              application.email,
-              "approved"
-            );
-          }
-        }
-      }
-
-      console.log(`✅ Application ${id} approved, cleaner account created: ${username}`);
+      console.log(`✅ Application ${id} approved`);
 
       return res.status(200).json({
-        message: "Application approved and cleaner account created",
+        message: "Application approved",
         application: ApplicationSerializer.serializeOne(application),
-        user: {
-          id: newUser.id,
-          username: newUser.username,
-          email: newUser.email,
-          firstName: newUser.firstName,
-          lastName: newUser.lastName,
-        },
       });
     }
 
@@ -389,7 +323,7 @@ applicationRouter.patch("/:id/status", async (req, res) => {
       // If HR made the decision, notify owner
       if (caller.type === "humanResources") {
         const owners = await User.findAll({
-          where: { [Op.or]: [{ type: "owner" }, { type: "owner1" }] },
+          where: { type: "owner" },
         });
         const hrName = `${caller.firstName || ""} ${caller.lastName || ""}`.trim() || caller.username;
         const applicantName = `${application.firstName} ${application.lastName}`;
@@ -434,6 +368,121 @@ applicationRouter.patch("/:id/status", async (req, res) => {
   } catch (error) {
     console.error("Error updating application status:", error);
     return res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+// POST: hire applicant - creates employee account and sets status to hired (Owner or HR only)
+applicationRouter.post("/:id/hire", async (req, res) => {
+  const { id } = req.params;
+  const { username, password, email, firstName, lastName, phone } = req.body;
+
+  try {
+    // Verify authorization
+    const auth = await verifyOwnerOrHR(req);
+    if (auth.error) {
+      return res.status(auth.status).json({ error: auth.error });
+    }
+    const caller = auth.caller;
+
+    // Find application
+    const application = await UserApplications.findByPk(id);
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    // Prevent hiring already hired applications
+    if (application.status === "hired") {
+      return res.status(400).json({ error: "Application has already been hired" });
+    }
+
+    // Check for existing email
+    const existingEmail = await User.findOne({ where: { email } });
+    if (existingEmail) {
+      return res.status(409).json({ error: "An account already has this email" });
+    }
+
+    // Check for existing username
+    const existingUsername = await User.findOne({ where: { username } });
+    if (existingUsername) {
+      return res.status(410).json({ error: "Username already exists" });
+    }
+
+    // Create cleaner user account
+    const newUser = await User.create({
+      firstName: firstName || application.firstName,
+      lastName: lastName || application.lastName,
+      username,
+      password, // Will be hashed by model's beforeCreate hook
+      email: email || application.email,
+      phone: phone || application.phone || null,
+      type: "cleaner",
+      notifications: ["phone", "email"],
+    });
+
+    // Create UserBills record
+    await UserBills.create({
+      userId: newUser.id,
+      appointmentDue: 0,
+      cancellationFee: 0,
+      totalDue: 0,
+    });
+
+    // Update application with hired details
+    await application.update({
+      status: "hired",
+      userId: newUser.id,
+      reviewedBy: caller.id,
+      reviewedAt: new Date(),
+    });
+
+    // Send welcome email to new cleaner with credentials
+    await Email.sendEmailCongragulations(
+      newUser.firstName,
+      newUser.lastName,
+      username,
+      password,
+      newUser.email,
+      "cleaner"
+    );
+
+    // If HR made the decision, notify owner
+    if (caller.type === "humanResources") {
+      const owners = await User.findAll({
+        where: { type: "owner" },
+      });
+      const hrName = `${caller.firstName || ""} ${caller.lastName || ""}`.trim() || caller.username;
+      const applicantName = `${newUser.firstName} ${newUser.lastName}`;
+
+      for (const owner of owners) {
+        const ownerEmail = owner.getNotificationEmail();
+        if (ownerEmail) {
+          await Email.sendHRHiringNotification(
+            ownerEmail,
+            hrName,
+            applicantName,
+            newUser.email,
+            "hired"
+          );
+        }
+      }
+    }
+
+    console.log(`✅ Application ${id} hired, cleaner account created: ${username}`);
+
+    return res.status(201).json({
+      message: "Applicant hired and cleaner account created",
+      application: ApplicationSerializer.serializeOne(application),
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+      },
+    });
+  } catch (error) {
+    console.error("Error hiring applicant:", error);
+    return res.status(500).json({ error: "Failed to hire applicant" });
   }
 });
 

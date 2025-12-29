@@ -53,6 +53,66 @@ userInfoRouter.get("/", async (req, res) => {
   }
 });
 
+// Recalculate and sync bill from actual appointments
+userInfoRouter.post("/sync-bill", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Get all unpaid appointments for this user
+    const unpaidAppointments = await UserAppointments.findAll({
+      where: {
+        userId,
+        paid: false,
+      },
+    });
+
+    // Calculate correct appointmentDue from actual unpaid appointments
+    const correctAppointmentDue = unpaidAppointments.reduce((total, appt) => {
+      return total + (Number(appt.price) || 0);
+    }, 0);
+
+    // Get or create user's bill
+    let bill = await UserBills.findOne({ where: { userId } });
+    if (!bill) {
+      bill = await UserBills.create({
+        userId,
+        appointmentDue: correctAppointmentDue,
+        cancellationFee: 0,
+        totalDue: correctAppointmentDue,
+      });
+    } else {
+      const cancellationFee = Number(bill.cancellationFee) || 0;
+      const oldAppointmentDue = Number(bill.appointmentDue) || 0;
+      const newTotalDue = correctAppointmentDue + cancellationFee;
+
+      await bill.update({
+        appointmentDue: correctAppointmentDue,
+        totalDue: newTotalDue,
+      });
+
+      console.log(`[Sync Bill] User ${userId}: appointmentDue ${oldAppointmentDue} -> ${correctAppointmentDue}, totalDue -> ${newTotalDue}`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      bill: {
+        appointmentDue: correctAppointmentDue,
+        cancellationFee: Number(bill.cancellationFee) || 0,
+        totalDue: correctAppointmentDue + (Number(bill.cancellationFee) || 0),
+      },
+      unpaidAppointmentsCount: unpaidAppointments.length,
+    });
+  } catch (error) {
+    console.error("[Sync Bill] Error:", error);
+    return res.status(500).json({ error: "Failed to sync bill" });
+  }
+});
+
 userInfoRouter.post("/home", async (req, res) => {
   const { token } = req.body.user;
   const {
@@ -286,13 +346,21 @@ userInfoRouter.delete("/home", async (req, res) => {
       },
     });
 
-    const prices = allAppointmentsToDelete.map((appt) => {
-      price += Number(appt.dataValues.price);
+    // Only count unpaid appointments
+    let unpaidPrice = 0;
+    allAppointmentsToDelete.forEach((appt) => {
+      if (!appt.dataValues.paid) {
+        unpaidPrice += Number(appt.dataValues.price);
+      }
     });
 
+    // Ensure values don't go negative
+    const newAppointmentDue = Math.max(0, oldAppt - unpaidPrice);
+    const newTotalDue = Math.max(0, Number(billToUpdate.dataValues.cancellationFee) + newAppointmentDue);
+
     await billToUpdate.update({
-      appointmentDue: oldAppt - price,
-      totalDue: total - price,
+      appointmentDue: newAppointmentDue,
+      totalDue: newTotalDue,
     });
 
     await UserAppointments.destroy({

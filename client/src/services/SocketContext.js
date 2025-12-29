@@ -100,6 +100,69 @@ export const SocketProvider = ({ children, token }) => {
     return () => {};
   }, [socket]);
 
+  // Listen for new internal conversations (owner/HR)
+  const onNewInternalConversation = useCallback((callback) => {
+    if (socket) {
+      socket.on("new_internal_conversation", callback);
+      return () => socket.off("new_internal_conversation", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for message reactions
+  const onMessageReaction = useCallback((callback) => {
+    if (socket) {
+      socket.on("message_reaction", callback);
+      return () => socket.off("message_reaction", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for message deletions
+  const onMessageDeleted = useCallback((callback) => {
+    if (socket) {
+      socket.on("message_deleted", callback);
+      return () => socket.off("message_deleted", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for message read receipts
+  const onMessageRead = useCallback((callback) => {
+    if (socket) {
+      socket.on("message_read", callback);
+      return () => socket.off("message_read", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for reaction notifications (sent to message sender)
+  const onReactionNotification = useCallback((callback) => {
+    if (socket) {
+      socket.on("reaction_notification", callback);
+      return () => socket.off("reaction_notification", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for conversation deletion (owner deleted a conversation)
+  const onConversationDeleted = useCallback((callback) => {
+    if (socket) {
+      socket.on("conversation_deleted", callback);
+      return () => socket.off("conversation_deleted", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for conversation title changes
+  const onConversationTitleChanged = useCallback((callback) => {
+    if (socket) {
+      socket.on("conversation_title_changed", callback);
+      return () => socket.off("conversation_title_changed", callback);
+    }
+    return () => {};
+  }, [socket]);
+
   const value = {
     socket,
     connected,
@@ -109,6 +172,13 @@ export const SocketProvider = ({ children, token }) => {
     onBroadcast,
     onUnreadUpdate,
     onAddedToConversation,
+    onNewInternalConversation,
+    onMessageReaction,
+    onMessageDeleted,
+    onMessageRead,
+    onReactionNotification,
+    onConversationDeleted,
+    onConversationTitleChanged,
   };
 
   return (

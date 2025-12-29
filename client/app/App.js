@@ -62,7 +62,7 @@ import {
 } from "../src/components/onboarding";
 
 // Calendar Sync
-import { CalendarSyncOwner } from "../src/components/calendarSync";
+import { CalendarSyncManager } from "../src/components/calendarSync";
 
 // Account Settings
 import AccountSettings from "../src/components/account/AccountSettings";
@@ -126,8 +126,8 @@ export default function App() {
       if (user.user.email) {
         dispatch({ type: "SET_USER_EMAIL", payload: user.user.email });
       }
-      if (user.user.username === "owner1") {
-        dispatch({ type: "USER_ACCOUNT", payload: user.user.username });
+      if (user.user.type === "owner") {
+        dispatch({ type: "USER_ACCOUNT", payload: "owner" });
       }
       if (user.user.type === "cleaner") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
@@ -178,7 +178,7 @@ export default function App() {
       <StripeProvider publishableKey={stripePublishableKey}>
         <PricingProvider>
         <SocketProvider token={state.currentUser.token}>
-          <UserContext.Provider value={{ currentUser: state.currentUser }}>
+          <UserContext.Provider value={{ state, dispatch, currentUser: state.currentUser }}>
           <NativeRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
               <TopBar dispatch={dispatch} state={state} />
@@ -265,7 +265,7 @@ export default function App() {
                 path="/schedule-cleaning"
                 element={<ScheduleCleaningList state={state} dispatch={dispatch} />}
               />
-              <Route path="/add-home" element={<AddHomeForm />} />
+              <Route path="/add-home" element={<AddHomeForm state={state} dispatch={dispatch} />} />
               <Route
                 path="/details/:id"
                 element={<DetailsComponent state={state} dispatch={dispatch} />}
@@ -280,7 +280,7 @@ export default function App() {
               />
               <Route
                 path="/calendar-sync/:homeId"
-                element={<CalendarSyncOwner state={state} dispatch={dispatch} />}
+                element={<CalendarSyncManager state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/appointments"
@@ -390,11 +390,11 @@ export default function App() {
               {/* Messaging routes */}
               <Route
                 path="/messages"
-                element={<ConversationList state={state} dispatch={dispatch} />}
+                element={<ConversationList />}
               />
               <Route
                 path="/messages/:conversationId"
-                element={<ChatScreen state={state} dispatch={dispatch} />}
+                element={<ChatScreen />}
               />
               <Route
                 path="/messages/broadcast"

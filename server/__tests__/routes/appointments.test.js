@@ -46,6 +46,9 @@ jest.mock("../../models", () => ({
     findOne: jest.fn(),
     create: jest.fn().mockResolvedValue({ id: 1 }),
   },
+  CalendarSync: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
 }));
 
 // Mock services
@@ -66,6 +69,21 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   removeRequestEmail: jest.fn().mockResolvedValue(true),
   sendRequestApproved: jest.fn().mockResolvedValue(true),
 }));
+
+// Mock stripe
+jest.mock("stripe", () => {
+  return jest.fn().mockImplementation(() => ({
+    customers: {
+      retrieve: jest.fn().mockResolvedValue({
+        invoice_settings: { default_payment_method: null },
+      }),
+    },
+    paymentIntents: {
+      create: jest.fn().mockResolvedValue({ id: "pi_test123" }),
+    },
+  }));
+});
+
 
 jest.mock("../../config/businessConfig", () => ({
   businessConfig: {
@@ -274,7 +292,12 @@ describe("Appointment Routes", () => {
       });
 
       UserAppointments.findOne.mockResolvedValue({
-        dataValues: { price: "150" },
+        dataValues: {
+          price: "150",
+          homeId: 1,
+          date: "2025-01-15",
+          paid: false,
+        },
       });
 
       UserCleanerAppointments.destroy.mockResolvedValue(1);
@@ -1112,8 +1135,13 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock User.findByPk for cleaner and homeowner
+      // Mock User.findByPk - first for payment intent check (no stripeCustomerId), then cleaner, then homeowner
       User.findByPk
+        .mockResolvedValueOnce({
+          // For payment intent creation check - no stripeCustomerId so it skips
+          id: 1,
+          stripeCustomerId: null,
+        })
         .mockResolvedValueOnce({
           dataValues: {
             id: 2,
@@ -1196,7 +1224,13 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
+      // Mock User.findByPk - first for payment intent check (no stripeCustomerId), then cleaner, then homeowner
       User.findByPk
+        .mockResolvedValueOnce({
+          // For payment intent creation check - no stripeCustomerId so it skips
+          id: 1,
+          stripeCustomerId: null,
+        })
         .mockResolvedValueOnce({
           dataValues: {
             id: 2,
@@ -1299,6 +1333,174 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(UserInfo.editTowelsInDB).toHaveBeenCalled();
+    });
+  });
+
+  describe("DELETE /:id - Bill Balance Protection", () => {
+    it("should not allow bill to go negative when deleting appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockBillUpdate = jest.fn().mockResolvedValue(true);
+      UserBills.findOne.mockResolvedValue({
+        dataValues: {
+          cancellationFee: 0,
+          appointmentDue: 50, // Less than appointment price
+          totalDue: 50,
+        },
+        update: mockBillUpdate,
+      });
+
+      UserAppointments.findOne.mockResolvedValue({
+        dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" }, // Price is higher than appointmentDue
+      });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      UserAppointments.destroy.mockResolvedValue(1);
+
+      const res = await request(app)
+        .delete("/api/v1/appointments/1")
+        .send({ fee: 0, user: token });
+
+      expect(res.status).toBe(201);
+      expect(mockBillUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appointmentDue: 0, // Should be 0, not negative
+          totalDue: 0, // Should be 0, not negative
+        })
+      );
+    });
+
+    it("should not subtract from bill when deleting a paid appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockBillUpdate = jest.fn().mockResolvedValue(true);
+      UserBills.findOne.mockResolvedValue({
+        dataValues: {
+          cancellationFee: 0,
+          appointmentDue: 300,
+          totalDue: 300,
+        },
+        update: mockBillUpdate,
+      });
+
+      UserAppointments.findOne.mockResolvedValue({
+        dataValues: { price: "150", paid: true, homeId: 1, date: "2025-01-15" }, // Already paid
+      });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      UserAppointments.destroy.mockResolvedValue(1);
+
+      const res = await request(app)
+        .delete("/api/v1/appointments/1")
+        .send({ fee: 0, user: token });
+
+      expect(res.status).toBe(201);
+      expect(mockBillUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appointmentDue: 300, // Should remain unchanged since appointment was paid
+          totalDue: 300,
+        })
+      );
+    });
+
+    it("should correctly subtract when deleting unpaid appointment with sufficient balance", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockBillUpdate = jest.fn().mockResolvedValue(true);
+      UserBills.findOne.mockResolvedValue({
+        dataValues: {
+          cancellationFee: 25,
+          appointmentDue: 300,
+          totalDue: 325,
+        },
+        update: mockBillUpdate,
+      });
+
+      UserAppointments.findOne.mockResolvedValue({
+        dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
+      });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      UserAppointments.destroy.mockResolvedValue(1);
+
+      const res = await request(app)
+        .delete("/api/v1/appointments/1")
+        .send({ fee: 0, user: token });
+
+      expect(res.status).toBe(201);
+      expect(mockBillUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appointmentDue: 150, // 300 - 150
+          totalDue: 175, // 25 + 150
+        })
+      );
+    });
+
+    it("should add cancellation fee while ensuring balance stays non-negative", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockBillUpdate = jest.fn().mockResolvedValue(true);
+      UserBills.findOne.mockResolvedValue({
+        dataValues: {
+          cancellationFee: 0,
+          appointmentDue: 100, // Less than appointment price
+          totalDue: 100,
+        },
+        update: mockBillUpdate,
+      });
+
+      UserAppointments.findOne.mockResolvedValue({
+        dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
+      });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      UserAppointments.destroy.mockResolvedValue(1);
+
+      const res = await request(app)
+        .delete("/api/v1/appointments/1")
+        .send({ fee: 25, user: token }); // Adding cancellation fee
+
+      expect(res.status).toBe(201);
+      expect(mockBillUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cancellationFee: 25,
+          appointmentDue: 0, // Max of (100 - 150, 0) = 0
+          totalDue: 25, // Max of (25 + 0, 0) = 25
+        })
+      );
+    });
+
+    it("should handle deleting appointment when bill is already at zero", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockBillUpdate = jest.fn().mockResolvedValue(true);
+      UserBills.findOne.mockResolvedValue({
+        dataValues: {
+          cancellationFee: 0,
+          appointmentDue: 0,
+          totalDue: 0,
+        },
+        update: mockBillUpdate,
+      });
+
+      UserAppointments.findOne.mockResolvedValue({
+        dataValues: { price: "150", paid: false, homeId: 1, date: "2025-01-15" },
+      });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
+      UserAppointments.destroy.mockResolvedValue(1);
+
+      const res = await request(app)
+        .delete("/api/v1/appointments/1")
+        .send({ fee: 0, user: token });
+
+      expect(res.status).toBe(201);
+      expect(mockBillUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appointmentDue: 0,
+          totalDue: 0,
+        })
+      );
     });
   });
 

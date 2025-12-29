@@ -15,6 +15,7 @@ require("./passport-config");
 
 const rootRouter = require("./routes/rootRouter");
 const { startPeriodicSync } = require("./services/calendarSyncService");
+const { startBillingScheduler } = require("./services/billingService");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -34,7 +35,7 @@ const secretKey = process.env.SESSION_SECRET;
 // Rate limiters for API security
 const apiLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 100, // 100 requests per window
+	max: 10000, // 10000 requests per window
 	message: { error: "Too many requests, please try again later" },
 	standardHeaders: true,
 	legacyHeaders: false,
@@ -42,7 +43,7 @@ const apiLimiter = rateLimit({
 
 const authLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 5, // 5 attempts per 15 minutes
+	max: 10, // 10 login attempts per 15 minutes
 	message: { error: "Too many login attempts, please try again later" },
 	standardHeaders: true,
 	legacyHeaders: false,
@@ -188,5 +189,6 @@ server.listen(port, () => {
 	// Only in non-test environment
 	if (process.env.NODE_ENV !== "test") {
 		startPeriodicSync(60 * 60 * 1000); // 1 hour
+		startBillingScheduler(); // Monthly interest on unpaid fees
 	}
 });

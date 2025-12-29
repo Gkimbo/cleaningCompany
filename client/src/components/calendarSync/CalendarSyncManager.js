@@ -56,6 +56,7 @@ const CalendarSyncManager = ({ state, dispatch }) => {
   const [newUrl, setNewUrl] = useState("");
   const [daysAfterCheckout, setDaysAfterCheckout] = useState("0");
   const [autoCreate, setAutoCreate] = useState(true);
+  const [autoSync, setAutoSync] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [syncingId, setSyncingId] = useState(null);
@@ -72,7 +73,7 @@ const CalendarSyncManager = ({ state, dispatch }) => {
     try {
       const response = await fetch(`${baseURL}/api/v1/calendar-sync/home/${homeId}`, {
         headers: {
-          Authorization: `Bearer ${user}`,
+          Authorization: `Bearer ${user?.token}`,
         },
       });
       const data = await response.json();
@@ -100,13 +101,14 @@ const CalendarSyncManager = ({ state, dispatch }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${user}`,
+          Authorization: `Bearer ${user?.token}`,
         },
         body: JSON.stringify({
           homeId: Number(homeId),
           icalUrl: newUrl.trim(),
           autoCreateAppointments: autoCreate,
           daysAfterCheckout: parseInt(daysAfterCheckout) || 0,
+          autoSync: autoSync,
         }),
       });
 
@@ -134,7 +136,7 @@ const CalendarSyncManager = ({ state, dispatch }) => {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${user}`,
+          Authorization: `Bearer ${user?.token}`,
         },
         body: JSON.stringify({ isActive: !isActive }),
       });
@@ -161,7 +163,7 @@ const CalendarSyncManager = ({ state, dispatch }) => {
               const response = await fetch(`${baseURL}/api/v1/calendar-sync/${syncId}`, {
                 method: "DELETE",
                 headers: {
-                  Authorization: `Bearer ${user}`,
+                  Authorization: `Bearer ${user?.token}`,
                 },
               });
 
@@ -184,7 +186,7 @@ const CalendarSyncManager = ({ state, dispatch }) => {
       const response = await fetch(`${baseURL}/api/v1/calendar-sync/${syncId}/sync`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${user}`,
+          Authorization: `Bearer ${user?.token}`,
         },
       });
 
@@ -298,6 +300,9 @@ const CalendarSyncManager = ({ state, dispatch }) => {
                   <Text style={styles.syncDetailText}>
                     Auto-create appointments: {sync.autoCreateAppointments ? "Yes" : "No"}
                   </Text>
+                  <Text style={styles.syncDetailText}>
+                    Auto-sync every hour: {sync.autoSync ? "Yes" : "No"}
+                  </Text>
                 </View>
 
                 <View style={styles.syncActions}>
@@ -401,6 +406,21 @@ const CalendarSyncManager = ({ state, dispatch }) => {
             </View>
             <View style={[styles.toggleSwitch, autoCreate && styles.toggleSwitchActive]}>
               <View style={[styles.toggleSwitchKnob, autoCreate && styles.toggleSwitchKnobActive]} />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.toggleCard, autoSync && styles.toggleCardActive]}
+            onPress={() => setAutoSync(!autoSync)}
+          >
+            <View style={styles.toggleCardContent}>
+              <Text style={styles.toggleCardTitle}>Auto-sync every hour</Text>
+              <Text style={styles.toggleCardDescription}>
+                Automatically check for new bookings and update appointments every hour
+              </Text>
+            </View>
+            <View style={[styles.toggleSwitch, autoSync && styles.toggleSwitchActive]}>
+              <View style={[styles.toggleSwitchKnob, autoSync && styles.toggleSwitchKnobActive]} />
             </View>
           </TouchableOpacity>
 

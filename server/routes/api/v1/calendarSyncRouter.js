@@ -84,7 +84,7 @@ calendarSyncRouter.get("/home/:homeId", verifyToken, async (req, res) => {
 
 // Add a new calendar sync
 calendarSyncRouter.post("/", verifyToken, async (req, res) => {
-  const { homeId, icalUrl, autoCreateAppointments, daysAfterCheckout } = req.body;
+  const { homeId, icalUrl, autoCreateAppointments, daysAfterCheckout, autoSync } = req.body;
 
   try {
     // Validate required fields
@@ -142,6 +142,7 @@ calendarSyncRouter.post("/", verifyToken, async (req, res) => {
       autoCreateAppointments: autoCreateAppointments !== false,
       daysAfterCheckout: daysAfterCheckout || 0,
       syncedEventUids: [],
+      autoSync: autoSync === true,
     });
 
     return res.status(201).json({
@@ -158,7 +159,7 @@ calendarSyncRouter.post("/", verifyToken, async (req, res) => {
 // Update a calendar sync
 calendarSyncRouter.patch("/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { isActive, autoCreateAppointments, daysAfterCheckout } = req.body;
+  const { isActive, autoCreateAppointments, daysAfterCheckout, autoSync } = req.body;
 
   try {
     const sync = await CalendarSync.findOne({
@@ -173,6 +174,7 @@ calendarSyncRouter.patch("/:id", verifyToken, async (req, res) => {
     if (typeof isActive === "boolean") updates.isActive = isActive;
     if (typeof autoCreateAppointments === "boolean") updates.autoCreateAppointments = autoCreateAppointments;
     if (typeof daysAfterCheckout === "number") updates.daysAfterCheckout = daysAfterCheckout;
+    if (typeof autoSync === "boolean") updates.autoSync = autoSync;
 
     await sync.update(updates);
 
@@ -234,23 +236,31 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
 
     const home = sync.home;
     const syncedUids = sync.syncedEventUids || [];
+    const deletedDates = sync.deletedDates || [];
     const newAppointments = [];
     const newSyncedUids = [...syncedUids];
+    const newDeletedDates = [...deletedDates];
 
     // Process checkout dates and create appointments
     if (sync.autoCreateAppointments) {
       for (const checkout of checkoutDates) {
-        // Skip if already synced
-        if (syncedUids.includes(checkout.uid)) {
-          continue;
-        }
-
         // Calculate the cleaning date based on daysAfterCheckout setting
         const checkoutDate = new Date(checkout.checkoutDate);
         const cleaningDate = new Date(checkoutDate);
         cleaningDate.setDate(cleaningDate.getDate() + sync.daysAfterCheckout);
 
         const cleaningDateStr = cleaningDate.toISOString().split("T")[0];
+
+        // If this date was previously deleted but still exists in external calendar,
+        // remove it from deletedDates so we can recreate the appointment
+        // (user is manually syncing, so they want to restore deleted appointments)
+        if (deletedDates.includes(cleaningDateStr)) {
+          const deleteIndex = newDeletedDates.indexOf(cleaningDateStr);
+          if (deleteIndex > -1) {
+            newDeletedDates.splice(deleteIndex, 1);
+            console.log(`[Calendar Sync] Removing ${cleaningDateStr} from deletedDates - will recreate appointment`);
+          }
+        }
 
         // Check if appointment already exists for this date
         const existingAppointment = await UserAppointments.findOne({
@@ -262,8 +272,18 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
 
         if (existingAppointment) {
           // Mark as synced even if appointment exists
-          newSyncedUids.push(checkout.uid);
+          if (!newSyncedUids.includes(checkout.uid)) {
+            newSyncedUids.push(checkout.uid);
+          }
           continue;
+        }
+
+        // If already synced but appointment no longer exists, we need to recreate it
+        // (user manually deleted the appointment)
+        const wasPreviouslySynced = syncedUids.includes(checkout.uid);
+        if (wasPreviouslySynced) {
+          // Appointment was deleted - will recreate below
+          console.log(`[Calendar Sync] Recreating deleted appointment for ${cleaningDateStr}`);
         }
 
         // Calculate price based on home details
@@ -281,14 +301,14 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
         });
 
         if (existingBill) {
-          const oldAppt = existingBill.dataValues.appointmentDue;
-          const total =
-            existingBill.dataValues.cancellationFee +
-            existingBill.dataValues.appointmentDue;
+          const oldAppt = Number(existingBill.dataValues.appointmentDue) || 0;
+          const cancellationFee = Number(existingBill.dataValues.cancellationFee) || 0;
+          const total = cancellationFee + oldAppt;
+          const priceNum = Number(price) || 0;
 
           await existingBill.update({
-            appointmentDue: oldAppt + price,
-            totalDue: total + price,
+            appointmentDue: oldAppt + priceNum,
+            totalDue: total + priceNum,
           });
         }
 
@@ -316,7 +336,9 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
           source: checkout.summary || `${sync.platform} booking`,
         });
 
-        newSyncedUids.push(checkout.uid);
+        if (!newSyncedUids.includes(checkout.uid)) {
+          newSyncedUids.push(checkout.uid);
+        }
       }
     }
 
@@ -326,6 +348,7 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
       lastSyncStatus: "success",
       lastSyncError: null,
       syncedEventUids: newSyncedUids,
+      deletedDates: newDeletedDates,
     });
 
     return res.status(200).json({

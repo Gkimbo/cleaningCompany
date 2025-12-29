@@ -67,10 +67,15 @@ class FetchData {
     }
   }
 
-  static async getApplicationsFromBackend() {
+  static async getApplicationsFromBackend(token) {
     try {
       const response = await fetch(
-        baseURL + `/api/v1/applications/all-applications`
+        baseURL + `/api/v1/applications/all-applications`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       if (!response.ok) {
         throw new Error("No data received");
@@ -400,6 +405,8 @@ class FetchData {
           requiresAcknowledgment: responseData.requiresAcknowledgment,
           isLargeHome: responseData.isLargeHome,
           hasTimeConstraint: responseData.hasTimeConstraint,
+          requiresStripeSetup: responseData.requiresStripeSetup,
+          stripeAccountStatus: responseData.stripeAccountStatus,
           message: responseData.message,
         };
       }
@@ -685,6 +692,9 @@ class FetchData {
   }
 
   static async getRequestCountsByHome(token) {
+    if (!token) {
+      return { requestCountsByHome: {} };
+    }
     try {
       const response = await fetch(baseURL + "/api/v1/appointments/requests-by-home", {
         headers: {
@@ -705,6 +715,9 @@ class FetchData {
   }
 
   static async getRequestsForHome(token, homeId) {
+    if (!token) {
+      return { requests: [] };
+    }
     try {
       const response = await fetch(baseURL + `/api/v1/appointments/requests-for-home/${homeId}`, {
         headers: {

@@ -1,5 +1,18 @@
 const reducer = (state, action) => {
   switch (action.type) {
+    case "LOGOUT":
+      return {
+        ...state,
+        account: null,
+        currentUser: { token: null, id: null, email: null },
+        homes: [],
+        appointments: [],
+        bill: { cancellationFee: 0, totalPaid: 0 },
+        requests: [],
+        conversations: [],
+        currentMessages: [],
+        unreadCount: 0,
+      };
     case "ERROR":
       return {
         ...state,
@@ -175,6 +188,22 @@ const reducer = (state, action) => {
         conversations: state.conversations.map((conv) =>
           conv.conversationId === action.payload.conversationId
             ? { ...conv, unreadCount: action.payload.unreadCount }
+            : conv
+        ),
+      };
+    case "REMOVE_CONVERSATION":
+      return {
+        ...state,
+        conversations: state.conversations.filter(
+          (conv) => conv.conversationId !== action.payload
+        ),
+      };
+    case "UPDATE_CONVERSATION_TITLE":
+      return {
+        ...state,
+        conversations: state.conversations.map((conv) =>
+          conv.conversationId === action.payload.conversationId
+            ? { ...conv, conversation: { ...conv.conversation, title: action.payload.title } }
             : conv
         ),
       };

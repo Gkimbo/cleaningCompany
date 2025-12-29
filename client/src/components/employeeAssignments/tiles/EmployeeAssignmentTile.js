@@ -70,14 +70,17 @@ const EmployeeAssignmentTile = ({
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
   const kilometers = distance ? distance.toFixed(1) : null;
 
-  const timeOptions = {
-    anytime: "anytime",
-    "10-3": "Between 10am and 3pm",
-    "11-4": "Between 11am and 4pm",
-    "12-2": "Between 12pm and 2pm",
+  const formatTimeWindow = (time) => {
+    if (!time || time === "anytime") {
+      return "Anytime today";
+    }
+    // time format is "10-3", "11-4", "12-2"
+    const endHour = parseInt(time.split("-")[1], 10);
+    const period = endHour >= 12 ? "PM" : "AM";
+    return `Must complete by ${endHour}${period}`;
   };
 
-  const formattedTime = timeOptions[timeToBeCompleted] || null;
+  const formattedTime = formatTimeWindow(timeToBeCompleted);
 
   // Handle opening cancellation modal
   const handleCancelPress = async () => {
@@ -141,10 +144,9 @@ const EmployeeAssignmentTile = ({
       <Pressable onPress={expandWindow ? contractDetails : expandDetails}>
         <Text style={styles.date}>{formatDate(date)}</Text>
 
-        {formattedTime && (
+        {timeToBeCompleted && (
           <View style={styles.timeContainer}>
-            <Text style={styles.timeLabel}>Time to complete:</Text>
-            <Text style={styles.timeText}>{`${formattedTime} on ${formatDate(date)}`}</Text>
+            <Text style={styles.timeText}>{formattedTime}</Text>
           </View>
         )}
 
@@ -157,7 +159,7 @@ const EmployeeAssignmentTile = ({
         <View style={styles.distanceContainer}>
           {distance !== null ? (
             <>
-              <Text style={styles.distanceLabel}>Distance to the center of town:</Text>
+              <Text style={styles.distanceLabel}>Distance to home:</Text>
               <Text style={styles.distanceValue}>
                 {miles} mi <Text style={styles.distanceKm}>({kilometers} km)</Text>
               </Text>

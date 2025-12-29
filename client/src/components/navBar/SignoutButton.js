@@ -19,8 +19,7 @@ const SignOutButton = ({ dispatch }) => {
 
       if (response.ok) {
         await AsyncStorage.removeItem("token");
-        dispatch({ type: "CURRENT_USER", payload: null });
-        dispatch({ type: "USER_ACCOUNT", payload: null });
+        dispatch({ type: "LOGOUT" });
         navigate("/");
       } else {
         console.error("Failed to log out");
