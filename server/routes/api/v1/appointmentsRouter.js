@@ -30,6 +30,9 @@ const secretKey = process.env.SESSION_SECRET;
 // Static pricing config (used as fallback, prefer getPricingConfig() for database values)
 const { pricing } = businessConfig;
 
+// Store pending linens update email timeouts to debounce multiple rapid updates
+const pendingLinensEmailTimeouts = new Map();
+
 appointmentRouter.get("/unassigned", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -748,6 +751,12 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
       return res.status(403).json({ error: "Not authorized to update this appointment" });
     }
 
+    // Capture previous linens values for comparison in email
+    const previousLinens = {
+      bringSheets: appointment.dataValues.bringSheets,
+      bringTowels: appointment.dataValues.bringTowels,
+    };
+
     // Get home info to recalculate price
     const home = await UserHomes.findOne({
       where: { id: appointment.dataValues.homeId },
@@ -773,6 +782,83 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
       bringTowels,
       newPrice,
     });
+
+    // If appointment has been assigned, send delayed email to assigned cleaner
+    if (appointment.dataValues.hasBeenAssigned) {
+      // Find the assigned cleaner via UserCleanerAppointments
+      const cleanerAppointment = await UserCleanerAppointments.findOne({
+        where: { appointmentId: id },
+      });
+
+      if (cleanerAppointment) {
+        const cleaner = await User.findByPk(cleanerAppointment.dataValues.employeeId);
+        const homeowner = await User.findByPk(appointment.dataValues.userId);
+
+        if (cleaner && homeowner) {
+          // Get pricing config for fee calculation
+          const pricingConfig = await getPricingConfig();
+          const cleanerSharePercent = 1 - (pricingConfig.platform?.feePercent || 0.1);
+          const cleanerPayout = Number(newPrice) * cleanerSharePercent;
+
+          const linensConfig = {
+            bringSheets,
+            bringTowels,
+            sheetConfigurations,
+            towelConfigurations,
+            previousBringSheets: previousLinens.bringSheets,
+            previousBringTowels: previousLinens.bringTowels,
+          };
+
+          // Cancel any existing pending email for this appointment (debounce)
+          if (pendingLinensEmailTimeouts.has(id)) {
+            clearTimeout(pendingLinensEmailTimeouts.get(id));
+            console.log(`[Linens Update] Cancelled previous pending email for appointment ${id}`);
+          }
+
+          // Capture original previous values for the email (before any updates in this session)
+          const originalPreviousLinens = { ...previousLinens };
+
+          // 1-minute delay before sending email to allow for multiple quick updates
+          const timeoutId = setTimeout(async () => {
+            try {
+              // Remove from pending map
+              pendingLinensEmailTimeouts.delete(id);
+
+              // Re-fetch appointment to get latest data in case of more updates
+              const latestAppointment = await UserAppointments.findByPk(id);
+              if (latestAppointment) {
+                const latestLinensConfig = {
+                  bringSheets: latestAppointment.dataValues.bringSheets,
+                  bringTowels: latestAppointment.dataValues.bringTowels,
+                  sheetConfigurations: latestAppointment.dataValues.sheetConfigurations,
+                  towelConfigurations: latestAppointment.dataValues.towelConfigurations,
+                  // Include previous values to show what was removed
+                  previousBringSheets: originalPreviousLinens.bringSheets,
+                  previousBringTowels: originalPreviousLinens.bringTowels,
+                };
+                const latestPayout = Number(latestAppointment.dataValues.price) * cleanerSharePercent;
+
+                await Email.sendLinensConfigurationUpdated(
+                  cleaner.dataValues.email,
+                  cleaner.dataValues.username,
+                  homeowner.dataValues.username,
+                  latestAppointment.dataValues.date,
+                  latestPayout,
+                  latestLinensConfig
+                );
+                console.log(`[Linens Update] Email sent to cleaner ${cleaner.dataValues.email} for appointment ${id}`);
+              }
+            } catch (emailError) {
+              console.error(`[Linens Update] Failed to send email for appointment ${id}:`, emailError);
+              pendingLinensEmailTimeouts.delete(id);
+            }
+          }, 60000); // 1 minute = 60000ms
+
+          // Store the timeout ID so we can cancel it if another update comes in
+          pendingLinensEmailTimeouts.set(id, timeoutId);
+        }
+      }
+    }
 
     const serializedAppointment = AppointmentSerializer.serializeOne(updatedAppointment);
     return res.status(200).json({ appointment: serializedAppointment });
@@ -1350,12 +1436,19 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
           state: home.dataValues.state,
           zipcode: home.dataValues.zipcode,
         };
+        const linensConfig = {
+          bringSheets: appointment.dataValues.bringSheets,
+          bringTowels: appointment.dataValues.bringTowels,
+          sheetConfigurations: appointment.dataValues.sheetConfigurations,
+          towelConfigurations: appointment.dataValues.towelConfigurations,
+        };
         await Email.sendRequestApproved(
           cleaner.dataValues.email,
           cleaner.dataValues.username,
           homeowner.dataValues.username,
           address,
-          appointment.dataValues.date
+          appointment.dataValues.date,
+          linensConfig
         );
 
         // Send push notification to cleaner

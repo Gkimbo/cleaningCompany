@@ -567,17 +567,22 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
   },
 
   // Sections
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing["2xl"],
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
   },
   sectionTitleRow: {
     flexDirection: "row",
@@ -608,11 +613,13 @@ const styles = StyleSheet.create({
 
   // Tile Wrapper
   tileWrapper: {
-    marginBottom: spacing.sm,
-    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
+    borderRadius: radius.xl,
     overflow: "hidden",
     backgroundColor: colors.neutral[0],
-    ...shadows.sm,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
   },
 
   // Empty State

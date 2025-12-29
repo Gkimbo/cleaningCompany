@@ -262,15 +262,87 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
           </View>
         </View>
 
-        <View style={styles.requirementsRow}>
-          {appointment.bringSheets === "Yes" && (
-            <View style={styles.requirementBadge}>
-              <Text style={styles.requirementText}>Bring Sheets</Text>
+        {/* Linens Section */}
+        <View style={styles.linensContainer}>
+          <View style={styles.linensHeader}>
+            <Icon name="th-large" size={14} color={colors.primary[600]} />
+            <Text style={styles.linensTitle}>Linens</Text>
+          </View>
+          {appointment.bringSheets === "Yes" || appointment.bringSheets === "yes" ||
+           appointment.bringTowels === "Yes" || appointment.bringTowels === "yes" ? (
+            <View style={styles.linensContent}>
+              <View style={styles.bringLinensAlert}>
+                <Icon name="exclamation-circle" size={14} color={colors.warning[600]} />
+                <Text style={styles.bringLinensText}>You need to bring:</Text>
+              </View>
+
+              {/* Sheet Details */}
+              {(appointment.bringSheets === "Yes" || appointment.bringSheets === "yes") && (
+                <View style={styles.linensSection}>
+                  <Text style={styles.linensSectionTitle}>Sheets</Text>
+                  {appointment.sheetConfigurations && appointment.sheetConfigurations.length > 0 ? (
+                    <View style={styles.linensItemsRow}>
+                      {appointment.sheetConfigurations.filter(bed => bed.needsSheets !== false).map((bed, index) => (
+                        <View key={index} style={styles.linensDetailItem}>
+                          <Icon name="check" size={10} color={colors.warning[600]} />
+                          <Text style={styles.linensDetailText}>
+                            Bed {bed.bedNumber}: {bed.size ? bed.size.charAt(0).toUpperCase() + bed.size.slice(1) : "Standard"} sheets
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.linensItemsRow}>
+                      <View style={styles.linensDetailItem}>
+                        <Icon name="check" size={10} color={colors.warning[600]} />
+                        <Text style={styles.linensDetailText}>
+                          {home.numBeds || "All"} set{home.numBeds !== "1" ? "s" : ""} of sheets
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Towel Details */}
+              {(appointment.bringTowels === "Yes" || appointment.bringTowels === "yes") && (
+                <View style={styles.linensSection}>
+                  <Text style={styles.linensSectionTitle}>Towels</Text>
+                  {appointment.towelConfigurations && appointment.towelConfigurations.length > 0 ? (
+                    <View style={styles.linensItemsRow}>
+                      {appointment.towelConfigurations.map((bath, index) => (
+                        <View key={index} style={styles.linensDetailItem}>
+                          <Icon name="check" size={10} color={colors.warning[600]} />
+                          <Text style={styles.linensDetailText}>
+                            Bathroom {bath.bathroomNumber}: {bath.towels || 0} towel{(bath.towels || 0) !== 1 ? "s" : ""}, {bath.faceCloths || 0} washcloth{(bath.faceCloths || 0) !== 1 ? "s" : ""}
+                          </Text>
+                        </View>
+                      ))}
+                      <View style={styles.linensTotalRow}>
+                        <Text style={styles.linensTotalText}>
+                          Total: {appointment.towelConfigurations.reduce((sum, b) => sum + (b.towels || 0), 0)} towels, {appointment.towelConfigurations.reduce((sum, b) => sum + (b.faceCloths || 0), 0)} washcloths
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.linensItemsRow}>
+                      <View style={styles.linensDetailItem}>
+                        <Icon name="check" size={10} color={colors.warning[600]} />
+                        <Text style={styles.linensDetailText}>
+                          Towels for {home.numBaths || "all"} bathroom{home.numBaths !== "1" ? "s" : ""}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
-          )}
-          {appointment.bringTowels === "Yes" && (
-            <View style={styles.requirementBadge}>
-              <Text style={styles.requirementText}>Bring Towels</Text>
+          ) : (
+            <View style={styles.linensProvidedContent}>
+              <Icon name="check-circle" size={14} color={colors.success[600]} />
+              <Text style={styles.linensProvidedText}>
+                Sheets and towels will be provided
+              </Text>
             </View>
           )}
         </View>
@@ -441,23 +513,81 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
   },
-  requirementsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    flexWrap: "wrap",
-    gap: spacing.sm,
+  linensContainer: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
     marginBottom: spacing.md,
+    width: "100%",
   },
-  requirementBadge: {
-    backgroundColor: colors.warning[100],
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
+  linensHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  requirementText: {
-    fontSize: typography.fontSize.xs,
+  linensTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  linensContent: {
+    gap: spacing.sm,
+  },
+  bringLinensAlert: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  bringLinensText: {
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
-    color: colors.warning[800],
+    color: colors.warning[700],
+  },
+  linensSection: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  linensSectionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+    marginBottom: spacing.xs,
+  },
+  linensItemsRow: {
+    gap: spacing.xs,
+  },
+  linensDetailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: 2,
+  },
+  linensDetailText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  linensTotalRow: {
+    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[200],
+  },
+  linensTotalText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  linensProvidedContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  linensProvidedText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
   },
   amount: {
     fontSize: typography.fontSize.xl,

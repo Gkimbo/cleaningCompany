@@ -805,18 +805,81 @@ Kleanr Support Team`;
     }
   }
 
-  static async sendRequestApproved(email, cleanerName, homeownerName, address, appointmentDate) {
+  static async sendRequestApproved(email, cleanerName, homeownerName, address, appointmentDate, linensConfig = {}) {
     try {
       const transporter = createTransporter();
       // Only show city, state, and zip code - full address shown in app on day of appointment
       const locationInfo = `${address.city}, ${address.state} ${address.zipcode}`;
+
+      // Build linens section if cleaner needs to bring sheets/towels
+      const { bringSheets, bringTowels, sheetConfigurations, towelConfigurations } = linensConfig;
+      const needsLinens = bringSheets === "yes" || bringTowels === "yes";
+
+      let linensHtml = "";
+      let linensText = "";
+
+      if (needsLinens) {
+        linensHtml = `<div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <div style="font-size: 16px; font-weight: bold; color: #92400e; margin-bottom: 12px;">⚠️ Linens You Need to Bring</div>`;
+        linensText = "\n\nLINENS YOU NEED TO BRING\n━━━━━━━━━━━━━━━━━━━━━━\n";
+
+        if (bringSheets === "yes") {
+          linensHtml += `<div style="margin-bottom: 12px;">
+            <div style="font-weight: 600; color: #78350f; margin-bottom: 6px;">🛏️ Sheets:</div>`;
+          linensText += "SHEETS:\n";
+
+          if (sheetConfigurations && sheetConfigurations.length > 0) {
+            sheetConfigurations.filter(bed => bed.needsSheets !== false).forEach(bed => {
+              const size = bed.size ? bed.size.charAt(0).toUpperCase() + bed.size.slice(1) : "Standard";
+              linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Bed ${bed.bedNumber}: ${size} sheets</div>`;
+              linensText += `  • Bed ${bed.bedNumber}: ${size} sheets\n`;
+            });
+          } else {
+            linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Sheets needed (check app for details)</div>`;
+            linensText += "  • Sheets needed (check app for details)\n";
+          }
+          linensHtml += "</div>";
+        }
+
+        if (bringTowels === "yes") {
+          linensHtml += `<div style="margin-bottom: 8px;">
+            <div style="font-weight: 600; color: #78350f; margin-bottom: 6px;">🛁 Towels:</div>`;
+          linensText += "TOWELS:\n";
+
+          if (towelConfigurations && towelConfigurations.length > 0) {
+            let totalTowels = 0;
+            let totalWashcloths = 0;
+            towelConfigurations.forEach(bath => {
+              const towels = bath.towels || 0;
+              const washcloths = bath.faceCloths || 0;
+              totalTowels += towels;
+              totalWashcloths += washcloths;
+              linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Bathroom ${bath.bathroomNumber}: ${towels} towel${towels !== 1 ? 's' : ''}, ${washcloths} washcloth${washcloths !== 1 ? 's' : ''}</div>`;
+              linensText += `  • Bathroom ${bath.bathroomNumber}: ${towels} towel${towels !== 1 ? 's' : ''}, ${washcloths} washcloth${washcloths !== 1 ? 's' : ''}\n`;
+            });
+            linensHtml += `<div style="color: #78350f; padding-left: 16px; font-weight: 600; margin-top: 6px;">Total: ${totalTowels} towels, ${totalWashcloths} washcloths</div>`;
+            linensText += `  Total: ${totalTowels} towels, ${totalWashcloths} washcloths\n`;
+          } else {
+            linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Towels needed (check app for details)</div>`;
+            linensText += "  • Towels needed (check app for details)\n";
+          }
+          linensHtml += "</div>";
+        }
+
+        linensHtml += "</div>";
+      } else {
+        linensHtml = `<div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 16px; margin: 20px 0; border-left: 4px solid #10b981;">
+          <div style="color: #065f46;"><span style="font-weight: 600;">✓ Linens Provided:</span> Sheets and towels will be provided at the home</div>
+        </div>`;
+        linensText = "\n\n✓ LINENS PROVIDED: Sheets and towels will be provided at the home\n";
+      }
 
       const htmlContent = createEmailTemplate({
         title: "Request Approved! 🎉",
         subtitle: "You've got a cleaning job",
         headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
         greeting: `Congratulations, ${cleanerName}! 🎊`,
-        content: `<p>Great news! <strong>${homeownerName}</strong> has approved your request to clean their home. You're all set for your upcoming appointment!</p>`,
+        content: `<p>Great news! <strong>${homeownerName}</strong> has approved your request to clean their home. You're all set for your upcoming appointment!</p>${linensHtml}`,
         infoBox: {
           icon: "📍",
           title: "Appointment Details",
@@ -853,7 +916,7 @@ Homeowner: ${homeownerName}
 Location: ${locationInfo}
 Date: ${formatDate(appointmentDate)}
 Status: ✅ Approved
-
+${linensText}
 Note: The full address will be available in the app on the day of your appointment.
 
 BEFORE YOUR APPOINTMENT
@@ -881,6 +944,152 @@ Kleanr Support Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending request approved email:", error);
+    }
+  }
+
+  static async sendLinensConfigurationUpdated(email, cleanerName, homeownerName, appointmentDate, payout, linensConfig = {}) {
+    try {
+      const transporter = createTransporter();
+      const { bringSheets, bringTowels, sheetConfigurations, towelConfigurations, previousBringSheets, previousBringTowels } = linensConfig;
+      const needsLinens = bringSheets === "yes" || bringTowels === "yes";
+
+      // Check what was removed
+      const sheetsRemoved = previousBringSheets === "yes" && bringSheets !== "yes";
+      const towelsRemoved = previousBringTowels === "yes" && bringTowels !== "yes";
+      const somethingRemoved = sheetsRemoved || towelsRemoved;
+
+      let linensHtml = "";
+      let linensText = "";
+
+      // Show removed items first (good news!)
+      if (somethingRemoved) {
+        linensHtml += `<div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 16px; margin: 20px 0; border-left: 4px solid #10b981;">
+          <div style="font-size: 16px; font-weight: bold; color: #065f46; margin-bottom: 8px;">✓ Good News!</div>`;
+        linensText += "\n\n✓ GOOD NEWS!\n━━━━━━━━━━━━━━━━━━━━━━\n";
+
+        if (sheetsRemoved) {
+          linensHtml += `<div style="color: #065f46; padding-left: 8px;">• You no longer need to bring sheets - they will be provided</div>`;
+          linensText += "• You no longer need to bring sheets - they will be provided\n";
+        }
+        if (towelsRemoved) {
+          linensHtml += `<div style="color: #065f46; padding-left: 8px;">• You no longer need to bring towels - they will be provided</div>`;
+          linensText += "• You no longer need to bring towels - they will be provided\n";
+        }
+        linensHtml += "</div>";
+      }
+
+      // Show current requirements if any linens are still needed
+      if (needsLinens) {
+        linensHtml += `<div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <div style="font-size: 16px; font-weight: bold; color: #92400e; margin-bottom: 12px;">🛏️ ${somethingRemoved ? 'Still Required' : 'Updated Linens Requirements'}</div>`;
+        linensText += `\n\n${somethingRemoved ? 'STILL REQUIRED' : 'UPDATED LINENS REQUIREMENTS'}\n━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+        if (bringSheets === "yes") {
+          linensHtml += `<div style="margin-bottom: 12px;">
+            <div style="font-weight: 600; color: #78350f; margin-bottom: 6px;">Sheets:</div>`;
+          linensText += "SHEETS:\n";
+
+          if (sheetConfigurations && sheetConfigurations.length > 0) {
+            sheetConfigurations.filter(bed => bed.needsSheets !== false).forEach(bed => {
+              const size = bed.size ? bed.size.charAt(0).toUpperCase() + bed.size.slice(1) : "Standard";
+              linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Bed ${bed.bedNumber}: ${size} sheets</div>`;
+              linensText += `  • Bed ${bed.bedNumber}: ${size} sheets\n`;
+            });
+          } else {
+            linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Sheets needed (check app for details)</div>`;
+            linensText += "  • Sheets needed (check app for details)\n";
+          }
+          linensHtml += "</div>";
+        }
+
+        if (bringTowels === "yes") {
+          linensHtml += `<div style="margin-bottom: 8px;">
+            <div style="font-weight: 600; color: #78350f; margin-bottom: 6px;">Towels:</div>`;
+          linensText += "TOWELS:\n";
+
+          if (towelConfigurations && towelConfigurations.length > 0) {
+            let totalTowels = 0;
+            let totalWashcloths = 0;
+            towelConfigurations.forEach(bath => {
+              const towels = bath.towels || 0;
+              const washcloths = bath.faceCloths || 0;
+              totalTowels += towels;
+              totalWashcloths += washcloths;
+              linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Bathroom ${bath.bathroomNumber}: ${towels} towel${towels !== 1 ? 's' : ''}, ${washcloths} washcloth${washcloths !== 1 ? 's' : ''}</div>`;
+              linensText += `  • Bathroom ${bath.bathroomNumber}: ${towels} towel${towels !== 1 ? 's' : ''}, ${washcloths} washcloth${washcloths !== 1 ? 's' : ''}\n`;
+            });
+            linensHtml += `<div style="color: #78350f; padding-left: 16px; font-weight: 600; margin-top: 6px;">Total: ${totalTowels} towels, ${totalWashcloths} washcloths</div>`;
+            linensText += `  Total: ${totalTowels} towels, ${totalWashcloths} washcloths\n`;
+          } else {
+            linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Towels needed (check app for details)</div>`;
+            linensText += "  • Towels needed (check app for details)\n";
+          }
+          linensHtml += "</div>";
+        }
+
+        linensHtml += "</div>";
+      } else if (!somethingRemoved) {
+        // Only show this if we haven't already shown the "removed" message
+        linensHtml = `<div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 16px; margin: 20px 0; border-left: 4px solid #10b981;">
+          <div style="color: #065f46;"><span style="font-weight: 600;">✓ Updated:</span> Sheets and towels will now be provided at the home - you don't need to bring any!</div>
+        </div>`;
+        linensText = "\n\n✓ UPDATED: Sheets and towels will now be provided at the home - you don't need to bring any!\n";
+      }
+
+      const payoutFormatted = typeof payout === 'number' ? `$${payout.toFixed(2)}` : payout;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Update 📝",
+        subtitle: "Linens requirements have changed",
+        headerColor: "linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)",
+        greeting: `Hi ${cleanerName},`,
+        content: `<p>The homeowner <strong>${homeownerName}</strong> has updated the sheets and towels requirements for your upcoming appointment on <strong>${formatDate(appointmentDate)}</strong>.</p>${linensHtml}`,
+        infoBox: {
+          icon: "💰",
+          title: "Updated Appointment Info",
+          items: [
+            { label: "Your Payout", value: payoutFormatted },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "✅ Still Confirmed" },
+          ],
+        },
+        tipBox: {
+          icon: "📱",
+          text: "Open the app to see the full updated details for this appointment.",
+        },
+        footerMessage: "Thank you for being part of Kleanr",
+      });
+
+      const textContent = `Hi ${cleanerName},
+
+The homeowner ${homeownerName} has updated the sheets and towels requirements for your upcoming appointment.
+
+UPDATED APPOINTMENT INFO
+━━━━━━━━━━━━━━━━━━━━━━
+Your Payout: ${payoutFormatted}
+Date: ${formatDate(appointmentDate)}
+Status: ✅ Still Confirmed
+${linensText}
+Open the app to see the full updated details for this appointment.
+
+Thank you for being part of Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `📝 Appointment Update - Linens changed for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Linens configuration updated email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending linens configuration updated email:", error);
     }
   }
 

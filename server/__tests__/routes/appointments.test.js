@@ -60,6 +60,7 @@ jest.mock("../../services/UserInfoClass", () => ({
   editSheetsInDB: jest.fn().mockResolvedValue({ success: true }),
   editTowelsInDB: jest.fn().mockResolvedValue({ success: true }),
   editCodeKeyInDB: jest.fn().mockResolvedValue({ success: true }),
+  editAppointmentLinensInDB: jest.fn(),
 }));
 
 jest.mock("../../services/CalculatePrice", () =>
@@ -71,7 +72,10 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendEmployeeRequest: jest.fn().mockResolvedValue(true),
   removeRequestEmail: jest.fn().mockResolvedValue(true),
   sendRequestApproved: jest.fn().mockResolvedValue(true),
+  sendLinensConfigurationUpdated: jest.fn().mockResolvedValue(true),
 }));
+
+const Email = require("../../services/sendNotifications/EmailClass");
 
 // Mock stripe
 jest.mock("stripe", () => {
@@ -113,6 +117,8 @@ const {
   UserReviews,
   StripeConnectAccount,
 } = require("../../models");
+
+const UserInfo = require("../../services/UserInfoClass");
 
 describe("Appointment Routes", () => {
   let app;
@@ -1659,6 +1665,430 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("pendingRequestsEmployee");
+    });
+  });
+
+  describe("PATCH /:id/linens", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("should update linens configuration for an appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "150",
+          hasBeenAssigned: false,
+          bringSheets: "no",
+          bringTowels: "no",
+          timeToBeCompleted: 3,
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        },
+      };
+
+      const mockHome = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          numBeds: 2,
+          numBaths: 2,
+        },
+      };
+
+      const mockUpdatedAppointment = {
+        ...mockAppointment,
+        dataValues: {
+          ...mockAppointment.dataValues,
+          bringSheets: "yes",
+          bringTowels: "yes",
+          price: "175",
+          sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }],
+        },
+      };
+
+      UserAppointments.findOne.mockResolvedValue(mockAppointment);
+      UserHomes.findOne.mockResolvedValue(mockHome);
+      UserInfo.editAppointmentLinensInDB.mockResolvedValue(mockUpdatedAppointment);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "yes",
+          sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("appointment");
+      expect(UserInfo.editAppointmentLinensInDB).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "1",
+          bringSheets: "yes",
+          bringTowels: "yes",
+        })
+      );
+    });
+
+    it("should return 401 if no authorization token provided", async () => {
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty("error", "Authorization token required");
+    });
+
+    it("should return 404 if appointment not found", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      UserAppointments.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/999/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(404);
+      expect(res.body).toHaveProperty("error", "Appointment not found");
+    });
+
+    it("should return 403 if user does not own the appointment", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1, // Different from token userId
+          homeId: 1,
+          hasBeenAssigned: false,
+        },
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body).toHaveProperty("error", "Not authorized to update this appointment");
+    });
+
+    it("should schedule delayed email to cleaner when appointment is assigned", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "150",
+          hasBeenAssigned: true,
+          bringSheets: "no",
+          bringTowels: "no",
+          timeToBeCompleted: 3,
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        },
+      };
+
+      const mockHome = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          numBeds: 2,
+          numBaths: 2,
+        },
+      };
+
+      const mockCleaner = {
+        id: 2,
+        dataValues: {
+          id: 2,
+          email: "cleaner@example.com",
+          username: "CleanerMike",
+        },
+      };
+
+      const mockHomeowner = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          username: "HomeownerJohn",
+        },
+      };
+
+      const mockCleanerAppointment = {
+        dataValues: {
+          employeeId: 2,
+          appointmentId: 1,
+        },
+      };
+
+      const mockUpdatedAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "175",
+          hasBeenAssigned: true,
+          bringSheets: "yes",
+          bringTowels: "yes",
+          sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }],
+        },
+      };
+
+      UserAppointments.findOne.mockResolvedValue(mockAppointment);
+      UserAppointments.findByPk.mockResolvedValue(mockUpdatedAppointment);
+      UserHomes.findOne.mockResolvedValue(mockHome);
+      UserCleanerAppointments.findOne.mockResolvedValue(mockCleanerAppointment);
+      User.findByPk
+        .mockResolvedValueOnce(mockCleaner)
+        .mockResolvedValueOnce(mockHomeowner);
+      UserInfo.editAppointmentLinensInDB.mockResolvedValue(mockUpdatedAppointment);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "yes",
+          sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }],
+        });
+
+      expect(res.status).toBe(200);
+
+      // Email should not be sent immediately
+      expect(Email.sendLinensConfigurationUpdated).not.toHaveBeenCalled();
+
+      // Fast-forward 1 minute
+      await jest.advanceTimersByTimeAsync(60000);
+
+      // Now the email should have been sent
+      expect(Email.sendLinensConfigurationUpdated).toHaveBeenCalledWith(
+        "cleaner@example.com",
+        "CleanerMike",
+        "HomeownerJohn",
+        "2025-04-15",
+        expect.any(Number),
+        expect.objectContaining({
+          bringSheets: "yes",
+          bringTowels: "yes",
+        })
+      );
+    });
+
+    it("should not send email if appointment is not assigned", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "150",
+          hasBeenAssigned: false, // Not assigned
+          bringSheets: "no",
+          bringTowels: "no",
+          timeToBeCompleted: 3,
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        },
+      };
+
+      const mockHome = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          numBeds: 2,
+          numBaths: 2,
+        },
+      };
+
+      const mockUpdatedAppointment = {
+        ...mockAppointment,
+        dataValues: {
+          ...mockAppointment.dataValues,
+          bringSheets: "yes",
+        },
+      };
+
+      UserAppointments.findOne.mockResolvedValue(mockAppointment);
+      UserHomes.findOne.mockResolvedValue(mockHome);
+      UserInfo.editAppointmentLinensInDB.mockResolvedValue(mockUpdatedAppointment);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(200);
+
+      // Fast-forward 1 minute
+      await jest.advanceTimersByTimeAsync(60000);
+
+      // Email should NOT have been sent
+      expect(Email.sendLinensConfigurationUpdated).not.toHaveBeenCalled();
+    });
+
+    it("should re-fetch latest appointment data before sending email", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "150",
+          hasBeenAssigned: true,
+          bringSheets: "no",
+          bringTowels: "no",
+          timeToBeCompleted: 3,
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        },
+      };
+
+      const mockHome = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          numBeds: 2,
+          numBaths: 2,
+        },
+      };
+
+      const mockCleaner = {
+        id: 2,
+        dataValues: {
+          id: 2,
+          email: "cleaner@example.com",
+          username: "CleanerMike",
+        },
+      };
+
+      const mockHomeowner = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          username: "HomeownerJohn",
+        },
+      };
+
+      const mockCleanerAppointment = {
+        dataValues: {
+          employeeId: 2,
+          appointmentId: 1,
+        },
+      };
+
+      const mockUpdatedAppointment = {
+        id: 1,
+        dataValues: {
+          ...mockAppointment.dataValues,
+          bringSheets: "yes",
+          price: "175",
+        },
+      };
+
+      // This is the "latest" data that will be fetched after the 1-minute delay
+      const mockLatestAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "200", // Price changed again during the delay
+          hasBeenAssigned: true,
+          bringSheets: "yes",
+          bringTowels: "yes", // Towels also added during the delay
+          sheetConfigurations: [{ bedNumber: 1, size: "king", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 3, faceCloths: 3 }],
+        },
+      };
+
+      UserAppointments.findOne.mockResolvedValue(mockAppointment);
+      UserAppointments.findByPk.mockResolvedValue(mockLatestAppointment);
+      UserHomes.findOne.mockResolvedValue(mockHome);
+      UserCleanerAppointments.findOne.mockResolvedValue(mockCleanerAppointment);
+      User.findByPk
+        .mockResolvedValueOnce(mockCleaner)
+        .mockResolvedValueOnce(mockHomeowner);
+      UserInfo.editAppointmentLinensInDB.mockResolvedValue(mockUpdatedAppointment);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(200);
+
+      // Fast-forward 1 minute
+      await jest.advanceTimersByTimeAsync(60000);
+
+      // Email should use the LATEST data (including towels added during delay)
+      expect(Email.sendLinensConfigurationUpdated).toHaveBeenCalledWith(
+        "cleaner@example.com",
+        "CleanerMike",
+        "HomeownerJohn",
+        "2025-04-15",
+        expect.any(Number),
+        expect.objectContaining({
+          bringSheets: "yes",
+          bringTowels: "yes", // Latest data
+          sheetConfigurations: [{ bedNumber: 1, size: "king", needsSheets: true }],
+        })
+      );
     });
   });
 });

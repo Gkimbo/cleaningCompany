@@ -21,6 +21,8 @@ const EmployeeAssignmentTile = ({
   homeId,
   bringSheets,
   bringTowels,
+  sheetConfigurations,
+  towelConfigurations,
   completed,
   keyPadCode,
   keyLocation,
@@ -70,8 +72,12 @@ const EmployeeAssignmentTile = ({
     if (diffDays < 0) return { label: "Past Due", color: colors.error[600], bgColor: colors.error[50], icon: "exclamation-circle" };
     if (diffDays === 0) return { label: "Today", color: colors.error[500], bgColor: colors.error[50], icon: "clock-o" };
     if (diffDays === 1) return { label: "Tomorrow", color: colors.warning[600], bgColor: colors.warning[50], icon: "clock-o" };
-    if (diffDays <= 7) return { label: `In ${diffDays} days`, color: colors.primary[600], bgColor: colors.primary[50], icon: "calendar" };
-    return { label: "Upcoming", color: colors.text.secondary, bgColor: colors.neutral[100], icon: "calendar-o" };
+    // Within a week - green
+    if (diffDays <= 7) return { label: `In ${diffDays} days`, color: colors.success[600], bgColor: colors.success[50], icon: "calendar" };
+    // Within a month - yellow
+    if (diffDays <= 30) return { label: `In ${diffDays} days`, color: colors.warning[600], bgColor: colors.warning[50], icon: "calendar" };
+    // Further than a month - grey
+    return { label: `In ${diffDays} days`, color: colors.text.secondary, bgColor: colors.neutral[100], icon: "calendar-o" };
   };
 
   const toggleDetails = () => {
@@ -92,6 +98,15 @@ const EmployeeAssignmentTile = ({
     today.setHours(0, 0, 0, 0);
     const appointmentDate = new Date(date + "T00:00:00");
     return appointmentDate.getTime() === today.getTime();
+  };
+
+  const isWithinOneDay = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(date + "T00:00:00");
+    const diffTime = appointmentDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 1; // Today or tomorrow
   };
 
   const formatTimeWindow = (time) => {
@@ -165,8 +180,24 @@ const EmployeeAssignmentTile = ({
   const isAnytimeToday = timeToBeCompleted?.toLowerCase() === "anytime" && isToday();
   const dateStatus = getDateStatus();
 
+  // Get accent color based on status for left border
+  const getAccentColor = () => {
+    if (completed) return colors.success[500];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(date + "T00:00:00");
+    const diffTime = appointmentDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return colors.error[500];
+    if (diffDays === 0) return colors.error[500];
+    if (diffDays === 1) return colors.warning[500];
+    if (diffDays <= 3) return colors.primary[500];
+    return colors.primary[300];
+  };
+
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { borderLeftColor: getAccentColor() }]}>
       <Pressable onPress={toggleDetails} style={styles.cardContent}>
         {/* Header Row */}
         <View style={styles.headerRow}>
@@ -245,25 +276,118 @@ const EmployeeAssignmentTile = ({
         {/* Expanded Details */}
         {(expandWindow || assigned) && (
           <View style={styles.expandedSection}>
-            {/* Access Info for Assigned Jobs */}
-            {assigned && !completed && (keyPadCode || keyLocation) && (
-              <View style={styles.accessInfoContainer}>
-                <Text style={styles.accessTitle}>
-                  <Icon name="key" size={12} color={colors.primary[600]} /> Access Information
-                </Text>
-                {keyPadCode && (
-                  <View style={styles.accessRow}>
-                    <Text style={styles.accessLabel}>Keypad Code:</Text>
-                    <Text style={styles.accessValue}>{keyPadCode}</Text>
-                  </View>
-                )}
-                {keyLocation && (
-                  <View style={styles.accessRow}>
-                    <Text style={styles.accessLabel}>Key Location:</Text>
-                    <Text style={styles.accessValue}>{keyLocation}</Text>
-                  </View>
-                )}
+            {/* Sheets & Towels Info */}
+            <View style={styles.linensContainer}>
+              <View style={styles.linensHeader}>
+                <Icon name="th-large" size={14} color={colors.primary[600]} />
+                <Text style={styles.linensTitle}>Linens</Text>
               </View>
+              {bringSheets === "yes" || bringTowels === "yes" ? (
+                <View style={styles.linensContent}>
+                  <View style={styles.bringLinensAlert}>
+                    <Icon name="exclamation-circle" size={14} color={colors.warning[600]} />
+                    <Text style={styles.bringLinensText}>You need to bring:</Text>
+                  </View>
+
+                  {/* Sheet Details */}
+                  {bringSheets === "yes" && (
+                    <View style={styles.linensSection}>
+                      <Text style={styles.linensSectionTitle}>Sheets</Text>
+                      {sheetConfigurations && sheetConfigurations.length > 0 ? (
+                        <View style={styles.linensItemsRow}>
+                          {sheetConfigurations.filter(bed => bed.needsSheets !== false).map((bed, index) => (
+                            <View key={index} style={styles.linensDetailItem}>
+                              <Icon name="check" size={10} color={colors.warning[600]} />
+                              <Text style={styles.linensDetailText}>
+                                Bed {bed.bedNumber}: {bed.size ? bed.size.charAt(0).toUpperCase() + bed.size.slice(1) : "Standard"} sheets
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={styles.linensItemsRow}>
+                          <View style={styles.linensDetailItem}>
+                            <Icon name="check" size={10} color={colors.warning[600]} />
+                            <Text style={styles.linensDetailText}>
+                              {home.numBeds || "All"} set{home.numBeds !== "1" ? "s" : ""} of sheets
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Towel Details */}
+                  {bringTowels === "yes" && (
+                    <View style={styles.linensSection}>
+                      <Text style={styles.linensSectionTitle}>Towels</Text>
+                      {towelConfigurations && towelConfigurations.length > 0 ? (
+                        <View style={styles.linensItemsRow}>
+                          {towelConfigurations.map((bath, index) => (
+                            <View key={index} style={styles.linensDetailItem}>
+                              <Icon name="check" size={10} color={colors.warning[600]} />
+                              <Text style={styles.linensDetailText}>
+                                Bathroom {bath.bathroomNumber}: {bath.towels || 0} towel{(bath.towels || 0) !== 1 ? "s" : ""}, {bath.faceCloths || 0} washcloth{(bath.faceCloths || 0) !== 1 ? "s" : ""}
+                              </Text>
+                            </View>
+                          ))}
+                          <View style={styles.linensTotalRow}>
+                            <Text style={styles.linensTotalText}>
+                              Total: {towelConfigurations.reduce((sum, b) => sum + (b.towels || 0), 0)} towels, {towelConfigurations.reduce((sum, b) => sum + (b.faceCloths || 0), 0)} washcloths
+                            </Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.linensItemsRow}>
+                          <View style={styles.linensDetailItem}>
+                            <Icon name="check" size={10} color={colors.warning[600]} />
+                            <Text style={styles.linensDetailText}>
+                              Towels for {home.numBaths || "all"} bathroom{home.numBaths !== "1" ? "s" : ""}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.linensProvidedContent}>
+                  <Icon name="check-circle" size={14} color={colors.success[600]} />
+                  <Text style={styles.linensProvidedText}>
+                    Sheets and towels will be provided for {home.numBeds || "each"} bed{home.numBeds !== "1" ? "s" : ""} and {home.numBaths || "each"} bathroom{home.numBaths !== "1" ? "s" : ""}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Access Info for Assigned Jobs - Only show day before or day of */}
+            {assigned && !completed && (keyPadCode || keyLocation) && (
+              isWithinOneDay() ? (
+                <View style={styles.accessInfoContainer}>
+                  <Text style={styles.accessTitle}>
+                    <Icon name="key" size={12} color={colors.primary[600]} /> Access Information
+                  </Text>
+                  {keyPadCode && (
+                    <View style={styles.accessRow}>
+                      <Text style={styles.accessLabel}>Keypad Code:</Text>
+                      <Text style={styles.accessValue}>{keyPadCode}</Text>
+                    </View>
+                  )}
+                  {keyLocation && (
+                    <View style={styles.accessRow}>
+                      <Text style={styles.accessLabel}>Key Location:</Text>
+                      <Text style={styles.accessValue}>{keyLocation}</Text>
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.accessInfoHiddenContainer}>
+                  <Icon name="lock" size={14} color={colors.text.tertiary} />
+                  <Text style={styles.accessInfoHiddenText}>
+                    Access information will be available the day before your job
+                  </Text>
+                </View>
+              )
             )}
 
             {/* Large Home Warning */}
@@ -284,14 +408,28 @@ const EmployeeAssignmentTile = ({
               </Text>
             )}
 
-            {/* Full Address for Assigned Jobs */}
-            {assigned && home.address && (
-              <View style={styles.addressContainer}>
-                <Icon name="home" size={14} color={colors.text.secondary} />
-                <Text style={styles.addressText}>
-                  {home.address}, {home.city}, {home.state} {home.zipcode}
-                </Text>
-              </View>
+            {/* Address for Assigned Jobs - Full address only day before or day of */}
+            {assigned && (
+              isWithinOneDay() ? (
+                <View style={styles.addressContainer}>
+                  <Icon name="home" size={14} color={colors.text.secondary} />
+                  <Text style={styles.addressText}>
+                    {home.address}, {home.city}, {home.state} {home.zipcode}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.addressContainer}>
+                  <Icon name="map-marker" size={14} color={colors.text.secondary} />
+                  <View style={styles.addressTextContainer}>
+                    <Text style={styles.addressText}>
+                      {home.city}, {home.state} {home.zipcode}
+                    </Text>
+                    <Text style={styles.addressHintText}>
+                      Full address available the day before your job
+                    </Text>
+                  </View>
+                </View>
+              )
             )}
           </View>
         )}
@@ -370,6 +508,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     overflow: "hidden",
     ...shadows.md,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
   },
   cardContent: {
     padding: spacing.lg,
@@ -521,6 +661,93 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
   },
+  linensContainer: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  linensHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  linensTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  linensContent: {
+    gap: spacing.sm,
+  },
+  bringLinensAlert: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  bringLinensText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
+  },
+  linensItemsRow: {
+    gap: spacing.xs,
+    paddingLeft: spacing.sm,
+  },
+  linensItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  linensItemText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  linensProvidedContent: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+  },
+  linensProvidedText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    lineHeight: 20,
+  },
+  linensSection: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  linensSectionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+    marginBottom: spacing.xs,
+  },
+  linensDetailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: 2,
+  },
+  linensDetailText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  linensTotalRow: {
+    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[200],
+  },
+  linensTotalText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
   accessInfoContainer: {
     backgroundColor: colors.primary[50],
     padding: spacing.md,
@@ -546,6 +773,21 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
+  },
+  accessInfoHiddenContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.neutral[100],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  accessInfoHiddenText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
   },
   warningBanner: {
     flexDirection: "row",
@@ -585,6 +827,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.fontSize.sm,
     color: colors.text.primary,
+  },
+  addressTextContainer: {
+    flex: 1,
+  },
+  addressHintText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
+    marginTop: 2,
   },
   expandIndicator: {
     alignItems: "center",
