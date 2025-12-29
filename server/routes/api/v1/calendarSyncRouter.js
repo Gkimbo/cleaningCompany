@@ -239,15 +239,11 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
     const deletedDates = sync.deletedDates || [];
     const newAppointments = [];
     const newSyncedUids = [...syncedUids];
+    const newDeletedDates = [...deletedDates];
 
     // Process checkout dates and create appointments
     if (sync.autoCreateAppointments) {
       for (const checkout of checkoutDates) {
-        // Skip if already synced
-        if (syncedUids.includes(checkout.uid)) {
-          continue;
-        }
-
         // Calculate the cleaning date based on daysAfterCheckout setting
         const checkoutDate = new Date(checkout.checkoutDate);
         const cleaningDate = new Date(checkoutDate);
@@ -255,10 +251,15 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
 
         const cleaningDateStr = cleaningDate.toISOString().split("T")[0];
 
-        // Skip if this date was previously deleted by user
+        // If this date was previously deleted but still exists in external calendar,
+        // remove it from deletedDates so we can recreate the appointment
+        // (user is manually syncing, so they want to restore deleted appointments)
         if (deletedDates.includes(cleaningDateStr)) {
-          newSyncedUids.push(checkout.uid);
-          continue;
+          const deleteIndex = newDeletedDates.indexOf(cleaningDateStr);
+          if (deleteIndex > -1) {
+            newDeletedDates.splice(deleteIndex, 1);
+            console.log(`[Calendar Sync] Removing ${cleaningDateStr} from deletedDates - will recreate appointment`);
+          }
         }
 
         // Check if appointment already exists for this date
@@ -271,8 +272,18 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
 
         if (existingAppointment) {
           // Mark as synced even if appointment exists
-          newSyncedUids.push(checkout.uid);
+          if (!newSyncedUids.includes(checkout.uid)) {
+            newSyncedUids.push(checkout.uid);
+          }
           continue;
+        }
+
+        // If already synced but appointment no longer exists, we need to recreate it
+        // (user manually deleted the appointment)
+        const wasPreviouslySynced = syncedUids.includes(checkout.uid);
+        if (wasPreviouslySynced) {
+          // Appointment was deleted - will recreate below
+          console.log(`[Calendar Sync] Recreating deleted appointment for ${cleaningDateStr}`);
         }
 
         // Calculate price based on home details
@@ -325,7 +336,9 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
           source: checkout.summary || `${sync.platform} booking`,
         });
 
-        newSyncedUids.push(checkout.uid);
+        if (!newSyncedUids.includes(checkout.uid)) {
+          newSyncedUids.push(checkout.uid);
+        }
       }
     }
 
@@ -335,6 +348,7 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
       lastSyncStatus: "success",
       lastSyncError: null,
       syncedEventUids: newSyncedUids,
+      deletedDates: newDeletedDates,
     });
 
     return res.status(200).json({

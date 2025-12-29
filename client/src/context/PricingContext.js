@@ -132,12 +132,32 @@ export { defaultPricing };
  */
 export const getTimeWindowOptions = (pricing) => {
   const timeWindows = pricing?.timeWindows || defaultPricing.timeWindows;
-  return Object.entries(timeWindows).map(([value, config]) => ({
-    value,
-    label: config.label,
-    description: config.description,
-    surcharge: config.surcharge,
-  }));
+
+  // Labels for time windows (used when config only has surcharge values)
+  const timeWindowLabels = {
+    anytime: { label: "Anytime", description: "Most flexible, best pricing" },
+    "10-3": { label: "10am - 3pm", description: "" },
+    "11-4": { label: "11am - 4pm", description: "" },
+    "12-2": { label: "12pm - 2pm", description: "" },
+  };
+
+  return Object.entries(timeWindows).map(([value, config]) => {
+    // Handle both formats: config as object or config as number (surcharge only)
+    const isObject = typeof config === "object" && config !== null;
+    const surcharge = isObject ? config.surcharge : config;
+    const labels = timeWindowLabels[value] || { label: value, description: "" };
+
+    return {
+      value,
+      label: isObject && config.label ? config.label : labels.label,
+      description: isObject && config.description
+        ? config.description
+        : surcharge > 0
+          ? `+$${surcharge} per cleaning`
+          : labels.description,
+      surcharge,
+    };
+  });
 };
 
 /**

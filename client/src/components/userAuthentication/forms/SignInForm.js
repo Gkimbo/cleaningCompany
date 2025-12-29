@@ -46,6 +46,10 @@ const SignInForm = ({ state, dispatch }) => {
 			}
 			if (response.user) {
 				dispatch({ type: "CURRENT_USER", payload: response.token });
+				dispatch({ type: "SET_USER_ID", payload: response.user.id });
+				if (response.user.email) {
+					dispatch({ type: "SET_USER_EMAIL", payload: response.user.email });
+				}
 				if (response.user.type === "owner") {
 					dispatch({ type: "USER_ACCOUNT", payload: "owner" });
 				}

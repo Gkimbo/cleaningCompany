@@ -273,10 +273,11 @@ const ClientDashboard = ({ state, dispatch }) => {
   };
 
   // Sort and filter upcoming appointments
-  const upcomingAppointments = appointments
+  const allUpcomingAppointments = appointments
     .filter((apt) => isFutureOrToday(apt.date))
-    .sort((a, b) => compareDates(a.date, b.date))
-    .slice(0, 3);
+    .sort((a, b) => compareDates(a.date, b.date));
+  const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
+  const upcomingAppointmentsCount = allUpcomingAppointments.length;
 
   // Get recent/past appointments
   const recentAppointments = appointments
@@ -405,7 +406,7 @@ const ClientDashboard = ({ state, dispatch }) => {
       <View style={styles.statsRow}>
         <StatCard
           title="Upcoming"
-          value={upcomingAppointments.length}
+          value={upcomingAppointmentsCount}
           subtitle="appointments"
           color={colors.primary[500]}
           onPress={() => navigate("/appointments")}
@@ -549,12 +550,7 @@ const ClientDashboard = ({ state, dispatch }) => {
           actionText="Details"
         />
         <View style={styles.billingCard}>
-          <View style={styles.billingRow}>
-            <Text style={styles.billingLabel}>Upcoming Services</Text>
-            <Text style={styles.billingValue}>
-              {formatCurrency(bill?.appointmentDue || 0)}
-            </Text>
-          </View>
+          {/* Only show cancellation fees if there are any - these are actually due now */}
           {bill?.cancellationFee > 0 && (
             <View style={styles.billingRow}>
               <Text style={styles.billingLabel}>Cancellation Fees</Text>
@@ -563,12 +559,30 @@ const ClientDashboard = ({ state, dispatch }) => {
               </Text>
             </View>
           )}
+          {/* Show current amount due (fees only, not future appointments) */}
           <View style={[styles.billingRow, styles.billingTotal]}>
-            <Text style={styles.billingTotalLabel}>Total Due</Text>
+            <Text style={styles.billingTotalLabel}>Amount Due Now</Text>
             <Text style={styles.billingTotalValue}>
-              {formatCurrency(totalDue)}
+              {formatCurrency(bill?.cancellationFee || 0)}
             </Text>
           </View>
+          {/* Show upcoming appointments as informational, not due */}
+          {(bill?.appointmentDue || 0) > 0 && (
+            <View style={styles.billingUpcoming}>
+              <View style={styles.billingUpcomingHeader}>
+                <Icon name="calendar" size={12} color={colors.text.tertiary} />
+                <Text style={styles.billingUpcomingLabel}>
+                  Upcoming Services ({upcomingAppointmentsCount})
+                </Text>
+              </View>
+              <Text style={styles.billingUpcomingValue}>
+                {formatCurrency(bill?.appointmentDue || 0)}
+              </Text>
+              <Text style={styles.billingUpcomingNote}>
+                Charged 3 days before each cleaning
+              </Text>
+            </View>
+          )}
           {bill?.totalPaid > 0 && (
             <View style={styles.billingPaid}>
               <Text style={styles.billingPaidText}>
@@ -971,6 +985,40 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.primary[600],
+  },
+  billingUpcoming: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+    backgroundColor: colors.neutral[50],
+    marginHorizontal: -spacing.lg,
+    marginBottom: -spacing.lg,
+    padding: spacing.md,
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.lg,
+  },
+  billingUpcomingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  billingUpcomingLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  billingUpcomingValue: {
+    fontSize: typography.fontSize.lg,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.semibold,
+    marginTop: spacing.xs,
+  },
+  billingUpcomingNote: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
+    fontStyle: "italic",
   },
   billingPaid: {
     marginTop: spacing.md,

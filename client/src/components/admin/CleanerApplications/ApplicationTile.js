@@ -53,6 +53,19 @@ const ApplicationTile = ({
     });
   };
 
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return "Not provided";
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) {
+      return "Invalid date";
+    }
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   const handleSaveNotes = async () => {
     setSavingNotes(true);
     try {
@@ -141,7 +154,7 @@ const ApplicationTile = ({
             <Text style={styles.applicantName}>
               {application.firstName} {application.lastName}
             </Text>
-            <Text style={styles.appliedDate}>Applied {formatDate(application.createdAt)}</Text>
+            <Text style={styles.appliedDate}>Applied {formatTimestamp(application.createdAt)}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: config.bgColor, borderColor: config.color }]}>
             <Text style={[styles.statusBadgeText, { color: config.color }]}>

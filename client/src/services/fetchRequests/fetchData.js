@@ -405,6 +405,8 @@ class FetchData {
           requiresAcknowledgment: responseData.requiresAcknowledgment,
           isLargeHome: responseData.isLargeHome,
           hasTimeConstraint: responseData.hasTimeConstraint,
+          requiresStripeSetup: responseData.requiresStripeSetup,
+          stripeAccountStatus: responseData.stripeAccountStatus,
           message: responseData.message,
         };
       }

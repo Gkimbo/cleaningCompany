@@ -11,6 +11,7 @@ const {
   Payout,
   JobPhoto,
   CalendarSync,
+  StripeConnectAccount,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -1056,6 +1057,28 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     const cleaner = await User.findByPk(id);
     if (!cleaner) {
       return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    // Check if cleaner has set up Stripe Connect account for payouts
+    const stripeAccount = await StripeConnectAccount.findOne({
+      where: { userId: id },
+    });
+
+    if (!stripeAccount || !stripeAccount.onboardingComplete) {
+      return res.status(400).json({
+        error: "Stripe account required",
+        message: "You need to set up your Stripe account to receive payments before you can request appointments.",
+        requiresStripeSetup: true,
+      });
+    }
+
+    if (!stripeAccount.payoutsEnabled) {
+      return res.status(400).json({
+        error: "Stripe account incomplete",
+        message: "Your Stripe account setup is incomplete. Please complete your account verification to receive payments.",
+        requiresStripeSetup: true,
+        stripeAccountStatus: stripeAccount.accountStatus,
+      });
     }
 
     // Check if home is large and requires acknowledgment
@@ -2423,6 +2446,7 @@ appointmentRouter.patch("/:id", async (req, res) => {
     keyPadCode,
     keyLocation,
     timeToBeCompleted,
+    contact,
   } = req.body;
   let userInfo;
 
@@ -2457,6 +2481,12 @@ appointmentRouter.patch("/:id", async (req, res) => {
         id,
         keyLocation,
         keyPadCode: "",
+      });
+    }
+    if (contact !== undefined) {
+      userInfo = await UserInfo.editContactInDB({
+        id,
+        contact,
       });
     }
     return res.status(200).json({ user: userInfo });

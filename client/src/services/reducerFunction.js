@@ -1,5 +1,18 @@
 const reducer = (state, action) => {
   switch (action.type) {
+    case "LOGOUT":
+      return {
+        ...state,
+        account: null,
+        currentUser: { token: null, id: null, email: null },
+        homes: [],
+        appointments: [],
+        bill: { cancellationFee: 0, totalPaid: 0 },
+        requests: [],
+        conversations: [],
+        currentMessages: [],
+        unreadCount: 0,
+      };
     case "ERROR":
       return {
         ...state,

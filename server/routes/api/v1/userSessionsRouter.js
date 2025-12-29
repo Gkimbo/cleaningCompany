@@ -158,6 +158,9 @@ sessionRouter.get("/current", authenticateToken, async (req, res) => {
 		const user = await User.findOne({
 			where: { id: req.userId },
 		});
+		if (!user) {
+			return res.status(401).json({ message: "User not found" });
+		}
 		const serializedUser = UserSerializer.serializeOne(user);
 		const token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '24h' });
 		res.status(200).json({ user: serializedUser, token });
