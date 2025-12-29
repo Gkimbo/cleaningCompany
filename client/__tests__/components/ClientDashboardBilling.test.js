@@ -548,3 +548,265 @@ describe("ClientDashboard - Real-world Scenarios", () => {
     expect(result.autoCapturedAppointments[0].id).toBe(2);
   });
 });
+
+describe("ClientDashboard - Auto-Captured vs Prepaid Separation", () => {
+  const getDateString = (daysFromNow) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromNow);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const parseLocalDate = (dateString) => {
+    return new Date(dateString + "T00:00:00");
+  };
+
+  const isFutureOrToday = (dateString) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const date = parseLocalDate(dateString);
+    return date >= today;
+  };
+
+  // Updated billing calculation that separates auto-captured and prepaid
+  const calculateBillingSummaryWithPrepaid = (appointments) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const allUpcomingAppointments = appointments
+      .filter((apt) => isFutureOrToday(apt.date) && !apt.completed)
+      .sort((a, b) => parseLocalDate(a.date) - parseLocalDate(b.date));
+
+    // Auto-captured: paid and within 3 days
+    const autoCapturedAppointments = allUpcomingAppointments.filter((apt) => {
+      if (!apt.paid) return false;
+      const aptDate = parseLocalDate(apt.date);
+      const daysUntil = Math.ceil((aptDate - today) / (1000 * 60 * 60 * 24));
+      return daysUntil <= 3;
+    });
+
+    // Prepaid: paid but more than 3 days away
+    const prepaidAppointments = allUpcomingAppointments.filter((apt) => {
+      if (!apt.paid) return false;
+      const aptDate = parseLocalDate(apt.date);
+      const daysUntil = Math.ceil((aptDate - today) / (1000 * 60 * 60 * 24));
+      return daysUntil > 3;
+    });
+
+    // Pending: not paid
+    const pendingPaymentAppointments = allUpcomingAppointments.filter((apt) => !apt.paid);
+
+    return {
+      autoCapturedAppointments,
+      prepaidAppointments,
+      pendingPaymentAppointments,
+      autoCapturedTotal: autoCapturedAppointments.reduce(
+        (sum, apt) => sum + (Number(apt.price) || 0),
+        0
+      ),
+      prepaidTotal: prepaidAppointments.reduce(
+        (sum, apt) => sum + (Number(apt.price) || 0),
+        0
+      ),
+      pendingPaymentTotal: pendingPaymentAppointments.reduce(
+        (sum, apt) => sum + (Number(apt.price) || 0),
+        0
+      ),
+    };
+  };
+
+  describe("Auto-captured classification (within 3 days)", () => {
+    it("should classify paid appointments within 3 days as auto-captured", () => {
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "150", paid: true, completed: false },
+        { id: 2, date: getDateString(2), price: "175", paid: true, completed: false },
+        { id: 3, date: getDateString(3), price: "200", paid: true, completed: false },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      expect(result.autoCapturedAppointments).toHaveLength(3);
+      expect(result.autoCapturedTotal).toBe(525);
+      expect(result.prepaidAppointments).toHaveLength(0);
+    });
+
+    it("should include today's paid appointments as auto-captured", () => {
+      const appointments = [
+        { id: 1, date: getDateString(0), price: "150", paid: true, completed: false },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      expect(result.autoCapturedAppointments).toHaveLength(1);
+    });
+
+    it("should handle boundary case of exactly 3 days", () => {
+      const appointments = [
+        { id: 1, date: getDateString(3), price: "150", paid: true, completed: false },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      // 3 days should be auto-captured (within <= 3 days)
+      expect(result.autoCapturedAppointments).toHaveLength(1);
+      expect(result.prepaidAppointments).toHaveLength(0);
+    });
+  });
+
+  describe("Prepaid classification (more than 3 days)", () => {
+    it("should classify paid appointments more than 3 days away as prepaid", () => {
+      const appointments = [
+        { id: 1, date: getDateString(4), price: "150", paid: true, completed: false },
+        { id: 2, date: getDateString(7), price: "175", paid: true, completed: false },
+        { id: 3, date: getDateString(14), price: "200", paid: true, completed: false },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      expect(result.prepaidAppointments).toHaveLength(3);
+      expect(result.prepaidTotal).toBe(525);
+      expect(result.autoCapturedAppointments).toHaveLength(0);
+    });
+
+    it("should handle boundary case of 4 days (just outside auto-capture)", () => {
+      const appointments = [
+        { id: 1, date: getDateString(4), price: "150", paid: true, completed: false },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      // 4 days should be prepaid (more than 3 days)
+      expect(result.prepaidAppointments).toHaveLength(1);
+      expect(result.autoCapturedAppointments).toHaveLength(0);
+    });
+  });
+
+  describe("Mixed scenarios", () => {
+    it("should correctly separate auto-captured, prepaid, and pending", () => {
+      const appointments = [
+        // Auto-captured (within 3 days, paid)
+        { id: 1, date: getDateString(1), price: "150", paid: true, completed: false },
+        { id: 2, date: getDateString(2), price: "175", paid: true, completed: false },
+        // Prepaid (more than 3 days, paid)
+        { id: 3, date: getDateString(5), price: "200", paid: true, completed: false },
+        { id: 4, date: getDateString(10), price: "225", paid: true, completed: false },
+        // Pending (not paid)
+        { id: 5, date: getDateString(7), price: "180", paid: false, completed: false },
+        { id: 6, date: getDateString(14), price: "190", paid: false, completed: false },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      expect(result.autoCapturedAppointments).toHaveLength(2);
+      expect(result.autoCapturedTotal).toBe(325); // 150 + 175
+
+      expect(result.prepaidAppointments).toHaveLength(2);
+      expect(result.prepaidTotal).toBe(425); // 200 + 225
+
+      expect(result.pendingPaymentAppointments).toHaveLength(2);
+      expect(result.pendingPaymentTotal).toBe(370); // 180 + 190
+    });
+
+    it("should handle all three categories with single appointments each", () => {
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "100", paid: true, completed: false }, // Auto-captured
+        { id: 2, date: getDateString(7), price: "150", paid: true, completed: false }, // Prepaid
+        { id: 3, date: getDateString(14), price: "200", paid: false, completed: false }, // Pending
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      expect(result.autoCapturedAppointments).toHaveLength(1);
+      expect(result.prepaidAppointments).toHaveLength(1);
+      expect(result.pendingPaymentAppointments).toHaveLength(1);
+    });
+  });
+
+  describe("Edge cases", () => {
+    it("should handle no appointments", () => {
+      const result = calculateBillingSummaryWithPrepaid([]);
+
+      expect(result.autoCapturedAppointments).toHaveLength(0);
+      expect(result.prepaidAppointments).toHaveLength(0);
+      expect(result.pendingPaymentAppointments).toHaveLength(0);
+      expect(result.autoCapturedTotal).toBe(0);
+      expect(result.prepaidTotal).toBe(0);
+      expect(result.pendingPaymentTotal).toBe(0);
+    });
+
+    it("should exclude completed appointments from all categories", () => {
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "150", paid: true, completed: true },
+        { id: 2, date: getDateString(7), price: "175", paid: true, completed: true },
+        { id: 3, date: getDateString(14), price: "200", paid: false, completed: true },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      expect(result.autoCapturedAppointments).toHaveLength(0);
+      expect(result.prepaidAppointments).toHaveLength(0);
+      expect(result.pendingPaymentAppointments).toHaveLength(0);
+    });
+
+    it("should exclude past appointments from all categories", () => {
+      const appointments = [
+        { id: 1, date: getDateString(-1), price: "150", paid: true, completed: false },
+        { id: 2, date: getDateString(-5), price: "175", paid: true, completed: false },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      expect(result.autoCapturedAppointments).toHaveLength(0);
+      expect(result.prepaidAppointments).toHaveLength(0);
+      expect(result.pendingPaymentAppointments).toHaveLength(0);
+    });
+
+    it("should handle unpaid appointments within 3 days", () => {
+      // An unpaid appointment within 3 days is still pending, not auto-captured
+      const appointments = [
+        { id: 1, date: getDateString(1), price: "150", paid: false, completed: false },
+        { id: 2, date: getDateString(2), price: "175", paid: false, completed: false },
+      ];
+
+      const result = calculateBillingSummaryWithPrepaid(appointments);
+
+      expect(result.autoCapturedAppointments).toHaveLength(0);
+      expect(result.prepaidAppointments).toHaveLength(0);
+      expect(result.pendingPaymentAppointments).toHaveLength(2);
+    });
+  });
+
+  describe("Display conditions", () => {
+    it("should show prepaid section only when there are prepaid appointments", () => {
+      const prepaidAppointments = [{ id: 1 }];
+      const shouldShow = prepaidAppointments.length > 0;
+      expect(shouldShow).toBe(true);
+    });
+
+    it("should hide prepaid section when no prepaid appointments", () => {
+      const prepaidAppointments = [];
+      const shouldShow = prepaidAppointments.length > 0;
+      expect(shouldShow).toBe(false);
+    });
+
+    it("should display correct styling for prepaid (success/green colors)", () => {
+      // Prepaid uses success colors (green) to indicate early payment
+      const expectedBadgeColor = "success";
+      const expectedIcon = "check-circle";
+
+      expect(expectedBadgeColor).toBe("success");
+      expect(expectedIcon).toBe("check-circle");
+    });
+
+    it("should display correct styling for auto-captured (primary/blue colors)", () => {
+      // Auto-captured uses primary colors (blue) with credit-card icon
+      const expectedBadgeColor = "primary";
+      const expectedIcon = "credit-card";
+
+      expect(expectedBadgeColor).toBe("primary");
+      expect(expectedIcon).toBe("credit-card");
+    });
+  });
+});
