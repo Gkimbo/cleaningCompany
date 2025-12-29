@@ -431,6 +431,8 @@ describe("Calendar Sync Router", () => {
       getCheckoutDates.mockResolvedValue([
         { checkoutDate: "2025-03-01", uid: "uid1", summary: "Reserved" },
       ]);
+      // Mock that an appointment already exists for this date - so it will be skipped
+      UserAppointments.findOne.mockResolvedValue({ id: 1, homeId: 1, date: "2025-03-01" });
 
       const response = await request(app)
         .post("/api/v1/calendar-sync/1/sync")

@@ -149,9 +149,10 @@ describe("EachAppointment", () => {
     });
 
     it("renders upcoming appointment with days countdown", () => {
-      // Set date to tomorrow
+      // Set date to tomorrow at noon to avoid timezone edge cases
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(12, 0, 0, 0);
       const { getByText } = renderWithProvider(
         <EachAppointment
           {...defaultProps}
@@ -163,11 +164,13 @@ describe("EachAppointment", () => {
     });
 
     it("renders today appointment", () => {
-      const today = new Date().toISOString();
+      // Use today's date at noon
+      const today = new Date();
+      today.setHours(12, 0, 0, 0);
       const { getByText } = renderWithProvider(
         <EachAppointment
           {...defaultProps}
-          date={today}
+          date={today.toISOString()}
           isDisabled={true}
         />
       );

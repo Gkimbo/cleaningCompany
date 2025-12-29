@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import * as Location from "expo-location";
 import FetchData from "../../services/fetchRequests/fetchData";
 import {
   colors,
@@ -28,6 +29,19 @@ import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlo
 import { usePricing } from "../../context/PricingContext";
 
 const { width } = Dimensions.get("window");
+
+// Haversine distance calculation (returns km)
+const haversineDistance = (lat1, lon1, lat2, lon2) => {
+  const toRad = (x) => (x * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 // Parse end time from format like "10am-3pm" → 15 (3pm in 24hr)
 const parseEndTime = (timeToBeCompleted) => {
@@ -156,13 +170,21 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, cleanerSharePerce
 };
 
 // Pending Request Card Component
-const PendingRequestCard = ({ request, onPress }) => {
+const PendingRequestCard = ({ request, onPress, distance }) => {
   const appointmentDate = new Date(request.date);
 
   const formatDate = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
   };
+
+  const formatDistance = (km) => {
+    if (km === null || km === undefined) return null;
+    const miles = km * 0.621371;
+    return `${miles.toFixed(1)} mi`;
+  };
+
+  const distanceText = formatDistance(distance);
 
   return (
     <Pressable
@@ -177,9 +199,17 @@ const PendingRequestCard = ({ request, onPress }) => {
         <Text style={styles.requestLocation}>
           {request.city}, {request.state}
         </Text>
-        <Text style={styles.requestDetails}>
-          {request.numBeds} bed | {request.numBaths} bath
-        </Text>
+        <View style={styles.requestDetailsRow}>
+          <Text style={styles.requestDetails}>
+            {request.numBeds} bed | {request.numBaths} bath
+          </Text>
+          {distanceText && (
+            <View style={styles.distanceBadge}>
+              <Icon name="location-arrow" size={10} color={colors.primary[600]} />
+              <Text style={styles.distanceText}>{distanceText}</Text>
+            </View>
+          )}
+        </View>
       </View>
       <View style={styles.requestBadge}>
         <Text style={styles.requestBadgeText}>Pending</Text>
@@ -202,12 +232,88 @@ const CleanerDashboard = ({ state, dispatch }) => {
   const [showCompletionFlow, setShowCompletionFlow] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [selectedHome, setSelectedHome] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [requestLocations, setRequestLocations] = useState({});
 
   useEffect(() => {
     if (state.currentUser.token) {
       fetchDashboardData();
     }
   }, [state.currentUser.token]);
+
+  // Get user's current location using expo-location
+  useEffect(() => {
+    let locationSubscription = null;
+
+    const startLocationTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          console.log("[CleanerDashboard] Location permission denied");
+          return;
+        }
+
+        // Get initial location
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        // Watch for location updates
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            distanceInterval: 100,
+          },
+          (location) => {
+            setUserLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.error("[CleanerDashboard] Error getting location:", error);
+      }
+    };
+
+    startLocationTracking();
+
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, []);
+
+  // Fetch locations for pending requests
+  useEffect(() => {
+    const fetchRequestLocations = async () => {
+      if (pendingRequests.length === 0) return;
+
+      try {
+        const uniqueHomeIds = [...new Set(pendingRequests.map(r => r.homeId))];
+        const locations = await Promise.all(
+          uniqueHomeIds.map(async (homeId) => {
+            const loc = await FetchData.getLatAndLong(homeId);
+            return { homeId, loc };
+          })
+        );
+        const locMap = {};
+        locations.forEach(({ homeId, loc }) => {
+          locMap[homeId] = loc;
+        });
+        setRequestLocations(locMap);
+      } catch (error) {
+        console.error("[CleanerDashboard] Error fetching request locations:", error);
+      }
+    };
+
+    fetchRequestLocations();
+  }, [pendingRequests]);
 
   const fetchDashboardData = async (isRefresh = false) => {
     if (isRefresh) {
@@ -546,13 +652,27 @@ const CleanerDashboard = ({ state, dispatch }) => {
               actionText="View All"
             />
             <View style={styles.requestsList}>
-              {pendingRequests.slice(0, 3).map((request, index) => (
-                <PendingRequestCard
-                  key={request.id || index}
-                  request={request}
-                  onPress={() => navigate("/my-requests")}
-                />
-              ))}
+              {pendingRequests.slice(0, 3).map((request, index) => {
+                // Calculate distance for this request
+                let distance = null;
+                const loc = requestLocations[request.homeId];
+                if (userLocation && loc) {
+                  distance = haversineDistance(
+                    userLocation.latitude,
+                    userLocation.longitude,
+                    loc.latitude,
+                    loc.longitude
+                  );
+                }
+                return (
+                  <PendingRequestCard
+                    key={request.id || index}
+                    request={request}
+                    distance={distance}
+                    onPress={() => navigate("/my-requests")}
+                  />
+                );
+              })}
             </View>
           </View>
         )}
@@ -887,7 +1007,26 @@ const styles = StyleSheet.create({
   requestDetails: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
+  },
+  requestDetailsRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 2,
+    gap: spacing.sm,
+  },
+  distanceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
+    gap: 4,
+  },
+  distanceText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
   },
   requestBadge: {
     backgroundColor: colors.warning[100],

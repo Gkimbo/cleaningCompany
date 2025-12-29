@@ -49,6 +49,9 @@ jest.mock("../../models", () => ({
   CalendarSync: {
     findAll: jest.fn().mockResolvedValue([]),
   },
+  StripeConnectAccount: {
+    findOne: jest.fn(),
+  },
 }));
 
 // Mock services
@@ -108,6 +111,7 @@ const {
   UserCleanerAppointments,
   UserPendingRequests,
   UserReviews,
+  StripeConnectAccount,
 } = require("../../models");
 
 describe("Appointment Routes", () => {
@@ -124,6 +128,16 @@ describe("Appointment Routes", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default mock for StripeConnectAccount - assume cleaner has completed Stripe setup
+    // Individual tests can override this if testing Stripe-related scenarios
+    StripeConnectAccount.findOne.mockResolvedValue({
+      id: 1,
+      userId: 2,
+      stripeAccountId: "acct_test_default",
+      onboardingComplete: true,
+      payoutsEnabled: true,
+      accountStatus: "active",
+    });
   });
 
   describe("GET /unassigned", () => {
@@ -1102,6 +1116,117 @@ describe("Appointment Routes", () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Acknowledgment required");
       expect(res.body.isLargeHome).toBe(true);
+    });
+
+    // Stripe Connect requirement tests
+    it("should reject request if cleaner has no Stripe Connect account", async () => {
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        type: "cleaner",
+        username: "testcleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/request-employee")
+        .send({ id: 2, appointmentId: 1 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Stripe account required");
+      expect(res.body.requiresStripeSetup).toBe(true);
+    });
+
+    it("should reject request if Stripe onboarding is incomplete", async () => {
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        type: "cleaner",
+        username: "testcleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue({
+        id: 1,
+        userId: 2,
+        stripeAccountId: "acct_test_123",
+        onboardingComplete: false,
+        payoutsEnabled: false,
+        accountStatus: "onboarding",
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/request-employee")
+        .send({ id: 2, appointmentId: 1 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Stripe account required");
+      expect(res.body.requiresStripeSetup).toBe(true);
+    });
+
+    it("should reject request if Stripe payouts are not enabled", async () => {
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        type: "cleaner",
+        username: "testcleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue({
+        id: 1,
+        userId: 2,
+        stripeAccountId: "acct_test_123",
+        onboardingComplete: true,
+        payoutsEnabled: false,
+        accountStatus: "restricted",
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/request-employee")
+        .send({ id: 2, appointmentId: 1 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Stripe account incomplete");
+      expect(res.body.requiresStripeSetup).toBe(true);
+      expect(res.body.stripeAccountStatus).toBe("restricted");
+    });
+
+    it("should allow request if Stripe account is fully set up", async () => {
+      UserAppointments.findByPk.mockResolvedValue({
+        dataValues: { userId: 1, date: "2025-01-15", homeId: 1 },
+        homeId: 1,
+      });
+      // First call returns client, second call returns cleaner
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 1,
+          dataValues: { id: 1, email: "client@test.com", username: "testclient" },
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          dataValues: { id: 2, username: "testcleaner", type: "cleaner" },
+          type: "cleaner",
+        });
+      StripeConnectAccount.findOne.mockResolvedValue({
+        id: 1,
+        userId: 2,
+        stripeAccountId: "acct_test_123",
+        onboardingComplete: true,
+        payoutsEnabled: true,
+        accountStatus: "active",
+      });
+      UserHomes.findByPk.mockResolvedValue({
+        numBeds: "2",
+        numBaths: "1",
+        timeToBeCompleted: "anytime",
+      });
+      UserPendingRequests.findOne.mockResolvedValue(null);
+      UserPendingRequests.create.mockResolvedValue({ id: 1, appointmentId: 1, employeeId: 2 });
+      UserReviews.findAll.mockResolvedValue([]);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/request-employee")
+        .send({ id: 2, appointmentId: 1 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBeDefined();
     });
   });
 

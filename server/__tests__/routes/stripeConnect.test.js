@@ -398,6 +398,139 @@ describe("Stripe Connect Router", () => {
       expect(res.body.code).toBe("ACCOUNT_EXISTS");
       expect(res.body.stripeAccountId).toBe("acct_existing_123");
     });
+
+    it("should create account with personalInfo (DOB, address, SSN last 4)", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "testcleaner",
+        firstName: "John",
+        lastName: "Doe",
+        email: "cleaner@test.com",
+        phone: "555-1234",
+        type: "cleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue(null);
+      StripeConnectAccount.create.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        stripeAccountId: "acct_test_123456",
+        accountStatus: "pending",
+      });
+
+      const personalInfo = {
+        dob: "1990-05-15",
+        address: {
+          line1: "123 Main St",
+          line2: "Apt 4",
+          city: "Austin",
+          state: "TX",
+          postalCode: "78701",
+        },
+        ssn_last_4: "1234",
+      };
+
+      const res = await request(app)
+        .post("/api/v1/stripe-connect/create-account")
+        .send({ token, personalInfo });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.stripeAccountId).toBe("acct_test_123456");
+    });
+
+    it("should handle partial personalInfo (only DOB)", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "testcleaner",
+        email: "cleaner@test.com",
+        type: "cleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue(null);
+      StripeConnectAccount.create.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        stripeAccountId: "acct_test_partial",
+        accountStatus: "pending",
+      });
+
+      const personalInfo = {
+        dob: "1985-12-25",
+      };
+
+      const res = await request(app)
+        .post("/api/v1/stripe-connect/create-account")
+        .send({ token, personalInfo });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("should handle partial personalInfo (only address)", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "testcleaner",
+        email: "cleaner@test.com",
+        type: "cleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue(null);
+      StripeConnectAccount.create.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        stripeAccountId: "acct_test_addr",
+        accountStatus: "pending",
+      });
+
+      const personalInfo = {
+        address: {
+          line1: "456 Oak Ave",
+          city: "Houston",
+          state: "TX",
+          postalCode: "77001",
+        },
+      };
+
+      const res = await request(app)
+        .post("/api/v1/stripe-connect/create-account")
+        .send({ token, personalInfo });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+    });
+
+    it("should create account without personalInfo", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "testcleaner",
+        email: "cleaner@test.com",
+        type: "cleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue(null);
+      StripeConnectAccount.create.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        stripeAccountId: "acct_test_no_info",
+        accountStatus: "pending",
+      });
+
+      const res = await request(app)
+        .post("/api/v1/stripe-connect/create-account")
+        .send({ token });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+    });
   });
 
   // ============================================================================
