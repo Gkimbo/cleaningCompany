@@ -496,6 +496,92 @@ describe("Reducer Function", () => {
 
   });
 
+  describe("Pending Cleaner Requests Actions", () => {
+    it("should handle SET_PENDING_CLEANER_REQUESTS action", () => {
+      const stateWithPending = { ...initialState, pendingCleanerRequests: 0 };
+      const action = { type: "SET_PENDING_CLEANER_REQUESTS", payload: 5 };
+      const newState = reducer(stateWithPending, action);
+
+      expect(newState.pendingCleanerRequests).toBe(5);
+    });
+
+    it("should set pendingCleanerRequests to zero", () => {
+      const stateWithPending = { ...initialState, pendingCleanerRequests: 10 };
+      const action = { type: "SET_PENDING_CLEANER_REQUESTS", payload: 0 };
+      const newState = reducer(stateWithPending, action);
+
+      expect(newState.pendingCleanerRequests).toBe(0);
+    });
+
+    it("should preserve other state properties when setting pending requests", () => {
+      const stateWithData = {
+        ...initialState,
+        account: "owner1",
+        pendingCleanerRequests: 0,
+      };
+      const action = { type: "SET_PENDING_CLEANER_REQUESTS", payload: 3 };
+      const newState = reducer(stateWithData, action);
+
+      expect(newState.pendingCleanerRequests).toBe(3);
+      expect(newState.account).toBe("owner1");
+    });
+
+    it("should handle DECREMENT_PENDING_CLEANER_REQUESTS action", () => {
+      const stateWithPending = { ...initialState, pendingCleanerRequests: 5 };
+      const action = { type: "DECREMENT_PENDING_CLEANER_REQUESTS" };
+      const newState = reducer(stateWithPending, action);
+
+      expect(newState.pendingCleanerRequests).toBe(4);
+    });
+
+    it("should not go below zero when decrementing", () => {
+      const stateWithPending = { ...initialState, pendingCleanerRequests: 0 };
+      const action = { type: "DECREMENT_PENDING_CLEANER_REQUESTS" };
+      const newState = reducer(stateWithPending, action);
+
+      expect(newState.pendingCleanerRequests).toBe(0);
+    });
+
+    it("should handle undefined pendingCleanerRequests when decrementing", () => {
+      const action = { type: "DECREMENT_PENDING_CLEANER_REQUESTS" };
+      const newState = reducer(initialState, action);
+
+      expect(newState.pendingCleanerRequests).toBe(0);
+    });
+
+    it("should correctly decrement from 1 to 0", () => {
+      const stateWithPending = { ...initialState, pendingCleanerRequests: 1 };
+      const action = { type: "DECREMENT_PENDING_CLEANER_REQUESTS" };
+      const newState = reducer(stateWithPending, action);
+
+      expect(newState.pendingCleanerRequests).toBe(0);
+    });
+
+    it("should handle set then decrement sequence", () => {
+      let state = { ...initialState, pendingCleanerRequests: 0 };
+
+      // Set to 3
+      state = reducer(state, { type: "SET_PENDING_CLEANER_REQUESTS", payload: 3 });
+      expect(state.pendingCleanerRequests).toBe(3);
+
+      // Decrement to 2
+      state = reducer(state, { type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      expect(state.pendingCleanerRequests).toBe(2);
+
+      // Decrement to 1
+      state = reducer(state, { type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      expect(state.pendingCleanerRequests).toBe(1);
+
+      // Decrement to 0
+      state = reducer(state, { type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      expect(state.pendingCleanerRequests).toBe(0);
+
+      // Try to decrement below 0
+      state = reducer(state, { type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      expect(state.pendingCleanerRequests).toBe(0);
+    });
+  });
+
   describe("Unknown action", () => {
     it("should throw error for unknown action type", () => {
       const action = { type: "UNKNOWN_ACTION", payload: {} };

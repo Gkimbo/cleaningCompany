@@ -808,7 +808,8 @@ Kleanr Support Team`;
   static async sendRequestApproved(email, cleanerName, homeownerName, address, appointmentDate) {
     try {
       const transporter = createTransporter();
-      const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
+      // Only show city, state, and zip code - full address shown in app on day of appointment
+      const locationInfo = `${address.city}, ${address.state} ${address.zipcode}`;
 
       const htmlContent = createEmailTemplate({
         title: "Request Approved! 🎉",
@@ -821,10 +822,14 @@ Kleanr Support Team`;
           title: "Appointment Details",
           items: [
             { label: "Homeowner", value: homeownerName },
-            { label: "Address", value: fullAddress },
+            { label: "Location", value: locationInfo },
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Status", value: "✅ Approved" },
           ],
+        },
+        tipBox: {
+          icon: "📱",
+          text: "The full address will be available in the app on the day of your appointment.",
         },
         steps: {
           title: "📋 Before Your Appointment",
@@ -845,9 +850,11 @@ Great news! ${homeownerName} has approved your request to clean their home.
 APPOINTMENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
 Homeowner: ${homeownerName}
-Address: ${fullAddress}
+Location: ${locationInfo}
 Date: ${formatDate(appointmentDate)}
 Status: ✅ Approved
+
+Note: The full address will be available in the app on the day of your appointment.
 
 BEFORE YOUR APPOINTMENT
 ━━━━━━━━━━━━━━━━━━━━━━

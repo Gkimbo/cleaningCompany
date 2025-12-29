@@ -40,7 +40,9 @@ const TopBar = ({ dispatch, state }) => {
   const [signUpRedirect, setSignUpRedirect] = useState(false);
   const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
   const [pendingApplications, setPendingApplications] = useState(0);
-  const [pendingCleanerRequests, setPendingCleanerRequests] = useState(0);
+
+  // Use global state for pending cleaner requests
+  const pendingCleanerRequests = state.pendingCleanerRequests || 0;
 
   const navigate = useNavigate();
 
@@ -64,7 +66,10 @@ const TopBar = ({ dispatch, state }) => {
           const data = await ClientDashboardService.getPendingRequestsForClient(
             state.currentUser.token
           );
-          setPendingCleanerRequests(data.totalCount || 0);
+          dispatch({
+            type: "SET_PENDING_CLEANER_REQUESTS",
+            payload: data.totalCount || 0,
+          });
         } catch (error) {
           console.error("Error fetching pending cleaner requests:", error);
         }
@@ -75,7 +80,7 @@ const TopBar = ({ dispatch, state }) => {
     // Refresh every 60 seconds
     const interval = setInterval(fetchPendingCleanerRequests, 60000);
     return () => clearInterval(interval);
-  }, [state.account, state.currentUser.token]);
+  }, [state.account, state.currentUser.token, dispatch]);
 
   useEffect(() => {
     if (signInRedirect) {

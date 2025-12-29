@@ -207,6 +207,16 @@ const reducer = (state, action) => {
             : conv
         ),
       };
+    case "SET_PENDING_CLEANER_REQUESTS":
+      return {
+        ...state,
+        pendingCleanerRequests: action.payload,
+      };
+    case "DECREMENT_PENDING_CLEANER_REQUESTS":
+      return {
+        ...state,
+        pendingCleanerRequests: Math.max(0, (state.pendingCleanerRequests || 0) - 1),
+      };
     default:
       throw new Error();
   }

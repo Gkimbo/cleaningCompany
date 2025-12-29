@@ -1,3 +1,25 @@
+const EncryptionService = require("../services/EncryptionService");
+
+// Fields that contain PII and should be encrypted
+const PII_FIELDS = [
+  "firstName",
+  "lastName",
+  "email",
+  "phone",
+  "streetAddress",
+  "city",
+  "state",
+  "zipCode",
+  "ssnLast4",
+  "driversLicenseNumber",
+  "driversLicenseState",
+  "idPhoto",
+  "previousEmployer",
+  "previousEmployerPhone",
+  "emergencyContactName",
+  "emergencyContactPhone",
+];
+
 module.exports = (sequelize, DataTypes) => {
   const UserApplications = sequelize.define("UserApplications", {
     id: {
@@ -7,21 +29,26 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
     },
 
-    // Basic Information
+    // Basic Information (encrypted)
     firstName: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: false,
     },
     lastName: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: false,
     },
     email: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: false,
     },
-    phone: {
+    emailHash: {
       type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Hash of email for searching (since email is encrypted)",
+    },
+    phone: {
+      type: DataTypes.TEXT,
       allowNull: false,
     },
     dateOfBirth: {
@@ -29,35 +56,35 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
 
-    // Address for background check verification
+    // Address for background check verification (encrypted)
     streetAddress: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     city: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     state: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     zipCode: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
 
-    // Identity verification
+    // Identity verification (encrypted)
     ssnLast4: {
-      type: DataTypes.STRING(4),
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     driversLicenseNumber: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     driversLicenseState: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     idPhoto: {
@@ -88,13 +115,13 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
 
-    // Previous Employment
+    // Previous Employment (encrypted)
     previousEmployer: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     previousEmployerPhone: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     previousEmploymentDuration: {
@@ -131,13 +158,13 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
 
-    // Emergency Contact
+    // Emergency Contact (encrypted)
     emergencyContactName: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     emergencyContactPhone: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     emergencyContactRelation: {
@@ -236,6 +263,59 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+  });
+
+  // Helper function to encrypt PII fields
+  const encryptPIIFields = (application) => {
+    PII_FIELDS.forEach((field) => {
+      if (application[field] !== undefined && application[field] !== null) {
+        const value = String(application[field]);
+        // Only encrypt if not already encrypted
+        if (!value.includes(":") || value.split(":").length !== 2) {
+          application[field] = EncryptionService.encrypt(value);
+        }
+      }
+    });
+
+    // Generate email hash for searching
+    if (application.email && !application.emailHash) {
+      const emailToHash = application.email.includes(":")
+        ? EncryptionService.decrypt(application.email)
+        : application.email;
+      application.emailHash = EncryptionService.hash(emailToHash);
+    }
+  };
+
+  // Helper function to decrypt PII fields
+  const decryptPIIFields = (application) => {
+    if (!application) return;
+
+    PII_FIELDS.forEach((field) => {
+      if (application.dataValues && application.dataValues[field]) {
+        application.dataValues[field] = EncryptionService.decrypt(application.dataValues[field]);
+      }
+    });
+  };
+
+  // Encrypt before creating
+  UserApplications.beforeCreate((application) => {
+    encryptPIIFields(application);
+  });
+
+  // Encrypt before updating
+  UserApplications.beforeUpdate((application) => {
+    encryptPIIFields(application);
+  });
+
+  // Decrypt after finding
+  UserApplications.afterFind((result) => {
+    if (!result) return;
+
+    if (Array.isArray(result)) {
+      result.forEach((application) => decryptPIIFields(application));
+    } else {
+      decryptPIIFields(result);
+    }
   });
 
   return UserApplications;

@@ -422,6 +422,7 @@ const MyAppointmentsCalendar = ({ state }) => {
                       assigned={true}
                       distance={appt.distance}
                       timeToBeCompleted={appt.timeToBeCompleted}
+                      token={state.currentUser?.token}
                       addEmployee={async () => {}}
                       removeEmployee={async (employeeId, appointmentId) => {
                         try {

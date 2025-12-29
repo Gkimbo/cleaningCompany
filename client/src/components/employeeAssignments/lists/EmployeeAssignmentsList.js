@@ -15,6 +15,7 @@ import * as Location from "expo-location";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
+import { usePricing } from "../../../context/PricingContext";
 import {
   colors,
   spacing,
@@ -55,6 +56,10 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [userId, setUserId] = useState(null);
 
   const navigate = useNavigate();
+  const { pricing } = usePricing();
+
+  // Calculate cleaner's share after platform fee (default 10%)
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -209,7 +214,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const completedJobs = sortedAppointments.filter((a) => a.completed);
 
   const totalEarnings = sortedAppointments.reduce(
-    (sum, a) => sum + (Number(a.price) || 0),
+    (sum, a) => sum + (Number(a.price) || 0) * cleanerSharePercent,
     0
   );
 
@@ -332,6 +337,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                       assigned={true}
                       distance={appointment.distance}
                       timeToBeCompleted={appointment.timeToBeCompleted}
+                      token={state.currentUser.token}
                     />
                   </View>
                 ))}
@@ -369,6 +375,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                       assigned={true}
                       distance={appointment.distance}
                       timeToBeCompleted={appointment.timeToBeCompleted}
+                      token={state.currentUser.token}
                     />
                   </View>
                 ))}

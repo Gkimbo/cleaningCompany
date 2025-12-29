@@ -27,8 +27,38 @@ const PayoutHistory = ({ state, dispatch }) => {
       );
       const data = await res.json();
       if (res.ok) {
-        setPayouts(data.payouts || []);
-        setTotals(data.totals || {});
+        const allPayouts = data.payouts || [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Separate past and upcoming payouts
+        const pastPayouts = allPayouts.filter((payout) => {
+          const appointmentDate = new Date(payout.appointmentDate);
+          appointmentDate.setHours(0, 0, 0, 0);
+          return appointmentDate <= today;
+        });
+
+        const upcomingPayouts = allPayouts.filter((payout) => {
+          const appointmentDate = new Date(payout.appointmentDate);
+          appointmentDate.setHours(0, 0, 0, 0);
+          return appointmentDate > today;
+        });
+
+        // Completed payouts from past jobs only
+        const completedPayouts = pastPayouts.filter((p) => p.status === "completed");
+
+        // Pending amount is from upcoming jobs only
+        const totalPaidCents = completedPayouts.reduce((sum, p) => sum + (p.netAmount || 0), 0);
+        const pendingCents = upcomingPayouts.reduce((sum, p) => sum + (p.netAmount || 0), 0);
+
+        // Only show past payouts in the history list (not upcoming appointments)
+        setPayouts(pastPayouts);
+        setTotals({
+          totalPaidDollars: (totalPaidCents / 100).toFixed(2),
+          pendingAmountDollars: (pendingCents / 100).toFixed(2),
+          completedCount: completedPayouts.length,
+          pendingCount: upcomingPayouts.length,
+        });
       }
     } catch (err) {
       console.error("Error fetching payouts:", err);
@@ -97,10 +127,10 @@ const PayoutHistory = ({ state, dispatch }) => {
           </Text>
         </View>
         <View style={[styles.summaryCard, { backgroundColor: "#2196F3" }]}>
-          <Text style={styles.summaryLabel}>Pending</Text>
+          <Text style={styles.summaryLabel}>Upcoming</Text>
           <Text style={styles.summaryAmount}>${totals.pendingAmountDollars}</Text>
           <Text style={styles.summaryCount}>
-            {totals.pendingCount} upcoming
+            {totals.pendingCount} upcoming {totals.pendingCount === 1 ? "job" : "jobs"}
           </Text>
         </View>
       </View>

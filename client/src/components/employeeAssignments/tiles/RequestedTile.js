@@ -1,8 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import { usePricing } from "../../../context/PricingContext";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../../services/styles/theme";
 
 const RequestedTile = ({
   id,
@@ -26,9 +34,22 @@ const RequestedTile = ({
   const amount = Number(price) * cleanerSharePercent;
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
-    const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
-    return date.toLocaleDateString(undefined, options);
+    const dateObj = new Date(dateString + "T00:00:00");
+    const options = { weekday: "short", month: "short", day: "numeric" };
+    return dateObj.toLocaleDateString(undefined, options);
+  };
+
+  const getDateStatus = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(date + "T00:00:00");
+    const diffTime = appointmentDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return { label: "Today", color: colors.error[500], bgColor: colors.error[50] };
+    if (diffDays === 1) return { label: "Tomorrow", color: colors.warning[600], bgColor: colors.warning[50] };
+    if (diffDays <= 7) return { label: `In ${diffDays} days`, color: colors.primary[600], bgColor: colors.primary[50] };
+    return null;
   };
 
   const toggleDetails = () => {
@@ -43,73 +64,147 @@ const RequestedTile = ({
   }, [homeId]);
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
-  const kilometers = distance ? distance.toFixed(1) : null;
 
-  const formatTimeWindow = (time) => {
-    if (!time || time === "anytime") {
-      return "Anytime today";
-    }
-    // time format is "10-3", "11-4", "12-2"
-    const endHour = parseInt(time.split("-")[1], 10);
-    const period = endHour >= 12 ? "PM" : "AM";
-    return `Must complete by ${endHour}${period}`;
+  const isToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(date + "T00:00:00");
+    return appointmentDate.getTime() === today.getTime();
   };
 
-  const formattedTime = formatTimeWindow(timeToBeCompleted);
+  const formatTimeWindow = (time) => {
+    if (!time) return null;
+    if (time.toLowerCase() === "anytime") {
+      return isToday() ? "Complete anytime today" : null;
+    }
+    const parts = time.split("-");
+    if (parts.length === 2) {
+      const endHour = parseInt(parts[1], 10);
+      // Time windows are like "10-3" (10am-3pm), "11-4" (11am-4pm), "12-2" (12pm-2pm)
+      // End hours 1-6 are PM (afternoon), 7-11 are AM, 12 is PM
+      const period = endHour <= 6 || endHour === 12 ? "PM" : "AM";
+      const displayHour = endHour === 0 ? 12 : endHour;
+      return `Complete by ${displayHour}${period}`;
+    }
+    return null;
+  };
+
+  const timeWindowText = formatTimeWindow(timeToBeCompleted);
+  const isAnytimeToday = timeToBeCompleted?.toLowerCase() === "anytime" && isToday();
+  const dateStatus = getDateStatus();
 
   return (
-    <View style={styles.tileContainer}>
-      <Pressable onPress={toggleDetails} style={{ padding: 10 }}>
-        <Text style={styles.date}>{formatDate(date)}</Text>
+    <View style={styles.card}>
+      <Pressable onPress={toggleDetails} style={styles.cardContent}>
+        {/* Header Row */}
+        <View style={styles.headerRow}>
+          <View style={styles.dateContainer}>
+            <Text style={styles.dateText}>{formatDate(date)}</Text>
+            {dateStatus && (
+              <View style={[styles.dateBadge, { backgroundColor: dateStatus.bgColor }]}>
+                <Text style={[styles.dateBadgeText, { color: dateStatus.color }]}>{dateStatus.label}</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.statusBadge}>
+            <Icon name="clock-o" size={12} color={colors.warning[600]} />
+            <Text style={styles.statusText}>Pending</Text>
+          </View>
+        </View>
 
-        {timeToBeCompleted && (
-          <View style={styles.timeContainer}>
-            <Text style={styles.timeText}>{formattedTime}</Text>
+        {/* Earnings */}
+        <View style={styles.earningsContainer}>
+          <Text style={styles.earningsLabel}>Potential Earnings</Text>
+          <Text style={styles.earningsAmount}>${amount.toFixed(2)}</Text>
+        </View>
+
+        {/* Location & Distance Row */}
+        <View style={styles.infoRow}>
+          <View style={styles.infoItem}>
+            <Icon name="map-marker" size={14} color={colors.text.secondary} />
+            <Text style={styles.infoText}>{home.city}, {home.state}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.infoItem}>
+            <Icon name="location-arrow" size={12} color={colors.primary[500]} />
+            <Text style={[styles.infoText, styles.distanceText]}>
+              {miles ? `${miles} mi` : "Distance unknown"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Time Window - Important */}
+        {timeWindowText && (
+          <View style={[styles.timeWindowContainer, isAnytimeToday && styles.anytimeTodayContainer]}>
+            <Icon name={isAnytimeToday ? "clock-o" : "exclamation-circle"} size={14} color={isAnytimeToday ? colors.primary[600] : colors.warning[600]} />
+            <Text style={[styles.timeWindowText, isAnytimeToday && styles.anytimeTodayText]}>{timeWindowText}</Text>
           </View>
         )}
 
-        <Text style={styles.amount}>Potential Earnings: ${amount}</Text>
-        <Text style={styles.location}>{home.city}, {home.state} {home.zipcode}</Text>
-
-        <View style={styles.distanceContainer}>
-          {distance !== null ? (
-            <>
-              <Text style={styles.distanceLabel}>Distance to home:</Text>
-              <Text style={styles.distanceValue}>{miles} mi <Text style={styles.distanceKm}>({kilometers} km)</Text></Text>
-              <Text style={styles.addressInfo}>Address available on the day of appointment.</Text>
-            </>
-          ) : (
-            <Text style={styles.unknownDistance}>Distance: Unknown</Text>
+        {/* Property Details */}
+        <View style={styles.propertyRow}>
+          <View style={styles.propertyItem}>
+            <Icon name="bed" size={14} color={colors.text.secondary} />
+            <Text style={styles.propertyText}>{home.numBeds || "?"} Beds</Text>
+          </View>
+          <View style={styles.propertyItem}>
+            <Icon name="bath" size={14} color={colors.text.secondary} />
+            <Text style={styles.propertyText}>{home.numBaths || "?"} Baths</Text>
+          </View>
+          {bringSheets === "yes" && (
+            <View style={styles.propertyItem}>
+              <Icon name="th-large" size={12} color={colors.primary[500]} />
+              <Text style={styles.propertyText}>Sheets</Text>
+            </View>
+          )}
+          {bringTowels === "yes" && (
+            <View style={styles.propertyItem}>
+              <Icon name="square" size={12} color={colors.primary[500]} />
+              <Text style={styles.propertyText}>Towels</Text>
+            </View>
           )}
         </View>
 
+        {/* Expanded Details */}
         {(expandWindow || assigned) && (
-          <>
-            <Text style={styles.detailText}>Beds: {home.numBeds}</Text>
-            <Text style={styles.detailText}>Bathrooms: {home.numBaths}</Text>
-            <Text style={styles.detailText}>Sheets needed: {bringSheets}</Text>
-            <Text style={styles.detailText}>Towels needed: {bringTowels}</Text>
+          <View style={styles.expandedSection}>
             {home.cleanersNeeded > 1 && (
-              <>
-                <Text style={styles.warningText}>This is a larger home. You may need more people.</Text>
-                <Text style={styles.subWarningText}>If unsure, choose a smaller home!</Text>
-              </>
+              <View style={styles.warningBanner}>
+                <Icon name="exclamation-triangle" size={14} color={colors.warning[700]} />
+                <View style={styles.warningTextContainer}>
+                  <Text style={styles.warningTitle}>Large Home</Text>
+                  <Text style={styles.warningSubtext}>May need additional cleaners</Text>
+                </View>
+              </View>
             )}
-          </>
+            <Text style={styles.expandHint}>
+              <Icon name="info-circle" size={12} color={colors.text.tertiary} /> Full address available on day of appointment
+            </Text>
+          </View>
         )}
+
+        {/* Expand Indicator */}
+        <View style={styles.expandIndicator}>
+          <Icon
+            name={expandWindow ? "chevron-up" : "chevron-down"}
+            size={12}
+            color={colors.text.tertiary}
+          />
+        </View>
       </Pressable>
 
-      {/* Buttons */}
-      <View style={styles.buttonsRow}>
-        <View style={[styles.button, styles.glassBlue]}>
-          <Text style={styles.buttonText}>Request Sent!</Text>
+      {/* Action Buttons */}
+      <View style={styles.actionsRow}>
+        <View style={styles.sentButton}>
+          <Icon name="check" size={12} color={colors.primary[600]} />
+          <Text style={styles.sentButtonText}>Request Sent</Text>
         </View>
-
         <Pressable
-          style={[styles.button, styles.glassRed]}
+          style={styles.cancelButton}
           onPress={() => removeRequest(cleanerId, id)}
         >
-          <Text style={styles.buttonText}>Cancel Request</Text>
+          <Icon name="times" size={12} color={colors.error[600]} />
+          <Text style={styles.cancelButtonText}>Cancel</Text>
         </Pressable>
       </View>
     </View>
@@ -117,123 +212,211 @@ const RequestedTile = ({
 };
 
 const styles = StyleSheet.create({
-  tileContainer: {
-    backgroundColor: "#fff",
-    padding: 18,
-    marginVertical: 10,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
+  card: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    ...shadows.md,
   },
-  date: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2C3E50",
-    textAlign: "center",
-    marginBottom: 6,
+  cardContent: {
+    padding: spacing.lg,
   },
-  amount: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#34495E",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  location: {
-    fontSize: 14,
-    color: "#7F8C8D",
-    textAlign: "center",
-  },
-  distanceContainer: {
-    marginVertical: 12,
-    alignItems: "center",
-  },
-  distanceLabel: {
-    fontSize: 12,
-    color: "#7F8C8D",
-  },
-  distanceValue: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#2C3E50",
-  },
-  distanceKm: {
-    fontSize: 12,
-    color: "#95A5A6",
-  },
-  addressInfo: {
-    fontSize: 12,
-    color: "#95A5A6",
-    marginTop: 4,
-    textAlign: "center",
-  },
-  unknownDistance: {
-    fontSize: 14,
-    color: "#95A5A6",
-    textAlign: "center",
-  },
-  detailText: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#34495E",
-    marginTop: 4,
-  },
-  warningText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#E74C3C",
-    marginTop: 10,
-  },
-  subWarningText: {
-    fontSize: 14,
-    color: "#7F8C8D",
-    marginBottom: 6,
-  },
-  timeContainer: {
-    alignItems: "center",
-    marginVertical: 10,
-  },
-  timeLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#34495E",
-  },
-  timeText: {
-    fontSize: 13,
-    color: "#2C3E50",
-    opacity: 0.8,
-    marginTop: 2,
-  },
-  buttonsRow: {
+  headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 15,
+    alignItems: "flex-start",
+    marginBottom: spacing.md,
   },
-  button: {
-    flex: 1,
-    paddingVertical: 10,
-    marginHorizontal: 5,
-    borderRadius: 12,
+  dateContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flexWrap: "wrap",
+  },
+  dateText: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  dateBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  dateBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.warning[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  statusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
+  },
+  earningsContainer: {
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+  },
+  earningsLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[700],
+    marginBottom: 2,
+  },
+  earningsAmount: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
+  },
+  infoRow: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.neutral[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
   },
-  glassBlue: {
-    backgroundColor: "rgba(0, 123, 255, 0.2)",
+  infoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  infoText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  distanceText: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  divider: {
+    width: 1,
+    height: 16,
+    backgroundColor: colors.border.light,
+    marginHorizontal: spacing.md,
+  },
+  timeWindowContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.warning[50],
     borderWidth: 1,
-    borderColor: "rgba(0, 123, 255, 0.3)",
+    borderColor: colors.warning[200],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
   },
-  glassRed: {
-    backgroundColor: "rgba(231, 76, 60, 0.2)",
-    borderWidth: 1,
-    borderColor: "rgba(231, 76, 60, 0.3)",
+  timeWindowText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
   },
-  buttonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#2C3E50",
+  anytimeTodayContainer: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
+  },
+  anytimeTodayText: {
+    color: colors.primary[700],
+  },
+  propertyRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  propertyItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  propertyText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  expandedSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  warningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.warning[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  warningTextContainer: {
+    flex: 1,
+  },
+  warningTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  warningSubtext: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[600],
+  },
+  expandHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    textAlign: "center",
+  },
+  expandIndicator: {
+    alignItems: "center",
+    marginTop: spacing.sm,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  sentButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.primary[50],
+  },
+  sentButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[600],
+  },
+  cancelButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.error[50],
+  },
+  cancelButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.error[600],
   },
 });
 

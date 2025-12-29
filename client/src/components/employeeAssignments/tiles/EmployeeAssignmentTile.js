@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import CleanerCancellationWarningModal from "../../modals/CleanerCancellationWarningModal";
 import { usePricing } from "../../../context/PricingContext";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../../services/styles/theme";
 
 const EmployeeAssignmentTile = ({
   id,
@@ -46,19 +54,29 @@ const EmployeeAssignmentTile = ({
   const amount = Number(price) * cleanerSharePercent;
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString + "T00:00:00");
-    const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
-    return date.toLocaleDateString(undefined, options);
+    const dateObj = new Date(dateString + "T00:00:00");
+    const options = { weekday: "short", month: "short", day: "numeric" };
+    return dateObj.toLocaleDateString(undefined, options);
   };
 
-  const expandDetails = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandWindow(true);
+  const getDateStatus = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(date + "T00:00:00");
+    const diffTime = appointmentDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (completed) return { label: "Completed", color: colors.success[600], bgColor: colors.success[50], icon: "check-circle" };
+    if (diffDays < 0) return { label: "Past Due", color: colors.error[600], bgColor: colors.error[50], icon: "exclamation-circle" };
+    if (diffDays === 0) return { label: "Today", color: colors.error[500], bgColor: colors.error[50], icon: "clock-o" };
+    if (diffDays === 1) return { label: "Tomorrow", color: colors.warning[600], bgColor: colors.warning[50], icon: "clock-o" };
+    if (diffDays <= 7) return { label: `In ${diffDays} days`, color: colors.primary[600], bgColor: colors.primary[50], icon: "calendar" };
+    return { label: "Upcoming", color: colors.text.secondary, bgColor: colors.neutral[100], icon: "calendar-o" };
   };
 
-  const contractDetails = () => {
+  const toggleDetails = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandWindow(false);
+    setExpandWindow(!expandWindow);
   };
 
   useEffect(() => {
@@ -68,24 +86,33 @@ const EmployeeAssignmentTile = ({
   }, [homeId]);
 
   const miles = distance ? (distance * 0.621371).toFixed(1) : null;
-  const kilometers = distance ? distance.toFixed(1) : null;
 
-  const formatTimeWindow = (time) => {
-    if (!time || time === "anytime") {
-      return "Anytime today";
-    }
-    // time format is "10-3", "11-4", "12-2"
-    const endHour = parseInt(time.split("-")[1], 10);
-    const period = endHour >= 12 ? "PM" : "AM";
-    return `Must complete by ${endHour}${period}`;
+  const isToday = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const appointmentDate = new Date(date + "T00:00:00");
+    return appointmentDate.getTime() === today.getTime();
   };
 
-  const formattedTime = formatTimeWindow(timeToBeCompleted);
+  const formatTimeWindow = (time) => {
+    if (!time) return null;
+    if (time.toLowerCase() === "anytime") {
+      return isToday() ? "Complete anytime today" : null;
+    }
+    const parts = time.split("-");
+    if (parts.length === 2) {
+      const endHour = parseInt(parts[1], 10);
+      // Time windows are like "10-3" (10am-3pm), "11-4" (11am-4pm), "12-2" (12pm-2pm)
+      // End hours 1-6 are PM (afternoon), 7-11 are AM, 12 is PM
+      const period = endHour <= 6 || endHour === 12 ? "PM" : "AM";
+      const displayHour = endHour === 0 ? 12 : endHour;
+      return `Complete by ${displayHour}${period}`;
+    }
+    return null;
+  };
 
-  // Handle opening cancellation modal
   const handleCancelPress = async () => {
     if (!token) {
-      // Fall back to old behavior if no token
       removeEmployee(cleanerId, id);
       return;
     }
@@ -107,11 +134,9 @@ const EmployeeAssignmentTile = ({
     }
   };
 
-  // Handle confirming cancellation
   const handleConfirmCancel = async () => {
     setCancelLoading(true);
     try {
-      // Pass acknowledged: true since user confirmed via the modal checkbox
       const result = await FetchData.cancelAsCleaner(id, token, true);
       if (result.error) {
         setError(result.error);
@@ -120,16 +145,13 @@ const EmployeeAssignmentTile = ({
       }
       setShowCancelModal(false);
 
-      // Show account frozen alert if applicable
       if (result.accountFrozen) {
         setError("Your account has been frozen due to too many cancellations. Please contact support.");
       }
 
-      // Call the callback to remove from list
       if (onCancelComplete) {
         onCancelComplete(id, result);
       } else {
-        // Fall back to removeEmployee if no callback provided
         removeEmployee(cleanerId, id);
       }
     } catch (err) {
@@ -139,82 +161,194 @@ const EmployeeAssignmentTile = ({
     }
   };
 
+  const timeWindowText = formatTimeWindow(timeToBeCompleted);
+  const isAnytimeToday = timeToBeCompleted?.toLowerCase() === "anytime" && isToday();
+  const dateStatus = getDateStatus();
+
   return (
-    <View style={styles.tileContainer}>
-      <Pressable onPress={expandWindow ? contractDetails : expandDetails}>
-        <Text style={styles.date}>{formatDate(date)}</Text>
-
-        {timeToBeCompleted && (
-          <View style={styles.timeContainer}>
-            <Text style={styles.timeText}>{formattedTime}</Text>
+    <View style={styles.card}>
+      <Pressable onPress={toggleDetails} style={styles.cardContent}>
+        {/* Header Row */}
+        <View style={styles.headerRow}>
+          <View style={styles.dateContainer}>
+            <Text style={styles.dateText}>{formatDate(date)}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: dateStatus.bgColor }]}>
+              <Icon name={dateStatus.icon} size={10} color={dateStatus.color} />
+              <Text style={[styles.statusText, { color: dateStatus.color }]}>{dateStatus.label}</Text>
+            </View>
           </View>
-        )}
-
-        <Text style={styles.amount}>You could make ${amount} cleaning this home</Text>
-        <Text style={styles.location}>{home.city}</Text>
-        <Text style={styles.location}>
-          {home.state}, {home.zipcode}
-        </Text>
-
-        <View style={styles.distanceContainer}>
-          {distance !== null ? (
-            <>
-              <Text style={styles.distanceLabel}>Distance to home:</Text>
-              <Text style={styles.distanceValue}>
-                {miles} mi <Text style={styles.distanceKm}>({kilometers} km)</Text>
-              </Text>
-              <Text style={styles.addressInfo}>Address available on the day of the appointment.</Text>
-            </>
-          ) : (
-            <Text style={styles.unknownDistance}>Distance: Unknown</Text>
+          {assigned && !completed && (
+            <View style={styles.assignedBadge}>
+              <Icon name="check" size={10} color={colors.success[600]} />
+              <Text style={styles.assignedText}>Assigned</Text>
+            </View>
           )}
         </View>
 
-        {(expandWindow || assigned) && (
-          <>
-            <Text style={styles.infoText}>Beds: {home.numBeds}</Text>
-            <Text style={styles.infoText}>Bathrooms: {home.numBaths}</Text>
-            <Text style={styles.infoText}>Sheets needed: {bringSheets}</Text>
-            <Text style={styles.infoText}>Towels needed: {bringTowels}</Text>
+        {/* Earnings */}
+        <View style={[styles.earningsContainer, completed && styles.earningsCompleted]}>
+          <Text style={[styles.earningsLabel, completed && styles.earningsLabelCompleted]}>
+            {completed ? "You Earned" : "You'll Earn"}
+          </Text>
+          <Text style={[styles.earningsAmount, completed && styles.earningsAmountCompleted]}>
+            ${amount.toFixed(2)}
+          </Text>
+        </View>
 
-            {home.cleanersNeeded > 1 && (
-              <>
-                <Text style={styles.warning}>
-                  This is a larger home. You may need more people to clean it in a timely manner.
-                </Text>
-                <Text style={styles.infoText}>
-                  If you don’t think you can complete it, please choose a smaller home!
-                </Text>
-              </>
-            )}
-          </>
+        {/* Location & Distance Row */}
+        <View style={styles.infoRow}>
+          <View style={styles.infoItem}>
+            <Icon name="map-marker" size={14} color={colors.text.secondary} />
+            <Text style={styles.infoText}>{home.city}, {home.state}</Text>
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.infoItem}>
+            <Icon name="location-arrow" size={12} color={colors.primary[500]} />
+            <Text style={[styles.infoText, styles.distanceText]}>
+              {miles ? `${miles} mi` : "Distance unknown"}
+            </Text>
+          </View>
+        </View>
+
+        {/* Time Window - Important */}
+        {timeWindowText && !completed && (
+          <View style={[styles.timeWindowContainer, isAnytimeToday && styles.anytimeTodayContainer]}>
+            <Icon name={isAnytimeToday ? "clock-o" : "exclamation-circle"} size={14} color={isAnytimeToday ? colors.primary[600] : colors.warning[600]} />
+            <Text style={[styles.timeWindowText, isAnytimeToday && styles.anytimeTodayText]}>{timeWindowText}</Text>
+          </View>
         )}
+
+        {/* Property Details */}
+        <View style={styles.propertyRow}>
+          <View style={styles.propertyItem}>
+            <Icon name="bed" size={14} color={colors.text.secondary} />
+            <Text style={styles.propertyText}>{home.numBeds || "?"} Beds</Text>
+          </View>
+          <View style={styles.propertyItem}>
+            <Icon name="bath" size={14} color={colors.text.secondary} />
+            <Text style={styles.propertyText}>{home.numBaths || "?"} Baths</Text>
+          </View>
+          {bringSheets === "yes" && (
+            <View style={styles.propertyItem}>
+              <Icon name="th-large" size={12} color={colors.primary[500]} />
+              <Text style={styles.propertyText}>Sheets</Text>
+            </View>
+          )}
+          {bringTowels === "yes" && (
+            <View style={styles.propertyItem}>
+              <Icon name="square" size={12} color={colors.primary[500]} />
+              <Text style={styles.propertyText}>Towels</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Expanded Details */}
+        {(expandWindow || assigned) && (
+          <View style={styles.expandedSection}>
+            {/* Access Info for Assigned Jobs */}
+            {assigned && !completed && (keyPadCode || keyLocation) && (
+              <View style={styles.accessInfoContainer}>
+                <Text style={styles.accessTitle}>
+                  <Icon name="key" size={12} color={colors.primary[600]} /> Access Information
+                </Text>
+                {keyPadCode && (
+                  <View style={styles.accessRow}>
+                    <Text style={styles.accessLabel}>Keypad Code:</Text>
+                    <Text style={styles.accessValue}>{keyPadCode}</Text>
+                  </View>
+                )}
+                {keyLocation && (
+                  <View style={styles.accessRow}>
+                    <Text style={styles.accessLabel}>Key Location:</Text>
+                    <Text style={styles.accessValue}>{keyLocation}</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Large Home Warning */}
+            {home.cleanersNeeded > 1 && (
+              <View style={styles.warningBanner}>
+                <Icon name="exclamation-triangle" size={14} color={colors.warning[700]} />
+                <View style={styles.warningTextContainer}>
+                  <Text style={styles.warningTitle}>Large Home</Text>
+                  <Text style={styles.warningSubtext}>May need additional cleaners</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Address Hint */}
+            {!assigned && (
+              <Text style={styles.expandHint}>
+                <Icon name="info-circle" size={12} color={colors.text.tertiary} /> Full address available after assignment
+              </Text>
+            )}
+
+            {/* Full Address for Assigned Jobs */}
+            {assigned && home.address && (
+              <View style={styles.addressContainer}>
+                <Icon name="home" size={14} color={colors.text.secondary} />
+                <Text style={styles.addressText}>
+                  {home.address}, {home.city}, {home.state} {home.zipcode}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Expand Indicator */}
+        <View style={styles.expandIndicator}>
+          <Icon
+            name={expandWindow ? "chevron-up" : "chevron-down"}
+            size={12}
+            color={colors.text.tertiary}
+          />
+        </View>
       </Pressable>
 
-      {assigned ? (
-        <Pressable
-          style={[styles.button, styles.cancelButton, loadingCancellation && styles.buttonDisabled]}
-          onPress={handleCancelPress}
-          disabled={loadingCancellation}
-        >
-          {loadingCancellation ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>I no longer want to clean this home!</Text>
-          )}
-        </Pressable>
-      ) : (
-        <Pressable
-          style={[styles.button, styles.acceptButton]}
-          onPress={() => addEmployee(cleanerId, id)}
-        >
-          <Text style={styles.buttonText}>I want to clean this home!</Text>
-        </Pressable>
-      )}
-
+      {/* Error Message */}
       {error && (
         <View style={styles.errorContainer}>
+          <Icon name="exclamation-circle" size={14} color={colors.error[600]} />
           <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {/* Action Buttons */}
+      {!completed && (
+        <View style={styles.actionsRow}>
+          {assigned ? (
+            <Pressable
+              style={[styles.actionButton, styles.cancelButton, loadingCancellation && styles.buttonDisabled]}
+              onPress={handleCancelPress}
+              disabled={loadingCancellation}
+            >
+              {loadingCancellation ? (
+                <ActivityIndicator size="small" color={colors.error[600]} />
+              ) : (
+                <>
+                  <Icon name="times" size={14} color={colors.error[600]} />
+                  <Text style={styles.cancelButtonText}>Cancel Job</Text>
+                </>
+              )}
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[styles.actionButton, styles.acceptButton]}
+              onPress={() => addEmployee(cleanerId, id)}
+            >
+              <Icon name="check" size={14} color={colors.neutral[0]} />
+              <Text style={styles.acceptButtonText}>Accept This Job</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* Completed Badge */}
+      {completed && (
+        <View style={styles.completedFooter}>
+          <Icon name="check-circle" size={16} color={colors.success[600]} />
+          <Text style={styles.completedText}>Job Completed</Text>
         </View>
       )}
 
@@ -231,130 +365,290 @@ const EmployeeAssignmentTile = ({
 };
 
 const styles = StyleSheet.create({
-  tileContainer: {
-    backgroundColor: "#fff",
-    padding: 18,
-    marginVertical: 10,
-    borderRadius: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
+  card: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    ...shadows.md,
+  },
+  cardContent: {
+    padding: spacing.lg,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.md,
+  },
+  dateContainer: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: spacing.sm,
+    flexWrap: "wrap",
+    flex: 1,
   },
-  date: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2C3E50",
-    marginBottom: 6,
-    textAlign: "center",
+  dateText: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
-  amount: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#34495E",
-    marginBottom: 6,
-    textAlign: "center",
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
   },
-  location: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#7F8C8D",
-    textAlign: "center",
+  statusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
   },
-  distanceContainer: {
-    marginVertical: 10,
+  assignedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.success[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
   },
-  distanceLabel: {
-    fontSize: 12,
-    color: "#7F8C8D",
-    marginBottom: 4,
+  assignedText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.success[600],
   },
-  distanceValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#2C3E50",
+  earningsContainer: {
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
   },
-  distanceKm: {
-    fontSize: 12,
-    color: "#7F8C8D",
+  earningsCompleted: {
+    backgroundColor: colors.neutral[100],
   },
-  addressInfo: {
-    fontSize: 12,
-    color: "#95A5A6",
-    marginTop: 4,
-    textAlign: "center",
+  earningsLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[700],
+    marginBottom: 2,
   },
-  unknownDistance: {
-    fontSize: 14,
-    color: "#95A5A6",
-    textAlign: "center",
+  earningsLabelCompleted: {
+    color: colors.text.secondary,
+  },
+  earningsAmount: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
+  },
+  earningsAmountCompleted: {
+    color: colors.text.primary,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.neutral[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  infoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
   },
   infoText: {
-    fontSize: 14,
-    color: "#34495E",
-    marginTop: 4,
-    textAlign: "center",
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
   },
-  warning: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#E74C3C",
-    marginTop: 8,
-    textAlign: "center",
+  distanceText: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
   },
-  button: {
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 10,
-    marginTop: 12,
-    justifyContent: "center",
+  divider: {
+    width: 1,
+    height: 16,
+    backgroundColor: colors.border.light,
+    marginHorizontal: spacing.md,
+  },
+  timeWindowContainer: {
+    flexDirection: "row",
     alignItems: "center",
-    minWidth: "80%",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.warning[50],
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+  },
+  timeWindowText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  anytimeTodayContainer: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
+  },
+  anytimeTodayText: {
+    color: colors.primary[700],
+  },
+  propertyRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  propertyItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  propertyText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  expandedSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  accessInfoContainer: {
+    backgroundColor: colors.primary[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  accessTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+    marginBottom: spacing.sm,
+  },
+  accessRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.xs,
+  },
+  accessLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  accessValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  warningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.warning[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  warningTextContainer: {
+    flex: 1,
+  },
+  warningTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  warningSubtext: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[600],
+  },
+  expandHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    textAlign: "center",
+  },
+  addressContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.neutral[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
+  },
+  addressText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+  },
+  expandIndicator: {
+    alignItems: "center",
+    marginTop: spacing.sm,
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.error[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.error[100],
+  },
+  errorText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.error[700],
+  },
+  actionsRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
   },
   cancelButton: {
-    backgroundColor: "#E74C3C",
+    backgroundColor: colors.error[50],
+  },
+  cancelButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.error[600],
   },
   acceptButton: {
-    backgroundColor: "#2ECC71",
+    backgroundColor: colors.success[500],
+  },
+  acceptButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-  buttonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#fff",
-    textAlign: "center",
-  },
-  errorContainer: {
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: "#FDECEA",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#F5C6CB",
-  },
-  errorText: {
-    color: "#C0392B",
-    fontSize: 13,
-    textAlign: "center",
-  },
-  timeContainer: {
+  completedFooter: {
+    flexDirection: "row",
     alignItems: "center",
-    marginVertical: 10,
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.success[100],
   },
-  timeLabel: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#34495E",
-  },
-  timeText: {
-    fontSize: 13,
-    color: "#7F8C8D",
-    marginTop: 2,
-    textAlign: "center",
+  completedText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.success[700],
   },
 });
 

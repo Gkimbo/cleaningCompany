@@ -562,7 +562,7 @@ describe("EmailClass", () => {
       expect(mailOptions.html).toContain("John Smith");
     });
 
-    it("should include appointment details", async () => {
+    it("should include appointment details with city/state/zip only (no street address)", async () => {
       await Email.sendRequestApproved(
         "cleaner@example.com",
         "Mike",
@@ -572,8 +572,12 @@ describe("EmailClass", () => {
       );
 
       const mailOptions = mockSendMail.mock.calls[0][0];
-      expect(mailOptions.html).toContain("789 Elm St");
+      // Should NOT contain street address for privacy
+      expect(mailOptions.html).not.toContain("789 Elm St");
+      // Should contain city, state, zip
       expect(mailOptions.html).toContain("Newton");
+      expect(mailOptions.html).toContain("MA");
+      expect(mailOptions.html).toContain("02458");
       expect(mailOptions.html).toContain("Approved");
     });
 
