@@ -27,6 +27,7 @@ import TodaysAppointment from "../employeeAssignments/tiles/TodaysAppointment";
 import NextAppointmentPreview from "../employeeAssignments/tiles/NextAppointmentPreview";
 import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlow";
 import { usePricing } from "../../context/PricingContext";
+import { parseLocalDate } from "../../utils/dateUtils";
 
 const { width } = Dimensions.get("window");
 
@@ -125,7 +126,7 @@ const QuickActionButton = ({ title, subtitle, onPress, icon, iconColor, bgColor,
 
 // Upcoming Appointment Card Component
 const UpcomingAppointmentCard = ({ appointment, home, onPress, cleanerSharePercent }) => {
-  const appointmentDate = new Date(appointment.date);
+  const appointmentDate = parseLocalDate(appointment.date);
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -422,25 +423,25 @@ const CleanerDashboard = ({ state, dispatch }) => {
 
   // Sort appointments by date
   const sortedAppointments = [...appointments].sort(
-    (a, b) => new Date(a.date) - new Date(b.date)
+    (a, b) => parseLocalDate(a.date) - parseLocalDate(b.date)
   );
 
   // Get today's appointments (multiple) sorted by end time
   const today = new Date();
   const todaysAppointments = sortByEndTime(
     sortedAppointments.filter(
-      (apt) => new Date(apt.date).toDateString() === today.toDateString()
+      (apt) => parseLocalDate(apt.date).toDateString() === today.toDateString()
     )
   );
 
   // Get next appointment (first one after today)
   const nextAppointment = sortedAppointments.find(
-    (apt) => new Date(apt.date) > today
+    (apt) => parseLocalDate(apt.date) > today
   );
 
   // Get upcoming appointments (excluding today and next) for the list
   const upcomingAppointments = sortedAppointments
-    .filter((apt) => new Date(apt.date) > today)
+    .filter((apt) => parseLocalDate(apt.date) > today)
     .slice(0, 3);
 
   // Get completed appointments count
@@ -448,7 +449,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
 
   // Calculate expected payout
   const expectedPayout = sortedAppointments
-    .filter((apt) => !apt.completed && new Date(apt.date) >= today)
+    .filter((apt) => !apt.completed && parseLocalDate(apt.date) >= today)
     .reduce((sum, apt) => sum + Number(apt.price) * cleanerSharePercent, 0);
 
   const handleJobCompleted = (data) => {

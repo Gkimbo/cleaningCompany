@@ -138,16 +138,35 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
       const data = await response.json();
 
       if (response.ok) {
-        Alert.alert(
-          "Job Completed!",
-          "Great work! Your payout has been processed.",
-          [
-            {
-              text: "OK",
-              onPress: () => onJobCompleted && onJobCompleted(data),
-            },
-          ]
+        // Check payout results to give appropriate feedback
+        const payoutResults = data.payoutResults || [];
+        const myPayout = payoutResults.find(
+          (p) => String(p.cleanerId) === String(currentUser.id)
         );
+
+        let message = "Great work!";
+        if (myPayout) {
+          if (myPayout.status === "success") {
+            const amount = myPayout.amountCents
+              ? `$${(myPayout.amountCents / 100).toFixed(2)}`
+              : "";
+            message = `Great work! Your payout${amount ? ` of ${amount}` : ""} has been processed.`;
+          } else if (myPayout.status === "skipped") {
+            message =
+              "Job completed! However, your payout could not be processed. Please complete your Stripe account setup to receive payments.";
+          } else if (myPayout.status === "already_paid") {
+            message = "Job completed! Your payout was already processed.";
+          }
+        } else {
+          message = "Job completed successfully!";
+        }
+
+        Alert.alert("Job Completed!", message, [
+          {
+            text: "OK",
+            onPress: () => onJobCompleted && onJobCompleted(data),
+          },
+        ]);
       } else {
         Alert.alert("Error", data.error || "Failed to complete job");
       }

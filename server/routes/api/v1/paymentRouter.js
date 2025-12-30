@@ -1489,8 +1489,20 @@ async function processCleanerPayouts(appointment) {
         });
       }
 
+      // Get the charge ID from the payment intent to use as source_transaction
+      // This links the transfer to the original customer payment
+      let chargeId = null;
+      if (appointment.paymentIntentId) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
+          chargeId = paymentIntent.latest_charge;
+        } catch (err) {
+          console.error(`Could not retrieve payment intent ${appointment.paymentIntentId}:`, err.message);
+        }
+      }
+
       // Create Stripe Transfer to cleaner
-      const transfer = await stripe.transfers.create({
+      const transferParams = {
         amount: netAmount,
         currency: "usd",
         destination: connectAccount.stripeAccountId,
@@ -1499,7 +1511,15 @@ async function processCleanerPayouts(appointment) {
           cleanerId: cleanerId.toString(),
           payoutId: payout.id.toString(),
         },
-      });
+      };
+
+      // Use source_transaction if we have the charge ID
+      // This links the transfer to the specific charge, ensuring funds are available
+      if (chargeId) {
+        transferParams.source_transaction = chargeId;
+      }
+
+      const transfer = await stripe.transfers.create(transferParams);
 
       await payout.update({
         stripeTransferId: transfer.id,

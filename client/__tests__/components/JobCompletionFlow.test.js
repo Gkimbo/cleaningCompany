@@ -442,10 +442,36 @@ describe("JobCompletionFlow Component", () => {
     });
 
     it("should show success alert when job completed successfully", async () => {
-      setupReviewStep();
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, payout: 135 }),
+      // Use mockImplementation to handle URL-based responses
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          });
+        }
+        if (url.includes("/job-photos/") && !url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
+                afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
+              }),
+          });
+        }
+        if (url.includes("/complete-job")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              success: true,
+              payoutResults: [
+                { cleanerId: 1, status: "success", amountCents: 13500 }
+              ]
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
@@ -461,7 +487,58 @@ describe("JobCompletionFlow Component", () => {
       await waitFor(() => {
         expect(Alert.alert).toHaveBeenCalledWith(
           "Job Completed!",
-          "Great work! Your payout has been processed.",
+          "Great work! Your payout of $135.00 has been processed.",
+          expect.any(Array)
+        );
+      });
+    });
+
+    it("should show warning when payout is skipped due to missing Stripe setup", async () => {
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          });
+        }
+        if (url.includes("/job-photos/") && !url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
+                afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
+              }),
+          });
+        }
+        if (url.includes("/complete-job")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              success: true,
+              payoutResults: [
+                { cleanerId: 1, status: "skipped", reason: "Cleaner has not completed Stripe onboarding" }
+              ]
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(getByText("Complete Job & Get Paid")).toBeTruthy();
+      });
+
+      await act(async () => {
+        fireEvent.press(getByText("Complete Job & Get Paid"));
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith(
+          "Job Completed!",
+          "Job completed! However, your payout could not be processed. Please complete your Stripe account setup to receive payments.",
           expect.any(Array)
         );
       });
