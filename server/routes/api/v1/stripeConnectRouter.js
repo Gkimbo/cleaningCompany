@@ -741,8 +741,9 @@ stripeConnectRouter.post("/process-payout", async (req, res) => {
     // Process payout for each cleaner
     const results = [];
 
-    for (const cleanerId of cleanerIds) {
-      const result = await processCleanerPayout(appointment, cleanerId, cleanerIds.length);
+    for (const cleanerIdStr of cleanerIds) {
+      const cleanerIdInt = parseInt(cleanerIdStr, 10);
+      const result = await processCleanerPayout(appointment, cleanerIdInt, cleanerIds.length);
       results.push(result);
     }
 

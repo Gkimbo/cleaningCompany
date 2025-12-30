@@ -72,12 +72,20 @@ const Earnings = ({ state, dispatch }) => {
   const fetchAssignedAppointments = async () => {
     if (!state?.currentUser?.id) return;
     try {
-      // Get appointments assigned to this cleaner
-      const myAppointments = (state?.appointments || []).filter(
-        (appt) =>
-          appt.employeesAssigned &&
-          appt.employeesAssigned.includes(String(state.currentUser.id))
-      );
+      // Get appointments assigned to this cleaner (exclude completed ones)
+      const myAppointments = (state?.appointments || [])
+        .filter(
+          (appt) =>
+            appt.employeesAssigned &&
+            appt.employeesAssigned.includes(String(state.currentUser.id)) &&
+            !appt.completed // Filter out completed appointments
+        )
+        .sort((a, b) => {
+          // Sort by date, soonest first
+          const dateA = new Date(a.date + "T00:00:00");
+          const dateB = new Date(b.date + "T00:00:00");
+          return dateA - dateB;
+        });
       setAssignedAppointments(myAppointments);
     } catch (err) {
       console.error("Error fetching appointments:", err);

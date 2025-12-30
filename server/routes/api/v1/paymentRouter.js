@@ -142,6 +142,7 @@ paymentRouter.get("/history/:userId", async (req, res) => {
  */
 paymentRouter.get("/earnings/:employeeId", async (req, res) => {
   const { employeeId } = req.params;
+  const cleanerIdInt = parseInt(employeeId, 10);
 
   try {
     // Get platform fee from database
@@ -150,7 +151,7 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
 
     // First try to get earnings from Payout records (more accurate)
     const payouts = await Payout.findAll({
-      where: { cleanerId: employeeId },
+      where: { cleanerId: cleanerIdInt },
       include: [{
         model: UserAppointments,
         as: "appointment",
@@ -1435,7 +1436,8 @@ async function processCleanerPayouts(appointment) {
   const pricing = await getPricingConfig();
   const platformFeePercent = pricing.platform.feePercent;
 
-  for (const cleanerId of cleanerIds) {
+  for (const cleanerIdStr of cleanerIds) {
+    const cleanerId = parseInt(cleanerIdStr, 10);
     try {
       // Get or create payout record
       let payout = await Payout.findOne({
