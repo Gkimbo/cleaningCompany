@@ -24,6 +24,7 @@ import {
 import TaxFormsSection from "../tax/TaxFormsSection";
 import HomeownerAdjustmentNotification from "./HomeownerAdjustmentNotification";
 import { parseLocalDate, isFutureOrToday, isPast, compareDates } from "../../utils/dateUtils";
+import TodaysCleaningCard from "./TodaysCleaningCard";
 
 const { width } = Dimensions.get("window");
 
@@ -279,6 +280,30 @@ const ClientDashboard = ({ state, dispatch }) => {
   const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
   const upcomingAppointmentsCount = allUpcomingAppointments.length;
 
+  // Find today's appointment (for Today's Cleaning card)
+  const todayStr = new Date().toDateString();
+  const todaysAppointment = appointments.find((apt) => {
+    const aptDate = parseLocalDate(apt.date);
+    return aptDate.toDateString() === todayStr;
+  });
+  const todaysHome = todaysAppointment
+    ? homes.find((h) => Number(h.id) === Number(todaysAppointment.homeId))
+    : null;
+
+  // Find pending reviews (completed appointments without client review)
+  const pendingReviews = appointments
+    .filter((apt) => apt.completed && !apt.hasClientReview)
+    .sort((a, b) => compareDates(b.date, a.date)); // Most recent first
+
+  const handleReviewSubmitted = (appointmentId) => {
+    // Update appointments state to mark as reviewed
+    setAppointments((prev) =>
+      prev.map((apt) =>
+        apt.id === appointmentId ? { ...apt, hasClientReview: true } : apt
+      )
+    );
+  };
+
   // Calculate auto-captured, prepaid, and pending amounts for upcoming appointments
   // Auto-captured: paid and within 3 days (system auto-captured the payment)
   // Prepaid: paid but more than 3 days away (client paid early)
@@ -362,6 +387,16 @@ const ClientDashboard = ({ state, dispatch }) => {
         <Text style={styles.greeting}>{getGreeting()}</Text>
         <Text style={styles.dateText}>{formatDate()}</Text>
       </View>
+
+      {/* Today's Cleaning - Show if there's an appointment today */}
+      {todaysAppointment && (
+        <TodaysCleaningCard
+          appointment={todaysAppointment}
+          home={todaysHome}
+          state={state}
+          onReviewSubmitted={handleReviewSubmitted}
+        />
+      )}
 
       {/* Pending Home Size Adjustments */}
       {pendingAdjustments.length > 0 && (
@@ -461,6 +496,38 @@ const ClientDashboard = ({ state, dispatch }) => {
           onPress={() => navigate("/appointments")}
         />
       </View>
+
+      {/* Pending Reviews Section */}
+      {pendingReviews.length > 0 && (
+        <View style={styles.section}>
+          <SectionHeader title="Pending Reviews" />
+          <View style={styles.pendingReviewsCard}>
+            <View style={styles.pendingReviewsHeader}>
+              <Icon name="star" size={16} color={colors.warning[500]} />
+              <Text style={styles.pendingReviewsTitle}>
+                {pendingReviews.length} cleaning{pendingReviews.length > 1 ? "s" : ""} to review
+              </Text>
+            </View>
+            <Text style={styles.pendingReviewsSubtitle}>
+              Share your feedback about your recent cleanings
+            </Text>
+            <View style={styles.pendingReviewsList}>
+              {pendingReviews.slice(0, 3).map((apt) => {
+                const home = homes.find((h) => Number(h.id) === Number(apt.homeId));
+                return (
+                  <TodaysCleaningCard
+                    key={apt.id}
+                    appointment={apt}
+                    home={home}
+                    state={state}
+                    onReviewSubmitted={handleReviewSubmitted}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Upcoming Appointments Section */}
       <View style={styles.section}>
@@ -1277,6 +1344,34 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.primary[600],
     fontWeight: typography.fontWeight.medium,
+  },
+
+  // Pending Reviews
+  pendingReviewsCard: {
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  pendingReviewsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  pendingReviewsTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  pendingReviewsSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[600],
+    marginBottom: spacing.md,
+  },
+  pendingReviewsList: {
+    gap: spacing.md,
   },
 
   bottomPadding: {

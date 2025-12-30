@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,17 +8,24 @@ import {
   Linking,
   Alert,
   Platform,
+  ScrollView,
 } from "react-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import JobCompletionFlow from "../jobPhotos/JobCompletionFlow";
 import HomeSizeConfirmationModal from "../HomeSizeConfirmationModal";
+import StartConversationButton from "../../messaging/StartConversationButton";
+import MultiAspectReviewForm from "../../reviews/MultiAspectReviewForm";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
+import { UserContext } from "../../../context/UserContext";
 import Icon from "react-native-vector-icons/FontAwesome";
 
 const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token }) => {
+  const { state } = useContext(UserContext);
   const { pricing } = usePricing();
   const [jobStarted, setJobStarted] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
   const [home, setHome] = useState({
     address: "",
     city: "",
@@ -249,10 +256,6 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
 
         <View style={styles.detailsGrid}>
           <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Contact</Text>
-            <Text style={styles.detailValue}>{home.contact}</Text>
-          </View>
-          <View style={styles.detailItem}>
             <Text style={styles.detailLabel}>Beds</Text>
             <Text style={styles.detailValue}>{home.numBeds}</Text>
           </View>
@@ -261,6 +264,42 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
             <Text style={styles.detailValue}>{home.numBaths}</Text>
           </View>
         </View>
+
+        {/* Message Homeowner Button - only show when job not completed */}
+        {!appointment.completed && (
+          <View style={styles.messageHomeownerContainer}>
+            <Icon name="comment" size={16} color={colors.primary[600]} />
+            <Text style={styles.messageHomeownerLabel}>Contact Homeowner</Text>
+            <StartConversationButton
+              appointmentId={appointment.id}
+              token={token}
+              style={styles.messageHomeownerButton}
+              textStyle={styles.messageHomeownerButtonText}
+            />
+          </View>
+        )}
+
+        {/* Review Homeowner Button - only show when job is completed */}
+        {appointment.completed && !hasReviewed && (
+          <TouchableOpacity
+            style={styles.reviewHomeownerContainer}
+            onPress={() => setShowReviewModal(true)}
+          >
+            <Icon name="star" size={16} color={colors.warning[600]} />
+            <Text style={styles.reviewHomeownerLabel}>Review Homeowner</Text>
+            <View style={styles.reviewHomeownerButton}>
+              <Text style={styles.reviewHomeownerButtonText}>Leave Review</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Review Submitted Banner */}
+        {appointment.completed && hasReviewed && (
+          <View style={styles.reviewSubmittedContainer}>
+            <Icon name="check-circle" size={16} color={colors.success[600]} />
+            <Text style={styles.reviewSubmittedText}>Review Submitted</Text>
+          </View>
+        )}
 
         {/* Linens Section */}
         <View style={styles.linensContainer}>
@@ -403,6 +442,40 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
           onCancel={handleCancelCompletion}
         />
       </Modal>
+
+      {/* Review Homeowner Modal */}
+      <Modal
+        visible={showReviewModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View style={styles.reviewModalContainer}>
+          <View style={styles.reviewModalHeader}>
+            <TouchableOpacity
+              onPress={() => setShowReviewModal(false)}
+              style={styles.reviewModalCloseButton}
+            >
+              <Icon name="times" size={20} color={colors.text.secondary} />
+            </TouchableOpacity>
+            <Text style={styles.reviewModalTitle}>Review Homeowner</Text>
+            <View style={styles.reviewModalCloseButton} />
+          </View>
+          <ScrollView style={styles.reviewModalContent}>
+            <MultiAspectReviewForm
+              state={state}
+              appointmentId={appointment.id}
+              userId={appointment.userId}
+              reviewType="cleaner_to_homeowner"
+              revieweeName={home.nickName || "Homeowner"}
+              onComplete={() => {
+                setShowReviewModal(false);
+                setHasReviewed(true);
+                Alert.alert("Thank you!", "Your review has been submitted.");
+              }}
+            />
+          </ScrollView>
+        </View>
+      </Modal>
     </>
   );
 };
@@ -512,6 +585,104 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
+  },
+  messageHomeownerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+  },
+  messageHomeownerLabel: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[700],
+    marginLeft: spacing.sm,
+  },
+  messageHomeownerButton: {
+    backgroundColor: colors.primary[500],
+    borderWidth: 0,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  messageHomeownerButtonText: {
+    color: colors.neutral[0],
+  },
+  reviewHomeownerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  reviewHomeownerLabel: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
+    marginLeft: spacing.sm,
+  },
+  reviewHomeownerButton: {
+    backgroundColor: colors.warning[500],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+  },
+  reviewHomeownerButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  reviewSubmittedContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.success[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  reviewSubmittedText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.success[700],
+    marginLeft: spacing.sm,
+  },
+  reviewModalContainer: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+  },
+  reviewModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  reviewModalCloseButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewModalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  reviewModalContent: {
+    flex: 1,
   },
   linensContainer: {
     backgroundColor: colors.neutral[50],

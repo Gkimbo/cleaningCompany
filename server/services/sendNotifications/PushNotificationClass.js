@@ -276,6 +276,30 @@ class PushNotification {
       emoji,
     });
   }
+
+  // 20. Cleaning completed notification (to homeowner)
+  static async sendPushCleaningCompleted(expoPushToken, userName, appointmentDate, address) {
+    const fullAddress = `${address.street}, ${address.city}`;
+    const title = "Your Home is Sparkling Clean! ✨";
+    const body = `Hi ${userName}! Your cleaning on ${formatDate(appointmentDate)} at ${fullAddress} is complete. Log in to leave a review!`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "cleaning_completed",
+      appointmentDate,
+      requiresReview: true,
+    });
+  }
+
+  // 21. Review reminder notification (to homeowner)
+  static async sendPushReviewReminder(expoPushToken, userName, pendingReviewCount) {
+    const title = "Don't Forget to Review! ⭐";
+    const body = `Hi ${userName}! You have ${pendingReviewCount} cleaning${pendingReviewCount > 1 ? 's' : ''} waiting for your review. Your feedback helps our cleaners!`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "review_reminder",
+      pendingReviewCount,
+    });
+  }
 }
 
 module.exports = PushNotification;

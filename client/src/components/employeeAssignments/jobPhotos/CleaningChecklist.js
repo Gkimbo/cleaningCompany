@@ -374,6 +374,13 @@ const CleaningChecklist = ({ home, token, onChecklistComplete, onProgressUpdate 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Tip about non-applicable tasks */}
+        <View style={styles.tipCard}>
+          <Text style={styles.tipText}>
+            If a task doesn't apply to this home, mark it complete anyway.
+          </Text>
+        </View>
+
         {/* Home-specific reminders */}
         {(home?.specialNotes || home?.keyPadCode || home?.keyLocation) && (
           <View style={styles.remindersCard}>
@@ -502,6 +509,20 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.md,
     paddingBottom: spacing["4xl"],
+  },
+  tipCard: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  tipText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+    textAlign: "center",
+    fontStyle: "italic",
   },
   remindersCard: {
     backgroundColor: colors.warning[50],

@@ -40,10 +40,7 @@ const MessageBubble = ({
 
   const getDisplayName = (sender) => {
     if (!sender) return "Unknown";
-    if (sender.firstName || sender.lastName) {
-      return `${sender.firstName || ""} ${sender.lastName || ""}`.trim();
-    }
-    return sender.username;
+    return sender.username || "Unknown";
   };
 
   const getInitials = (sender) => {

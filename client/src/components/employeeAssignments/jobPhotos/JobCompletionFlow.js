@@ -7,6 +7,8 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Platform,
+  StatusBar,
 } from "react-native";
 import { UserContext } from "../../../context/UserContext";
 import { usePricing } from "../../../context/PricingContext";
@@ -44,10 +46,11 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   });
 
   useEffect(() => {
-    checkPhotoStatus();
+    // Auto-advance on initial load only (e.g., resuming a job)
+    checkPhotoStatus(true);
   }, [appointment.id]);
 
-  const checkPhotoStatus = async () => {
+  const checkPhotoStatus = async (autoAdvance = false) => {
     try {
       const response = await fetch(
         `${baseURL}/api/v1/job-photos/${appointment.id}/status`,
@@ -61,11 +64,16 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
 
       if (response.ok) {
         setPhotoStatus(data);
-        // Auto-advance to appropriate step based on existing photos
-        if (data.hasBeforePhotos && data.hasAfterPhotos) {
-          setCurrentStep(STEPS.REVIEW);
-        } else if (data.hasBeforePhotos) {
-          setCurrentStep(STEPS.CLEANING);
+        // Only auto-advance on initial load (when autoAdvance is true)
+        // This prevents advancing when user is still adding photos
+        if (autoAdvance) {
+          if (data.hasBeforePhotos && data.hasAfterPhotos) {
+            setCurrentStep(STEPS.REVIEW);
+            // Load photos for the review screen
+            loadAllPhotos();
+          } else if (data.hasBeforePhotos) {
+            setCurrentStep(STEPS.CLEANING);
+          }
         }
       }
     } catch (error) {
@@ -319,8 +327,10 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
     </ScrollView>
   );
 
+  const statusBarHeight = Platform.OS === 'ios' ? 50 : StatusBar.currentHeight || 0;
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: statusBarHeight }]}>
       <View style={styles.headerBar}>
         <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
           <Text style={styles.cancelButtonText}>Cancel</Text>

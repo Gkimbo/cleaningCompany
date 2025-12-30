@@ -23,6 +23,29 @@ class FetchData {
     }
   }
 
+  static async post(url, data, token) {
+    try {
+      const response = await fetch(baseURL + url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || "Request failed");
+      }
+
+      return responseData;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   static async getHome(id) {
     try {
       const response = await fetch(

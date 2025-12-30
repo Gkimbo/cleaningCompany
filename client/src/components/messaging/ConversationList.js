@@ -216,9 +216,6 @@ const ConversationList = () => {
       );
       if (otherParticipants?.length === 1) {
         const user = otherParticipants[0].user;
-        if (user?.firstName || user?.lastName) {
-          return `${user.firstName || ""} ${user.lastName || ""}`.trim();
-        }
         return user?.username || "Team Member";
       }
       if (otherParticipants?.length > 1) {
@@ -238,14 +235,11 @@ const ConversationList = () => {
     );
     if (otherParticipants?.length > 0) {
       const firstUser = otherParticipants[0].user;
-      if (firstUser?.firstName || firstUser?.lastName) {
-        const name = `${firstUser.firstName || ""} ${firstUser.lastName || ""}`.trim();
-        if (otherParticipants.length > 1) {
-          return `${name} +${otherParticipants.length - 1}`;
-        }
-        return name;
+      const name = firstUser?.username || "User";
+      if (otherParticipants.length > 1) {
+        return `${name} +${otherParticipants.length - 1}`;
       }
-      return firstUser?.username || "Conversation";
+      return name;
     }
     return "Conversation";
   };

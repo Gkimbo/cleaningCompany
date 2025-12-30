@@ -2123,6 +2123,186 @@ Kleanr System`;
       console.error("❌ Error sending HR hiring notification email:", error);
     }
   }
+  // Cleaning completed notification to homeowner
+  static async sendCleaningCompletedNotification(
+    email,
+    userName,
+    address,
+    appointmentDate,
+    cleanerName
+  ) {
+    try {
+      const transporter = createTransporter();
+      const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Your Home is Sparkling Clean! ✨",
+        subtitle: "Your cleaning is complete",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${userName}! 🎉`,
+        content: `<p>Great news! Your scheduled cleaning has been completed. Your home is now fresh and clean!</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Cleaning Details",
+          items: [
+            { label: "Address", value: fullAddress },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Cleaned By", value: cleanerName },
+            { label: "Status", value: "✅ Completed" },
+          ],
+        },
+        warningBox: {
+          icon: "⭐",
+          text: "<strong>We'd love your feedback!</strong> Please take a moment to review your cleaner. Your review helps maintain quality service and helps other homeowners.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        steps: {
+          title: "📝 Leave a Review",
+          items: [
+            "Open the Kleanr app on your device",
+            "Go to your Dashboard or completed appointments",
+            "Tap 'Leave a Review' to rate your cleaner",
+            "Your feedback helps us improve!",
+          ],
+        },
+        ctaText: "Log into the Kleanr app now to leave your review!",
+        footerMessage: "Thank you for choosing Kleanr",
+      });
+
+      const textContent = `Hi ${userName}! 🎉
+
+Great news! Your scheduled cleaning has been completed. Your home is now fresh and clean!
+
+CLEANING DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${fullAddress}
+Date: ${formatDate(appointmentDate)}
+Cleaned By: ${cleanerName}
+Status: ✅ Completed
+
+⭐ WE'D LOVE YOUR FEEDBACK!
+Please take a moment to review your cleaner. Your review helps maintain quality service and helps other homeowners.
+
+HOW TO LEAVE A REVIEW
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app on your device
+2. Go to your Dashboard or completed appointments
+3. Tap 'Leave a Review' to rate your cleaner
+4. Your feedback helps us improve!
+
+Log into the Kleanr app now to leave your review!
+
+Thank you for choosing Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✨ Your Cleaning is Complete - Leave a Review!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Cleaning completed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending cleaning completed email:", error);
+    }
+  }
+
+  // Review reminder email to homeowner
+  static async sendReviewReminderNotification(
+    email,
+    userName,
+    pendingReviews
+  ) {
+    try {
+      const transporter = createTransporter();
+      const reviewCount = pendingReviews.length;
+
+      // Build list of pending reviews
+      const reviewItems = pendingReviews.slice(0, 5).map(review => ({
+        label: formatDate(review.date),
+        value: review.homeName || review.address || "Your Home",
+      }));
+
+      const htmlContent = createEmailTemplate({
+        title: "Don't Forget to Review! ⭐",
+        subtitle: `You have ${reviewCount} pending review${reviewCount > 1 ? 's' : ''}`,
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+        greeting: `Hi ${userName}! 👋`,
+        content: `<p>You have <strong>${reviewCount} completed cleaning${reviewCount > 1 ? 's' : ''}</strong> waiting for your review. Your feedback is incredibly valuable to our cleaners and helps maintain excellent service quality.</p>`,
+        infoBox: {
+          icon: "📋",
+          title: "Cleanings Awaiting Review",
+          items: reviewItems,
+        },
+        warningBox: {
+          icon: "💡",
+          text: "Leaving a review only takes a minute and really makes a difference for your cleaner!",
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        steps: {
+          title: "⚡ Quick Review Steps",
+          items: [
+            "Open the Kleanr app",
+            "Go to your Dashboard",
+            "Tap on 'Pending Reviews'",
+            "Rate your cleaner and leave feedback",
+          ],
+        },
+        ctaText: "Log into the Kleanr app now to leave your reviews!",
+        footerMessage: "Your feedback helps our cleaners grow",
+      });
+
+      const pendingListText = pendingReviews.slice(0, 5).map(review =>
+        `  • ${formatDate(review.date)} - ${review.homeName || review.address || "Your Home"}`
+      ).join('\n');
+
+      const textContent = `Hi ${userName}!
+
+You have ${reviewCount} completed cleaning${reviewCount > 1 ? 's' : ''} waiting for your review.
+
+CLEANINGS AWAITING REVIEW
+━━━━━━━━━━━━━━━━━━━━━━
+${pendingListText}
+${reviewCount > 5 ? `  ...and ${reviewCount - 5} more\n` : ''}
+Your feedback is incredibly valuable to our cleaners and helps maintain excellent service quality.
+
+QUICK REVIEW STEPS
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Go to your Dashboard
+3. Tap on 'Pending Reviews'
+4. Rate your cleaner and leave feedback
+
+Log into the Kleanr app now to leave your reviews!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⭐ Reminder: ${reviewCount} Cleaning${reviewCount > 1 ? 's' : ''} Waiting for Your Review`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Review reminder email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending review reminder email:", error);
+    }
+  }
 }
 
 module.exports = Email;

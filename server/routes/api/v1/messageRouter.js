@@ -39,7 +39,7 @@ messageRouter.get("/conversations", authenticateToken, async (req, res) => {
                 {
                   model: User,
                   as: "sender",
-                  attributes: ["id", "username"],
+                  attributes: ["id", "username", "firstName", "lastName"],
                 },
               ],
             },
@@ -54,7 +54,7 @@ messageRouter.get("/conversations", authenticateToken, async (req, res) => {
                 {
                   model: User,
                   as: "user",
-                  attributes: ["id", "username", "type"],
+                  attributes: ["id", "username", "type", "firstName", "lastName"],
                 },
               ],
             },
@@ -132,7 +132,7 @@ messageRouter.get("/conversation/:conversationId", authenticateToken, async (req
             {
               model: User,
               as: "user",
-              attributes: ["id", "username"],
+              attributes: ["id", "username", "firstName", "lastName"],
             },
           ],
         },
@@ -157,7 +157,7 @@ messageRouter.get("/conversation/:conversationId", authenticateToken, async (req
             {
               model: User,
               as: "user",
-              attributes: ["id", "username", "type"],
+              attributes: ["id", "username", "type", "firstName", "lastName"],
             },
           ],
         },
@@ -214,7 +214,7 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
         {
           model: User,
           as: "sender",
-          attributes: ["id", "username", "type"],
+          attributes: ["id", "username", "type", "firstName", "lastName"],
         },
       ],
     });
@@ -302,7 +302,7 @@ messageRouter.post("/conversation/appointment", authenticateToken, async (req, r
             {
               model: User,
               as: "user",
-              attributes: ["id", "username", "type"],
+              attributes: ["id", "username", "type", "firstName", "lastName"],
             },
           ],
         },
@@ -361,7 +361,7 @@ messageRouter.post("/conversation/appointment", authenticateToken, async (req, r
               {
                 model: User,
                 as: "user",
-                attributes: ["id", "username", "type"],
+                attributes: ["id", "username", "type", "firstName", "lastName"],
               },
             ],
           },
@@ -451,7 +451,7 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
         {
           model: User,
           as: "sender",
-          attributes: ["id", "username", "type"],
+          attributes: ["id", "username", "type", "firstName", "lastName"],
         },
       ],
     });
@@ -620,7 +620,7 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
               {
                 model: User,
                 as: "user",
-                attributes: ["id", "username", "type"],
+                attributes: ["id", "username", "type", "firstName", "lastName"],
               },
             ],
           },
@@ -660,7 +660,7 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
               {
                 model: User,
                 as: "user",
-                attributes: ["id", "username", "type"],
+                attributes: ["id", "username", "type", "firstName", "lastName"],
               },
             ],
           },
