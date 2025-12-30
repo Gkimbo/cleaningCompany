@@ -36,7 +36,7 @@ const NextAppointment = ({ appointment }) => {
 
   const formatDate = (dateString) => {
     const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
   };
 
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);

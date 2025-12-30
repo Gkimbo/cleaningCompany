@@ -168,7 +168,46 @@ export const getTimeWindowOptions = (pricing) => {
  */
 export const getTimeWindowSurcharge = (pricing, timeWindow) => {
   const timeWindows = pricing?.timeWindows || defaultPricing.timeWindows;
-  return timeWindows[timeWindow]?.surcharge || 0;
+  const config = timeWindows[timeWindow];
+  // Handle both formats: config as object with surcharge property, or config as number (surcharge only)
+  if (typeof config === "object" && config !== null) {
+    return config.surcharge || 0;
+  }
+  return typeof config === "number" ? config : 0;
+};
+
+/**
+ * Helper to get time window label and surcharge info
+ * @param {object} pricing - Pricing object from usePricing()
+ * @param {string} timeWindow - Time window key (e.g., "10-3", "anytime")
+ * @returns {object} { label, surcharge, shortLabel }
+ */
+export const getTimeWindowLabel = (pricing, timeWindow) => {
+  if (!timeWindow || timeWindow === "anytime") {
+    return { label: "Anytime", surcharge: 0, shortLabel: null };
+  }
+
+  // Fallback labels for time windows when config only has surcharge value
+  const timeWindowLabels = {
+    "10-3": "10am - 3pm",
+    "11-4": "11am - 4pm",
+    "12-2": "12pm - 2pm",
+  };
+
+  const timeWindows = pricing?.timeWindows || defaultPricing.timeWindows;
+  const config = timeWindows[timeWindow];
+
+  if (!config) {
+    return { label: "Anytime", surcharge: 0, shortLabel: null };
+  }
+
+  const surcharge = typeof config === "object" ? (config.surcharge || 0) : (typeof config === "number" ? config : 0);
+  const label = typeof config === "object" && config.label ? config.label : (timeWindowLabels[timeWindow] || timeWindow);
+
+  // Create a short label for calendar cells (e.g., "10-3")
+  const shortLabel = timeWindow;
+
+  return { label, surcharge, shortLabel };
 };
 
 /**

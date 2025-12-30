@@ -33,22 +33,28 @@ describe("NextAppointmentPreview Component Logic", () => {
   const cleanerSharePercent = 0.9; // 90% cleaner share
 
   describe("Date Formatting", () => {
-    const formatDate = (dateString) => {
+    // OLD formatDate (had timezone issues)
+    const formatDateOld = (dateString) => {
       const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
       return new Date(dateString).toLocaleDateString(undefined, options);
     };
 
+    // NEW formatDate (fixed timezone issues by appending T00:00:00)
+    const formatDate = (dateString) => {
+      const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
+      return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
+    };
+
     it("should format date correctly", () => {
       // Use a date with time to avoid timezone issues
-      const formatted = formatDate("2025-01-15T12:00:00");
+      const formatted = formatDate("2025-01-15");
       // Date formatting varies by locale, check it contains expected parts
       expect(formatted).toContain("2025");
       expect(formatted).toContain("15");
     });
 
     it("should include weekday in formatted date", () => {
-      // Use a date with time to avoid timezone issues
-      const formatted = formatDate("2025-01-15T12:00:00");
+      const formatted = formatDate("2025-01-15");
       // January 15, 2025 is a Wednesday
       expect(formatted.toLowerCase()).toContain("wed");
     });
@@ -65,6 +71,115 @@ describe("NextAppointmentPreview Component Logic", () => {
         expect(typeof formatted).toBe("string");
         expect(formatted.length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  describe("Date Formatting - Timezone Fix", () => {
+    /**
+     * These tests verify the timezone fix for date formatting.
+     * The issue was that new Date("2025-01-04") interprets the date as UTC midnight,
+     * which becomes the previous day in US timezones (e.g., 2025-01-03 at 7pm EST).
+     *
+     * The fix appends "T00:00:00" to make JavaScript interpret the time as local midnight.
+     */
+
+    // The fixed formatDate function
+    const formatDateFixed = (dateString) => {
+      const options = { weekday: "long", month: "short", day: "numeric", year: "numeric" };
+      return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
+    };
+
+    it("should return the correct day number for January 4th", () => {
+      const formatted = formatDateFixed("2025-01-04");
+      // Should contain "4" (not "3" which would happen with timezone bug)
+      expect(formatted).toContain("4");
+    });
+
+    it("should return the correct day for January 15th", () => {
+      const formatted = formatDateFixed("2025-01-15");
+      expect(formatted).toContain("15");
+    });
+
+    it("should return correct day for end of month dates", () => {
+      // January 31st should stay as 31, not become 30
+      const formatted = formatDateFixed("2025-01-31");
+      expect(formatted).toContain("31");
+    });
+
+    it("should handle year boundaries correctly", () => {
+      // January 1st should stay as 1, not become December 31
+      const formatted = formatDateFixed("2025-01-01");
+      expect(formatted).toContain("Jan");
+      expect(formatted).toContain("1");
+      expect(formatted).toContain("2025");
+    });
+
+    it("should preserve the day of week correctly", () => {
+      // 2025-01-04 is a Saturday
+      const formatted = formatDateFixed("2025-01-04");
+      expect(formatted.toLowerCase()).toContain("sat");
+    });
+
+    it("should handle February 29 in leap years", () => {
+      // 2024 is a leap year
+      const formatted = formatDateFixed("2024-02-29");
+      expect(formatted).toContain("29");
+      expect(formatted).toContain("Feb");
+    });
+
+    it("should match expected date for various dates", () => {
+      const testCases = [
+        { input: "2025-01-04", expectedDay: "4" },
+        { input: "2025-06-15", expectedDay: "15" },
+        { input: "2025-12-25", expectedDay: "25" },
+        { input: "2025-03-01", expectedDay: "1" },
+      ];
+
+      testCases.forEach(({ input, expectedDay }) => {
+        const formatted = formatDateFixed(input);
+        expect(formatted).toContain(expectedDay);
+      });
+    });
+  });
+
+  describe("isWithinTwoDays Calculation - Timezone Handling", () => {
+    /**
+     * Tests for the isWithinTwoDays function which also had timezone issues.
+     * The fix uses: new Date(appointment.date + "T00:00:00") instead of new Date(appointment.date)
+     */
+
+    const isWithinTwoDays = (appointmentDate) => {
+      // Fixed version using local time
+      const date = new Date(appointmentDate + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffTime = date.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays <= 2;
+    };
+
+    it("should correctly identify tomorrow as within 2 days", () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+      expect(isWithinTwoDays(tomorrowStr)).toBe(true);
+    });
+
+    it("should correctly identify day after tomorrow as within 2 days", () => {
+      const dayAfter = new Date();
+      dayAfter.setDate(dayAfter.getDate() + 2);
+      const dayAfterStr = dayAfter.toISOString().split("T")[0];
+
+      expect(isWithinTwoDays(dayAfterStr)).toBe(true);
+    });
+
+    it("should correctly identify 3 days from now as NOT within 2 days", () => {
+      const threeDays = new Date();
+      threeDays.setDate(threeDays.getDate() + 3);
+      const threeDaysStr = threeDays.toISOString().split("T")[0];
+
+      expect(isWithinTwoDays(threeDaysStr)).toBe(false);
     });
   });
 
