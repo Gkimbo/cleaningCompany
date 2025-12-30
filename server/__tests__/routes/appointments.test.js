@@ -73,9 +73,15 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   removeRequestEmail: jest.fn().mockResolvedValue(true),
   sendRequestApproved: jest.fn().mockResolvedValue(true),
   sendLinensConfigurationUpdated: jest.fn().mockResolvedValue(true),
+  sendRequestDenied: jest.fn().mockResolvedValue(true),
 }));
 
 const Email = require("../../services/sendNotifications/EmailClass");
+
+jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
+  sendPushRequestDenied: jest.fn().mockResolvedValue(true),
+  sendPushNotification: jest.fn().mockResolvedValue(true),
+}));
 
 // Mock stripe
 jest.mock("stripe", () => {
@@ -2089,6 +2095,192 @@ describe("Appointment Routes", () => {
           sheetConfigurations: [{ bedNumber: 1, size: "king", needsSheets: true }],
         })
       );
+    });
+  });
+
+  describe("PATCH /deny-request", () => {
+    const mockRequest = {
+      id: 1,
+      employeeId: 2,
+      appointmentId: 10,
+      get: jest.fn().mockReturnValue({
+        id: 1,
+        employeeId: 2,
+        appointmentId: 10,
+      }),
+      destroy: jest.fn().mockResolvedValue(true),
+    };
+
+    const mockAppointment = {
+      id: 10,
+      date: "2025-01-15",
+      userId: 3,
+      homeId: 5,
+      dataValues: {
+        id: 10,
+        date: "2025-01-15",
+        userId: 3,
+        homeId: 5,
+      },
+    };
+
+    const mockClient = {
+      id: 3,
+      username: "HomeownerJohn",
+      email: "homeowner@example.com",
+      dataValues: {
+        id: 3,
+        username: "HomeownerJohn",
+        email: "homeowner@example.com",
+      },
+    };
+
+    const mockCleaner = {
+      id: 2,
+      username: "CleanerMike",
+      email: "cleaner@example.com",
+      dataValues: {
+        id: 2,
+        username: "CleanerMike",
+        email: "cleaner@example.com",
+        expoPushToken: null,
+        notifications: [],
+      },
+      update: jest.fn().mockResolvedValue(true),
+    };
+
+    const mockHome = {
+      id: 5,
+      nickname: "Beach House",
+      address: "123 Beach St",
+      dataValues: {
+        id: 5,
+        nickname: "Beach House",
+        address: "123 Beach St",
+      },
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      UserPendingRequests.findOne.mockResolvedValue(mockRequest);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+      User.findByPk
+        .mockResolvedValueOnce(mockClient)
+        .mockResolvedValueOnce(mockCleaner);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+    });
+
+    it("should deny a pending request successfully", async () => {
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Request removed");
+    });
+
+    it("should return 404 when request is not found", async () => {
+      UserPendingRequests.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Request not found");
+    });
+
+    it("should return 404 when appointment is not found", async () => {
+      UserAppointments.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Appointment not found");
+    });
+
+    it("should return 404 when client is not found", async () => {
+      User.findByPk.mockReset();
+      User.findByPk.mockResolvedValueOnce(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Client not found");
+    });
+
+    it("should return 404 when cleaner is not found", async () => {
+      User.findByPk.mockReset();
+      User.findByPk
+        .mockResolvedValueOnce(mockClient)
+        .mockResolvedValueOnce(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Cleaner not found");
+    });
+
+    it("should destroy the pending request", async () => {
+      await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(mockRequest.destroy).toHaveBeenCalled();
+    });
+
+    it("should find request with correct parameters", async () => {
+      await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(UserPendingRequests.findOne).toHaveBeenCalledWith({
+        where: { appointmentId: 10, employeeId: 2 },
+      });
+    });
+
+    it("should handle missing id parameter", async () => {
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ appointmentId: 10 });
+
+      // Should still attempt to find with undefined id, resulting in not found
+      expect(UserPendingRequests.findOne).toHaveBeenCalled();
+    });
+
+    it("should handle missing appointmentId parameter", async () => {
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2 });
+
+      // Should still attempt to find with undefined appointmentId
+      expect(UserPendingRequests.findOne).toHaveBeenCalled();
+    });
+
+    it("should handle server error gracefully", async () => {
+      UserPendingRequests.findOne.mockRejectedValue(new Error("Database error"));
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(500);
+    });
+
+    it("should convert string ids to numbers", async () => {
+      await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: "2", appointmentId: "10" });
+
+      expect(UserPendingRequests.findOne).toHaveBeenCalledWith({
+        where: { appointmentId: 10, employeeId: 2 },
+      });
     });
   });
 });

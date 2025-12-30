@@ -148,6 +148,14 @@ describe("NextAppointmentPreview Component Logic", () => {
      * The fix uses: new Date(appointment.date + "T00:00:00") instead of new Date(appointment.date)
      */
 
+    // Helper to format date as YYYY-MM-DD in local timezone (not UTC)
+    const toLocalDateString = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
     const isWithinTwoDays = (appointmentDate) => {
       // Fixed version using local time
       const date = new Date(appointmentDate + "T00:00:00");
@@ -161,7 +169,7 @@ describe("NextAppointmentPreview Component Logic", () => {
     it("should correctly identify tomorrow as within 2 days", () => {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+      const tomorrowStr = toLocalDateString(tomorrow);
 
       expect(isWithinTwoDays(tomorrowStr)).toBe(true);
     });
@@ -169,7 +177,7 @@ describe("NextAppointmentPreview Component Logic", () => {
     it("should correctly identify day after tomorrow as within 2 days", () => {
       const dayAfter = new Date();
       dayAfter.setDate(dayAfter.getDate() + 2);
-      const dayAfterStr = dayAfter.toISOString().split("T")[0];
+      const dayAfterStr = toLocalDateString(dayAfter);
 
       expect(isWithinTwoDays(dayAfterStr)).toBe(true);
     });
@@ -177,7 +185,7 @@ describe("NextAppointmentPreview Component Logic", () => {
     it("should correctly identify 3 days from now as NOT within 2 days", () => {
       const threeDays = new Date();
       threeDays.setDate(threeDays.getDate() + 3);
-      const threeDaysStr = threeDays.toISOString().split("T")[0];
+      const threeDaysStr = toLocalDateString(threeDays);
 
       expect(isWithinTwoDays(threeDaysStr)).toBe(false);
     });

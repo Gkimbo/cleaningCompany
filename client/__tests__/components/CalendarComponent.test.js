@@ -3,18 +3,9 @@
  * Tests time window display, price calculation, and date handling
  */
 
-import React from "react";
-import { render } from "@testing-library/react-native";
-import { Text, View } from "react-native";
-
-// Mock dependencies
+// Mock dependencies - these don't need react-native components
 jest.mock("react-native-calendars", () => ({
-  Calendar: ({ dayComponent, ...props }) => (
-    <View testID="calendar">
-      {/* Render a sample day for testing */}
-      {dayComponent && dayComponent({ date: { day: 15, dateString: "2025-01-15" } })}
-    </View>
-  ),
+  Calendar: "Calendar",
 }));
 
 jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
@@ -230,7 +221,7 @@ describe("CalendarComponent Time Window Logic", () => {
   describe("Booked Appointment Time Window Detection", () => {
     const hasTimeConstraint = (appointment) => {
       const timeWindow = appointment?.timeToBeCompleted;
-      return timeWindow && timeWindow !== "anytime";
+      return Boolean(timeWindow && timeWindow !== "anytime");
     };
 
     it("should detect time constraint on appointment", () => {
