@@ -303,6 +303,8 @@ const ClientDashboard = ({ state, dispatch }) => {
         apt.id === appointmentId ? { ...apt, hasClientReview: true } : apt
       )
     );
+    // Refresh dashboard data to get latest state from server
+    fetchDashboardData(true);
   };
 
   // Calculate auto-captured, prepaid, and pending amounts for upcoming appointments

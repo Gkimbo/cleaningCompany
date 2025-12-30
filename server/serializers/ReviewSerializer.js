@@ -35,13 +35,10 @@ class ReviewSerializer {
 			}
 			// Include the reviewer association if present
 			if (review.reviewer) {
-				// Access dataValues for decrypted PII fields (firstName, lastName are encrypted)
 				const reviewerData = review.reviewer.dataValues || review.reviewer;
 				newReview.reviewer = {
 					id: reviewerData.id,
 					username: reviewerData.username,
-					firstName: reviewerData.firstName,
-					lastName: reviewerData.lastName,
 				};
 			}
 			return newReview;

@@ -144,16 +144,59 @@ const convertApiToLocal = (apiData) => {
 const CACHE_KEY = "cleaning_checklist_cache";
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
-const CleaningChecklist = ({ home, token, onChecklistComplete, onProgressUpdate }) => {
+// Helper to get progress storage key for an appointment
+const getProgressKey = (appointmentId) => `checklist_progress_${appointmentId}`;
+
+// Exported function to clear progress for an appointment (called on undo start or job complete)
+export const clearChecklistProgress = async (appointmentId) => {
+  try {
+    await AsyncStorage.removeItem(getProgressKey(appointmentId));
+  } catch (error) {
+    console.warn("Error clearing checklist progress:", error);
+  }
+};
+
+const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, onProgressUpdate }) => {
   const [checkedItems, setCheckedItems] = useState({});
   const [checklistData, setChecklistData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedSections, setExpandedSections] = useState({});
+  const [progressLoaded, setProgressLoaded] = useState(false);
 
   // Load checklist from API or cache
   useEffect(() => {
     loadChecklist();
   }, []);
+
+  // Load saved progress for this appointment
+  useEffect(() => {
+    if (appointmentId) {
+      loadSavedProgress();
+    }
+  }, [appointmentId]);
+
+  const loadSavedProgress = async () => {
+    try {
+      const saved = await AsyncStorage.getItem(getProgressKey(appointmentId));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setCheckedItems(parsed);
+      }
+    } catch (error) {
+      console.warn("Error loading checklist progress:", error);
+    } finally {
+      setProgressLoaded(true);
+    }
+  };
+
+  const saveProgress = async (items) => {
+    if (!appointmentId) return;
+    try {
+      await AsyncStorage.setItem(getProgressKey(appointmentId), JSON.stringify(items));
+    } catch (error) {
+      console.warn("Error saving checklist progress:", error);
+    }
+  };
 
   const loadChecklist = async () => {
     setLoading(true);
@@ -242,10 +285,15 @@ const CleaningChecklist = ({ home, token, onChecklistComplete, onProgressUpdate 
   }, [completedTasks, totalTasks]);
 
   const toggleItem = (itemId) => {
-    setCheckedItems((prev) => ({
-      ...prev,
-      [itemId]: !prev[itemId],
-    }));
+    setCheckedItems((prev) => {
+      const newItems = {
+        ...prev,
+        [itemId]: !prev[itemId],
+      };
+      // Save immediately when item is toggled
+      saveProgress(newItems);
+      return newItems;
+    });
   };
 
   const toggleSection = (sectionKey) => {
@@ -382,13 +430,39 @@ const CleaningChecklist = ({ home, token, onChecklistComplete, onProgressUpdate 
         </View>
 
         {/* Home-specific reminders */}
-        {(home?.specialNotes || home?.keyPadCode || home?.keyLocation) && (
+        {(home?.specialNotes || home?.trashLocation || home?.recyclingLocation ||
+          home?.compostLocation || home?.cleanSheetsLocation || home?.dirtySheetsLocation ||
+          home?.cleanTowelsLocation || home?.dirtyTowelsLocation) && (
           <View style={styles.remindersCard}>
             <Text style={styles.remindersTitle}>Important Reminders</Text>
             {home?.specialNotes && (
               <View style={styles.reminderItem}>
                 <Text style={styles.reminderLabel}>Special Notes:</Text>
                 <Text style={styles.reminderText}>{home.specialNotes}</Text>
+              </View>
+            )}
+            {/* Sheets locations */}
+            {(home?.cleanSheetsLocation || home?.dirtySheetsLocation) && (
+              <View style={styles.reminderItem}>
+                <Text style={styles.reminderLabel}>Sheets:</Text>
+                {home?.cleanSheetsLocation && (
+                  <Text style={styles.reminderText}>Clean: {home.cleanSheetsLocation}</Text>
+                )}
+                {home?.dirtySheetsLocation && (
+                  <Text style={styles.reminderText}>Dirty: {home.dirtySheetsLocation}</Text>
+                )}
+              </View>
+            )}
+            {/* Towels locations */}
+            {(home?.cleanTowelsLocation || home?.dirtyTowelsLocation) && (
+              <View style={styles.reminderItem}>
+                <Text style={styles.reminderLabel}>Towels:</Text>
+                {home?.cleanTowelsLocation && (
+                  <Text style={styles.reminderText}>Clean: {home.cleanTowelsLocation}</Text>
+                )}
+                {home?.dirtyTowelsLocation && (
+                  <Text style={styles.reminderText}>Dirty: {home.dirtyTowelsLocation}</Text>
+                )}
               </View>
             )}
             {home?.trashLocation && (

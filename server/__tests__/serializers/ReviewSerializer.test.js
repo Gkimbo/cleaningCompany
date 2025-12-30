@@ -109,8 +109,7 @@ describe("ReviewSerializer", () => {
       expect(result[0].reviewer).toBeTruthy();
       expect(result[0].reviewer.id).toBe(20);
       expect(result[0].reviewer.username).toBe("cleaner123");
-      expect(result[0].reviewer.firstName).toBe("John");
-      expect(result[0].reviewer.lastName).toBe("Doe");
+      // firstName and lastName are no longer included in serialization (only username)
     });
 
     it("should include reviewer from dataValues when available", () => {

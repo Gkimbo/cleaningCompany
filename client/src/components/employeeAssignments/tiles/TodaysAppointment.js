@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import JobCompletionFlow from "../jobPhotos/JobCompletionFlow";
+import { clearChecklistProgress } from "../jobPhotos/CleaningChecklist";
 import HomeSizeConfirmationModal from "../HomeSizeConfirmationModal";
 import StartConversationButton from "../../messaging/StartConversationButton";
 import MultiAspectReviewForm from "../../reviews/MultiAspectReviewForm";
@@ -120,8 +121,18 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
     }
   };
 
-  const handleCancelCompletion = () => {
+  const handleCancelCompletion = async () => {
     setShowCompletionFlow(false);
+    // Re-check job status after closing the modal in case photos were taken
+    try {
+      const response = await FetchData.get(
+        `/api/v1/job-photos/${appointment.id}/status`,
+        token
+      );
+      setJobStarted(response.hasBeforePhotos && !appointment.completed);
+    } catch (err) {
+      // Keep current state if check fails
+    }
   };
 
   const handleUndoStart = () => {
@@ -140,6 +151,8 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
                 {},
                 token
               );
+              // Clear saved checklist progress
+              await clearChecklistProgress(appointment.id);
               setJobStarted(false);
               setShowCompletionFlow(false);
               if (onJobUnstarted) onJobUnstarted(appointment.id);
@@ -522,10 +535,19 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
               userId={appointment.userId}
               reviewType="cleaner_to_homeowner"
               revieweeName={home.nickName || "Homeowner"}
-              onComplete={() => {
+              onComplete={(data) => {
                 setShowReviewModal(false);
                 setHasReviewed(true);
-                Alert.alert("Thank you!", "Your review has been submitted.");
+                // Use setTimeout to ensure the modal is fully closed before showing the alert
+                setTimeout(() => {
+                  const bothReviewed = data?.status?.bothReviewed;
+                  Alert.alert(
+                    "Thank you!",
+                    bothReviewed
+                      ? "Both reviews are now visible to each other."
+                      : "Your review has been submitted. It will become visible once the homeowner submits their review."
+                  );
+                }, 300);
               }}
             />
           </ScrollView>

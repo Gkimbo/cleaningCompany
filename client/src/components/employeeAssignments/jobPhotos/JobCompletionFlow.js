@@ -13,7 +13,7 @@ import {
 import { UserContext } from "../../../context/UserContext";
 import { usePricing } from "../../../context/PricingContext";
 import JobPhotoCapture from "./JobPhotoCapture";
-import CleaningChecklist from "./CleaningChecklist";
+import CleaningChecklist, { clearChecklistProgress } from "./CleaningChecklist";
 import styles from "./JobCompletionFlowStyles";
 import { API_BASE } from "../../../services/config";
 
@@ -169,6 +169,9 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
           message = "Job completed successfully!";
         }
 
+        // Clear the saved checklist progress since job is complete
+        await clearChecklistProgress(appointment.id);
+
         Alert.alert("Job Completed!", message, [
           {
             text: "OK",
@@ -241,6 +244,8 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   const renderCleaningStep = () => (
     <CleaningChecklist
       home={home}
+      token={currentUser.token}
+      appointmentId={appointment.id}
       onChecklistComplete={handleChecklistComplete}
       onProgressUpdate={handleChecklistProgress}
     />

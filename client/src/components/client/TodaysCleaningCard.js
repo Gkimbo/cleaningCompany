@@ -13,7 +13,6 @@ import {
   Dimensions,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import { useNavigate } from "react-router-native";
 import MultiAspectReviewForm from "../reviews/MultiAspectReviewForm";
 import {
   colors,
@@ -27,7 +26,6 @@ import { API_BASE } from "../../services/config";
 const { width: screenWidth } = Dimensions.get("window");
 
 const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => {
-  const navigate = useNavigate();
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showPhotosModal, setShowPhotosModal] = useState(false);
   const [cleaningStatus, setCleaningStatus] = useState("not_started");
@@ -142,24 +140,24 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
     }
   };
 
-  const handleReviewComplete = () => {
+  const handleReviewComplete = (data) => {
     setShowReviewModal(false);
-    Alert.alert(
-      "Thank you!",
-      "Your review has been submitted.",
-      [
-        {
-          text: "OK",
-          onPress: () => {
-            if (onReviewSubmitted) {
-              onReviewSubmitted(appointment.id);
-            }
-            // Navigate to dashboard
-            navigate("/");
-          },
-        },
-      ]
-    );
+
+    // Update parent state immediately to hide review button
+    if (onReviewSubmitted) {
+      onReviewSubmitted(appointment.id);
+    }
+
+    // Use setTimeout to ensure the modal is fully closed before showing the alert
+    setTimeout(() => {
+      const bothReviewed = data?.status?.bothReviewed;
+      Alert.alert(
+        "Thank you!",
+        bothReviewed
+          ? "Both reviews are now visible to each other."
+          : "Your review has been submitted. It will become visible once your cleaner submits their review."
+      );
+    }, 300);
   };
 
   const fetchPhotos = async () => {
@@ -414,7 +412,7 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
             <MultiAspectReviewForm
               state={state}
               appointmentId={appointment.id}
-              userId={assignedCleaners[0]?.id}
+              userId={assignedCleaners[0]?.id || parseInt(appointment.employeesAssigned?.[0], 10)}
               reviewType="homeowner_to_cleaner"
               revieweeName={assignedCleaners[0]?.username || "Your Cleaner"}
               onComplete={handleReviewComplete}

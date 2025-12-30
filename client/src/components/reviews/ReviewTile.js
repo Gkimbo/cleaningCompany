@@ -124,18 +124,6 @@ const ReviewTile = ({
             </Text>
           </View>
         </View>
-        {reviewType && (
-          <View
-            style={[
-              styles.typeBadge,
-              isHomeownerReview ? styles.homeownerBadge : styles.cleanerBadge,
-            ]}
-          >
-            <Text style={styles.typeBadgeText}>
-              {isHomeownerReview ? "From Client" : "From Cleaner"}
-            </Text>
-          </View>
-        )}
       </View>
 
       <View style={styles.ratingContainer}>
@@ -280,22 +268,6 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 12,
-    color: theme.colors.textSecondary,
-  },
-  typeBadge: {
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.radius.sm,
-  },
-  homeownerBadge: {
-    backgroundColor: "#E3F2FD",
-  },
-  cleanerBadge: {
-    backgroundColor: "#E8F5E9",
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: "600",
     color: theme.colors.textSecondary,
   },
   ratingContainer: {

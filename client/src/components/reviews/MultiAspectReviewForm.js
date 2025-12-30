@@ -191,6 +191,11 @@ const MultiAspectReviewForm = ({
       return;
     }
 
+    if (!userId || isNaN(userId)) {
+      Alert.alert("Error", "Unable to identify who to review. Please try again later.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -233,29 +238,19 @@ const MultiAspectReviewForm = ({
       });
 
       const data = await response.json();
+      console.log("[Review] Response:", response.status, data);
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to submit review");
       }
 
-      Alert.alert(
-        "Review Submitted!",
-        data.status.bothReviewed
-          ? "Both reviews are now visible to each other."
-          : "Your review has been saved. It will become visible once the other party submits their review.",
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              if (onComplete) {
-                onComplete(data);
-              } else {
-                navigate("/");
-              }
-            },
-          },
-        ]
-      );
+      // Call onComplete - let the parent handle showing feedback
+      // This avoids Alert issues inside pageSheet modals on iOS
+      if (onComplete) {
+        onComplete(data);
+      } else {
+        navigate("/");
+      }
     } catch (error) {
       Alert.alert("Error", error.message);
     } finally {
