@@ -19,12 +19,16 @@ class AppointmentSerializer {
 			"paymentCaptureFailed",
 			"contact",
 			"sheetConfigurations",
-			"towelConfigurations"
+			"towelConfigurations",
+			"hasClientReview",
+			"hasCleanerReview"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
+			// Handle both Sequelize instances and plain objects
+			const data = appointment.dataValues || appointment;
 			for (const attribute of allowedAttributes) {
-				newAppointment[attribute] = appointment.dataValues[attribute];
+				newAppointment[attribute] = data[attribute];
 			}
 			return newAppointment;
 		});
@@ -51,15 +55,17 @@ class AppointmentSerializer {
 			"paymentCaptureFailed",
 			"contact",
 			"sheetConfigurations",
-			"towelConfigurations"
+			"towelConfigurations",
+			"hasClientReview",
+			"hasCleanerReview"
 		];
-		
-			const newAppointment = {};
-			for (const attribute of allowedAttributes) {
-				newAppointment[attribute] = appointment.dataValues[attribute];
-			}
-			return newAppointment;
-	
+		const newAppointment = {};
+		// Handle both Sequelize instances and plain objects
+		const data = appointment.dataValues || appointment;
+		for (const attribute of allowedAttributes) {
+			newAppointment[attribute] = data[attribute];
+		}
+		return newAppointment;
 	}
 }
 

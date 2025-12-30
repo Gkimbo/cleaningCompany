@@ -56,6 +56,22 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.FLOAT,
       allowNull: true,
     },
+    attentionToDetail: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    thoroughness: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    respectOfProperty: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    followedInstructions: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
     wouldRecommend: {
       type: DataTypes.BOOLEAN,
       allowNull: true,
@@ -70,6 +86,18 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
     easeOfAccess: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    homeCondition: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    respectfulness: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    safetyConditions: {
       type: DataTypes.FLOAT,
       allowNull: true,
     },

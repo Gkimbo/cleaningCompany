@@ -25,7 +25,7 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
   const { pricing } = usePricing();
   const [jobStarted, setJobStarted] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [hasReviewed, setHasReviewed] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(appointment.hasCleanerReview || false);
   const [home, setHome] = useState({
     address: "",
     city: "",
@@ -44,6 +44,10 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
     zipcode: "",
     cleanersNeeded: "",
     timeToBeCompleted: "",
+    cleanSheetsLocation: "",
+    dirtySheetsLocation: "",
+    cleanTowelsLocation: "",
+    dirtyTowelsLocation: "",
   });
   const [showCompletionFlow, setShowCompletionFlow] = useState(false);
   const [showHomeSizeModal, setShowHomeSizeModal] = useState(false);
@@ -62,6 +66,13 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
       setHome(response.home);
     });
   }, [appointment.homeId]);
+
+  // Sync hasReviewed state with appointment prop
+  useEffect(() => {
+    if (appointment.hasCleanerReview) {
+      setHasReviewed(true);
+    }
+  }, [appointment.hasCleanerReview]);
 
   // Check if job has been started (before photos taken but not completed)
   useEffect(() => {
@@ -378,10 +389,54 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
             </View>
           ) : (
             <View style={styles.linensProvidedContent}>
-              <Icon name="check-circle" size={14} color={colors.success[600]} />
-              <Text style={styles.linensProvidedText}>
-                Sheets and towels will be provided
-              </Text>
+              <View style={styles.linensProvidedHeader}>
+                <Icon name="check-circle" size={14} color={colors.success[600]} />
+                <Text style={styles.linensProvidedText}>
+                  Linens provided by homeowner
+                </Text>
+              </View>
+
+              {/* Sheets Location Info */}
+              {(home.cleanSheetsLocation || home.dirtySheetsLocation) && (
+                <View style={styles.linenLocationSection}>
+                  <Text style={styles.linenLocationTitle}>Sheets</Text>
+                  {home.cleanSheetsLocation && (
+                    <View style={styles.linenLocationRow}>
+                      <Icon name="inbox" size={12} color={colors.primary[600]} />
+                      <Text style={styles.linenLocationLabel}>Clean:</Text>
+                      <Text style={styles.linenLocationValue}>{home.cleanSheetsLocation}</Text>
+                    </View>
+                  )}
+                  {home.dirtySheetsLocation && (
+                    <View style={styles.linenLocationRow}>
+                      <Icon name="archive" size={12} color={colors.warning[600]} />
+                      <Text style={styles.linenLocationLabel}>Dirty:</Text>
+                      <Text style={styles.linenLocationValue}>{home.dirtySheetsLocation}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Towels Location Info */}
+              {(home.cleanTowelsLocation || home.dirtyTowelsLocation) && (
+                <View style={styles.linenLocationSection}>
+                  <Text style={styles.linenLocationTitle}>Towels</Text>
+                  {home.cleanTowelsLocation && (
+                    <View style={styles.linenLocationRow}>
+                      <Icon name="inbox" size={12} color={colors.primary[600]} />
+                      <Text style={styles.linenLocationLabel}>Clean:</Text>
+                      <Text style={styles.linenLocationValue}>{home.cleanTowelsLocation}</Text>
+                    </View>
+                  )}
+                  {home.dirtyTowelsLocation && (
+                    <View style={styles.linenLocationRow}>
+                      <Icon name="archive" size={12} color={colors.warning[600]} />
+                      <Text style={styles.linenLocationLabel}>Dirty:</Text>
+                      <Text style={styles.linenLocationValue}>{home.dirtyTowelsLocation}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -752,6 +807,9 @@ const styles = StyleSheet.create({
     color: colors.warning[700],
   },
   linensProvidedContent: {
+    gap: spacing.sm,
+  },
+  linensProvidedHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
@@ -759,6 +817,35 @@ const styles = StyleSheet.create({
   linensProvidedText: {
     fontSize: typography.fontSize.sm,
     color: colors.success[700],
+  },
+  linenLocationSection: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  linenLocationTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  linenLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: 2,
+  },
+  linenLocationLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
+    width: 40,
+  },
+  linenLocationValue: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    flex: 1,
   },
   amount: {
     fontSize: typography.fontSize.xl,

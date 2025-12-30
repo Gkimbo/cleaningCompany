@@ -8,6 +8,7 @@ const {
   UserAppointments,
   UserCleanerAppointments,
   UserBills,
+  UserReviews,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
@@ -41,8 +42,29 @@ employeeInfoRouter.get("/", async (req, res) => {
         id: appointmentIds,
       },
     });
+
+    // Get all cleaner reviews for these appointments
+    const cleanerReviews = await UserReviews.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        reviewerId: userId,
+        reviewType: "cleaner_to_homeowner",
+      },
+      attributes: ["appointmentId"],
+    });
+    const reviewedAppointmentIds = new Set(cleanerReviews.map((r) => r.appointmentId));
+
+    // Add hasCleanerReview to each appointment and filter out completed+reviewed
+    const appointmentsWithReviewStatus = appointments
+      .map((apt) => ({
+        ...apt.dataValues,
+        hasCleanerReview: reviewedAppointmentIds.has(apt.id),
+      }))
+      // Filter out completed appointments that have been reviewed by cleaner
+      .filter((apt) => !(apt.completed && apt.hasCleanerReview));
+
     const serializedAppointments = await AppointmentSerializer.serializeArray(
-      appointments
+      appointmentsWithReviewStatus
     );
     const serializedEmployee = UserSerializer.serializeOne(employee.dataValues);
     serializedEmployee.cleanerAppointments = serializedAppointments;

@@ -439,18 +439,24 @@ const CleanerDashboard = ({ state, dispatch }) => {
     (apt) => parseLocalDate(apt.date) > today
   );
 
-  // Get upcoming appointments (excluding today and next) for the list
-  const upcomingAppointments = sortedAppointments
-    .filter((apt) => parseLocalDate(apt.date) > today)
-    .slice(0, 3);
+  // Get all upcoming appointments (excluding today)
+  const allUpcomingAppointments = sortedAppointments
+    .filter((apt) => parseLocalDate(apt.date) > today);
+
+  // Get first 3 for display in the list
+  const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
 
   // Get completed appointments count
   const completedCount = appointments.filter((apt) => apt.completed).length;
 
-  // Calculate expected payout
+  // Calculate expected payout (accounting for split between multiple cleaners)
   const expectedPayout = sortedAppointments
     .filter((apt) => !apt.completed && parseLocalDate(apt.date) >= today)
-    .reduce((sum, apt) => sum + Number(apt.price) * cleanerSharePercent, 0);
+    .reduce((sum, apt) => {
+      const numCleaners = apt.employeesAssigned?.length || 1;
+      const perCleanerShare = (Number(apt.price) / numCleaners) * cleanerSharePercent;
+      return sum + perCleanerShare;
+    }, 0);
 
   const handleJobCompleted = (data) => {
     setShowCompletionFlow(false);
@@ -575,7 +581,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
           />
           <StatCard
             title="Upcoming"
-            value={upcomingAppointments.length + todaysAppointments.length}
+            value={allUpcomingAppointments.length + todaysAppointments.length}
             subtitle="jobs"
             color={colors.primary[500]}
             onPress={() => navigate("/employee-assignments")}

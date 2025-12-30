@@ -280,11 +280,12 @@ const ClientDashboard = ({ state, dispatch }) => {
   const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
   const upcomingAppointmentsCount = allUpcomingAppointments.length;
 
-  // Find today's appointment (for Today's Cleaning card)
+  // Find today's appointment (for Today's Cleaning card) - only show if NOT completed
+  // Completed appointments should appear in Pending Reviews section instead
   const todayStr = new Date().toDateString();
   const todaysAppointment = appointments.find((apt) => {
     const aptDate = parseLocalDate(apt.date);
-    return aptDate.toDateString() === todayStr;
+    return aptDate.toDateString() === todayStr && !apt.completed;
   });
   const todaysHome = todaysAppointment
     ? homes.find((h) => Number(h.id) === Number(todaysAppointment.homeId))

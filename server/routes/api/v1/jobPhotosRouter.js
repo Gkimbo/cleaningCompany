@@ -109,9 +109,12 @@ jobPhotosRouter.get("/:appointmentId", authenticateToken, async (req, res) => {
   const { appointmentId } = req.params;
   const userId = req.user.userId;
 
+  console.log(`[JobPhotos] Fetching photos for appointment ${appointmentId} by user ${userId}`);
+
   try {
     const appointment = await UserAppointments.findByPk(appointmentId);
     if (!appointment) {
+      console.log(`[JobPhotos] Appointment ${appointmentId} not found`);
       return res.status(404).json({ error: "Appointment not found" });
     }
 
@@ -123,7 +126,10 @@ jobPhotosRouter.get("/:appointmentId", authenticateToken, async (req, res) => {
     const isOwner = appointment.userId === userId;
     const isAdmin = user && user.type === "admin";
 
+    console.log(`[JobPhotos] Authorization check: isAssignedCleaner=${isAssignedCleaner}, isOwner=${isOwner}, isAdmin=${isAdmin}`);
+
     if (!isAssignedCleaner && !isOwner && !isAdmin) {
+      console.log(`[JobPhotos] User ${userId} not authorized to view photos for appointment ${appointmentId}`);
       return res.status(403).json({ error: "Not authorized to view photos" });
     }
 
@@ -135,6 +141,8 @@ jobPhotosRouter.get("/:appointmentId", authenticateToken, async (req, res) => {
 
     const beforePhotos = photos.filter((p) => p.photoType === "before");
     const afterPhotos = photos.filter((p) => p.photoType === "after");
+
+    console.log(`[JobPhotos] Returning ${beforePhotos.length} before and ${afterPhotos.length} after photos`);
 
     return res.json({
       appointmentId: parseInt(appointmentId),
@@ -153,19 +161,31 @@ jobPhotosRouter.get("/:appointmentId", authenticateToken, async (req, res) => {
 /**
  * Get photo status for an appointment (lightweight check)
  * GET /api/v1/job-photos/:appointmentId/status
+ * Works for both cleaners (see their own photos) and homeowners (see all photos)
  */
 jobPhotosRouter.get("/:appointmentId/status", authenticateToken, async (req, res) => {
   const { appointmentId } = req.params;
-  const cleanerId = req.user.userId;
+  const userId = req.user.userId;
+
+  console.log(`[JobPhotos] Status request for appointment ${appointmentId} by user ${userId}`);
 
   try {
-    const beforeCount = await JobPhoto.count({
-      where: { appointmentId, cleanerId, photoType: "before" },
-    });
+    // Check if user is the homeowner for this appointment
+    const appointment = await UserAppointments.findByPk(appointmentId);
+    const isHomeowner = appointment && appointment.userId === userId;
+    console.log(`[JobPhotos] User ${userId} isHomeowner: ${isHomeowner}, appointment.userId: ${appointment?.userId}`);
 
-    const afterCount = await JobPhoto.count({
-      where: { appointmentId, cleanerId, photoType: "after" },
-    });
+    // For homeowners, show all photos; for cleaners, show their own photos
+    const whereClause = isHomeowner
+      ? { appointmentId, photoType: "before" }
+      : { appointmentId, cleanerId: userId, photoType: "before" };
+
+    const afterWhereClause = isHomeowner
+      ? { appointmentId, photoType: "after" }
+      : { appointmentId, cleanerId: userId, photoType: "after" };
+
+    const beforeCount = await JobPhoto.count({ where: whereClause });
+    const afterCount = await JobPhoto.count({ where: afterWhereClause });
 
     return res.json({
       appointmentId: parseInt(appointmentId),

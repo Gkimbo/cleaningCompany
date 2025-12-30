@@ -33,6 +33,8 @@ import ViewApplicationsButton from "./ViewApplicationsButton";
 import MessagesButton from "../messaging/MessagesButton";
 import AccountSettingsButton from "./AccountSettingsButton";
 import RecommendedSuppliesButton from "./RecommendedSuppliesButton";
+import ArchiveButton from "./ArchiveButton";
+import ReviewsButton from "./ReviewsButton";
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -204,6 +206,8 @@ const TopBar = ({ dispatch, state }) => {
                             <AppointmentsButton closeModal={closeModal} />
                           )}
                           <BillButton closeModal={closeModal} />
+                          <ArchiveButton closeModal={closeModal} />
+                          <ReviewsButton closeModal={closeModal} />
                         </>
                       )}
 

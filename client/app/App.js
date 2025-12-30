@@ -69,6 +69,8 @@ import AccountSettings from "../src/components/account/AccountSettings";
 
 // Client components
 import ClientRequestsList from "../src/components/client/ClientRequestsList";
+import ArchivedCleanings from "../src/components/client/ArchivedCleanings";
+import ClientReviews from "../src/components/client/ClientReviews";
 
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
@@ -409,6 +411,16 @@ export default function App() {
               <Route
                 path="/client-requests"
                 element={<ClientRequestsList state={state} dispatch={dispatch} />}
+              />
+              {/* Archived Cleanings */}
+              <Route
+                path="/archived-cleanings"
+                element={<ArchivedCleanings state={state} />}
+              />
+              {/* Client Reviews */}
+              <Route
+                path="/client-reviews"
+                element={<ClientReviews state={state} />}
               />
               {/* Owner Terms Editor */}
               <Route

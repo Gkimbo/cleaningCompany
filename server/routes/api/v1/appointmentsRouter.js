@@ -553,6 +553,78 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
   }
 });
 
+// Get archived cleanings (completed with client review) for a user
+// NOTE: This must be defined BEFORE /:homeId to avoid route conflict
+appointmentRouter.get("/archived", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    // Get all completed appointments for this user
+    const completedAppointments = await UserAppointments.findAll({
+      where: {
+        userId: userId,
+        completed: true,
+      },
+      order: [["date", "DESC"]],
+    });
+
+    // Get reviews for these appointments (homeowner_to_cleaner type)
+    const appointmentIds = completedAppointments.map((apt) => apt.id);
+    const reviews = await UserReviews.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        reviewType: "homeowner_to_cleaner",
+      },
+    });
+
+    // Filter to only appointments with client reviews
+    const reviewedAppointmentIds = new Set(reviews.map((r) => r.appointmentId));
+    const archivedAppointments = completedAppointments.filter((apt) =>
+      reviewedAppointmentIds.has(apt.id)
+    );
+
+    // Enrich with home and cleaner info
+    const enrichedAppointments = await Promise.all(
+      archivedAppointments.map(async (apt) => {
+        const serialized = AppointmentSerializer.serializeOne(apt);
+
+        // Get home info
+        const home = await UserHomes.findByPk(apt.homeId);
+        if (home) {
+          serialized.home = HomeSerializer.serializeOne(home);
+        }
+
+        // Get cleaner name from assigned employees
+        if (apt.employeesAssigned && apt.employeesAssigned.length > 0) {
+          const cleanerId = apt.employeesAssigned[0];
+          const cleaner = await User.findByPk(cleanerId);
+          if (cleaner) {
+            serialized.cleanerName = cleaner.username;
+          }
+        }
+
+        return serialized;
+      })
+    );
+
+    return res.status(200).json({ appointments: enrichedAppointments });
+  } catch (error) {
+    console.error("Error fetching archived cleanings:", error);
+
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+
+    return res.status(401).json({ error: "Failed to fetch archived cleanings" });
+  }
+});
+
 appointmentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;
   try {

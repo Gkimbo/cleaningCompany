@@ -124,27 +124,36 @@ const MultiAspectReviewForm = ({
   const [punctuality, setPunctuality] = useState(0);
   const [professionalism, setProfessionalism] = useState(0);
   const [communication, setCommunication] = useState(0);
+  const [attentionToDetail, setAttentionToDetail] = useState(0);
+  const [thoroughness, setThoroughness] = useState(0);
+  const [respectOfProperty, setRespectOfProperty] = useState(0);
+  const [followedInstructions, setFollowedInstructions] = useState(0);
   const [wouldRecommend, setWouldRecommend] = useState(null);
 
   // Cleaner reviewing Homeowner
   const [accuracyOfDescription, setAccuracyOfDescription] = useState(0);
   const [homeReadiness, setHomeReadiness] = useState(0);
   const [easeOfAccess, setEaseOfAccess] = useState(0);
+  const [homeCondition, setHomeCondition] = useState(0);
+  const [respectfulness, setRespectfulness] = useState(0);
+  const [safetyConditions, setSafetyConditions] = useState(0);
   const [wouldWorkForAgain, setWouldWorkForAgain] = useState(null);
 
   const isHomeownerReview = reviewType === "homeowner_to_cleaner";
 
   const calculateOverall = () => {
     if (isHomeownerReview) {
-      const ratings = [cleaningQuality, punctuality, professionalism, communication].filter(
-        (r) => r > 0
-      );
+      const ratings = [
+        cleaningQuality, punctuality, professionalism, communication,
+        attentionToDetail, thoroughness, respectOfProperty, followedInstructions
+      ].filter((r) => r > 0);
       if (ratings.length === 0) return 0;
       return ratings.reduce((a, b) => a + b, 0) / ratings.length;
     } else {
-      const ratings = [accuracyOfDescription, homeReadiness, easeOfAccess, communication].filter(
-        (r) => r > 0
-      );
+      const ratings = [
+        accuracyOfDescription, homeReadiness, easeOfAccess, communication,
+        homeCondition, respectfulness, safetyConditions
+      ].filter((r) => r > 0);
       if (ratings.length === 0) return 0;
       return ratings.reduce((a, b) => a + b, 0) / ratings.length;
     }
@@ -152,17 +161,25 @@ const MultiAspectReviewForm = ({
 
   const canProceedStep1 = () => {
     if (isHomeownerReview) {
-      return cleaningQuality > 0 && punctuality > 0;
+      return cleaningQuality > 0 && punctuality > 0 && thoroughness > 0;
     } else {
-      return accuracyOfDescription > 0 && homeReadiness > 0;
+      return accuracyOfDescription > 0 && homeReadiness > 0 && homeCondition > 0;
     }
   };
 
   const canProceedStep2 = () => {
     if (isHomeownerReview) {
+      return attentionToDetail > 0 && respectOfProperty > 0 && followedInstructions > 0;
+    } else {
+      return easeOfAccess > 0 && safetyConditions > 0;
+    }
+  };
+
+  const canProceedStep3 = () => {
+    if (isHomeownerReview) {
       return professionalism > 0 && communication > 0 && wouldRecommend !== null;
     } else {
-      return easeOfAccess > 0 && communication > 0 && wouldWorkForAgain !== null;
+      return respectfulness > 0 && communication > 0 && wouldWorkForAgain !== null;
     }
   };
 
@@ -191,11 +208,18 @@ const MultiAspectReviewForm = ({
         reviewData.cleaningQuality = cleaningQuality;
         reviewData.punctuality = punctuality;
         reviewData.professionalism = professionalism;
+        reviewData.attentionToDetail = attentionToDetail;
+        reviewData.thoroughness = thoroughness;
+        reviewData.respectOfProperty = respectOfProperty;
+        reviewData.followedInstructions = followedInstructions;
         reviewData.wouldRecommend = wouldRecommend;
       } else {
         reviewData.accuracyOfDescription = accuracyOfDescription;
         reviewData.homeReadiness = homeReadiness;
         reviewData.easeOfAccess = easeOfAccess;
+        reviewData.homeCondition = homeCondition;
+        reviewData.respectfulness = respectfulness;
+        reviewData.safetyConditions = safetyConditions;
         reviewData.wouldWorkForAgain = wouldWorkForAgain;
       }
 
@@ -256,13 +280,19 @@ const MultiAspectReviewForm = ({
             rating={cleaningQuality}
             onRatingChange={setCleaningQuality}
             label="Cleaning Quality"
-            description="How thorough and detailed was the cleaning?"
+            description="How well was the space cleaned overall?"
           />
           <StarRating
             rating={punctuality}
             onRatingChange={setPunctuality}
             label="Punctuality"
             description="Did they arrive on time?"
+          />
+          <StarRating
+            rating={thoroughness}
+            onRatingChange={setThoroughness}
+            label="Thoroughness"
+            description="How thorough was the cleaning?"
           />
         </>
       ) : (
@@ -278,6 +308,12 @@ const MultiAspectReviewForm = ({
             onRatingChange={setHomeReadiness}
             label="Home Readiness"
             description="Was the home prepared for cleaning?"
+          />
+          <StarRating
+            rating={homeCondition}
+            onRatingChange={setHomeCondition}
+            label="Home Condition"
+            description="What was the overall condition of the home?"
           />
         </>
       )}
@@ -297,6 +333,69 @@ const MultiAspectReviewForm = ({
   );
 
   const renderStep2 = () => (
+    <View style={styles.stepContainer}>
+      <View style={styles.stepHeader}>
+        <Text style={styles.stepTitle}>
+          {isHomeownerReview ? "Quality details" : "Working conditions"}
+        </Text>
+      </View>
+
+      {isHomeownerReview ? (
+        <>
+          <StarRating
+            rating={attentionToDetail}
+            onRatingChange={setAttentionToDetail}
+            label="Attention to Detail"
+            description="Did they pay attention to small details?"
+          />
+          <StarRating
+            rating={respectOfProperty}
+            onRatingChange={setRespectOfProperty}
+            label="Respect of Property"
+            description="Did they treat your belongings with care?"
+          />
+          <StarRating
+            rating={followedInstructions}
+            onRatingChange={setFollowedInstructions}
+            label="Followed Instructions"
+            description="Did they follow any special instructions?"
+          />
+        </>
+      ) : (
+        <>
+          <StarRating
+            rating={easeOfAccess}
+            onRatingChange={setEaseOfAccess}
+            label="Ease of Access"
+            description="Was it easy to access the property?"
+          />
+          <StarRating
+            rating={safetyConditions}
+            onRatingChange={setSafetyConditions}
+            label="Safety Conditions"
+            description="Was the home safe to work in?"
+          />
+        </>
+      )}
+
+      <View style={styles.navigationButtons}>
+        <Pressable style={styles.backButton} onPress={() => setStep(1)}>
+          <Icon name="chevron-left" size={14} color={colors.primary[600]} />
+          <Text style={styles.backButtonText}>Back</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.nextButton, !canProceedStep2() && styles.buttonDisabled]}
+          onPress={() => setStep(3)}
+          disabled={!canProceedStep2()}
+        >
+          <Text style={styles.nextButtonText}>Continue</Text>
+          <Icon name="chevron-right" size={14} color={colors.neutral[0]} />
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const renderStep3 = () => (
     <View style={styles.stepContainer}>
       <View style={styles.stepHeader}>
         <Text style={styles.stepTitle}>
@@ -327,10 +426,10 @@ const MultiAspectReviewForm = ({
       ) : (
         <>
           <StarRating
-            rating={easeOfAccess}
-            onRatingChange={setEaseOfAccess}
-            label="Ease of Access"
-            description="Was it easy to access the property?"
+            rating={respectfulness}
+            onRatingChange={setRespectfulness}
+            label="Respectfulness"
+            description="Was the homeowner respectful?"
           />
           <StarRating
             rating={communication}
@@ -347,14 +446,14 @@ const MultiAspectReviewForm = ({
       )}
 
       <View style={styles.navigationButtons}>
-        <Pressable style={styles.backButton} onPress={() => setStep(1)}>
+        <Pressable style={styles.backButton} onPress={() => setStep(2)}>
           <Icon name="chevron-left" size={14} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
         <Pressable
-          style={[styles.nextButton, !canProceedStep2() && styles.buttonDisabled]}
-          onPress={() => setStep(3)}
-          disabled={!canProceedStep2()}
+          style={[styles.nextButton, !canProceedStep3() && styles.buttonDisabled]}
+          onPress={() => setStep(4)}
+          disabled={!canProceedStep3()}
         >
           <Text style={styles.nextButtonText}>Continue</Text>
           <Icon name="chevron-right" size={14} color={colors.neutral[0]} />
@@ -363,7 +462,7 @@ const MultiAspectReviewForm = ({
     </View>
   );
 
-  const renderStep3 = () => (
+  const renderStep4 = () => (
     <View style={styles.stepContainer}>
       <View style={styles.stepHeader}>
         <Text style={styles.stepTitle}>Add your comments</Text>
@@ -420,7 +519,7 @@ const MultiAspectReviewForm = ({
       </View>
 
       <View style={styles.navigationButtons}>
-        <Pressable style={styles.backButton} onPress={() => setStep(2)}>
+        <Pressable style={styles.backButton} onPress={() => setStep(3)}>
           <Icon name="chevron-left" size={14} color={colors.primary[600]} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
@@ -446,7 +545,7 @@ const MultiAspectReviewForm = ({
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Progress Indicator */}
       <View style={styles.progressContainer}>
-        {[1, 2, 3].map((s) => (
+        {[1, 2, 3, 4].map((s) => (
           <View key={s} style={styles.progressItem}>
             <View
               style={[
@@ -468,7 +567,7 @@ const MultiAspectReviewForm = ({
                 </Text>
               )}
             </View>
-            {s < 3 && (
+            {s < 4 && (
               <View
                 style={[
                   styles.progressLine,
@@ -492,6 +591,7 @@ const MultiAspectReviewForm = ({
       {step === 1 && renderStep1()}
       {step === 2 && renderStep2()}
       {step === 3 && renderStep3()}
+      {step === 4 && renderStep4()}
     </ScrollView>
   );
 };
@@ -540,10 +640,10 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
   },
   progressLine: {
-    width: 40,
+    width: 28,
     height: 3,
     backgroundColor: colors.neutral[200],
-    marginHorizontal: spacing.sm,
+    marginHorizontal: spacing.xs,
   },
   progressLineActive: {
     backgroundColor: colors.success[500],

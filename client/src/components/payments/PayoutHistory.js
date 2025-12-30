@@ -37,8 +37,7 @@ const PayoutHistory = ({ state, dispatch }) => {
     today.setHours(0, 0, 0, 0);
 
     const upcomingAssigned = appointments.filter((appt) => {
-      const appointmentDate = new Date(appt.date);
-      appointmentDate.setHours(0, 0, 0, 0);
+      const appointmentDate = new Date(appt.date + "T00:00:00");
       return (
         appointmentDate > today &&
         !appt.completed &&
@@ -72,8 +71,10 @@ const PayoutHistory = ({ state, dispatch }) => {
 
         // Separate past and upcoming payouts
         const pastPayouts = allPayouts.filter((payout) => {
-          const appointmentDate = new Date(payout.appointmentDate);
-          appointmentDate.setHours(0, 0, 0, 0);
+          const dateStr = payout.appointmentDate?.length === 10
+            ? payout.appointmentDate + "T00:00:00"
+            : payout.appointmentDate;
+          const appointmentDate = new Date(dateStr);
           return appointmentDate <= today;
         });
 
@@ -125,7 +126,9 @@ const PayoutHistory = ({ state, dispatch }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
+    // If dateString is a date-only format (YYYY-MM-DD), append T00:00:00 to avoid timezone shift
+    const dateStr = dateString.length === 10 ? dateString + "T00:00:00" : dateString;
+    return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",

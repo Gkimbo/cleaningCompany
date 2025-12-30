@@ -400,7 +400,7 @@ const Earnings = ({ state, dispatch }) => {
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontWeight: "600", fontSize: 16 }}>
-                      {new Date(appt.date).toLocaleDateString("en-US", {
+                      {new Date(appt.date + "T00:00:00").toLocaleDateString("en-US", {
                         weekday: "short",
                         month: "short",
                         day: "numeric",
