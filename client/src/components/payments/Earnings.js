@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,6 +12,9 @@ import {
 import StripeConnectOnboarding from "./StripeConnectOnboarding";
 import PayoutHistory from "./PayoutHistory";
 import EarningsChart from "./EarningsChart";
+import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlow";
+import HomeSizeConfirmationModal from "../employeeAssignments/HomeSizeConfirmationModal";
+import FetchData from "../../services/fetchRequests/fetchData";
 import { API_BASE } from "../../services/config";
 import { usePricing } from "../../context/PricingContext";
 
@@ -28,8 +32,12 @@ const Earnings = ({ state, dispatch }) => {
   const [accountStatus, setAccountStatus] = useState(null);
   const [assignedAppointments, setAssignedAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isCapturing, setIsCapturing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [selectedHome, setSelectedHome] = useState(null);
+  const [showCompletionFlow, setShowCompletionFlow] = useState(false);
+  const [showHomeSizeModal, setShowHomeSizeModal] = useState(false);
+  const [jobStatuses, setJobStatuses] = useState({});
 
   const fetchEarnings = async () => {
     if (!state?.currentUser?.id) return;
@@ -64,12 +72,20 @@ const Earnings = ({ state, dispatch }) => {
   const fetchAssignedAppointments = async () => {
     if (!state?.currentUser?.id) return;
     try {
-      // Get appointments assigned to this cleaner
-      const myAppointments = (state?.appointments || []).filter(
-        (appt) =>
-          appt.employeesAssigned &&
-          appt.employeesAssigned.includes(String(state.currentUser.id))
-      );
+      // Get appointments assigned to this cleaner (exclude completed ones)
+      const myAppointments = (state?.appointments || [])
+        .filter(
+          (appt) =>
+            appt.employeesAssigned &&
+            appt.employeesAssigned.includes(String(state.currentUser.id)) &&
+            !appt.completed // Filter out completed appointments
+        )
+        .sort((a, b) => {
+          // Sort by date, soonest first
+          const dateA = new Date(a.date + "T00:00:00");
+          const dateB = new Date(b.date + "T00:00:00");
+          return dateA - dateB;
+        });
       setAssignedAppointments(myAppointments);
     } catch (err) {
       console.error("Error fetching appointments:", err);
@@ -92,32 +108,88 @@ const Earnings = ({ state, dispatch }) => {
     loadData();
   }, [state?.currentUser?.id, state?.appointments]);
 
-  const handleCapturePayment = async (appointmentId) => {
-    Alert.alert("Complete Job", "Mark this job as completed and release payment?", [
-      { text: "Cancel" },
-      {
-        text: "Yes",
-        onPress: async () => {
-          setIsCapturing(true);
-          try {
-            const res = await fetch(`${API_BASE}/payments/capture`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ appointmentId }),
-            });
-            const data = await res.json();
-            if (!res.ok)
-              throw new Error(data.error || "Failed to complete job");
-            Alert.alert("Success", "Job completed! Payment captured.");
-            await loadData();
-          } catch (err) {
-            Alert.alert("Error", err.message);
-          } finally {
-            setIsCapturing(false);
-          }
-        },
-      },
-    ]);
+  // Check if an appointment is today
+  const isAppointmentToday = (appt) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const apptDate = new Date(appt.date + "T00:00:00");
+    return apptDate.getTime() === today.getTime();
+  };
+
+  // Check job started status for all appointments
+  const checkJobStatuses = async () => {
+    if (!state?.currentUser?.token) return;
+    const statuses = {};
+    for (const appt of assignedAppointments) {
+      if (!appt.completed && isAppointmentToday(appt)) {
+        try {
+          const response = await FetchData.get(
+            `/api/v1/job-photos/${appt.id}/status`,
+            state.currentUser.token
+          );
+          statuses[appt.id] = {
+            hasBeforePhotos: response.hasBeforePhotos,
+            started: response.hasBeforePhotos && !appt.completed,
+          };
+        } catch (err) {
+          statuses[appt.id] = { hasBeforePhotos: false, started: false };
+        }
+      }
+    }
+    setJobStatuses(statuses);
+  };
+
+  useEffect(() => {
+    if (assignedAppointments.length > 0) {
+      checkJobStatuses();
+    }
+  }, [assignedAppointments]);
+
+  const handleStartCleaning = async (appt) => {
+    // Fetch home data for the appointment
+    try {
+      const response = await FetchData.getHome(appt.homeId);
+      setSelectedHome(response.home);
+      setSelectedAppointment(appt);
+      setShowHomeSizeModal(true);
+    } catch (err) {
+      Alert.alert("Error", "Could not load home details. Please try again.");
+    }
+  };
+
+  const handleHomeSizeConfirmed = () => {
+    setShowHomeSizeModal(false);
+    setShowCompletionFlow(true);
+  };
+
+  const handleHomeSizeModalClose = () => {
+    setShowHomeSizeModal(false);
+    setSelectedAppointment(null);
+    setSelectedHome(null);
+  };
+
+  const handleJobCompleted = (data) => {
+    setShowCompletionFlow(false);
+    setSelectedAppointment(null);
+    setSelectedHome(null);
+    loadData(); // Refresh the data
+  };
+
+  const handleCancelCompletion = () => {
+    setShowCompletionFlow(false);
+    // Keep selected appointment/home in case user wants to continue later
+  };
+
+  const handleContinueCleaning = async (appt) => {
+    // Fetch home data and go directly to completion flow
+    try {
+      const response = await FetchData.getHome(appt.homeId);
+      setSelectedHome(response.home);
+      setSelectedAppointment(appt);
+      setShowCompletionFlow(true);
+    } catch (err) {
+      Alert.alert("Error", "Could not load home details. Please try again.");
+    }
   };
 
   const getStatusBadge = (appt) => {
@@ -132,6 +204,18 @@ const Earnings = ({ state, dispatch }) => {
     const perCleaner = gross / numCleaners;
     const cleanerShare = perCleaner * cleanerSharePercent;
     return cleanerShare.toFixed(2);
+  };
+
+  // Calculate potential earnings from assigned appointments (not completed)
+  const calculatePotentialEarnings = () => {
+    return assignedAppointments
+      .filter((appt) => !appt.completed) // Only non-completed jobs
+      .reduce((total, appt) => {
+        const numCleaners = appt.employeesAssigned?.length || 1;
+        const share = parseFloat(calculateCleanerShare(appt.price, numCleaners));
+        return total + share;
+      }, 0)
+      .toFixed(2);
   };
 
   if (isLoading) {
@@ -227,7 +311,7 @@ const Earnings = ({ state, dispatch }) => {
         </Text>
       </View>
 
-      {/* Pending Earnings Card */}
+      {/* Potential Earnings Card */}
       <View
         style={{
           backgroundColor: "#2196F3",
@@ -249,13 +333,13 @@ const Earnings = ({ state, dispatch }) => {
             marginBottom: 5,
           }}
         >
-          Pending Earnings
+          Potential Earnings
         </Text>
         <Text style={{ color: "#fff", fontSize: 28, fontWeight: "700" }}>
-          ${earnings.pendingEarnings}
+          ${calculatePotentialEarnings()}
         </Text>
         <Text style={{ color: "rgba(255,255,255,0.8)", marginTop: 5 }}>
-          Jobs in progress
+          {assignedAppointments.filter((a) => !a.completed).length} upcoming {assignedAppointments.filter((a) => !a.completed).length === 1 ? "job" : "jobs"}
         </Text>
       </View>
 
@@ -324,7 +408,7 @@ const Earnings = ({ state, dispatch }) => {
                 >
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontWeight: "600", fontSize: 16 }}>
-                      {new Date(appt.date).toLocaleDateString("en-US", {
+                      {new Date(appt.date + "T00:00:00").toLocaleDateString("en-US", {
                         weekday: "short",
                         month: "short",
                         day: "numeric",
@@ -373,28 +457,50 @@ const Earnings = ({ state, dispatch }) => {
                   </Text>
                 )}
 
-                {/* Complete Job Button */}
-                {appt.paid && !appt.completed && (
-                  <Pressable
-                    onPress={() => handleCapturePayment(appt.id)}
-                    disabled={isCapturing || !accountStatus?.onboardingComplete}
-                    style={{
-                      backgroundColor: isCapturing || !accountStatus?.onboardingComplete ? "#aaa" : "#4CAF50",
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      alignItems: "center",
-                      marginTop: 12,
-                    }}
-                  >
-                    <Text
-                      style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}
-                    >
-                      {isCapturing ? "Processing..." : "Mark Complete & Get Paid"}
-                    </Text>
-                  </Pressable>
+                {/* Start/Continue Cleaning Button - Only shows on day of cleaning */}
+                {appt.paid && !appt.completed && isAppointmentToday(appt) && (
+                  <>
+                    {jobStatuses[appt.id]?.started ? (
+                      <Pressable
+                        onPress={() => handleContinueCleaning(appt)}
+                        disabled={!accountStatus?.onboardingComplete}
+                        style={{
+                          backgroundColor: !accountStatus?.onboardingComplete ? "#aaa" : "#2196F3",
+                          paddingVertical: 12,
+                          borderRadius: 10,
+                          alignItems: "center",
+                          marginTop: 12,
+                        }}
+                      >
+                        <Text
+                          style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}
+                        >
+                          Continue Cleaning
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable
+                        onPress={() => handleStartCleaning(appt)}
+                        disabled={!accountStatus?.onboardingComplete}
+                        style={{
+                          backgroundColor: !accountStatus?.onboardingComplete ? "#aaa" : "#4CAF50",
+                          paddingVertical: 12,
+                          borderRadius: 10,
+                          alignItems: "center",
+                          marginTop: 12,
+                        }}
+                      >
+                        <Text
+                          style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}
+                        >
+                          Start Cleaning
+                        </Text>
+                      </Pressable>
+                    )}
+                  </>
                 )}
 
-                {appt.paid && !appt.completed && !accountStatus?.onboardingComplete && (
+                {appt.paid && !appt.completed && isAppointmentToday(appt) && !accountStatus?.onboardingComplete && (
                   <Pressable onPress={() => setActiveTab("account")}>
                     <Text style={{ color: "#E65100", fontSize: 12, textAlign: "center", marginTop: 8 }}>
                       Set up payment account first →
@@ -452,6 +558,34 @@ const Earnings = ({ state, dispatch }) => {
 
       {/* Tab Content */}
       {renderTabContent()}
+
+      {/* Home Size Confirmation Modal */}
+      {selectedAppointment && selectedHome && (
+        <HomeSizeConfirmationModal
+          visible={showHomeSizeModal}
+          onClose={handleHomeSizeModalClose}
+          onConfirm={handleHomeSizeConfirmed}
+          home={selectedHome}
+          appointment={selectedAppointment}
+          token={state?.currentUser?.token}
+        />
+      )}
+
+      {/* Job Completion Flow Modal */}
+      <Modal
+        visible={showCompletionFlow}
+        animationType="slide"
+        presentationStyle="fullScreen"
+      >
+        {selectedAppointment && selectedHome && (
+          <JobCompletionFlow
+            appointment={selectedAppointment}
+            home={selectedHome}
+            onJobCompleted={handleJobCompleted}
+            onCancel={handleCancelCompletion}
+          />
+        )}
+      </Modal>
     </View>
   );
 };

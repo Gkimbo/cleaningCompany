@@ -805,26 +805,94 @@ Kleanr Support Team`;
     }
   }
 
-  static async sendRequestApproved(email, cleanerName, homeownerName, address, appointmentDate) {
+  static async sendRequestApproved(email, cleanerName, homeownerName, address, appointmentDate, linensConfig = {}) {
     try {
       const transporter = createTransporter();
-      const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
+      // Only show city, state, and zip code - full address shown in app on day of appointment
+      const locationInfo = `${address.city}, ${address.state} ${address.zipcode}`;
+
+      // Build linens section if cleaner needs to bring sheets/towels
+      const { bringSheets, bringTowels, sheetConfigurations, towelConfigurations } = linensConfig;
+      const needsLinens = bringSheets === "yes" || bringTowels === "yes";
+
+      let linensHtml = "";
+      let linensText = "";
+
+      if (needsLinens) {
+        linensHtml = `<div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <div style="font-size: 16px; font-weight: bold; color: #92400e; margin-bottom: 12px;">⚠️ Linens You Need to Bring</div>`;
+        linensText = "\n\nLINENS YOU NEED TO BRING\n━━━━━━━━━━━━━━━━━━━━━━\n";
+
+        if (bringSheets === "yes") {
+          linensHtml += `<div style="margin-bottom: 12px;">
+            <div style="font-weight: 600; color: #78350f; margin-bottom: 6px;">🛏️ Sheets:</div>`;
+          linensText += "SHEETS:\n";
+
+          if (sheetConfigurations && sheetConfigurations.length > 0) {
+            sheetConfigurations.filter(bed => bed.needsSheets !== false).forEach(bed => {
+              const size = bed.size ? bed.size.charAt(0).toUpperCase() + bed.size.slice(1) : "Standard";
+              linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Bed ${bed.bedNumber}: ${size} sheets</div>`;
+              linensText += `  • Bed ${bed.bedNumber}: ${size} sheets\n`;
+            });
+          } else {
+            linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Sheets needed (check app for details)</div>`;
+            linensText += "  • Sheets needed (check app for details)\n";
+          }
+          linensHtml += "</div>";
+        }
+
+        if (bringTowels === "yes") {
+          linensHtml += `<div style="margin-bottom: 8px;">
+            <div style="font-weight: 600; color: #78350f; margin-bottom: 6px;">🛁 Towels:</div>`;
+          linensText += "TOWELS:\n";
+
+          if (towelConfigurations && towelConfigurations.length > 0) {
+            let totalTowels = 0;
+            let totalWashcloths = 0;
+            towelConfigurations.forEach(bath => {
+              const towels = bath.towels || 0;
+              const washcloths = bath.faceCloths || 0;
+              totalTowels += towels;
+              totalWashcloths += washcloths;
+              linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Bathroom ${bath.bathroomNumber}: ${towels} towel${towels !== 1 ? 's' : ''}, ${washcloths} washcloth${washcloths !== 1 ? 's' : ''}</div>`;
+              linensText += `  • Bathroom ${bath.bathroomNumber}: ${towels} towel${towels !== 1 ? 's' : ''}, ${washcloths} washcloth${washcloths !== 1 ? 's' : ''}\n`;
+            });
+            linensHtml += `<div style="color: #78350f; padding-left: 16px; font-weight: 600; margin-top: 6px;">Total: ${totalTowels} towels, ${totalWashcloths} washcloths</div>`;
+            linensText += `  Total: ${totalTowels} towels, ${totalWashcloths} washcloths\n`;
+          } else {
+            linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Towels needed (check app for details)</div>`;
+            linensText += "  • Towels needed (check app for details)\n";
+          }
+          linensHtml += "</div>";
+        }
+
+        linensHtml += "</div>";
+      } else {
+        linensHtml = `<div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 16px; margin: 20px 0; border-left: 4px solid #10b981;">
+          <div style="color: #065f46;"><span style="font-weight: 600;">✓ Linens Provided:</span> Sheets and towels will be provided at the home</div>
+        </div>`;
+        linensText = "\n\n✓ LINENS PROVIDED: Sheets and towels will be provided at the home\n";
+      }
 
       const htmlContent = createEmailTemplate({
         title: "Request Approved! 🎉",
         subtitle: "You've got a cleaning job",
         headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
         greeting: `Congratulations, ${cleanerName}! 🎊`,
-        content: `<p>Great news! <strong>${homeownerName}</strong> has approved your request to clean their home. You're all set for your upcoming appointment!</p>`,
+        content: `<p>Great news! <strong>${homeownerName}</strong> has approved your request to clean their home. You're all set for your upcoming appointment!</p>${linensHtml}`,
         infoBox: {
           icon: "📍",
           title: "Appointment Details",
           items: [
             { label: "Homeowner", value: homeownerName },
-            { label: "Address", value: fullAddress },
+            { label: "Location", value: locationInfo },
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Status", value: "✅ Approved" },
           ],
+        },
+        tipBox: {
+          icon: "📱",
+          text: "The full address will be available in the app on the day of your appointment.",
         },
         steps: {
           title: "📋 Before Your Appointment",
@@ -845,9 +913,11 @@ Great news! ${homeownerName} has approved your request to clean their home.
 APPOINTMENT DETAILS
 ━━━━━━━━━━━━━━━━━━━━━━
 Homeowner: ${homeownerName}
-Address: ${fullAddress}
+Location: ${locationInfo}
 Date: ${formatDate(appointmentDate)}
 Status: ✅ Approved
+${linensText}
+Note: The full address will be available in the app on the day of your appointment.
 
 BEFORE YOUR APPOINTMENT
 ━━━━━━━━━━━━━━━━━━━━━━
@@ -874,6 +944,152 @@ Kleanr Support Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending request approved email:", error);
+    }
+  }
+
+  static async sendLinensConfigurationUpdated(email, cleanerName, homeownerName, appointmentDate, payout, linensConfig = {}) {
+    try {
+      const transporter = createTransporter();
+      const { bringSheets, bringTowels, sheetConfigurations, towelConfigurations, previousBringSheets, previousBringTowels } = linensConfig;
+      const needsLinens = bringSheets === "yes" || bringTowels === "yes";
+
+      // Check what was removed
+      const sheetsRemoved = previousBringSheets === "yes" && bringSheets !== "yes";
+      const towelsRemoved = previousBringTowels === "yes" && bringTowels !== "yes";
+      const somethingRemoved = sheetsRemoved || towelsRemoved;
+
+      let linensHtml = "";
+      let linensText = "";
+
+      // Show removed items first (good news!)
+      if (somethingRemoved) {
+        linensHtml += `<div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 16px; margin: 20px 0; border-left: 4px solid #10b981;">
+          <div style="font-size: 16px; font-weight: bold; color: #065f46; margin-bottom: 8px;">✓ Good News!</div>`;
+        linensText += "\n\n✓ GOOD NEWS!\n━━━━━━━━━━━━━━━━━━━━━━\n";
+
+        if (sheetsRemoved) {
+          linensHtml += `<div style="color: #065f46; padding-left: 8px;">• You no longer need to bring sheets - they will be provided</div>`;
+          linensText += "• You no longer need to bring sheets - they will be provided\n";
+        }
+        if (towelsRemoved) {
+          linensHtml += `<div style="color: #065f46; padding-left: 8px;">• You no longer need to bring towels - they will be provided</div>`;
+          linensText += "• You no longer need to bring towels - they will be provided\n";
+        }
+        linensHtml += "</div>";
+      }
+
+      // Show current requirements if any linens are still needed
+      if (needsLinens) {
+        linensHtml += `<div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+          <div style="font-size: 16px; font-weight: bold; color: #92400e; margin-bottom: 12px;">🛏️ ${somethingRemoved ? 'Still Required' : 'Updated Linens Requirements'}</div>`;
+        linensText += `\n\n${somethingRemoved ? 'STILL REQUIRED' : 'UPDATED LINENS REQUIREMENTS'}\n━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+        if (bringSheets === "yes") {
+          linensHtml += `<div style="margin-bottom: 12px;">
+            <div style="font-weight: 600; color: #78350f; margin-bottom: 6px;">Sheets:</div>`;
+          linensText += "SHEETS:\n";
+
+          if (sheetConfigurations && sheetConfigurations.length > 0) {
+            sheetConfigurations.filter(bed => bed.needsSheets !== false).forEach(bed => {
+              const size = bed.size ? bed.size.charAt(0).toUpperCase() + bed.size.slice(1) : "Standard";
+              linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Bed ${bed.bedNumber}: ${size} sheets</div>`;
+              linensText += `  • Bed ${bed.bedNumber}: ${size} sheets\n`;
+            });
+          } else {
+            linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Sheets needed (check app for details)</div>`;
+            linensText += "  • Sheets needed (check app for details)\n";
+          }
+          linensHtml += "</div>";
+        }
+
+        if (bringTowels === "yes") {
+          linensHtml += `<div style="margin-bottom: 8px;">
+            <div style="font-weight: 600; color: #78350f; margin-bottom: 6px;">Towels:</div>`;
+          linensText += "TOWELS:\n";
+
+          if (towelConfigurations && towelConfigurations.length > 0) {
+            let totalTowels = 0;
+            let totalWashcloths = 0;
+            towelConfigurations.forEach(bath => {
+              const towels = bath.towels || 0;
+              const washcloths = bath.faceCloths || 0;
+              totalTowels += towels;
+              totalWashcloths += washcloths;
+              linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Bathroom ${bath.bathroomNumber}: ${towels} towel${towels !== 1 ? 's' : ''}, ${washcloths} washcloth${washcloths !== 1 ? 's' : ''}</div>`;
+              linensText += `  • Bathroom ${bath.bathroomNumber}: ${towels} towel${towels !== 1 ? 's' : ''}, ${washcloths} washcloth${washcloths !== 1 ? 's' : ''}\n`;
+            });
+            linensHtml += `<div style="color: #78350f; padding-left: 16px; font-weight: 600; margin-top: 6px;">Total: ${totalTowels} towels, ${totalWashcloths} washcloths</div>`;
+            linensText += `  Total: ${totalTowels} towels, ${totalWashcloths} washcloths\n`;
+          } else {
+            linensHtml += `<div style="color: #78350f; padding-left: 16px;">• Towels needed (check app for details)</div>`;
+            linensText += "  • Towels needed (check app for details)\n";
+          }
+          linensHtml += "</div>";
+        }
+
+        linensHtml += "</div>";
+      } else if (!somethingRemoved) {
+        // Only show this if we haven't already shown the "removed" message
+        linensHtml = `<div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 16px; margin: 20px 0; border-left: 4px solid #10b981;">
+          <div style="color: #065f46;"><span style="font-weight: 600;">✓ Updated:</span> Sheets and towels will now be provided at the home - you don't need to bring any!</div>
+        </div>`;
+        linensText = "\n\n✓ UPDATED: Sheets and towels will now be provided at the home - you don't need to bring any!\n";
+      }
+
+      const payoutFormatted = typeof payout === 'number' ? `$${payout.toFixed(2)}` : payout;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Update 📝",
+        subtitle: "Linens requirements have changed",
+        headerColor: "linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)",
+        greeting: `Hi ${cleanerName},`,
+        content: `<p>The homeowner <strong>${homeownerName}</strong> has updated the sheets and towels requirements for your upcoming appointment on <strong>${formatDate(appointmentDate)}</strong>.</p>${linensHtml}`,
+        infoBox: {
+          icon: "💰",
+          title: "Updated Appointment Info",
+          items: [
+            { label: "Your Payout", value: payoutFormatted },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "✅ Still Confirmed" },
+          ],
+        },
+        tipBox: {
+          icon: "📱",
+          text: "Open the app to see the full updated details for this appointment.",
+        },
+        footerMessage: "Thank you for being part of Kleanr",
+      });
+
+      const textContent = `Hi ${cleanerName},
+
+The homeowner ${homeownerName} has updated the sheets and towels requirements for your upcoming appointment.
+
+UPDATED APPOINTMENT INFO
+━━━━━━━━━━━━━━━━━━━━━━
+Your Payout: ${payoutFormatted}
+Date: ${formatDate(appointmentDate)}
+Status: ✅ Still Confirmed
+${linensText}
+Open the app to see the full updated details for this appointment.
+
+Thank you for being part of Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `📝 Appointment Update - Linens changed for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Linens configuration updated email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending linens configuration updated email:", error);
     }
   }
 
@@ -1630,6 +1846,103 @@ Kleanr Team`;
     }
   }
 
+  // Notify cleaner when homeowner cancels their appointment
+  static async sendHomeownerCancelledNotification(
+    email,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    willBePaid = false,
+    paymentAmount = null
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      // Build content based on whether cleaner will be paid
+      const paymentInfo = willBePaid && paymentAmount
+        ? `<p style="margin-top: 15px;"><strong>Good news!</strong> Since this cancellation was within 3 days of the scheduled cleaning, you will still receive a partial payment of <strong>$${paymentAmount}</strong> for this appointment.</p>`
+        : "";
+
+      const paymentWarning = willBePaid && paymentAmount
+        ? {
+            icon: "💰",
+            text: `You will receive <strong>$${paymentAmount}</strong> for this cancelled appointment. The payment will be processed according to the normal payout schedule.`,
+            bgColor: "#d1fae5",
+            borderColor: "#10b981",
+            textColor: "#065f46",
+          }
+        : null;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Cancelled",
+        subtitle: "The homeowner has cancelled",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+        greeting: `Hi ${cleanerName},`,
+        content: `<p>We wanted to let you know that the homeowner has cancelled their cleaning appointment that you were assigned to.</p>${paymentInfo}`,
+        infoBox: {
+          icon: "📅",
+          title: "Cancelled Appointment Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Location", value: homeAddress },
+            ...(willBePaid && paymentAmount ? [{ label: "Your Payment", value: `$${paymentAmount}` }] : []),
+          ],
+        },
+        warningBox: paymentWarning,
+        steps: {
+          title: "🔍 Find Another Appointment",
+          items: [
+            "Log into the Kleanr app",
+            "Browse available cleaning appointments",
+            "Request jobs that fit your schedule",
+          ],
+        },
+        ctaText: "There are plenty of other cleaning opportunities waiting for you!",
+        footerMessage: "Thank you for being part of Kleanr",
+      });
+
+      const paymentText = willBePaid && paymentAmount
+        ? `\n\nGOOD NEWS: Since this cancellation was within 3 days of the scheduled cleaning, you will still receive a partial payment of $${paymentAmount} for this appointment.\n`
+        : "";
+
+      const textContent = `Hi ${cleanerName},
+
+We wanted to let you know that the homeowner has cancelled their cleaning appointment that you were assigned to.
+${paymentText}
+CANCELLED APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Location: ${homeAddress}
+${willBePaid && paymentAmount ? `Your Payment: $${paymentAmount}\n` : ""}
+FIND ANOTHER APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+1. Log into the Kleanr app
+2. Browse available cleaning appointments
+3. Request jobs that fit your schedule
+
+There are plenty of other cleaning opportunities waiting for you!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: willBePaid
+          ? `⚠️ Appointment Cancelled - You'll Still Be Paid $${paymentAmount}`
+          : `⚠️ Appointment Cancelled - ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Homeowner cancelled notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending homeowner cancelled notification email:", error);
+    }
+  }
+
   // Auto-sync calendar appointment notification
   static async sendAutoSyncAppointmentsCreated(
     email,
@@ -1808,6 +2121,186 @@ Kleanr System`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending HR hiring notification email:", error);
+    }
+  }
+  // Cleaning completed notification to homeowner
+  static async sendCleaningCompletedNotification(
+    email,
+    userName,
+    address,
+    appointmentDate,
+    cleanerName
+  ) {
+    try {
+      const transporter = createTransporter();
+      const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipcode}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Your Home is Sparkling Clean! ✨",
+        subtitle: "Your cleaning is complete",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${userName}! 🎉`,
+        content: `<p>Great news! Your scheduled cleaning has been completed. Your home is now fresh and clean!</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Cleaning Details",
+          items: [
+            { label: "Address", value: fullAddress },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Cleaned By", value: cleanerName },
+            { label: "Status", value: "✅ Completed" },
+          ],
+        },
+        warningBox: {
+          icon: "⭐",
+          text: "<strong>We'd love your feedback!</strong> Please take a moment to review your cleaner. Your review helps maintain quality service and helps other homeowners.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        steps: {
+          title: "📝 Leave a Review",
+          items: [
+            "Open the Kleanr app on your device",
+            "Go to your Dashboard or completed appointments",
+            "Tap 'Leave a Review' to rate your cleaner",
+            "Your feedback helps us improve!",
+          ],
+        },
+        ctaText: "Log into the Kleanr app now to leave your review!",
+        footerMessage: "Thank you for choosing Kleanr",
+      });
+
+      const textContent = `Hi ${userName}! 🎉
+
+Great news! Your scheduled cleaning has been completed. Your home is now fresh and clean!
+
+CLEANING DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${fullAddress}
+Date: ${formatDate(appointmentDate)}
+Cleaned By: ${cleanerName}
+Status: ✅ Completed
+
+⭐ WE'D LOVE YOUR FEEDBACK!
+Please take a moment to review your cleaner. Your review helps maintain quality service and helps other homeowners.
+
+HOW TO LEAVE A REVIEW
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app on your device
+2. Go to your Dashboard or completed appointments
+3. Tap 'Leave a Review' to rate your cleaner
+4. Your feedback helps us improve!
+
+Log into the Kleanr app now to leave your review!
+
+Thank you for choosing Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✨ Your Cleaning is Complete - Leave a Review!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Cleaning completed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending cleaning completed email:", error);
+    }
+  }
+
+  // Review reminder email to homeowner
+  static async sendReviewReminderNotification(
+    email,
+    userName,
+    pendingReviews
+  ) {
+    try {
+      const transporter = createTransporter();
+      const reviewCount = pendingReviews.length;
+
+      // Build list of pending reviews
+      const reviewItems = pendingReviews.slice(0, 5).map(review => ({
+        label: formatDate(review.date),
+        value: review.homeName || review.address || "Your Home",
+      }));
+
+      const htmlContent = createEmailTemplate({
+        title: "Don't Forget to Review! ⭐",
+        subtitle: `You have ${reviewCount} pending review${reviewCount > 1 ? 's' : ''}`,
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+        greeting: `Hi ${userName}! 👋`,
+        content: `<p>You have <strong>${reviewCount} completed cleaning${reviewCount > 1 ? 's' : ''}</strong> waiting for your review. Your feedback is incredibly valuable to our cleaners and helps maintain excellent service quality.</p>`,
+        infoBox: {
+          icon: "📋",
+          title: "Cleanings Awaiting Review",
+          items: reviewItems,
+        },
+        warningBox: {
+          icon: "💡",
+          text: "Leaving a review only takes a minute and really makes a difference for your cleaner!",
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        steps: {
+          title: "⚡ Quick Review Steps",
+          items: [
+            "Open the Kleanr app",
+            "Go to your Dashboard",
+            "Tap on 'Pending Reviews'",
+            "Rate your cleaner and leave feedback",
+          ],
+        },
+        ctaText: "Log into the Kleanr app now to leave your reviews!",
+        footerMessage: "Your feedback helps our cleaners grow",
+      });
+
+      const pendingListText = pendingReviews.slice(0, 5).map(review =>
+        `  • ${formatDate(review.date)} - ${review.homeName || review.address || "Your Home"}`
+      ).join('\n');
+
+      const textContent = `Hi ${userName}!
+
+You have ${reviewCount} completed cleaning${reviewCount > 1 ? 's' : ''} waiting for your review.
+
+CLEANINGS AWAITING REVIEW
+━━━━━━━━━━━━━━━━━━━━━━
+${pendingListText}
+${reviewCount > 5 ? `  ...and ${reviewCount - 5} more\n` : ''}
+Your feedback is incredibly valuable to our cleaners and helps maintain excellent service quality.
+
+QUICK REVIEW STEPS
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Go to your Dashboard
+3. Tap on 'Pending Reviews'
+4. Rate your cleaner and leave feedback
+
+Log into the Kleanr app now to leave your reviews!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⭐ Reminder: ${reviewCount} Cleaning${reviewCount > 1 ? 's' : ''} Waiting for Your Review`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Review reminder email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending review reminder email:", error);
     }
   }
 }

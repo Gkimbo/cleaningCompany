@@ -1,3 +1,19 @@
+const EncryptionService = require("../services/EncryptionService");
+
+// Fields that contain PII and should be encrypted
+const PII_FIELDS = [
+	"address",
+	"city",
+	"state",
+	"zipcode",
+	"keyPadCode",
+	"keyLocation",
+	"contact",
+];
+
+// Location fields stored as strings when encrypted
+const LOCATION_FIELDS = ["latitude", "longitude"];
+
 module.exports = (sequelize, DataTypes) => {
 	// Define the UserHomes model
 	const UserHomes = sequelize.define("UserHomes", {
@@ -12,19 +28,19 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 		},
 		nickName: {
-			type: DataTypes.INTEGER,
+			type: DataTypes.STRING,
 			allowNull: false,
 		},
 		address: {
-			type: DataTypes.INTEGER,
+			type: DataTypes.TEXT,
 			allowNull: false,
 		},
 		city: {
-			type: DataTypes.INTEGER,
+			type: DataTypes.TEXT,
 			allowNull: false,
 		},
 		state: {
-			type: DataTypes.INTEGER,
+			type: DataTypes.TEXT,
 			allowNull: true,
 		},
 		zipcode: {
@@ -48,11 +64,11 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 		},
 		keyPadCode: {
-			type: DataTypes.STRING,
+			type: DataTypes.TEXT,
 			allowNull: true,
 		},
 		keyLocation: {
-			type: DataTypes.STRING,
+			type: DataTypes.TEXT,
 			allowNull: true,
 		},
 		recyclingLocation: {
@@ -68,7 +84,7 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 		},
 		contact: {
-			type: DataTypes.STRING,
+			type: DataTypes.TEXT,
 			allowNull: false,
 		},
 		specialNotes: {
@@ -116,15 +132,81 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.JSON,
 			allowNull: true,
 		},
-		// Geocoded coordinates for accurate distance calculations
+		// Geocoded coordinates for accurate distance calculations (stored encrypted as TEXT)
 		latitude: {
-			type: DataTypes.DECIMAL(10, 8),
+			type: DataTypes.TEXT,
 			allowNull: true,
 		},
 		longitude: {
-			type: DataTypes.DECIMAL(11, 8),
+			type: DataTypes.TEXT,
 			allowNull: true,
 		},
+	});
+
+	// Helper function to encrypt PII fields
+	const encryptPIIFields = (home) => {
+		// Encrypt regular PII fields
+		PII_FIELDS.forEach((field) => {
+			if (home[field] !== undefined && home[field] !== null) {
+				const value = String(home[field]);
+				// Only encrypt if not already encrypted (doesn't contain the iv:ciphertext format)
+				if (!value.includes(":") || value.split(":").length !== 2) {
+					home[field] = EncryptionService.encrypt(value);
+				}
+			}
+		});
+
+		// Encrypt location fields (convert numbers to strings first)
+		LOCATION_FIELDS.forEach((field) => {
+			if (home[field] !== undefined && home[field] !== null) {
+				const value = String(home[field]);
+				// Only encrypt if not already encrypted
+				if (!value.includes(":") || value.split(":").length !== 2) {
+					home[field] = EncryptionService.encrypt(value);
+				}
+			}
+		});
+	};
+
+	// Helper function to decrypt PII fields
+	const decryptPIIFields = (home) => {
+		if (!home) return;
+
+		// Decrypt regular PII fields
+		PII_FIELDS.forEach((field) => {
+			if (home.dataValues && home.dataValues[field]) {
+				home.dataValues[field] = EncryptionService.decrypt(home.dataValues[field]);
+			}
+		});
+
+		// Decrypt location fields (convert back to numbers)
+		LOCATION_FIELDS.forEach((field) => {
+			if (home.dataValues && home.dataValues[field]) {
+				const decrypted = EncryptionService.decrypt(home.dataValues[field]);
+				home.dataValues[field] = decrypted ? parseFloat(decrypted) : null;
+			}
+		});
+	};
+
+	// Encrypt before creating
+	UserHomes.beforeCreate((home) => {
+		encryptPIIFields(home);
+	});
+
+	// Encrypt before updating
+	UserHomes.beforeUpdate((home) => {
+		encryptPIIFields(home);
+	});
+
+	// Decrypt after finding
+	UserHomes.afterFind((result) => {
+		if (!result) return;
+
+		if (Array.isArray(result)) {
+			result.forEach((home) => decryptPIIFields(home));
+		} else {
+			decryptPIIFields(result);
+		}
 	});
 
 	// Define the one-to-many relationship with User

@@ -370,3 +370,202 @@ describe("PricingContext", () => {
     });
   });
 });
+
+// Import helper functions for testing
+import { getTimeWindowSurcharge, getTimeWindowLabel, getTimeWindowOptions } from "../../src/context/PricingContext";
+
+describe("PricingContext Helper Functions", () => {
+  describe("getTimeWindowSurcharge", () => {
+    it("should return surcharge when timeWindows values are objects", () => {
+      const pricing = {
+        timeWindows: {
+          anytime: { surcharge: 0, label: "Anytime" },
+          "10-3": { surcharge: 25, label: "10am - 3pm" },
+          "11-4": { surcharge: 25, label: "11am - 4pm" },
+          "12-2": { surcharge: 30, label: "12pm - 2pm" },
+        },
+      };
+
+      expect(getTimeWindowSurcharge(pricing, "anytime")).toBe(0);
+      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(25);
+      expect(getTimeWindowSurcharge(pricing, "11-4")).toBe(25);
+      expect(getTimeWindowSurcharge(pricing, "12-2")).toBe(30);
+    });
+
+    it("should return surcharge when timeWindows values are plain numbers", () => {
+      const pricing = {
+        timeWindows: {
+          anytime: 0,
+          "10-3": 25,
+          "11-4": 25,
+          "12-2": 30,
+        },
+      };
+
+      expect(getTimeWindowSurcharge(pricing, "anytime")).toBe(0);
+      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(25);
+      expect(getTimeWindowSurcharge(pricing, "11-4")).toBe(25);
+      expect(getTimeWindowSurcharge(pricing, "12-2")).toBe(30);
+    });
+
+    it("should return 0 for unknown time window", () => {
+      const pricing = {
+        timeWindows: {
+          "10-3": 25,
+        },
+      };
+
+      expect(getTimeWindowSurcharge(pricing, "unknown")).toBe(0);
+      expect(getTimeWindowSurcharge(pricing, null)).toBe(0);
+      expect(getTimeWindowSurcharge(pricing, undefined)).toBe(0);
+    });
+
+    it("should use default pricing when pricing is null or undefined", () => {
+      expect(getTimeWindowSurcharge(null, "10-3")).toBe(25);
+      expect(getTimeWindowSurcharge(undefined, "10-3")).toBe(25);
+    });
+
+    it("should use default pricing when timeWindows is missing", () => {
+      const pricing = { basePrice: 150 };
+      expect(getTimeWindowSurcharge(pricing, "10-3")).toBe(25);
+    });
+  });
+
+  describe("getTimeWindowLabel", () => {
+    it("should return Anytime for null, undefined, or anytime time window", () => {
+      const pricing = {
+        timeWindows: {
+          anytime: { surcharge: 0, label: "Anytime" },
+        },
+      };
+
+      expect(getTimeWindowLabel(pricing, null)).toEqual({
+        label: "Anytime",
+        surcharge: 0,
+        shortLabel: null,
+      });
+      expect(getTimeWindowLabel(pricing, undefined)).toEqual({
+        label: "Anytime",
+        surcharge: 0,
+        shortLabel: null,
+      });
+      expect(getTimeWindowLabel(pricing, "anytime")).toEqual({
+        label: "Anytime",
+        surcharge: 0,
+        shortLabel: null,
+      });
+    });
+
+    it("should return correct label and surcharge for object format", () => {
+      const pricing = {
+        timeWindows: {
+          "10-3": { surcharge: 25, label: "10am - 3pm" },
+          "11-4": { surcharge: 25, label: "11am - 4pm" },
+          "12-2": { surcharge: 30, label: "12pm - 2pm" },
+        },
+      };
+
+      expect(getTimeWindowLabel(pricing, "10-3")).toEqual({
+        label: "10am - 3pm",
+        surcharge: 25,
+        shortLabel: "10-3",
+      });
+      expect(getTimeWindowLabel(pricing, "12-2")).toEqual({
+        label: "12pm - 2pm",
+        surcharge: 30,
+        shortLabel: "12-2",
+      });
+    });
+
+    it("should return correct label and surcharge for number format", () => {
+      const pricing = {
+        timeWindows: {
+          "10-3": 25,
+          "11-4": 25,
+          "12-2": 30,
+        },
+      };
+
+      const result = getTimeWindowLabel(pricing, "10-3");
+      expect(result.surcharge).toBe(25);
+      expect(result.label).toBe("10am - 3pm"); // Uses fallback label
+      expect(result.shortLabel).toBe("10-3");
+    });
+
+    it("should return Anytime for unknown time window", () => {
+      const pricing = {
+        timeWindows: {
+          "10-3": 25,
+        },
+      };
+
+      expect(getTimeWindowLabel(pricing, "unknown")).toEqual({
+        label: "Anytime",
+        surcharge: 0,
+        shortLabel: null,
+      });
+    });
+
+    it("should use fallback labels for known time windows when label is missing", () => {
+      const pricing = {
+        timeWindows: {
+          "10-3": 25,
+          "11-4": 25,
+          "12-2": 30,
+        },
+      };
+
+      expect(getTimeWindowLabel(pricing, "10-3").label).toBe("10am - 3pm");
+      expect(getTimeWindowLabel(pricing, "11-4").label).toBe("11am - 4pm");
+      expect(getTimeWindowLabel(pricing, "12-2").label).toBe("12pm - 2pm");
+    });
+  });
+
+  describe("getTimeWindowOptions", () => {
+    it("should return array of time window options", () => {
+      const pricing = {
+        timeWindows: {
+          anytime: { surcharge: 0, label: "Anytime", description: "Most flexible" },
+          "10-3": { surcharge: 25, label: "10am - 3pm", description: "+$25" },
+        },
+      };
+
+      const options = getTimeWindowOptions(pricing);
+
+      expect(Array.isArray(options)).toBe(true);
+      expect(options.length).toBe(2);
+
+      const anytimeOption = options.find(o => o.value === "anytime");
+      expect(anytimeOption).toBeDefined();
+      expect(anytimeOption.label).toBe("Anytime");
+      expect(anytimeOption.surcharge).toBe(0);
+
+      const tenToThreeOption = options.find(o => o.value === "10-3");
+      expect(tenToThreeOption).toBeDefined();
+      expect(tenToThreeOption.label).toBe("10am - 3pm");
+      expect(tenToThreeOption.surcharge).toBe(25);
+    });
+
+    it("should handle number format timeWindows", () => {
+      const pricing = {
+        timeWindows: {
+          anytime: 0,
+          "10-3": 25,
+        },
+      };
+
+      const options = getTimeWindowOptions(pricing);
+
+      const tenToThreeOption = options.find(o => o.value === "10-3");
+      expect(tenToThreeOption.surcharge).toBe(25);
+      expect(tenToThreeOption.description).toBe("+$25 per cleaning");
+    });
+
+    it("should use default pricing when pricing is null", () => {
+      const options = getTimeWindowOptions(null);
+
+      expect(Array.isArray(options)).toBe(true);
+      expect(options.length).toBeGreaterThan(0);
+    });
+  });
+});

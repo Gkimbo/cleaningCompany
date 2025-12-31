@@ -1,3 +1,6 @@
+// Set SESSION_SECRET before importing anything
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || "test_secret";
+
 const express = require("express");
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
@@ -18,9 +21,13 @@ jest.mock("../../models", () => ({
   },
   UserCleanerAppointments: {},
   UserBills: {},
-  UserReviews: {},
+  UserReviews: {
+    findAll: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+  },
   Op: {
     contains: Symbol("contains"),
+    in: Symbol("in"),
   },
 }));
 
@@ -61,6 +68,9 @@ describe("Employee Info Router", () => {
   describe("GET /", () => {
     it("should return employee info with appointments", async () => {
       User.findByPk.mockResolvedValue({
+        id: 2,
+        username: "cleaner1",
+        type: "cleaner",
         dataValues: {
           id: 2,
           username: "cleaner1",
@@ -72,8 +82,8 @@ describe("Employee Info Router", () => {
         },
       });
       UserAppointments.findAll.mockResolvedValue([
-        { id: 100, date: "2025-01-20" },
-        { id: 101, date: "2025-01-21" },
+        { id: 100, date: "2025-01-20", completed: false, dataValues: { id: 100, date: "2025-01-20", completed: false } },
+        { id: 101, date: "2025-01-21", completed: false, dataValues: { id: 101, date: "2025-01-21", completed: false } },
       ]);
 
       const response = await request(app)

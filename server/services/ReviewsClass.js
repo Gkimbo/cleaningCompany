@@ -17,11 +17,18 @@ class ReviewsClass {
       punctuality,
       professionalism,
       communication,
+      attentionToDetail,
+      thoroughness,
+      respectOfProperty,
+      followedInstructions,
       wouldRecommend,
       // Cleaner reviewing Homeowner
       accuracyOfDescription,
       homeReadiness,
       easeOfAccess,
+      homeCondition,
+      respectfulness,
+      safetyConditions,
       wouldWorkForAgain,
     } = reviewData;
 
@@ -47,14 +54,23 @@ class ReviewsClass {
       review,
       reviewComment,
       privateComment,
+      // Homeowner reviewing Cleaner
       cleaningQuality,
       punctuality,
       professionalism,
       communication,
+      attentionToDetail,
+      thoroughness,
+      respectOfProperty,
+      followedInstructions,
       wouldRecommend,
+      // Cleaner reviewing Homeowner
       accuracyOfDescription,
       homeReadiness,
       easeOfAccess,
+      homeCondition,
+      respectfulness,
+      safetyConditions,
       wouldWorkForAgain,
       isPublished: false,
     });
@@ -264,6 +280,22 @@ class ReviewsClass {
         homeownerReviews,
         "communication"
       );
+      aspectAverages.attentionToDetail = this.calculateAspectAverage(
+        homeownerReviews,
+        "attentionToDetail"
+      );
+      aspectAverages.thoroughness = this.calculateAspectAverage(
+        homeownerReviews,
+        "thoroughness"
+      );
+      aspectAverages.respectOfProperty = this.calculateAspectAverage(
+        homeownerReviews,
+        "respectOfProperty"
+      );
+      aspectAverages.followedInstructions = this.calculateAspectAverage(
+        homeownerReviews,
+        "followedInstructions"
+      );
     }
 
     if (cleanerReviews.length > 0) {
@@ -282,6 +314,18 @@ class ReviewsClass {
       aspectAverages.communication = this.calculateAspectAverage(
         cleanerReviews,
         "communication"
+      );
+      aspectAverages.homeCondition = this.calculateAspectAverage(
+        cleanerReviews,
+        "homeCondition"
+      );
+      aspectAverages.respectfulness = this.calculateAspectAverage(
+        cleanerReviews,
+        "respectfulness"
+      );
+      aspectAverages.safetyConditions = this.calculateAspectAverage(
+        cleanerReviews,
+        "safetyConditions"
       );
     }
 

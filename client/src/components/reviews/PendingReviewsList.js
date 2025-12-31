@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Pressable,
   RefreshControl,
@@ -75,10 +76,21 @@ const PendingReviewsList = ({ state }) => {
     setShowReviewModal(true);
   };
 
-  const handleReviewComplete = () => {
+  const handleReviewComplete = (data) => {
     setShowReviewModal(false);
     setSelectedReview(null);
     fetchPendingReviews(true);
+
+    // Use setTimeout to ensure the modal is fully closed before showing the alert
+    setTimeout(() => {
+      const bothReviewed = data?.status?.bothReviewed;
+      Alert.alert(
+        "Thank you!",
+        bothReviewed
+          ? "Both reviews are now visible to each other."
+          : "Your review has been submitted. It will become visible once the other party submits their review."
+      );
+    }, 300);
   };
 
   const getRevieweeInfo = (pendingReview) => {

@@ -562,7 +562,7 @@ describe("EmailClass", () => {
       expect(mailOptions.html).toContain("John Smith");
     });
 
-    it("should include appointment details", async () => {
+    it("should include appointment details with city/state/zip only (no street address)", async () => {
       await Email.sendRequestApproved(
         "cleaner@example.com",
         "Mike",
@@ -572,8 +572,12 @@ describe("EmailClass", () => {
       );
 
       const mailOptions = mockSendMail.mock.calls[0][0];
-      expect(mailOptions.html).toContain("789 Elm St");
+      // Should NOT contain street address for privacy
+      expect(mailOptions.html).not.toContain("789 Elm St");
+      // Should contain city, state, zip
       expect(mailOptions.html).toContain("Newton");
+      expect(mailOptions.html).toContain("MA");
+      expect(mailOptions.html).toContain("02458");
       expect(mailOptions.html).toContain("Approved");
     });
 
@@ -588,6 +592,351 @@ describe("EmailClass", () => {
 
       const mailOptions = mockSendMail.mock.calls[0][0];
       expect(mailOptions.html).toContain("supplies");
+    });
+
+    it("should show linens provided message when cleaner does not need to bring linens", async () => {
+      const linensConfig = {
+        bringSheets: "no",
+        bringTowels: "no",
+        sheetConfigurations: [],
+        towelConfigurations: [],
+      };
+
+      await Email.sendRequestApproved(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        testAddress,
+        "2025-04-01",
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Linens Provided");
+      expect(mailOptions.html).toContain("provided at the home");
+      expect(mailOptions.text).toContain("LINENS PROVIDED");
+    });
+
+    it("should show sheets details when cleaner needs to bring sheets", async () => {
+      const linensConfig = {
+        bringSheets: "yes",
+        bringTowels: "no",
+        sheetConfigurations: [
+          { bedNumber: 1, size: "queen", needsSheets: true },
+          { bedNumber: 2, size: "twin", needsSheets: true },
+        ],
+        towelConfigurations: [],
+      };
+
+      await Email.sendRequestApproved(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        testAddress,
+        "2025-04-01",
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Linens You Need to Bring");
+      expect(mailOptions.html).toContain("Bed 1");
+      expect(mailOptions.html).toContain("Queen sheets");
+      expect(mailOptions.html).toContain("Bed 2");
+      expect(mailOptions.html).toContain("Twin sheets");
+      expect(mailOptions.text).toContain("SHEETS:");
+      expect(mailOptions.text).toContain("Bed 1: Queen sheets");
+    });
+
+    it("should show towels details when cleaner needs to bring towels", async () => {
+      const linensConfig = {
+        bringSheets: "no",
+        bringTowels: "yes",
+        sheetConfigurations: [],
+        towelConfigurations: [
+          { bathroomNumber: 1, towels: 2, faceCloths: 2 },
+          { bathroomNumber: 2, towels: 1, faceCloths: 1 },
+        ],
+      };
+
+      await Email.sendRequestApproved(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        testAddress,
+        "2025-04-01",
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Linens You Need to Bring");
+      expect(mailOptions.html).toContain("Bathroom 1");
+      expect(mailOptions.html).toContain("2 towels");
+      expect(mailOptions.html).toContain("2 washcloths");
+      expect(mailOptions.html).toContain("Total: 3 towels, 3 washcloths");
+      expect(mailOptions.text).toContain("TOWELS:");
+    });
+
+    it("should show both sheets and towels when cleaner needs to bring both", async () => {
+      const linensConfig = {
+        bringSheets: "yes",
+        bringTowels: "yes",
+        sheetConfigurations: [
+          { bedNumber: 1, size: "king", needsSheets: true },
+        ],
+        towelConfigurations: [
+          { bathroomNumber: 1, towels: 3, faceCloths: 2 },
+        ],
+      };
+
+      await Email.sendRequestApproved(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        testAddress,
+        "2025-04-01",
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Sheets:");
+      expect(mailOptions.html).toContain("Towels:");
+      expect(mailOptions.html).toContain("King sheets");
+      expect(mailOptions.html).toContain("3 towels");
+    });
+
+    it("should work without linens config (backwards compatibility)", async () => {
+      await Email.sendRequestApproved(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        testAddress,
+        "2025-04-01"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Linens Provided");
+    });
+
+    it("should filter out beds that don't need sheets", async () => {
+      const linensConfig = {
+        bringSheets: "yes",
+        bringTowels: "no",
+        sheetConfigurations: [
+          { bedNumber: 1, size: "queen", needsSheets: true },
+          { bedNumber: 2, size: "twin", needsSheets: false },
+        ],
+        towelConfigurations: [],
+      };
+
+      await Email.sendRequestApproved(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        testAddress,
+        "2025-04-01",
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Bed 1");
+      expect(mailOptions.html).not.toContain("Bed 2");
+    });
+  });
+
+  describe("sendLinensConfigurationUpdated", () => {
+    it("should send linens update email with correct details", async () => {
+      const linensConfig = {
+        bringSheets: "yes",
+        bringTowels: "yes",
+        sheetConfigurations: [
+          { bedNumber: 1, size: "queen", needsSheets: true },
+        ],
+        towelConfigurations: [
+          { bathroomNumber: 1, towels: 2, faceCloths: 2 },
+        ],
+      };
+
+      await Email.sendLinensConfigurationUpdated(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        "2025-04-15",
+        135.00,
+        linensConfig
+      );
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.to).toBe("cleaner@example.com");
+      expect(mailOptions.subject).toContain("Linens changed");
+      expect(mailOptions.html).toContain("Mike");
+      expect(mailOptions.html).toContain("John Smith");
+    });
+
+    it("should show updated payout amount", async () => {
+      const linensConfig = {
+        bringSheets: "no",
+        bringTowels: "no",
+        sheetConfigurations: [],
+        towelConfigurations: [],
+      };
+
+      await Email.sendLinensConfigurationUpdated(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        "2025-04-15",
+        157.50,
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("$157.50");
+      expect(mailOptions.text).toContain("$157.50");
+    });
+
+    it("should show linens no longer needed when changed to provided", async () => {
+      const linensConfig = {
+        bringSheets: "no",
+        bringTowels: "no",
+        sheetConfigurations: [],
+        towelConfigurations: [],
+      };
+
+      await Email.sendLinensConfigurationUpdated(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        "2025-04-15",
+        135.00,
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("provided at the home");
+      expect(mailOptions.html).toContain("you don't need to bring any");
+    });
+
+    it("should show updated linens requirements when sheets are needed", async () => {
+      const linensConfig = {
+        bringSheets: "yes",
+        bringTowels: "no",
+        sheetConfigurations: [
+          { bedNumber: 1, size: "full", needsSheets: true },
+          { bedNumber: 2, size: "queen", needsSheets: true },
+        ],
+        towelConfigurations: [],
+      };
+
+      await Email.sendLinensConfigurationUpdated(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        "2025-04-15",
+        120.00,
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Updated Linens Requirements");
+      expect(mailOptions.html).toContain("Bed 1");
+      expect(mailOptions.html).toContain("Full sheets");
+      expect(mailOptions.html).toContain("Bed 2");
+      expect(mailOptions.html).toContain("Queen sheets");
+    });
+
+    it("should show updated towel requirements with totals", async () => {
+      const linensConfig = {
+        bringSheets: "no",
+        bringTowels: "yes",
+        sheetConfigurations: [],
+        towelConfigurations: [
+          { bathroomNumber: 1, towels: 3, faceCloths: 2 },
+          { bathroomNumber: 2, towels: 2, faceCloths: 1 },
+        ],
+      };
+
+      await Email.sendLinensConfigurationUpdated(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        "2025-04-15",
+        125.00,
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Bathroom 1: 3 towels, 2 washcloths");
+      expect(mailOptions.html).toContain("Bathroom 2: 2 towels, 1 washcloth");
+      expect(mailOptions.html).toContain("Total: 5 towels, 3 washcloths");
+    });
+
+    it("should confirm appointment is still confirmed", async () => {
+      const linensConfig = {
+        bringSheets: "no",
+        bringTowels: "no",
+        sheetConfigurations: [],
+        towelConfigurations: [],
+      };
+
+      await Email.sendLinensConfigurationUpdated(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        "2025-04-15",
+        135.00,
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Still Confirmed");
+      expect(mailOptions.text).toContain("Still Confirmed");
+    });
+
+    it("should handle string payout values", async () => {
+      const linensConfig = {
+        bringSheets: "no",
+        bringTowels: "no",
+        sheetConfigurations: [],
+        towelConfigurations: [],
+      };
+
+      await Email.sendLinensConfigurationUpdated(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        "2025-04-15",
+        "$142.50",
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("$142.50");
+    });
+
+    it("should include text version for plain text email clients", async () => {
+      const linensConfig = {
+        bringSheets: "yes",
+        bringTowels: "no",
+        sheetConfigurations: [
+          { bedNumber: 1, size: "king", needsSheets: true },
+        ],
+        towelConfigurations: [],
+      };
+
+      await Email.sendLinensConfigurationUpdated(
+        "cleaner@example.com",
+        "Mike",
+        "John Smith",
+        "2025-04-15",
+        135.00,
+        linensConfig
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.text).toContain("UPDATED LINENS REQUIREMENTS");
+      expect(mailOptions.text).toContain("SHEETS:");
+      expect(mailOptions.text).toContain("Bed 1: King sheets");
     });
   });
 

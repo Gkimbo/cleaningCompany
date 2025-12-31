@@ -4,7 +4,7 @@
  * we focus on testing the filter logic and data structures
  */
 
-// Default filters structure
+// Default filters structure (minEarnings removed in latest update)
 const defaultFilters = {
   distance: { preset: "any", customValue: 25 },
   sheets: "any",
@@ -13,7 +13,6 @@ const defaultFilters = {
   bathrooms: "any",
   timeWindow: "any",
   city: "any",
-  minEarnings: null,
 };
 
 describe("JobFilterModal - Default Filters", () => {
@@ -26,7 +25,6 @@ describe("JobFilterModal - Default Filters", () => {
       bathrooms: "any",
       timeWindow: "any",
       city: "any",
-      minEarnings: null,
     });
   });
 
@@ -35,14 +33,17 @@ describe("JobFilterModal - Default Filters", () => {
     expect(defaultFilters.distance.customValue).toBe(25);
   });
 
-  it("should have all optional filters set to 'any' or null", () => {
+  it("should have all optional filters set to 'any'", () => {
     expect(defaultFilters.sheets).toBe("any");
     expect(defaultFilters.towels).toBe("any");
     expect(defaultFilters.bedrooms).toBe("any");
     expect(defaultFilters.bathrooms).toBe("any");
     expect(defaultFilters.timeWindow).toBe("any");
     expect(defaultFilters.city).toBe("any");
-    expect(defaultFilters.minEarnings).toBeNull();
+  });
+
+  it("should not include minEarnings filter (removed feature)", () => {
+    expect(defaultFilters.minEarnings).toBeUndefined();
   });
 });
 
@@ -88,13 +89,7 @@ describe("JobFilterModal - Filter Options", () => {
     { value: "12pm-2pm", label: "12pm-2pm" },
   ];
 
-  const earningsPresets = [
-    { value: null, label: "Any" },
-    { value: 50, label: "$50+" },
-    { value: 75, label: "$75+" },
-    { value: 100, label: "$100+" },
-    { value: 150, label: "$150+" },
-  ];
+  // Note: earningsPresets removed as minEarnings filter was removed from the modal
 
   it("should have 6 distance preset options", () => {
     expect(distancePresets.length).toBe(6);
@@ -131,12 +126,6 @@ describe("JobFilterModal - Filter Options", () => {
   it("should have 5 time window options", () => {
     expect(timeWindowOptions.length).toBe(5);
     expect(timeWindowOptions.some((o) => o.value === "anytime")).toBe(true);
-  });
-
-  it("should have 5 earnings presets", () => {
-    expect(earningsPresets.length).toBe(5);
-    expect(earningsPresets[0].value).toBeNull();
-    expect(earningsPresets[earningsPresets.length - 1].value).toBe(150);
   });
 });
 
@@ -561,7 +550,6 @@ describe("Filter Logic - Combined Filters", () => {
       bathrooms: "any",
       timeWindow: "10am-3pm",
       city: "any",
-      minEarnings: 100,
     };
 
     let count = 0;
@@ -572,9 +560,8 @@ describe("Filter Logic - Combined Filters", () => {
     if (filters.bathrooms !== "any") count++;
     if (filters.timeWindow !== "any") count++;
     if (filters.city !== "any") count++;
-    if (filters.minEarnings) count++;
 
-    expect(count).toBe(5);
+    expect(count).toBe(4); // distance, sheets, bedrooms, timeWindow
   });
 
   it("should return 0 active filters for default state", () => {
@@ -588,7 +575,6 @@ describe("Filter Logic - Combined Filters", () => {
     if (filters.bathrooms !== "any") count++;
     if (filters.timeWindow !== "any") count++;
     if (filters.city !== "any") count++;
-    if (filters.minEarnings) count++;
 
     expect(count).toBe(0);
   });

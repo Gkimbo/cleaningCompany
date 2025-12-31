@@ -67,7 +67,7 @@ const Bill = ({ state, dispatch }) => {
       .sort((a, b) => new Date(a.date) - new Date(b.date));
     setFailedPayments(failed);
 
-    // Upcoming payable - can pre-pay
+    // Upcoming payable - can pre-pay (any assigned appointment that's not paid)
     const upcoming = appointments
       .filter(appt => {
         const apptDate = new Date(appt.date);
@@ -76,7 +76,6 @@ const Bill = ({ state, dispatch }) => {
           !appt.paid &&
           apptDate > today &&
           appt.hasBeenAssigned &&
-          appt.paymentIntentId &&
           !appt.paymentCaptureFailed
         );
       })
@@ -191,7 +190,7 @@ const Bill = ({ state, dispatch }) => {
     });
   };
 
-  // Get unpaid future appointments (not failed, not payable yet)
+  // Get unpaid future appointments (not failed, not assigned yet)
   const unpaidPendingAppointments = allAppointments.filter(appt => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -201,7 +200,7 @@ const Bill = ({ state, dispatch }) => {
       !appt.paid &&
       apptDate > today &&
       !appt.paymentCaptureFailed &&
-      (!appt.hasBeenAssigned || !appt.paymentIntentId)
+      !appt.hasBeenAssigned
     );
   });
 

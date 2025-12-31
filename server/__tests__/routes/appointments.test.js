@@ -49,6 +49,9 @@ jest.mock("../../models", () => ({
   CalendarSync: {
     findAll: jest.fn().mockResolvedValue([]),
   },
+  StripeConnectAccount: {
+    findOne: jest.fn(),
+  },
 }));
 
 // Mock services
@@ -57,6 +60,7 @@ jest.mock("../../services/UserInfoClass", () => ({
   editSheetsInDB: jest.fn().mockResolvedValue({ success: true }),
   editTowelsInDB: jest.fn().mockResolvedValue({ success: true }),
   editCodeKeyInDB: jest.fn().mockResolvedValue({ success: true }),
+  editAppointmentLinensInDB: jest.fn(),
 }));
 
 jest.mock("../../services/CalculatePrice", () =>
@@ -68,6 +72,15 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendEmployeeRequest: jest.fn().mockResolvedValue(true),
   removeRequestEmail: jest.fn().mockResolvedValue(true),
   sendRequestApproved: jest.fn().mockResolvedValue(true),
+  sendLinensConfigurationUpdated: jest.fn().mockResolvedValue(true),
+  sendRequestDenied: jest.fn().mockResolvedValue(true),
+}));
+
+const Email = require("../../services/sendNotifications/EmailClass");
+
+jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
+  sendPushRequestDenied: jest.fn().mockResolvedValue(true),
+  sendPushNotification: jest.fn().mockResolvedValue(true),
 }));
 
 // Mock stripe
@@ -108,7 +121,10 @@ const {
   UserCleanerAppointments,
   UserPendingRequests,
   UserReviews,
+  StripeConnectAccount,
 } = require("../../models");
+
+const UserInfo = require("../../services/UserInfoClass");
 
 describe("Appointment Routes", () => {
   let app;
@@ -124,6 +140,16 @@ describe("Appointment Routes", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default mock for StripeConnectAccount - assume cleaner has completed Stripe setup
+    // Individual tests can override this if testing Stripe-related scenarios
+    StripeConnectAccount.findOne.mockResolvedValue({
+      id: 1,
+      userId: 2,
+      stripeAccountId: "acct_test_default",
+      onboardingComplete: true,
+      payoutsEnabled: true,
+      accountStatus: "active",
+    });
   });
 
   describe("GET /unassigned", () => {
@@ -1103,6 +1129,117 @@ describe("Appointment Routes", () => {
       expect(res.body.error).toBe("Acknowledgment required");
       expect(res.body.isLargeHome).toBe(true);
     });
+
+    // Stripe Connect requirement tests
+    it("should reject request if cleaner has no Stripe Connect account", async () => {
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        type: "cleaner",
+        username: "testcleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/request-employee")
+        .send({ id: 2, appointmentId: 1 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Stripe account required");
+      expect(res.body.requiresStripeSetup).toBe(true);
+    });
+
+    it("should reject request if Stripe onboarding is incomplete", async () => {
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        type: "cleaner",
+        username: "testcleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue({
+        id: 1,
+        userId: 2,
+        stripeAccountId: "acct_test_123",
+        onboardingComplete: false,
+        payoutsEnabled: false,
+        accountStatus: "onboarding",
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/request-employee")
+        .send({ id: 2, appointmentId: 1 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Stripe account required");
+      expect(res.body.requiresStripeSetup).toBe(true);
+    });
+
+    it("should reject request if Stripe payouts are not enabled", async () => {
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        type: "cleaner",
+        username: "testcleaner",
+      });
+
+      StripeConnectAccount.findOne.mockResolvedValue({
+        id: 1,
+        userId: 2,
+        stripeAccountId: "acct_test_123",
+        onboardingComplete: true,
+        payoutsEnabled: false,
+        accountStatus: "restricted",
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/request-employee")
+        .send({ id: 2, appointmentId: 1 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Stripe account incomplete");
+      expect(res.body.requiresStripeSetup).toBe(true);
+      expect(res.body.stripeAccountStatus).toBe("restricted");
+    });
+
+    it("should allow request if Stripe account is fully set up", async () => {
+      UserAppointments.findByPk.mockResolvedValue({
+        dataValues: { userId: 1, date: "2025-01-15", homeId: 1 },
+        homeId: 1,
+      });
+      // First call returns client, second call returns cleaner
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 1,
+          dataValues: { id: 1, email: "client@test.com", username: "testclient" },
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          dataValues: { id: 2, username: "testcleaner", type: "cleaner" },
+          type: "cleaner",
+        });
+      StripeConnectAccount.findOne.mockResolvedValue({
+        id: 1,
+        userId: 2,
+        stripeAccountId: "acct_test_123",
+        onboardingComplete: true,
+        payoutsEnabled: true,
+        accountStatus: "active",
+      });
+      UserHomes.findByPk.mockResolvedValue({
+        numBeds: "2",
+        numBaths: "1",
+        timeToBeCompleted: "anytime",
+      });
+      UserPendingRequests.findOne.mockResolvedValue(null);
+      UserPendingRequests.create.mockResolvedValue({ id: 1, appointmentId: 1, employeeId: 2 });
+      UserReviews.findAll.mockResolvedValue([]);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/request-employee")
+        .send({ id: 2, appointmentId: 1 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBeDefined();
+    });
   });
 
   describe("PATCH /approve-request", () => {
@@ -1534,6 +1671,616 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("pendingRequestsEmployee");
+    });
+  });
+
+  describe("PATCH /:id/linens", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("should update linens configuration for an appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "150",
+          hasBeenAssigned: false,
+          bringSheets: "no",
+          bringTowels: "no",
+          timeToBeCompleted: 3,
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        },
+      };
+
+      const mockHome = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          numBeds: 2,
+          numBaths: 2,
+        },
+      };
+
+      const mockUpdatedAppointment = {
+        ...mockAppointment,
+        dataValues: {
+          ...mockAppointment.dataValues,
+          bringSheets: "yes",
+          bringTowels: "yes",
+          price: "175",
+          sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }],
+        },
+      };
+
+      UserAppointments.findOne.mockResolvedValue(mockAppointment);
+      UserHomes.findOne.mockResolvedValue(mockHome);
+      UserInfo.editAppointmentLinensInDB.mockResolvedValue(mockUpdatedAppointment);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "yes",
+          sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("appointment");
+      expect(UserInfo.editAppointmentLinensInDB).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "1",
+          bringSheets: "yes",
+          bringTowels: "yes",
+        })
+      );
+    });
+
+    it("should return 401 if no authorization token provided", async () => {
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toHaveProperty("error", "Authorization token required");
+    });
+
+    it("should return 404 if appointment not found", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      UserAppointments.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/999/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(404);
+      expect(res.body).toHaveProperty("error", "Appointment not found");
+    });
+
+    it("should return 403 if user does not own the appointment", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1, // Different from token userId
+          homeId: 1,
+          hasBeenAssigned: false,
+        },
+      });
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body).toHaveProperty("error", "Not authorized to update this appointment");
+    });
+
+    it("should schedule delayed email to cleaner when appointment is assigned", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "150",
+          hasBeenAssigned: true,
+          bringSheets: "no",
+          bringTowels: "no",
+          timeToBeCompleted: 3,
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        },
+      };
+
+      const mockHome = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          numBeds: 2,
+          numBaths: 2,
+        },
+      };
+
+      const mockCleaner = {
+        id: 2,
+        dataValues: {
+          id: 2,
+          email: "cleaner@example.com",
+          username: "CleanerMike",
+        },
+      };
+
+      const mockHomeowner = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          username: "HomeownerJohn",
+        },
+      };
+
+      const mockCleanerAppointment = {
+        dataValues: {
+          employeeId: 2,
+          appointmentId: 1,
+        },
+      };
+
+      const mockUpdatedAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "175",
+          hasBeenAssigned: true,
+          bringSheets: "yes",
+          bringTowels: "yes",
+          sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }],
+        },
+      };
+
+      UserAppointments.findOne.mockResolvedValue(mockAppointment);
+      UserAppointments.findByPk.mockResolvedValue(mockUpdatedAppointment);
+      UserHomes.findOne.mockResolvedValue(mockHome);
+      UserCleanerAppointments.findOne.mockResolvedValue(mockCleanerAppointment);
+      User.findByPk
+        .mockResolvedValueOnce(mockCleaner)
+        .mockResolvedValueOnce(mockHomeowner);
+      UserInfo.editAppointmentLinensInDB.mockResolvedValue(mockUpdatedAppointment);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "yes",
+          sheetConfigurations: [{ bedNumber: 1, size: "queen", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 2, faceCloths: 2 }],
+        });
+
+      expect(res.status).toBe(200);
+
+      // Email should not be sent immediately
+      expect(Email.sendLinensConfigurationUpdated).not.toHaveBeenCalled();
+
+      // Fast-forward 1 minute
+      await jest.advanceTimersByTimeAsync(60000);
+
+      // Now the email should have been sent
+      expect(Email.sendLinensConfigurationUpdated).toHaveBeenCalledWith(
+        "cleaner@example.com",
+        "CleanerMike",
+        "HomeownerJohn",
+        "2025-04-15",
+        expect.any(Number),
+        expect.objectContaining({
+          bringSheets: "yes",
+          bringTowels: "yes",
+        })
+      );
+    });
+
+    it("should not send email if appointment is not assigned", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "150",
+          hasBeenAssigned: false, // Not assigned
+          bringSheets: "no",
+          bringTowels: "no",
+          timeToBeCompleted: 3,
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        },
+      };
+
+      const mockHome = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          numBeds: 2,
+          numBaths: 2,
+        },
+      };
+
+      const mockUpdatedAppointment = {
+        ...mockAppointment,
+        dataValues: {
+          ...mockAppointment.dataValues,
+          bringSheets: "yes",
+        },
+      };
+
+      UserAppointments.findOne.mockResolvedValue(mockAppointment);
+      UserHomes.findOne.mockResolvedValue(mockHome);
+      UserInfo.editAppointmentLinensInDB.mockResolvedValue(mockUpdatedAppointment);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(200);
+
+      // Fast-forward 1 minute
+      await jest.advanceTimersByTimeAsync(60000);
+
+      // Email should NOT have been sent
+      expect(Email.sendLinensConfigurationUpdated).not.toHaveBeenCalled();
+    });
+
+    it("should re-fetch latest appointment data before sending email", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "150",
+          hasBeenAssigned: true,
+          bringSheets: "no",
+          bringTowels: "no",
+          timeToBeCompleted: 3,
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        },
+      };
+
+      const mockHome = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          numBeds: 2,
+          numBaths: 2,
+        },
+      };
+
+      const mockCleaner = {
+        id: 2,
+        dataValues: {
+          id: 2,
+          email: "cleaner@example.com",
+          username: "CleanerMike",
+        },
+      };
+
+      const mockHomeowner = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          username: "HomeownerJohn",
+        },
+      };
+
+      const mockCleanerAppointment = {
+        dataValues: {
+          employeeId: 2,
+          appointmentId: 1,
+        },
+      };
+
+      const mockUpdatedAppointment = {
+        id: 1,
+        dataValues: {
+          ...mockAppointment.dataValues,
+          bringSheets: "yes",
+          price: "175",
+        },
+      };
+
+      // This is the "latest" data that will be fetched after the 1-minute delay
+      const mockLatestAppointment = {
+        id: 1,
+        dataValues: {
+          id: 1,
+          userId: 1,
+          homeId: 1,
+          date: "2025-04-15",
+          price: "200", // Price changed again during the delay
+          hasBeenAssigned: true,
+          bringSheets: "yes",
+          bringTowels: "yes", // Towels also added during the delay
+          sheetConfigurations: [{ bedNumber: 1, size: "king", needsSheets: true }],
+          towelConfigurations: [{ bathroomNumber: 1, towels: 3, faceCloths: 3 }],
+        },
+      };
+
+      UserAppointments.findOne.mockResolvedValue(mockAppointment);
+      UserAppointments.findByPk.mockResolvedValue(mockLatestAppointment);
+      UserHomes.findOne.mockResolvedValue(mockHome);
+      UserCleanerAppointments.findOne.mockResolvedValue(mockCleanerAppointment);
+      User.findByPk
+        .mockResolvedValueOnce(mockCleaner)
+        .mockResolvedValueOnce(mockHomeowner);
+      UserInfo.editAppointmentLinensInDB.mockResolvedValue(mockUpdatedAppointment);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/1/linens")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bringSheets: "yes",
+          bringTowels: "no",
+          sheetConfigurations: [],
+          towelConfigurations: [],
+        });
+
+      expect(res.status).toBe(200);
+
+      // Fast-forward 1 minute
+      await jest.advanceTimersByTimeAsync(60000);
+
+      // Email should use the LATEST data (including towels added during delay)
+      expect(Email.sendLinensConfigurationUpdated).toHaveBeenCalledWith(
+        "cleaner@example.com",
+        "CleanerMike",
+        "HomeownerJohn",
+        "2025-04-15",
+        expect.any(Number),
+        expect.objectContaining({
+          bringSheets: "yes",
+          bringTowels: "yes", // Latest data
+          sheetConfigurations: [{ bedNumber: 1, size: "king", needsSheets: true }],
+        })
+      );
+    });
+  });
+
+  describe("PATCH /deny-request", () => {
+    const mockRequest = {
+      id: 1,
+      employeeId: 2,
+      appointmentId: 10,
+      get: jest.fn().mockReturnValue({
+        id: 1,
+        employeeId: 2,
+        appointmentId: 10,
+      }),
+      destroy: jest.fn().mockResolvedValue(true),
+    };
+
+    const mockAppointment = {
+      id: 10,
+      date: "2025-01-15",
+      userId: 3,
+      homeId: 5,
+      dataValues: {
+        id: 10,
+        date: "2025-01-15",
+        userId: 3,
+        homeId: 5,
+      },
+    };
+
+    const mockClient = {
+      id: 3,
+      username: "HomeownerJohn",
+      email: "homeowner@example.com",
+      dataValues: {
+        id: 3,
+        username: "HomeownerJohn",
+        email: "homeowner@example.com",
+      },
+    };
+
+    const mockCleaner = {
+      id: 2,
+      username: "CleanerMike",
+      email: "cleaner@example.com",
+      dataValues: {
+        id: 2,
+        username: "CleanerMike",
+        email: "cleaner@example.com",
+        expoPushToken: null,
+        notifications: [],
+      },
+      update: jest.fn().mockResolvedValue(true),
+    };
+
+    const mockHome = {
+      id: 5,
+      nickname: "Beach House",
+      address: "123 Beach St",
+      dataValues: {
+        id: 5,
+        nickname: "Beach House",
+        address: "123 Beach St",
+      },
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      UserPendingRequests.findOne.mockResolvedValue(mockRequest);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+      User.findByPk
+        .mockResolvedValueOnce(mockClient)
+        .mockResolvedValueOnce(mockCleaner);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+    });
+
+    it("should deny a pending request successfully", async () => {
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe("Request removed");
+    });
+
+    it("should return 404 when request is not found", async () => {
+      UserPendingRequests.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Request not found");
+    });
+
+    it("should return 404 when appointment is not found", async () => {
+      UserAppointments.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Appointment not found");
+    });
+
+    it("should return 404 when client is not found", async () => {
+      User.findByPk.mockReset();
+      User.findByPk.mockResolvedValueOnce(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Client not found");
+    });
+
+    it("should return 404 when cleaner is not found", async () => {
+      User.findByPk.mockReset();
+      User.findByPk
+        .mockResolvedValueOnce(mockClient)
+        .mockResolvedValueOnce(null);
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Cleaner not found");
+    });
+
+    it("should destroy the pending request", async () => {
+      await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(mockRequest.destroy).toHaveBeenCalled();
+    });
+
+    it("should find request with correct parameters", async () => {
+      await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(UserPendingRequests.findOne).toHaveBeenCalledWith({
+        where: { appointmentId: 10, employeeId: 2 },
+      });
+    });
+
+    it("should handle missing id parameter", async () => {
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ appointmentId: 10 });
+
+      // Should still attempt to find with undefined id, resulting in not found
+      expect(UserPendingRequests.findOne).toHaveBeenCalled();
+    });
+
+    it("should handle missing appointmentId parameter", async () => {
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2 });
+
+      // Should still attempt to find with undefined appointmentId
+      expect(UserPendingRequests.findOne).toHaveBeenCalled();
+    });
+
+    it("should handle server error gracefully", async () => {
+      UserPendingRequests.findOne.mockRejectedValue(new Error("Database error"));
+
+      const res = await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: 2, appointmentId: 10 });
+
+      expect(res.status).toBe(500);
+    });
+
+    it("should convert string ids to numbers", async () => {
+      await request(app)
+        .patch("/api/v1/appointments/deny-request")
+        .send({ id: "2", appointmentId: "10" });
+
+      expect(UserPendingRequests.findOne).toHaveBeenCalledWith({
+        where: { appointmentId: 10, employeeId: 2 },
+      });
     });
   });
 });

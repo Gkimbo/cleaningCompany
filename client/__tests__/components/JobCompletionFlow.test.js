@@ -41,7 +41,7 @@ jest.mock("../../src/components/employeeAssignments/jobPhotos/JobPhotoCapture", 
 jest.mock("../../src/components/employeeAssignments/jobPhotos/CleaningChecklist", () => {
   const React = require("react");
   const { View, Text, TouchableOpacity } = require("react-native");
-  return ({ home, onChecklistComplete, onProgressUpdate }) => {
+  const MockCleaningChecklist = ({ home, onChecklistComplete, onProgressUpdate }) => {
     React.useEffect(() => {
       if (onProgressUpdate) {
         onProgressUpdate(50, 37, 73);
@@ -55,6 +55,11 @@ jest.mock("../../src/components/employeeAssignments/jobPhotos/CleaningChecklist"
         </TouchableOpacity>
       </View>
     );
+  };
+  return {
+    __esModule: true,
+    default: MockCleaningChecklist,
+    clearChecklistProgress: jest.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -407,10 +412,36 @@ describe("JobCompletionFlow Component", () => {
     };
 
     it("should call complete-job API when Complete Job button pressed", async () => {
-      setupReviewStep();
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, payout: 135 }),
+      jest.clearAllMocks();
+      global.fetch = jest.fn((url) => {
+        if (url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          });
+        }
+        if (url.includes("/job-photos/") && !url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
+                afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
+              }),
+          });
+        }
+        if (url.includes("/complete-job")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              success: true,
+              payoutResults: [
+                { cleanerId: 1, status: "success", amountCents: 13500 }
+              ]
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
@@ -442,63 +473,8 @@ describe("JobCompletionFlow Component", () => {
     });
 
     it("should show success alert when job completed successfully", async () => {
-      setupReviewStep();
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, payout: 135 }),
-      });
-
-      const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(getByText("Complete Job & Get Paid")).toBeTruthy();
-      });
-
-      await act(async () => {
-        fireEvent.press(getByText("Complete Job & Get Paid"));
-      });
-
-      await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
-          "Job Completed!",
-          "Great work! Your payout has been processed.",
-          expect.any(Array)
-        );
-      });
-    });
-
-    it("should call onJobCompleted callback after alert OK", async () => {
-      setupReviewStep();
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, payout: 135 }),
-      });
-
-      const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
-
-      await waitFor(() => {
-        expect(getByText("Complete Job & Get Paid")).toBeTruthy();
-      });
-
-      await act(async () => {
-        fireEvent.press(getByText("Complete Job & Get Paid"));
-      });
-
-      await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalled();
-      });
-
-      // Simulate pressing OK on the alert
-      const alertCall = Alert.alert.mock.calls[0];
-      const okButton = alertCall[2].find((btn) => btn.text === "OK");
-      okButton.onPress();
-
-      expect(mockOnJobCompleted).toHaveBeenCalled();
-    });
-
-    it("should show error alert when job completion fails", async () => {
-      // Use mockImplementation to handle URL-based responses
-      global.fetch.mockImplementation((url) => {
+      jest.clearAllMocks();
+      global.fetch = jest.fn((url) => {
         if (url.includes("/status")) {
           return Promise.resolve({
             ok: true,
@@ -516,6 +492,171 @@ describe("JobCompletionFlow Component", () => {
           });
         }
         if (url.includes("/complete-job")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              success: true,
+              payoutResults: [
+                { cleanerId: 1, status: "success", amountCents: 13500 }
+              ]
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(getByText("Complete Job & Get Paid")).toBeTruthy();
+      });
+
+      await act(async () => {
+        fireEvent.press(getByText("Complete Job & Get Paid"));
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith(
+          "Job Completed!",
+          "Great work! Your payout of $135.00 has been processed.",
+          expect.any(Array)
+        );
+      });
+    });
+
+    it("should show warning when payout is skipped due to missing Stripe setup", async () => {
+      jest.clearAllMocks();
+      global.fetch = jest.fn().mockImplementation((url) => {
+        if (typeof url === 'string' && url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          });
+        }
+        if (typeof url === 'string' && url.includes("/job-photos/") && !url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
+                afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
+              }),
+          });
+        }
+        if (typeof url === 'string' && url.includes("/complete-job")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              success: true,
+              payoutResults: [
+                { cleanerId: 1, status: "skipped", reason: "Cleaner has not completed Stripe onboarding" }
+              ]
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(getByText("Complete Job & Get Paid")).toBeTruthy();
+      });
+
+      await act(async () => {
+        fireEvent.press(getByText("Complete Job & Get Paid"));
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith(
+          "Job Completed!",
+          "Job completed! However, your payout could not be processed. Please complete your Stripe account setup to receive payments.",
+          expect.any(Array)
+        );
+      });
+    });
+
+    it("should call onJobCompleted callback after alert OK", async () => {
+      jest.clearAllMocks();
+      global.fetch = jest.fn().mockImplementation((url) => {
+        if (typeof url === 'string' && url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          });
+        }
+        if (typeof url === 'string' && url.includes("/job-photos/") && !url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
+                afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
+              }),
+          });
+        }
+        if (typeof url === 'string' && url.includes("/complete-job")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              success: true,
+              payoutResults: [
+                { cleanerId: 1, status: "success", amountCents: 13500 }
+              ]
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(getByText("Complete Job & Get Paid")).toBeTruthy();
+      });
+
+      await act(async () => {
+        fireEvent.press(getByText("Complete Job & Get Paid"));
+      });
+
+      await waitFor(() => {
+        expect(Alert.alert).toHaveBeenCalledWith(
+          "Job Completed!",
+          expect.any(String),
+          expect.any(Array)
+        );
+      });
+
+      // Simulate pressing OK on the alert
+      const alertCall = Alert.alert.mock.calls.find(
+        (call) => call[0] === "Job Completed!" && Array.isArray(call[2])
+      );
+      const okButton = alertCall[2].find((btn) => btn.text === "OK");
+      okButton.onPress();
+
+      expect(mockOnJobCompleted).toHaveBeenCalled();
+    });
+
+    it("should show error alert when job completion fails", async () => {
+      jest.clearAllMocks();
+      global.fetch = jest.fn().mockImplementation((url) => {
+        if (typeof url === 'string' && url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          });
+        }
+        if (typeof url === 'string' && url.includes("/job-photos/") && !url.includes("/status")) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
+                afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
+              }),
+          });
+        }
+        if (typeof url === 'string' && url.includes("/complete-job")) {
           return Promise.resolve({
             ok: false,
             json: () => Promise.resolve({ error: "Payment processing failed" }),
@@ -540,15 +681,15 @@ describe("JobCompletionFlow Component", () => {
     });
 
     it("should show generic error when API throws exception", async () => {
-      // Use mockImplementation to handle URL-based responses
-      global.fetch.mockImplementation((url) => {
-        if (url.includes("/status")) {
+      jest.clearAllMocks();
+      global.fetch = jest.fn().mockImplementation((url) => {
+        if (typeof url === 'string' && url.includes("/status")) {
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
           });
         }
-        if (url.includes("/job-photos/") && !url.includes("/status")) {
+        if (typeof url === 'string' && url.includes("/job-photos/") && !url.includes("/status")) {
           return Promise.resolve({
             ok: true,
             json: () =>
@@ -558,7 +699,7 @@ describe("JobCompletionFlow Component", () => {
               }),
           });
         }
-        if (url.includes("/complete-job")) {
+        if (typeof url === 'string' && url.includes("/complete-job")) {
           return Promise.reject(new Error("Network error"));
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });

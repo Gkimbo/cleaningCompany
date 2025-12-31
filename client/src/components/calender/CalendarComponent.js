@@ -4,7 +4,7 @@ import { Calendar } from "react-native-calendars";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
-import { usePricing, getTimeWindowSurcharge } from "../../context/PricingContext";
+import { usePricing, getTimeWindowSurcharge, getTimeWindowLabel } from "../../context/PricingContext";
 
 const CalendarComponent = ({
   onDatesSelected,
@@ -31,6 +31,10 @@ const CalendarComponent = ({
 
   // Get pricing from database
   const { pricing } = usePricing();
+
+  // Get time window info for display
+  const timeWindowInfo = getTimeWindowLabel(pricing, timeToBeCompleted);
+  const hasTimeWindowSurcharge = timeWindowInfo.surcharge > 0;
 
   const calculatePrice = () => {
     // Fallbacks match database defaults in case pricing is unavailable
@@ -225,6 +229,11 @@ const CalendarComponent = ({
     const isPastUnpaid = isDatePastAndNotPaid(date);
     const price = isBooked ? priceOfBooking(date) : calculatePrice();
 
+    // Get appointment details for time window display
+    const appointment = isBooked ? getAppointmentDetails(date) : null;
+    const appointmentTimeWindow = appointment?.timeToBeCompleted;
+    const hasAppointmentTimeConstraint = appointmentTimeWindow && appointmentTimeWindow !== "anytime";
+
     // Determine the style based on state
     let containerStyle = [styles.dayContainer];
     let textStyle = [styles.dayText];
@@ -271,7 +280,12 @@ const CalendarComponent = ({
       >
         <Text style={textStyle}>{date.day}</Text>
         {!isPast && <Text style={priceTextStyle}>${price}</Text>}
-        {isBooked && !isPast && (
+        {isBooked && !isPast && hasAppointmentTimeConstraint && (
+          <View style={styles.timeWindowBadge}>
+            <Icon name="clock-o" size={7} color="#fff" />
+          </View>
+        )}
+        {isBooked && !isPast && !hasAppointmentTimeConstraint && (
           <View style={styles.bookedBadge}>
             <Icon name="check" size={8} color="#fff" />
           </View>
@@ -283,7 +297,7 @@ const CalendarComponent = ({
         )}
       </Pressable>
     );
-  }, [selectedDates, appointments, confirmationModalVisible]);
+  }, [selectedDates, appointments, confirmationModalVisible, pricing, timeToBeCompleted, numBeds, numBaths, sheets, towels, bedConfigurations, bathroomConfigurations]);
 
   const selectedCount = Object.keys(selectedDates).length;
   const totalPrice = Object.values(selectedDates).reduce((sum, d) => sum + d.price, 0);
@@ -296,7 +310,7 @@ const CalendarComponent = ({
         <View style={styles.headerStats}>
           <View style={styles.headerStatItem}>
             <View style={[styles.headerStatIcon, { backgroundColor: "#ecfdf5" }]}>
-              <Icon name="calendar-check-o" size={16} color="#10b981" />
+              <Icon name="calendar-check-o" size={10} color="#10b981" />
             </View>
             <View>
               <Text style={styles.headerStatValue}>{bookedCount}</Text>
@@ -306,13 +320,27 @@ const CalendarComponent = ({
           <View style={styles.headerStatDivider} />
           <View style={styles.headerStatItem}>
             <View style={[styles.headerStatIcon, { backgroundColor: "#eff6ff" }]}>
-              <Icon name="dollar" size={16} color="#3b82f6" />
+              <Icon name="dollar" size={10} color="#3b82f6" />
             </View>
             <View>
               <Text style={styles.headerStatValue}>${calculatePrice()}</Text>
               <Text style={styles.headerStatLabel}>Per Clean</Text>
             </View>
           </View>
+          {hasTimeWindowSurcharge && (
+            <>
+              <View style={styles.headerStatDivider} />
+              <View style={styles.headerStatItem}>
+                <View style={[styles.headerStatIcon, { backgroundColor: "#fef3c7" }]}>
+                  <Icon name="clock-o" size={10} color="#d97706" />
+                </View>
+                <View>
+                  <Text style={styles.headerStatValue}>{timeWindowInfo.label}</Text>
+                  <Text style={styles.headerStatLabel}>+${timeWindowInfo.surcharge}</Text>
+                </View>
+              </View>
+            </>
+          )}
         </View>
       </View>
 
@@ -334,6 +362,10 @@ const CalendarComponent = ({
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, styles.legendDotBooked]} />
             <Text style={styles.legendText}>Booked</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, styles.legendDotTimeWindow]} />
+            <Text style={styles.legendText}>Time Window</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, styles.legendDotUnpaid]} />
@@ -547,14 +579,15 @@ const styles = StyleSheet.create({
   // Header Card
   headerCard: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginBottom: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   headerStats: {
     flexDirection: "row",
@@ -564,28 +597,27 @@ const styles = StyleSheet.create({
   headerStatItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 5,
   },
   headerStatIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 5,
     justifyContent: "center",
     alignItems: "center",
   },
   headerStatValue: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "600",
     color: "#1e293b",
   },
   headerStatLabel: {
-    fontSize: 12,
+    fontSize: 9,
     color: "#94a3b8",
-    marginTop: 1,
   },
   headerStatDivider: {
     width: 1,
-    height: 40,
+    height: 20,
     backgroundColor: "#e2e8f0",
   },
 
@@ -646,6 +678,9 @@ const styles = StyleSheet.create({
   },
   legendDotBooked: {
     backgroundColor: "#10b981",
+  },
+  legendDotTimeWindow: {
+    backgroundColor: "#d97706",
   },
   legendDotUnpaid: {
     backgroundColor: "#ef4444",
@@ -733,6 +768,17 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     backgroundColor: "rgba(255,255,255,0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  timeWindowBadge: {
+    position: "absolute",
+    top: 3,
+    right: 3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#d97706",
     justifyContent: "center",
     alignItems: "center",
   },

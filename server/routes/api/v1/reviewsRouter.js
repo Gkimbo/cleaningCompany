@@ -67,7 +67,7 @@ reviewsRouter.get("/status/:appointmentId", verifyToken, async (req, res) => {
 reviewsRouter.get("/pending", verifyToken, async (req, res) => {
   try {
     const user = await User.findByPk(req.userId);
-    const userRole = user.role || "client";
+    const userRole = user.type || "client";
 
     const pendingAppointments = await ReviewsClass.getPendingReviewsForUser(
       req.userId,
@@ -127,6 +127,13 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
       reviewerId: req.userId,
     };
 
+    console.log("[Reviews] Submit attempt:", {
+      reviewerId: reviewData.reviewerId,
+      userId: reviewData.userId,
+      appointmentId: reviewData.appointmentId,
+      reviewType: reviewData.reviewType,
+    });
+
     const newReview = await ReviewsClass.submitReview(reviewData);
 
     // Check and return updated status
@@ -143,8 +150,13 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
         : "Review submitted! It will be visible once the other party submits their review.",
     });
   } catch (error) {
-    console.error("Error submitting review:", error);
+    console.error("[Reviews] Error submitting review:", error.message);
+    console.error("[Reviews] Full error:", error);
     if (error.message === "You have already reviewed this appointment") {
+      return res.status(400).json({ error: error.message });
+    }
+    // Check for Sequelize validation errors
+    if (error.name === "SequelizeValidationError" || error.name === "SequelizeDatabaseError") {
       return res.status(400).json({ error: error.message });
     }
     return res.status(500).json({ error: "Failed to submit review" });

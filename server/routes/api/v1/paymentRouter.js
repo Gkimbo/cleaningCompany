@@ -142,6 +142,7 @@ paymentRouter.get("/history/:userId", async (req, res) => {
  */
 paymentRouter.get("/earnings/:employeeId", async (req, res) => {
   const { employeeId } = req.params;
+  const cleanerIdInt = parseInt(employeeId, 10);
 
   try {
     // Get platform fee from database
@@ -150,7 +151,7 @@ paymentRouter.get("/earnings/:employeeId", async (req, res) => {
 
     // First try to get earnings from Payout records (more accurate)
     const payouts = await Payout.findAll({
-      where: { cleanerId: employeeId },
+      where: { cleanerId: cleanerIdInt },
       include: [{
         model: UserAppointments,
         as: "appointment",
@@ -1435,7 +1436,8 @@ async function processCleanerPayouts(appointment) {
   const pricing = await getPricingConfig();
   const platformFeePercent = pricing.platform.feePercent;
 
-  for (const cleanerId of cleanerIds) {
+  for (const cleanerIdStr of cleanerIds) {
+    const cleanerId = parseInt(cleanerIdStr, 10);
     try {
       // Get or create payout record
       let payout = await Payout.findOne({
@@ -1489,8 +1491,20 @@ async function processCleanerPayouts(appointment) {
         });
       }
 
+      // Get the charge ID from the payment intent to use as source_transaction
+      // This links the transfer to the original customer payment
+      let chargeId = null;
+      if (appointment.paymentIntentId) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
+          chargeId = paymentIntent.latest_charge;
+        } catch (err) {
+          console.error(`Could not retrieve payment intent ${appointment.paymentIntentId}:`, err.message);
+        }
+      }
+
       // Create Stripe Transfer to cleaner
-      const transfer = await stripe.transfers.create({
+      const transferParams = {
         amount: netAmount,
         currency: "usd",
         destination: connectAccount.stripeAccountId,
@@ -1499,7 +1513,15 @@ async function processCleanerPayouts(appointment) {
           cleanerId: cleanerId.toString(),
           payoutId: payout.id.toString(),
         },
-      });
+      };
+
+      // Use source_transaction if we have the charge ID
+      // This links the transfer to the specific charge, ensuring funds are available
+      if (chargeId) {
+        transferParams.source_transaction = chargeId;
+      }
+
+      const transfer = await stripe.transfers.create(transferParams);
 
       await payout.update({
         stripeTransferId: transfer.id,
@@ -1685,6 +1707,50 @@ paymentRouter.post("/complete-job", async (req, res) => {
 
     // Process payouts to cleaners (90% of their share)
     const payoutResults = await processCleanerPayouts(appointment);
+
+    // Send completion notifications to homeowner
+    try {
+      const homeowner = await User.findByPk(appointment.userId);
+      const home = await UserHomes.findByPk(appointment.homeId);
+      const cleanerIdForNotification = cleanerId || (appointment.employeesAssigned && appointment.employeesAssigned[0]);
+      const cleaner = cleanerIdForNotification ? await User.findByPk(cleanerIdForNotification) : null;
+
+      if (homeowner && home) {
+        const address = {
+          street: home.address,
+          city: home.city,
+          state: home.state,
+          zipcode: home.zipcode,
+        };
+        const cleanerName = cleaner?.username || "Your Cleaner";
+
+        // Send push notification
+        if (homeowner.expoPushToken) {
+          await PushNotification.sendPushCleaningCompleted(
+            homeowner.expoPushToken,
+            homeowner.username || homeowner.firstName,
+            appointment.date,
+            address
+          );
+        }
+
+        // Send email notification
+        if (homeowner.email) {
+          await Email.sendCleaningCompletedNotification(
+            homeowner.email,
+            homeowner.username || homeowner.firstName,
+            address,
+            appointment.date,
+            cleanerName
+          );
+        }
+
+        console.log(`[Complete Job] Notifications sent to homeowner ${homeowner.id} for appointment ${appointment.id}`);
+      }
+    } catch (notificationError) {
+      // Don't fail the job completion if notifications fail
+      console.error("Error sending completion notifications:", notificationError);
+    }
 
     return res.json({
       success: true,
@@ -1913,15 +1979,50 @@ paymentRouter.post("/pre-pay", async (req, res) => {
       });
     }
 
-    // 6. Check payment intent exists
-    if (!appointment.paymentIntentId) {
-      return res.status(400).json({ error: "No payment on file" });
-    }
+    // 6. Get or create payment intent
+    let paymentIntent;
 
-    // 7. Capture via Stripe
-    const paymentIntent = await stripe.paymentIntents.capture(
-      appointment.paymentIntentId
-    );
+    if (!appointment.paymentIntentId) {
+      // Create payment intent if one doesn't exist
+      const user = await User.findByPk(appointment.userId);
+      if (!user || !user.stripeCustomerId) {
+        return res.status(400).json({ error: "No payment method on file. Please add a payment method first." });
+      }
+
+      const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+      const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+      if (!defaultPaymentMethod) {
+        return res.status(400).json({ error: "No default payment method. Please add a payment method first." });
+      }
+
+      const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+
+      // Create and immediately capture the payment intent
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: priceInCents,
+        currency: "usd",
+        customer: user.stripeCustomerId,
+        payment_method: defaultPaymentMethod,
+        confirm: true,
+        off_session: true,
+        metadata: {
+          userId: appointment.userId,
+          homeId: appointment.homeId,
+          appointmentId: appointment.id,
+        },
+      });
+
+      // Update appointment with payment intent ID
+      await appointment.update({
+        paymentIntentId: paymentIntent.id,
+      });
+    } else {
+      // 7. Capture existing payment intent via Stripe
+      paymentIntent = await stripe.paymentIntents.capture(
+        appointment.paymentIntentId
+      );
+    }
 
     // 8. Update appointment
     await appointment.update({
@@ -2224,10 +2325,46 @@ async function runDailyPaymentCheck() {
         const home = await UserHomes.findByPk(appointment.homeId);
         if (!user || !home) continue;
 
-        if (appointment.hasBeenAssigned && appointment.paymentIntentId) {
+        if (appointment.hasBeenAssigned) {
           // Capture payment if cleaner assigned - money is now held by the platform
           try {
-            const paymentIntent = await stripe.paymentIntents.capture(appointment.paymentIntentId);
+            let paymentIntent;
+
+            if (!appointment.paymentIntentId) {
+              // No payment intent exists - create and capture a new one
+              console.log(`Creating payment intent for appointment ${appointment.id} (cleaner assigned but no payment intent)`);
+
+              const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+              const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+              if (!defaultPaymentMethod) {
+                console.error(`No payment method on file for user ${user.id}, appointment ${appointment.id}`);
+                await appointment.update({ paymentCaptureFailed: true });
+                continue;
+              }
+
+              const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+
+              paymentIntent = await stripe.paymentIntents.create({
+                amount: priceInCents,
+                currency: "usd",
+                customer: user.stripeCustomerId,
+                payment_method: defaultPaymentMethod,
+                confirm: true,
+                off_session: true,
+                metadata: {
+                  userId: appointment.userId,
+                  homeId: appointment.homeId,
+                  appointmentId: appointment.id,
+                },
+              });
+
+              await appointment.update({ paymentIntentId: paymentIntent.id });
+            } else {
+              // Existing payment intent - capture it
+              paymentIntent = await stripe.paymentIntents.capture(appointment.paymentIntentId);
+            }
+
             await appointment.update({
               paymentStatus: "captured",
               paid: true,
@@ -2682,6 +2819,192 @@ cron.schedule("0 7 * * *", async () => {
     console.log("[Cron] Daily supply reminder complete");
   } catch (error) {
     console.error("[Cron] Error in supply reminder job:", error);
+  }
+});
+
+// ============================================================
+// CRON JOB: Daily Review Reminder (9:00 AM)
+// Sends push notifications and emails to homeowners with
+// completed appointments that haven't been reviewed yet
+// ============================================================
+cron.schedule("0 9 * * *", async () => {
+  console.log("[Cron] Running daily review reminder...");
+
+  try {
+    const { Op } = require("sequelize");
+
+    // Find all homeowners with completed appointments that haven't been reviewed
+    const pendingReviewAppointments = await UserAppointments.findAll({
+      where: {
+        completed: true,
+        hasClientReview: { [Op.or]: [false, null] },
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "username", "firstName", "email", "expoPushToken"],
+        },
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "nickName", "address", "city", "state", "zipcode"],
+        },
+      ],
+    });
+
+    if (pendingReviewAppointments.length === 0) {
+      console.log("[Cron] No pending reviews found");
+      return;
+    }
+
+    // Group appointments by user
+    const userAppointments = {};
+    for (const appointment of pendingReviewAppointments) {
+      if (!appointment.user) continue;
+      const userId = appointment.user.id;
+      if (!userAppointments[userId]) {
+        userAppointments[userId] = {
+          user: appointment.user,
+          appointments: [],
+        };
+      }
+      userAppointments[userId].appointments.push({
+        id: appointment.id,
+        date: appointment.date,
+        homeName: appointment.home?.nickName || appointment.home?.address || "Your Home",
+        address: appointment.home?.address || "",
+      });
+    }
+
+    // Send notifications to each user
+    for (const userId in userAppointments) {
+      const { user, appointments } = userAppointments[userId];
+      const pendingCount = appointments.length;
+
+      try {
+        // Send push notification
+        if (user.expoPushToken) {
+          await PushNotification.sendPushReviewReminder(
+            user.expoPushToken,
+            user.username || user.firstName,
+            pendingCount
+          );
+          console.log(`[Cron] Review reminder push sent to user ${userId}`);
+        }
+
+        // Send email notification
+        if (user.email) {
+          await Email.sendReviewReminderNotification(
+            user.email,
+            user.username || user.firstName,
+            appointments
+          );
+          console.log(`[Cron] Review reminder email sent to user ${userId}`);
+        }
+      } catch (userError) {
+        console.error(`[Cron] Failed to send review reminder to user ${userId}:`, userError);
+      }
+    }
+
+    console.log(`[Cron] Daily review reminder complete. Notified ${Object.keys(userAppointments).length} users`);
+  } catch (error) {
+    console.error("[Cron] Error in review reminder job:", error);
+  }
+});
+
+/**
+ * Test endpoint to manually trigger the review reminder
+ * Only available in development/test environments
+ */
+paymentRouter.post("/run-review-reminder", async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization required" });
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return res.status(403).json({ error: "Not available in production" });
+  }
+
+  try {
+    const { Op } = require("sequelize");
+
+    // Find all homeowners with completed appointments that haven't been reviewed
+    const pendingReviewAppointments = await UserAppointments.findAll({
+      where: {
+        completed: true,
+        hasClientReview: { [Op.or]: [false, null] },
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "username", "firstName", "email", "expoPushToken"],
+        },
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "nickName", "address", "city", "state", "zipcode"],
+        },
+      ],
+    });
+
+    // Group appointments by user
+    const userAppointments = {};
+    for (const appointment of pendingReviewAppointments) {
+      if (!appointment.user) continue;
+      const userId = appointment.user.id;
+      if (!userAppointments[userId]) {
+        userAppointments[userId] = {
+          user: appointment.user,
+          appointments: [],
+        };
+      }
+      userAppointments[userId].appointments.push({
+        id: appointment.id,
+        date: appointment.date,
+        homeName: appointment.home?.nickName || appointment.home?.address || "Your Home",
+        address: appointment.home?.address || "",
+      });
+    }
+
+    // Send notifications to each user
+    let notifiedCount = 0;
+    for (const userId in userAppointments) {
+      const { user, appointments } = userAppointments[userId];
+      const pendingCount = appointments.length;
+
+      try {
+        if (user.expoPushToken) {
+          await PushNotification.sendPushReviewReminder(
+            user.expoPushToken,
+            user.username || user.firstName,
+            pendingCount
+          );
+        }
+        if (user.email) {
+          await Email.sendReviewReminderNotification(
+            user.email,
+            user.username || user.firstName,
+            appointments
+          );
+        }
+        notifiedCount++;
+      } catch (err) {
+        console.error(`Failed to notify user ${userId}:`, err);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Review reminder sent to ${notifiedCount} users`,
+      totalPendingReviews: pendingReviewAppointments.length,
+    });
+  } catch (error) {
+    console.error("Manual review reminder error:", error);
+    return res.status(500).json({ error: "Failed to run review reminder" });
   }
 });
 

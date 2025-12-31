@@ -198,7 +198,7 @@ describe("Reviews Router", () => {
     it("should return pending reviews for cleaner", async () => {
       const token = generateToken(2);
 
-      User.findByPk.mockResolvedValue({ id: 2, role: "cleaner" });
+      User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
       ReviewsClass.getPendingReviewsForUser.mockResolvedValue([
         { id: 100, date: "2025-01-15", homeId: 10, employeesAssigned: ["2"] },
       ]);

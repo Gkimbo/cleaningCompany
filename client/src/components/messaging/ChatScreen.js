@@ -271,10 +271,7 @@ const ChatScreen = () => {
 
   const getDisplayName = (user) => {
     if (!user) return "Unknown";
-    if (user.firstName || user.lastName) {
-      return `${user.firstName || ""} ${user.lastName || ""}`.trim();
-    }
-    return user.username;
+    return user.username || "Unknown";
   };
 
   const getConversationTitle = () => {

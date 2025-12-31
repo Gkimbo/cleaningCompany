@@ -1,14 +1,24 @@
 const bcrypt = require("bcrypt");
+const EncryptionService = require("../services/EncryptionService");
+
+// Fields that contain PII and should be encrypted
+const PII_FIELDS = [
+	"firstName",
+	"lastName",
+	"email",
+	"notificationEmail",
+	"phone",
+];
 
 module.exports = (sequelize, DataTypes) => {
 	// Define the User model
 	const User = sequelize.define("User", {
 		firstName: {
-			type: DataTypes.STRING,
+			type: DataTypes.TEXT,
 			allowNull: false,
 		},
 		lastName: {
-			type: DataTypes.STRING,
+			type: DataTypes.TEXT,
 			allowNull: false,
 		},
 		username: {
@@ -21,11 +31,16 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 		},
 		email: {
-			type: DataTypes.STRING,
+			type: DataTypes.TEXT,
 			allowNull: false,
 		},
-		notificationEmail: {
+		emailHash: {
 			type: DataTypes.STRING,
+			allowNull: true,
+			comment: "Hash of email for searching (since email is encrypted)",
+		},
+		notificationEmail: {
+			type: DataTypes.TEXT,
 			allowNull: true,
 			comment: "Separate email for receiving notifications (falls back to main email if null)",
 		},
@@ -85,7 +100,7 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 		},
 		phone: {
-			type: DataTypes.STRING,
+			type: DataTypes.TEXT,
 			allowNull: true,
 		},
 		ownerPrivateNotes: {
@@ -118,14 +133,76 @@ module.exports = (sequelize, DataTypes) => {
 		},
 	});
 
+	// Helper function to encrypt PII fields
+	const encryptPIIFields = (user) => {
+		PII_FIELDS.forEach((field) => {
+			if (user[field] !== undefined && user[field] !== null) {
+				const value = String(user[field]);
+				// Only encrypt if not already encrypted
+				if (!value.includes(":") || value.split(":").length !== 2) {
+					user[field] = EncryptionService.encrypt(value);
+				}
+			}
+		});
+
+		// Generate email hash for searching (if email is being set/updated)
+		if (user.email && user.changed && user.changed("email")) {
+			// Get the original unencrypted email value
+			const originalEmail = user._previousDataValues?.email
+				? EncryptionService.decrypt(user._previousDataValues.email)
+				: user.email;
+			// If the email looks encrypted, decrypt it first
+			const emailToHash = originalEmail.includes(":")
+				? EncryptionService.decrypt(originalEmail)
+				: originalEmail;
+			user.emailHash = EncryptionService.hash(emailToHash);
+		} else if (user.email && !user.emailHash) {
+			// For new users or if hash is missing
+			const emailToHash = user.email.includes(":")
+				? EncryptionService.decrypt(user.email)
+				: user.email;
+			user.emailHash = EncryptionService.hash(emailToHash);
+		}
+	};
+
+	// Helper function to decrypt PII fields
+	const decryptPIIFields = (user) => {
+		if (!user) return;
+
+		PII_FIELDS.forEach((field) => {
+			if (user.dataValues && user.dataValues[field]) {
+				user.dataValues[field] = EncryptionService.decrypt(user.dataValues[field]);
+			}
+		});
+	};
+
 	// Hash the password before saving the user
 	User.beforeCreate(async (user) => {
 		try {
 			const salt = await bcrypt.genSalt(10);
 			const hashedPassword = await bcrypt.hash(user.password, salt);
 			user.password = hashedPassword;
+
+			// Encrypt PII fields
+			encryptPIIFields(user);
 		} catch (error) {
 			throw new Error(error);
+		}
+	});
+
+	// Encrypt PII fields before updating
+	User.beforeUpdate((user) => {
+		encryptPIIFields(user);
+	});
+
+	// Decrypt after finding
+	User.afterFind((result) => {
+		if (!result) return;
+
+		if (Array.isArray(result)) {
+			result.forEach((user) => decryptPIIFields(user));
+		} else {
+			decryptPIIFields(result);
 		}
 	});
 

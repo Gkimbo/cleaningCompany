@@ -106,7 +106,6 @@ const ReactorListModal = ({ visible, reaction, currentUserId, onClose }) => {
     const names = users.map((user) => {
       if (!user) return "Unknown";
       if (user.id === currentUserId) return "You";
-      if (user.firstName) return user.firstName;
       return user.username || "Unknown";
     });
 

@@ -30,6 +30,9 @@ const secretKey = process.env.SESSION_SECRET;
 // Static pricing config (used as fallback, prefer getPricingConfig() for database values)
 const { pricing } = businessConfig;
 
+// Store pending linens update email timeouts to debounce multiple rapid updates
+const pendingLinensEmailTimeouts = new Map();
+
 appointmentRouter.get("/unassigned", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
@@ -550,6 +553,78 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
   }
 });
 
+// Get archived cleanings (completed with client review) for a user
+// NOTE: This must be defined BEFORE /:homeId to avoid route conflict
+appointmentRouter.get("/archived", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    // Get all completed appointments for this user
+    const completedAppointments = await UserAppointments.findAll({
+      where: {
+        userId: userId,
+        completed: true,
+      },
+      order: [["date", "DESC"]],
+    });
+
+    // Get reviews for these appointments (homeowner_to_cleaner type)
+    const appointmentIds = completedAppointments.map((apt) => apt.id);
+    const reviews = await UserReviews.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        reviewType: "homeowner_to_cleaner",
+      },
+    });
+
+    // Filter to only appointments with client reviews
+    const reviewedAppointmentIds = new Set(reviews.map((r) => r.appointmentId));
+    const archivedAppointments = completedAppointments.filter((apt) =>
+      reviewedAppointmentIds.has(apt.id)
+    );
+
+    // Enrich with home and cleaner info
+    const enrichedAppointments = await Promise.all(
+      archivedAppointments.map(async (apt) => {
+        const serialized = AppointmentSerializer.serializeOne(apt);
+
+        // Get home info
+        const home = await UserHomes.findByPk(apt.homeId);
+        if (home) {
+          serialized.home = HomeSerializer.serializeOne(home);
+        }
+
+        // Get cleaner name from assigned employees
+        if (apt.employeesAssigned && apt.employeesAssigned.length > 0) {
+          const cleanerId = apt.employeesAssigned[0];
+          const cleaner = await User.findByPk(cleanerId);
+          if (cleaner) {
+            serialized.cleanerName = cleaner.username;
+          }
+        }
+
+        return serialized;
+      })
+    );
+
+    return res.status(200).json({ appointments: enrichedAppointments });
+  } catch (error) {
+    console.error("Error fetching archived cleanings:", error);
+
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+
+    return res.status(401).json({ error: "Failed to fetch archived cleanings" });
+  }
+});
+
 appointmentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;
   try {
@@ -748,6 +823,12 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
       return res.status(403).json({ error: "Not authorized to update this appointment" });
     }
 
+    // Capture previous linens values for comparison in email
+    const previousLinens = {
+      bringSheets: appointment.dataValues.bringSheets,
+      bringTowels: appointment.dataValues.bringTowels,
+    };
+
     // Get home info to recalculate price
     const home = await UserHomes.findOne({
       where: { id: appointment.dataValues.homeId },
@@ -773,6 +854,83 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
       bringTowels,
       newPrice,
     });
+
+    // If appointment has been assigned, send delayed email to assigned cleaner
+    if (appointment.dataValues.hasBeenAssigned) {
+      // Find the assigned cleaner via UserCleanerAppointments
+      const cleanerAppointment = await UserCleanerAppointments.findOne({
+        where: { appointmentId: id },
+      });
+
+      if (cleanerAppointment) {
+        const cleaner = await User.findByPk(cleanerAppointment.dataValues.employeeId);
+        const homeowner = await User.findByPk(appointment.dataValues.userId);
+
+        if (cleaner && homeowner) {
+          // Get pricing config for fee calculation
+          const pricingConfig = await getPricingConfig();
+          const cleanerSharePercent = 1 - (pricingConfig.platform?.feePercent || 0.1);
+          const cleanerPayout = Number(newPrice) * cleanerSharePercent;
+
+          const linensConfig = {
+            bringSheets,
+            bringTowels,
+            sheetConfigurations,
+            towelConfigurations,
+            previousBringSheets: previousLinens.bringSheets,
+            previousBringTowels: previousLinens.bringTowels,
+          };
+
+          // Cancel any existing pending email for this appointment (debounce)
+          if (pendingLinensEmailTimeouts.has(id)) {
+            clearTimeout(pendingLinensEmailTimeouts.get(id));
+            console.log(`[Linens Update] Cancelled previous pending email for appointment ${id}`);
+          }
+
+          // Capture original previous values for the email (before any updates in this session)
+          const originalPreviousLinens = { ...previousLinens };
+
+          // 1-minute delay before sending email to allow for multiple quick updates
+          const timeoutId = setTimeout(async () => {
+            try {
+              // Remove from pending map
+              pendingLinensEmailTimeouts.delete(id);
+
+              // Re-fetch appointment to get latest data in case of more updates
+              const latestAppointment = await UserAppointments.findByPk(id);
+              if (latestAppointment) {
+                const latestLinensConfig = {
+                  bringSheets: latestAppointment.dataValues.bringSheets,
+                  bringTowels: latestAppointment.dataValues.bringTowels,
+                  sheetConfigurations: latestAppointment.dataValues.sheetConfigurations,
+                  towelConfigurations: latestAppointment.dataValues.towelConfigurations,
+                  // Include previous values to show what was removed
+                  previousBringSheets: originalPreviousLinens.bringSheets,
+                  previousBringTowels: originalPreviousLinens.bringTowels,
+                };
+                const latestPayout = Number(latestAppointment.dataValues.price) * cleanerSharePercent;
+
+                await Email.sendLinensConfigurationUpdated(
+                  cleaner.dataValues.email,
+                  cleaner.dataValues.username,
+                  homeowner.dataValues.username,
+                  latestAppointment.dataValues.date,
+                  latestPayout,
+                  latestLinensConfig
+                );
+                console.log(`[Linens Update] Email sent to cleaner ${cleaner.dataValues.email} for appointment ${id}`);
+              }
+            } catch (emailError) {
+              console.error(`[Linens Update] Failed to send email for appointment ${id}:`, emailError);
+              pendingLinensEmailTimeouts.delete(id);
+            }
+          }, 60000); // 1 minute = 60000ms
+
+          // Store the timeout ID so we can cancel it if another update comes in
+          pendingLinensEmailTimeouts.set(id, timeoutId);
+        }
+      }
+    }
 
     const serializedAppointment = AppointmentSerializer.serializeOne(updatedAppointment);
     return res.status(200).json({ appointment: serializedAppointment });
@@ -1291,42 +1449,85 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       if (
         diffInDays <= 3 &&
         diffInDays >= 0 &&
-        appointment.dataValues.paymentIntentId &&
-        appointment.dataValues.paymentStatus === "pending"
+        appointment.dataValues.paymentStatus !== "captured"
       ) {
         try {
-          const capturedIntent = await stripe.paymentIntents.capture(
-            appointment.dataValues.paymentIntentId
-          );
+          let capturedIntent;
+          const user = await User.findByPk(appointment.dataValues.userId);
 
-          await appointment.update({
-            paymentStatus: "captured",
-            paid: true,
-            amountPaid: capturedIntent.amount,
-          });
+          if (appointment.dataValues.paymentIntentId) {
+            // Existing payment intent - capture it
+            capturedIntent = await stripe.paymentIntents.capture(
+              appointment.dataValues.paymentIntentId
+            );
+          } else {
+            // No payment intent exists - create and capture in one step
+            console.log(`[Approve Request] Creating payment intent for appointment ${appointment.id} (no existing intent)`);
 
-          // Update all payout records to "held"
-          await Payout.update(
-            { status: "held", paymentCapturedAt: new Date() },
-            { where: { appointmentId: appointment.id } }
-          );
+            if (!user || !user.stripeCustomerId) {
+              console.error(`[Approve Request] No Stripe customer for appointment ${appointment.id}`);
+              await appointment.update({ paymentCaptureFailed: true });
+              // Continue with approval - don't return early
+            } else {
+              const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+              const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
 
-          // Record the capture transaction
-          await recordPaymentTransaction({
-            type: "capture",
-            stripePaymentIntentId: capturedIntent.id,
-            stripeChargeId: capturedIntent.latest_charge,
-            amount: capturedIntent.amount,
-            currency: capturedIntent.currency,
-            status: "succeeded",
-            appointmentId: appointment.id,
-            homeownerId: appointment.dataValues.userId,
-            description: `Payment captured for appointment ${appointment.id}`,
-          });
+              if (!defaultPaymentMethod) {
+                console.error(`[Approve Request] No payment method for appointment ${appointment.id}`);
+                await appointment.update({ paymentCaptureFailed: true });
+                // Continue with approval - don't return early
+              } else {
+                const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
 
-          console.log(
-            `[Approve Request] Payment captured for appointment ${appointment.id}`
-          );
+                capturedIntent = await stripe.paymentIntents.create({
+                  amount: priceInCents,
+                  currency: "usd",
+                  customer: user.stripeCustomerId,
+                  payment_method: defaultPaymentMethod,
+                  confirm: true,
+                  off_session: true,
+                  metadata: {
+                    userId: appointment.dataValues.userId,
+                    homeId: appointment.dataValues.homeId,
+                    appointmentId: appointment.dataValues.id,
+                  },
+                });
+
+                await appointment.update({ paymentIntentId: capturedIntent.id });
+              }
+            }
+          }
+
+          if (capturedIntent) {
+            await appointment.update({
+              paymentStatus: "captured",
+              paid: true,
+              amountPaid: capturedIntent.amount_received || capturedIntent.amount,
+            });
+
+            // Update all payout records to "held"
+            await Payout.update(
+              { status: "held", paymentCapturedAt: new Date() },
+              { where: { appointmentId: appointment.id } }
+            );
+
+            // Record the capture transaction
+            await recordPaymentTransaction({
+              type: "capture",
+              stripePaymentIntentId: capturedIntent.id,
+              stripeChargeId: capturedIntent.latest_charge,
+              amount: capturedIntent.amount_received || capturedIntent.amount,
+              currency: capturedIntent.currency,
+              status: "succeeded",
+              appointmentId: appointment.id,
+              homeownerId: appointment.dataValues.userId,
+              description: `Payment captured for appointment ${appointment.id}`,
+            });
+
+            console.log(
+              `[Approve Request] Payment captured for appointment ${appointment.id}`
+            );
+          }
         } catch (captureError) {
           console.error(
             `[Approve Request] Payment capture failed for appointment ${appointment.id}, will retry via cron:`,
@@ -1350,12 +1551,19 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
           state: home.dataValues.state,
           zipcode: home.dataValues.zipcode,
         };
+        const linensConfig = {
+          bringSheets: appointment.dataValues.bringSheets,
+          bringTowels: appointment.dataValues.bringTowels,
+          sheetConfigurations: appointment.dataValues.sheetConfigurations,
+          towelConfigurations: appointment.dataValues.towelConfigurations,
+        };
         await Email.sendRequestApproved(
           cleaner.dataValues.email,
           cleaner.dataValues.username,
           homeowner.dataValues.username,
           address,
-          appointment.dataValues.date
+          appointment.dataValues.date,
+          linensConfig
         );
 
         // Send push notification to cleaner
@@ -2064,7 +2272,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       });
     }
 
-    // Send notification emails to cleaners
+    // Send notifications to cleaners (in-app and email)
     if (hasCleanerAssigned) {
       const cleanerIds = appointment.employeesAssigned || [];
       const home = await UserHomes.findByPk(appointment.homeId);
@@ -2074,6 +2282,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const cleanerPayment = cleanerPayoutResult
         ? cleanerPayoutResult.perCleaner.toFixed(2)
         : (price * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
+
+      // Only show payment amount if appointment was paid and cleaner is getting compensated
+      const showPayment = isWithinPenaltyWindow && cleanerPayoutResult;
 
       for (const cleanerId of cleanerIds) {
         const cleaner = await User.findByPk(cleanerId);
@@ -2086,14 +2297,33 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             day: "numeric",
           });
 
-          // Only show payment amount if appointment was paid and cleaner is getting compensated
-          const showPayment = isWithinPenaltyWindow && cleanerPayoutResult;
           notifications.unshift(
             showPayment
               ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${cleanerPayment}.`
               : `The homeowner cancelled the ${formattedDate} cleaning at ${home?.address || "their property"}.`
           );
           await cleaner.update({ notifications: notifications.slice(0, 50) });
+
+          // Send email notification to cleaner
+          if (cleaner.email) {
+            const homeAddress = home
+              ? `${home.city}, ${home.state}`
+              : "the scheduled location";
+
+            try {
+              await Email.sendHomeownerCancelledNotification(
+                cleaner.email,
+                cleaner.firstName || cleaner.username,
+                appointment.date,
+                homeAddress,
+                showPayment,
+                showPayment ? cleanerPayment : null
+              );
+            } catch (emailError) {
+              console.error(`Error sending cancellation email to cleaner ${cleanerId}:`, emailError);
+              // Don't fail the cancellation if email fails
+            }
+          }
         }
       }
     }

@@ -407,4 +407,137 @@ describe("CleaningChecklist Component", () => {
       expect(taskCounts.length).toBeGreaterThan(0);
     });
   });
+
+  describe("Checklist Persistence", () => {
+    const AsyncStorage = require("@react-native-async-storage/async-storage");
+
+    beforeEach(() => {
+      AsyncStorage.getItem.mockClear();
+      AsyncStorage.setItem.mockClear();
+      AsyncStorage.removeItem.mockClear();
+    });
+
+    it("should load saved progress on mount when appointmentId is provided", async () => {
+      const savedProgress = { "kitchen-1": true, "kitchen-2": true };
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(savedProgress));
+
+      const component = render(
+        <CleaningChecklist {...defaultProps} appointmentId={100} />
+      );
+      await waitForLoad(component);
+
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith("checklist_progress_100");
+    });
+
+    it("should not load progress if no appointmentId provided", async () => {
+      const component = render(<CleaningChecklist {...defaultProps} />);
+      await waitForLoad(component);
+
+      // Should not have been called with a specific checklist_progress key
+      const progressCalls = AsyncStorage.getItem.mock.calls.filter(
+        (call) => call[0] && call[0].startsWith("checklist_progress_")
+      );
+      expect(progressCalls.length).toBe(0);
+    });
+
+    it("should save progress when task is toggled", async () => {
+      const component = render(
+        <CleaningChecklist {...defaultProps} appointmentId={100} />
+      );
+      await waitForLoad(component);
+
+      // Toggle a task
+      fireEvent.press(component.getByText(/Clean all countertops/));
+
+      await waitFor(() => {
+        expect(AsyncStorage.setItem).toHaveBeenCalled();
+      });
+
+      // Verify the key includes appointment ID
+      const setItemCalls = AsyncStorage.setItem.mock.calls.filter(
+        (call) => call[0] === "checklist_progress_100"
+      );
+      expect(setItemCalls.length).toBeGreaterThan(0);
+    });
+
+    it("should persist progress across multiple toggles", async () => {
+      const component = render(
+        <CleaningChecklist {...defaultProps} appointmentId={100} />
+      );
+      await waitForLoad(component);
+
+      // Toggle first task
+      fireEvent.press(component.getByText(/Clean all countertops/));
+
+      // Toggle second task
+      fireEvent.press(component.getByText(/Clean inside and outside of oven/));
+
+      await waitFor(() => {
+        // Should have been called multiple times as progress is saved on each toggle
+        expect(AsyncStorage.setItem.mock.calls.length).toBeGreaterThanOrEqual(2);
+      });
+    });
+
+    it("should restore checked state from saved progress", async () => {
+      // Mock that we have some saved progress
+      const savedProgress = { "kitchen-countertops": true };
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(savedProgress));
+
+      const component = render(
+        <CleaningChecklist {...defaultProps} appointmentId={100} />
+      );
+      await waitForLoad(component);
+
+      // Progress callback should be called with restored progress
+      await waitFor(() => {
+        expect(mockOnProgressUpdate).toHaveBeenCalled();
+      });
+    });
+
+    it("should handle corrupted saved data gracefully", async () => {
+      // Mock corrupted JSON data
+      AsyncStorage.getItem.mockResolvedValueOnce("not valid json");
+
+      const component = render(
+        <CleaningChecklist {...defaultProps} appointmentId={100} />
+      );
+
+      // Should not throw and should render
+      await waitForLoad(component);
+      expect(component.getByText("Cleaning Progress")).toBeTruthy();
+    });
+
+    it("should handle missing saved data gracefully", async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+
+      const component = render(
+        <CleaningChecklist {...defaultProps} appointmentId={100} />
+      );
+
+      await waitForLoad(component);
+      expect(component.getByText("0%")).toBeTruthy();
+    });
+  });
+
+  describe("clearChecklistProgress", () => {
+    const AsyncStorage = require("@react-native-async-storage/async-storage");
+    const { clearChecklistProgress } = require("../../src/components/employeeAssignments/jobPhotos/CleaningChecklist");
+
+    beforeEach(() => {
+      AsyncStorage.removeItem.mockClear();
+    });
+
+    it("should remove saved progress for given appointmentId", async () => {
+      await clearChecklistProgress(100);
+
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith("checklist_progress_100");
+    });
+
+    it("should handle errors gracefully", async () => {
+      AsyncStorage.removeItem.mockRejectedValueOnce(new Error("Storage error"));
+
+      // Should not throw
+      await expect(clearChecklistProgress(100)).resolves.not.toThrow();
+    });
+  });
 });

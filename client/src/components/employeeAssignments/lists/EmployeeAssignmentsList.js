@@ -11,9 +11,11 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
+import * as Location from "expo-location";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import EmployeeAssignmentTile from "../tiles/EmployeeAssignmentTile";
+import { usePricing } from "../../../context/PricingContext";
 import {
   colors,
   spacing,
@@ -54,6 +56,10 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const [userId, setUserId] = useState(null);
 
   const navigate = useNavigate();
+  const { pricing } = usePricing();
+
+  // Calculate cleaner's share after platform fee (default 10%)
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -82,23 +88,50 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     }
   }, [state.currentUser.token, fetchData]);
 
+  // Get user location using expo-location
   useEffect(() => {
-    if (navigator.geolocation) {
-      const watcher = navigator.geolocation.watchPosition(
-        (position) => {
-          setUserLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.error("Error getting location:", error);
-          setUserLocation({ latitude: 0, longitude: 0 });
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-      return () => navigator.geolocation.clearWatch(watcher);
-    }
+    let locationSubscription = null;
+
+    const startLocationTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          console.log("[EmployeeAssignmentsList] Location permission denied");
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            distanceInterval: 100,
+          },
+          (location) => {
+            setUserLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.error("[EmployeeAssignmentsList] Error getting location:", error);
+      }
+    };
+
+    startLocationTracking();
+
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -181,7 +214,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const completedJobs = sortedAppointments.filter((a) => a.completed);
 
   const totalEarnings = sortedAppointments.reduce(
-    (sum, a) => sum + (Number(a.price) || 0),
+    (sum, a) => sum + (Number(a.price) || 0) * cleanerSharePercent,
     0
   );
 
@@ -304,6 +337,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                       assigned={true}
                       distance={appointment.distance}
                       timeToBeCompleted={appointment.timeToBeCompleted}
+                      token={state.currentUser.token}
                     />
                   </View>
                 ))}
@@ -341,6 +375,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                       assigned={true}
                       distance={appointment.distance}
                       timeToBeCompleted={appointment.timeToBeCompleted}
+                      token={state.currentUser.token}
                     />
                   </View>
                 ))}
@@ -532,17 +567,22 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
   },
 
   // Sections
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing["2xl"],
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
   },
   sectionTitleRow: {
     flexDirection: "row",
@@ -573,11 +613,13 @@ const styles = StyleSheet.create({
 
   // Tile Wrapper
   tileWrapper: {
-    marginBottom: spacing.sm,
-    borderRadius: radius.lg,
+    marginBottom: spacing.lg,
+    borderRadius: radius.xl,
     overflow: "hidden",
     backgroundColor: colors.neutral[0],
-    ...shadows.sm,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
   },
 
   // Empty State

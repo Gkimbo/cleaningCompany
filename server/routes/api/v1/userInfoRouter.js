@@ -7,6 +7,7 @@ const {
   UserHomes,
   UserAppointments,
   UserBills,
+  UserReviews,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
@@ -45,7 +46,32 @@ userInfoRouter.get("/", async (req, res) => {
         },
       ],
     });
-    let serializedUser = UserSerializer.serializeOne(user.dataValues);
+
+    // Get all client reviews for this user's appointments
+    const appointmentIds = user.appointments.map((apt) => apt.id);
+    const clientReviews = await UserReviews.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        reviewerId: userId,
+        reviewType: "homeowner_to_cleaner",
+      },
+      attributes: ["appointmentId"],
+    });
+    const reviewedAppointmentIds = new Set(clientReviews.map((r) => r.appointmentId));
+
+    // Add hasClientReview to each appointment
+    const appointmentsWithReviewStatus = user.appointments.map((apt) => ({
+      ...apt.dataValues,
+      hasClientReview: reviewedAppointmentIds.has(apt.id),
+    }));
+
+    // Replace appointments with enriched data
+    const userData = {
+      ...user.dataValues,
+      appointments: appointmentsWithReviewStatus,
+    };
+
+    let serializedUser = UserSerializer.serializeOne(userData);
     return res.status(200).json({ user: serializedUser });
   } catch (error) {
     console.log(error);

@@ -238,7 +238,7 @@ describe("Pre-Pay and Retry Payment Routes", () => {
           .send({ appointmentId: 1 });
 
         expect(res.status).toBe(400);
-        expect(res.body.error).toBe("No payment on file");
+        expect(res.body.error).toBe("No payment method on file. Please add a payment method first.");
       });
     });
 

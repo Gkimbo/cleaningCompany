@@ -21,8 +21,12 @@ jest.mock("../../models", () => ({
   UserBills: {
     findOne: jest.fn(),
   },
+  UserReviews: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
   Op: {
     between: Symbol("between"),
+    in: Symbol("in"),
   },
 }));
 
@@ -73,6 +77,12 @@ describe("User Info Router", () => {
   describe("GET /", () => {
     it("should return user info with homes and appointments", async () => {
       User.findByPk.mockResolvedValue({
+        id: 1,
+        username: "testuser",
+        email: "test@test.com",
+        homes: [],
+        appointments: [],
+        bills: [],
         dataValues: {
           id: 1,
           username: "testuser",

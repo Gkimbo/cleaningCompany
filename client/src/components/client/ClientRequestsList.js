@@ -75,6 +75,11 @@ const ClientRequestsList = ({ state, dispatch }) => {
       );
       setTotalCount((prev) => prev - 1);
 
+      // Update the global pending requests count in TopBar
+      if (dispatch) {
+        dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      }
+
       // Refresh appointments in global state so Bill page gets updated paymentIntentId
       try {
         const dashboardData = await ClientDashboardService.getDashboardSummary(
@@ -118,6 +123,12 @@ const ClientRequestsList = ({ state, dispatch }) => {
           .filter((homeGroup) => homeGroup.requests.length > 0)
       );
       setTotalCount((prev) => prev - 1);
+
+      // Update the global pending requests count in TopBar
+      if (dispatch) {
+        dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      }
+
       Alert.alert(
         "Request Denied",
         `${cleanerName || "The cleaner"}'s request has been denied.`

@@ -7,8 +7,11 @@ import {
   View,
 } from "react-native";
 import { API_BASE } from "../../services/config";
+import { usePricing } from "../../context/PricingContext";
 
 const PayoutHistory = ({ state, dispatch }) => {
+  const { pricing } = usePricing();
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const [payouts, setPayouts] = useState([]);
   const [totals, setTotals] = useState({
     totalPaidDollars: "0.00",
@@ -19,6 +22,41 @@ const PayoutHistory = ({ state, dispatch }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Calculate cleaner's share for a given price
+  const calculateCleanerShare = (price, numCleaners = 1) => {
+    const gross = parseFloat(price) || 0;
+    const perCleaner = gross / numCleaners;
+    return perCleaner * cleanerSharePercent;
+  };
+
+  // Calculate potential earnings from assigned appointments (not completed)
+  const calculatePotentialEarnings = () => {
+    const userId = String(state?.currentUser?.id);
+    const appointments = state?.appointments || [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const upcomingAssigned = appointments.filter((appt) => {
+      const appointmentDate = new Date(appt.date + "T00:00:00");
+      return (
+        appointmentDate > today &&
+        !appt.completed &&
+        appt.employeesAssigned &&
+        appt.employeesAssigned.includes(userId)
+      );
+    });
+
+    const total = upcomingAssigned.reduce((sum, appt) => {
+      const numCleaners = appt.employeesAssigned?.length || 1;
+      return sum + calculateCleanerShare(appt.price, numCleaners);
+    }, 0);
+
+    return {
+      amount: total.toFixed(2),
+      count: upcomingAssigned.length,
+    };
+  };
+
   const fetchPayouts = async () => {
     if (!state?.currentUser?.id) return;
     try {
@@ -27,8 +65,36 @@ const PayoutHistory = ({ state, dispatch }) => {
       );
       const data = await res.json();
       if (res.ok) {
-        setPayouts(data.payouts || []);
-        setTotals(data.totals || {});
+        const allPayouts = data.payouts || [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Separate past and upcoming payouts
+        const pastPayouts = allPayouts.filter((payout) => {
+          const dateStr = payout.appointmentDate?.length === 10
+            ? payout.appointmentDate + "T00:00:00"
+            : payout.appointmentDate;
+          const appointmentDate = new Date(dateStr);
+          return appointmentDate <= today;
+        });
+
+        // Completed payouts from past jobs only
+        const completedPayouts = pastPayouts.filter((p) => p.status === "completed");
+
+        // Total paid from completed payouts
+        const totalPaidCents = completedPayouts.reduce((sum, p) => sum + (p.netAmount || 0), 0);
+
+        // Calculate potential earnings from appointments (ensures consistency with Overview)
+        const potentialEarnings = calculatePotentialEarnings();
+
+        // Only show past payouts in the history list (not upcoming appointments)
+        setPayouts(pastPayouts);
+        setTotals({
+          totalPaidDollars: (totalPaidCents / 100).toFixed(2),
+          pendingAmountDollars: potentialEarnings.amount,
+          completedCount: completedPayouts.length,
+          pendingCount: potentialEarnings.count,
+        });
       }
     } catch (err) {
       console.error("Error fetching payouts:", err);
@@ -45,7 +111,7 @@ const PayoutHistory = ({ state, dispatch }) => {
 
   useEffect(() => {
     fetchPayouts();
-  }, [state?.currentUser?.id]);
+  }, [state?.currentUser?.id, state?.appointments, pricing]);
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -60,7 +126,9 @@ const PayoutHistory = ({ state, dispatch }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
+    // If dateString is a date-only format (YYYY-MM-DD), append T00:00:00 to avoid timezone shift
+    const dateStr = dateString.length === 10 ? dateString + "T00:00:00" : dateString;
+    return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -97,10 +165,10 @@ const PayoutHistory = ({ state, dispatch }) => {
           </Text>
         </View>
         <View style={[styles.summaryCard, { backgroundColor: "#2196F3" }]}>
-          <Text style={styles.summaryLabel}>Pending</Text>
+          <Text style={styles.summaryLabel}>Potential Earnings</Text>
           <Text style={styles.summaryAmount}>${totals.pendingAmountDollars}</Text>
           <Text style={styles.summaryCount}>
-            {totals.pendingCount} upcoming
+            {totals.pendingCount} upcoming {totals.pendingCount === 1 ? "job" : "jobs"}
           </Text>
         </View>
       </View>

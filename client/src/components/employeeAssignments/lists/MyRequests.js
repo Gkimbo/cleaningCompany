@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
+import * as Location from "expo-location";
 import FetchData from "../../../services/fetchRequests/fetchData";
 import getCurrentUser from "../../../services/fetchRequests/getCurrentUser";
 import RequestedTile from "../tiles/RequestedTile";
@@ -107,25 +108,52 @@ const MyRequests = ({ state }) => {
     fetchLocations();
   }, [allRequests]);
 
-  // Get user location
+  // Get user location using expo-location
   useEffect(() => {
-    if (!navigator.geolocation) return;
+    let locationSubscription = null;
 
-    const watcher = navigator.geolocation.watchPosition(
-      (position) => {
-        setUserLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+    const startLocationTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          console.log("[MyRequests] Location permission denied");
+          return;
+        }
+
+        // Get initial location
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
         });
-      },
-      (error) => {
-        console.error("Error getting location:", error);
-        setUserLocation({ latitude: 0, longitude: 0 });
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
 
-    return () => navigator.geolocation.clearWatch(watcher);
+        // Watch for location updates
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            distanceInterval: 100,
+          },
+          (location) => {
+            setUserLocation({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+            });
+          }
+        );
+      } catch (error) {
+        console.error("[MyRequests] Error getting location:", error);
+      }
+    };
+
+    startLocationTracking();
+
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
   }, []);
 
   const onRefresh = useCallback(() => {
