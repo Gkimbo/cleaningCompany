@@ -25,6 +25,7 @@ import TaxFormsSection from "../tax/TaxFormsSection";
 import HomeownerAdjustmentNotification from "./HomeownerAdjustmentNotification";
 import { parseLocalDate, isFutureOrToday, isPast, compareDates } from "../../utils/dateUtils";
 import TodaysCleaningCard from "./TodaysCleaningCard";
+import DiscountedPrice from "../pricing/DiscountedPrice";
 
 const { width } = Dimensions.get("window");
 
@@ -137,9 +138,24 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
             {formatTime(appointment.time)}
           </Text>
         )}
-        <Text style={styles.appointmentPrice}>
-          ${Number(appointment.price).toFixed(2)}
-        </Text>
+        <View style={styles.appointmentPriceContainer}>
+          {appointment.discountApplied && appointment.originalPrice ? (
+            <>
+              <DiscountedPrice
+                originalPrice={Number(appointment.originalPrice)}
+                discountedPrice={Number(appointment.price)}
+                size="sm"
+              />
+              <Text style={styles.discountBadge}>
+                {Math.round(Number(appointment.discountPercent) * 100)}% new homeowner discount
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.appointmentPrice}>
+              ${Number(appointment.price).toFixed(2)}
+            </Text>
+          )}
+        </View>
       </View>
     </Pressable>
   );
@@ -1013,13 +1029,22 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.xs,
   },
+  appointmentPriceContainer: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    alignItems: "flex-end",
+  },
   appointmentPrice: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],
-    position: "absolute",
-    right: 0,
-    top: 0,
+  },
+  discountBadge: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.medium,
+    marginTop: spacing.xs,
   },
 
   // Homes

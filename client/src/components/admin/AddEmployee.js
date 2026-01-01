@@ -46,13 +46,24 @@ const AddEmployee = ({ state, setEmployeeList, employeeList }) => {
 
     setIsDeleting(true);
     try {
-      await FetchData.deleteEmployee(selectedEmployeeId);
+      const result = await FetchData.deleteEmployee(
+        selectedEmployeeId,
+        state.currentUser.token
+      );
+
+      if (result.error) {
+        console.error("Error deleting employee:", result.error);
+        alert(result.error);
+        return;
+      }
+
       const updatedEmployeeList = employeeList.filter(
         (emp) => emp.id !== Number(selectedEmployeeId)
       );
       setEmployeeList(updatedEmployeeList);
     } catch (error) {
       console.error("Error deleting employee:", error);
+      alert("Failed to delete employee. Please try again.");
     } finally {
       setIsDeleting(false);
       setDeleteModalVisible(false);

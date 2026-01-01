@@ -75,6 +75,7 @@ import ClientReviews from "../src/components/client/ClientReviews";
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
 import PricingManagement from "../src/components/owner/PricingManagement";
+import IncentivesManagement from "../src/components/owner/IncentivesManagement";
 import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
 import HREmployeeManagement from "../src/components/owner/HREmployeeManagement";
 import ChecklistEditor from "../src/components/owner/ChecklistEditor";
@@ -431,6 +432,11 @@ export default function App() {
               <Route
                 path="/owner/pricing"
                 element={<PricingManagement state={state} />}
+              />
+              {/* Owner Incentives */}
+              <Route
+                path="/owner/incentives"
+                element={<IncentivesManagement state={state} />}
               />
               {/* Owner Withdrawals */}
               <Route

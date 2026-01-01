@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
 import styles from "./OnboardingStyles";
-import { usePricing } from "../../context/PricingContext";
+import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
 
 const STEPS = {
   BASICS: 0,
@@ -21,13 +21,6 @@ const STEPS = {
   REVIEW: 3,
 };
 
-// Fallback time options matching database defaults (used if pricing context unavailable)
-const DEFAULT_TIME_OPTIONS = [
-  { value: "anytime", label: "Anytime", description: "Most flexible, best pricing" },
-  { value: "10-3", label: "10am - 3pm", description: "+$25 per cleaning" },
-  { value: "11-4", label: "11am - 4pm", description: "+$25 per cleaning" },
-  { value: "12-2", label: "12pm - 2pm", description: "+$30 per cleaning" },
-];
 
 const BED_SIZE_OPTIONS = [
   { value: "long_twin", label: "Long Twin" },
@@ -56,17 +49,8 @@ const HomeSetupWizard = ({ state, dispatch }) => {
   const towelFee = pricing?.linens?.towelFee ?? 5;
   const faceClothFee = pricing?.linens?.faceClothFee ?? 2;
 
-  // Generate time options from pricing context (fallback to defaults if unavailable)
-  const TIME_OPTIONS = useMemo(() => {
-    if (pricing?.timeWindows) {
-      return Object.entries(pricing.timeWindows).map(([value, config]) => ({
-        value,
-        label: config.label,
-        description: config.surcharge > 0 ? `+$${config.surcharge} per cleaning` : config.description,
-      }));
-    }
-    return DEFAULT_TIME_OPTIONS;
-  }, [pricing?.timeWindows]);
+  // Generate time options from pricing context using shared helper
+  const TIME_OPTIONS = useMemo(() => getTimeWindowOptions(pricing), [pricing]);
 
   const [currentStep, setCurrentStep] = useState(STEPS.BASICS);
   const [errors, setErrors] = useState({});

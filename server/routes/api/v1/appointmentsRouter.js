@@ -23,6 +23,7 @@ const PushNotification = require("../../../services/sendNotifications/PushNotifi
 const { businessConfig, getPricingConfig } = require("../../../config/businessConfig");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { recordPaymentTransaction } = require("./paymentRouter");
+const IncentiveService = require("../../../services/IncentiveService");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -435,12 +436,25 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
       const { cancellation: cancellationConfig, platform: platformConfig } = pricingConfig;
 
       const penaltyDays = cancellationConfig.homeownerPenaltyDays;
-      const refundPercent = cancellationConfig.refundPercentage;
+      const standardRefundPercent = cancellationConfig.refundPercentage;
       const platformFee = platformConfig.feePercent;
       const cancellationFeeAmount = cancellationConfig.fee;
       const cancellationWindowDays = cancellationConfig.windowDays;
       const isWithinPenaltyWindow = daysUntilAppointment <= penaltyDays && hasCleanerAssigned;
       const willChargeCancellationFee = daysUntilAppointment <= cancellationWindowDays;
+
+      // Check if discount was applied (incentive appointment)
+      const discountApplied = appointment.discountApplied === true;
+      const originalPrice = discountApplied && appointment.originalPrice
+        ? parseFloat(appointment.originalPrice)
+        : price;
+
+      // Get incentive-specific cancellation rates
+      const incentiveRefundPercent = cancellationConfig.incentiveRefundPercent || 0.10;
+      const incentiveCleanerPercent = cancellationConfig.incentiveCleanerPercent || 0.40;
+
+      // Use different rates for incentive appointments
+      const refundPercent = discountApplied ? incentiveRefundPercent : standardRefundPercent;
 
       // Check if appointment is prepaid
       const isPrepaid = appointment.paid === true;
@@ -448,8 +462,25 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
       // Calculate refund amounts - always show expected refund for informational purposes
       // isWithinPenaltyWindow means cleaner is assigned AND within 3 days
       const estimatedRefund = isWithinPenaltyWindow ? price * refundPercent : price;
-      // Cleaner gets the remaining amount (after client refund) minus platform fee
-      const cleanerPayout = isWithinPenaltyWindow ? price * (1 - refundPercent) * (1 - platformFee) : 0;
+
+      // Cleaner payout calculation differs for incentive vs standard
+      let cleanerPayout;
+      if (isWithinPenaltyWindow) {
+        if (discountApplied) {
+          // Incentive: cleaner gets % of ORIGINAL price, no separate platform fee
+          cleanerPayout = originalPrice * incentiveCleanerPercent;
+        } else {
+          // Standard: cleaner gets remaining amount minus platform fee
+          cleanerPayout = price * (1 - standardRefundPercent) * (1 - platformFee);
+        }
+      } else {
+        cleanerPayout = 0;
+      }
+
+      // Calculate what platform keeps for incentive cancellations (for display)
+      const platformKeeps = discountApplied && isWithinPenaltyWindow
+        ? price - estimatedRefund - cleanerPayout
+        : 0;
 
       // Check if user has a payment method on file
       const hasPaymentMethod = user.hasPaymentMethod && user.stripeCustomerId;
@@ -468,14 +499,22 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
         }
       } else if (willChargeCancellationFee) {
         if (isWithinPenaltyWindow) {
-          warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means you will receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)} (${(1 - refundPercent) * 100}% minus ${platformFee * 100}% platform fee). Additionally, a $${cancellationFeeAmount} cancellation fee will be charged.`;
+          if (discountApplied) {
+            warningMessage = `Because you received a discount on this appointment, cancelling within ${penaltyDays} days means you will only receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)} (${incentiveCleanerPercent * 100}% of the original $${originalPrice.toFixed(2)} price). Additionally, a $${cancellationFeeAmount} cancellation fee will be charged.`;
+          } else {
+            warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means you will receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)} (${(1 - refundPercent) * 100}% minus ${platformFee * 100}% platform fee). Additionally, a $${cancellationFeeAmount} cancellation fee will be charged.`;
+          }
         } else if (isPrepaid) {
           warningMessage = `A $${cancellationFeeAmount} cancellation fee will be charged to your card on file. You will receive a full refund of $${price.toFixed(2)} for the cleaning cost.`;
         } else {
           warningMessage = `A $${cancellationFeeAmount} cancellation fee will be charged to your card on file for cancelling within ${cancellationWindowDays} days of the appointment.`;
         }
       } else if (isWithinPenaltyWindow) {
-        warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means you will receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)}.`;
+        if (discountApplied) {
+          warningMessage = `Because you received a discount on this appointment, cancelling within ${penaltyDays} days means you will only receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)} (${incentiveCleanerPercent * 100}% of the original $${originalPrice.toFixed(2)} price).`;
+        } else {
+          warningMessage = `Cancelling within ${penaltyDays} days of the cleaning means you will receive a ${refundPercent * 100}% refund ($${estimatedRefund.toFixed(2)}). The cleaner will receive $${cleanerPayout.toFixed(2)}.`;
+        }
       } else if (isPrepaid) {
         warningMessage = "You will receive a full refund of the cleaning cost.";
       } else if (hasCleanerAssigned) {
@@ -492,6 +531,12 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
         isPrepaid,
         estimatedRefund: estimatedRefund.toFixed(2),
         cleanerPayout: cleanerPayout.toFixed(2),
+        // Discount/incentive info
+        discountApplied,
+        originalPrice: originalPrice.toFixed(2),
+        refundPercent: refundPercent * 100,
+        incentiveCleanerPercent: discountApplied ? incentiveCleanerPercent * 100 : null,
+        platformKeeps: platformKeeps.toFixed(2),
         // Cancellation fee info
         willChargeCancellationFee,
         cancellationFee: cancellationFeeAmount,
@@ -695,28 +740,50 @@ appointmentRouter.post("/", async (req, res) => {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
-  for (const date of dateArray) {
-    // Use configurations if provided, otherwise fall back to home defaults
-    const sheetConfigs = date.sheetConfigurations || home.dataValues.bedConfigurations;
-    const towelConfigs = date.towelConfigurations || home.dataValues.bathroomConfigurations;
-
-    const price = await calculatePrice(
-      date.bringSheets,
-      date.bringTowels,
-      home.dataValues.numBeds,
-      home.dataValues.numBaths,
-      home.dataValues.timeToBeCompleted,
-      sheetConfigs,
-      towelConfigs
-    );
-    date.price = price;
-    date.sheetConfigurations = sheetConfigs;
-    date.towelConfigurations = towelConfigs;
-    appointmentTotal += price;
-  }
   try {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
+
+    // Check if homeowner is eligible for discount incentive
+    const discountResult = await IncentiveService.isHomeownerEligible(userId);
+
+    for (const date of dateArray) {
+      // Use configurations if provided, otherwise fall back to home defaults
+      const sheetConfigs = date.sheetConfigurations || home.dataValues.bedConfigurations;
+      const towelConfigs = date.towelConfigurations || home.dataValues.bathroomConfigurations;
+
+      const originalPrice = await calculatePrice(
+        date.bringSheets,
+        date.bringTowels,
+        home.dataValues.numBeds,
+        home.dataValues.numBaths,
+        home.dataValues.timeToBeCompleted,
+        sheetConfigs,
+        towelConfigs
+      );
+
+      // Apply discount if eligible
+      let finalPrice = originalPrice;
+      if (discountResult.eligible && discountResult.remainingCleanings > 0) {
+        const discountAmount = originalPrice * discountResult.discountPercent;
+        finalPrice = Math.round((originalPrice - discountAmount) * 100) / 100;
+        date.originalPrice = originalPrice.toString();
+        date.discountApplied = true;
+        date.discountPercent = discountResult.discountPercent;
+        // Decrement remaining for this batch of appointments
+        discountResult.remainingCleanings--;
+      } else {
+        date.originalPrice = null;
+        date.discountApplied = false;
+        date.discountPercent = null;
+      }
+
+      date.price = finalPrice;
+      date.sheetConfigurations = sheetConfigs;
+      date.towelConfigurations = towelConfigs;
+      appointmentTotal += finalPrice;
+    }
+
     const existingBill = await UserBills.findOne({
       where: { userId },
     });
@@ -765,6 +832,10 @@ appointmentRouter.post("/", async (req, res) => {
           timeToBeCompleted: homeBeingScheduled.dataValues.timeToBeCompleted,
           sheetConfigurations: date.sheetConfigurations || null,
           towelConfigurations: date.towelConfigurations || null,
+          // Discount incentive fields
+          discountApplied: date.discountApplied || false,
+          discountPercent: date.discountPercent || null,
+          originalPrice: date.originalPrice || null,
         });
         const appointmentId = newAppointment.dataValues.id;
 
@@ -1421,9 +1492,20 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
 
       const cleanerId = request.dataValues.employeeId;
       const appointmentId = request.dataValues.appointmentId;
-      const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
-      const platformFeeAmount = Math.round(priceInCents * platformConfig.feePercent);
-      const netAmount = priceInCents - platformFeeAmount;
+
+      // Use original price for cleaner payout if a homeowner discount was applied
+      // This ensures cleaners get paid based on the full price, with the platform absorbing the discount
+      const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+        ? parseFloat(appointment.dataValues.originalPrice)
+        : parseFloat(appointment.dataValues.price);
+      const priceInCents = Math.round(payoutPrice * 100);
+
+      // Check cleaner incentive eligibility and calculate fees
+      const feeResult = await IncentiveService.calculateCleanerFee(
+        cleanerId,
+        priceInCents,
+        platformConfig.feePercent
+      );
 
       // Check if payout record already exists
       const existingPayout = await Payout.findOne({
@@ -1435,9 +1517,11 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
           appointmentId,
           cleanerId,
           grossAmount: priceInCents,
-          platformFee: platformFeeAmount,
-          netAmount,
+          platformFee: feeResult.platformFee,
+          netAmount: feeResult.netAmount,
           status: "pending", // Will change to "held" when payment is captured
+          incentiveApplied: feeResult.incentiveApplied,
+          originalPlatformFee: feeResult.originalPlatformFee,
         });
       }
 
@@ -2034,6 +2118,13 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     const price = parseFloat(appointment.price) || 0;
     const priceInCents = Math.round(price * 100);
 
+    // Use original price for cleaner payout calculations if discount was applied
+    // This ensures cleaners get paid based on the full price, with the platform absorbing the discount
+    const cleanerBasePrice = appointment.discountApplied && appointment.originalPrice
+      ? parseFloat(appointment.originalPrice)
+      : price;
+    const cleanerBasePriceInCents = Math.round(cleanerBasePrice * 100);
+
     // Get user for Stripe customer info
     const user = await User.findByPk(userId);
 
@@ -2177,14 +2268,31 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       console.log(`[Cancellation] isWithinPenaltyWindow: ${isWithinPenaltyWindow}, hasCleanerAssigned: ${hasCleanerAssigned}`);
 
       if (isWithinPenaltyWindow && isPaid) {
-        // Within 3 days with cleaner assigned: 50% refund to client, 50% - platform fee to cleaner
-        const refundPercent = cancellationConfig.refundPercentage; // 0.5 (50%)
-        const clientRefundAmount = Math.round(priceInCents * refundPercent); // 50% to client
-        const cleanerPortion = priceInCents - clientRefundAmount; // Remaining 50%
-        const platformFee = Math.round(cleanerPortion * platformFeePercent); // 10% of remaining
-        const cleanerAmount = cleanerPortion - platformFee; // Cleaner gets remaining minus platform fee
+        // Within 3 days with cleaner assigned: partial refund to client, portion to cleaner
+        // If homeowner used an incentive discount, they get reduced refund (configurable, default 10% instead of 50%)
+        const standardRefundPercent = cancellationConfig.refundPercentage; // 0.5 (50%)
+        const discountedRefundPercent = cancellationConfig.incentiveRefundPercent || 0.10; // Default 10% if not configured
+        const refundPercent = appointment.discountApplied ? discountedRefundPercent : standardRefundPercent;
 
-        console.log(`[Cancellation] Partial refund: client gets $${clientRefundAmount/100}, cleaner gets $${cleanerAmount/100}, platform gets $${platformFee/100}`);
+        const clientRefundAmount = Math.round(priceInCents * refundPercent); // Refund based on what client paid
+
+        let cleanerPortion, platformFee, cleanerAmount;
+
+        if (appointment.discountApplied) {
+          // Incentive cancellation: Cleaner gets configurable % of original price, platform keeps rest for Stripe fees
+          const cleanerPercent = cancellationConfig.incentiveCleanerPercent || 0.40; // Default 40% if not configured
+          cleanerAmount = Math.round(cleanerBasePriceInCents * cleanerPercent);
+          cleanerPortion = cleanerAmount; // No separate platform fee - platform keeps what's left
+          platformFee = 0; // Platform fee absorbed into what platform keeps
+        } else {
+          // Standard cancellation: Cleaner gets 50% minus platform fee
+          cleanerPortion = Math.round(cleanerBasePriceInCents * (1 - standardRefundPercent));
+          platformFee = Math.round(cleanerPortion * platformFeePercent);
+          cleanerAmount = cleanerPortion - platformFee;
+        }
+
+        console.log(`[Cancellation] Discount applied: ${appointment.discountApplied}, Refund percent: ${refundPercent * 100}%`);
+        console.log(`[Cancellation] Partial refund: client gets $${clientRefundAmount/100}, cleaner gets $${cleanerAmount/100}, platform keeps $${(priceInCents - clientRefundAmount - cleanerAmount)/100}`);
 
         if (paymentIntent && paymentIntent.status === "succeeded") {
           // Payment was captured, process partial refund to client
@@ -2193,7 +2301,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             amount: clientRefundAmount,
           });
 
-          // Create payout records for cleaners (50% minus platform fee)
+          // Create payout records for cleaners (their portion minus platform fee)
           const cleanerIds = appointment.employeesAssigned || [];
           const perCleanerAmount = Math.round(cleanerAmount / cleanerIds.length);
           const perCleanerGross = Math.round(cleanerPortion / cleanerIds.length);
@@ -2278,10 +2386,19 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       const home = await UserHomes.findByPk(appointment.homeId);
       const homeowner = await User.findByPk(userId);
 
-      // Use actual payout amount if available, otherwise calculate it
-      const cleanerPayment = cleanerPayoutResult
-        ? cleanerPayoutResult.perCleaner.toFixed(2)
-        : (price * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
+      // Use actual payout amount if available, otherwise calculate
+      // If discount was applied: cleaner gets 40% of original price
+      // Otherwise: cleaner gets 50% of price minus platform fee
+      let cleanerPayment;
+      if (cleanerPayoutResult) {
+        cleanerPayment = cleanerPayoutResult.perCleaner.toFixed(2);
+      } else if (appointment.discountApplied) {
+        // 40% of original price to cleaner
+        cleanerPayment = (cleanerBasePrice * 0.40 / cleanerIds.length).toFixed(2);
+      } else {
+        // Standard: 50% minus platform fee
+        cleanerPayment = (cleanerBasePrice * (1 - cancellationConfig.refundPercentage) * (1 - platformConfig.feePercent) / cleanerIds.length).toFixed(2);
+      }
 
       // Only show payment amount if appointment was paid and cleaner is getting compensated
       const showPayment = isWithinPenaltyWindow && cleanerPayoutResult;
@@ -2449,7 +2566,8 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
       // Create system cancellation penalty review
       await UserReviews.create({
         userId: userId,
-        reviewerId: 0, // System-generated (0 indicates system)
+        reviewerId: null, // System-generated
+        reviewerName: "System",
         appointmentId: appointment.id,
         reviewType: "system_cancellation_penalty",
         isPublished: true, // System reviews are always published

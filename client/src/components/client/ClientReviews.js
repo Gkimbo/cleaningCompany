@@ -195,7 +195,12 @@ const ClientReviews = ({ state }) => {
                     <Icon name="user" size={16} color={colors.primary[600]} />
                   </View>
                   <Text style={styles.reviewerName}>
-                    {review.reviewer?.username || "Cleaner"}
+                    {review.reviewer?.firstName && review.reviewer?.lastName
+                      ? `${review.reviewer.firstName} ${review.reviewer.lastName}`.trim()
+                      : review.reviewer?.username ||
+                        review.reviewer?.displayName ||
+                        review.reviewerName ||
+                        "Cleaner"}
                   </Text>
                 </View>
                 <Text style={styles.reviewDate}>{formatDate(review.createdAt)}</Text>

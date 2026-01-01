@@ -21,7 +21,10 @@ class AppointmentSerializer {
 			"sheetConfigurations",
 			"towelConfigurations",
 			"hasClientReview",
-			"hasCleanerReview"
+			"hasCleanerReview",
+			"discountApplied",
+			"discountPercent",
+			"originalPrice"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
@@ -57,7 +60,10 @@ class AppointmentSerializer {
 			"sheetConfigurations",
 			"towelConfigurations",
 			"hasClientReview",
-			"hasCleanerReview"
+			"hasCleanerReview",
+			"discountApplied",
+			"discountPercent",
+			"originalPrice"
 		];
 		const newAppointment = {};
 		// Handle both Sequelize instances and plain objects

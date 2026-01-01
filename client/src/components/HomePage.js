@@ -34,12 +34,22 @@ import OwnerDashboard from "./owner/OwnerDashboard";
 import HRDashboard from "./hr/HRDashboard";
 import ClientDashboard from "./client/ClientDashboard";
 import CleanerDashboard from "./cleaner/CleanerDashboard";
+import IncentiveBanner from "./incentives/IncentiveBanner";
+import IncentivesService from "../services/fetchRequests/IncentivesService";
 
 const HomePage = ({ state, dispatch }) => {
   const [redirect, setRedirect] = useState(false);
   const [redirectToJobs, setRedirectToJobs] = useState(false);
+  const [incentiveConfig, setIncentiveConfig] = useState(null);
   const navigate = useNavigate();
   const { width } = Dimensions.get("window");
+
+  // Fetch incentive config for landing page banner
+  useEffect(() => {
+    if (!state.currentUser.token) {
+      IncentivesService.getCurrentIncentives().then(setIncentiveConfig);
+    }
+  }, [state.currentUser.token]);
 
   // Get pricing from database (via PricingContext)
   const { pricing: fetchedPricing, loading } = usePricing();
@@ -431,6 +441,15 @@ const HomePage = ({ state, dispatch }) => {
           </Pressable>
         </View>
       </View>
+
+      {/* Incentive Banner */}
+      {!state.currentUser.token && incentiveConfig?.homeowner?.enabled && (
+        <IncentiveBanner
+          type="homeowner"
+          message={`First ${incentiveConfig.homeowner.maxCleanings} cleanings get ${Math.round(incentiveConfig.homeowner.discountPercent * 100)}% off!`}
+          icon="tag"
+        />
+      )}
 
       {/* Stats Section
       <View style={{

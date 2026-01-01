@@ -45,10 +45,17 @@ class ReviewsClass {
       throw new Error("You have already reviewed this appointment");
     }
 
+    // Get reviewer's name to store with the review
+    const reviewer = await User.findByPk(reviewerId);
+    const reviewerName = reviewer
+      ? `${reviewer.firstName || ''} ${reviewer.lastName || ''}`.trim() || reviewer.username
+      : null;
+
     // Create the review (unpublished by default)
     const newReview = await UserReviews.create({
       userId,
       reviewerId,
+      reviewerName,
       appointmentId,
       reviewType,
       review,
@@ -352,9 +359,16 @@ class ReviewsClass {
     rating,
     comment,
   }) {
+    // Get reviewer's name to store with the review
+    const reviewer = await User.findByPk(reviewerId);
+    const reviewerName = reviewer
+      ? `${reviewer.firstName || ''} ${reviewer.lastName || ''}`.trim() || reviewer.username
+      : null;
+
     const newReview = await UserReviews.create({
       userId,
       reviewerId,
+      reviewerName,
       appointmentId,
       review: rating,
       reviewComment: comment,

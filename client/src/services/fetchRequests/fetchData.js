@@ -331,25 +331,29 @@ class FetchData {
       return error;
     }
   }
-  static async deleteEmployee(id) {
+  static async deleteEmployee(id, token) {
     try {
       const response = await fetch(baseURL + "/api/v1/users/employee", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           id,
         }),
       });
-      if (!response.ok) {
-        throw new Error("Failed to delete");
-      }
 
       const responseData = await response.json();
-      return true;
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to delete employee" };
+      }
+
+      return { success: true };
     } catch (error) {
-      return error;
+      console.error("Error deleting employee:", error);
+      return { error: "Failed to delete employee" };
     }
   }
 
