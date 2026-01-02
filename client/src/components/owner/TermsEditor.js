@@ -55,6 +55,60 @@ const TermsEditor = ({ state }) => {
     }
   };
 
+  const loadTermsForEditing = async (termsId) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE}/terms/${termsId}/full`, {
+        headers: {
+          Authorization: `Bearer ${state.currentUser.token}`,
+        },
+      });
+      const data = await response.json();
+
+      if (response.ok && data.terms) {
+        const terms = data.terms;
+        setTitle(terms.title);
+
+        if (terms.contentType === "text") {
+          setContentType("text");
+          setContent(terms.content || "");
+          setSelectedPdf(null);
+          setEditorMode("edit");
+        } else {
+          setContentType("pdf");
+          setContent("");
+          // For PDF, we can't edit the file, but we show a message
+          setError("PDF files cannot be edited directly. Upload a new PDF or switch to text content.");
+        }
+
+        setSuccess(`Loaded version ${terms.version}: "${terms.title}" - make your changes and publish as a new version.`);
+      } else {
+        setError(data.error || "Failed to load terms for editing");
+      }
+    } catch (err) {
+      setError("Failed to load terms. Please try again.");
+      console.error("Error loading terms:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLoadCurrent = () => {
+    if (currentTerms) {
+      loadTermsForEditing(currentTerms.id);
+    }
+  };
+
+  const handleClearEditor = () => {
+    setTitle("");
+    setContent("");
+    setSelectedPdf(null);
+    setEditorMode("edit");
+    setError(null);
+    setSuccess(null);
+  };
+
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
@@ -164,9 +218,12 @@ const TermsEditor = ({ state }) => {
       return;
     }
 
+    const docTypeName = selectedType === "privacy_policy" ? "privacy policy" : `${selectedType} terms`;
+    const affectedUsers = selectedType === "privacy_policy" ? "all users" : `all ${selectedType}s`;
+
     const confirmMessage = currentTerms
-      ? `This will create version ${(currentTerms.version || 0) + 1} of the ${selectedType} terms. All ${selectedType}s will need to re-accept the new terms on their next login. Continue?`
-      : `This will create the first version of the ${selectedType} terms. Continue?`;
+      ? `This will create version ${(currentTerms.version || 0) + 1} of the ${docTypeName}. ${affectedUsers.charAt(0).toUpperCase() + affectedUsers.slice(1)} will need to re-accept on their next login. Continue?`
+      : `This will create the first version of the ${docTypeName}. Continue?`;
 
     if (Platform.OS === "web") {
       if (!window.confirm(confirmMessage)) return;
@@ -506,7 +563,9 @@ const TermsEditor = ({ state }) => {
         <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Terms & Conditions</Text>
+        <Text style={styles.headerTitle}>
+          {selectedType === "privacy_policy" ? "Privacy Policy" : "Terms & Conditions"}
+        </Text>
       </View>
 
       {/* Current Version Badge */}
@@ -519,19 +578,28 @@ const TermsEditor = ({ state }) => {
             <Text style={styles.currentTermsVersion}>Version {currentTerms.version}</Text>
             <Text style={styles.currentTermsTitle}>{currentTerms.title}</Text>
             <Text style={styles.currentTermsMeta}>
-              {currentTerms.contentType === "pdf" ? "PDF Document" : "Text Content"} • {selectedType}
+              {currentTerms.contentType === "pdf" ? "PDF Document" : "Text Content"} • {selectedType === "privacy_policy" ? "Privacy Policy" : selectedType}
             </Text>
           </View>
+          <Pressable
+            style={styles.editCurrentButton}
+            onPress={handleLoadCurrent}
+            disabled={loading}
+          >
+            <Text style={styles.editCurrentButtonText}>
+              {loading ? "Loading..." : "Edit Current"}
+            </Text>
+          </Pressable>
         </View>
       )}
 
-      {/* User Type Selector */}
+      {/* Document Type Selector */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Publishing for</Text>
-        <View style={styles.segmentedControl}>
+        <Text style={styles.sectionLabel}>Document Type</Text>
+        <View style={styles.segmentedControlThree}>
           <Pressable
             style={[
-              styles.segmentButton,
+              styles.segmentButtonThree,
               selectedType === "homeowner" && styles.segmentButtonActive,
             ]}
             onPress={() => setSelectedType("homeowner")}
@@ -542,12 +610,12 @@ const TermsEditor = ({ state }) => {
                 selectedType === "homeowner" && styles.segmentButtonTextActive,
               ]}
             >
-              Homeowners
+              Homeowner Terms
             </Text>
           </Pressable>
           <Pressable
             style={[
-              styles.segmentButton,
+              styles.segmentButtonThree,
               selectedType === "cleaner" && styles.segmentButtonActive,
             ]}
             onPress={() => setSelectedType("cleaner")}
@@ -558,7 +626,23 @@ const TermsEditor = ({ state }) => {
                 selectedType === "cleaner" && styles.segmentButtonTextActive,
               ]}
             >
-              Cleaners
+              Cleaner Terms
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.segmentButtonThree,
+              selectedType === "privacy_policy" && styles.segmentButtonActive,
+            ]}
+            onPress={() => setSelectedType("privacy_policy")}
+          >
+            <Text
+              style={[
+                styles.segmentButtonText,
+                selectedType === "privacy_policy" && styles.segmentButtonTextActive,
+              ]}
+            >
+              Privacy Policy
             </Text>
           </Pressable>
         </View>
@@ -566,10 +650,17 @@ const TermsEditor = ({ state }) => {
 
       {/* Title Input */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>Version Title</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionLabelNoMargin}>Version Title</Text>
+          {(title || content || selectedPdf) && (
+            <Pressable style={styles.clearButton} onPress={handleClearEditor}>
+              <Text style={styles.clearButtonText}>Clear Editor</Text>
+            </Pressable>
+          )}
+        </View>
         <TextInput
           style={styles.titleInput}
-          placeholder="e.g., Terms of Service - January 2025"
+          placeholder={selectedType === "privacy_policy" ? "e.g., Privacy Policy - January 2025" : "e.g., Terms of Service - January 2025"}
           value={title}
           onChangeText={setTitle}
           placeholderTextColor={colors.text.tertiary}
@@ -726,14 +817,27 @@ const TermsEditor = ({ state }) => {
                   <Text style={styles.historyItemMeta}>
                     Published {formatDate(version.createdAt)}
                   </Text>
-                  {version.pdfUrl && Platform.OS === "web" && (
-                    <Pressable
-                      style={styles.viewPdfLink}
-                      onPress={() => window.open(`${API_BASE}${version.pdfUrl}`, "_blank")}
-                    >
-                      <Text style={styles.viewPdfLinkText}>View PDF</Text>
-                    </Pressable>
-                  )}
+                  <View style={styles.historyItemActions}>
+                    {version.contentType === "text" && (
+                      <Pressable
+                        style={styles.loadVersionButton}
+                        onPress={() => loadTermsForEditing(version.id)}
+                        disabled={loading}
+                      >
+                        <Text style={styles.loadVersionButtonText}>
+                          {loading ? "..." : "Load & Edit"}
+                        </Text>
+                      </Pressable>
+                    )}
+                    {version.pdfUrl && Platform.OS === "web" && (
+                      <Pressable
+                        style={styles.viewPdfLink}
+                        onPress={() => window.open(`${API_BASE}${version.pdfUrl}`, "_blank")}
+                      >
+                        <Text style={styles.viewPdfLinkText}>View PDF</Text>
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
               </View>
             ))}
@@ -741,7 +845,7 @@ const TermsEditor = ({ state }) => {
         ) : (
           <View style={styles.emptyHistory}>
             <Text style={styles.emptyHistoryText}>
-              No terms published yet for {selectedType}s
+              No {selectedType === "privacy_policy" ? "privacy policy" : "terms"} published yet{selectedType !== "privacy_policy" ? ` for ${selectedType}s` : ""}
             </Text>
             <Text style={styles.emptyHistoryHint}>
               Create your first version above
@@ -808,6 +912,18 @@ const styles = StyleSheet.create({
   currentTermsContent: {
     flex: 1,
   },
+  editCurrentButton: {
+    backgroundColor: colors.primary[500],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    marginLeft: spacing.sm,
+  },
+  editCurrentButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
   currentTermsVersion: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
@@ -829,13 +945,37 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     ...shadows.sm,
   },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
   sectionLabel: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.secondary,
-    marginBottom: spacing.md,
     textTransform: "uppercase",
     letterSpacing: 0.5,
+    marginBottom: spacing.md,
+  },
+  sectionLabelNoMargin: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  clearButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.md,
+  },
+  clearButtonText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
   },
   segmentedControl: {
     flexDirection: "row",
@@ -843,9 +983,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: 4,
   },
+  segmentedControlThree: {
+    flexDirection: "row",
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    padding: 4,
+    flexWrap: "wrap",
+    gap: 4,
+  },
   segmentButton: {
     flex: 1,
     paddingVertical: spacing.sm,
+    alignItems: "center",
+    borderRadius: radius.md,
+  },
+  segmentButtonThree: {
+    flex: 1,
+    minWidth: 100,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     alignItems: "center",
     borderRadius: radius.md,
   },
@@ -854,9 +1010,10 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   segmentButtonText: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     color: colors.text.tertiary,
+    textAlign: "center",
   },
   segmentButtonTextActive: {
     color: colors.primary[600],
@@ -1289,8 +1446,25 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
   },
+  historyItemActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.sm,
+    flexWrap: "wrap",
+  },
+  loadVersionButton: {
+    backgroundColor: colors.primary[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+  },
+  loadVersionButtonText: {
+    color: colors.primary[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
   viewPdfLink: {
-    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
   },
   viewPdfLinkText: {
     fontSize: typography.fontSize.sm,

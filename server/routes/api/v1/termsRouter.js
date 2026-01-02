@@ -79,6 +79,9 @@ const getNextVersion = async (type) => {
   return latest ? latest.version + 1 : 1;
 };
 
+// Valid document types
+const VALID_TYPES = ["homeowner", "cleaner", "privacy_policy"];
+
 /**
  * Get current T&C for a type (public - no auth required)
  * GET /api/v1/terms/current/:type
@@ -86,8 +89,8 @@ const getNextVersion = async (type) => {
 termsRouter.get("/current/:type", async (req, res) => {
   const { type } = req.params;
 
-  if (!["homeowner", "cleaner"].includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner' or 'cleaner'" });
+  if (!VALID_TYPES.includes(type)) {
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', or 'privacy_policy'" });
   }
 
   try {
@@ -126,7 +129,7 @@ termsRouter.get("/current/:type", async (req, res) => {
 });
 
 /**
- * Check if user needs to accept new terms
+ * Check if user needs to accept new terms and/or privacy policy
  * GET /api/v1/terms/check
  */
 termsRouter.get("/check", authenticateToken, async (req, res) => {
@@ -145,40 +148,84 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
       order: [["version", "DESC"]],
     });
 
-    if (!currentTerms) {
-      // No terms exist yet - no acceptance needed
-      return res.json({
-        requiresAcceptance: false,
-        message: "No terms configured yet",
-      });
+    // Get current privacy policy
+    const currentPrivacyPolicy = await TermsAndConditions.findOne({
+      where: { type: "privacy_policy" },
+      order: [["version", "DESC"]],
+    });
+
+    // Check if user needs to accept terms
+    let requiresTermsAcceptance = false;
+    let termsData = null;
+    if (currentTerms) {
+      const userTermsVersion = user.termsAcceptedVersion;
+      requiresTermsAcceptance = !userTermsVersion || userTermsVersion < currentTerms.version;
+
+      if (requiresTermsAcceptance) {
+        termsData = {
+          id: currentTerms.id,
+          type: currentTerms.type,
+          version: currentTerms.version,
+          title: currentTerms.title,
+          contentType: currentTerms.contentType,
+          effectiveDate: currentTerms.effectiveDate,
+        };
+        if (currentTerms.contentType === "text") {
+          termsData.content = currentTerms.content;
+        } else {
+          termsData.pdfFileName = currentTerms.pdfFileName;
+          termsData.pdfUrl = `/api/v1/terms/pdf/${currentTerms.id}`;
+        }
+      }
     }
 
-    // Check if user has accepted the current version
-    const userVersion = user.termsAcceptedVersion;
-    const requiresAcceptance = !userVersion || userVersion < currentTerms.version;
+    // Check if user needs to accept privacy policy
+    let requiresPrivacyAcceptance = false;
+    let privacyData = null;
+    if (currentPrivacyPolicy) {
+      const userPrivacyVersion = user.privacyPolicyAcceptedVersion;
+      requiresPrivacyAcceptance = !userPrivacyVersion || userPrivacyVersion < currentPrivacyPolicy.version;
+
+      if (requiresPrivacyAcceptance) {
+        privacyData = {
+          id: currentPrivacyPolicy.id,
+          type: currentPrivacyPolicy.type,
+          version: currentPrivacyPolicy.version,
+          title: currentPrivacyPolicy.title,
+          contentType: currentPrivacyPolicy.contentType,
+          effectiveDate: currentPrivacyPolicy.effectiveDate,
+        };
+        if (currentPrivacyPolicy.contentType === "text") {
+          privacyData.content = currentPrivacyPolicy.content;
+        } else {
+          privacyData.pdfFileName = currentPrivacyPolicy.pdfFileName;
+          privacyData.pdfUrl = `/api/v1/terms/pdf/${currentPrivacyPolicy.id}`;
+        }
+      }
+    }
+
+    const requiresAcceptance = requiresTermsAcceptance || requiresPrivacyAcceptance;
 
     const response = {
       requiresAcceptance,
-      currentVersion: currentTerms.version,
-      acceptedVersion: userVersion,
+      termsAcceptedVersion: user.termsAcceptedVersion,
+      privacyPolicyAcceptedVersion: user.privacyPolicyAcceptedVersion,
     };
 
-    if (requiresAcceptance) {
-      response.terms = {
-        id: currentTerms.id,
-        type: currentTerms.type,
-        version: currentTerms.version,
-        title: currentTerms.title,
-        contentType: currentTerms.contentType,
-        effectiveDate: currentTerms.effectiveDate,
-      };
+    if (requiresTermsAcceptance) {
+      response.terms = termsData;
+      response.currentTermsVersion = currentTerms?.version;
+    }
 
-      if (currentTerms.contentType === "text") {
-        response.terms.content = currentTerms.content;
-      } else {
-        response.terms.pdfFileName = currentTerms.pdfFileName;
-        response.terms.pdfUrl = `/api/v1/terms/pdf/${currentTerms.id}`;
-      }
+    if (requiresPrivacyAcceptance) {
+      response.privacyPolicy = privacyData;
+      response.currentPrivacyVersion = currentPrivacyPolicy?.version;
+    }
+
+    // For backwards compatibility, also include the old format if only terms need acceptance
+    if (requiresTermsAcceptance && !requiresPrivacyAcceptance) {
+      response.currentVersion = currentTerms?.version;
+      response.acceptedVersion = user.termsAcceptedVersion;
     }
 
     return res.json(response);
@@ -189,7 +236,7 @@ termsRouter.get("/check", authenticateToken, async (req, res) => {
 });
 
 /**
- * Accept T&C
+ * Accept T&C or Privacy Policy
  * POST /api/v1/terms/accept
  */
 termsRouter.post("/accept", authenticateToken, async (req, res) => {
@@ -253,17 +300,71 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
       pdfSnapshotPath,
     });
 
-    // Update user's accepted version
-    await user.update({ termsAcceptedVersion: terms.version });
+    // Update user's accepted version based on document type
+    if (terms.type === "privacy_policy") {
+      await user.update({ privacyPolicyAcceptedVersion: terms.version });
+    } else {
+      await user.update({ termsAcceptedVersion: terms.version });
+    }
 
     return res.json({
       success: true,
-      message: "Terms accepted successfully",
+      message: terms.type === "privacy_policy" ? "Privacy Policy accepted successfully" : "Terms accepted successfully",
       acceptedVersion: terms.version,
+      type: terms.type,
     });
   } catch (error) {
     console.error("Error accepting terms:", error);
     return res.status(500).json({ error: "Failed to accept terms" });
+  }
+});
+
+/**
+ * Get full terms content for editing (owner only)
+ * GET /api/v1/terms/:id/full
+ */
+termsRouter.get("/:id/full", authenticateToken, requireOwner, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const terms = await TermsAndConditions.findByPk(id, {
+      include: [
+        {
+          model: User,
+          as: "creator",
+          attributes: ["id", "firstName", "lastName"],
+        },
+      ],
+    });
+
+    if (!terms) {
+      return res.status(404).json({ error: "Terms not found" });
+    }
+
+    const response = {
+      id: terms.id,
+      type: terms.type,
+      version: terms.version,
+      title: terms.title,
+      contentType: terms.contentType,
+      effectiveDate: terms.effectiveDate,
+      createdAt: terms.createdAt,
+      createdBy: terms.creator
+        ? `${terms.creator.firstName} ${terms.creator.lastName}`
+        : "Unknown",
+    };
+
+    if (terms.contentType === "text") {
+      response.content = terms.content;
+    } else {
+      response.pdfFileName = terms.pdfFileName;
+      response.pdfUrl = `/api/v1/terms/pdf/${terms.id}`;
+    }
+
+    return res.json({ terms: response });
+  } catch (error) {
+    console.error("Error fetching terms for editing:", error);
+    return res.status(500).json({ error: "Failed to fetch terms" });
   }
 });
 
@@ -274,8 +375,8 @@ termsRouter.post("/accept", authenticateToken, async (req, res) => {
 termsRouter.get("/history/:type", authenticateToken, requireOwner, async (req, res) => {
   const { type } = req.params;
 
-  if (!["homeowner", "cleaner"].includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner' or 'cleaner'" });
+  if (!VALID_TYPES.includes(type)) {
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', or 'privacy_policy'" });
   }
 
   try {
@@ -324,8 +425,8 @@ termsRouter.post("/", authenticateToken, requireOwner, async (req, res) => {
     return res.status(400).json({ error: "type, title, and content are required" });
   }
 
-  if (!["homeowner", "cleaner"].includes(type)) {
-    return res.status(400).json({ error: "Type must be 'homeowner' or 'cleaner'" });
+  if (!VALID_TYPES.includes(type)) {
+    return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', or 'privacy_policy'" });
   }
 
   try {
@@ -385,8 +486,8 @@ termsRouter.post(
       return res.status(400).json({ error: "type and title are required" });
     }
 
-    if (!["homeowner", "cleaner"].includes(type)) {
-      return res.status(400).json({ error: "Type must be 'homeowner' or 'cleaner'" });
+    if (!VALID_TYPES.includes(type)) {
+      return res.status(400).json({ error: "Type must be 'homeowner', 'cleaner', or 'privacy_policy'" });
     }
 
     if (!req.file) {

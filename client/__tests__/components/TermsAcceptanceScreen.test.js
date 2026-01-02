@@ -39,7 +39,7 @@ describe("TermsAcceptanceScreen", () => {
         <TermsAcceptanceScreen state={defaultState} dispatch={mockDispatch} />
       );
 
-      expect(getByText("Checking terms status...")).toBeTruthy();
+      expect(getByText("Checking requirements...")).toBeTruthy();
     });
 
     it("should navigate away if no acceptance required", async () => {
@@ -128,7 +128,7 @@ describe("TermsAcceptanceScreen", () => {
       );
 
       await waitFor(() => {
-        expect(getByText("Updated Terms")).toBeTruthy();
+        expect(getByText("Updated")).toBeTruthy();
       });
     });
   });
@@ -288,7 +288,7 @@ describe("TermsAcceptanceScreen", () => {
       );
 
       await waitFor(() => {
-        expect(getByText("Failed to check terms status")).toBeTruthy();
+        expect(getByText("Failed to check acceptance status")).toBeTruthy();
       });
     });
 

@@ -145,6 +145,8 @@ npm install
 createdb cleaning_company_development
 npx sequelize-cli db:migrate
 npx sequelize-cli db:seed --seed ownerSeeder.js
+npx sequelize-cli db:seed --seed termsAndConditionsSeeder.js
+npx sequelize-cli db:seed --seed privacyPolicySeeder.js
 
 # Setup Client
 cd ../client
@@ -331,15 +333,19 @@ npm test -- --coverage
 | `GET`  | `/api/v1/tax/contractor/1099-nec/:year`           | Get 1099-NEC        |
 | `GET`  | `/api/v1/tax/platform/comprehensive-report/:year` | Platform tax report |
 
-### Terms & Conditions
+### Terms & Conditions / Privacy Policy
 
-| Method | Endpoint                      | Description                         |
-| ------ | ----------------------------- | ----------------------------------- |
-| `GET`  | `/api/v1/terms/current/:type` | Get current terms (public)          |
-| `GET`  | `/api/v1/terms/check`         | Check if user needs to accept terms |
-| `POST` | `/api/v1/terms/accept`        | Accept terms                        |
-| `POST` | `/api/v1/terms`               | Create new terms version (Owner)    |
-| `GET`  | `/api/v1/terms/history/:type` | Get version history (Owner)         |
+| Method  | Endpoint                      | Description                               |
+| ------- | ----------------------------- | ----------------------------------------- |
+| `GET`   | `/api/v1/terms/current/:type` | Get current terms/privacy policy (public) |
+| `GET`   | `/api/v1/terms/check`         | Check if user needs to accept             |
+| `POST`  | `/api/v1/terms/accept`        | Accept terms or privacy policy            |
+| `POST`  | `/api/v1/terms`               | Create new version (Owner)                |
+| `GET`   | `/api/v1/terms/history/:type` | Get version history (Owner)               |
+| `GET`   | `/api/v1/terms/:id/full`      | Get full content for editing (Owner)      |
+| `PATCH` | `/api/v1/terms/:id/publish`   | Publish new version (Owner)               |
+
+**Types:** `homeowner`, `cleaner`, `privacy_policy`
 
 ---
 

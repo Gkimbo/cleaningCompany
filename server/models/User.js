@@ -86,6 +86,10 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		privacyPolicyAcceptedVersion: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 		lastDeviceType: {
 			type: DataTypes.STRING,
 			allowNull: true,

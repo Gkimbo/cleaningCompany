@@ -176,12 +176,15 @@ const CleanerApplicationForm = () => {
     referenceCheckConsent: false,
     termsAccepted: false,
     termsId: null,
+    privacyPolicyAccepted: false,
+    privacyPolicyId: null,
   });
 
   const [formError, setFormError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const totalSteps = 6;
   const styles = ApplicationFormStyles;
 
@@ -409,6 +412,9 @@ const CleanerApplicationForm = () => {
         if (!formData.termsAccepted) {
           errors.push("You must accept the Terms and Conditions.");
         }
+        if (!formData.privacyPolicyAccepted) {
+          errors.push("You must accept the Privacy Policy.");
+        }
         if (!formData.message.trim()) {
           errors.push("Please tell us why you want to work with us.");
         }
@@ -441,6 +447,16 @@ const CleanerApplicationForm = () => {
       termsId: acceptedTermsId,
     }));
     setShowTermsModal(false);
+  };
+
+  // Handle privacy policy acceptance
+  const handlePrivacyAccepted = (acceptedPrivacyId) => {
+    setFormData((prev) => ({
+      ...prev,
+      privacyPolicyAccepted: true,
+      privacyPolicyId: acceptedPrivacyId,
+    }));
+    setShowPrivacyModal(false);
   };
 
   // Submit form
@@ -1743,6 +1759,45 @@ const CleanerApplicationForm = () => {
         )}
       </View>
 
+      <Text style={styles.sectionTitle}>Privacy Policy</Text>
+      <View style={localStyles.termsContainer}>
+        <View style={localStyles.termsRow}>
+          <TouchableOpacity
+            style={[
+              localStyles.termsCheckbox,
+              formData.privacyPolicyAccepted && localStyles.termsCheckboxChecked,
+            ]}
+            onPress={() => {
+              if (!formData.privacyPolicyAccepted) {
+                setShowPrivacyModal(true);
+              } else {
+                handleChange("privacyPolicyAccepted", false);
+                handleChange("privacyPolicyId", null);
+              }
+            }}
+          >
+            {formData.privacyPolicyAccepted && (
+              <Text style={localStyles.termsCheckmark}>✓</Text>
+            )}
+          </TouchableOpacity>
+          <View style={localStyles.termsTextContainer}>
+            <Text style={localStyles.termsLabel}>
+              I agree to the{" "}
+              <Text
+                style={localStyles.termsLink}
+                onPress={() => setShowPrivacyModal(true)}
+              >
+                Privacy Policy
+              </Text>
+              {" *"}
+            </Text>
+          </View>
+        </View>
+        {formData.privacyPolicyAccepted && (
+          <Text style={localStyles.termsAcceptedText}>Privacy policy accepted</Text>
+        )}
+      </View>
+
       <Text style={styles.legalText}>
         By submitting this application, I certify that all information provided
         is true and complete to the best of my knowledge. I understand that any
@@ -1756,6 +1811,15 @@ const CleanerApplicationForm = () => {
         onClose={() => setShowTermsModal(false)}
         onAccept={handleTermsAccepted}
         type="cleaner"
+      />
+
+      {/* Privacy Policy Modal */}
+      <TermsModal
+        visible={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+        onAccept={handlePrivacyAccepted}
+        type="privacy_policy"
+        title="Privacy Policy"
       />
     </>
   );

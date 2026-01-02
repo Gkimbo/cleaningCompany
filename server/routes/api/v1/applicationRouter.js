@@ -9,6 +9,21 @@ const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { generateSecurePassword, generateUniqueUsername } = require("../../../utils/passwordGenerator");
 const ReferralService = require("../../../services/ReferralService");
+const EncryptionService = require("../../../services/EncryptionService");
+
+// Helper to safely get decrypted value
+const getDecryptedValue = (value) => {
+  if (!value) return value;
+  // Check if value looks encrypted (contains colon separator)
+  if (typeof value === "string" && value.includes(":")) {
+    try {
+      return EncryptionService.decrypt(value);
+    } catch (e) {
+      return value; // Return original if decryption fails
+    }
+  }
+  return value;
+};
 
 const applicationRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -469,18 +484,24 @@ applicationRouter.post("/:id/hire", async (req, res) => {
     });
 
     // Send welcome email to new cleaner with credentials
+    // Use the original values from request body, not the encrypted values from database
+    // If falling back to application data, decrypt it first
+    const employeeEmail = email || getDecryptedValue(application.email);
+    const employeeFirstName = firstName || getDecryptedValue(application.firstName);
+    const employeeLastName = lastName || getDecryptedValue(application.lastName);
+
     try {
       await Email.sendEmailCongragulations(
-        newUser.firstName,
-        newUser.lastName,
+        employeeFirstName,
+        employeeLastName,
         username,
         password,
-        newUser.email,
+        employeeEmail,
         "cleaner"
       );
-      console.log(`✅ Welcome email sent to ${newUser.email}`);
+      console.log(`✅ Welcome email sent to ${employeeEmail}`);
     } catch (emailError) {
-      console.error(`❌ Failed to send welcome email to ${newUser.email}:`, emailError.message);
+      console.error(`❌ Failed to send welcome email to ${employeeEmail}:`, emailError.message);
       // Don't fail the hire process if email fails
     }
 

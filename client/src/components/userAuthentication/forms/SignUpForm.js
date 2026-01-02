@@ -24,6 +24,9 @@ const SignUpForm = ({ state, dispatch }) => {
 	const [termsAccepted, setTermsAccepted] = useState(false);
 	const [termsId, setTermsId] = useState(null);
 	const [showTermsModal, setShowTermsModal] = useState(false);
+	const [privacyAccepted, setPrivacyAccepted] = useState(false);
+	const [privacyId, setPrivacyId] = useState(null);
+	const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 	const [referralCode, setReferralCode] = useState("");
 	const [referralValidation, setReferralValidation] = useState(null);
 	const navigate = useNavigate();
@@ -78,6 +81,10 @@ const SignUpForm = ({ state, dispatch }) => {
 			validationErrors.push("You must accept the Terms and Conditions to create an account.");
 		}
 
+		if (!privacyAccepted) {
+			validationErrors.push("You must accept the Privacy Policy to create an account.");
+		}
+
 		setErrors(validationErrors);
 		return validationErrors.length === 0;
 	};
@@ -86,6 +93,12 @@ const SignUpForm = ({ state, dispatch }) => {
 		setTermsId(acceptedTermsId);
 		setTermsAccepted(true);
 		setShowTermsModal(false);
+	};
+
+	const handlePrivacyAccepted = (acceptedPrivacyId) => {
+		setPrivacyId(acceptedPrivacyId);
+		setPrivacyAccepted(true);
+		setShowPrivacyModal(false);
 	};
 
 	const onSubmit = async () => {
@@ -99,6 +112,7 @@ const SignUpForm = ({ state, dispatch }) => {
 				password,
 				email,
 				termsId,
+				privacyPolicyId: privacyId,
 				referralCode: referralValidation?.valid ? referralCode : null,
 			};
 			const response = await FetchData.makeNewUser(data);
@@ -249,12 +263,48 @@ const SignUpForm = ({ state, dispatch }) => {
 							>
 								Terms and Conditions
 							</Text>
+							{" *"}
 						</Text>
 					</View>
 				</View>
 				{termsAccepted && (
 					<Text style={localStyles.termsAcceptedText}>
-						Terms accepted
+						✓ Terms accepted
+					</Text>
+				)}
+			</View>
+
+			{/* Privacy Policy */}
+			<View style={localStyles.termsContainer}>
+				<View style={localStyles.termsRow}>
+					<Checkbox
+						status={privacyAccepted ? "checked" : "unchecked"}
+						onPress={() => {
+							if (!privacyAccepted) {
+								setShowPrivacyModal(true);
+							} else {
+								setPrivacyAccepted(false);
+								setPrivacyId(null);
+							}
+						}}
+						color={colors.primary[600]}
+					/>
+					<View style={localStyles.termsTextContainer}>
+						<Text style={localStyles.termsText}>
+							I agree to the{" "}
+							<Text
+								style={localStyles.termsLink}
+								onPress={() => setShowPrivacyModal(true)}
+							>
+								Privacy Policy
+							</Text>
+							{" *"}
+						</Text>
+					</View>
+				</View>
+				{privacyAccepted && (
+					<Text style={localStyles.termsAcceptedText}>
+						✓ Privacy Policy accepted
 					</Text>
 				)}
 			</View>
@@ -269,6 +319,18 @@ const SignUpForm = ({ state, dispatch }) => {
 				onClose={() => setShowTermsModal(false)}
 				onAccept={handleTermsAccepted}
 				type="homeowner"
+				required={true}
+				title="Terms and Conditions"
+			/>
+
+			{/* Privacy Policy Modal */}
+			<TermsModal
+				visible={showPrivacyModal}
+				onClose={() => setShowPrivacyModal(false)}
+				onAccept={handlePrivacyAccepted}
+				type="privacy_policy"
+				required={true}
+				title="Privacy Policy"
 			/>
 		</View>
 	);

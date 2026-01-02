@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
   const TermsAndConditions = sequelize.define("TermsAndConditions", {
     type: {
-      type: DataTypes.ENUM("homeowner", "cleaner"),
+      type: DataTypes.ENUM("homeowner", "cleaner", "privacy_policy"),
       allowNull: false,
     },
     version: {

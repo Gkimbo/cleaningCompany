@@ -261,7 +261,13 @@ module.exports = {
     try {
       // Remove emailHash columns
       await queryInterface.removeColumn("Users", "emailHash", { transaction });
-      await queryInterface.removeColumn("UserApplications", "emailHash", { transaction });
+
+      // UserApplications table may not exist if its migration was already rolled back
+      try {
+        await queryInterface.removeColumn("UserApplications", "emailHash", { transaction });
+      } catch (error) {
+        console.log("UserApplications table does not exist, skipping emailHash removal");
+      }
 
       // Note: We don't decrypt data in down migration as that would require the encryption key
       // and could lead to data loss if key is not available
