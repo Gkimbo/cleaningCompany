@@ -1275,9 +1275,8 @@ const CleanerApplicationForm = () => {
       <Text style={styles.helperText}>
         You must be at least 18 years old to apply.
       </Text>
-
-      {/* Referral Code */}
-      <View style={{ marginTop: spacing.lg }}>
+      {/* Referral Code - placed prominently after email */}
+      <View style={{ marginTop: spacing.md, marginBottom: spacing.md }}>
         <ReferralCodeInput
           value={referralCode}
           onChangeText={setReferralCode}

@@ -190,6 +190,7 @@ describe("Referral Router", () => {
   describe("GET /config (Owner)", () => {
     it("should return config for owner", async () => {
       User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+      ReferralConfig.getActive.mockResolvedValue({ id: 1, isActive: true });
       ReferralConfig.getFormattedConfig.mockResolvedValue({
         clientToClient: { enabled: true, referrerReward: 2500 },
         clientToCleaner: { enabled: false },
@@ -202,7 +203,7 @@ describe("Referral Router", () => {
         .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.clientToClient.enabled).toBe(true);
+      expect(response.body.formattedConfig.clientToClient.enabled).toBe(true);
     });
 
     it("should return 403 for non-owner", async () => {
@@ -224,9 +225,11 @@ describe("Referral Router", () => {
 
   describe("PUT /config (Owner)", () => {
     const configUpdate = {
-      clientToClientEnabled: true,
-      clientToClientReferrerReward: 3000,
-      clientToClientReferredReward: 3000,
+      clientToClient: {
+        enabled: true,
+        referrerReward: 3000,
+        referredReward: 3000,
+      },
       changeNote: "Updated rewards",
     };
 
@@ -234,7 +237,8 @@ describe("Referral Router", () => {
       User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
       ReferralConfig.updateConfig.mockResolvedValue({
         id: 1,
-        ...configUpdate,
+        clientToClientEnabled: true,
+        clientToClientReferrerReward: 3000,
       });
       ReferralConfig.getFormattedConfig.mockResolvedValue({
         clientToClient: { enabled: true, referrerReward: 3000 },
@@ -247,8 +251,9 @@ describe("Referral Router", () => {
 
       expect(response.status).toBe(200);
       expect(ReferralConfig.updateConfig).toHaveBeenCalledWith(
-        expect.objectContaining(configUpdate),
-        1
+        expect.objectContaining({ clientToClient: configUpdate.clientToClient }),
+        1,
+        configUpdate.changeNote
       );
     });
 
@@ -277,7 +282,8 @@ describe("Referral Router", () => {
         .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(2);
+      expect(response.body.history).toHaveLength(2);
+      expect(response.body.count).toBe(2);
     });
   });
 
@@ -298,7 +304,8 @@ describe("Referral Router", () => {
         .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveLength(1);
+      expect(response.body.referrals).toHaveLength(1);
+      expect(response.body.count).toBe(1);
     });
 
     it("should pass filters to service", async () => {
@@ -323,6 +330,9 @@ describe("Referral Router", () => {
       ReferralService.updateReferralStatus.mockResolvedValue({
         id: 1,
         status: "cancelled",
+        qualifiedAt: null,
+        referrerRewardApplied: false,
+        referredRewardApplied: false,
       });
 
       const response = await request(app)
@@ -331,7 +341,8 @@ describe("Referral Router", () => {
         .send({ status: "cancelled" });
 
       expect(response.status).toBe(200);
-      expect(response.body.status).toBe("cancelled");
+      expect(response.body.success).toBe(true);
+      expect(response.body.referral.status).toBe("cancelled");
     });
 
     it("should return 400 for missing status", async () => {
@@ -402,8 +413,17 @@ describe("Referral Router", () => {
         rewarded: 1,
         totalEarned: 5000,
       });
-      Referral.findAll.mockResolvedValue([
-        { id: 1, referredId: 5, status: "rewarded", createdAt: new Date() },
+      Referral.findByReferrer = jest.fn().mockResolvedValue([
+        {
+          id: 1,
+          referredId: 5,
+          status: "rewarded",
+          programType: "client_to_client",
+          cleaningsCompleted: 1,
+          cleaningsRequired: 1,
+          createdAt: new Date(),
+          referred: { firstName: "Bob", type: null }
+        },
       ]);
 
       const response = await request(app)
@@ -426,8 +446,8 @@ describe("Referral Router", () => {
         .set("Authorization", `Bearer ${homeownerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.credits).toBe(7500);
-      expect(response.body.formatted).toBe("$75.00");
+      expect(response.body.availableCredits).toBe(7500);
+      expect(response.body.availableDollars).toBe("75.00");
     });
   });
 
@@ -451,15 +471,16 @@ describe("Referral Router", () => {
       expect(response.body.amountApplied).toBe(2500);
     });
 
-    it("should return 400 for missing fields", async () => {
+    it("should return 400 for missing appointmentId", async () => {
       User.findByPk.mockResolvedValue({ id: 3 });
 
       const response = await request(app)
         .post("/api/v1/referrals/apply-credits")
         .set("Authorization", `Bearer ${homeownerToken}`)
-        .send({ appointmentId: 1 });
+        .send({ amount: 2500 });
 
       expect(response.status).toBe(400);
+      expect(response.body.error).toBe("appointmentId is required");
     });
 
     it("should return error when application fails", async () => {
@@ -475,7 +496,7 @@ describe("Referral Router", () => {
         .send({ appointmentId: 1, amount: 2500 });
 
       expect(response.status).toBe(400);
-      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe("No credits available");
     });
   });
 

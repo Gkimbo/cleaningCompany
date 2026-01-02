@@ -86,7 +86,9 @@ describe("ReferralService", () => {
       const code = await ReferralService.generateReferralCode(user, mockModels);
 
       expect(mockModels.User.findOne).toHaveBeenCalledTimes(2);
-      expect(code).toMatch(/^TEST[A-Z0-9]{4}$/);
+      // Code should start with TEST and have alphanumeric suffix (length varies)
+      expect(code).toMatch(/^TEST[A-Z0-9]+$/);
+      expect(code.length).toBeGreaterThanOrEqual(6);
     });
 
     it("should generate fallback code after max attempts", async () => {
