@@ -9,6 +9,7 @@ import CancellationWarningModal from "../modals/CancellationWarningModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
+import DiscountedPrice from "../pricing/DiscountedPrice";
 
 const BED_SIZE_OPTIONS = [
   { value: "long_twin", label: "Long Twin" },
@@ -49,6 +50,8 @@ const EachAppointment = ({
   onConfigurationsUpdate,
   paymentCaptureFailed,
   onPaymentRetried,
+  originalPrice,
+  discountApplied,
 }) => {
   const [code, setCode] = useState("");
   const [key, setKeyLocation] = useState("");
@@ -486,7 +489,11 @@ const EachAppointment = ({
             </View>
           </View>
           <View style={styles.priceContainer}>
-            <Text style={[styles.priceText, styles.priceWarning]}>${price}</Text>
+            {discountApplied && originalPrice ? (
+              <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
+            ) : (
+              <Text style={[styles.priceText, styles.priceWarning]}>${price}</Text>
+            )}
           </View>
         </View>
         <View style={styles.paymentPrompt}>
@@ -513,7 +520,11 @@ const EachAppointment = ({
             </View>
           </View>
           <View style={styles.priceContainer}>
-            <Text style={[styles.priceText, styles.priceComplete]}>${price}</Text>
+            {discountApplied && originalPrice ? (
+              <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
+            ) : (
+              <Text style={[styles.priceText, styles.priceComplete]}>${price}</Text>
+            )}
             <Icon name="check-circle" size={16} color={colors.success[500]} />
           </View>
         </View>
@@ -552,7 +563,11 @@ const EachAppointment = ({
         </View>
         <View style={styles.priceContainer}>
           <Text style={styles.priceLabel}>Total</Text>
-          <Text style={styles.priceText}>${price}</Text>
+          {discountApplied && originalPrice ? (
+            <DiscountedPrice originalPrice={originalPrice} discountedPrice={price} size="md" />
+          ) : (
+            <Text style={styles.priceText}>${price}</Text>
+          )}
         </View>
       </View>
 

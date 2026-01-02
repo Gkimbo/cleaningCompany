@@ -97,6 +97,31 @@ jest.mock("stripe", () => {
   }));
 });
 
+// Mock IncentiveService
+jest.mock("../../services/IncentiveService", () => ({
+  isHomeownerEligible: jest.fn().mockResolvedValue({
+    eligible: false,
+    remainingCleanings: 0,
+    discountPercent: 0,
+  }),
+  calculateCleanerFee: jest.fn().mockImplementation((cleanerId, grossAmount, feePercent) => {
+    // Calculate fee based on input values (same logic as real service when no incentive)
+    const platformFee = Math.round(grossAmount * feePercent);
+    const netAmount = grossAmount - platformFee;
+    return Promise.resolve({
+      eligible: false,
+      platformFee,
+      netAmount,
+      incentiveApplied: false,
+      originalPlatformFee: platformFee,
+    });
+  }),
+  isCleanerEligible: jest.fn().mockResolvedValue({
+    eligible: false,
+    remainingCleanings: 0,
+    feeReductionPercent: 0,
+  }),
+}));
 
 jest.mock("../../config/businessConfig", () => ({
   businessConfig: {

@@ -5,6 +5,7 @@ const {
   UserAppointments,
   UserCleanerAppointments,
   UserPendingRequests,
+  UserReviews,
   TermsAndConditions,
   UserTermsAcceptance,
   Conversation,
@@ -321,13 +322,15 @@ usersRouter.get("/hr-staff", async (req, res) => {
       order: [["createdAt", "DESC"]],
     });
 
+    // Explicitly decrypt PII fields (afterFind hook should handle this, but ensure it's done)
+    const EncryptionService = require("../../../services/EncryptionService");
     const serializedHrStaff = hrStaff.map((user) => ({
       id: user.id,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      firstName: EncryptionService.decrypt(user.firstName),
+      lastName: EncryptionService.decrypt(user.lastName),
       username: user.username,
-      email: user.email,
-      phone: user.phone,
+      email: EncryptionService.decrypt(user.email),
+      phone: user.phone ? EncryptionService.decrypt(user.phone) : null,
       createdAt: user.createdAt,
     }));
 
@@ -398,15 +401,17 @@ usersRouter.patch("/hr-staff/:id", async (req, res) => {
 
     console.log(`✅ HR employee ${id} updated by owner ${caller.id}`);
 
+    // Decrypt PII fields for response
+    const EncryptionService = require("../../../services/EncryptionService");
     return res.status(200).json({
       message: "HR employee updated successfully",
       user: {
         id: hrUser.id,
-        firstName: hrUser.firstName,
-        lastName: hrUser.lastName,
+        firstName: EncryptionService.decrypt(hrUser.firstName),
+        lastName: EncryptionService.decrypt(hrUser.lastName),
         username: hrUser.username,
-        email: hrUser.email,
-        phone: hrUser.phone,
+        email: EncryptionService.decrypt(hrUser.email),
+        phone: hrUser.phone ? EncryptionService.decrypt(hrUser.phone) : null,
       },
     });
   } catch (error) {
@@ -517,8 +522,38 @@ usersRouter.patch("/employee", async (req, res) => {
 });
 
 usersRouter.delete("/employee", async (req, res) => {
-  const userId = req.body.id;
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
   try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const requesterId = decodedToken.userId;
+
+    // Verify requester is an owner
+    const requester = await User.findByPk(requesterId);
+    if (!requester || requester.type !== "owner") {
+      return res.status(403).json({ error: "Only owners can delete employees" });
+    }
+
+    const userId = req.body.id;
+    if (!userId) {
+      return res.status(400).json({ error: "Employee ID is required" });
+    }
+
+    // Verify employee exists
+    const employee = await User.findByPk(userId);
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    // Don't allow deleting owners
+    if (employee.type === "owner") {
+      return res.status(403).json({ error: "Cannot delete owner accounts" });
+    }
+
+    // Clean up related records
     await UserBills.destroy({
       where: {
         userId: userId,
@@ -531,6 +566,30 @@ usersRouter.delete("/employee", async (req, res) => {
       },
     });
 
+    // Remove employee from any pending requests
+    await UserPendingRequests.destroy({
+      where: {
+        employeeId: userId,
+      },
+    });
+
+    // Store reviewer name on reviews written BY this employee before deletion
+    // This preserves the name even after reviewerId is set to NULL by cascade
+    const employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username;
+    await UserReviews.update(
+      { reviewerName: employeeName },
+      { where: { reviewerId: userId, reviewerName: null } }
+    );
+
+    // Delete reviews where employee is the subject (reviews about them)
+    // Reviews written BY the employee will have reviewerId set to NULL by database cascade
+    await UserReviews.destroy({
+      where: {
+        userId: userId,
+      },
+    });
+
+    // Update appointments to remove this employee from assigned lists
     const appointmentsToUpdate = await UserAppointments.findAll({
       where: {
         employeesAssigned: {
@@ -555,15 +614,24 @@ usersRouter.delete("/employee", async (req, res) => {
       }
     }
 
-    await User.destroy({
+    // Delete the user (cascading deletes should handle StripeConnectAccount, Payouts, etc.)
+    const deleted = await User.destroy({
       where: {
         id: userId,
       },
     });
-    return res.status(201).json({ message: "Employee Deleted from DB" });
+
+    if (deleted === 0) {
+      return res.status(404).json({ error: "Employee not found or already deleted" });
+    }
+
+    return res.status(200).json({ success: true, message: "Employee deleted successfully" });
   } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error("Error deleting employee:", error);
+    if (error.name === "JsonWebTokenError" || error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Failed to delete employee" });
   }
 });
 usersRouter.get("/appointments", async (req, res) => {

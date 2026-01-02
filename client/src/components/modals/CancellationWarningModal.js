@@ -46,6 +46,12 @@ const CancellationWarningModal = ({
     willChargeCancellationFee,
     cancellationFee,
     hasPaymentMethod,
+    // Discount/incentive info
+    discountApplied,
+    originalPrice,
+    refundPercent,
+    incentiveCleanerPercent,
+    platformKeeps,
   } = cancellationInfo;
 
   const showCancellationFeeWarning = willChargeCancellationFee && hasPaymentMethod;
@@ -113,18 +119,42 @@ const CancellationWarningModal = ({
 
             {/* Financial breakdown for penalty window */}
             {isWithinPenaltyWindow && hasCleanerAssigned && (
-              <View style={styles.breakdownContainer}>
+              <View style={[styles.breakdownContainer, discountApplied && styles.breakdownContainerIncentive]}>
+                {discountApplied && (
+                  <View style={styles.incentiveWarningBanner}>
+                    <Icon name="exclamation-triangle" size={16} color={colors.warning[700]} />
+                    <Text style={styles.incentiveWarningText}>
+                      Reduced refund due to discount applied
+                    </Text>
+                  </View>
+                )}
+
                 <Text style={styles.breakdownTitle}>Financial Breakdown</Text>
 
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Original Price</Text>
-                  <Text style={styles.breakdownValue}>${parseFloat(price).toFixed(2)}</Text>
-                </View>
+                {discountApplied && (
+                  <>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>Original Price (before discount)</Text>
+                      <Text style={styles.breakdownValue}>${parseFloat(originalPrice).toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>You Paid (after discount)</Text>
+                      <Text style={styles.breakdownValue}>${parseFloat(price).toFixed(2)}</Text>
+                    </View>
+                  </>
+                )}
+
+                {!discountApplied && (
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Amount Paid</Text>
+                    <Text style={styles.breakdownValue}>${parseFloat(price).toFixed(2)}</Text>
+                  </View>
+                )}
 
                 <View style={styles.divider} />
 
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Your Refund ({pricing.cancellation.refundPercentage * 100}%)</Text>
+                  <Text style={styles.breakdownLabel}>Your Refund ({refundPercent}%)</Text>
                   <Text style={[styles.breakdownValue, styles.refundAmount]}>${estimatedRefund}</Text>
                 </View>
 
@@ -133,10 +163,20 @@ const CancellationWarningModal = ({
                   <Text style={styles.breakdownValue}>${cleanerPayout}</Text>
                 </View>
 
+                {discountApplied && parseFloat(platformKeeps) > 0 && (
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Platform Keeps</Text>
+                    <Text style={styles.breakdownValue}>${platformKeeps}</Text>
+                  </View>
+                )}
+
                 <View style={styles.breakdownNote}>
                   <Icon name="info-circle" size={12} color={colors.text.tertiary} />
                   <Text style={styles.breakdownNoteText}>
-                    Cleaner receives {pricing.cancellation.refundPercentage * 100}% minus {pricing.platform.feePercent * 100}% platform fee
+                    {discountApplied
+                      ? `Cleaner receives ${incentiveCleanerPercent}% of original price ($${originalPrice})`
+                      : `Cleaner receives ${pricing.cancellation.refundPercentage * 100}% minus ${pricing.platform.feePercent * 100}% platform fee`
+                    }
                   </Text>
                 </View>
               </View>
@@ -156,6 +196,8 @@ const CancellationWarningModal = ({
               <Text style={styles.checkboxLabel}>
                 {showCancellationFeeWarning
                   ? `I agree to pay the $${cancellationFee} cancellation fee`
+                  : isWithinPenaltyWindow && discountApplied
+                  ? `I understand I will only receive $${estimatedRefund} back (${refundPercent}% refund due to discount)`
                   : isWithinPenaltyWindow
                   ? "I understand and agree to the cancellation terms"
                   : "I want to cancel this appointment"}
@@ -276,6 +318,26 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     marginBottom: spacing.lg,
+  },
+  breakdownContainerIncentive: {
+    backgroundColor: colors.warning[50],
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  incentiveWarningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[100],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  incentiveWarningText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[800],
   },
   breakdownTitle: {
     fontSize: typography.fontSize.sm,

@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Alert,
   Dimensions,
@@ -24,6 +24,8 @@ import {
   responsive,
 } from "../../../services/styles/theme";
 import { usePricing, defaultPricing } from "../../../context/PricingContext";
+import IncentiveBanner from "../../incentives/IncentiveBanner";
+import IncentivesService from "../../../services/fetchRequests/IncentivesService";
 
 const US_STATES = [
   "AL",
@@ -113,6 +115,13 @@ const CleanerApplicationForm = () => {
   const hustleModeEarnings = calculateEarnings(4);
 
   const [showForm, setShowForm] = useState(false);
+  const [incentiveConfig, setIncentiveConfig] = useState(null);
+
+  // Fetch incentive configuration on mount
+  useEffect(() => {
+    IncentivesService.getCurrentIncentives().then(setIncentiveConfig);
+  }, []);
+
   const [formData, setFormData] = useState({
     // Basic Information
     firstName: "",
@@ -640,6 +649,28 @@ const CleanerApplicationForm = () => {
             {maxCleanerPay}/house
           </Text>
         </View>
+
+        {/* Incentive Banner */}
+        {incentiveConfig?.cleaner?.enabled && (() => {
+          const feeReduction = incentiveConfig.cleaner.feeReductionPercent;
+          const maxCleanings = incentiveConfig.cleaner.maxCleanings;
+
+          // Extra percentage = platform fee * fee reduction (e.g., 10% * 100% = 10% extra)
+          const extraPercent = Math.round(platformFeePercent * feeReduction * 100);
+
+          // Calculate estimated total extra earnings
+          const avgPayPerHouse = Math.round((minCleanerPay + maxCleanerPay) / 2);
+          const extraPerCleaning = Math.round(avgPayPerHouse * platformFeePercent * feeReduction);
+          const totalExtra = extraPerCleaning * maxCleanings;
+
+          return (
+            <IncentiveBanner
+              type="cleaner"
+              message={`New cleaners earn an extra ${extraPercent}% on each of your first ${maxCleanings} cleanings - that's up to $${totalExtra} extra!`}
+              icon="trending-up"
+            />
+          );
+        })()}
 
         {/* Benefits Grid */}
         <View

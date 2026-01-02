@@ -110,6 +110,20 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
+		// Incentive/discount tracking
+		discountApplied: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		discountPercent: {
+			type: DataTypes.DECIMAL(3, 2),
+			allowNull: true,
+		},
+		originalPrice: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User

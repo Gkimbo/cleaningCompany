@@ -1464,7 +1464,11 @@ async function processCleanerPayouts(appointment) {
       }
 
       // Calculate amounts using database pricing
-      const priceInCents = Math.round(parseFloat(appointment.price) * 100);
+      // Use original price for cleaner payout if discount was applied (platform absorbs the discount)
+      const payoutPrice = appointment.discountApplied && appointment.originalPrice
+        ? parseFloat(appointment.originalPrice)
+        : parseFloat(appointment.price);
+      const priceInCents = Math.round(payoutPrice * 100);
       const perCleanerGross = Math.round(priceInCents / cleanerIds.length);
       const platformFee = Math.round(perCleanerGross * platformFeePercent);
       const netAmount = perCleanerGross - platformFee;

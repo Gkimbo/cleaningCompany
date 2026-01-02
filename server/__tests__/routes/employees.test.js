@@ -10,6 +10,7 @@ jest.mock("../../models", () => ({
   User: {
     findOne: jest.fn(),
     findAll: jest.fn(),
+    findByPk: jest.fn(),
     create: jest.fn(),
     destroy: jest.fn(),
   },
@@ -23,11 +24,20 @@ jest.mock("../../models", () => ({
   UserAppointments: {
     findAll: jest.fn(),
   },
-  UserPendingRequests: {},
+  UserPendingRequests: {
+    destroy: jest.fn(),
+  },
+  UserReviews: {
+    destroy: jest.fn(),
+    update: jest.fn(),
+  },
   TermsAndConditions: {},
   UserTermsAcceptance: {},
+  Conversation: {},
+  ConversationParticipant: {},
   Op: {
     contains: Symbol("contains"),
+    or: Symbol("or"),
   },
 }));
 
@@ -64,7 +74,20 @@ const {
   UserBills,
   UserCleanerAppointments,
   UserAppointments,
+  UserPendingRequests,
+  UserReviews,
 } = require("../../models");
+
+// Helper to setup all delete mocks
+const setupDeleteMocks = () => {
+  UserBills.destroy.mockResolvedValue(1);
+  UserCleanerAppointments.destroy.mockResolvedValue(0);
+  UserPendingRequests.destroy.mockResolvedValue(0);
+  UserReviews.update.mockResolvedValue([0]);
+  UserReviews.destroy.mockResolvedValue(0);
+  UserAppointments.findAll.mockResolvedValue([]);
+  User.destroy.mockResolvedValue(1);
+};
 const UserInfo = require("../../services/UserInfoClass");
 const Email = require("../../services/sendNotifications/EmailClass");
 
@@ -396,18 +419,35 @@ describe("Employee CRUD Operations", () => {
   });
 
   describe("DELETE /employee - Delete Employee", () => {
+    const mockOwner = { id: 1, type: "owner" };
+    const mockEmployee = { id: 10, type: "cleaner" };
+
+    beforeEach(() => {
+      // Default mock for authorization: requester is owner, employee is cleaner
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockOwner);
+        if (id === 10) return Promise.resolve(mockEmployee);
+        return Promise.resolve(null);
+      });
+    });
+
     it("should delete employee and associated data successfully", async () => {
       UserBills.destroy.mockResolvedValue(1);
       UserCleanerAppointments.destroy.mockResolvedValue(5);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      UserReviews.update.mockResolvedValue([0]);
+      UserReviews.destroy.mockResolvedValue(0);
       UserAppointments.findAll.mockResolvedValue([]);
       User.destroy.mockResolvedValue(1);
 
       const response = await request(app)
         .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ id: 10 });
 
-      expect(response.status).toBe(201);
-      expect(response.body.message).toBe("Employee Deleted from DB");
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe("Employee deleted successfully");
       expect(UserBills.destroy).toHaveBeenCalledWith({
         where: { userId: 10 },
       });
@@ -427,14 +467,18 @@ describe("Employee CRUD Operations", () => {
 
       UserBills.destroy.mockResolvedValue(1);
       UserCleanerAppointments.destroy.mockResolvedValue(1);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      UserReviews.update.mockResolvedValue([0]);
+      UserReviews.destroy.mockResolvedValue(0);
       UserAppointments.findAll.mockResolvedValue([mockAppointment]);
       User.destroy.mockResolvedValue(1);
 
       const response = await request(app)
         .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ id: 10 });
 
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(200);
       expect(mockAppointment.update).toHaveBeenCalledWith({
         employeesAssigned: ["20", "30"],
       });
@@ -448,14 +492,18 @@ describe("Employee CRUD Operations", () => {
 
       UserBills.destroy.mockResolvedValue(1);
       UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      UserReviews.update.mockResolvedValue([0]);
+      UserReviews.destroy.mockResolvedValue(0);
       UserAppointments.findAll.mockResolvedValue([mockAppointment]);
       User.destroy.mockResolvedValue(1);
 
       const response = await request(app)
         .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ id: 10 });
 
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(200);
       expect(mockAppointment.update).not.toHaveBeenCalled();
     });
 
@@ -468,14 +516,18 @@ describe("Employee CRUD Operations", () => {
 
       UserBills.destroy.mockResolvedValue(1);
       UserCleanerAppointments.destroy.mockResolvedValue(3);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      UserReviews.update.mockResolvedValue([0]);
+      UserReviews.destroy.mockResolvedValue(0);
       UserAppointments.findAll.mockResolvedValue(mockAppointments);
       User.destroy.mockResolvedValue(1);
 
       const response = await request(app)
         .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ id: 10 });
 
-      expect(response.status).toBe(201);
+      expect(response.status).toBe(200);
       expect(mockAppointments[0].update).toHaveBeenCalledWith({
         employeesAssigned: ["20"],
       });
@@ -492,38 +544,102 @@ describe("Employee CRUD Operations", () => {
 
       const response = await request(app)
         .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ id: 10 });
 
-      expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Invalid or expired token");
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("Failed to delete employee");
     });
 
     it("should handle employee with no bills", async () => {
       UserBills.destroy.mockResolvedValue(0); // No bills deleted
       UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      UserReviews.update.mockResolvedValue([0]);
+      UserReviews.destroy.mockResolvedValue(0);
       UserAppointments.findAll.mockResolvedValue([]);
       User.destroy.mockResolvedValue(1);
 
       const response = await request(app)
         .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ id: 10 });
 
-      expect(response.status).toBe(201);
-      expect(response.body.message).toBe("Employee Deleted from DB");
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe("Employee deleted successfully");
     });
 
     it("should handle employee with no appointments", async () => {
       UserBills.destroy.mockResolvedValue(1);
       UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      UserReviews.update.mockResolvedValue([0]);
+      UserReviews.destroy.mockResolvedValue(0);
       UserAppointments.findAll.mockResolvedValue([]);
       User.destroy.mockResolvedValue(1);
 
       const response = await request(app)
         .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
         .send({ id: 10 });
 
-      expect(response.status).toBe(201);
-      expect(response.body.message).toBe("Employee Deleted from DB");
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe("Employee deleted successfully");
+    });
+
+    it("should require authorization token", async () => {
+      const response = await request(app)
+        .delete("/api/v1/users/employee")
+        .send({ id: 10 });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe("Authorization token required");
+    });
+
+    it("should reject non-owner users", async () => {
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve({ id: 1, type: "cleaner" });
+        return Promise.resolve(mockEmployee);
+      });
+
+      const response = await request(app)
+        .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({ id: 10 });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe("Only owners can delete employees");
+    });
+
+    it("should not allow deleting owner accounts", async () => {
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockOwner);
+        if (id === 10) return Promise.resolve({ id: 10, type: "owner" });
+        return Promise.resolve(null);
+      });
+
+      const response = await request(app)
+        .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({ id: 10 });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe("Cannot delete owner accounts");
+    });
+
+    it("should return 404 for non-existent employee", async () => {
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockOwner);
+        return Promise.resolve(null);
+      });
+
+      const response = await request(app)
+        .delete("/api/v1/users/employee")
+        .set("Authorization", `Bearer ${ownerToken}`)
+        .send({ id: 999 });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("Employee not found");
     });
   });
 });

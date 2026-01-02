@@ -51,7 +51,12 @@ const PricingManagement = ({ state }) => {
     refundPercentage: "",
     platformFeePercent: "",
     highVolumeFee: "",
+    incentiveRefundPercent: "",
+    incentiveCleanerPercent: "",
     changeNote: "",
+    exampleOriginalPrice: "150",
+    exampleDiscountPercent: "50",
+    exampleCleaningPrice: "150",
   });
 
   useEffect(() => {
@@ -87,6 +92,8 @@ const PricingManagement = ({ state }) => {
             refundPercentage: (parseFloat(result.config.refundPercentage) * 100).toString() || "",
             platformFeePercent: (parseFloat(result.config.platformFeePercent) * 100).toString() || "",
             highVolumeFee: result.config.highVolumeFee?.toString() || "",
+            incentiveRefundPercent: (parseFloat(result.config.incentiveRefundPercent || 0.10) * 100).toString() || "10",
+            incentiveCleanerPercent: (parseFloat(result.config.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
             changeNote: "",
           };
         } else if (result.staticDefaults) {
@@ -109,6 +116,8 @@ const PricingManagement = ({ state }) => {
             refundPercentage: (result.staticDefaults.refundPercentage * 100).toString() || "",
             platformFeePercent: (result.staticDefaults.platformFeePercent * 100).toString() || "",
             highVolumeFee: result.staticDefaults.highVolumeFee?.toString() || "",
+            incentiveRefundPercent: ((result.staticDefaults.incentiveRefundPercent || 0.10) * 100).toString() || "10",
+            incentiveCleanerPercent: ((result.staticDefaults.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
             changeNote: "",
           };
         }
@@ -131,9 +140,11 @@ const PricingManagement = ({ state }) => {
     setFormData(newFormData);
 
     // Check if values have changed from original
+    // Exclude changeNote and calculator fields from change detection
     if (originalValues) {
+      const excludeFromChangeDetection = ["changeNote", "exampleOriginalPrice", "exampleDiscountPercent", "exampleCleaningPrice"];
       const changed = Object.keys(originalValues).some(
-        (key) => key !== "changeNote" && newFormData[key] !== originalValues[key]
+        (key) => !excludeFromChangeDetection.includes(key) && newFormData[key] !== originalValues[key]
       );
       setHasChanges(changed);
     }
@@ -164,6 +175,8 @@ const PricingManagement = ({ state }) => {
       "refundPercentage",
       "platformFeePercent",
       "highVolumeFee",
+      "incentiveRefundPercent",
+      "incentiveCleanerPercent",
     ];
 
     for (const field of numericFields) {
@@ -177,12 +190,22 @@ const PricingManagement = ({ state }) => {
     // Validate percentages
     const refund = parseFloat(formData.refundPercentage);
     const platform = parseFloat(formData.platformFeePercent);
+    const incentiveRefund = parseFloat(formData.incentiveRefundPercent);
+    const incentiveCleaner = parseFloat(formData.incentiveCleanerPercent);
     if (refund < 0 || refund > 100) {
       setError("Refund percentage must be between 0 and 100");
       return;
     }
     if (platform < 0 || platform > 100) {
       setError("Platform fee percentage must be between 0 and 100");
+      return;
+    }
+    if (incentiveRefund < 0 || incentiveRefund > 100) {
+      setError("Incentive refund percentage must be between 0 and 100");
+      return;
+    }
+    if (incentiveCleaner < 0 || incentiveCleaner > 100) {
+      setError("Incentive cleaner percentage must be between 0 and 100");
       return;
     }
 
@@ -215,6 +238,8 @@ const PricingManagement = ({ state }) => {
         refundPercentage: parseFloat(formData.refundPercentage) / 100,
         platformFeePercent: parseFloat(formData.platformFeePercent) / 100,
         highVolumeFee: parseInt(formData.highVolumeFee),
+        incentiveRefundPercent: parseFloat(formData.incentiveRefundPercent) / 100,
+        incentiveCleanerPercent: parseFloat(formData.incentiveCleanerPercent) / 100,
         changeNote: formData.changeNote || null,
       };
 
@@ -373,6 +398,239 @@ const PricingManagement = ({ state }) => {
         </Text>
         {renderPriceInput("Platform Fee", "platformFeePercent", "", "%", "Percentage taken from cleaner payouts (applies to regular payouts and cancelled appointment compensation)")}
         {renderPriceInput("High Volume Day Fee", "highVolumeFee", "$", "", "Additional fee for holidays and busy days")}
+
+        {/* Platform Revenue Calculator */}
+        {(() => {
+          const platformFeePercent = parseFloat(formData.platformFeePercent) / 100 || 0.10;
+          const cleaningPrice = parseFloat(formData.exampleCleaningPrice) || 150;
+          const stripeFeePercent = 0.029; // Stripe's 2.9%
+          const stripeFlatFee = 0.30; // Stripe's $0.30
+
+          // Calculate amounts
+          const stripeProcessingFee = (cleaningPrice * stripeFeePercent) + stripeFlatFee;
+          const platformFee = cleaningPrice * platformFeePercent;
+          const cleanerReceives = cleaningPrice - platformFee;
+          const platformNet = platformFee - stripeProcessingFee;
+          const isProfit = platformNet > 0;
+          const profitMargin = cleaningPrice > 0 ? (platformNet / cleaningPrice) * 100 : 0;
+
+          return (
+            <View style={styles.revenueCalculator}>
+              <View style={styles.revenueHeader}>
+                <Icon name="calculator" size={18} color={colors.primary[600]} />
+                <Text style={styles.revenueTitle}>Revenue Calculator</Text>
+              </View>
+
+              <View style={styles.revenueInputRow}>
+                <Text style={styles.revenueInputLabel}>Cleaning price:</Text>
+                <View style={styles.revenueInputWrapper}>
+                  <Text style={styles.revenueInputPrefix}>$</Text>
+                  <TextInput
+                    style={styles.revenueInput}
+                    value={formData.exampleCleaningPrice}
+                    onChangeText={(value) => handleInputChange("exampleCleaningPrice", value)}
+                    keyboardType="numeric"
+                    placeholder="150"
+                    placeholderTextColor={colors.text.tertiary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.revenueVisual}>
+                <View style={styles.revenueBar}>
+                  <View style={[styles.revenueBarSegment, styles.revenueBarCleaner, { flex: cleanerReceives }]}>
+                    <Text style={styles.revenueBarLabel}>Cleaner</Text>
+                  </View>
+                  <View style={[styles.revenueBarSegment, styles.revenueBarPlatform, { flex: platformFee }]}>
+                    <Text style={styles.revenueBarLabelSmall}>Fee</Text>
+                  </View>
+                </View>
+                <View style={styles.revenueBarLegend}>
+                  <Text style={styles.revenueBarLegendText}>${cleanerReceives.toFixed(2)}</Text>
+                  <Text style={styles.revenueBarLegendText}>${platformFee.toFixed(2)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.revenueBreakdown}>
+                <View style={styles.revenueRow}>
+                  <View style={styles.revenueRowLeft}>
+                    <View style={[styles.revenueDot, styles.revenueDotCleaner]} />
+                    <Text style={styles.revenueLabel}>Cleaner receives</Text>
+                  </View>
+                  <Text style={styles.revenueValue}>${cleanerReceives.toFixed(2)}</Text>
+                </View>
+
+                <View style={styles.revenueRow}>
+                  <View style={styles.revenueRowLeft}>
+                    <View style={[styles.revenueDot, styles.revenueDotPlatform]} />
+                    <Text style={styles.revenueLabel}>Platform fee ({(platformFeePercent * 100).toFixed(0)}%)</Text>
+                  </View>
+                  <Text style={styles.revenueValue}>${platformFee.toFixed(2)}</Text>
+                </View>
+
+                <View style={styles.revenueDivider} />
+
+                <View style={styles.revenueRow}>
+                  <View style={styles.revenueRowLeft}>
+                    <Icon name="cc-stripe" size={14} color={colors.text.tertiary} />
+                    <Text style={[styles.revenueLabel, styles.revenueLabelMuted]}>Stripe fees (2.9% + $0.30)</Text>
+                  </View>
+                  <Text style={[styles.revenueValue, styles.revenueValueMuted]}>-${stripeProcessingFee.toFixed(2)}</Text>
+                </View>
+
+                <View style={[styles.revenueRow, styles.revenueRowTotal]}>
+                  <View style={styles.revenueRowLeft}>
+                    <Icon
+                      name={isProfit ? "arrow-up" : "arrow-down"}
+                      size={14}
+                      color={isProfit ? colors.success[600] : colors.error[600]}
+                    />
+                    <Text style={styles.revenueLabelTotal}>Platform net</Text>
+                  </View>
+                  <View style={styles.revenueValueContainer}>
+                    <Text style={[
+                      styles.revenueValueTotal,
+                      isProfit ? styles.revenueValueProfit : styles.revenueValueLoss
+                    ]}>
+                      {isProfit ? "" : "-"}${Math.abs(platformNet).toFixed(2)}
+                    </Text>
+                    <Text style={[
+                      styles.revenueMargin,
+                      isProfit ? styles.revenueMarginProfit : styles.revenueMarginLoss
+                    ]}>
+                      {profitMargin.toFixed(1)}% margin
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {!isProfit && (
+                <View style={styles.revenueLossWarning}>
+                  <Icon name="exclamation-triangle" size={14} color={colors.error[600]} />
+                  <Text style={styles.revenueLossText}>
+                    Platform loses money at this fee level
+                  </Text>
+                </View>
+              )}
+            </View>
+          );
+        })()}
+      </View>
+
+      {/* Incentive Cancellation Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Incentive Cancellation Policy</Text>
+        <Text style={styles.sectionDescription}>
+          Special rules when a client with an active incentive discount cancels within the penalty window
+        </Text>
+        {renderPriceInput("Client Refund (Incentive)", "incentiveRefundPercent", "", "%", "Refund percentage for clients who used an incentive discount (normally 50%, reduced to discourage abuse)")}
+        {renderPriceInput("Cleaner Compensation", "incentiveCleanerPercent", "", "%", "Percentage of original price the cleaner receives on incentive cancellations")}
+
+        {/* Cancellation Calculator */}
+        {(() => {
+          const refundPercent = parseFloat(formData.incentiveRefundPercent) / 100 || 0;
+          const cleanerPercent = parseFloat(formData.incentiveCleanerPercent) / 100 || 0;
+          // Stripe fee is about 2.9% + $0.30, approximate as 3% for warning
+          const stripeFeePercent = 0.03;
+
+          // Calculate with adjustable original price and discount
+          const exampleOriginal = parseFloat(formData.exampleOriginalPrice) || 150;
+          const exampleDiscountPercent = (parseFloat(formData.exampleDiscountPercent) || 50) / 100;
+          const examplePaid = exampleOriginal * (1 - exampleDiscountPercent);
+          const clientRefund = examplePaid * refundPercent;
+          const cleanerPayout = exampleOriginal * cleanerPercent;
+          const stripeFee = examplePaid * stripeFeePercent;
+          const platformReceives = examplePaid - clientRefund - cleanerPayout - stripeFee;
+          const isLoss = platformReceives < 0;
+          const isLowMargin = platformReceives >= 0 && platformReceives < 5;
+
+          return (
+            <View style={[
+              styles.calculatorBanner,
+              isLoss && styles.calculatorBannerLoss,
+              isLowMargin && styles.calculatorBannerCaution,
+            ]}>
+              <View style={styles.calculatorHeader}>
+                <Icon
+                  name={isLoss ? "exclamation-triangle" : "calculator"}
+                  size={18}
+                  color={isLoss ? colors.warning[700] : colors.primary[600]}
+                />
+                <Text style={[styles.calculatorTitle, isLoss && styles.calculatorTitleLoss]}>
+                  {isLoss ? "Platform Loss Warning" : "Cancellation Calculator"}
+                </Text>
+              </View>
+
+              <View style={styles.calculatorInputRow}>
+                <Text style={styles.calculatorInputLabel}>Original price:</Text>
+                <View style={styles.calculatorInputWrapper}>
+                  <Text style={styles.calculatorInputPrefix}>$</Text>
+                  <TextInput
+                    style={styles.calculatorInput}
+                    value={formData.exampleOriginalPrice}
+                    onChangeText={(value) => handleInputChange("exampleOriginalPrice", value)}
+                    keyboardType="numeric"
+                    placeholder="150"
+                    placeholderTextColor={colors.text.tertiary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.calculatorInputRow}>
+                <Text style={styles.calculatorInputLabel}>Incentive discount:</Text>
+                <View style={styles.calculatorInputWrapper}>
+                  <TextInput
+                    style={styles.calculatorInput}
+                    value={formData.exampleDiscountPercent}
+                    onChangeText={(value) => handleInputChange("exampleDiscountPercent", value)}
+                    keyboardType="numeric"
+                    placeholder="50"
+                    placeholderTextColor={colors.text.tertiary}
+                  />
+                  <Text style={styles.calculatorInputSuffix}>%</Text>
+                </View>
+              </View>
+
+              <Text style={styles.calculatorScenario}>
+                Scenario: ${exampleOriginal.toFixed(0)} cleaning with {(exampleDiscountPercent * 100).toFixed(0)}% discount (${examplePaid.toFixed(2)} paid)
+              </Text>
+
+              <View style={styles.calculatorBreakdown}>
+                <View style={styles.calculatorRow}>
+                  <Text style={styles.calculatorLabel}>Client refund ({(refundPercent * 100).toFixed(0)}% of paid):</Text>
+                  <Text style={styles.calculatorValue}>${clientRefund.toFixed(2)}</Text>
+                </View>
+                <View style={styles.calculatorRow}>
+                  <Text style={styles.calculatorLabel}>Cleaner payout ({(cleanerPercent * 100).toFixed(0)}% of original):</Text>
+                  <Text style={styles.calculatorValue}>${cleanerPayout.toFixed(2)}</Text>
+                </View>
+                <View style={styles.calculatorRow}>
+                  <Text style={styles.calculatorLabel}>Stripe fees (~3%):</Text>
+                  <Text style={styles.calculatorValue}>~${stripeFee.toFixed(2)}</Text>
+                </View>
+                <View style={[styles.calculatorRow, styles.calculatorRowTotal]}>
+                  <Text style={[styles.calculatorLabel, styles.calculatorLabelTotal]}>
+                    Platform {isLoss ? "loss" : "keeps"}:
+                  </Text>
+                  <Text style={[
+                    styles.calculatorValue,
+                    styles.calculatorValueTotal,
+                    isLoss && styles.calculatorValueLoss,
+                    !isLoss && styles.calculatorValueProfit,
+                  ]}>
+                    {isLoss ? "-" : ""}${Math.abs(platformReceives).toFixed(2)}
+                  </Text>
+                </View>
+              </View>
+
+              {isLoss && (
+                <Text style={styles.calculatorWarningText}>
+                  With these settings, the platform loses money on each incentive cancellation.
+                </Text>
+              )}
+            </View>
+          );
+        })()}
       </View>
 
       {/* Change Note Section */}
@@ -663,6 +921,312 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
+  },
+  // Revenue Calculator Styles
+  revenueCalculator: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+  },
+  revenueHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  revenueTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  revenueInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.lg,
+  },
+  revenueInputLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  revenueInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    paddingHorizontal: spacing.md,
+    minWidth: 100,
+  },
+  revenueInputPrefix: {
+    fontSize: typography.fontSize.lg,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  revenueInput: {
+    flex: 1,
+    padding: spacing.sm,
+    fontSize: typography.fontSize.lg,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
+    textAlign: "right",
+    minWidth: 60,
+  },
+  revenueVisual: {
+    marginBottom: spacing.lg,
+  },
+  revenueBar: {
+    flexDirection: "row",
+    height: 32,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+  },
+  revenueBarSegment: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  revenueBarCleaner: {
+    backgroundColor: colors.success[400],
+  },
+  revenueBarPlatform: {
+    backgroundColor: colors.primary[500],
+  },
+  revenueBarLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+  },
+  revenueBarLabelSmall: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+  },
+  revenueBarLegend: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  revenueBarLegendText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  revenueBreakdown: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  revenueRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+  },
+  revenueRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  revenueDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  revenueDotCleaner: {
+    backgroundColor: colors.success[400],
+  },
+  revenueDotPlatform: {
+    backgroundColor: colors.primary[500],
+  },
+  revenueLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  revenueLabelMuted: {
+    color: colors.text.tertiary,
+  },
+  revenueLabelTotal: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  revenueValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  revenueValueMuted: {
+    color: colors.text.tertiary,
+  },
+  revenueValueContainer: {
+    alignItems: "flex-end",
+  },
+  revenueValueTotal: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+  },
+  revenueValueProfit: {
+    color: colors.success[600],
+  },
+  revenueValueLoss: {
+    color: colors.error[600],
+  },
+  revenueMargin: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  revenueMarginProfit: {
+    color: colors.success[500],
+  },
+  revenueMarginLoss: {
+    color: colors.error[500],
+  },
+  revenueDivider: {
+    height: 1,
+    backgroundColor: colors.border.light,
+    marginVertical: spacing.xs,
+  },
+  revenueRowTotal: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+    marginTop: spacing.xs,
+    paddingTop: spacing.md,
+  },
+  revenueLossWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: colors.error[50],
+    borderRadius: radius.md,
+  },
+  revenueLossText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.error[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  // Incentive Cancellation Calculator Styles
+  calculatorBanner: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  calculatorBannerLoss: {
+    backgroundColor: colors.warning[50],
+    borderColor: colors.warning[300],
+  },
+  calculatorBannerCaution: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
+  },
+  calculatorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  calculatorTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  calculatorTitleLoss: {
+    color: colors.warning[800],
+  },
+  calculatorInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  calculatorInputLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  calculatorInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    paddingHorizontal: spacing.sm,
+  },
+  calculatorInputPrefix: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  calculatorInputSuffix: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  calculatorInput: {
+    width: 60,
+    padding: spacing.sm,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    textAlign: "right",
+  },
+  calculatorScenario: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
+    marginBottom: spacing.md,
+  },
+  calculatorBreakdown: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  calculatorRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  calculatorRowTotal: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  calculatorLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  calculatorLabelTotal: {
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  calculatorValue: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  calculatorValueTotal: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
+  calculatorValueLoss: {
+    color: colors.error[600],
+  },
+  calculatorValueProfit: {
+    color: colors.success[600],
+  },
+  calculatorWarningText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    marginTop: spacing.sm,
+    fontWeight: typography.fontWeight.medium,
   },
 });
 
