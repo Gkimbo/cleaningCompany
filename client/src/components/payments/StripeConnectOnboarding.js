@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import * as WebBrowser from "expo-web-browser";
 import { API_BASE } from "../../services/config";
 import {
   colors,
@@ -90,7 +91,10 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     city: "",
     state: "",
     postalCode: "",
-    ssnLast4: "",
+    ssn: "", // Full SSN for complete onboarding
+    routingNumber: "", // Bank routing number
+    accountNumber: "", // Bank account number
+    confirmAccountNumber: "", // Confirm account number
   });
 
   const [errors, setErrors] = useState({});
@@ -179,8 +183,34 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     if (!formData.postalCode.trim() || !/^\d{5}(-\d{4})?$/.test(formData.postalCode)) {
       newErrors.postalCode = "Valid ZIP code required";
     }
-    if (!formData.ssnLast4 || !/^\d{4}$/.test(formData.ssnLast4)) {
-      newErrors.ssnLast4 = "Last 4 digits of SSN required";
+    // Full SSN validation (9 digits)
+    const ssnDigits = formData.ssn.replace(/\D/g, "");
+    if (!ssnDigits || ssnDigits.length !== 9) {
+      newErrors.ssn = "Full 9-digit SSN required";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateStep3 = () => {
+    const newErrors = {};
+
+    // Routing number validation (9 digits)
+    const routingDigits = formData.routingNumber.replace(/\D/g, "");
+    if (!routingDigits || routingDigits.length !== 9) {
+      newErrors.routingNumber = "Valid 9-digit routing number required";
+    }
+
+    // Account number validation (typically 4-17 digits)
+    const accountDigits = formData.accountNumber.replace(/\D/g, "");
+    if (!accountDigits || accountDigits.length < 4 || accountDigits.length > 17) {
+      newErrors.accountNumber = "Valid account number required";
+    }
+
+    // Confirm account number
+    if (formData.accountNumber !== formData.confirmAccountNumber) {
+      newErrors.confirmAccountNumber = "Account numbers must match";
     }
 
     setErrors(newErrors);
@@ -191,78 +221,68 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     if (currentStep === 1 && validateStep1()) {
       setCurrentStep(2);
     } else if (currentStep === 2 && validateStep2()) {
-      handleCreateAccount();
+      setCurrentStep(3);
+    } else if (currentStep === 3 && validateStep3()) {
+      handleCompleteSetup();
     }
   };
 
-  const handleCreateAccount = async () => {
+  const handleCompleteSetup = async () => {
     setIsProcessing(true);
     try {
-      const personalInfo = {
-        dob: `${formData.dobYear}-${formData.dobMonth.padStart(2, "0")}-${formData.dobDay.padStart(2, "0")}`,
-        address: {
-          line1: formData.addressLine1,
-          line2: formData.addressLine2 || undefined,
-          city: formData.city,
-          state: formData.state,
-          postalCode: formData.postalCode,
+      const ssnDigits = formData.ssn.replace(/\D/g, "");
+      const routingDigits = formData.routingNumber.replace(/\D/g, "");
+      const accountDigits = formData.accountNumber.replace(/\D/g, "");
+
+      const setupData = {
+        token: state.currentUser.token,
+        personalInfo: {
+          dob: `${formData.dobYear}-${formData.dobMonth.padStart(2, "0")}-${formData.dobDay.padStart(2, "0")}`,
+          address: {
+            line1: formData.addressLine1,
+            line2: formData.addressLine2 || undefined,
+            city: formData.city,
+            state: formData.state,
+            postalCode: formData.postalCode,
+          },
+          ssn: ssnDigits,
         },
-        ssn_last_4: formData.ssnLast4,
+        bankAccount: {
+          routingNumber: routingDigits,
+          accountNumber: accountDigits,
+        },
       };
 
-      const res = await fetch(`${API_BASE}/stripe-connect/create-account`, {
+      const res = await fetch(`${API_BASE}/stripe-connect/complete-setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: state.currentUser.token,
-          personalInfo,
-        }),
+        body: JSON.stringify(setupData),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        // If account already exists, just move to step 3
-        if (data.code === "ACCOUNT_EXISTS") {
-          setCurrentStep(3);
-          await fetchAccountStatus();
-          return;
+        throw new Error(data.error || "Failed to complete setup");
+      }
+
+      // If there's an onboarding URL, user needs to accept ToS
+      if (data.onboardingUrl) {
+        // Open Stripe's hosted page for ToS acceptance
+        // All other info is pre-filled, so this should be quick
+        const result = await WebBrowser.openBrowserAsync(data.onboardingUrl, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+          controlsColor: colors.primary[600],
+          toolbarColor: colors.neutral[0],
+          showTitle: true,
+        });
+
+        // When browser closes, refresh status
+        if (result.type === "cancel" || result.type === "dismiss") {
+          await fetchAccountStatus(true);
         }
-        throw new Error(data.error || "Failed to create account");
+      } else {
+        // Fully complete! Refresh status
+        await fetchAccountStatus(true);
       }
-
-      // Account created, move to bank account step
-      setCurrentStep(3);
-      await fetchAccountStatus();
-    } catch (err) {
-      Alert.alert("Error", err.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleStartOnboarding = async () => {
-    setIsProcessing(true);
-    try {
-      const res = await fetch(`${API_BASE}/stripe-connect/onboarding-link`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: state.currentUser.token,
-          returnUrl: "http://localhost:3000/earnings",
-          refreshUrl: "http://localhost:3000/earnings",
-        }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to generate onboarding link");
-      }
-
-      // Open Stripe onboarding in browser
-      await Linking.openURL(data.url);
-
-      // Refresh status after a delay
-      setTimeout(fetchAccountStatus, 3000);
     } catch (err) {
       Alert.alert("Error", err.message);
     } finally {
@@ -547,151 +567,143 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             </View>
           </View>
 
-          <View style={styles.rowGroup}>
-            <View style={styles.flexField}>
-              <Text style={styles.inputLabel}>ZIP Code</Text>
-              <TextInput
-                style={[styles.input, errors.postalCode && styles.inputError]}
-                placeholder="12345"
-                keyboardType="number-pad"
-                maxLength={10}
-                value={formData.postalCode}
-                onChangeText={(v) => setFormData({ ...formData, postalCode: v })}
-              />
-              {errors.postalCode && <Text style={styles.errorText}>{errors.postalCode}</Text>}
-            </View>
-            <View style={styles.flexField}>
-              <Text style={styles.inputLabel}>SSN (last 4 digits)</Text>
-              <TextInput
-                style={[styles.input, errors.ssnLast4 && styles.inputError]}
-                placeholder="1234"
-                keyboardType="number-pad"
-                maxLength={4}
-                secureTextEntry
-                value={formData.ssnLast4}
-                onChangeText={(v) => setFormData({ ...formData, ssnLast4: v })}
-              />
-              {errors.ssnLast4 && <Text style={styles.errorText}>{errors.ssnLast4}</Text>}
-            </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.inputLabel}>ZIP Code</Text>
+            <TextInput
+              style={[styles.input, errors.postalCode && styles.inputError]}
+              placeholder="12345"
+              keyboardType="number-pad"
+              maxLength={10}
+              value={formData.postalCode}
+              onChangeText={(v) => setFormData({ ...formData, postalCode: v })}
+            />
+            {errors.postalCode && <Text style={styles.errorText}>{errors.postalCode}</Text>}
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.inputLabel}>Social Security Number</Text>
+            <TextInput
+              style={[styles.input, errors.ssn && styles.inputError]}
+              placeholder="XXX-XX-XXXX"
+              keyboardType="number-pad"
+              maxLength={11}
+              secureTextEntry
+              value={formData.ssn}
+              onChangeText={(v) => {
+                // Auto-format SSN with dashes
+                const digits = v.replace(/\D/g, "");
+                let formatted = digits;
+                if (digits.length > 3) {
+                  formatted = digits.slice(0, 3) + "-" + digits.slice(3);
+                }
+                if (digits.length > 5) {
+                  formatted = digits.slice(0, 3) + "-" + digits.slice(3, 5) + "-" + digits.slice(5, 9);
+                }
+                setFormData({ ...formData, ssn: formatted });
+              }}
+            />
+            {errors.ssn && <Text style={styles.errorText}>{errors.ssn}</Text>}
           </View>
 
           <View style={styles.securityNote}>
             <Icon name="shield" size={14} color={colors.text.tertiary} />
             <Text style={styles.securityNoteText}>
-              We only store the last 4 digits of your SSN
+              Your SSN is encrypted and sent directly to Stripe. We never store it.
             </Text>
           </View>
         </View>
       );
     }
 
-    // Step 3 - Bank account / Pending verification
-    const hasPendingRequirements = accountStatus?.requirements?.currentlyDue?.length > 0;
-    const detailsSubmitted = accountStatus?.detailsSubmitted;
-
+    // Step 3 - Bank account entry
     return (
       <View style={styles.formCard}>
         <View style={styles.formHeader}>
           <Icon name="university" size={24} color={colors.primary[500]} />
-          <Text style={styles.formTitle}>
-            {detailsSubmitted ? "Almost Done!" : "Connect Your Bank"}
-          </Text>
+          <Text style={styles.formTitle}>Connect Your Bank</Text>
         </View>
         <Text style={styles.formSubtitle}>
-          {detailsSubmitted
-            ? "Your details have been submitted. Complete any remaining requirements to activate your account."
-            : "Last step! Connect your bank account to receive direct deposits."}
+          Last step! Enter your bank details to receive direct deposits.
         </Text>
 
-        {/* Show current status */}
-        {accountStatus?.hasAccount && (
-          <View style={styles.statusInfo}>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Details Submitted:</Text>
-              <Icon
-                name={detailsSubmitted ? "check-circle" : "times-circle"}
-                size={16}
-                color={detailsSubmitted ? colors.success[500] : colors.error[500]}
-              />
-            </View>
-            <View style={styles.statusRow}>
-              <Text style={styles.statusLabel}>Payouts Enabled:</Text>
-              <Icon
-                name={accountStatus.payoutsEnabled ? "check-circle" : "times-circle"}
-                size={16}
-                color={accountStatus.payoutsEnabled ? colors.success[500] : colors.error[500]}
-              />
-            </View>
-            {hasPendingRequirements && (
-              <View style={styles.requirementsBox}>
-                <Text style={styles.requirementsTitle}>Pending Requirements:</Text>
-                {accountStatus.requirements.currentlyDue.map((req, idx) => (
-                  <Text key={idx} style={styles.requirementItem}>• {req.replace(/_/g, ' ')}</Text>
-                ))}
-              </View>
-            )}
+        <View style={styles.bankInfo}>
+          <View style={styles.bankInfoItem}>
+            <Icon name="check-circle" size={16} color={colors.success[500]} />
+            <Text style={styles.bankInfoText}>Deposits in 2-3 business days</Text>
           </View>
-        )}
+          <View style={styles.bankInfoItem}>
+            <Icon name="check-circle" size={16} color={colors.success[500]} />
+            <Text style={styles.bankInfoText}>No fees to receive payments</Text>
+          </View>
+        </View>
 
-        {!detailsSubmitted && (
-          <>
-            <View style={styles.bankInfo}>
-              <View style={styles.bankInfoItem}>
-                <Icon name="check-circle" size={16} color={colors.success[500]} />
-                <Text style={styles.bankInfoText}>Secure connection via Stripe</Text>
-              </View>
-              <View style={styles.bankInfoItem}>
-                <Icon name="check-circle" size={16} color={colors.success[500]} />
-                <Text style={styles.bankInfoText}>Deposits in 2-3 business days</Text>
-              </View>
-              <View style={styles.bankInfoItem}>
-                <Icon name="check-circle" size={16} color={colors.success[500]} />
-                <Text style={styles.bankInfoText}>No fees to receive payments</Text>
-              </View>
-            </View>
+        <View style={styles.formGroup}>
+          <Text style={styles.inputLabel}>Routing Number</Text>
+          <TextInput
+            style={[styles.input, errors.routingNumber && styles.inputError]}
+            placeholder="9 digits (found on your check)"
+            keyboardType="number-pad"
+            maxLength={9}
+            value={formData.routingNumber}
+            onChangeText={(v) => setFormData({ ...formData, routingNumber: v.replace(/\D/g, "") })}
+          />
+          {errors.routingNumber && <Text style={styles.errorText}>{errors.routingNumber}</Text>}
+        </View>
 
-            <View style={styles.tipCard}>
-              <Icon name="lightbulb-o" size={20} color={colors.warning[600]} />
-              <View style={styles.tipContent}>
-                <Text style={styles.tipTitle}>Have This Ready</Text>
-                <Text style={styles.tipText}>
-                  Your bank routing number and account number (found on a check or in your bank app)
-                </Text>
-              </View>
-            </View>
-          </>
-        )}
+        <View style={styles.formGroup}>
+          <Text style={styles.inputLabel}>Account Number</Text>
+          <TextInput
+            style={[styles.input, errors.accountNumber && styles.inputError]}
+            placeholder="Your bank account number"
+            keyboardType="number-pad"
+            maxLength={17}
+            secureTextEntry
+            value={formData.accountNumber}
+            onChangeText={(v) => setFormData({ ...formData, accountNumber: v.replace(/\D/g, "") })}
+          />
+          {errors.accountNumber && <Text style={styles.errorText}>{errors.accountNumber}</Text>}
+        </View>
 
-        <Pressable
-          style={[styles.primaryButton, isProcessing && styles.buttonDisabled]}
-          onPress={handleStartOnboarding}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <ActivityIndicator color={colors.neutral[0]} />
-          ) : (
-            <>
-              <Icon name="bank" size={16} color={colors.neutral[0]} />
-              <Text style={styles.primaryButtonText}>
-                {detailsSubmitted ? "Complete Requirements" : "Connect Bank Account"}
-              </Text>
-            </>
-          )}
-        </Pressable>
+        <View style={styles.formGroup}>
+          <Text style={styles.inputLabel}>Confirm Account Number</Text>
+          <TextInput
+            style={[styles.input, errors.confirmAccountNumber && styles.inputError]}
+            placeholder="Re-enter account number"
+            keyboardType="number-pad"
+            maxLength={17}
+            secureTextEntry
+            value={formData.confirmAccountNumber}
+            onChangeText={(v) => setFormData({ ...formData, confirmAccountNumber: v.replace(/\D/g, "") })}
+          />
+          {errors.confirmAccountNumber && <Text style={styles.errorText}>{errors.confirmAccountNumber}</Text>}
+        </View>
 
-        <Text style={styles.stripeNote}>
-          You'll be taken to Stripe to {detailsSubmitted ? "complete verification" : "securely enter your bank details"}
-        </Text>
+        <View style={styles.tipCard}>
+          <Icon name="info-circle" size={20} color={colors.primary[500]} />
+          <View style={styles.tipContent}>
+            <Text style={styles.tipTitle}>Where to Find These</Text>
+            <Text style={styles.tipText}>
+              Your routing and account numbers are on the bottom of your checks, or in your bank's mobile app under account details.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.securityNote}>
+          <Icon name="lock" size={14} color={colors.text.tertiary} />
+          <Text style={styles.securityNoteText}>
+            Your bank info is encrypted and sent directly to Stripe
+          </Text>
+        </View>
       </View>
     );
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <StepIndicator />
-      {renderStepContent()}
+    <>
+      <ScrollView contentContainerStyle={styles.container}>
+        <StepIndicator />
+        {renderStepContent()}
 
-      {currentStep < 3 && (
         <View style={styles.buttonContainer}>
           {currentStep > 1 && (
             <Pressable
@@ -712,27 +724,27 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             ) : (
               <>
                 <Text style={styles.primaryButtonText}>
-                  {currentStep === 2 ? "Continue to Bank" : "Continue"}
+                  {currentStep === 3 ? "Complete Setup" : "Continue"}
                 </Text>
-                <Icon name="arrow-right" size={16} color={colors.neutral[0]} />
+                <Icon name={currentStep === 3 ? "check" : "arrow-right"} size={16} color={colors.neutral[0]} />
               </>
             )}
           </Pressable>
         </View>
-      )}
 
-      <Pressable
-        style={[styles.refreshButton, isRefreshing && styles.buttonDisabled]}
-        onPress={() => fetchAccountStatus(true)}
-        disabled={isRefreshing}
-      >
-        {isRefreshing ? (
-          <ActivityIndicator size="small" color={colors.primary[600]} />
-        ) : (
-          <Text style={styles.refreshButtonText}>Refresh Status</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+        <Pressable
+          style={[styles.refreshButton, isRefreshing && styles.buttonDisabled]}
+          onPress={() => fetchAccountStatus(true)}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? (
+            <ActivityIndicator size="small" color={colors.primary[600]} />
+          ) : (
+            <Text style={styles.refreshButtonText}>Refresh Status</Text>
+          )}
+        </Pressable>
+      </ScrollView>
+    </>
   );
 };
 
