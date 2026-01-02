@@ -44,23 +44,26 @@ const TopBar = ({ dispatch, state }) => {
   const [signInRedirect, setSignInRedirect] = useState(false);
   const [signUpRedirect, setSignUpRedirect] = useState(false);
   const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
-  const [pendingApplications, setPendingApplications] = useState(0);
 
-  // Use global state for pending cleaner requests
+  // Use global state for pending applications and cleaner requests
+  const pendingApplications = state.pendingApplications || 0;
   const pendingCleanerRequests = state.pendingCleanerRequests || 0;
 
   const navigate = useNavigate();
 
-  // Fetch pending applications count for owners
+  // Fetch pending applications count for owners and HR
   useEffect(() => {
     const fetchPendingApplications = async () => {
-      if (state.account === "owner") {
+      if (state.account === "owner" || state.account === "humanResources") {
         const count = await Application.getPendingCount();
-        setPendingApplications(count);
+        dispatch({
+          type: "SET_PENDING_APPLICATIONS",
+          payload: count,
+        });
       }
     };
     fetchPendingApplications();
-  }, [state.account]);
+  }, [state.account, dispatch]);
 
   // Fetch pending cleaner requests count for clients (homeowners)
   useEffect(() => {
@@ -115,8 +118,8 @@ const TopBar = ({ dispatch, state }) => {
             <View style={styles.rightSection}>
               <MessagesButton state={state} dispatch={dispatch} />
               <HomeButton />
-              {/* Applications notification badge for owners */}
-              {state.account === "owner" && pendingApplications > 0 && (
+              {/* Applications notification badge for owners and HR */}
+              {(state.account === "owner" || state.account === "humanResources") && pendingApplications > 0 && (
                 <Pressable
                   style={({ pressed }) => [
                     styles.notificationButton,

@@ -9,7 +9,180 @@ jest.mock("../../models", () => ({
 
 const { UserApplications } = require("../../models");
 
+// Import the parseToISODate helper for testing (exposed via module for testing)
+// Since it's a private function, we test it through the public API
 describe("ApplicationInfoClass", () => {
+  describe("Date Parsing (parseToISODate)", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      UserApplications.create.mockResolvedValue({ id: 1 });
+    });
+
+    it("should convert MM/DD/YYYY format to ISO format", async () => {
+      await ApplicationInfoClass.addApplicationToDB({
+        firstName: "Test",
+        lastName: "User",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        dateOfBirth: "01/17/1994",
+        idPhoto: "photo",
+        experience: "1 year",
+        message: "test",
+        backgroundConsent: true,
+      });
+
+      expect(UserApplications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dateOfBirth: "1994-01-17",
+        })
+      );
+    });
+
+    it("should handle single-digit month and day in MM/DD/YYYY format", async () => {
+      await ApplicationInfoClass.addApplicationToDB({
+        firstName: "Test",
+        lastName: "User",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        dateOfBirth: "1/5/1990",
+        idPhoto: "photo",
+        experience: "1 year",
+        message: "test",
+        backgroundConsent: true,
+      });
+
+      expect(UserApplications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dateOfBirth: "1990-01-05",
+        })
+      );
+    });
+
+    it("should keep ISO format dates as-is", async () => {
+      await ApplicationInfoClass.addApplicationToDB({
+        firstName: "Test",
+        lastName: "User",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        dateOfBirth: "1994-01-17",
+        idPhoto: "photo",
+        experience: "1 year",
+        message: "test",
+        backgroundConsent: true,
+      });
+
+      expect(UserApplications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dateOfBirth: "1994-01-17",
+        })
+      );
+    });
+
+    it("should handle null dateOfBirth", async () => {
+      await ApplicationInfoClass.addApplicationToDB({
+        firstName: "Test",
+        lastName: "User",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        dateOfBirth: null,
+        idPhoto: "photo",
+        experience: "1 year",
+        message: "test",
+        backgroundConsent: true,
+      });
+
+      expect(UserApplications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dateOfBirth: null,
+        })
+      );
+    });
+
+    it("should handle undefined dateOfBirth", async () => {
+      await ApplicationInfoClass.addApplicationToDB({
+        firstName: "Test",
+        lastName: "User",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        idPhoto: "photo",
+        experience: "1 year",
+        message: "test",
+        backgroundConsent: true,
+      });
+
+      expect(UserApplications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dateOfBirth: null,
+        })
+      );
+    });
+
+    it("should convert availableStartDate from MM/DD/YYYY to ISO format", async () => {
+      await ApplicationInfoClass.addApplicationToDB({
+        firstName: "Test",
+        lastName: "User",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        dateOfBirth: "1994-01-17",
+        availableStartDate: "02/15/2025",
+        idPhoto: "photo",
+        experience: "1 year",
+        message: "test",
+        backgroundConsent: true,
+      });
+
+      expect(UserApplications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          availableStartDate: "2025-02-15",
+        })
+      );
+    });
+
+    it("should keep availableStartDate as-is if already ISO format", async () => {
+      await ApplicationInfoClass.addApplicationToDB({
+        firstName: "Test",
+        lastName: "User",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        dateOfBirth: "1994-01-17",
+        availableStartDate: "2025-02-15",
+        idPhoto: "photo",
+        experience: "1 year",
+        message: "test",
+        backgroundConsent: true,
+      });
+
+      expect(UserApplications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          availableStartDate: "2025-02-15",
+        })
+      );
+    });
+
+    it("should handle both date fields with MM/DD/YYYY format", async () => {
+      await ApplicationInfoClass.addApplicationToDB({
+        firstName: "Test",
+        lastName: "User",
+        email: "test@test.com",
+        phone: "555-555-5555",
+        dateOfBirth: "12/25/1985",
+        availableStartDate: "03/01/2025",
+        idPhoto: "photo",
+        experience: "1 year",
+        message: "test",
+        backgroundConsent: true,
+      });
+
+      expect(UserApplications.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dateOfBirth: "1985-12-25",
+          availableStartDate: "2025-03-01",
+        })
+      );
+    });
+  });
+
+  // Original tests below
   beforeEach(() => {
     jest.clearAllMocks();
   });

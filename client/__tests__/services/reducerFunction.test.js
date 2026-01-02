@@ -582,6 +582,78 @@ describe("Reducer Function", () => {
     });
   });
 
+  describe("Pending Applications Actions", () => {
+    it("should handle SET_PENDING_APPLICATIONS action", () => {
+      const stateWithPending = { ...initialState, pendingApplications: 0 };
+      const action = { type: "SET_PENDING_APPLICATIONS", payload: 5 };
+      const newState = reducer(stateWithPending, action);
+
+      expect(newState.pendingApplications).toBe(5);
+    });
+
+    it("should set pendingApplications to zero", () => {
+      const stateWithPending = { ...initialState, pendingApplications: 10 };
+      const action = { type: "SET_PENDING_APPLICATIONS", payload: 0 };
+      const newState = reducer(stateWithPending, action);
+
+      expect(newState.pendingApplications).toBe(0);
+    });
+
+    it("should preserve other state properties when setting pending applications", () => {
+      const stateWithData = {
+        ...initialState,
+        account: "owner",
+        pendingApplications: 0,
+      };
+      const action = { type: "SET_PENDING_APPLICATIONS", payload: 3 };
+      const newState = reducer(stateWithData, action);
+
+      expect(newState.pendingApplications).toBe(3);
+      expect(newState.account).toBe("owner");
+    });
+
+    it("should update pendingApplications when status changes reduce pending count", () => {
+      let state = { ...initialState, pendingApplications: 5 };
+
+      // Simulate status change reducing pending count
+      state = reducer(state, { type: "SET_PENDING_APPLICATIONS", payload: 4 });
+      expect(state.pendingApplications).toBe(4);
+
+      // Simulate another status change (hire)
+      state = reducer(state, { type: "SET_PENDING_APPLICATIONS", payload: 3 });
+      expect(state.pendingApplications).toBe(3);
+    });
+
+    it("should handle setting pendingApplications from undefined", () => {
+      const action = { type: "SET_PENDING_APPLICATIONS", payload: 2 };
+      const newState = reducer(initialState, action);
+
+      expect(newState.pendingApplications).toBe(2);
+    });
+
+    it("should allow HR to see same pending count as owner", () => {
+      // Test that the reducer works the same way for HR account type
+      const ownerState = {
+        ...initialState,
+        account: "owner",
+        pendingApplications: 0,
+      };
+      const hrState = {
+        ...initialState,
+        account: "humanResources",
+        pendingApplications: 0,
+      };
+
+      const action = { type: "SET_PENDING_APPLICATIONS", payload: 7 };
+
+      const newOwnerState = reducer(ownerState, action);
+      const newHRState = reducer(hrState, action);
+
+      expect(newOwnerState.pendingApplications).toBe(7);
+      expect(newHRState.pendingApplications).toBe(7);
+    });
+  });
+
   describe("Unknown action", () => {
     it("should throw error for unknown action type", () => {
       const action = { type: "UNKNOWN_ACTION", payload: {} };

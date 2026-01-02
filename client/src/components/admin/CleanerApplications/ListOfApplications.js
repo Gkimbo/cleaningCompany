@@ -27,7 +27,7 @@ const STATUS_CONFIG = {
   hired: { label: "Hired", color: colors.success[700], bgColor: colors.success[100] },
 };
 
-const ListOfApplications = ({ state }) => {
+const ListOfApplications = ({ state, dispatch }) => {
   const [applications, setApplications] = useState([]);
   const [filteredApplications, setFilteredApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +43,21 @@ const ListOfApplications = ({ state }) => {
     filterApplications();
   }, [applications, searchQuery, selectedStatus]);
 
+  // Update the pending applications count in global state
+  const updatePendingCount = async () => {
+    if (dispatch) {
+      try {
+        const count = await Application.getPendingCount();
+        dispatch({
+          type: "SET_PENDING_APPLICATIONS",
+          payload: count,
+        });
+      } catch (error) {
+        console.error("Error updating pending count:", error);
+      }
+    }
+  };
+
   const fetchApplications = async () => {
     setLoading(true);
     try {
@@ -51,6 +66,8 @@ const ListOfApplications = ({ state }) => {
       const apps = response.serializedApplications || [];
       setApplications(apps);
       calculateStats(apps);
+      // Also update global pending count
+      await updatePendingCount();
     } catch (error) {
       console.error("Error fetching applications:", error);
     } finally {

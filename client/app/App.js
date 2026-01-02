@@ -259,6 +259,7 @@ export default function App() {
                 element={
                   <ListOfApplications
                     state={state}
+                    dispatch={dispatch}
                     applicationList={applicationList}
                     setApplicationList={setApplicationList}
                   />
