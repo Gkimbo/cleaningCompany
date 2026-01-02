@@ -683,7 +683,6 @@ usersRouter.delete("/employee", async (req, res) => {
       );
     }
 
-    await User.destroy({
     // Delete the user (cascading deletes should handle StripeConnectAccount, Payouts, etc.)
     const deleted = await User.destroy({
       where: {
