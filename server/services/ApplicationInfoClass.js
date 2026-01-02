@@ -1,5 +1,30 @@
 const { UserApplications } = require("../models");
 
+// Helper to convert date strings to ISO format (YYYY-MM-DD) for DATEONLY fields
+const parseToISODate = (dateString) => {
+  if (!dateString) return null;
+
+  // If already in ISO format (YYYY-MM-DD), return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+
+  // Handle MM/DD/YYYY format
+  const match = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) {
+    const [, month, day, year] = match;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  // Fallback: try to parse with Date and extract ISO date
+  const parsed = new Date(dateString);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+
+  return null;
+};
+
 class ApplicationInfoClass {
   static async addApplicationToDB({
     // Basic Information
@@ -56,7 +81,7 @@ class ApplicationInfoClass {
       lastName,
       email,
       phone,
-      dateOfBirth,
+      dateOfBirth: parseToISODate(dateOfBirth),
       streetAddress,
       city,
       state,
@@ -79,7 +104,7 @@ class ApplicationInfoClass {
       emergencyContactName,
       emergencyContactPhone,
       emergencyContactRelation,
-      availableStartDate,
+      availableStartDate: parseToISODate(availableStartDate),
       availableDays,
       message,
       backgroundConsent,
