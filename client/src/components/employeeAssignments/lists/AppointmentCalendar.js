@@ -157,7 +157,7 @@ const AppointmentCalendar = ({ state }) => {
           }
         );
       } catch (error) {
-        console.error("[AppointmentCalendar] Error getting location:", error);
+        console.log("[AppointmentCalendar] Location unavailable:", error.message);
       }
     };
 

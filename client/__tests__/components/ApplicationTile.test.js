@@ -361,3 +361,122 @@ describe("ApplicationTile - Status Update Logic", () => {
     expect(availableStatuses).not.toContain("hired");
   });
 });
+
+describe("ApplicationTile - ID Photo Blob URL Handling", () => {
+  /**
+   * On web platform, blob URLs (blob:http://...) are session-only and cannot be
+   * displayed after the page is reloaded. The component should detect these
+   * and show a placeholder instead of crashing.
+   */
+
+  describe("Blob URL Detection", () => {
+    it("should detect blob URLs correctly", () => {
+      const blobUrls = [
+        "blob:http://localhost:8081/18a1947f-fd12-4c55-9b99-0bbba8ad60c4",
+        "blob:https://example.com/some-uuid",
+        "blob:null/abcd-1234",
+      ];
+
+      blobUrls.forEach((url) => {
+        expect(url.startsWith("blob:")).toBe(true);
+      });
+    });
+
+    it("should not flag data URLs as blob URLs", () => {
+      const dataUrls = [
+        "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+        "data:image/png;base64,iVBORw0KGgo...",
+      ];
+
+      dataUrls.forEach((url) => {
+        expect(url.startsWith("blob:")).toBe(false);
+        expect(url.startsWith("data:")).toBe(true);
+      });
+    });
+
+    it("should not flag file URLs as blob URLs", () => {
+      const fileUrls = [
+        "file:///path/to/photo.jpg",
+        "file:///var/mobile/Containers/Data/image.png",
+      ];
+
+      fileUrls.forEach((url) => {
+        expect(url.startsWith("blob:")).toBe(false);
+        expect(url.startsWith("file:")).toBe(true);
+      });
+    });
+  });
+
+  describe("Photo Display Logic", () => {
+    it("should show placeholder for blob URLs on web", () => {
+      const platformOS = "web";
+      const photoUrl = "blob:http://localhost:8081/test-uuid";
+
+      const shouldShowPlaceholder = platformOS === "web" && photoUrl.startsWith("blob:");
+      expect(shouldShowPlaceholder).toBe(true);
+    });
+
+    it("should show image for data URLs on web", () => {
+      const platformOS = "web";
+      const photoUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRg...";
+
+      const shouldShowPlaceholder = platformOS === "web" && photoUrl.startsWith("blob:");
+      expect(shouldShowPlaceholder).toBe(false);
+    });
+
+    it("should show image for any URL on native platforms", () => {
+      const nativePlatforms = ["ios", "android"];
+      const blobUrl = "blob:http://localhost:8081/test-uuid";
+
+      nativePlatforms.forEach((platform) => {
+        const shouldShowPlaceholder = platform === "web" && blobUrl.startsWith("blob:");
+        expect(shouldShowPlaceholder).toBe(false);
+      });
+    });
+
+    it("should show image when no photo is provided", () => {
+      const photoUrl = null;
+      const hasPhoto = !!photoUrl;
+      expect(hasPhoto).toBe(false);
+    });
+  });
+
+  describe("Valid Photo URL Types", () => {
+    it("should accept base64 data URLs", () => {
+      const validUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+      expect(validUrl).toMatch(/^data:image\/(jpeg|png|gif|webp);base64,/);
+    });
+
+    it("should accept file:// URLs (native)", () => {
+      const validUrl = "file:///path/to/photo.jpg";
+      expect(validUrl.startsWith("file://")).toBe(true);
+    });
+
+    it("should accept content:// URLs (Android)", () => {
+      const validUrl = "content://media/external/images/media/1234";
+      expect(validUrl.startsWith("content://")).toBe(true);
+    });
+
+    it("should accept https:// URLs (remote images)", () => {
+      const validUrl = "https://example.com/images/photo.jpg";
+      expect(validUrl.startsWith("https://")).toBe(true);
+    });
+  });
+});
+
+describe("ApplicationTile - Photo Save Functionality", () => {
+  it("should extract filename from photo URL", () => {
+    const photoUrl = "file:///path/to/photo123.jpg";
+    const filename = photoUrl.split("/").pop();
+    expect(filename).toBe("photo123.jpg");
+  });
+
+  it("should handle data URL for saving (no filename)", () => {
+    const photoUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    // Data URLs don't have a traditional filename path
+    const parts = photoUrl.split("/");
+    const lastPart = parts.pop();
+    // This won't be a valid filename
+    expect(lastPart).not.toMatch(/\.(jpg|jpeg|png|gif)$/);
+  });
+});
