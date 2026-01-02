@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { UserContext } from "../../../context/UserContext";
@@ -183,7 +184,33 @@ const JobPhotoCapture = ({
     setUploading(true);
 
     try {
-      const photoData = `data:image/jpeg;base64,${imageAsset.base64}`;
+      let photoData;
+
+      // On web, base64 may not be available - need to convert blob URL
+      if (imageAsset.base64) {
+        photoData = `data:image/jpeg;base64,${imageAsset.base64}`;
+      } else if (Platform.OS === "web" && imageAsset.uri) {
+        // Convert blob URL to base64 data URL on web
+        try {
+          const response = await fetch(imageAsset.uri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          photoData = await new Promise((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (conversionError) {
+          console.error("Error converting blob to base64:", conversionError);
+          Alert.alert("Error", "Failed to process the image.");
+          setUploading(false);
+          return;
+        }
+      } else {
+        Alert.alert("Error", "Could not process the selected image.");
+        setUploading(false);
+        return;
+      }
 
       const response = await fetch(`${baseURL}/api/v1/job-photos/upload`, {
         method: "POST",

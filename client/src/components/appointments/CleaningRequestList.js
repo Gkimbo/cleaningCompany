@@ -93,7 +93,7 @@ const CleaningRequestList = ({ state, dispatch }) => {
         );
         setAppointmentLocations(Object.assign({}, ...locations));
       } catch (error) {
-        console.error("Error fetching appointment locations:", error);
+        console.log("Error fetching appointment locations:", error.message);
       }
     };
     if (appointmentArray.length > 0) fetchLocations();
@@ -115,7 +115,7 @@ const CleaningRequestList = ({ state, dispatch }) => {
         setLoading(false);
       },
       (error) => {
-        console.error("Error getting location:", error);
+        console.log("Location unavailable:", error.message || error);
         setLoading(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }

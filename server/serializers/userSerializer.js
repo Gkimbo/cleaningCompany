@@ -15,7 +15,9 @@ class UserSerializer {
 			"daysWorking",
 			"notifications",
 			"reviews",
-			"hasPaymentMethod"
+			"hasPaymentMethod",
+			"referralCode",
+			"referralCredits"
 		];
 
 		const serializedUser = {};
@@ -55,6 +57,8 @@ class UserSerializer {
 			"type",
 			"daysWorking",
 			"hasPaymentMethod",
+			"referralCode",
+			"referralCredits",
 		];
 		const serializedUser = {};
 

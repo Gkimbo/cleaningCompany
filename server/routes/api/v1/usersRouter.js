@@ -1,4 +1,5 @@
 const express = require("express");
+const models = require("../../../models");
 const {
   User,
   UserBills,
@@ -10,13 +11,14 @@ const {
   UserTermsAcceptance,
   Conversation,
   ConversationParticipant,
-} = require("../../../models");
+} = models;
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
+const ReferralService = require("../../../services/ReferralService");
 const { Op } = require("sequelize");
 
 const secretKey = process.env.SESSION_SECRET;
@@ -51,7 +53,7 @@ const validatePassword = (password) => {
 
 usersRouter.post("/", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, email, termsId } = req.body;
+    const { firstName, lastName, username, password, email, termsId, referralCode } = req.body;
 
     // Validate password strength
     const passwordError = validatePassword(password);
@@ -105,6 +107,43 @@ usersRouter.post("/", async (req, res) => {
             ipAddress,
             termsContentSnapshot: termsRecord.contentType === "text" ? termsRecord.content : null,
           });
+        }
+
+        // Process referral code if provided
+        if (referralCode) {
+          try {
+            // Validate the referral code
+            const validation = await ReferralService.validateReferralCode(
+              referralCode,
+              "homeowner",
+              models
+            );
+
+            if (validation.valid) {
+              // Generate a referral code for the new user first
+              await ReferralService.generateReferralCode(newUser, models);
+
+              // Create the referral record
+              await ReferralService.createReferral(
+                referralCode,
+                newUser,
+                validation.programType,
+                validation.rewards,
+                models
+              );
+              console.log(`[Referral] New user ${newUser.id} referred by code ${referralCode}`);
+            }
+          } catch (referralError) {
+            // Don't fail signup if referral processing fails
+            console.error("[Referral] Error processing referral:", referralError.message);
+          }
+        } else {
+          // Generate a referral code for new user even without being referred
+          try {
+            await ReferralService.generateReferralCode(newUser, models);
+          } catch (codeError) {
+            console.error("[Referral] Error generating code:", codeError.message);
+          }
         }
 
         await newUser.update({ lastLogin: new Date() });
@@ -458,6 +497,21 @@ usersRouter.delete("/hr-staff/:id", async (req, res) => {
     await UserBills.destroy({ where: { userId: id } });
     await ConversationParticipant.destroy({ where: { userId: id } });
 
+    // Cancel any referrals associated with this user
+    const { Referral } = models;
+    if (Referral) {
+      // Cancel referrals where this user was the referrer
+      await Referral.update(
+        { status: "cancelled" },
+        { where: { referrerId: id, status: { [Op.in]: ["pending", "qualified"] } } }
+      );
+      // Cancel referrals where this user was referred
+      await Referral.update(
+        { status: "cancelled" },
+        { where: { referredId: id, status: { [Op.in]: ["pending", "qualified"] } } }
+      );
+    }
+
     // Delete the HR user
     await hrUser.destroy();
 
@@ -614,6 +668,22 @@ usersRouter.delete("/employee", async (req, res) => {
       }
     }
 
+    // Cancel any referrals associated with this user
+    const { Referral } = models;
+    if (Referral) {
+      // Cancel referrals where this user was the referrer
+      await Referral.update(
+        { status: "cancelled" },
+        { where: { referrerId: userId, status: { [Op.in]: ["pending", "qualified"] } } }
+      );
+      // Cancel referrals where this user was referred
+      await Referral.update(
+        { status: "cancelled" },
+        { where: { referredId: userId, status: { [Op.in]: ["pending", "qualified"] } } }
+      );
+    }
+
+    await User.destroy({
     // Delete the user (cascading deletes should handle StripeConnectAccount, Payouts, etc.)
     const deleted = await User.destroy({
       where: {

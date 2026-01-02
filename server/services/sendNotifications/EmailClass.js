@@ -455,7 +455,8 @@ This is an automated message. Please do not reply directly to this email.
       console.log("✅ Welcome email sent successfully:", info.response);
       return info.response;
     } catch (error) {
-      console.error("❌ Error sending welcome email:", error);
+      console.error("❌ Error sending welcome email:", error.message);
+      throw error; // Re-throw so caller can handle it
     }
   }
 

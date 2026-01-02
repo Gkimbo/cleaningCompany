@@ -83,6 +83,10 @@ import ChecklistEditor from "../src/components/owner/ChecklistEditor";
 // Cleaner components
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
 
+// Referral components
+import ReferralManagement from "../src/components/owner/ReferralManagement";
+import MyReferralsPage from "../src/components/referrals/MyReferralsPage";
+
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
 
@@ -452,6 +456,16 @@ export default function App() {
               <Route
                 path="/owner/checklist"
                 element={<ChecklistEditor state={state} />}
+              />
+              {/* Owner Referral Management */}
+              <Route
+                path="/owner/referrals"
+                element={<ReferralManagement state={state} />}
+              />
+              {/* User Referrals Page */}
+              <Route
+                path="/my-referrals"
+                element={<MyReferralsPage state={state} dispatch={dispatch} />}
               />
             </Routes>
             </SafeAreaView>

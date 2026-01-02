@@ -47,6 +47,8 @@ class ApplicationInfoClass {
     backgroundConsent,
     drugTestConsent,
     referenceCheckConsent,
+    // Referral
+    referralCode,
   }) {
     // Create a new record in the database
     const application = await UserApplications.create({
@@ -83,6 +85,7 @@ class ApplicationInfoClass {
       backgroundConsent,
       drugTestConsent,
       referenceCheckConsent,
+      referralCode,
     });
 
     return application;

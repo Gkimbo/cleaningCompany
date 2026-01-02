@@ -1,17 +1,28 @@
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE } from "./config";
 
-// Configure notification handling
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Try to import expo-notifications, but gracefully handle if unavailable (Expo Go SDK 53+)
+let Notifications = null;
+let notificationsAvailable = false;
+
+try {
+  Notifications = require("expo-notifications");
+  notificationsAvailable = true;
+
+  // Configure notification handling
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (error) {
+  console.log("[Push] expo-notifications not available (Expo Go SDK 53+). Push notifications disabled.");
+  console.log("[Push] To enable push notifications, use a development build instead of Expo Go.");
+}
 
 class PushNotificationService {
   static expoPushToken = null;
@@ -19,10 +30,24 @@ class PushNotificationService {
   static responseListener = null;
 
   /**
+   * Check if push notifications are available
+   * @returns {boolean} Whether push notifications can be used
+   */
+  static isAvailable() {
+    return notificationsAvailable && Platform.OS !== "web";
+  }
+
+  /**
    * Register for push notifications and get the Expo push token
    * @returns {Promise<string|null>} The Expo push token or null if failed
    */
   static async registerForPushNotificationsAsync() {
+    // Push notifications not available in Expo Go SDK 53+
+    if (!notificationsAvailable) {
+      console.log("[Push] Push notifications not available in this environment");
+      return null;
+    }
+
     let token = null;
 
     // Push notifications only work on physical devices
@@ -31,22 +56,22 @@ class PushNotificationService {
       return null;
     }
 
-    // Check existing permissions
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    // Request permissions if not already granted
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== "granted") {
-      console.log("[Push] Permission not granted for push notifications");
-      return null;
-    }
-
     try {
+      // Check existing permissions
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      // Request permissions if not already granted
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== "granted") {
+        console.log("[Push] Permission not granted for push notifications");
+        return null;
+      }
+
       // Get the Expo push token
       const tokenData = await Notifications.getExpoPushTokenAsync({
         projectId: "your-project-id", // Optional: Add your Expo project ID
@@ -54,19 +79,19 @@ class PushNotificationService {
       token = tokenData.data;
       this.expoPushToken = token;
       console.log("[Push] Expo push token:", token);
+
+      // Android requires a notification channel
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "default",
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: "#0d9488",
+        });
+      }
     } catch (error) {
       console.error("[Push] Error getting push token:", error);
       return null;
-    }
-
-    // Android requires a notification channel
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", {
-        name: "default",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#0d9488",
-      });
     }
 
     return token;
@@ -144,6 +169,12 @@ class PushNotificationService {
    * @param {Function} onNotificationResponse - Callback when user taps notification
    */
   static setupNotificationListeners(onNotificationReceived, onNotificationResponse) {
+    // Skip if notifications not available
+    if (!notificationsAvailable) {
+      console.log("[Push] Cannot set up listeners - notifications not available");
+      return;
+    }
+
     // Listen for notifications when app is in foreground
     this.notificationListener = Notifications.addNotificationReceivedListener(
       (notification) => {
@@ -169,6 +200,11 @@ class PushNotificationService {
    * Remove notification listeners (on unmount)
    */
   static removeNotificationListeners() {
+    // Skip if notifications not available
+    if (!notificationsAvailable) {
+      return;
+    }
+
     // removeNotificationSubscription is not available on web
     if (Platform.OS === "web") {
       this.notificationListener = null;

@@ -141,7 +141,7 @@ const SelectNewJobList = ({ state }) => {
         );
         setAppointmentLocations(Object.assign({}, ...locations));
       } catch (error) {
-        console.error("Error fetching locations:", error);
+        console.log("Error fetching locations:", error.message);
       }
     };
 
@@ -187,7 +187,7 @@ const SelectNewJobList = ({ state }) => {
           }
         );
       } catch (error) {
-        console.error("Error getting location:", error);
+        console.log("Location unavailable:", error.message || error);
       }
     };
 

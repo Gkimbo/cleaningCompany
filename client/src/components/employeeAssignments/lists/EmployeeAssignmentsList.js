@@ -121,7 +121,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
           }
         );
       } catch (error) {
-        console.error("[EmployeeAssignmentsList] Error getting location:", error);
+        console.log("[EmployeeAssignmentsList] Location unavailable:", error.message);
       }
     };
 
@@ -145,7 +145,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
         );
         setAppointmentLocations(Object.assign({}, ...locations));
       } catch (error) {
-        console.error("Error fetching appointment locations:", error);
+        console.log("Error fetching appointment locations:", error.message);
       }
     };
     if (allAppointments.length > 0) fetchLocations();

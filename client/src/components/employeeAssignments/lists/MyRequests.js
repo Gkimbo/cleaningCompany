@@ -101,7 +101,7 @@ const MyRequests = ({ state }) => {
         );
         setAppointmentLocations(Object.assign({}, ...locations));
       } catch (error) {
-        console.error("Error fetching appointment locations:", error);
+        console.log("Error fetching appointment locations:", error.message);
       }
     };
 
@@ -143,7 +143,7 @@ const MyRequests = ({ state }) => {
           }
         );
       } catch (error) {
-        console.error("[MyRequests] Error getting location:", error);
+        console.log("[MyRequests] Location unavailable:", error.message);
       }
     };
 

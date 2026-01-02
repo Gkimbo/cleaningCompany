@@ -120,7 +120,7 @@ const MyRequestsCalendar = ({ state }) => {
           }
         );
       } catch (error) {
-        console.error("[MyRequestsCalendar] Location error:", error);
+        console.log("[MyRequestsCalendar] Location unavailable:", error.message);
       }
     };
 

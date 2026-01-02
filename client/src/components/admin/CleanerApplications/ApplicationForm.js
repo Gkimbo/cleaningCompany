@@ -24,6 +24,7 @@ import {
   responsive,
 } from "../../../services/styles/theme";
 import { usePricing, defaultPricing } from "../../../context/PricingContext";
+import ReferralCodeInput from "../../referrals/ReferralCodeInput";
 import IncentiveBanner from "../../incentives/IncentiveBanner";
 import IncentivesService from "../../../services/fetchRequests/IncentivesService";
 
@@ -115,6 +116,8 @@ const CleanerApplicationForm = () => {
   const hustleModeEarnings = calculateEarnings(4);
 
   const [showForm, setShowForm] = useState(false);
+  const [referralCode, setReferralCode] = useState("");
+  const [referralValidation, setReferralValidation] = useState(null);
   const [incentiveConfig, setIncentiveConfig] = useState(null);
 
   // Fetch incentive configuration on mount
@@ -122,6 +125,7 @@ const CleanerApplicationForm = () => {
     IncentivesService.getCurrentIncentives().then(setIncentiveConfig);
   }, []);
 
+  
   const [formData, setFormData] = useState({
     // Basic Information
     firstName: "",
@@ -285,9 +289,30 @@ const CleanerApplicationForm = () => {
     });
 
     if (!pickerResult.canceled && pickerResult.assets?.length > 0) {
+      let photoUri = pickerResult.assets[0].uri;
+
+      // On web, blob URLs need to be converted to base64 data URLs
+      // because blob URLs are session-only and can't be displayed later
+      if (Platform.OS === "web" && photoUri.startsWith("blob:")) {
+        try {
+          const response = await fetch(photoUri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          photoUri = await new Promise((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (error) {
+          console.error("Error converting blob to data URL:", error);
+          Alert.alert("Error", "Failed to process the selected image.");
+          return;
+        }
+      }
+
       setFormData((prev) => ({
         ...prev,
-        idPhoto: pickerResult.assets[0].uri,
+        idPhoto: photoUri,
       }));
     }
   };
@@ -427,8 +452,13 @@ const CleanerApplicationForm = () => {
     }
 
     try {
+      // Include referral code if valid
+      const submissionData = {
+        ...formData,
+        referralCode: referralValidation?.valid ? referralCode : null,
+      };
       const submittedApplication = await Application.addApplicationToDb(
-        formData
+        submissionData
       );
       console.log("Form submitted:", submittedApplication);
       setSubmitted(true);
@@ -1298,6 +1328,16 @@ const CleanerApplicationForm = () => {
       <Text style={styles.helperText}>
         You must be at least 18 years old to apply.
       </Text>
+      {/* Referral Code - placed prominently after email */}
+      <View style={{ marginTop: spacing.md, marginBottom: spacing.md }}>
+        <ReferralCodeInput
+          value={referralCode}
+          onChangeText={setReferralCode}
+          onValidation={setReferralValidation}
+          userType="cleaner"
+          placeholder="Enter referral code (optional)"
+        />
+      </View>
     </>
   );
 

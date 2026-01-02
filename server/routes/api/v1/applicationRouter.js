@@ -3,10 +3,12 @@ const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
 const ApplicationInfoClass = require("../../../services/ApplicationInfoClass");
 const ApplicationSerializer = require("../../../serializers/ApplicationSerializer");
-const { UserApplications, User, UserBills } = require("../../../models");
+const models = require("../../../models");
+const { UserApplications, User, UserBills } = models;
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { generateSecurePassword, generateUniqueUsername } = require("../../../utils/passwordGenerator");
+const ReferralService = require("../../../services/ReferralService");
 
 const applicationRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -86,6 +88,8 @@ applicationRouter.post("/submitted", async (req, res) => {
     backgroundConsent,
     drugTestConsent,
     referenceCheckConsent,
+    // Referral
+    referralCode,
   } = req.body;
 
   try {
@@ -123,6 +127,7 @@ applicationRouter.post("/submitted", async (req, res) => {
       backgroundConsent,
       drugTestConsent,
       referenceCheckConsent,
+      referralCode,
     });
 
     // Notify owners about the new application
@@ -427,6 +432,34 @@ applicationRouter.post("/:id/hire", async (req, res) => {
       totalDue: 0,
     });
 
+    // Process referral if application had a referral code
+    try {
+      // Generate a referral code for the new cleaner
+      await ReferralService.generateReferralCode(newUser, models);
+
+      // If application had a referral code, create the referral record
+      if (application.referralCode) {
+        const validation = await ReferralService.validateReferralCode(
+          application.referralCode,
+          "cleaner",
+          models
+        );
+        if (validation.valid) {
+          await ReferralService.createReferral(
+            application.referralCode,
+            newUser,
+            validation.programType,
+            validation.rewards,
+            models
+          );
+          console.log(`✅ Referral created for cleaner ${newUser.username} using code ${application.referralCode}`);
+        }
+      }
+    } catch (referralError) {
+      // Don't fail the hire process if referral processing fails
+      console.error("Error processing referral during hire:", referralError);
+    }
+
     // Update application with hired details
     await application.update({
       status: "hired",
@@ -436,14 +469,20 @@ applicationRouter.post("/:id/hire", async (req, res) => {
     });
 
     // Send welcome email to new cleaner with credentials
-    await Email.sendEmailCongragulations(
-      newUser.firstName,
-      newUser.lastName,
-      username,
-      password,
-      newUser.email,
-      "cleaner"
-    );
+    try {
+      await Email.sendEmailCongragulations(
+        newUser.firstName,
+        newUser.lastName,
+        username,
+        password,
+        newUser.email,
+        "cleaner"
+      );
+      console.log(`✅ Welcome email sent to ${newUser.email}`);
+    } catch (emailError) {
+      console.error(`❌ Failed to send welcome email to ${newUser.email}:`, emailError.message);
+      // Don't fail the hire process if email fails
+    }
 
     // If HR made the decision, notify owner
     if (caller.type === "humanResources") {

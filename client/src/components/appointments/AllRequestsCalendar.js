@@ -98,7 +98,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
           setLoading(false);
         },
         (error) => {
-          console.error("Error getting location:", error);
+          console.log("Location unavailable:", error.message || error);
           setUserLocation({ latitude: 0, longitude: 0 });
           setLoading(false);
         },
@@ -141,7 +141,7 @@ const AllRequestsCalendar = ({ state, dispatch }) => {
           Object.assign({}, ...locationsWithDistances.filter(Boolean))
         );
       } catch (error) {
-        console.error("Error fetching appointment locations:", error);
+        console.log("Error fetching appointment locations:", error.message);
       }
     };
 

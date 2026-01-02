@@ -8,6 +8,7 @@ import formStyles from "../../../services/styles/FormStyle";
 import { AuthContext } from "../../../services/AuthContext";
 import { TermsModal } from "../../terms";
 import { colors } from "../../../services/styles/theme";
+import ReferralCodeInput from "../../referrals/ReferralCodeInput";
 
 const SignUpForm = ({ state, dispatch }) => {
 	const [firstName, setFirstName] = useState("");
@@ -23,6 +24,8 @@ const SignUpForm = ({ state, dispatch }) => {
 	const [termsAccepted, setTermsAccepted] = useState(false);
 	const [termsId, setTermsId] = useState(null);
 	const [showTermsModal, setShowTermsModal] = useState(false);
+	const [referralCode, setReferralCode] = useState("");
+	const [referralValidation, setReferralValidation] = useState(null);
 	const navigate = useNavigate();
 	const { login } = useContext(AuthContext);
 
@@ -96,6 +99,7 @@ const SignUpForm = ({ state, dispatch }) => {
 				password,
 				email,
 				termsId,
+				referralCode: referralValidation?.valid ? referralCode : null,
 			};
 			const response = await FetchData.makeNewUser(data);
 			if (
@@ -212,6 +216,14 @@ const SignUpForm = ({ state, dispatch }) => {
 			<Text style={{ fontSize: 12, color: "#64748b", marginBottom: 16, marginTop: -8 }}>
 				Password must be at least 8 characters with 2 uppercase, 2 lowercase, and 2 special characters.
 			</Text>
+
+			{/* Referral Code */}
+			<ReferralCodeInput
+				value={referralCode}
+				onChangeText={setReferralCode}
+				onValidation={setReferralValidation}
+				userType="homeowner"
+			/>
 
 			{/* Terms and Conditions */}
 			<View style={localStyles.termsContainer}>

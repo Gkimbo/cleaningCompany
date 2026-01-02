@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Dimensions,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -260,20 +261,32 @@ const CleanerDashboard = ({ state, dispatch }) => {
 
     const startLocationTracking = async () => {
       try {
+        // Skip location tracking on web - it's often unavailable or unreliable
+        if (Platform.OS === "web") {
+          console.log("[CleanerDashboard] Skipping location tracking on web");
+          return;
+        }
+
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
           console.log("[CleanerDashboard] Location permission denied");
           return;
         }
 
-        // Get initial location
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        setUserLocation({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-        });
+        // Get initial location with a timeout fallback
+        try {
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          setUserLocation({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+        } catch (locationError) {
+          // Location unavailable - this is fine, we just won't show distances
+          console.log("[CleanerDashboard] Location unavailable:", locationError.message);
+          return;
+        }
 
         // Watch for location updates
         locationSubscription = await Location.watchPositionAsync(
@@ -289,7 +302,8 @@ const CleanerDashboard = ({ state, dispatch }) => {
           }
         );
       } catch (error) {
-        console.error("[CleanerDashboard] Error getting location:", error);
+        // Don't show error for location issues - it's optional functionality
+        console.log("[CleanerDashboard] Location tracking unavailable:", error.message);
       }
     };
 
@@ -321,7 +335,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
         });
         setRequestLocations(locMap);
       } catch (error) {
-        console.error("[CleanerDashboard] Error fetching request locations:", error);
+        console.log("[CleanerDashboard] Error fetching request locations:", error.message);
       }
     };
 

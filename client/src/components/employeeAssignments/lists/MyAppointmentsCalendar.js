@@ -120,7 +120,7 @@ const MyAppointmentsCalendar = ({ state }) => {
           }
         );
       } catch (error) {
-        console.error("[MyAppointmentsCalendar] Location error:", error);
+        console.log("[MyAppointmentsCalendar] Location unavailable:", error.message);
       }
     };
 
