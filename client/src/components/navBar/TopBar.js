@@ -35,6 +35,8 @@ import AccountSettingsButton from "./AccountSettingsButton";
 import RecommendedSuppliesButton from "./RecommendedSuppliesButton";
 import ArchiveButton from "./ArchiveButton";
 import ReviewsButton from "./ReviewsButton";
+import ReferralsButton from "./ReferralsButton";
+import MyReferralsButton from "./MyReferralsButton";
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -172,6 +174,7 @@ const TopBar = ({ dispatch, state }) => {
                         <>
                           <ManageEmployees closeModal={closeModal} />
                           <ManagePricingButton closeModal={closeModal} />
+                          <ReferralsButton closeModal={closeModal} />
                           <SeeAllAppointments closeModal={closeModal} />
                           <UnassignedAppointmentsButton
                             closeModal={closeModal}
@@ -185,6 +188,7 @@ const TopBar = ({ dispatch, state }) => {
                           <MyRequestsButton closeModal={closeModal} />
                           {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                           <EarningsButton closeModal={closeModal} />
+                          <MyReferralsButton closeModal={closeModal} />
                           <RecommendedSuppliesButton closeModal={closeModal} />
                         </>
                       ) : state.account === "humanResources" ? (
@@ -208,6 +212,7 @@ const TopBar = ({ dispatch, state }) => {
                           <BillButton closeModal={closeModal} />
                           <ArchiveButton closeModal={closeModal} />
                           <ReviewsButton closeModal={closeModal} />
+                          <MyReferralsButton closeModal={closeModal} />
                         </>
                       )}
 

@@ -131,6 +131,18 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "If set, supply reminders are silenced until this date",
 		},
+		referralCode: {
+			type: DataTypes.STRING,
+			allowNull: true,
+			unique: true,
+			comment: "Unique referral code for this user (e.g., JOHN7X2K)",
+		},
+		referralCredits: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Available referral credits in cents",
+		},
 	});
 
 	// Helper function to encrypt PII fields
@@ -265,6 +277,18 @@ module.exports = (sequelize, DataTypes) => {
 		User.hasMany(models.UserTermsAcceptance, {
 		  foreignKey: "userId",
 		  as: "termsAcceptances",
+		});
+
+		// Referrals where this user is the referrer
+		User.hasMany(models.Referral, {
+		  foreignKey: "referrerId",
+		  as: "referralsMade",
+		});
+
+		// Referrals where this user was referred
+		User.hasMany(models.Referral, {
+		  foreignKey: "referredId",
+		  as: "referralsReceived",
 		});
 	  };
 	  

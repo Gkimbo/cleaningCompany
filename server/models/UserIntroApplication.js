@@ -263,6 +263,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+
+    // Referral code used during application
+    referralCode: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   });
 
   // Helper function to encrypt PII fields

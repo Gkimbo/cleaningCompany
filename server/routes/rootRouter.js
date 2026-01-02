@@ -20,6 +20,7 @@ const pricingRouter = require("./api/v1/pricingRouter");
 const pushNotificationRouter = require("./api/v1/pushNotificationRouter");
 const homeSizeAdjustmentRouter = require("./api/v1/homeSizeAdjustmentRouter");
 const checklistRouter = require("./api/v1/checklistRouter");
+const referralRouter = require("./api/v1/referralRouter");
 
 const rootRouter = new express.Router();
 
@@ -43,6 +44,7 @@ rootRouter.use("/api/v1/pricing", pricingRouter);
 rootRouter.use("/api/v1/push-notifications", pushNotificationRouter);
 rootRouter.use("/api/v1/home-size-adjustment", homeSizeAdjustmentRouter);
 rootRouter.use("/api/v1/checklist", checklistRouter);
+rootRouter.use("/api/v1/referrals", referralRouter);
 
 rootRouter.use("/", clientRouter);
 

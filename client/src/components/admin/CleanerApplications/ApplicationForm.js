@@ -24,6 +24,7 @@ import {
   responsive,
 } from "../../../services/styles/theme";
 import { usePricing, defaultPricing } from "../../../context/PricingContext";
+import ReferralCodeInput from "../../referrals/ReferralCodeInput";
 
 const US_STATES = [
   "AL",
@@ -113,6 +114,8 @@ const CleanerApplicationForm = () => {
   const hustleModeEarnings = calculateEarnings(4);
 
   const [showForm, setShowForm] = useState(false);
+  const [referralCode, setReferralCode] = useState("");
+  const [referralValidation, setReferralValidation] = useState(null);
   const [formData, setFormData] = useState({
     // Basic Information
     firstName: "",
@@ -418,8 +421,13 @@ const CleanerApplicationForm = () => {
     }
 
     try {
+      // Include referral code if valid
+      const submissionData = {
+        ...formData,
+        referralCode: referralValidation?.valid ? referralCode : null,
+      };
       const submittedApplication = await Application.addApplicationToDb(
-        formData
+        submissionData
       );
       console.log("Form submitted:", submittedApplication);
       setSubmitted(true);
@@ -1267,6 +1275,17 @@ const CleanerApplicationForm = () => {
       <Text style={styles.helperText}>
         You must be at least 18 years old to apply.
       </Text>
+
+      {/* Referral Code */}
+      <View style={{ marginTop: spacing.lg }}>
+        <ReferralCodeInput
+          value={referralCode}
+          onChangeText={setReferralCode}
+          onValidation={setReferralValidation}
+          userType="cleaner"
+          placeholder="Enter referral code (optional)"
+        />
+      </View>
     </>
   );
 

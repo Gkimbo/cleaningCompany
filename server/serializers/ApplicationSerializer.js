@@ -56,6 +56,8 @@ class ApplicationSerializer {
     "reviewedBy",
     "reviewedAt",
     "rejectionReason",
+    // Referral
+    "referralCode",
     // Timestamps
     "createdAt",
     "updatedAt",
