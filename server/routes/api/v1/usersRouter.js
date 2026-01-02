@@ -53,7 +53,7 @@ const validatePassword = (password) => {
 
 usersRouter.post("/", async (req, res) => {
   try {
-    const { firstName, lastName, username, password, email, termsId, referralCode } = req.body;
+    const { firstName, lastName, username, password, email, termsId, privacyPolicyId, referralCode } = req.body;
 
     // Validate password strength
     const passwordError = validatePassword(password);
@@ -81,6 +81,16 @@ usersRouter.post("/", async (req, res) => {
           }
         }
 
+        // Get privacy policy version if privacyPolicyId provided
+        let privacyVersion = null;
+        let privacyRecord = null;
+        if (privacyPolicyId) {
+          privacyRecord = await TermsAndConditions.findByPk(privacyPolicyId);
+          if (privacyRecord) {
+            privacyVersion = privacyRecord.version;
+          }
+        }
+
         const newUser = await User.create({
           firstName,
           lastName,
@@ -89,6 +99,7 @@ usersRouter.post("/", async (req, res) => {
           email,
           notifications: ["phone", "email"],
           termsAcceptedVersion: termsVersion,
+          privacyPolicyAcceptedVersion: privacyVersion,
         });
         const newBill = await UserBills.create({
           userId: newUser.dataValues.id,
@@ -97,15 +108,27 @@ usersRouter.post("/", async (req, res) => {
           totalDue: 0,
         });
 
+        const ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
         // Record terms acceptance if terms were accepted
         if (termsId && termsRecord) {
-          const ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
           await UserTermsAcceptance.create({
             userId: newUser.dataValues.id,
             termsId,
             acceptedAt: new Date(),
             ipAddress,
             termsContentSnapshot: termsRecord.contentType === "text" ? termsRecord.content : null,
+          });
+        }
+
+        // Record privacy policy acceptance if privacy policy was accepted
+        if (privacyPolicyId && privacyRecord) {
+          await UserTermsAcceptance.create({
+            userId: newUser.dataValues.id,
+            termsId: privacyPolicyId,
+            acceptedAt: new Date(),
+            ipAddress,
+            termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
           });
         }
 

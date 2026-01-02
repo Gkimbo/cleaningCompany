@@ -74,11 +74,12 @@ describe("TermsEditor", () => {
       expect(getByText("Terms & Conditions")).toBeTruthy();
     });
 
-    it("should render user type selector", async () => {
+    it("should render document type selector", async () => {
       const { getByText } = render(<TermsEditor state={defaultState} />);
 
-      expect(getByText("Homeowners")).toBeTruthy();
-      expect(getByText("Cleaners")).toBeTruthy();
+      expect(getByText("Homeowner Terms")).toBeTruthy();
+      expect(getByText("Cleaner Terms")).toBeTruthy();
+      expect(getByText("Privacy Policy")).toBeTruthy();
     });
 
     it("should render content type options", async () => {
@@ -136,7 +137,7 @@ describe("TermsEditor", () => {
     it("should switch to cleaner type when selected", async () => {
       const { getByText } = render(<TermsEditor state={defaultState} />);
 
-      const cleanerButton = getByText("Cleaners");
+      const cleanerButton = getByText("Cleaner Terms");
       fireEvent.press(cleanerButton);
 
       await waitFor(() => {
@@ -500,6 +501,290 @@ describe("TermsEditor", () => {
       fireEvent.press(backButton);
 
       expect(mockNavigate).toHaveBeenCalledWith(-1);
+    });
+  });
+
+  describe("Privacy Policy Support", () => {
+    it("should switch to privacy policy when selected", async () => {
+      const { getByText } = render(<TermsEditor state={defaultState} />);
+
+      const privacyButton = getByText("Privacy Policy");
+      fireEvent.press(privacyButton);
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining("/current/privacy_policy")
+        );
+      });
+    });
+
+    it("should show privacy policy empty message", async () => {
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/current/privacy_policy")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ terms: null }),
+          });
+        }
+        if (url.includes("/history/privacy_policy")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ versions: [] }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      });
+
+      const { getByText } = render(<TermsEditor state={defaultState} />);
+
+      fireEvent.press(getByText("Privacy Policy"));
+
+      await waitFor(() => {
+        expect(getByText(/No privacy policy published yet/)).toBeTruthy();
+      });
+    });
+
+    it("should use privacy policy placeholder for title", async () => {
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/current/privacy_policy")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ terms: null }),
+          });
+        }
+        if (url.includes("/history/privacy_policy")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ versions: [] }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      });
+
+      const { getByText, getByPlaceholderText } = render(<TermsEditor state={defaultState} />);
+
+      fireEvent.press(getByText("Privacy Policy"));
+
+      await waitFor(() => {
+        expect(getByPlaceholderText(/Privacy Policy - January/)).toBeTruthy();
+      });
+    });
+  });
+
+  describe("Edit Current Feature", () => {
+    it("should show Edit Current button when terms exist", async () => {
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/current/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              terms: {
+                id: 1,
+                version: 1,
+                title: "Terms v1",
+                contentType: "text",
+              },
+            }),
+          });
+        }
+        if (url.includes("/history/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ versions: [] }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      });
+
+      const { getByText } = render(<TermsEditor state={defaultState} />);
+
+      await waitFor(() => {
+        expect(getByText("Edit Current")).toBeTruthy();
+      });
+    });
+
+    it("should load terms for editing on Edit Current press", async () => {
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/current/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              terms: {
+                id: 1,
+                version: 1,
+                title: "Terms v1",
+                contentType: "text",
+              },
+            }),
+          });
+        }
+        if (url.includes("/history/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ versions: [] }),
+          });
+        }
+        if (url.includes("/terms/1/full")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              terms: {
+                id: 1,
+                version: 1,
+                title: "Terms v1",
+                content: "Full terms content for editing",
+                contentType: "text",
+                createdBy: "Admin User",
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      });
+
+      const { getByText } = render(<TermsEditor state={defaultState} />);
+
+      await waitFor(() => {
+        expect(getByText("Edit Current")).toBeTruthy();
+      });
+
+      fireEvent.press(getByText("Edit Current"));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining("/terms/1/full"),
+          expect.any(Object)
+        );
+      });
+    });
+
+    it("should show success message after loading terms", async () => {
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/current/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              terms: {
+                id: 1,
+                version: 1,
+                title: "Terms v1",
+                contentType: "text",
+              },
+            }),
+          });
+        }
+        if (url.includes("/history/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ versions: [] }),
+          });
+        }
+        if (url.includes("/terms/1/full")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              terms: {
+                id: 1,
+                version: 1,
+                title: "Terms v1",
+                content: "Content",
+                contentType: "text",
+                createdBy: "Admin",
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      });
+
+      const { getByText } = render(<TermsEditor state={defaultState} />);
+
+      await waitFor(() => {
+        expect(getByText("Edit Current")).toBeTruthy();
+      });
+
+      fireEvent.press(getByText("Edit Current"));
+
+      await waitFor(() => {
+        expect(getByText(/Loaded version 1/)).toBeTruthy();
+      });
+    });
+  });
+
+  describe("Load from Version History", () => {
+    it("should show Load & Edit button for text versions in history", async () => {
+      global.fetch.mockImplementation((url) => {
+        if (url.includes("/current/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              terms: {
+                id: 2,
+                version: 2,
+                title: "Terms v2",
+                contentType: "text",
+              },
+            }),
+          });
+        }
+        if (url.includes("/history/")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              versions: [
+                {
+                  id: 2,
+                  version: 2,
+                  title: "Terms v2",
+                  contentType: "text",
+                  createdAt: "2025-01-01T00:00:00Z",
+                },
+                {
+                  id: 1,
+                  version: 1,
+                  title: "Terms v1",
+                  contentType: "text",
+                  createdAt: "2024-12-01T00:00:00Z",
+                },
+              ],
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({}),
+        });
+      });
+
+      const { getAllByText } = render(<TermsEditor state={defaultState} />);
+
+      await waitFor(() => {
+        const loadButtons = getAllByText("Load & Edit");
+        expect(loadButtons.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe("Clear Editor", () => {
+    it("should not show Clear Editor button when editor is empty", async () => {
+      const { queryByText } = render(<TermsEditor state={defaultState} />);
+
+      expect(queryByText("Clear Editor")).toBeNull();
     });
   });
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -19,15 +19,31 @@ import {
 } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
 
-const TermsModal = ({ visible, onClose, onAccept, type, loading = false }) => {
+const TermsModal = ({
+  visible,
+  onClose,
+  onAccept,
+  type,
+  loading = false,
+  required = true,  // If true, user cannot close without accepting
+  title = "Terms and Conditions",  // Customizable title
+}) => {
   const [terms, setTerms] = useState(null);
   const [fetchLoading, setFetchLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const scrollViewRef = useRef(null);
+
+  const scrollToBottom = () => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollToEnd({ animated: true });
+    }
+  };
 
   useEffect(() => {
     if (visible && type) {
       fetchTerms();
+      setHasScrolledToBottom(false); // Reset scroll state when opening
     }
   }, [visible, type]);
 
@@ -128,6 +144,7 @@ const TermsModal = ({ visible, onClose, onAccept, type, loading = false }) => {
     // Text content
     return (
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollContent}
         contentContainerStyle={styles.scrollContentContainer}
         onScroll={handleScroll}
@@ -137,10 +154,17 @@ const TermsModal = ({ visible, onClose, onAccept, type, loading = false }) => {
         <Text style={styles.termsVersion}>Version {terms.version}</Text>
         <Text style={styles.termsContent}>{terms.content}</Text>
         <View style={styles.endOfTerms}>
-          <Text style={styles.endOfTermsText}>End of Terms</Text>
+          <Text style={styles.endOfTermsText}>End of Document</Text>
         </View>
       </ScrollView>
     );
+  };
+
+  const handleClose = () => {
+    if (!required) {
+      onClose();
+    }
+    // If required, do nothing - user must accept
   };
 
   return (
@@ -148,15 +172,17 @@ const TermsModal = ({ visible, onClose, onAccept, type, loading = false }) => {
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Terms and Conditions</Text>
-          <Pressable onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>Close</Text>
-          </Pressable>
+          <Text style={styles.headerTitle}>{title}</Text>
+          {!required && (
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <Text style={styles.closeButtonText}>Close</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Content */}
@@ -166,22 +192,38 @@ const TermsModal = ({ visible, onClose, onAccept, type, loading = false }) => {
         {terms && !error && (
           <View style={styles.footer}>
             {!hasScrolledToBottom && terms.contentType === "text" && (
-              <Text style={styles.scrollHint}>
-                Please scroll to the bottom to accept
+              <>
+                <Pressable
+                  style={styles.skipToBottomButton}
+                  onPress={scrollToBottom}
+                >
+                  <Text style={styles.skipToBottomText}>Skip to Bottom ↓</Text>
+                </Pressable>
+                <Text style={styles.scrollHint}>
+                  or scroll down to continue
+                </Text>
+              </>
+            )}
+            {required && hasScrolledToBottom && (
+              <Text style={styles.requiredNotice}>
+                You must accept to continue
               </Text>
             )}
             <View style={styles.buttonRow}>
-              <Pressable
-                style={[styles.button, styles.cancelButton]}
-                onPress={onClose}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
+              {!required && (
+                <Pressable
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={onClose}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </Pressable>
+              )}
               <Pressable
                 style={[
                   styles.button,
                   styles.acceptButton,
                   (!hasScrolledToBottom || loading) && styles.buttonDisabled,
+                  required && styles.fullWidthButton,
                 ]}
                 onPress={handleAccept}
                 disabled={!hasScrolledToBottom || loading}
@@ -310,15 +352,38 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     ...shadows.sm,
   },
-  scrollHint: {
+  skipToBottomButton: {
+    backgroundColor: colors.primary[100],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    alignSelf: "center",
+    marginBottom: spacing.sm,
+  },
+  skipToBottomText: {
+    color: colors.primary[700],
     fontSize: typography.fontSize.sm,
-    color: colors.warning[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  scrollHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
     textAlign: "center",
     marginBottom: spacing.md,
+  },
+  requiredNotice: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    textAlign: "center",
+    marginBottom: spacing.md,
+    fontWeight: typography.fontWeight.medium,
   },
   buttonRow: {
     flexDirection: "row",
     gap: spacing.md,
+  },
+  fullWidthButton: {
+    flex: 1,
   },
   button: {
     flex: 1,

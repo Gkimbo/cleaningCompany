@@ -110,7 +110,7 @@ describe("TermsModal", () => {
         }),
       });
 
-      const { getByText } = render(<TermsModal {...defaultProps} />);
+      const { getByText } = render(<TermsModal {...defaultProps} required={false} />);
 
       await waitFor(() => {
         expect(getByText("Terms")).toBeTruthy();

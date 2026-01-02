@@ -44,7 +44,11 @@ createdb cleaning_company_development
 npx sequelize-cli db:migrate
 
 # Seed initial data (manager account)
-npx sequelize-cli db:seed --seed managerSeeder.js
+npx sequelize-cli db:seed --seed ownerSeeder.js
+
+# Seed Terms & Conditions and Privacy Policy
+npx sequelize-cli db:seed --seed termsAndConditionsSeeder.js
+npx sequelize-cli db:seed --seed privacyPolicySeeder.js
 
 # Start the server
 npm start
@@ -182,7 +186,9 @@ server/
 │   └── authenticatedToken.js       # JWT authentication
 │
 ├── seeders/                        # Database seeds
-│   └── managerSeeder.js
+│   ├── ownerSeeder.js              # Manager account
+│   ├── termsAndConditionsSeeder.js # Terms for homeowners/cleaners
+│   └── privacyPolicySeeder.js      # Privacy policy document
 │
 ├── app.js                          # Express app setup
 └── package.json
@@ -328,13 +334,19 @@ server/
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | `GET` | `/api/v1/terms/current/:type` | Get current terms (public) | No |
-| `GET` | `/api/v1/terms/check` | Check if user needs to accept | Yes |
-| `POST` | `/api/v1/terms/accept` | Accept terms | Yes |
+| `GET` | `/api/v1/terms/check` | Check if user needs to accept terms/privacy | Yes |
+| `POST` | `/api/v1/terms/accept` | Accept terms or privacy policy | Yes |
 | `GET` | `/api/v1/terms/user/history` | Get user's acceptance history | Yes |
-| `POST` | `/api/v1/terms` | Create new terms version | Manager |
-| `GET` | `/api/v1/terms/history/:type` | Get version history | Manager |
-| `GET` | `/api/v1/terms/:id` | Get specific version | Manager |
-| `PATCH` | `/api/v1/terms/:id/publish` | Publish terms version | Manager |
+| `POST` | `/api/v1/terms` | Create new terms version | Owner |
+| `GET` | `/api/v1/terms/history/:type` | Get version history | Owner |
+| `GET` | `/api/v1/terms/:id` | Get specific version | Owner |
+| `GET` | `/api/v1/terms/:id/full` | Get full terms content for editing | Owner |
+| `PATCH` | `/api/v1/terms/:id/publish` | Publish terms version | Owner |
+
+**Document Types:**
+- `homeowner` - Terms for homeowners
+- `cleaner` - Terms for cleaners
+- `privacy_policy` - Privacy Policy (applies to all users)
 
 ---
 
@@ -426,11 +438,21 @@ npx sequelize-cli migration:generate --name add-new-feature
 npx sequelize-cli db:seed:all
 
 # Run specific seed
-npx sequelize-cli db:seed --seed managerSeeder.js
+npx sequelize-cli db:seed --seed ownerSeeder.js
 
 # Undo seeds
 npx sequelize-cli db:seed:undo:all
 ```
+
+#### Available Seeders
+
+| Seeder | Description |
+|--------|-------------|
+| `ownerSeeder.js` | Creates the initial manager/owner account |
+| `termsAndConditionsSeeder.js` | Seeds Terms & Conditions for homeowners and cleaners |
+| `privacyPolicySeeder.js` | Seeds the Privacy Policy document |
+
+**Note:** The Terms & Conditions and Privacy Policy seeders create version 1 of each document. Users will be prompted to accept these when they first log in. The owner can later edit and publish new versions through the admin interface.
 
 ---
 

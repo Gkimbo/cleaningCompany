@@ -106,6 +106,26 @@ describe("Terms Router", () => {
       expect(response.body.terms.type).toBe("cleaner");
     });
 
+    it("should return current privacy policy", async () => {
+      const mockPrivacyPolicy = {
+        id: 3,
+        type: "privacy_policy",
+        version: 1,
+        title: "Privacy Policy",
+        content: "Privacy policy content",
+        contentType: "text",
+        effectiveDate: new Date(),
+      };
+
+      TermsAndConditions.findOne.mockResolvedValue(mockPrivacyPolicy);
+
+      const response = await request(app).get("/api/v1/terms/current/privacy_policy");
+
+      expect(response.status).toBe(200);
+      expect(response.body.terms.type).toBe("privacy_policy");
+      expect(response.body.terms.title).toBe("Privacy Policy");
+    });
+
     it("should return PDF URL for PDF type terms", async () => {
       const mockTerms = {
         id: 1,
@@ -179,17 +199,28 @@ describe("Terms Router", () => {
         id: 1,
         type: "client",
         termsAcceptedVersion: 1,
+        privacyPolicyAcceptedVersion: 1,
       });
 
-      TermsAndConditions.findOne.mockResolvedValue({
-        id: 2,
-        type: "homeowner",
-        version: 2,
-        title: "Terms v2",
-        contentType: "text",
-        content: "Updated content",
-        effectiveDate: new Date(),
-      });
+      // Mock terms query and privacy policy query (null for privacy)
+      TermsAndConditions.findOne
+        .mockResolvedValueOnce({
+          id: 2,
+          type: "homeowner",
+          version: 2,
+          title: "Terms v2",
+          contentType: "text",
+          content: "Updated content",
+          effectiveDate: new Date(),
+        })
+        .mockResolvedValueOnce({
+          id: 1,
+          type: "privacy_policy",
+          version: 1,
+          title: "Privacy",
+          contentType: "text",
+          effectiveDate: new Date(),
+        });
 
       const response = await request(app)
         .get("/api/v1/terms/check")
@@ -197,8 +228,8 @@ describe("Terms Router", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.requiresAcceptance).toBe(true);
-      expect(response.body.currentVersion).toBe(2);
-      expect(response.body.acceptedVersion).toBe(1);
+      expect(response.body.currentTermsVersion).toBe(2);
+      expect(response.body.termsAcceptedVersion).toBe(1);
     });
 
     it("should return requiresAcceptance false if user is current", async () => {
@@ -208,16 +239,27 @@ describe("Terms Router", () => {
         id: 1,
         type: "client",
         termsAcceptedVersion: 2,
+        privacyPolicyAcceptedVersion: 1,
       });
 
-      TermsAndConditions.findOne.mockResolvedValue({
-        id: 2,
-        type: "homeowner",
-        version: 2,
-        title: "Terms v2",
-        contentType: "text",
-        effectiveDate: new Date(),
-      });
+      // Mock both terms and privacy policy queries with matching versions
+      TermsAndConditions.findOne
+        .mockResolvedValueOnce({
+          id: 2,
+          type: "homeowner",
+          version: 2,
+          title: "Terms v2",
+          contentType: "text",
+          effectiveDate: new Date(),
+        })
+        .mockResolvedValueOnce({
+          id: 1,
+          type: "privacy_policy",
+          version: 1,
+          title: "Privacy",
+          contentType: "text",
+          effectiveDate: new Date(),
+        });
 
       const response = await request(app)
         .get("/api/v1/terms/check")
@@ -262,6 +304,122 @@ describe("Terms Router", () => {
           where: { type: "cleaner" },
         })
       );
+    });
+
+    it("should require both terms and privacy policy acceptance", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        type: "client",
+        termsAcceptedVersion: null,
+        privacyPolicyAcceptedVersion: null,
+      });
+
+      // Mock both terms and privacy policy queries
+      TermsAndConditions.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          type: "homeowner",
+          version: 1,
+          title: "Terms",
+          contentType: "text",
+          content: "Terms content",
+          effectiveDate: new Date(),
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          type: "privacy_policy",
+          version: 1,
+          title: "Privacy Policy",
+          contentType: "text",
+          content: "Privacy content",
+          effectiveDate: new Date(),
+        });
+
+      const response = await request(app)
+        .get("/api/v1/terms/check")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.requiresAcceptance).toBe(true);
+      expect(response.body.terms).toBeDefined();
+      expect(response.body.privacyPolicy).toBeDefined();
+    });
+
+    it("should only require privacy policy if terms already accepted", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        type: "client",
+        termsAcceptedVersion: 1,
+        privacyPolicyAcceptedVersion: null,
+      });
+
+      TermsAndConditions.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          type: "homeowner",
+          version: 1,
+          title: "Terms",
+          contentType: "text",
+          effectiveDate: new Date(),
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          type: "privacy_policy",
+          version: 1,
+          title: "Privacy Policy",
+          contentType: "text",
+          content: "Privacy content",
+          effectiveDate: new Date(),
+        });
+
+      const response = await request(app)
+        .get("/api/v1/terms/check")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.requiresAcceptance).toBe(true);
+      expect(response.body.terms).toBeUndefined();
+      expect(response.body.privacyPolicy).toBeDefined();
+    });
+
+    it("should return false if both terms and privacy policy accepted", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        type: "client",
+        termsAcceptedVersion: 1,
+        privacyPolicyAcceptedVersion: 1,
+      });
+
+      TermsAndConditions.findOne
+        .mockResolvedValueOnce({
+          id: 1,
+          type: "homeowner",
+          version: 1,
+          title: "Terms",
+          contentType: "text",
+          effectiveDate: new Date(),
+        })
+        .mockResolvedValueOnce({
+          id: 2,
+          type: "privacy_policy",
+          version: 1,
+          title: "Privacy Policy",
+          contentType: "text",
+          effectiveDate: new Date(),
+        });
+
+      const response = await request(app)
+        .get("/api/v1/terms/check")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.requiresAcceptance).toBe(false);
     });
   });
 
@@ -356,6 +514,146 @@ describe("Terms Router", () => {
         .send({ termsId: 999 });
 
       expect(response.status).toBe(404);
+    });
+
+    it("should accept privacy policy and update privacyPolicyAcceptedVersion", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      const mockPrivacyPolicy = {
+        id: 2,
+        version: 1,
+        contentType: "text",
+        content: "Privacy policy content",
+        type: "privacy_policy",
+      };
+
+      const mockUser = {
+        id: 1,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      TermsAndConditions.findByPk.mockResolvedValue(mockPrivacyPolicy);
+      User.findByPk.mockResolvedValue(mockUser);
+      UserTermsAcceptance.create.mockResolvedValue({ id: 1 });
+
+      const response = await request(app)
+        .post("/api/v1/terms/accept")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ termsId: 2 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.type).toBe("privacy_policy");
+      expect(response.body.message).toContain("Privacy Policy");
+      expect(mockUser.update).toHaveBeenCalledWith({ privacyPolicyAcceptedVersion: 1 });
+    });
+  });
+
+  describe("GET /terms/:id/full (Owner only - Edit terms)", () => {
+    it("should return full terms content for editing", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+
+      TermsAndConditions.findByPk.mockResolvedValue({
+        id: 1,
+        type: "homeowner",
+        version: 1,
+        title: "Terms of Service",
+        content: "Full terms content for editing",
+        contentType: "text",
+        effectiveDate: new Date(),
+        createdAt: new Date(),
+        creator: { firstName: "Admin", lastName: "User" },
+      });
+
+      const response = await request(app)
+        .get("/api/v1/terms/1/full")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.terms).toBeDefined();
+      expect(response.body.terms.content).toBe("Full terms content for editing");
+      expect(response.body.terms.version).toBe(1);
+      expect(response.body.terms.createdBy).toBe("Admin User");
+    });
+
+    it("should return PDF URL for PDF terms", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+
+      TermsAndConditions.findByPk.mockResolvedValue({
+        id: 1,
+        type: "homeowner",
+        version: 1,
+        title: "Terms PDF",
+        contentType: "pdf",
+        pdfFileName: "terms.pdf",
+        effectiveDate: new Date(),
+        createdAt: new Date(),
+        creator: { firstName: "Admin", lastName: "User" },
+      });
+
+      const response = await request(app)
+        .get("/api/v1/terms/1/full")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.terms.contentType).toBe("pdf");
+      expect(response.body.terms.pdfUrl).toBe("/api/v1/terms/pdf/1");
+      expect(response.body.terms.content).toBeUndefined();
+    });
+
+    it("should return 404 if terms not found", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+      TermsAndConditions.findByPk.mockResolvedValue(null);
+
+      const response = await request(app)
+        .get("/api/v1/terms/999/full")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(404);
+    });
+
+    it("should return 403 for non-owners", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, type: "client" });
+
+      const response = await request(app)
+        .get("/api/v1/terms/1/full")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(403);
+    });
+
+    it("should return full privacy policy content", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+
+      TermsAndConditions.findByPk.mockResolvedValue({
+        id: 2,
+        type: "privacy_policy",
+        version: 1,
+        title: "Privacy Policy",
+        content: "Full privacy policy content",
+        contentType: "text",
+        effectiveDate: new Date(),
+        createdAt: new Date(),
+        creator: { firstName: "Admin", lastName: "User" },
+      });
+
+      const response = await request(app)
+        .get("/api/v1/terms/2/full")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.terms.type).toBe("privacy_policy");
+      expect(response.body.terms.content).toBe("Full privacy policy content");
     });
   });
 
@@ -492,6 +790,71 @@ describe("Terms Router", () => {
         });
 
       expect(response.status).toBe(400);
+    });
+
+    it("should create privacy policy", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+      TermsAndConditions.findOne.mockResolvedValue(null);
+      TermsAndConditions.create.mockResolvedValue({
+        id: 1,
+        type: "privacy_policy",
+        version: 1,
+        title: "Privacy Policy",
+        contentType: "text",
+        effectiveDate: new Date(),
+      });
+
+      const response = await request(app)
+        .post("/api/v1/terms")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          type: "privacy_policy",
+          title: "Privacy Policy",
+          content: "Privacy policy content",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.terms.type).toBe("privacy_policy");
+    });
+  });
+
+  describe("GET /terms/history/privacy_policy (Owner only)", () => {
+    it("should return privacy policy version history", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, type: "owner" });
+
+      TermsAndConditions.findAll.mockResolvedValue([
+        {
+          id: 2,
+          version: 2,
+          title: "Privacy Policy v2",
+          contentType: "text",
+          effectiveDate: new Date(),
+          createdAt: new Date(),
+          creator: { firstName: "Admin", lastName: "User" },
+        },
+        {
+          id: 1,
+          version: 1,
+          title: "Privacy Policy v1",
+          contentType: "text",
+          effectiveDate: new Date(),
+          createdAt: new Date(),
+          creator: { firstName: "Admin", lastName: "User" },
+        },
+      ]);
+
+      const response = await request(app)
+        .get("/api/v1/terms/history/privacy_policy")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.type).toBe("privacy_policy");
+      expect(response.body.versions).toHaveLength(2);
     });
   });
 
