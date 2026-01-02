@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import * as Location from "expo-location";
 import FetchData from "../../services/fetchRequests/fetchData";
+import { API_BASE } from "../../services/config";
 import {
   colors,
   spacing,
@@ -29,6 +30,31 @@ import NextAppointmentPreview from "../employeeAssignments/tiles/NextAppointment
 import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlow";
 import { usePricing } from "../../context/PricingContext";
 import { parseLocalDate } from "../../utils/dateUtils";
+
+// Payment Setup Banner Component
+const PaymentSetupBanner = ({ onPress }) => (
+  <Pressable
+    onPress={onPress}
+    style={({ pressed }) => [
+      styles.paymentBanner,
+      pressed && styles.paymentBannerPressed,
+    ]}
+  >
+    <View style={styles.paymentBannerIcon}>
+      <Icon name="credit-card" size={20} color={colors.warning[600]} />
+    </View>
+    <View style={styles.paymentBannerContent}>
+      <Text style={styles.paymentBannerTitle}>Complete Payment Setup</Text>
+      <Text style={styles.paymentBannerSubtitle}>
+        Set up your bank account to receive earnings from completed jobs
+      </Text>
+    </View>
+    <View style={styles.paymentBannerAction}>
+      <Text style={styles.paymentBannerActionText}>Set Up</Text>
+      <Icon name="chevron-right" size={12} color={colors.primary[600]} />
+    </View>
+  </Pressable>
+);
 
 const { width } = Dimensions.get("window");
 
@@ -249,11 +275,38 @@ const CleanerDashboard = ({ state, dispatch }) => {
   const [userLocation, setUserLocation] = useState(null);
   const [requestLocations, setRequestLocations] = useState({});
 
+  // Stripe account status for payment setup banner
+  const [stripeAccountStatus, setStripeAccountStatus] = useState(null);
+  const [showPaymentBanner, setShowPaymentBanner] = useState(false);
+
   useEffect(() => {
     if (state.currentUser.token) {
       fetchDashboardData();
+      fetchStripeAccountStatus();
     }
   }, [state.currentUser.token]);
+
+  // Fetch Stripe account status to determine if banner should show
+  const fetchStripeAccountStatus = async () => {
+    if (!state?.currentUser?.id) return;
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/stripe-connect/account-status/${state.currentUser.id}`
+      );
+      const data = await res.json();
+
+      if (res.ok) {
+        setStripeAccountStatus(data);
+        // Show banner if account doesn't exist or onboarding isn't complete
+        setShowPaymentBanner(!data.hasAccount || !data.onboardingComplete);
+      }
+    } catch (err) {
+      console.log("[CleanerDashboard] Error fetching Stripe status:", err.message);
+      // If we can't fetch status, show the banner to be safe
+      setShowPaymentBanner(true);
+    }
+  };
 
   // Get user's current location using expo-location
   useEffect(() => {
@@ -421,6 +474,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
 
   const onRefresh = useCallback(() => {
     fetchDashboardData(true);
+    fetchStripeAccountStatus(); // Also refresh Stripe status
   }, [state.currentUser.token]);
 
   const getGreeting = () => {
@@ -525,6 +579,11 @@ const CleanerDashboard = ({ state, dispatch }) => {
           </Text>
           <Text style={styles.dateText}>{formatDate()}</Text>
         </View>
+
+        {/* Payment Setup Banner */}
+        {showPaymentBanner && (
+          <PaymentSetupBanner onPress={() => navigate("/earnings")} />
+        )}
 
         {/* Quick Actions */}
         <View style={styles.quickActionsContainer}>
@@ -1084,6 +1143,62 @@ const styles = StyleSheet.create({
 
   bottomPadding: {
     height: spacing["4xl"],
+  },
+
+  // Payment Setup Banner
+  paymentBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    ...shadows.sm,
+  },
+  paymentBannerPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  paymentBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  paymentBannerContent: {
+    flex: 1,
+  },
+  paymentBannerTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[800],
+    marginBottom: 2,
+  },
+  paymentBannerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[700],
+    lineHeight: 18,
+  },
+  paymentBannerAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  paymentBannerActionText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
   },
 });
 
