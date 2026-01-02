@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import {
   Alert,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -220,14 +221,28 @@ const ApplicationTile = ({
           {application.idPhoto && (
             <View style={styles.photoSection}>
               <Text style={styles.sectionTitle}>ID Photo</Text>
-              <Pressable onPress={() => setPhotoExpanded(!photoExpanded)} onLongPress={handleSavePhoto}>
-                <Image
-                  source={{ uri: application.idPhoto }}
-                  style={[styles.idPhoto, photoExpanded && styles.idPhotoExpanded]}
-                  resizeMode="contain"
-                />
-              </Pressable>
-              <Text style={styles.photoHint}>Tap to expand • Long press to save</Text>
+              {/* Check for blob URLs on web which can't be displayed */}
+              {Platform.OS === "web" && application.idPhoto.startsWith("blob:") ? (
+                <View style={[styles.idPhoto, styles.photoPlaceholder]}>
+                  <Text style={styles.photoPlaceholderText}>
+                    Photo unavailable - uploaded before fix
+                  </Text>
+                  <Text style={styles.photoPlaceholderHint}>
+                    Ask applicant to resubmit application
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Pressable onPress={() => setPhotoExpanded(!photoExpanded)} onLongPress={handleSavePhoto}>
+                    <Image
+                      source={{ uri: application.idPhoto }}
+                      style={[styles.idPhoto, photoExpanded && styles.idPhotoExpanded]}
+                      resizeMode="contain"
+                    />
+                  </Pressable>
+                  <Text style={styles.photoHint}>Tap to expand • Long press to save</Text>
+                </>
+              )}
             </View>
           )}
 
@@ -633,6 +648,26 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     textAlign: "center",
     marginTop: spacing.sm,
+  },
+  photoPlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.neutral[100],
+    borderWidth: 2,
+    borderColor: colors.border.default,
+    borderStyle: "dashed",
+  },
+  photoPlaceholderText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
+    textAlign: "center",
+  },
+  photoPlaceholderHint: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    marginTop: spacing.xs,
   },
 
   // Details Section

@@ -279,9 +279,30 @@ const CleanerApplicationForm = () => {
     });
 
     if (!pickerResult.canceled && pickerResult.assets?.length > 0) {
+      let photoUri = pickerResult.assets[0].uri;
+
+      // On web, blob URLs need to be converted to base64 data URLs
+      // because blob URLs are session-only and can't be displayed later
+      if (Platform.OS === "web" && photoUri.startsWith("blob:")) {
+        try {
+          const response = await fetch(photoUri);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          photoUri = await new Promise((resolve, reject) => {
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (error) {
+          console.error("Error converting blob to data URL:", error);
+          Alert.alert("Error", "Failed to process the selected image.");
+          return;
+        }
+      }
+
       setFormData((prev) => ({
         ...prev,
-        idPhoto: pickerResult.assets[0].uri,
+        idPhoto: photoUri,
       }));
     }
   };
