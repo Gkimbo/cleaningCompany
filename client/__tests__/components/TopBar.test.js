@@ -59,6 +59,7 @@ describe("TopBar", () => {
     currentUser: { token: "valid-token" },
     account: "owner",
     appointments: [],
+    pendingApplications: 0,
   };
 
   const authenticatedCleanerState = {
@@ -127,8 +128,13 @@ describe("TopBar", () => {
     it("should display badge when there are pending applications", async () => {
       Application.getPendingCount.mockResolvedValue(5);
 
+      const stateWithPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 5,
+      };
+
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
+        <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
       const badge = await findByText("5");
@@ -154,8 +160,13 @@ describe("TopBar", () => {
     it("should display '9+' when pending count exceeds 9", async () => {
       Application.getPendingCount.mockResolvedValue(15);
 
+      const stateWithPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 15,
+      };
+
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
+        <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
       const badge = await findByText("9+");
@@ -165,8 +176,13 @@ describe("TopBar", () => {
     it("should display exact count for numbers 1-9", async () => {
       Application.getPendingCount.mockResolvedValue(7);
 
+      const stateWithPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 7,
+      };
+
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
+        <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
       const badge = await findByText("7");
@@ -270,8 +286,13 @@ describe("TopBar", () => {
     it("should have notification button for owners with pending applications", async () => {
       Application.getPendingCount.mockResolvedValue(3);
 
+      const stateWithPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 3,
+      };
+
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
+        <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
       const badge = await findByText("3");
@@ -301,8 +322,13 @@ describe("TopBar", () => {
     it("should handle exactly 9 pending applications", async () => {
       Application.getPendingCount.mockResolvedValue(9);
 
+      const stateWithPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 9,
+      };
+
       const { findByText, queryByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
+        <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
       const badge = await findByText("9");
@@ -313,8 +339,13 @@ describe("TopBar", () => {
     it("should handle exactly 10 pending applications", async () => {
       Application.getPendingCount.mockResolvedValue(10);
 
+      const stateWithPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 10,
+      };
+
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
+        <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
       const badge = await findByText("9+");
@@ -324,8 +355,13 @@ describe("TopBar", () => {
     it("should handle 1 pending application", async () => {
       Application.getPendingCount.mockResolvedValue(1);
 
+      const stateWithPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 1,
+      };
+
       const { findByText } = render(
-        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
+        <TopBar dispatch={mockDispatch} state={stateWithPending} />
       );
 
       const badge = await findByText("1");
