@@ -469,14 +469,20 @@ applicationRouter.post("/:id/hire", async (req, res) => {
     });
 
     // Send welcome email to new cleaner with credentials
-    await Email.sendEmailCongragulations(
-      newUser.firstName,
-      newUser.lastName,
-      username,
-      password,
-      newUser.email,
-      "cleaner"
-    );
+    try {
+      await Email.sendEmailCongragulations(
+        newUser.firstName,
+        newUser.lastName,
+        username,
+        password,
+        newUser.email,
+        "cleaner"
+      );
+      console.log(`✅ Welcome email sent to ${newUser.email}`);
+    } catch (emailError) {
+      console.error(`❌ Failed to send welcome email to ${newUser.email}:`, emailError.message);
+      // Don't fail the hire process if email fails
+    }
 
     // If HR made the decision, notify owner
     if (caller.type === "humanResources") {
