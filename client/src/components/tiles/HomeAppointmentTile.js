@@ -207,6 +207,8 @@ const HomeAppointmentTile = ({
         onConfigurationsUpdate={handleConfigurationsUpdate}
         paymentCaptureFailed={appointment.paymentCaptureFailed}
         onPaymentRetried={handlePaymentRetried}
+        originalPrice={appointment.originalPrice}
+        discountApplied={appointment.discountApplied}
       />
     );
   };

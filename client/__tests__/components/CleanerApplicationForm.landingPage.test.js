@@ -32,7 +32,23 @@ jest.mock("../../src/components/terms", () => ({
   TermsModal: () => null,
 }));
 
+// Mock IncentivesService
+jest.mock("../../src/services/fetchRequests/IncentivesService", () => ({
+  getCurrentIncentives: jest.fn(),
+}));
+
+// Mock IncentiveBanner component for testing
+jest.mock("../../src/components/incentives/IncentiveBanner", () => {
+  const { Text, View } = require("react-native");
+  return ({ message }) => (
+    <View testID="incentive-banner">
+      <Text>{message}</Text>
+    </View>
+  );
+});
+
 import PricingService from "../../src/services/fetchRequests/PricingService";
+import IncentivesService from "../../src/services/fetchRequests/IncentivesService";
 import { PricingProvider, defaultPricing } from "../../src/context/PricingContext";
 import CleanerApplicationForm from "../../src/components/admin/CleanerApplications/ApplicationForm";
 
@@ -60,6 +76,11 @@ const renderCleanerApplicationForm = () => {
 describe("CleanerApplicationForm Landing Page - Earnings Display", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: incentives disabled so existing tests work as before
+    IncentivesService.getCurrentIncentives.mockResolvedValue({
+      cleaner: { enabled: false },
+      homeowner: { enabled: false },
+    });
   });
 
   describe("Database Pricing (Server Available)", () => {
@@ -390,6 +411,11 @@ describe("CleanerApplicationForm Landing Page - Content Verification", () => {
       source: "database",
       pricing: defaultPricing,
     });
+    // Default: incentives disabled
+    IncentivesService.getCurrentIncentives.mockResolvedValue({
+      cleaner: { enabled: false },
+      homeowner: { enabled: false },
+    });
   });
 
   it("should display 'Now Hiring' badge", async () => {
@@ -508,6 +534,145 @@ describe("Customer vs Cleaner Pricing Comparison", () => {
     testCases.forEach(({ basePrice, feePercent, expectedCleanerPay }) => {
       const cleanerPay = Math.round(basePrice * (1 - feePercent));
       expect(cleanerPay).toBe(expectedCleanerPay);
+    });
+  });
+});
+
+describe("Cleaner Incentive Banner", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Default to enabled incentive config
+    IncentivesService.getCurrentIncentives.mockResolvedValue({
+      cleaner: {
+        enabled: true,
+        feeReductionPercent: 1.0, // 100% reduction = 0% fees
+        eligibilityDays: 30,
+        maxCleanings: 5,
+      },
+      homeowner: {
+        enabled: false,
+        discountPercent: 0.1,
+        maxCleanings: 4,
+      },
+    });
+  });
+
+  it("should display incentive banner when cleaner incentive is enabled", async () => {
+    PricingService.getCurrentPricing.mockResolvedValue({
+      source: "database",
+      pricing: defaultPricing,
+    });
+
+    const { getByTestId } = renderCleanerApplicationForm();
+
+    await waitFor(() => {
+      expect(getByTestId("incentive-banner")).toBeTruthy();
+    });
+  });
+
+  it("should NOT display incentive banner when cleaner incentive is disabled", async () => {
+    IncentivesService.getCurrentIncentives.mockResolvedValue({
+      cleaner: {
+        enabled: false,
+        feeReductionPercent: 1.0,
+        eligibilityDays: 30,
+        maxCleanings: 5,
+      },
+      homeowner: {
+        enabled: false,
+        discountPercent: 0.1,
+        maxCleanings: 4,
+      },
+    });
+
+    PricingService.getCurrentPricing.mockResolvedValue({
+      source: "database",
+      pricing: defaultPricing,
+    });
+
+    const { queryByTestId } = renderCleanerApplicationForm();
+
+    await waitFor(() => {
+      expect(queryByTestId("incentive-banner")).toBeNull();
+    });
+  });
+
+  it("should display extra percentage in banner with 100% fee reduction", async () => {
+    const pricing = {
+      ...defaultPricing,
+      platform: { feePercent: 0.1 }, // 10% platform fee
+    };
+
+    PricingService.getCurrentPricing.mockResolvedValue({
+      source: "database",
+      pricing,
+    });
+
+    // With 100% fee reduction: extra = 10% * 100% = 10%
+    // minCleanerPay = 135, maxCleanerPay = 180, avgPay = 158
+    // extraPerCleaning = 158 * 0.1 * 1.0 = 16, totalExtra = 16 * 5 = 80
+    const { getByText } = renderCleanerApplicationForm();
+
+    await waitFor(() => {
+      expect(getByText(/extra 10% on each of your first 5 cleanings - that's up to \$80 extra/)).toBeTruthy();
+    });
+  });
+
+  it("should show correct percentage for partial fee reduction", async () => {
+    IncentivesService.getCurrentIncentives.mockResolvedValue({
+      cleaner: {
+        enabled: true,
+        feeReductionPercent: 0.5, // 50% reduction
+        eligibilityDays: 30,
+        maxCleanings: 5,
+      },
+      homeowner: { enabled: false },
+    });
+
+    PricingService.getCurrentPricing.mockResolvedValue({
+      source: "database",
+      pricing: {
+        ...defaultPricing,
+        platform: { feePercent: 0.1 }, // 10% platform fee
+      },
+    });
+
+    // Extra = 10% * 50% = 5%
+    // minCleanerPay = 135, maxCleanerPay = 180, avgPay = 158
+    // extraPerCleaning = 158 * 0.1 * 0.5 = 8, totalExtra = 8 * 5 = 40
+    const { getByText } = renderCleanerApplicationForm();
+
+    await waitFor(() => {
+      expect(getByText(/extra 5% on each of your first 5 cleanings - that's up to \$40 extra/)).toBeTruthy();
+    });
+  });
+
+  it("should calculate percentage correctly with different settings", async () => {
+    IncentivesService.getCurrentIncentives.mockResolvedValue({
+      cleaner: {
+        enabled: true,
+        feeReductionPercent: 0.75, // 75% reduction
+        eligibilityDays: 60,
+        maxCleanings: 10,
+      },
+      homeowner: { enabled: false },
+    });
+
+    PricingService.getCurrentPricing.mockResolvedValue({
+      source: "database",
+      pricing: {
+        ...defaultPricing,
+        platform: { feePercent: 0.12 }, // 12% platform fee
+      },
+    });
+
+    // Extra = 12% * 75% = 9%
+    // minCleanerPay = 150 * 0.88 = 132, maxCleanerPay = 200 * 0.88 = 176, avgPay = 154
+    // extraPerCleaning = 154 * 0.12 * 0.75 = 14, totalExtra = 14 * 10 = 140
+    const { getByText } = renderCleanerApplicationForm();
+
+    await waitFor(() => {
+      expect(getByText(/extra 9% on each of your first 10 cleanings - that's up to \$140 extra/)).toBeTruthy();
     });
   });
 });

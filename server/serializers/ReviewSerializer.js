@@ -4,6 +4,7 @@ class ReviewSerializer {
 			"id",
 			"userId",
 			"reviewerId",
+			"reviewerName",
 			"appointmentId",
 			"reviewType",
 			"review",
@@ -33,12 +34,21 @@ class ReviewSerializer {
 			for (const attribute of allowedAttributes) {
 				newReview[attribute] = review.dataValues[attribute];
 			}
-			// Include the reviewer association if present
+			// Include the reviewer association if present, otherwise use stored reviewerName
 			if (review.reviewer) {
 				const reviewerData = review.reviewer.dataValues || review.reviewer;
 				newReview.reviewer = {
 					id: reviewerData.id,
 					username: reviewerData.username,
+					firstName: reviewerData.firstName,
+					lastName: reviewerData.lastName,
+				};
+			} else if (review.dataValues.reviewerName) {
+				// Reviewer was deleted but we have their stored name
+				newReview.reviewer = {
+					id: null,
+					username: null,
+					displayName: review.dataValues.reviewerName,
 				};
 			}
 			return newReview;

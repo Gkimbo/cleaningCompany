@@ -24,6 +24,7 @@ import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
 import HomeButton from "./HomeButton";
 import ManageEmployees from "./ManageEmployeeButton";
 import ManagePricingButton from "./ManagePricingButton";
+import IncentivesButton from "./IncentivesButton";
 import MyRequestsButton from "./MyRequestsButton";
 import ScheduleCleaningButton from "./ScheduleCleaningButton";
 import SeeAllAppointments from "./SeeAllAppointmentsButton";
@@ -143,7 +144,9 @@ const TopBar = ({ dispatch, state }) => {
                   <Feather name="user-check" size={20} color="white" />
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
-                      {pendingCleanerRequests > 9 ? "9+" : pendingCleanerRequests}
+                      {pendingCleanerRequests > 9
+                        ? "9+"
+                        : pendingCleanerRequests}
                     </Text>
                   </View>
                 </Pressable>
@@ -180,6 +183,7 @@ const TopBar = ({ dispatch, state }) => {
                             closeModal={closeModal}
                           />
                           <ViewApplicationsButton closeModal={closeModal} />
+                          <IncentivesButton closeModal={closeModal} />
                         </>
                       ) : state.account === "cleaner" ? (
                         <>

@@ -52,6 +52,16 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Incentive tracking
+    incentiveApplied: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    originalPlatformFee: {
+      type: DataTypes.INTEGER, // Original fee before incentive reduction (in cents)
+      allowNull: true,
+    },
   });
 
   Payout.associate = (models) => {

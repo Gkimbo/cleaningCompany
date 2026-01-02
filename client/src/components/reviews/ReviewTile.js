@@ -30,6 +30,7 @@ const ReviewTile = ({
   createdAt,
   reviewType,
   reviewer,
+  reviewerName: reviewerNameProp,
   cleaningQuality,
   punctuality,
   professionalism,
@@ -100,10 +101,23 @@ const ReviewTile = ({
   const isHomeownerReview = reviewType === "homeowner_to_cleaner";
   const isCleanerReview = reviewType === "cleaner_to_homeowner";
 
-  const reviewerName = reviewer
-    ? `${reviewer.firstName || ""} ${reviewer.lastName || ""}`.trim() ||
-      reviewer.username
-    : null;
+  // Get reviewer display name with fallbacks:
+  // 1. Full name from reviewer object (firstName + lastName)
+  // 2. Username from reviewer object
+  // 3. displayName from reviewer object (set when reviewer was deleted)
+  // 4. reviewerName prop (stored on the review when created)
+  const getReviewerDisplayName = () => {
+    if (reviewer) {
+      const fullName = `${reviewer.firstName || ""} ${reviewer.lastName || ""}`.trim();
+      if (fullName) return fullName;
+      if (reviewer.username) return reviewer.username;
+      if (reviewer.displayName) return reviewer.displayName;
+    }
+    // Fallback to stored reviewerName prop
+    return reviewerNameProp || null;
+  };
+
+  const reviewerName = getReviewerDisplayName();
 
   return (
     <Pressable

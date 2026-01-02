@@ -120,6 +120,20 @@ module.exports = (sequelize, DataTypes) => {
       comment: "Platform fee percentage (0.10 = 10%)",
     },
 
+    // Incentive cancellation settings
+    incentiveRefundPercent: {
+      type: DataTypes.DECIMAL(3, 2),
+      allowNull: false,
+      defaultValue: 0.10,
+      comment: "Refund percentage for incentive cancellations (0.10 = 10%)",
+    },
+    incentiveCleanerPercent: {
+      type: DataTypes.DECIMAL(3, 2),
+      allowNull: false,
+      defaultValue: 0.40,
+      comment: "Percentage of original price cleaner receives on incentive cancellation (0.40 = 40%)",
+    },
+
     // High volume fee
     highVolumeFee: {
       type: DataTypes.INTEGER,
@@ -209,6 +223,8 @@ module.exports = (sequelize, DataTypes) => {
         homeownerPenaltyDays: config.homeownerPenaltyDays,
         cleanerPenaltyDays: config.cleanerPenaltyDays,
         refundPercentage: parseFloat(config.refundPercentage),
+        incentiveRefundPercent: parseFloat(config.incentiveRefundPercent),
+        incentiveCleanerPercent: parseFloat(config.incentiveCleanerPercent),
       },
       platform: {
         feePercent: parseFloat(config.platformFeePercent),

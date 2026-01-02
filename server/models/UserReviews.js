@@ -12,7 +12,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     reviewerId: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
+    },
+    reviewerName: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
     appointmentId: {
       type: DataTypes.INTEGER,
