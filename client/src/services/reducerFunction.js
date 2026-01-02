@@ -217,6 +217,11 @@ const reducer = (state, action) => {
         ...state,
         pendingCleanerRequests: Math.max(0, (state.pendingCleanerRequests || 0) - 1),
       };
+    case "SET_PENDING_APPLICATIONS":
+      return {
+        ...state,
+        pendingApplications: action.payload,
+      };
     default:
       throw new Error();
   }

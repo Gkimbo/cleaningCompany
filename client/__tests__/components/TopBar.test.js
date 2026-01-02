@@ -36,6 +36,18 @@ jest.mock("../../src/components/navBar/UnassignedAppointmentsButton", () => "Una
 jest.mock("../../src/components/navBar/ViewApplicationsButton", () => "ViewApplicationsButton");
 jest.mock("../../src/components/messaging/MessagesButton", () => "MessagesButton");
 jest.mock("../../src/components/navBar/AccountSettingsButton", () => "AccountSettingsButton");
+jest.mock("../../src/components/navBar/IncentivesButton", () => "IncentivesButton");
+jest.mock("../../src/components/navBar/RecommendedSuppliesButton", () => "RecommendedSuppliesButton");
+jest.mock("../../src/components/navBar/ArchiveButton", () => "ArchiveButton");
+jest.mock("../../src/components/navBar/ReviewsButton", () => "ReviewsButton");
+jest.mock("../../src/components/navBar/ReferralsButton", () => "ReferralsButton");
+jest.mock("../../src/components/navBar/MyReferralsButton", () => "MyReferralsButton");
+jest.mock("../../src/services/fetchRequests/ClientDashboardService", () => ({
+  __esModule: true,
+  default: {
+    getPendingRequestsForClient: jest.fn().mockResolvedValue({ totalCount: 0 }),
+  },
+}));
 
 import TopBar from "../../src/components/navBar/TopBar";
 import Application from "../../src/services/fetchRequests/ApplicationClass";
@@ -53,6 +65,13 @@ describe("TopBar", () => {
     currentUser: { token: "valid-token" },
     account: "cleaner",
     appointments: [],
+  };
+
+  const authenticatedHRState = {
+    currentUser: { token: "valid-token" },
+    account: "humanResources",
+    appointments: [],
+    pendingApplications: 0,
   };
 
   const authenticatedHomeownerState = {
@@ -333,6 +352,197 @@ describe("TopBar", () => {
       await waitFor(() => {
         expect(Application.getPendingCount).toHaveBeenCalled();
       });
+    });
+  });
+
+  describe("HR User Application Notifications", () => {
+    it("should fetch pending applications count for HR users", async () => {
+      Application.getPendingCount.mockResolvedValue(3);
+
+      render(
+        <TopBar dispatch={mockDispatch} state={authenticatedHRState} />
+      );
+
+      await waitFor(() => {
+        expect(Application.getPendingCount).toHaveBeenCalled();
+      });
+    });
+
+    it("should display badge for HR users when there are pending applications", async () => {
+      Application.getPendingCount.mockResolvedValue(4);
+
+      const stateWithPending = {
+        ...authenticatedHRState,
+        pendingApplications: 4,
+      };
+
+      const { findByText } = render(
+        <TopBar dispatch={mockDispatch} state={stateWithPending} />
+      );
+
+      const badge = await findByText("4");
+      expect(badge).toBeTruthy();
+    });
+
+    it("should dispatch SET_PENDING_APPLICATIONS for HR users", async () => {
+      Application.getPendingCount.mockResolvedValue(5);
+
+      render(
+        <TopBar dispatch={mockDispatch} state={authenticatedHRState} />
+      );
+
+      await waitFor(() => {
+        expect(mockDispatch).toHaveBeenCalledWith({
+          type: "SET_PENDING_APPLICATIONS",
+          payload: 5,
+        });
+      });
+    });
+
+    it("should dispatch SET_PENDING_APPLICATIONS for owner users", async () => {
+      Application.getPendingCount.mockResolvedValue(3);
+
+      render(
+        <TopBar dispatch={mockDispatch} state={authenticatedOwnerState} />
+      );
+
+      await waitFor(() => {
+        expect(mockDispatch).toHaveBeenCalledWith({
+          type: "SET_PENDING_APPLICATIONS",
+          payload: 3,
+        });
+      });
+    });
+
+    it("should not fetch pending applications for cleaners", async () => {
+      render(
+        <TopBar dispatch={mockDispatch} state={authenticatedCleanerState} />
+      );
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      expect(Application.getPendingCount).not.toHaveBeenCalled();
+    });
+
+    it("should show same badge for both owner and HR with same pending count", async () => {
+      Application.getPendingCount.mockResolvedValue(6);
+
+      const ownerStateWithPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 6,
+      };
+
+      const hrStateWithPending = {
+        ...authenticatedHRState,
+        pendingApplications: 6,
+      };
+
+      const { findByText: findByTextOwner } = render(
+        <TopBar dispatch={mockDispatch} state={ownerStateWithPending} />
+      );
+
+      const ownerBadge = await findByTextOwner("6");
+      expect(ownerBadge).toBeTruthy();
+
+      const { findByText: findByTextHR } = render(
+        <TopBar dispatch={mockDispatch} state={hrStateWithPending} />
+      );
+
+      const hrBadge = await findByTextHR("6");
+      expect(hrBadge).toBeTruthy();
+    });
+  });
+
+  describe("Global State for Pending Applications", () => {
+    it("should read pendingApplications from global state", async () => {
+      const stateWithGlobalPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 8,
+      };
+
+      const { findByText } = render(
+        <TopBar dispatch={mockDispatch} state={stateWithGlobalPending} />
+      );
+
+      const badge = await findByText("8");
+      expect(badge).toBeTruthy();
+    });
+
+    it("should not show badge when global pendingApplications is 0", async () => {
+      const stateWithZeroPending = {
+        ...authenticatedOwnerState,
+        pendingApplications: 0,
+      };
+
+      const { queryByText, getByText } = render(
+        <TopBar dispatch={mockDispatch} state={stateWithZeroPending} />
+      );
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      expect(getByText("Kleanr")).toBeTruthy();
+      expect(queryByText("0")).toBeNull();
+    });
+
+    it("should update badge when global state changes", async () => {
+      const initialState = {
+        ...authenticatedOwnerState,
+        pendingApplications: 3,
+      };
+
+      const { findByText, rerender } = render(
+        <TopBar dispatch={mockDispatch} state={initialState} />
+      );
+
+      const initialBadge = await findByText("3");
+      expect(initialBadge).toBeTruthy();
+
+      // Simulate state update (e.g., after status change)
+      const updatedState = {
+        ...authenticatedOwnerState,
+        pendingApplications: 2,
+      };
+
+      rerender(
+        <TopBar dispatch={mockDispatch} state={updatedState} />
+      );
+
+      const updatedBadge = await findByText("2");
+      expect(updatedBadge).toBeTruthy();
+    });
+
+    it("should hide badge when pendingApplications becomes 0", async () => {
+      const initialState = {
+        ...authenticatedOwnerState,
+        pendingApplications: 1,
+      };
+
+      const { findByText, rerender, queryByText } = render(
+        <TopBar dispatch={mockDispatch} state={initialState} />
+      );
+
+      const initialBadge = await findByText("1");
+      expect(initialBadge).toBeTruthy();
+
+      // Simulate last pending application being approved/hired
+      const updatedState = {
+        ...authenticatedOwnerState,
+        pendingApplications: 0,
+      };
+
+      rerender(
+        <TopBar dispatch={mockDispatch} state={updatedState} />
+      );
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      expect(queryByText("1")).toBeNull();
     });
   });
 });
