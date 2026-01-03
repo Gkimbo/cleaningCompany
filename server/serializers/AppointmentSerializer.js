@@ -1,4 +1,18 @@
+const EncryptionService = require("../services/EncryptionService");
+
 class AppointmentSerializer {
+	// Fields that are encrypted in the database
+	static encryptedFields = ["keyPadCode", "keyLocation", "contact"];
+
+	static getValue(data, attribute) {
+		const value = data[attribute];
+		// EncryptionService.decrypt() safely handles both encrypted and unencrypted data
+		if (this.encryptedFields.includes(attribute) && value) {
+			return EncryptionService.decrypt(value);
+		}
+		return value;
+	}
+
 	static serializeArray(appointmentArray) {
 		const allowedAttributes = [
 			"id",
@@ -31,7 +45,7 @@ class AppointmentSerializer {
 			// Handle both Sequelize instances and plain objects
 			const data = appointment.dataValues || appointment;
 			for (const attribute of allowedAttributes) {
-				newAppointment[attribute] = data[attribute];
+				newAppointment[attribute] = this.getValue(data, attribute);
 			}
 			return newAppointment;
 		});
@@ -69,7 +83,7 @@ class AppointmentSerializer {
 		// Handle both Sequelize instances and plain objects
 		const data = appointment.dataValues || appointment;
 		for (const attribute of allowedAttributes) {
-			newAppointment[attribute] = data[attribute];
+			newAppointment[attribute] = this.getValue(data, attribute);
 		}
 		return newAppointment;
 	}

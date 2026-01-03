@@ -750,9 +750,13 @@ appointmentRouter.post("/", async (req, res) => {
     // Check if homeowner is eligible for discount incentive
     const discountResult = await IncentiveService.isHomeownerEligible(userId);
 
+    // Check if home uses preferred cleaners feature (default: true)
+    const usePreferredCleaners = home.dataValues.usePreferredCleaners !== false;
+
     // Check if home has a preferred cleaner (business owner relationship)
+    // Only use preferred cleaner logic if the toggle is enabled
     let cleanerClientRelation = null;
-    const preferredCleanerId = home.dataValues.preferredCleanerId;
+    const preferredCleanerId = usePreferredCleaners ? home.dataValues.preferredCleanerId : null;
     if (preferredCleanerId) {
       cleanerClientRelation = await CleanerClient.findOne({
         where: {
@@ -2660,14 +2664,14 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           notifications.unshift(
             showPayment
               ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${cleanerPayment}.`
-              : `The homeowner cancelled the ${formattedDate} cleaning at ${home?.address || "their property"}.`
+              : `The homeowner cancelled the ${formattedDate} cleaning at ${home ? EncryptionService.decrypt(home.address) : "their property"}.`
           );
           await cleaner.update({ notifications: notifications.slice(0, 50) });
 
           // Send email notification to cleaner
           if (cleaner.email) {
             const homeAddress = home
-              ? `${home.city}, ${home.state}`
+              ? `${EncryptionService.decrypt(home.city)}, ${EncryptionService.decrypt(home.state)}`
               : "the scheduled location";
 
             try {
@@ -2983,17 +2987,17 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
         day: "numeric",
       });
       notifications.unshift(
-        `A cleaner has cancelled their assignment for the ${formattedDate} cleaning at ${home?.address || "your property"}. A new cleaner will need to be assigned.`
+        `A cleaner has cancelled their assignment for the ${formattedDate} cleaning at ${home ? EncryptionService.decrypt(home.address) : "your property"}. A new cleaner will need to be assigned.`
       );
       await homeowner.update({ notifications: notifications.slice(0, 50) });
 
       // Send email notification
       if (home) {
         const homeAddress = {
-          street: home.address,
-          city: home.city,
-          state: home.state,
-          zipcode: home.zipcode,
+          street: EncryptionService.decrypt(home.address),
+          city: EncryptionService.decrypt(home.city),
+          state: EncryptionService.decrypt(home.state),
+          zipcode: EncryptionService.decrypt(home.zipcode),
         };
         await Email.sendEmailCancellation(
           homeowner.email,

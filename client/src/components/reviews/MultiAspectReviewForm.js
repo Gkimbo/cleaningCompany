@@ -110,6 +110,7 @@ const MultiAspectReviewForm = ({
   reviewType, // "homeowner_to_cleaner" or "cleaner_to_homeowner"
   revieweeName,
   homeId, // Home ID for preferred cleaner feature
+  isCleanerPreferred = false, // Whether cleaner is already preferred for this home
   onComplete,
 }) => {
   const navigate = useNavigate();
@@ -142,7 +143,8 @@ const MultiAspectReviewForm = ({
   const [wouldWorkForAgain, setWouldWorkForAgain] = useState(null);
 
   // Preferred cleaner option (homeowner reviewing cleaner only)
-  const [setAsPreferred, setSetAsPreferred] = useState(false);
+  // Initialize based on whether cleaner is already preferred
+  const [setAsPreferred, setSetAsPreferred] = useState(isCleanerPreferred);
 
   const isHomeownerReview = reviewType === "homeowner_to_cleaner";
 
@@ -525,17 +527,32 @@ const MultiAspectReviewForm = ({
 
       {/* Preferred Cleaner Option - only for homeowner reviewing cleaner */}
       {isHomeownerReview && homeId && (
-        <View style={styles.preferredCleanerSection}>
+        <View style={[
+          styles.preferredCleanerSection,
+          isCleanerPreferred && !setAsPreferred && styles.preferredCleanerSectionWarning,
+        ]}>
           <View style={styles.preferredCleanerRow}>
             <View style={styles.preferredCleanerContent}>
               <View style={styles.preferredCleanerHeader}>
-                <Icon name="star" size={16} color={colors.success[600]} />
+                <Icon
+                  name="star"
+                  size={16}
+                  color={setAsPreferred ? colors.success[600] : colors.neutral[400]}
+                />
                 <Text style={styles.preferredCleanerLabel}>
-                  Make {revieweeName} a preferred cleaner
+                  {isCleanerPreferred
+                    ? setAsPreferred
+                      ? `Keep ${revieweeName} as a preferred cleaner`
+                      : `Remove ${revieweeName} from preferred cleaners`
+                    : `Make ${revieweeName} a preferred cleaner`}
                 </Text>
               </View>
               <Text style={styles.preferredCleanerHint}>
-                They can book directly for this home without needing your approval each time.
+                {setAsPreferred
+                  ? "They can book directly for this home without needing your approval each time."
+                  : isCleanerPreferred
+                    ? "They will no longer have preferred status for this home."
+                    : "Preferred cleaners can book directly without requesting approval."}
               </Text>
             </View>
             <Switch
@@ -901,6 +918,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: colors.success[200],
+  },
+  preferredCleanerSectionWarning: {
+    backgroundColor: colors.warning[50],
+    borderColor: colors.warning[200],
   },
   preferredCleanerRow: {
     flexDirection: "row",

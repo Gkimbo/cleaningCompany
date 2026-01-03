@@ -196,6 +196,20 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Not authorized to send messages in this conversation" });
     }
 
+    // Check if this is a completed appointment conversation
+    const conversation = await Conversation.findByPk(conversationId, {
+      include: [{ model: UserAppointments, as: "appointment" }],
+    });
+
+    if (
+      conversation?.conversationType === "appointment" &&
+      conversation?.appointment?.completed
+    ) {
+      return res.status(403).json({
+        error: "Messaging is disabled for completed appointments",
+      });
+    }
+
     // Check if this is the first message in the conversation (for email notification)
     const existingMessageCount = await Message.count({
       where: { conversationId },

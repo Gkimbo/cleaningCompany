@@ -4,7 +4,8 @@ const { User, UserAppointments, UserReviews, UserHomes, HomePreferredCleaner } =
 const ReviewsClass = require("../../../services/ReviewsClass");
 const ReviewSerializer = require("../../../serializers/ReviewSerializer");
 const EmailClass = require("../../../services/sendNotifications/EmailClass");
-const PushNotificationClass = require("../../../services/PushNotificationService");
+const PushNotificationClass = require("../../../services/sendNotifications/PushNotificationClass");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const reviewsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -87,18 +88,31 @@ reviewsRouter.get("/pending", verifyToken, async (req, res) => {
           attributes: ["id", "username", "firstName", "lastName"],
         });
 
+        // Check if cleaner is already preferred for this home (for homeowner reviews)
+        let isCleanerPreferred = false;
+        if (home && assignedCleaners.length > 0 && userRole !== "cleaner") {
+          const preferredRecord = await HomePreferredCleaner.findOne({
+            where: {
+              homeId: home.id,
+              cleanerId: assignedCleaners[0].id,
+            },
+          });
+          isCleanerPreferred = !!preferredRecord;
+        }
+
         return {
           appointmentId: apt.id,
           date: apt.date,
           price: apt.price,
           home: home ? {
             id: home.id,
-            address: home.address,
-            city: home.city,
+            address: EncryptionService.decrypt(home.address),
+            city: EncryptionService.decrypt(home.city),
             nickName: home.nickName,
           } : null,
           cleaners: assignedCleaners,
           completedAt: apt.updatedAt,
+          isCleanerPreferred,
         };
       })
     );
@@ -141,7 +155,7 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
     const newReview = await ReviewsClass.submitReview(reviewData);
 
     // Handle preferred cleaner feature for homeowner reviews
-    if (reviewData.reviewType === "homeowner_to_cleaner" && reviewData.setAsPreferred && reviewData.homeId) {
+    if (reviewData.reviewType === "homeowner_to_cleaner" && reviewData.homeId) {
       try {
         const cleanerId = reviewData.userId; // The cleaner being reviewed
         const homeId = reviewData.homeId;
@@ -151,8 +165,8 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
           where: { homeId, cleanerId },
         });
 
-        if (!existingPreferred) {
-          // Create the preferred cleaner record
+        if (reviewData.setAsPreferred && !existingPreferred) {
+          // Add as preferred cleaner
           await HomePreferredCleaner.create({
             homeId,
             cleanerId,
@@ -168,7 +182,7 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
           const homeowner = await User.findByPk(req.userId);
 
           if (cleaner && home && homeowner) {
-            const homeAddress = home.nickName || home.address || "their home";
+            const homeAddress = home.nickName || EncryptionService.decrypt(home.address) || "their home";
             const homeownerName = homeowner.firstName
               ? `${homeowner.firstName} ${homeowner.lastName || ""}`.trim()
               : "A homeowner";
@@ -200,10 +214,17 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
               }
             }
           }
+        } else if (!reviewData.setAsPreferred && existingPreferred) {
+          // Remove from preferred cleaner list
+          await HomePreferredCleaner.destroy({
+            where: { homeId, cleanerId },
+          });
+
+          console.log("[Reviews] Removed preferred cleaner record:", { homeId, cleanerId });
         }
       } catch (preferredError) {
         // Log but don't fail the request if preferred cleaner feature has an issue
-        console.error("[Reviews] Error creating preferred cleaner:", preferredError);
+        console.error("[Reviews] Error handling preferred cleaner:", preferredError);
       }
     }
 

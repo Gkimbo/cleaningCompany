@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-native";
 import { colors, spacing, radius, shadows } from "../../services/styles/theme";
 import Application from "../../services/fetchRequests/ApplicationClass";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
+import ReferralService from "../../services/fetchRequests/ReferralService";
 
 import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
@@ -51,6 +52,7 @@ const TopBar = ({ dispatch, state }) => {
   const [signUpRedirect, setSignUpRedirect] = useState(false);
   const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
   const [importBusinessRedirect, setImportBusinessRedirect] = useState(false);
+  const [referralsEnabled, setReferralsEnabled] = useState(false);
 
   // Use global state for pending applications and cleaner requests
   const pendingApplications = state.pendingApplications || 0;
@@ -96,6 +98,41 @@ const TopBar = ({ dispatch, state }) => {
     const interval = setInterval(fetchPendingCleanerRequests, 60000);
     return () => clearInterval(interval);
   }, [state.account, state.currentUser.token, dispatch]);
+
+  // Fetch referral programs status to determine if referrals button should be shown
+  useEffect(() => {
+    const fetchReferralsStatus = async () => {
+      // Only check for clients and cleaners (not owners - they always see it)
+      if (state.currentUser.token && state.account !== "owner") {
+        try {
+          const data = await ReferralService.getCurrentPrograms();
+
+          if (!data.active || !data.programs || data.programs.length === 0) {
+            setReferralsEnabled(false);
+            return;
+          }
+
+          // Check if there are programs applicable to the user's type
+          const isCleaner = state.account === "cleaner";
+          const hasApplicablePrograms = data.programs.some((program) => {
+            if (isCleaner) {
+              // Cleaners can use cleaner_to_cleaner and cleaner_to_client programs
+              return program.type === "cleaner_to_cleaner" || program.type === "cleaner_to_client";
+            } else {
+              // Homeowners/clients can use client_to_client and client_to_cleaner programs
+              return program.type === "client_to_client" || program.type === "client_to_cleaner";
+            }
+          });
+
+          setReferralsEnabled(hasApplicablePrograms);
+        } catch (error) {
+          console.error("Error fetching referral programs:", error);
+          setReferralsEnabled(false);
+        }
+      }
+    };
+    fetchReferralsStatus();
+  }, [state.currentUser.token, state.account]);
 
   useEffect(() => {
     if (signInRedirect) {
@@ -215,7 +252,7 @@ const TopBar = ({ dispatch, state }) => {
                             <MyClientsButton closeModal={closeModal} />
                             {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                             <EarningsButton closeModal={closeModal} />
-                            <MyReferralsButton closeModal={closeModal} />
+                            {referralsEnabled && <MyReferralsButton closeModal={closeModal} />}
                             <RecommendedSuppliesButton closeModal={closeModal} />
                           </>
                         ) : state.account === "humanResources" ? (
@@ -239,7 +276,7 @@ const TopBar = ({ dispatch, state }) => {
                             <BillButton closeModal={closeModal} />
                             <ArchiveButton closeModal={closeModal} />
                             <ReviewsButton closeModal={closeModal} />
-                            <MyReferralsButton closeModal={closeModal} />
+                            {referralsEnabled && <MyReferralsButton closeModal={closeModal} />}
                           </>
                         )}
 

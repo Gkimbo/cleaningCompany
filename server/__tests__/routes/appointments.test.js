@@ -52,6 +52,12 @@ jest.mock("../../models", () => ({
   StripeConnectAccount: {
     findOne: jest.fn(),
   },
+  HomePreferredCleaner: {
+    findOne: jest.fn(),
+    findAll: jest.fn(),
+    create: jest.fn(),
+    destroy: jest.fn(),
+  },
 }));
 
 // Mock services

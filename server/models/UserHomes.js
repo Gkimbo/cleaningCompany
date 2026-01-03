@@ -146,6 +146,12 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		// Toggle for preferred cleaners feature (when false, all cleaners can request jobs)
+		usePreferredCleaners: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: true,
+		},
 	});
 
 	// Helper function to encrypt PII fields

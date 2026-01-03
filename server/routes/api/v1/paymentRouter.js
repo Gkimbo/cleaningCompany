@@ -22,6 +22,7 @@ const AppointmentSerializer = require("../../../serializers/AppointmentSerialize
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { getPricingConfig } = require("../../../config/businessConfig");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const paymentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -1729,10 +1730,10 @@ paymentRouter.post("/complete-job", async (req, res) => {
 
       if (homeowner && home) {
         const address = {
-          street: home.address,
-          city: home.city,
-          state: home.state,
-          zipcode: home.zipcode,
+          street: EncryptionService.decrypt(home.address),
+          city: EncryptionService.decrypt(home.city),
+          state: EncryptionService.decrypt(home.state),
+          zipcode: EncryptionService.decrypt(home.zipcode),
         };
         const cleanerName = cleaner?.username || "Your Cleaner";
 
@@ -2269,10 +2270,10 @@ async function runDailyPaymentCheck() {
 
           // Send email notification
           const homeAddress = {
-            street: home.address,
-            city: home.city,
-            state: home.state,
-            zipcode: home.zipcode,
+            street: EncryptionService.decrypt(home.address),
+            city: EncryptionService.decrypt(home.city),
+            state: EncryptionService.decrypt(home.state),
+            zipcode: EncryptionService.decrypt(home.zipcode),
           };
           await Email.sendUnassignedAppointmentWarning(
             user.email,
@@ -2299,8 +2300,9 @@ async function runDailyPaymentCheck() {
             day: "numeric",
             year: "numeric",
           });
+          const decryptedAddress = EncryptionService.decrypt(home.address);
           notifications.unshift(
-            `Heads up! Your cleaning on ${formattedDate} at ${home.address} doesn't have a cleaner assigned yet. There's still time for one to pick it up, but you may want to have a backup plan.`
+            `Heads up! Your cleaning on ${formattedDate} at ${decryptedAddress} doesn't have a cleaner assigned yet. There's still time for one to pick it up, but you may want to have a backup plan.`
           );
           await user.update({ notifications: notifications.slice(0, 50) });
 
@@ -2437,10 +2439,10 @@ async function runDailyPaymentCheck() {
             });
 
             const cancelAddress = {
-              street: home.address,
-              city: home.city,
-              state: home.state,
-              zipcode: home.zipcode,
+              street: EncryptionService.decrypt(home.address),
+              city: EncryptionService.decrypt(home.city),
+              state: EncryptionService.decrypt(home.state),
+              zipcode: EncryptionService.decrypt(home.zipcode),
             };
 
             // Send email notification
@@ -2470,7 +2472,7 @@ async function runDailyPaymentCheck() {
             });
             const notifications = user.notifications || [];
             notifications.unshift(
-              `Your cleaning appointment for ${formattedDate} at ${home.address} has been cancelled because no cleaner was available. You have not been charged.`
+              `Your cleaning appointment for ${formattedDate} at ${cancelAddress.street} has been cancelled because no cleaner was available. You have not been charged.`
             );
             await user.update({ notifications: notifications.slice(0, 50) });
 
@@ -2527,10 +2529,10 @@ async function runDailyPaymentCheck() {
           if (!user || !home) continue;
 
           const cancelAddress = {
-            street: home.address,
-            city: home.city,
-            state: home.state,
-            zipcode: home.zipcode,
+            street: EncryptionService.decrypt(home.address),
+            city: EncryptionService.decrypt(home.city),
+            state: EncryptionService.decrypt(home.state),
+            zipcode: EncryptionService.decrypt(home.zipcode),
           };
 
           // Send cancellation email
@@ -2560,7 +2562,7 @@ async function runDailyPaymentCheck() {
           });
           const notifications = user.notifications || [];
           notifications.unshift(
-            `Your cleaning appointment for ${formattedDate} at ${home.address} has been cancelled due to payment failure. Please rebook when ready.`
+            `Your cleaning appointment for ${formattedDate} at ${cancelAddress.street} has been cancelled due to payment failure. Please rebook when ready.`
           );
           await user.update({ notifications: notifications.slice(0, 50) });
 
@@ -2581,10 +2583,10 @@ async function runDailyPaymentCheck() {
           if (!user || !home) continue;
 
           const homeAddress = {
-            street: home.address,
-            city: home.city,
-            state: home.state,
-            zipcode: home.zipcode,
+            street: EncryptionService.decrypt(home.address),
+            city: EncryptionService.decrypt(home.city),
+            state: EncryptionService.decrypt(home.state),
+            zipcode: EncryptionService.decrypt(home.zipcode),
           };
 
           const formattedDate = appointmentDate.toLocaleDateString("en-US", {
@@ -2616,7 +2618,7 @@ async function runDailyPaymentCheck() {
           // Add in-app notification
           const notifications = user.notifications || [];
           notifications.unshift(
-            `Payment failed for your cleaning on ${formattedDate} at ${home.address}. Your appointment will be cancelled in ${diffInDays} day${diffInDays !== 1 ? "s" : ""} if payment is not completed. Please log in and retry payment.`
+            `Payment failed for your cleaning on ${formattedDate} at ${homeAddress.street}. Your appointment will be cancelled in ${diffInDays} day${diffInDays !== 1 ? "s" : ""} if payment is not completed. Please log in and retry payment.`
           );
           await user.update({ notifications: notifications.slice(0, 50) });
 
@@ -2719,13 +2721,16 @@ cron.schedule("0 * * * *", async () => {
           // Send email notification (use notificationEmail if set, otherwise main email)
           const ownerNotificationEmail = owner.getNotificationEmail();
           if (ownerNotificationEmail) {
+            const homeAddress = request.home
+              ? `${EncryptionService.decrypt(request.home.address)}, ${EncryptionService.decrypt(request.home.city)}`
+              : "Unknown address";
             await Email.sendAdjustmentNeedsOwnerReview(
               ownerNotificationEmail,
               owner.firstName,
               request.id,
               request.cleaner?.firstName || "Cleaner",
               request.homeowner?.firstName || "Homeowner",
-              request.home ? `${request.home.address}, ${request.home.city}` : "Unknown address"
+              homeAddress
             );
           }
 
@@ -2805,8 +2810,8 @@ cron.schedule("0 7 * * *", async () => {
           if (!home) continue;
 
           const address = {
-            street: home.street,
-            city: home.city,
+            street: EncryptionService.decrypt(home.address),
+            city: EncryptionService.decrypt(home.city),
           };
 
           await PushNotification.sendPushSupplyReminder(

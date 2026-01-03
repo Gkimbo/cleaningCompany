@@ -8,6 +8,7 @@ const jwt = require("jsonwebtoken");
 const models = require("../../../models");
 const { User } = models;
 const BillingService = require("../../../services/BillingService");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const billingRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -160,7 +161,7 @@ billingRouter.get("/pending-reminders", async (req, res) => {
           : null,
         home: a.home
           ? {
-              address: `${a.home.address}, ${a.home.city}`,
+              address: `${EncryptionService.decrypt(a.home.address)}, ${EncryptionService.decrypt(a.home.city)}`,
             }
           : null,
       })),

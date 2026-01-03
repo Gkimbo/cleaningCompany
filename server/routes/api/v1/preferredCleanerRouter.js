@@ -214,4 +214,160 @@ preferredCleanerRouter.post("/appointments/:id/respond", verifyHomeowner, async 
   }
 });
 
+// =====================
+// HOMEOWNER PREFERRED CLEANER MANAGEMENT ENDPOINTS
+// =====================
+
+/**
+ * GET /homes/:homeId/preferred-cleaners
+ * List all preferred cleaners for a home
+ */
+preferredCleanerRouter.get("/homes/:homeId/preferred-cleaners", verifyHomeowner, async (req, res) => {
+  try {
+    const { homeId } = req.params;
+    const { HomePreferredCleaner, UserHomes, User } = models;
+
+    // Verify homeowner owns this home
+    const home = await UserHomes.findOne({
+      where: { id: homeId, userId: req.user.id },
+    });
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Get all preferred cleaners for this home
+    const preferredCleaners = await HomePreferredCleaner.findAll({
+      where: { homeId },
+      include: [{
+        model: User,
+        as: "cleaner",
+        attributes: ["id", "firstName", "lastName", "username"],
+      }],
+      order: [["setAt", "DESC"]],
+    });
+
+    res.json({
+      preferredCleaners: preferredCleaners.map((pc) => ({
+        id: pc.id,
+        cleanerId: pc.cleanerId,
+        cleanerName: pc.cleaner
+          ? `${pc.cleaner.firstName || ""} ${pc.cleaner.lastName || ""}`.trim() || pc.cleaner.username
+          : "Unknown",
+        setAt: pc.setAt,
+        setBy: pc.setBy,
+      })),
+      usePreferredCleaners: home.usePreferredCleaners,
+    });
+  } catch (err) {
+    console.error("Error fetching preferred cleaners:", err);
+    res.status(500).json({ error: "Failed to fetch preferred cleaners" });
+  }
+});
+
+/**
+ * DELETE /homes/:homeId/cleaners/:cleanerId
+ * Remove a cleaner from the preferred list
+ */
+preferredCleanerRouter.delete("/homes/:homeId/cleaners/:cleanerId", verifyHomeowner, async (req, res) => {
+  try {
+    const { homeId, cleanerId } = req.params;
+    const { HomePreferredCleaner, UserHomes } = models;
+
+    // Verify homeowner owns this home
+    const home = await UserHomes.findOne({
+      where: { id: homeId, userId: req.user.id },
+    });
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Find and delete the preferred cleaner record
+    const deleted = await HomePreferredCleaner.destroy({
+      where: { homeId, cleanerId },
+    });
+
+    if (deleted === 0) {
+      return res.status(404).json({ error: "Cleaner not found in preferred list" });
+    }
+
+    console.log(`[PreferredCleaner] Removed cleaner ${cleanerId} from home ${homeId}`);
+
+    res.json({ success: true, message: "Cleaner removed from preferred list" });
+  } catch (err) {
+    console.error("Error removing preferred cleaner:", err);
+    res.status(500).json({ error: "Failed to remove preferred cleaner" });
+  }
+});
+
+/**
+ * PATCH /homes/:homeId/preferred-settings
+ * Toggle usePreferredCleaners for a home
+ */
+preferredCleanerRouter.patch("/homes/:homeId/preferred-settings", verifyHomeowner, async (req, res) => {
+  try {
+    const { homeId } = req.params;
+    const { usePreferredCleaners } = req.body;
+    const { UserHomes } = models;
+
+    if (typeof usePreferredCleaners !== "boolean") {
+      return res.status(400).json({ error: "usePreferredCleaners must be a boolean" });
+    }
+
+    // Verify homeowner owns this home
+    const home = await UserHomes.findOne({
+      where: { id: homeId, userId: req.user.id },
+    });
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    await home.update({ usePreferredCleaners });
+
+    console.log(`[PreferredCleaner] Updated usePreferredCleaners=${usePreferredCleaners} for home ${homeId}`);
+
+    res.json({
+      success: true,
+      usePreferredCleaners: home.usePreferredCleaners,
+      message: usePreferredCleaners
+        ? "Only preferred cleaners can now request jobs for this home"
+        : "All cleaners can now request jobs for this home",
+    });
+  } catch (err) {
+    console.error("Error updating preferred settings:", err);
+    res.status(500).json({ error: "Failed to update settings" });
+  }
+});
+
+/**
+ * GET /homes/:homeId/cleaners/:cleanerId/is-preferred
+ * Check if a specific cleaner is preferred for a home
+ */
+preferredCleanerRouter.get("/homes/:homeId/cleaners/:cleanerId/is-preferred", verifyHomeowner, async (req, res) => {
+  try {
+    const { homeId, cleanerId } = req.params;
+    const { HomePreferredCleaner, UserHomes } = models;
+
+    // Verify homeowner owns this home
+    const home = await UserHomes.findOne({
+      where: { id: homeId, userId: req.user.id },
+    });
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    const isPreferred = await HomePreferredCleaner.findOne({
+      where: { homeId, cleanerId },
+    });
+
+    res.json({ isPreferred: !!isPreferred });
+  } catch (err) {
+    console.error("Error checking preferred status:", err);
+    res.status(500).json({ error: "Failed to check preferred status" });
+  }
+});
+
 module.exports = preferredCleanerRouter;

@@ -44,20 +44,10 @@ class HomeSerializer {
 	static getValue(home, attribute) {
 		// Get value from dataValues or directly from home object
 		const value = home.dataValues ? home.dataValues[attribute] : home[attribute];
-
-		// If this is an encrypted field, check if it needs decryption
+		// EncryptionService.decrypt() safely handles both encrypted and unencrypted data
 		if (this.encryptedFields.includes(attribute) && value) {
-			// Check if value looks encrypted (contains colon with two parts)
-			if (typeof value === 'string' && value.includes(':') && value.split(':').length === 2) {
-				try {
-					return EncryptionService.decrypt(value);
-				} catch (e) {
-					// If decryption fails, return as-is
-					return value;
-				}
-			}
+			return EncryptionService.decrypt(value);
 		}
-
 		return value;
 	}
 
