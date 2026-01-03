@@ -17,22 +17,27 @@ const styles = StyleSheet.create({
     paddingBottom: spacing["4xl"],
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     marginBottom: spacing.lg,
   },
-  headerLeft: {
+  headerTopRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: spacing.md,
   },
   backButton: {
-    paddingVertical: spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
     paddingRight: spacing.md,
+    gap: spacing.xs,
+  },
+  backButtonIcon: {
+    fontSize: 18,
+    color: colors.primary[600],
   },
   backButtonText: {
     color: colors.primary[600],
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
   },
   headerTitle: {
@@ -45,10 +50,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   headerButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
   headerButtonText: {
     fontSize: typography.fontSize.sm,
@@ -313,6 +323,101 @@ const styles = StyleSheet.create({
     color: colors.error[500],
   },
 
+  // Pro Tip Styles
+  proTipContainer: {
+    marginLeft: 52, // Align with content (drag handle + bullet)
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+    marginTop: -spacing.xs,
+  },
+  proTipBox: {
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[500],
+  },
+  proTipHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  proTipIcon: {
+    fontSize: 14,
+    marginRight: spacing.xs,
+  },
+  proTipLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.warning[700],
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  proTipText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[800],
+    lineHeight: 20,
+  },
+  proTipInput: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[800],
+    lineHeight: 20,
+    padding: 0,
+    minHeight: 40,
+  },
+  proTipContainerPreview: {
+    marginLeft: 24, // Align with bullet
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+    marginTop: -spacing.xs,
+  },
+  proTipActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[200],
+  },
+  proTipDeleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.error[50],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  proTipDeleteButtonText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.error[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  addProTipButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 52,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.warning[300],
+  },
+  addProTipButtonText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.xs,
+  },
+
   // Add Item Button
   addItemButton: {
     flexDirection: "row",
@@ -361,32 +466,46 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 1,
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
+    flexDirection: "row",
     alignItems: "center",
-    ...shadows.md,
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary[600],
+    ...shadows.sm,
   },
   saveButtonDisabled: {
     opacity: 0.6,
   },
   saveButtonText: {
-    color: colors.neutral[0],
+    color: colors.primary[600],
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
   },
+  saveButtonIcon: {
+    fontSize: 16,
+  },
   publishButton: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
     backgroundColor: colors.success[600],
     paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    alignItems: "center",
+    borderRadius: radius.xl,
     ...shadows.md,
   },
   publishButtonText: {
     color: colors.neutral[0],
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
+  },
+  publishButtonIcon: {
+    fontSize: 16,
   },
 
   // Version History
@@ -516,10 +635,10 @@ const styles = StyleSheet.create({
     ...shadows.lg,
   },
   modalTitle: {
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize["2xl"],
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     textAlign: "center",
   },
   modalMessage: {
@@ -612,6 +731,116 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     fontWeight: typography.fontWeight.medium,
+  },
+
+  // Template Button
+  templateButton: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
+  },
+  templateButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[0],
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // History Button styling
+  historyButton: {
+    backgroundColor: colors.neutral[0],
+    borderColor: colors.neutral[300],
+  },
+
+  // Modal Content (for inline modals)
+  modalContent: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius["2xl"],
+    padding: spacing.xl,
+    width: "100%",
+    maxWidth: 420,
+    ...shadows.xl,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.xl,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[100],
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  modalCancelButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  modalConfirmButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[600],
+    alignItems: "center",
+    justifyContent: "center",
+    ...shadows.sm,
+  },
+  modalConfirmButtonText: {
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[0],
+    fontWeight: typography.fontWeight.bold,
+  },
+  modalDangerButton: {
+    backgroundColor: colors.error[600],
+  },
+
+  // Warning Box
+  warningBox: {
+    backgroundColor: colors.error[50],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+    borderLeftWidth: 4,
+    borderLeftColor: colors.error[500],
+  },
+  warningText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.error[800],
+    marginBottom: spacing.xs,
+  },
+  warningSubtext: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[600],
+    lineHeight: 20,
+  },
+
+  // Template Stats Box
+  templateStatsBox: {
+    backgroundColor: colors.success[50],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  templateStatsTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[800],
+    marginBottom: spacing.sm,
+  },
+  templateStatItem: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    marginBottom: 6,
+    paddingLeft: spacing.sm,
   },
 });
 

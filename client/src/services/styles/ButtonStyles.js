@@ -163,24 +163,33 @@ const ButtonStyles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
 
-  // Glass effect button (legacy support)
+  // Menu button for sidebar navigation
   glassButton: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.glass.light,
-    borderRadius: radius.full,
+    marginVertical: spacing.xs,
+    backgroundColor: colors.neutral[700],
+    borderRadius: radius.lg,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     borderWidth: 1,
-    borderColor: colors.border.light,
-    ...shadows.sm,
+    borderColor: colors.neutral[600],
+  },
+
+  glassButtonPressed: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[500],
   },
 
   buttonText: {
-    color: colors.text.secondary,
-    fontWeight: typography.fontWeight.semibold,
-    fontSize: typography.fontSize.base,
+    color: colors.neutral[100],
+    fontWeight: typography.fontWeight.medium,
+    fontSize: typography.fontSize.sm,
+  },
+
+  buttonTextPressed: {
+    color: colors.neutral[0],
   },
 
   // Floating action button

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, Text } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useNavigate } from "react-router-native";
 import ButtonStyles from "../../services/styles/ButtonStyles";
 
@@ -23,11 +24,12 @@ const ScheduleCleaningButton = ({ closeModal }) => {
     <Pressable
       style={({ pressed }) => [
         ButtonStyles.glassButton,
-        pressed && { backgroundColor: "rgba(255,255,255,0.25)" },
+        pressed && ButtonStyles.glassButtonPressed,
       ]}
       onPress={handlePress}
     >
-      <Text style={ButtonStyles.buttonText}>Appointments and Requests</Text>
+      <Feather name="calendar" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
+      <Text style={ButtonStyles.buttonText}>Appointments</Text>
     </Pressable>
   );
 };

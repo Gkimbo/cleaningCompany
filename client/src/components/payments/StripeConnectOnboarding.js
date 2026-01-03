@@ -5,11 +5,12 @@ import {
   Linking,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import Icon from "react-native-vector-icons/FontAwesome";
+import { Feather } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { API_BASE } from "../../services/config";
 import {
@@ -81,7 +82,6 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [showStateDropdown, setShowStateDropdown] = useState(false);
 
-  // Form data
   const [formData, setFormData] = useState({
     dobMonth: "",
     dobDay: "",
@@ -91,10 +91,10 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     city: "",
     state: "",
     postalCode: "",
-    ssn: "", // Full SSN for complete onboarding
-    routingNumber: "", // Bank routing number
-    accountNumber: "", // Bank account number
-    confirmAccountNumber: "", // Confirm account number
+    ssn: "",
+    routingNumber: "",
+    accountNumber: "",
+    confirmAccountNumber: "",
   });
 
   const [errors, setErrors] = useState({});
@@ -119,7 +119,6 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
 
       if (res.ok) {
         setAccountStatus(data);
-        // If account exists but not complete, go to step 3 (bank verification)
         if (data.hasAccount && !data.onboardingComplete) {
           setCurrentStep(3);
         }
@@ -183,7 +182,6 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     if (!formData.postalCode.trim() || !/^\d{5}(-\d{4})?$/.test(formData.postalCode)) {
       newErrors.postalCode = "Valid ZIP code required";
     }
-    // Full SSN validation (9 digits)
     const ssnDigits = formData.ssn.replace(/\D/g, "");
     if (!ssnDigits || ssnDigits.length !== 9) {
       newErrors.ssn = "Full 9-digit SSN required";
@@ -196,19 +194,16 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
   const validateStep3 = () => {
     const newErrors = {};
 
-    // Routing number validation (9 digits)
     const routingDigits = formData.routingNumber.replace(/\D/g, "");
     if (!routingDigits || routingDigits.length !== 9) {
       newErrors.routingNumber = "Valid 9-digit routing number required";
     }
 
-    // Account number validation (typically 4-17 digits)
     const accountDigits = formData.accountNumber.replace(/\D/g, "");
     if (!accountDigits || accountDigits.length < 4 || accountDigits.length > 17) {
       newErrors.accountNumber = "Valid account number required";
     }
 
-    // Confirm account number
     if (formData.accountNumber !== formData.confirmAccountNumber) {
       newErrors.confirmAccountNumber = "Account numbers must match";
     }
@@ -264,10 +259,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
         throw new Error(data.error || "Failed to complete setup");
       }
 
-      // If there's an onboarding URL, user needs to accept ToS
       if (data.onboardingUrl) {
-        // Open Stripe's hosted page for ToS acceptance
-        // All other info is pre-filled, so this should be quick
         const result = await WebBrowser.openBrowserAsync(data.onboardingUrl, {
           presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
           controlsColor: colors.primary[600],
@@ -275,12 +267,10 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
           showTitle: true,
         });
 
-        // When browser closes, refresh status
         if (result.type === "cancel" || result.type === "dismiss") {
           await fetchAccountStatus(true);
         }
       } else {
-        // Fully complete! Refresh status
         await fetchAccountStatus(true);
       }
     } catch (err) {
@@ -315,7 +305,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary[500]} />
+        <ActivityIndicator size="large" color={colors.primary[600]} />
         <Text style={styles.loadingText}>Loading account status...</Text>
       </View>
     );
@@ -327,7 +317,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.successCard}>
           <View style={styles.successIconContainer}>
-            <Icon name="check-circle" size={60} color={colors.success[500]} />
+            <Feather name="check-circle" size={60} color={colors.success[500]} />
           </View>
           <Text style={styles.successTitle}>You're All Set!</Text>
           <Text style={styles.successText}>
@@ -336,7 +326,10 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
         </View>
 
         <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>How You Get Paid</Text>
+          <View style={styles.infoCardHeader}>
+            <Feather name="dollar-sign" size={20} color={colors.primary[600]} />
+            <Text style={styles.infoTitle}>How You Get Paid</Text>
+          </View>
           <View style={styles.infoItem}>
             <View style={styles.infoNumberBadge}>
               <Text style={styles.infoNumber}>1</Text>
@@ -356,7 +349,11 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
         </View>
 
         <Pressable
-          style={[styles.secondaryButton, isProcessing && styles.buttonDisabled]}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            pressed && styles.secondaryButtonPressed,
+            isProcessing && styles.buttonDisabled,
+          ]}
           onPress={handleOpenDashboard}
           disabled={isProcessing}
         >
@@ -364,7 +361,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             <ActivityIndicator color={colors.primary[600]} />
           ) : (
             <>
-              <Icon name="external-link" size={16} color={colors.primary[600]} />
+              <Feather name="external-link" size={18} color={colors.primary[600]} />
               <Text style={styles.secondaryButtonText}>View Stripe Dashboard</Text>
             </>
           )}
@@ -378,7 +375,10 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
           {isRefreshing ? (
             <ActivityIndicator size="small" color={colors.primary[600]} />
           ) : (
-            <Text style={styles.refreshButtonText}>Refresh Status</Text>
+            <>
+              <Feather name="refresh-cw" size={14} color={colors.primary[600]} />
+              <Text style={styles.refreshButtonText}>Refresh Status</Text>
+            </>
           )}
         </Pressable>
       </ScrollView>
@@ -398,7 +398,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             ]}
           >
             {currentStep > step ? (
-              <Icon name="check" size={12} color={colors.neutral[0]} />
+              <Feather name="check" size={14} color={colors.neutral[0]} />
             ) : (
               <Text
                 style={[
@@ -437,7 +437,9 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
       return (
         <View style={styles.formCard}>
           <View style={styles.formHeader}>
-            <Icon name="birthday-cake" size={24} color={colors.primary[500]} />
+            <View style={styles.formIconContainer}>
+              <Feather name="gift" size={24} color={colors.primary[600]} />
+            </View>
             <Text style={styles.formTitle}>When's your birthday?</Text>
           </View>
           <Text style={styles.formSubtitle}>
@@ -450,6 +452,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
               <TextInput
                 style={[styles.input, styles.dobInput, errors.dobMonth && styles.inputError]}
                 placeholder="MM"
+                placeholderTextColor={colors.neutral[400]}
                 keyboardType="number-pad"
                 maxLength={2}
                 value={formData.dobMonth}
@@ -462,6 +465,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
               <TextInput
                 style={[styles.input, styles.dobInput, errors.dobDay && styles.inputError]}
                 placeholder="DD"
+                placeholderTextColor={colors.neutral[400]}
                 keyboardType="number-pad"
                 maxLength={2}
                 value={formData.dobDay}
@@ -474,6 +478,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
               <TextInput
                 style={[styles.input, styles.dobInput, errors.dobYear && styles.inputError]}
                 placeholder="YYYY"
+                placeholderTextColor={colors.neutral[400]}
                 keyboardType="number-pad"
                 maxLength={4}
                 value={formData.dobYear}
@@ -484,7 +489,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
           </View>
 
           <View style={styles.securityNote}>
-            <Icon name="lock" size={14} color={colors.text.tertiary} />
+            <Feather name="lock" size={14} color={colors.neutral[400]} />
             <Text style={styles.securityNoteText}>
               Your information is encrypted and secure
             </Text>
@@ -497,7 +502,9 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
       return (
         <View style={styles.formCard}>
           <View style={styles.formHeader}>
-            <Icon name="home" size={24} color={colors.primary[500]} />
+            <View style={styles.formIconContainer}>
+              <Feather name="home" size={24} color={colors.primary[600]} />
+            </View>
             <Text style={styles.formTitle}>Your Address</Text>
           </View>
           <Text style={styles.formSubtitle}>
@@ -509,6 +516,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             <TextInput
               style={[styles.input, errors.addressLine1 && styles.inputError]}
               placeholder="123 Main St"
+              placeholderTextColor={colors.neutral[400]}
               value={formData.addressLine1}
               onChangeText={(v) => setFormData({ ...formData, addressLine1: v })}
             />
@@ -520,6 +528,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             <TextInput
               style={styles.input}
               placeholder="Apt 4B"
+              placeholderTextColor={colors.neutral[400]}
               value={formData.addressLine2}
               onChangeText={(v) => setFormData({ ...formData, addressLine2: v })}
             />
@@ -531,6 +540,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
               <TextInput
                 style={[styles.input, errors.city && styles.inputError]}
                 placeholder="City"
+                placeholderTextColor={colors.neutral[400]}
                 value={formData.city}
                 onChangeText={(v) => setFormData({ ...formData, city: v })}
               />
@@ -545,7 +555,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
                 <Text style={formData.state ? styles.stateSelectorText : styles.stateSelectorPlaceholder}>
                   {formData.state || "State"}
                 </Text>
-                <Icon name="chevron-down" size={12} color={colors.text.tertiary} />
+                <Feather name="chevron-down" size={14} color={colors.neutral[400]} />
               </Pressable>
               {errors.state && <Text style={styles.errorText}>{errors.state}</Text>}
               {showStateDropdown && (
@@ -572,6 +582,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             <TextInput
               style={[styles.input, errors.postalCode && styles.inputError]}
               placeholder="12345"
+              placeholderTextColor={colors.neutral[400]}
               keyboardType="number-pad"
               maxLength={10}
               value={formData.postalCode}
@@ -585,12 +596,12 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             <TextInput
               style={[styles.input, errors.ssn && styles.inputError]}
               placeholder="XXX-XX-XXXX"
+              placeholderTextColor={colors.neutral[400]}
               keyboardType="number-pad"
               maxLength={11}
               secureTextEntry
               value={formData.ssn}
               onChangeText={(v) => {
-                // Auto-format SSN with dashes
                 const digits = v.replace(/\D/g, "");
                 let formatted = digits;
                 if (digits.length > 3) {
@@ -606,7 +617,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
           </View>
 
           <View style={styles.securityNote}>
-            <Icon name="shield" size={14} color={colors.text.tertiary} />
+            <Feather name="shield" size={14} color={colors.neutral[400]} />
             <Text style={styles.securityNoteText}>
               Your SSN is encrypted and sent directly to Stripe. We never store it.
             </Text>
@@ -619,7 +630,9 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
     return (
       <View style={styles.formCard}>
         <View style={styles.formHeader}>
-          <Icon name="university" size={24} color={colors.primary[500]} />
+          <View style={styles.formIconContainer}>
+            <Feather name="credit-card" size={24} color={colors.primary[600]} />
+          </View>
           <Text style={styles.formTitle}>Connect Your Bank</Text>
         </View>
         <Text style={styles.formSubtitle}>
@@ -628,11 +641,11 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
 
         <View style={styles.bankInfo}>
           <View style={styles.bankInfoItem}>
-            <Icon name="check-circle" size={16} color={colors.success[500]} />
+            <Feather name="check-circle" size={16} color={colors.success[500]} />
             <Text style={styles.bankInfoText}>Deposits in 2-3 business days</Text>
           </View>
           <View style={styles.bankInfoItem}>
-            <Icon name="check-circle" size={16} color={colors.success[500]} />
+            <Feather name="check-circle" size={16} color={colors.success[500]} />
             <Text style={styles.bankInfoText}>No fees to receive payments</Text>
           </View>
         </View>
@@ -642,6 +655,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
           <TextInput
             style={[styles.input, errors.routingNumber && styles.inputError]}
             placeholder="9 digits (found on your check)"
+            placeholderTextColor={colors.neutral[400]}
             keyboardType="number-pad"
             maxLength={9}
             value={formData.routingNumber}
@@ -655,6 +669,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
           <TextInput
             style={[styles.input, errors.accountNumber && styles.inputError]}
             placeholder="Your bank account number"
+            placeholderTextColor={colors.neutral[400]}
             keyboardType="number-pad"
             maxLength={17}
             secureTextEntry
@@ -669,6 +684,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
           <TextInput
             style={[styles.input, errors.confirmAccountNumber && styles.inputError]}
             placeholder="Re-enter account number"
+            placeholderTextColor={colors.neutral[400]}
             keyboardType="number-pad"
             maxLength={17}
             secureTextEntry
@@ -679,7 +695,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
         </View>
 
         <View style={styles.tipCard}>
-          <Icon name="info-circle" size={20} color={colors.primary[500]} />
+          <Feather name="info" size={20} color={colors.primary[600]} />
           <View style={styles.tipContent}>
             <Text style={styles.tipTitle}>Where to Find These</Text>
             <Text style={styles.tipText}>
@@ -689,7 +705,7 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
         </View>
 
         <View style={styles.securityNote}>
-          <Icon name="lock" size={14} color={colors.text.tertiary} />
+          <Feather name="lock" size={14} color={colors.neutral[400]} />
           <Text style={styles.securityNoteText}>
             Your bank info is encrypted and sent directly to Stripe
           </Text>
@@ -699,70 +715,84 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
   };
 
   return (
-    <>
-      <ScrollView contentContainerStyle={styles.container}>
-        <StepIndicator />
-        {renderStepContent()}
+    <ScrollView contentContainerStyle={styles.container}>
+      <StepIndicator />
+      {renderStepContent()}
 
-        <View style={styles.buttonContainer}>
-          {currentStep > 1 && (
-            <Pressable
-              style={styles.backButton}
-              onPress={() => setCurrentStep(currentStep - 1)}
-            >
-              <Icon name="arrow-left" size={16} color={colors.text.secondary} />
-              <Text style={styles.backButtonText}>Back</Text>
-            </Pressable>
-          )}
+      <View style={styles.buttonContainer}>
+        {currentStep > 1 && (
           <Pressable
-            style={[styles.primaryButton, styles.continueButton, isProcessing && styles.buttonDisabled]}
-            onPress={handleNextStep}
-            disabled={isProcessing}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}
+            onPress={() => setCurrentStep(currentStep - 1)}
           >
-            {isProcessing ? (
-              <ActivityIndicator color={colors.neutral[0]} />
-            ) : (
-              <>
-                <Text style={styles.primaryButtonText}>
-                  {currentStep === 3 ? "Complete Setup" : "Continue"}
-                </Text>
-                <Icon name={currentStep === 3 ? "check" : "arrow-right"} size={16} color={colors.neutral[0]} />
-              </>
-            )}
+            <Feather name="arrow-left" size={18} color={colors.text.secondary} />
+            <Text style={styles.backButtonText}>Back</Text>
           </Pressable>
-        </View>
-
+        )}
         <Pressable
-          style={[styles.refreshButton, isRefreshing && styles.buttonDisabled]}
-          onPress={() => fetchAccountStatus(true)}
-          disabled={isRefreshing}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            styles.continueButton,
+            pressed && styles.primaryButtonPressed,
+            isProcessing && styles.buttonDisabled,
+          ]}
+          onPress={handleNextStep}
+          disabled={isProcessing}
         >
-          {isRefreshing ? (
-            <ActivityIndicator size="small" color={colors.primary[600]} />
+          {isProcessing ? (
+            <ActivityIndicator color={colors.neutral[0]} />
           ) : (
-            <Text style={styles.refreshButtonText}>Refresh Status</Text>
+            <>
+              <Text style={styles.primaryButtonText}>
+                {currentStep === 3 ? "Complete Setup" : "Continue"}
+              </Text>
+              <Feather
+                name={currentStep === 3 ? "check" : "arrow-right"}
+                size={18}
+                color={colors.neutral[0]}
+              />
+            </>
           )}
         </Pressable>
-      </ScrollView>
-    </>
+      </View>
+
+      <Pressable
+        style={[styles.refreshButton, isRefreshing && styles.buttonDisabled]}
+        onPress={() => fetchAccountStatus(true)}
+        disabled={isRefreshing}
+      >
+        {isRefreshing ? (
+          <ActivityIndicator size="small" color={colors.primary[600]} />
+        ) : (
+          <>
+            <Feather name="refresh-cw" size={14} color={colors.primary[600]} />
+            <Text style={styles.refreshButtonText}>Refresh Status</Text>
+          </>
+        )}
+      </Pressable>
+    </ScrollView>
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     padding: spacing.lg,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.neutral[100],
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.neutral[100],
   },
   loadingText: {
     marginTop: spacing.md,
-    color: colors.text.secondary,
+    color: colors.neutral[500],
+    fontSize: typography.fontSize.sm,
   },
 
   // Step Indicator
@@ -771,21 +801,25 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     marginBottom: spacing.xl,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    ...shadows.sm,
   },
   stepContainer: {
     flexDirection: "row",
     alignItems: "center",
   },
   stepCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.neutral[200],
     justifyContent: "center",
     alignItems: "center",
   },
   stepCircleActive: {
-    backgroundColor: colors.primary[500],
+    backgroundColor: colors.primary[600],
   },
   stepCircleComplete: {
     backgroundColor: colors.success[500],
@@ -793,14 +827,14 @@ const styles = {
   stepNumber: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.bold,
-    color: colors.text.tertiary,
+    color: colors.neutral[400],
   },
   stepNumberActive: {
     color: colors.neutral[0],
   },
   stepLabel: {
     fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
+    color: colors.neutral[400],
     marginLeft: spacing.xs,
     marginRight: spacing.sm,
   },
@@ -810,9 +844,10 @@ const styles = {
   },
   stepLine: {
     width: 24,
-    height: 2,
+    height: 3,
     backgroundColor: colors.neutral[200],
     marginRight: spacing.sm,
+    borderRadius: radius.full,
   },
   stepLineActive: {
     backgroundColor: colors.success[500],
@@ -828,8 +863,16 @@ const styles = {
   formHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.md,
     marginBottom: spacing.sm,
+  },
+  formIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
   },
   formTitle: {
     fontSize: typography.fontSize.xl,
@@ -840,7 +883,7 @@ const styles = {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     marginBottom: spacing.lg,
-    lineHeight: 20,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
   },
 
   // Form Fields
@@ -869,20 +912,21 @@ const styles = {
   input: {
     backgroundColor: colors.neutral[50],
     borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: radius.md,
+    borderColor: colors.neutral[200],
+    borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
   },
   inputError: {
     borderColor: colors.error[500],
+    borderWidth: 2,
   },
   errorText: {
     fontSize: typography.fontSize.xs,
     color: colors.error[500],
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
 
   // DOB Fields
@@ -902,10 +946,10 @@ const styles = {
   stateSelector: {
     backgroundColor: colors.neutral[50],
     borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: radius.md,
+    borderColor: colors.neutral[200],
+    borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -916,7 +960,7 @@ const styles = {
   },
   stateSelectorPlaceholder: {
     fontSize: typography.fontSize.base,
-    color: colors.text.tertiary,
+    color: colors.neutral[400],
   },
   stateDropdown: {
     position: "absolute",
@@ -924,16 +968,17 @@ const styles = {
     left: 0,
     right: 0,
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     maxHeight: 200,
+    marginTop: spacing.xs,
     ...shadows.lg,
     zIndex: 1000,
   },
   stateOption: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: colors.neutral[100],
   },
   stateOptionText: {
     fontSize: typography.fontSize.sm,
@@ -944,57 +989,27 @@ const styles = {
   securityNote: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    marginTop: spacing.md,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
   },
   securityNoteText: {
     fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-  },
-
-  // Status Info
-  statusInfo: {
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  statusRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing.xs,
-  },
-  statusLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-  },
-  requirementsBox: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
-  },
-  requirementsTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.warning[700],
-    marginBottom: spacing.xs,
-  },
-  requirementItem: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    marginLeft: spacing.sm,
-    lineHeight: 18,
+    color: colors.neutral[400],
+    flex: 1,
   },
 
   // Bank Info
   bankInfo: {
-    backgroundColor: colors.neutral[50],
+    backgroundColor: colors.success[50],
     borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.lg,
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.success[200],
   },
   bankInfoItem: {
     flexDirection: "row",
@@ -1003,17 +1018,19 @@ const styles = {
   },
   bankInfoText: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    color: colors.success[700],
   },
 
   // Tip Card
   tipCard: {
     flexDirection: "row",
-    backgroundColor: colors.warning[50],
+    backgroundColor: colors.primary[50],
     borderRadius: radius.lg,
     padding: spacing.md,
-    marginBottom: spacing.lg,
+    marginTop: spacing.md,
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
   },
   tipContent: {
     flex: 1,
@@ -1021,20 +1038,13 @@ const styles = {
   tipTitle: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.warning[800],
-    marginBottom: 2,
+    color: colors.primary[700],
+    marginBottom: spacing.xs,
   },
   tipText: {
     fontSize: typography.fontSize.sm,
-    color: colors.warning[700],
-    lineHeight: 18,
-  },
-
-  stripeNote: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-    textAlign: "center",
-    marginTop: spacing.md,
+    color: colors.primary[600],
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
   },
 
   // Buttons
@@ -1054,6 +1064,10 @@ const styles = {
     paddingHorizontal: spacing.xl,
     borderRadius: radius.lg,
     gap: spacing.sm,
+    ...shadows.md,
+  },
+  primaryButtonPressed: {
+    backgroundColor: colors.primary[700],
   },
   continueButton: {
     flex: 1,
@@ -1074,6 +1088,10 @@ const styles = {
     borderWidth: 2,
     borderColor: colors.primary[500],
     gap: spacing.sm,
+    ...shadows.sm,
+  },
+  secondaryButtonPressed: {
+    backgroundColor: colors.primary[50],
   },
   secondaryButtonText: {
     color: colors.primary[600],
@@ -1086,6 +1104,10 @@ const styles = {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     gap: spacing.xs,
+    borderRadius: radius.lg,
+  },
+  backButtonPressed: {
+    backgroundColor: colors.neutral[100],
   },
   backButtonText: {
     color: colors.text.secondary,
@@ -1093,13 +1115,17 @@ const styles = {
     fontSize: typography.fontSize.base,
   },
   refreshButton: {
+    flexDirection: "row",
     paddingVertical: spacing.md,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: spacing.md,
+    gap: spacing.sm,
   },
   refreshButtonText: {
     color: colors.primary[600],
     fontWeight: typography.fontWeight.medium,
+    fontSize: typography.fontSize.sm,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -1115,7 +1141,13 @@ const styles = {
     marginBottom: spacing.lg,
   },
   successIconContainer: {
-    marginBottom: spacing.md,
+    width: 100,
+    height: 100,
+    borderRadius: radius.full,
+    backgroundColor: colors.success[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.lg,
   },
   successTitle: {
     fontSize: typography.fontSize["2xl"],
@@ -1127,6 +1159,7 @@ const styles = {
     fontSize: typography.fontSize.base,
     color: colors.text.secondary,
     textAlign: "center",
+    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
   },
 
   // Info Card
@@ -1137,23 +1170,28 @@ const styles = {
     marginBottom: spacing.lg,
     ...shadows.sm,
   },
+  infoCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
   infoTitle: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.md,
     color: colors.text.primary,
   },
   infoItem: {
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: spacing.md,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   infoNumberBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary[500],
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[600],
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1165,8 +1203,9 @@ const styles = {
   infoItemText: {
     flex: 1,
     color: colors.text.secondary,
-    lineHeight: 20,
+    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
+    fontSize: typography.fontSize.sm,
   },
-};
+});
 
 export default StripeConnectOnboarding;

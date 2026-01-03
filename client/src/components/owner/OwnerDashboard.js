@@ -1106,62 +1106,6 @@ const OwnerDashboard = ({ state }) => {
       {/* Tax Section */}
       <TaxFormsSection state={state} />
 
-      {/* Platform Withdrawals Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Platform Earnings" />
-        <Text style={styles.termsDescription}>
-          Withdraw platform fees from your Stripe account to your bank account.
-        </Text>
-        <Pressable
-          style={styles.termsButton}
-          onPress={() => navigate("/owner/withdrawals")}
-        >
-          <Text style={styles.termsButtonText}>Manage Withdrawals</Text>
-        </Pressable>
-      </View>
-
-      {/* Terms & Conditions Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Terms & Conditions" />
-        <Text style={styles.termsDescription}>
-          Manage the terms and conditions for homeowners and cleaners. Update terms to require users to re-accept on their next login.
-        </Text>
-        <Pressable
-          style={styles.termsButton}
-          onPress={() => navigate("/owner/terms")}
-        >
-          <Text style={styles.termsButtonText}>Manage Terms & Conditions</Text>
-        </Pressable>
-      </View>
-
-      {/* HR Management Section */}
-      <View style={styles.section}>
-        <SectionHeader title="HR Management" />
-        <Text style={styles.termsDescription}>
-          Create and manage HR employee accounts. HR staff can handle customer support and dispute resolution.
-        </Text>
-        <Pressable
-          style={styles.termsButton}
-          onPress={() => navigate("/owner/hr-management")}
-        >
-          <Text style={styles.termsButtonText}>Manage HR Employees</Text>
-        </Pressable>
-      </View>
-
-      {/* Cleaning Checklist Editor Section */}
-      <View style={styles.section}>
-        <SectionHeader title="Cleaning Checklist" />
-        <Text style={styles.termsDescription}>
-          Edit the master cleaning checklist that cleaners use during jobs. Add, remove, or reorder tasks with a Word-like editor.
-        </Text>
-        <Pressable
-          style={styles.termsButton}
-          onPress={() => navigate("/owner/checklist")}
-        >
-          <Text style={styles.termsButtonText}>Edit Cleaning Checklist</Text>
-        </Pressable>
-      </View>
-
       {/* Footer Spacer */}
       <View style={{ height: 40 }} />
     </ScrollView>
