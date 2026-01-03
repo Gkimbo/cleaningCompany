@@ -163,6 +163,24 @@ export const SocketProvider = ({ children, token }) => {
     return () => {};
   }, [socket]);
 
+  // Listen for new suspicious activity reports (HR/Owner only)
+  const onSuspiciousActivityReport = useCallback((callback) => {
+    if (socket) {
+      socket.on("suspicious_activity_report", callback);
+      return () => socket.off("suspicious_activity_report", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for suspicious report updates (HR/Owner only)
+  const onSuspiciousReportUpdated = useCallback((callback) => {
+    if (socket) {
+      socket.on("suspicious_report_updated", callback);
+      return () => socket.off("suspicious_report_updated", callback);
+    }
+    return () => {};
+  }, [socket]);
+
   const value = {
     socket,
     connected,
@@ -179,6 +197,8 @@ export const SocketProvider = ({ children, token }) => {
     onReactionNotification,
     onConversationDeleted,
     onConversationTitleChanged,
+    onSuspiciousActivityReport,
+    onSuspiciousReportUpdated,
   };
 
   return (

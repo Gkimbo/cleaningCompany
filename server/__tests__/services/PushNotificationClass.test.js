@@ -505,4 +505,95 @@ describe("PushNotificationClass", () => {
       expect(chunkCall[0].body).toMatch(/25.*2025|2025.*25|Dec|December/);
     });
   });
+
+  describe("sendPushSuspiciousActivityReport", () => {
+    it("should send suspicious activity report notification", async () => {
+      Expo.isExpoPushToken = jest.fn().mockReturnValue(true);
+      await PushNotification.sendPushSuspiciousActivityReport(
+        validToken,
+        "HR Staff",
+        "John Client",
+        "Jane Cleaner",
+        5
+      );
+
+      const chunkCall = mockExpo.chunkPushNotifications.mock.calls[0][0];
+      expect(chunkCall[0].title).toBe("⚠️ Suspicious Activity Report");
+      expect(chunkCall[0].data.type).toBe("suspicious_activity_report");
+    });
+
+    it("should include reporter and reported user names in body", async () => {
+      Expo.isExpoPushToken = jest.fn().mockReturnValue(true);
+      await PushNotification.sendPushSuspiciousActivityReport(
+        validToken,
+        "HR Staff",
+        "John Client",
+        "Jane Cleaner",
+        3
+      );
+
+      const chunkCall = mockExpo.chunkPushNotifications.mock.calls[0][0];
+      expect(chunkCall[0].body).toContain("John Client");
+      expect(chunkCall[0].body).toContain("Jane Cleaner");
+    });
+
+    it("should include pending count in body", async () => {
+      Expo.isExpoPushToken = jest.fn().mockReturnValue(true);
+      await PushNotification.sendPushSuspiciousActivityReport(
+        validToken,
+        "HR Staff",
+        "Reporter",
+        "Reported",
+        7
+      );
+
+      const chunkCall = mockExpo.chunkPushNotifications.mock.calls[0][0];
+      expect(chunkCall[0].body).toContain("7 pending reports");
+    });
+
+    it("should use singular 'report' when pending count is 1", async () => {
+      Expo.isExpoPushToken = jest.fn().mockReturnValue(true);
+      await PushNotification.sendPushSuspiciousActivityReport(
+        validToken,
+        "HR Staff",
+        "Reporter",
+        "Reported",
+        1
+      );
+
+      const chunkCall = mockExpo.chunkPushNotifications.mock.calls[0][0];
+      expect(chunkCall[0].body).toContain("1 pending report");
+      expect(chunkCall[0].body).not.toContain("1 pending reports");
+    });
+
+    it("should include pending count in data", async () => {
+      Expo.isExpoPushToken = jest.fn().mockReturnValue(true);
+      await PushNotification.sendPushSuspiciousActivityReport(
+        validToken,
+        "HR Staff",
+        "Reporter",
+        "Reported",
+        10
+      );
+
+      const chunkCall = mockExpo.chunkPushNotifications.mock.calls[0][0];
+      expect(chunkCall[0].data.pendingCount).toBe(10);
+      expect(chunkCall[0].data.reporterName).toBe("Reporter");
+      expect(chunkCall[0].data.reportedUserName).toBe("Reported");
+    });
+
+    it("should return null for invalid token", async () => {
+      Expo.isExpoPushToken = jest.fn().mockReturnValue(false);
+      const result = await PushNotification.sendPushSuspiciousActivityReport(
+        invalidToken,
+        "HR Staff",
+        "Reporter",
+        "Reported",
+        5
+      );
+
+      expect(result).toBeNull();
+      expect(mockExpo.sendPushNotificationsAsync).not.toHaveBeenCalled();
+    });
+  });
 });

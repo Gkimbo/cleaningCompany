@@ -11,9 +11,11 @@ const {
   MessageReadReceipt,
   CleanerClient,
   UserHomes,
+  SuspiciousActivityReport,
 } = require("../../../models");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
+const SuspiciousContentDetector = require("../../../services/SuspiciousContentDetector");
 
 const messageRouter = express.Router();
 
@@ -210,6 +212,16 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       });
     }
 
+    // Detect suspicious content for appointment conversations
+    let hasSuspiciousContent = false;
+    let suspiciousContentTypes = [];
+
+    if (conversation?.conversationType === "appointment") {
+      const detection = SuspiciousContentDetector.detect(content);
+      hasSuspiciousContent = detection.isSuspicious;
+      suspiciousContentTypes = detection.types;
+    }
+
     // Check if this is the first message in the conversation (for email notification)
     const existingMessageCount = await Message.count({
       where: { conversationId },
@@ -222,6 +234,8 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       senderId,
       content: content.trim(),
       messageType: "text",
+      hasSuspiciousContent,
+      suspiciousContentTypes,
     });
 
     // Get message with sender info
@@ -1936,5 +1950,191 @@ messageRouter.post("/mark-messages-read", authenticateToken, async (req, res) =>
     return res.status(500).json({ error: "Failed to mark messages as read" });
   }
 });
+
+/**
+ * POST /api/v1/messages/:messageId/report-suspicious
+ * Report a message with suspicious content
+ * Creates a report for HR/Owner review and sends notifications
+ */
+messageRouter.post(
+  "/:messageId/report-suspicious",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const reporterId = req.userId;
+
+      // Get the message with conversation and sender info
+      const message = await Message.findByPk(messageId, {
+        include: [
+          {
+            model: Conversation,
+            as: "conversation",
+            include: [{ model: UserAppointments, as: "appointment" }],
+          },
+          {
+            model: User,
+            as: "sender",
+            attributes: ["id", "username", "firstName", "lastName", "type"],
+          },
+        ],
+      });
+
+      if (!message) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      // Verify the reporter is a participant in this conversation
+      const participant = await ConversationParticipant.findOne({
+        where: { conversationId: message.conversationId, userId: reporterId },
+      });
+
+      if (!participant) {
+        return res.status(403).json({ error: "Not authorized to report this message" });
+      }
+
+      // Cannot report your own message
+      if (message.senderId === reporterId) {
+        return res.status(400).json({ error: "Cannot report your own message" });
+      }
+
+      // Check if the message is flagged as suspicious
+      if (!message.hasSuspiciousContent) {
+        return res.status(400).json({
+          error: "This message is not flagged as suspicious",
+        });
+      }
+
+      // Check if this message has already been reported by this user
+      const existingReport = await SuspiciousActivityReport.findOne({
+        where: { messageId, reporterId },
+      });
+
+      if (existingReport) {
+        return res.status(409).json({
+          error: "You have already reported this message",
+          alreadyReported: true,
+        });
+      }
+
+      // Create the report
+      const report = await SuspiciousActivityReport.create({
+        messageId: message.id,
+        reporterId,
+        reportedUserId: message.senderId,
+        conversationId: message.conversationId,
+        appointmentId: message.conversation?.appointmentId || null,
+        suspiciousContentTypes: message.suspiciousContentTypes || [],
+        messageContent: message.content,
+        status: "pending",
+      });
+
+      // Get reporter info for the notification
+      const reporter = await User.findByPk(reporterId, {
+        attributes: ["id", "username", "firstName", "lastName", "type"],
+      });
+
+      // Get owner and HR users to notify
+      const staffToNotify = await User.findAll({
+        where: {
+          type: { [Op.in]: ["owner", "humanResources"] },
+        },
+        attributes: ["id", "email", "firstName", "lastName", "type", "expoPushToken"],
+      });
+
+      // Send email notifications to owner and HR
+      const reportedUserName = message.sender
+        ? `${message.sender.firstName || ""} ${message.sender.lastName || ""}`.trim() ||
+          message.sender.username
+        : "Unknown User";
+
+      const reporterName = reporter
+        ? `${reporter.firstName || ""} ${reporter.lastName || ""}`.trim() ||
+          reporter.username
+        : "Unknown User";
+
+      const suspiciousTypes = (message.suspiciousContentTypes || [])
+        .map((type) => {
+          const labels = {
+            phone_number: "Phone Number",
+            email: "Email Address",
+            off_platform: "Off-Platform Communication",
+          };
+          return labels[type] || type;
+        })
+        .join(", ");
+
+      // Get pending count for notifications
+      const pendingCount = await SuspiciousActivityReport.count({
+        where: { status: "pending" },
+      });
+
+      // Send notification emails
+      for (const staff of staffToNotify) {
+        try {
+          await Email.sendSuspiciousActivityReport({
+            to: staff.email,
+            staffName: staff.firstName || "Team",
+            reporterName,
+            reportedUserName,
+            reportedUserType: message.sender?.type || "unknown",
+            messageContent: message.content,
+            suspiciousTypes: suspiciousTypes || "Suspicious content",
+            appointmentId: message.conversation?.appointmentId,
+            reportId: report.id,
+          });
+        } catch (emailError) {
+          console.error(
+            `Failed to send suspicious activity email to ${staff.email}:`,
+            emailError
+          );
+        }
+      }
+
+      // Send push notifications to HR and Owner
+      for (const staff of staffToNotify) {
+        if (staff.expoPushToken) {
+          try {
+            await PushNotification.sendPushSuspiciousActivityReport(
+              staff.expoPushToken,
+              staff.firstName || "Team",
+              reporterName,
+              reportedUserName,
+              pendingCount
+            );
+          } catch (pushError) {
+            console.error(
+              `Failed to send suspicious activity push to ${staff.id}:`,
+              pushError
+            );
+          }
+        }
+      }
+
+      // Emit socket event to notify staff in real-time
+      const io = req.app.get("io");
+      for (const staff of staffToNotify) {
+        io.to(`user_${staff.id}`).emit("suspicious_activity_report", {
+          reportId: report.id,
+          reporterName,
+          reportedUserName,
+          messageContent: message.content,
+          suspiciousTypes,
+          pendingCount,
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        message:
+          "Report submitted successfully. Our team will review this activity.",
+        reportId: report.id,
+      });
+    } catch (error) {
+      console.error("Error reporting suspicious activity:", error);
+      return res.status(500).json({ error: "Failed to submit report" });
+    }
+  }
+);
 
 module.exports = messageRouter;

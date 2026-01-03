@@ -398,6 +398,19 @@ class PushNotification {
       nextDate,
     });
   }
+
+  // 30. Suspicious activity report (to HR/Owner)
+  static async sendPushSuspiciousActivityReport(expoPushToken, staffName, reporterName, reportedUserName, pendingCount) {
+    const title = "⚠️ Suspicious Activity Report";
+    const body = `${reporterName} reported ${reportedUserName} for suspicious messaging. You have ${pendingCount} pending report${pendingCount !== 1 ? 's' : ''} to review.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "suspicious_activity_report",
+      reporterName,
+      reportedUserName,
+      pendingCount,
+    });
+  }
 }
 
 module.exports = PushNotification;

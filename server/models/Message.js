@@ -41,6 +41,16 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    hasSuspiciousContent: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    suspiciousContentTypes: {
+      type: DataTypes.JSON,
+      allowNull: false,
+      defaultValue: [],
+    },
   });
 
   Message.associate = (models) => {

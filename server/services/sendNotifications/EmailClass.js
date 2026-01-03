@@ -3114,6 +3114,117 @@ The Kleanr Team`;
       throw error;
     }
   }
+
+  /**
+   * Send suspicious activity report notification to HR/Owner
+   */
+  static async sendSuspiciousActivityReport({
+    to,
+    staffName,
+    reporterName,
+    reportedUserName,
+    reportedUserType,
+    messageContent,
+    suspiciousTypes,
+    appointmentId,
+    reportId,
+  }) {
+    try {
+      const transporter = createTransporter();
+
+      const userTypeLabel =
+        reportedUserType === "cleaner"
+          ? "Cleaner"
+          : reportedUserType === "homeowner"
+          ? "Client"
+          : "User";
+
+      const htmlContent = createEmailTemplate({
+        title: "Suspicious Activity Report",
+        subtitle: "A message has been flagged for review",
+        greeting: `Hello ${staffName},`,
+        content: `
+          <p>A user has reported suspicious activity in the messaging system that requires your review.</p>
+          <p>The reported message may contain attempts to communicate or transact outside of the Kleanr platform.</p>
+        `,
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+        infoBox: {
+          icon: "🚨",
+          title: "Report Details",
+          items: [
+            { label: "Report ID", value: `#${reportId}` },
+            { label: "Reported By", value: reporterName },
+            { label: "Reported User", value: `${reportedUserName} (${userTypeLabel})` },
+            { label: "Suspicious Content", value: suspiciousTypes },
+            ...(appointmentId
+              ? [{ label: "Related Appointment", value: `#${appointmentId}` }]
+              : []),
+          ],
+        },
+        warningBox: {
+          bgColor: "#fef2f2",
+          borderColor: "#dc2626",
+          textColor: "#991b1b",
+          icon: "💬",
+          text: `Message content: "${messageContent.substring(0, 200)}${messageContent.length > 200 ? "..." : ""}"`,
+        },
+        steps: {
+          title: "Recommended Actions",
+          items: [
+            "Review the reported message and conversation context",
+            "Check the user's history for similar patterns",
+            "Consider warning or flagging the user if appropriate",
+            "Update the report status once reviewed",
+          ],
+        },
+        ctaText: "Log into the Kleanr admin panel to review this report and take action.",
+        footerMessage: "Protecting our community is a priority.",
+      });
+
+      const textContent = `Hello ${staffName},
+
+SUSPICIOUS ACTIVITY REPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A user has reported suspicious activity that requires your review.
+
+REPORT DETAILS
+Report ID: #${reportId}
+Reported By: ${reporterName}
+Reported User: ${reportedUserName} (${userTypeLabel})
+Suspicious Content: ${suspiciousTypes}
+${appointmentId ? `Related Appointment: #${appointmentId}` : ""}
+
+MESSAGE CONTENT:
+"${messageContent}"
+
+RECOMMENDED ACTIONS:
+1. Review the reported message and conversation context
+2. Check the user's history for similar patterns
+3. Consider warning or flagging the user if appropriate
+4. Update the report status once reviewed
+
+Log into the Kleanr admin panel to review this report.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `🚨 Suspicious Activity Report - ${reportedUserName} (${userTypeLabel})`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Suspicious activity report email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending suspicious activity report email:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Email;

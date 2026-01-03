@@ -496,6 +496,39 @@ class MessageService {
   }
 
   /**
+   * Report a message as suspicious activity
+   * @param {number} messageId - The ID of the message to report
+   * @param {string} token - Auth token
+   * @returns {Promise<Object>} - Result with success/error status
+   */
+  static async reportSuspiciousActivity(messageId, token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/${messageId}/report-suspicious`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        // Handle "already reported" case specially
+        if (response.status === 409) {
+          return { alreadyReported: true, message: data.error };
+        }
+        throw new Error(data.error || "Failed to report suspicious activity");
+      }
+      return data;
+    } catch (error) {
+      console.error("Error reporting suspicious activity:", error);
+      return { error: error.message };
+    }
+  }
+
+  /**
    * Create or get a direct conversation between cleaner and their client
    * @param {number} clientUserId - Required when cleaner is calling (the client to message)
    * @param {number} cleanerUserId - Optional when client is calling (defaults to their preferred cleaner)

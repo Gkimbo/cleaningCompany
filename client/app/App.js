@@ -91,6 +91,9 @@ import { ImportBusinessLanding, BusinessSignupWizard } from "../src/components/b
 import ReferralManagement from "../src/components/owner/ReferralManagement";
 import MyReferralsPage from "../src/components/referrals/MyReferralsPage";
 
+// HR components
+import SuspiciousReportsPage from "../src/components/hr/SuspiciousReportsPage";
+
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
 
@@ -485,6 +488,11 @@ export default function App() {
               <Route
                 path="/my-referrals"
                 element={<MyReferralsPage state={state} dispatch={dispatch} />}
+              />
+              {/* HR/Owner Suspicious Reports */}
+              <Route
+                path="/suspicious-reports"
+                element={<SuspiciousReportsPage />}
               />
             </Routes>
             </SafeAreaView>

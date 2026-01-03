@@ -45,6 +45,7 @@ import HRManagementButton from "./HRManagementButton";
 import TermsEditorButton from "./TermsEditorButton";
 import WithdrawalsButton from "./WithdrawalsButton";
 import MyClientsButton from "./MyClientsButton";
+import SuspiciousReportsButton from "./SuspiciousReportsButton";
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -241,6 +242,7 @@ const TopBar = ({ dispatch, state }) => {
                             <IncentivesButton closeModal={closeModal} />
                             <ChecklistEditorButton closeModal={closeModal} />
                             <HRManagementButton closeModal={closeModal} />
+                            <SuspiciousReportsButton closeModal={closeModal} />
                             <TermsEditorButton closeModal={closeModal} />
                             <WithdrawalsButton closeModal={closeModal} />
                           </>
@@ -259,6 +261,7 @@ const TopBar = ({ dispatch, state }) => {
                           <>
                             <ViewApplicationsButton closeModal={closeModal} />
                             <ManageEmployees closeModal={closeModal} />
+                            <SuspiciousReportsButton closeModal={closeModal} />
                           </>
                         ) : (
                           <>
