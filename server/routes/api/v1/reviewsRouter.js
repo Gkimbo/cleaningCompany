@@ -1,8 +1,10 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const { User, UserAppointments, UserReviews, UserHomes } = require("../../../models");
+const { User, UserAppointments, UserReviews, UserHomes, HomePreferredCleaner } = require("../../../models");
 const ReviewsClass = require("../../../services/ReviewsClass");
 const ReviewSerializer = require("../../../serializers/ReviewSerializer");
+const EmailClass = require("../../../services/sendNotifications/EmailClass");
+const PushNotificationClass = require("../../../services/PushNotificationService");
 
 const reviewsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -132,9 +134,78 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
       userId: reviewData.userId,
       appointmentId: reviewData.appointmentId,
       reviewType: reviewData.reviewType,
+      setAsPreferred: reviewData.setAsPreferred,
+      homeId: reviewData.homeId,
     });
 
     const newReview = await ReviewsClass.submitReview(reviewData);
+
+    // Handle preferred cleaner feature for homeowner reviews
+    if (reviewData.reviewType === "homeowner_to_cleaner" && reviewData.setAsPreferred && reviewData.homeId) {
+      try {
+        const cleanerId = reviewData.userId; // The cleaner being reviewed
+        const homeId = reviewData.homeId;
+
+        // Check if already a preferred cleaner for this home
+        const existingPreferred = await HomePreferredCleaner.findOne({
+          where: { homeId, cleanerId },
+        });
+
+        if (!existingPreferred) {
+          // Create the preferred cleaner record
+          await HomePreferredCleaner.create({
+            homeId,
+            cleanerId,
+            setAt: new Date(),
+            setBy: "review",
+          });
+
+          console.log("[Reviews] Created preferred cleaner record:", { homeId, cleanerId });
+
+          // Get cleaner and home details for notifications
+          const cleaner = await User.findByPk(cleanerId);
+          const home = await UserHomes.findByPk(homeId);
+          const homeowner = await User.findByPk(req.userId);
+
+          if (cleaner && home && homeowner) {
+            const homeAddress = home.nickName || home.address || "their home";
+            const homeownerName = homeowner.firstName
+              ? `${homeowner.firstName} ${homeowner.lastName || ""}`.trim()
+              : "A homeowner";
+
+            // Send email notification to the cleaner
+            try {
+              await EmailClass.sendPreferredCleanerNotification(
+                cleaner.getNotificationEmail(),
+                cleaner.firstName || "there",
+                homeownerName,
+                homeAddress
+              );
+              console.log("[Reviews] Sent preferred cleaner email to:", cleaner.email);
+            } catch (emailError) {
+              console.error("[Reviews] Failed to send preferred cleaner email:", emailError);
+            }
+
+            // Send push notification to the cleaner
+            if (cleaner.expoPushToken) {
+              try {
+                await PushNotificationClass.sendPushNotification(
+                  cleaner.expoPushToken,
+                  "You earned preferred status!",
+                  `${homeownerName} gave you preferred booking status for ${homeAddress}. You can now book directly without requesting approval!`
+                );
+                console.log("[Reviews] Sent preferred cleaner push notification");
+              } catch (pushError) {
+                console.error("[Reviews] Failed to send preferred cleaner push:", pushError);
+              }
+            }
+          }
+        }
+      } catch (preferredError) {
+        // Log but don't fail the request if preferred cleaner feature has an issue
+        console.error("[Reviews] Error creating preferred cleaner:", preferredError);
+      }
+    }
 
     // Check and return updated status
     const status = await ReviewsClass.getReviewStatus(

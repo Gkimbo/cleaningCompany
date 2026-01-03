@@ -176,6 +176,14 @@ const BusinessSignupWizard = ({ dispatch }) => {
       // Login and set user state
       dispatch({ type: "CURRENT_USER", payload: responseData.token });
       dispatch({ type: "USER_ACCOUNT", payload: "cleaner" });
+      dispatch({
+        type: "SET_BUSINESS_OWNER_INFO",
+        payload: {
+          isBusinessOwner: true,
+          businessName: formData.businessName || null,
+          yearsInBusiness: formData.yearsInBusiness ? parseInt(formData.yearsInBusiness) : null,
+        },
+      });
       login(responseData.token);
 
       // Navigate to my clients page to start adding clients

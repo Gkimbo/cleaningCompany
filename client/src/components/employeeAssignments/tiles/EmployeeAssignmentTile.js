@@ -33,6 +33,7 @@ const EmployeeAssignmentTile = ({
   timeToBeCompleted,
   token,
   onCancelComplete,
+  isPreferred = false,
 }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
@@ -208,12 +209,20 @@ const EmployeeAssignmentTile = ({
               <Text style={[styles.statusText, { color: dateStatus.color }]}>{dateStatus.label}</Text>
             </View>
           </View>
-          {assigned && !completed && (
-            <View style={styles.assignedBadge}>
-              <Icon name="check" size={10} color={colors.success[600]} />
-              <Text style={styles.assignedText}>Assigned</Text>
-            </View>
-          )}
+          <View style={styles.headerBadges}>
+            {isPreferred && !completed && (
+              <View style={styles.preferredBadge}>
+                <Icon name="star" size={10} color={colors.success[600]} />
+                <Text style={styles.preferredText}>Preferred</Text>
+              </View>
+            )}
+            {assigned && !completed && (
+              <View style={styles.assignedBadge}>
+                <Icon name="check" size={10} color={colors.success[600]} />
+                <Text style={styles.assignedText}>Assigned</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Earnings */}
@@ -472,11 +481,13 @@ const EmployeeAssignmentTile = ({
             </Pressable>
           ) : (
             <Pressable
-              style={[styles.actionButton, styles.acceptButton]}
+              style={[styles.actionButton, styles.acceptButton, isPreferred && styles.preferredAcceptButton]}
               onPress={() => addEmployee(cleanerId, id)}
             >
-              <Icon name="check" size={14} color={colors.neutral[0]} />
-              <Text style={styles.acceptButtonText}>Accept This Job</Text>
+              <Icon name={isPreferred ? "star" : "check"} size={14} color={colors.neutral[0]} />
+              <Text style={styles.acceptButtonText}>
+                {isPreferred ? "Book Directly" : "Request This Job"}
+              </Text>
             </Pressable>
           )}
         </View>
@@ -543,6 +554,27 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.semibold,
+  },
+  headerBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  preferredBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.success[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.success[300],
+  },
+  preferredText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
   },
   assignedBadge: {
     flexDirection: "row",
@@ -877,6 +909,9 @@ const styles = StyleSheet.create({
   },
   acceptButton: {
     backgroundColor: colors.success[500],
+  },
+  preferredAcceptButton: {
+    backgroundColor: colors.success[600],
   },
   acceptButtonText: {
     fontSize: typography.fontSize.base,

@@ -13,6 +13,7 @@ const {
   CalendarSync,
   StripeConnectAccount,
   CleanerClient,
+  HomePreferredCleaner,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -1392,6 +1393,190 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
           hasTimeConstraint,
         });
       }
+    }
+
+    // Check if cleaner is a preferred cleaner for this home (direct booking)
+    const homeId = appointment.dataValues.homeId;
+    const isPreferredCleaner = await HomePreferredCleaner.findOne({
+      where: { homeId, cleanerId: id },
+    });
+
+    if (isPreferredCleaner) {
+      // Preferred cleaners can book directly without approval
+      // Check if appointment is already assigned
+      if (appointment.dataValues.hasBeenAssigned) {
+        return res.status(400).json({
+          error: "A cleaner is already assigned to this appointment.",
+        });
+      }
+
+      // Create the cleaner-appointment assignment
+      await UserCleanerAppointments.create({
+        employeeId: id,
+        appointmentId: Number(appointmentId),
+      });
+
+      // Update appointment as assigned
+      const employees = [String(id)];
+      await appointment.update({
+        employeesAssigned: employees,
+        hasBeenAssigned: true,
+      });
+
+      // Create payment intent if one doesn't exist
+      if (!appointment.dataValues.paymentIntentId) {
+        try {
+          const priceInCents = Math.round(parseFloat(appointment.dataValues.price) * 100);
+          const user = await User.findByPk(appointment.dataValues.userId);
+
+          if (user && user.stripeCustomerId) {
+            const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+            const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+            if (defaultPaymentMethod) {
+              const paymentIntent = await stripe.paymentIntents.create({
+                amount: priceInCents,
+                currency: "usd",
+                customer: user.stripeCustomerId,
+                payment_method: defaultPaymentMethod,
+                capture_method: "manual",
+                confirm: true,
+                off_session: true,
+                metadata: {
+                  userId: appointment.dataValues.userId,
+                  homeId: homeId,
+                  appointmentId: Number(appointmentId),
+                },
+              });
+
+              await appointment.update({
+                paymentIntentId: paymentIntent.id,
+                paymentStatus: "pending",
+              });
+
+              await recordPaymentTransaction({
+                type: "authorization",
+                status: "pending",
+                amount: priceInCents,
+                userId: appointment.dataValues.userId,
+                appointmentId: Number(appointmentId),
+                stripePaymentIntentId: paymentIntent.id,
+                description: `Payment authorization for preferred cleaner direct booking ${appointmentId}`,
+                metadata: { homeId },
+              });
+            }
+          }
+        } catch (paymentError) {
+          console.error("Error creating payment intent on direct booking:", paymentError);
+        }
+      }
+
+      // Create payout record for the cleaner
+      const pricingConfig = await getPricingConfig();
+      const { platform: platformConfig } = pricingConfig;
+
+      const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+        ? parseFloat(appointment.dataValues.originalPrice)
+        : parseFloat(appointment.dataValues.price);
+      const priceInCents = Math.round(payoutPrice * 100);
+
+      const feeResult = await IncentiveService.calculateCleanerFee(
+        id,
+        priceInCents,
+        platformConfig.feePercent
+      );
+
+      const existingPayout = await Payout.findOne({
+        where: { appointmentId: Number(appointmentId), cleanerId: id },
+      });
+
+      if (!existingPayout) {
+        await Payout.create({
+          appointmentId: Number(appointmentId),
+          cleanerId: id,
+          grossAmount: priceInCents,
+          platformFee: feeResult.platformFee,
+          netAmount: feeResult.netAmount,
+          status: "pending",
+          incentiveApplied: feeResult.incentiveApplied,
+          originalPlatformFee: feeResult.originalPlatformFee,
+        });
+      }
+
+      // Capture payment immediately if within 3 days of appointment
+      const appointmentDate = new Date(appointment.dataValues.date);
+      const now = new Date();
+      const diffInDays = (appointmentDate - now) / (1000 * 60 * 60 * 24);
+
+      if (
+        diffInDays <= 3 &&
+        diffInDays >= 0 &&
+        appointment.dataValues.paymentStatus !== "captured"
+      ) {
+        try {
+          const user = await User.findByPk(appointment.dataValues.userId);
+
+          if (appointment.dataValues.paymentIntentId) {
+            await stripe.paymentIntents.capture(appointment.dataValues.paymentIntentId);
+            await appointment.update({ paymentStatus: "captured" });
+          } else if (user && user.stripeCustomerId) {
+            const customer = await stripe.customers.retrieve(user.stripeCustomerId);
+            const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
+
+            if (defaultPaymentMethod) {
+              const priceForCapture = Math.round(parseFloat(appointment.dataValues.price) * 100);
+              const capturedIntent = await stripe.paymentIntents.create({
+                amount: priceForCapture,
+                currency: "usd",
+                customer: user.stripeCustomerId,
+                payment_method: defaultPaymentMethod,
+                confirm: true,
+                off_session: true,
+                metadata: {
+                  userId: appointment.dataValues.userId,
+                  homeId: homeId,
+                  appointmentId: Number(appointmentId),
+                },
+              });
+
+              await appointment.update({
+                paymentIntentId: capturedIntent.id,
+                paymentStatus: "captured",
+              });
+            }
+          }
+        } catch (captureError) {
+          console.error("Error capturing payment on direct booking:", captureError);
+        }
+      }
+
+      // Send informational notification to homeowner (not approval request)
+      const formattedDate = new Date(appointment.dataValues.date).toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+
+      await Email.sendPreferredCleanerBookingNotification(
+        client.dataValues.email,
+        client.dataValues.username,
+        cleaner.dataValues.username,
+        home?.address || "your property",
+        formattedDate
+      );
+
+      if (client.dataValues.expoPushToken) {
+        await PushNotification.sendPushNotification(
+          client.dataValues.expoPushToken,
+          "Preferred Cleaner Booked",
+          `${cleaner.dataValues.username} (your preferred cleaner) has booked the ${formattedDate} cleaning at ${home?.address || "your property"}.`
+        );
+      }
+
+      return res.status(200).json({
+        message: "Job booked successfully! As a preferred cleaner, no approval was needed.",
+        directBooking: true,
+      });
     }
 
     const existingRequest = await UserPendingRequests.findOne({

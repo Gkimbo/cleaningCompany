@@ -1087,4 +1087,36 @@ usersRouter.patch("/update-phone", async (req, res) => {
   }
 });
 
+// GET: Get preferred home IDs for the current cleaner
+usersRouter.get("/preferred-homes", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const cleanerId = decodedToken.userId;
+
+    // Get the HomePreferredCleaner model from models
+    const { HomePreferredCleaner } = models;
+
+    // Find all homes where this cleaner has preferred status
+    const preferredRecords = await HomePreferredCleaner.findAll({
+      where: { cleanerId },
+      attributes: ["homeId"],
+    });
+
+    const preferredHomeIds = preferredRecords.map((record) => record.homeId);
+
+    return res.status(200).json({ preferredHomeIds });
+  } catch (error) {
+    console.error("Error fetching preferred homes:", error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+    return res.status(500).json({ error: "Failed to fetch preferred homes" });
+  }
+});
+
 module.exports = usersRouter;

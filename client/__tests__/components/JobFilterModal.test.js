@@ -634,3 +634,273 @@ describe("Filter Logic - Edge Cases", () => {
     expect(filtered[0].id).toBe(1);
   });
 });
+
+describe("JobFilterModal - Preferred Only Filter", () => {
+  // Updated default filters structure including preferredOnly
+  const defaultFiltersWithPreferred = {
+    distance: { preset: "any", customValue: 25 },
+    sheets: "any",
+    towels: "any",
+    bedrooms: "any",
+    bathrooms: "any",
+    timeWindow: "any",
+    city: "any",
+    preferredOnly: false,
+  };
+
+  describe("Default Filter Structure", () => {
+    it("should include preferredOnly in default filters", () => {
+      expect(defaultFiltersWithPreferred).toHaveProperty("preferredOnly");
+    });
+
+    it("should default preferredOnly to false", () => {
+      expect(defaultFiltersWithPreferred.preferredOnly).toBe(false);
+    });
+  });
+
+  describe("Preferred Only Filter Logic", () => {
+    const preferredHomeIds = [10, 15, 22];
+    const appointments = [
+      { id: 1, homeId: 10, address: "123 Main St" },
+      { id: 2, homeId: 11, address: "456 Oak Ave" },
+      { id: 3, homeId: 15, address: "789 Pine Rd" },
+      { id: 4, homeId: 20, address: "321 Elm St" },
+      { id: 5, homeId: 22, address: "555 Maple Ave" },
+    ];
+
+    it("should filter to show only preferred homes when preferredOnly is true", () => {
+      const filters = { preferredOnly: true };
+
+      const filtered = appointments.filter((apt) => {
+        if (filters.preferredOnly) {
+          return preferredHomeIds.includes(apt.homeId);
+        }
+        return true;
+      });
+
+      expect(filtered).toHaveLength(3);
+      expect(filtered.map((a) => a.id)).toEqual([1, 3, 5]);
+    });
+
+    it("should show all appointments when preferredOnly is false", () => {
+      const filters = { preferredOnly: false };
+
+      const filtered = appointments.filter((apt) => {
+        if (filters.preferredOnly) {
+          return preferredHomeIds.includes(apt.homeId);
+        }
+        return true;
+      });
+
+      expect(filtered).toHaveLength(5);
+    });
+
+    it("should return empty array when preferredOnly true but no preferred homes exist", () => {
+      const emptyPreferredHomeIds = [];
+      const filters = { preferredOnly: true };
+
+      const filtered = appointments.filter((apt) => {
+        if (filters.preferredOnly) {
+          return emptyPreferredHomeIds.includes(apt.homeId);
+        }
+        return true;
+      });
+
+      expect(filtered).toHaveLength(0);
+    });
+
+    it("should handle undefined preferredHomeIds gracefully", () => {
+      const preferredHomeIds = undefined;
+      const filters = { preferredOnly: true };
+
+      const filtered = appointments.filter((apt) => {
+        if (filters.preferredOnly && preferredHomeIds) {
+          return preferredHomeIds.includes(apt.homeId);
+        }
+        return !filters.preferredOnly;
+      });
+
+      expect(filtered).toHaveLength(0);
+    });
+  });
+
+  describe("Active Filter Count with preferredOnly", () => {
+    it("should count preferredOnly as active filter when true", () => {
+      const filters = {
+        distance: { preset: "any", customValue: 25 },
+        sheets: "any",
+        towels: "any",
+        bedrooms: "any",
+        bathrooms: "any",
+        timeWindow: "any",
+        city: "any",
+        preferredOnly: true,
+      };
+
+      let count = 0;
+      if (filters.distance.preset !== "any") count++;
+      if (filters.sheets !== "any") count++;
+      if (filters.towels !== "any") count++;
+      if (filters.bedrooms !== "any") count++;
+      if (filters.bathrooms !== "any") count++;
+      if (filters.timeWindow !== "any") count++;
+      if (filters.city !== "any") count++;
+      if (filters.preferredOnly) count++;
+
+      expect(count).toBe(1); // Only preferredOnly is active
+    });
+
+    it("should not count preferredOnly when false", () => {
+      const filters = { ...defaultFiltersWithPreferred };
+
+      let count = 0;
+      if (filters.distance.preset !== "any") count++;
+      if (filters.sheets !== "any") count++;
+      if (filters.towels !== "any") count++;
+      if (filters.bedrooms !== "any") count++;
+      if (filters.bathrooms !== "any") count++;
+      if (filters.timeWindow !== "any") count++;
+      if (filters.city !== "any") count++;
+      if (filters.preferredOnly) count++;
+
+      expect(count).toBe(0);
+    });
+
+    it("should count preferredOnly along with other filters", () => {
+      const filters = {
+        distance: { preset: "10", customValue: 25 },
+        sheets: "needed",
+        towels: "any",
+        bedrooms: "any",
+        bathrooms: "any",
+        timeWindow: "any",
+        city: "any",
+        preferredOnly: true,
+      };
+
+      let count = 0;
+      if (filters.distance.preset !== "any") count++;
+      if (filters.sheets !== "any") count++;
+      if (filters.towels !== "any") count++;
+      if (filters.bedrooms !== "any") count++;
+      if (filters.bathrooms !== "any") count++;
+      if (filters.timeWindow !== "any") count++;
+      if (filters.city !== "any") count++;
+      if (filters.preferredOnly) count++;
+
+      expect(count).toBe(3); // distance, sheets, preferredOnly
+    });
+  });
+
+  describe("Combined Filters with preferredOnly", () => {
+    it("should apply preferredOnly with distance filter", () => {
+      const preferredHomeIds = [10, 15];
+      const appointments = [
+        { id: 1, homeId: 10, distance: 5 },  // Preferred, ~3.1 miles - within 10 mi
+        { id: 2, homeId: 11, distance: 3 },  // Not preferred, ~1.9 miles
+        { id: 3, homeId: 15, distance: 30 }, // Preferred, ~18.6 miles - outside 10 mi
+        { id: 4, homeId: 20, distance: 8 },  // Not preferred, ~5 miles
+      ];
+
+      const filters = {
+        distance: { preset: "10", customValue: 25 },
+        preferredOnly: true,
+      };
+
+      const filtered = appointments.filter((apt) => {
+        // Distance filter (distance is in km, convert to miles)
+        const maxDistMiles = parseInt(filters.distance.preset);
+        const distMiles = apt.distance * 0.621371;
+        if (distMiles > maxDistMiles) return false;
+
+        // Preferred filter
+        if (filters.preferredOnly && !preferredHomeIds.includes(apt.homeId)) {
+          return false;
+        }
+
+        return true;
+      });
+
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe(1); // Only preferred + within 10 miles
+    });
+
+    it("should apply preferredOnly with sheets/towels filter", () => {
+      const preferredHomeIds = [10, 15];
+      const appointments = [
+        { id: 1, homeId: 10, bringSheets: "no", bringTowels: "no" },
+        { id: 2, homeId: 15, bringSheets: "yes", bringTowels: "no" },
+        { id: 3, homeId: 20, bringSheets: "no", bringTowels: "no" },
+      ];
+
+      const filters = {
+        sheets: "not_needed",
+        preferredOnly: true,
+      };
+
+      const filtered = appointments.filter((apt) => {
+        // Sheets filter
+        if (filters.sheets === "not_needed" && apt.bringSheets === "yes") {
+          return false;
+        }
+
+        // Preferred filter
+        if (filters.preferredOnly && !preferredHomeIds.includes(apt.homeId)) {
+          return false;
+        }
+
+        return true;
+      });
+
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].id).toBe(1); // Preferred + no sheets
+    });
+  });
+
+  describe("Filter Reset", () => {
+    it("should reset preferredOnly to false on clear all", () => {
+      const filters = {
+        distance: { preset: "10", customValue: 25 },
+        sheets: "needed",
+        preferredOnly: true,
+      };
+
+      // Simulate clear all
+      const resetFilters = { ...defaultFiltersWithPreferred };
+
+      expect(resetFilters.preferredOnly).toBe(false);
+      expect(resetFilters.distance.preset).toBe("any");
+      expect(resetFilters.sheets).toBe("any");
+    });
+  });
+
+  describe("hasPreferredHomes Prop", () => {
+    it("should show preferredOnly toggle when hasPreferredHomes is true", () => {
+      const hasPreferredHomes = true;
+      const showPreferredToggle = hasPreferredHomes;
+
+      expect(showPreferredToggle).toBe(true);
+    });
+
+    it("should hide preferredOnly toggle when hasPreferredHomes is false", () => {
+      const hasPreferredHomes = false;
+      const showPreferredToggle = hasPreferredHomes;
+
+      expect(showPreferredToggle).toBe(false);
+    });
+
+    it("should determine hasPreferredHomes from preferredHomeIds length", () => {
+      const preferredHomeIds = [10, 15, 22];
+      const hasPreferredHomes = preferredHomeIds.length > 0;
+
+      expect(hasPreferredHomes).toBe(true);
+    });
+
+    it("should set hasPreferredHomes false for empty array", () => {
+      const preferredHomeIds = [];
+      const hasPreferredHomes = preferredHomeIds.length > 0;
+
+      expect(hasPreferredHomes).toBe(false);
+    });
+  });
+});

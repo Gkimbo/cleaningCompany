@@ -59,6 +59,17 @@ const SignInForm = ({ state, dispatch }) => {
 				if (response.user.type === "humanResources") {
 					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
 				}
+				// Set business owner info for cleaners who own a business
+				if (response.user.isBusinessOwner) {
+					dispatch({
+						type: "SET_BUSINESS_OWNER_INFO",
+						payload: {
+							isBusinessOwner: response.user.isBusinessOwner,
+							businessName: response.user.businessName,
+							yearsInBusiness: response.user.yearsInBusiness,
+						},
+					});
+				}
 				login(response.token);
 
 				// Check if user needs to accept updated terms

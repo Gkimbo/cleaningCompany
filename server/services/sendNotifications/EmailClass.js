@@ -2954,6 +2954,166 @@ The Kleanr Team`;
       throw error;
     }
   }
+
+  /**
+   * Send notification to cleaner when they are made a preferred cleaner
+   * @param {string} email - Cleaner's email
+   * @param {string} cleanerName - Cleaner's first name
+   * @param {string} homeownerName - Homeowner's full name
+   * @param {string} homeAddress - Address or nickname of the home
+   */
+  static async sendPreferredCleanerNotification(
+    email,
+    cleanerName,
+    homeownerName,
+    homeAddress
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "You Earned Preferred Status!",
+        subtitle: "A homeowner loved your work",
+        headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+        greeting: `Congratulations ${cleanerName}!`,
+        content: `
+          <p><strong>${homeownerName}</strong> was so impressed with your cleaning that they've given you <strong>preferred cleaner status</strong> for their home!</p>
+          <p>This means you can now book appointments for this home directly, without needing to request approval each time.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "Preferred Home",
+          items: [
+            { label: "Homeowner", value: homeownerName },
+            { label: "Home", value: homeAddress },
+            { label: "Status", value: '<span style="color: #10b981; font-weight: bold;">Preferred Cleaner</span>' },
+          ],
+        },
+        steps: {
+          title: "What this means for you:",
+          items: [
+            "You can book directly for this home without waiting for approval",
+            "The homeowner trusts your work and wants you back",
+            "This helps build your recurring client base",
+          ],
+        },
+        warningBox: {
+          icon: "⭐",
+          text: "Keep up the great work! Preferred status is a sign that your clients value your service.",
+          bgColor: "#ecfdf5",
+          borderColor: "#10b981",
+          textColor: "#065f46",
+        },
+        ctaText: "Open the Kleanr app to see available jobs at preferred homes.",
+        footerMessage: "Thank you for providing excellent service!",
+      });
+
+      const textContent = `Congratulations ${cleanerName}!
+
+${homeownerName} was so impressed with your cleaning that they've given you preferred cleaner status for their home!
+
+PREFERRED HOME
+━━━━━━━━━━━━━━━━━━━━━━
+Homeowner: ${homeownerName}
+Home: ${homeAddress}
+Status: Preferred Cleaner
+
+WHAT THIS MEANS FOR YOU:
+1. You can book directly for this home without waiting for approval
+2. The homeowner trusts your work and wants you back
+3. This helps build your recurring client base
+
+Keep up the great work! Preferred status is a sign that your clients value your service.
+
+Open the Kleanr app to see available jobs at preferred homes.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⭐ You earned preferred status from ${homeownerName}!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Preferred cleaner notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending preferred cleaner notification email:", error);
+      throw error;
+    }
+  }
+
+  static async sendPreferredCleanerBookingNotification(
+    email,
+    homeownerName,
+    cleanerName,
+    homeAddress,
+    appointmentDate
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Your Preferred Cleaner Booked",
+        subtitle: "Direct booking confirmation",
+        headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+        greeting: `Hello ${homeownerName},`,
+        content: `
+          <p><strong>${cleanerName}</strong>, your preferred cleaner, has booked an upcoming cleaning at your home.</p>
+          <p>Since you gave them preferred status, they were able to book directly without needing your approval.</p>
+        `,
+        infoBox: {
+          icon: "📅",
+          title: "Booking Details",
+          items: [
+            { label: "Cleaner", value: cleanerName },
+            { label: "Property", value: homeAddress },
+            { label: "Date", value: appointmentDate },
+            { label: "Status", value: '<span style="color: #10b981; font-weight: bold;">Confirmed</span>' },
+          ],
+        },
+        ctaText: "Open the Kleanr app to view your upcoming appointments.",
+        footerMessage: "Thank you for using Kleanr!",
+      });
+
+      const textContent = `Hello ${homeownerName},
+
+${cleanerName}, your preferred cleaner, has booked an upcoming cleaning at your home.
+
+Since you gave them preferred status, they were able to book directly without needing your approval.
+
+BOOKING DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Cleaner: ${cleanerName}
+Property: ${homeAddress}
+Date: ${appointmentDate}
+Status: Confirmed
+
+Open the Kleanr app to view your upcoming appointments.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `📅 ${cleanerName} booked your ${appointmentDate} cleaning`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Preferred cleaner booking notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending preferred cleaner booking notification email:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Email;

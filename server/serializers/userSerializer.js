@@ -17,7 +17,10 @@ class UserSerializer {
 			"reviews",
 			"hasPaymentMethod",
 			"referralCode",
-			"referralCredits"
+			"referralCredits",
+			"isBusinessOwner",
+			"businessName",
+			"yearsInBusiness"
 		];
 
 		const serializedUser = {};
@@ -59,6 +62,9 @@ class UserSerializer {
 			"hasPaymentMethod",
 			"referralCode",
 			"referralCredits",
+			"isBusinessOwner",
+			"businessName",
+			"yearsInBusiness",
 		];
 		const serializedUser = {};
 

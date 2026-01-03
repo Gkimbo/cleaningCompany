@@ -12,6 +12,9 @@ const reducer = (state, action) => {
         conversations: [],
         currentMessages: [],
         unreadCount: 0,
+        isBusinessOwner: false,
+        businessName: null,
+        yearsInBusiness: null,
       };
     case "ERROR":
       return {
@@ -221,6 +224,13 @@ const reducer = (state, action) => {
       return {
         ...state,
         pendingApplications: action.payload,
+      };
+    case "SET_BUSINESS_OWNER_INFO":
+      return {
+        ...state,
+        isBusinessOwner: action.payload.isBusinessOwner,
+        businessName: action.payload.businessName,
+        yearsInBusiness: action.payload.yearsInBusiness,
       };
     default:
       throw new Error();
