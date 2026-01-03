@@ -23,6 +23,11 @@ jest.mock("../../models", () => ({
     findByPk: jest.fn(),
     findAll: jest.fn(),
   },
+  HomePreferredCleaner: {
+    findOne: jest.fn(),
+    create: jest.fn(),
+    destroy: jest.fn(),
+  },
 }));
 
 // Mock ReviewsClass
@@ -35,6 +40,15 @@ jest.mock("../../services/ReviewsClass", () => ({
   checkAndPublishReviews: jest.fn(),
   getReviewsWrittenByUser: jest.fn(),
   addReviewToDB: jest.fn(),
+}));
+
+// Mock Email and Push notification services
+jest.mock("../../services/sendNotifications/EmailClass", () => ({
+  sendPreferredCleanerNotification: jest.fn().mockResolvedValue(true),
+}));
+
+jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
+  sendPushNotification: jest.fn().mockResolvedValue(true),
 }));
 
 // Mock ReviewSerializer

@@ -438,7 +438,11 @@ class FetchData {
         };
       }
 
-      return { success: true, message: responseData.message };
+      return {
+        success: true,
+        message: responseData.message,
+        directBooking: responseData.directBooking || false,
+      };
     } catch (error) {
       console.error("Error requesting appointment:", error);
       return { error: "Failed to request appointment" };

@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -108,6 +109,8 @@ const MultiAspectReviewForm = ({
   userId, // User being reviewed
   reviewType, // "homeowner_to_cleaner" or "cleaner_to_homeowner"
   revieweeName,
+  homeId, // Home ID for preferred cleaner feature
+  isCleanerPreferred = false, // Whether cleaner is already preferred for this home
   onComplete,
 }) => {
   const navigate = useNavigate();
@@ -138,6 +141,10 @@ const MultiAspectReviewForm = ({
   const [respectfulness, setRespectfulness] = useState(0);
   const [safetyConditions, setSafetyConditions] = useState(0);
   const [wouldWorkForAgain, setWouldWorkForAgain] = useState(null);
+
+  // Preferred cleaner option (homeowner reviewing cleaner only)
+  // Initialize based on whether cleaner is already preferred
+  const [setAsPreferred, setSetAsPreferred] = useState(isCleanerPreferred);
 
   const isHomeownerReview = reviewType === "homeowner_to_cleaner";
 
@@ -218,6 +225,11 @@ const MultiAspectReviewForm = ({
         reviewData.respectOfProperty = respectOfProperty;
         reviewData.followedInstructions = followedInstructions;
         reviewData.wouldRecommend = wouldRecommend;
+        // Preferred cleaner feature
+        reviewData.setAsPreferred = setAsPreferred;
+        if (homeId) {
+          reviewData.homeId = homeId;
+        }
       } else {
         reviewData.accuracyOfDescription = accuracyOfDescription;
         reviewData.homeReadiness = homeReadiness;
@@ -512,6 +524,46 @@ const MultiAspectReviewForm = ({
           onChangeText={setPrivateComment}
         />
       </View>
+
+      {/* Preferred Cleaner Option - only for homeowner reviewing cleaner */}
+      {isHomeownerReview && homeId && (
+        <View style={[
+          styles.preferredCleanerSection,
+          isCleanerPreferred && !setAsPreferred && styles.preferredCleanerSectionWarning,
+        ]}>
+          <View style={styles.preferredCleanerRow}>
+            <View style={styles.preferredCleanerContent}>
+              <View style={styles.preferredCleanerHeader}>
+                <Icon
+                  name="star"
+                  size={16}
+                  color={setAsPreferred ? colors.success[600] : colors.neutral[400]}
+                />
+                <Text style={styles.preferredCleanerLabel}>
+                  {isCleanerPreferred
+                    ? setAsPreferred
+                      ? `Keep ${revieweeName} as a preferred cleaner`
+                      : `Remove ${revieweeName} from preferred cleaners`
+                    : `Make ${revieweeName} a preferred cleaner`}
+                </Text>
+              </View>
+              <Text style={styles.preferredCleanerHint}>
+                {setAsPreferred
+                  ? "They can book directly for this home without needing your approval each time."
+                  : isCleanerPreferred
+                    ? "They will no longer have preferred status for this home."
+                    : "Preferred cleaners can book directly without requesting approval."}
+              </Text>
+            </View>
+            <Switch
+              value={setAsPreferred}
+              onValueChange={setSetAsPreferred}
+              trackColor={{ false: colors.neutral[300], true: colors.success[400] }}
+              thumbColor={setAsPreferred ? colors.success[600] : colors.neutral[100]}
+            />
+          </View>
+        </View>
+      )}
 
       <View style={styles.navigationButtons}>
         <Pressable style={styles.backButton} onPress={() => setStep(3)}>
@@ -856,6 +908,45 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+
+  // Preferred Cleaner Section
+  preferredCleanerSection: {
+    backgroundColor: colors.success[50],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  preferredCleanerSectionWarning: {
+    backgroundColor: colors.warning[50],
+    borderColor: colors.warning[200],
+  },
+  preferredCleanerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  preferredCleanerContent: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  preferredCleanerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  preferredCleanerLabel: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+  },
+  preferredCleanerHint: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    lineHeight: 18,
   },
 });
 

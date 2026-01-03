@@ -72,6 +72,28 @@ class ClientDashboardService {
       }
     );
   }
+
+  /**
+   * Get client's preferred cleaner (if they were invited by a cleaner)
+   */
+  static async getMyCleanerRelationship(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/cleaner-clients/my-cleaner`,
+      token,
+      { cleaner: null }
+    );
+  }
+
+  /**
+   * Get client's recurring schedules
+   */
+  static async getMyRecurringSchedules(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/recurring-schedules/my-schedules`,
+      token,
+      { schedules: [] }
+    );
+  }
 }
 
 export default ClientDashboardService;

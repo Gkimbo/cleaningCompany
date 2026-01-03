@@ -284,6 +284,8 @@ const PendingReviewsList = ({ state }) => {
               userId={getRevieweeInfo(selectedReview).userId}
               reviewType={getRevieweeInfo(selectedReview).reviewType}
               revieweeName={getRevieweeInfo(selectedReview).name}
+              homeId={selectedReview.home?.id}
+              isCleanerPreferred={selectedReview.isCleanerPreferred || false}
               onComplete={handleReviewComplete}
             />
           )}

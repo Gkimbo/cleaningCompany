@@ -10,6 +10,7 @@ import Icon from "react-native-vector-icons/Feather";
 import { UserContext } from "../../context/UserContext";
 import MessageService from "../../services/fetchRequests/MessageClass";
 import ReactionPicker, { ReactionDisplay } from "./ReactionPicker";
+import SuspiciousContentBanner from "./SuspiciousContentBanner";
 import {
   colors,
   spacing,
@@ -191,6 +192,20 @@ const MessageBubble = ({
         )}
       </View>
 
+      {/* Suspicious content warning - only shown to recipient */}
+      {message.hasSuspiciousContent && !isOwn && (
+        <View style={[styles.bubbleRow]}>
+          <View style={styles.avatarSpacer} />
+          <View style={styles.warningBannerContainer}>
+            <SuspiciousContentBanner
+              suspiciousContentTypes={message.suspiciousContentTypes || []}
+              messageId={message.id}
+              token={state.currentUser?.token}
+            />
+          </View>
+        </View>
+      )}
+
       {/* Message bubble */}
       <View style={[styles.bubbleRow, isOwn && styles.bubbleRowOwn]}>
         {!isOwn && <View style={styles.avatarSpacer} />}
@@ -325,6 +340,10 @@ const styles = StyleSheet.create({
   },
   reactionsRowOwn: {
     justifyContent: "flex-end",
+  },
+  // Suspicious content warning banner
+  warningBannerContainer: {
+    maxWidth: "80%",
   },
   // Deleted message
   deletedBubble: {

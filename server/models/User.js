@@ -82,6 +82,21 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
+		warningCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of warnings issued to this user",
+		},
+		accountStatusUpdatedById: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			references: {
+				model: "Users",
+				key: "id",
+			},
+			comment: "The HR/Owner who last updated the account status",
+		},
 		termsAcceptedVersion: {
 			type: DataTypes.INTEGER,
 			allowNull: true,
@@ -146,6 +161,22 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: 0,
 			comment: "Available referral credits in cents",
+		},
+		isBusinessOwner: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if this cleaner owns their own cleaning business",
+		},
+		businessName: {
+			type: DataTypes.STRING,
+			allowNull: true,
+			comment: "Name of the cleaning business (for business owners)",
+		},
+		yearsInBusiness: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Years the business owner has been in business",
 		},
 	});
 
@@ -234,6 +265,22 @@ module.exports = (sequelize, DataTypes) => {
 	// Method to get email for notifications (uses notificationEmail if set, otherwise main email)
 	User.prototype.getNotificationEmail = function () {
 		return this.notificationEmail || this.email;
+	};
+
+	// Method to check if the user account is active (not frozen/suspended)
+	User.prototype.isAccountActive = function () {
+		return !this.accountFrozen;
+	};
+
+	// Method to get account status for display
+	User.prototype.getAccountStatus = function () {
+		if (this.accountFrozen) {
+			return "suspended";
+		}
+		if (this.warningCount > 0) {
+			return "warned";
+		}
+		return "active";
 	};
 
 	// Define the one-to-many relationship with UserInformation

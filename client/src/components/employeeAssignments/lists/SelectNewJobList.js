@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -77,6 +78,9 @@ const SelectNewJobList = ({ state }) => {
   const [homeDetails, setHomeDetails] = useState({});
   const [availableCities, setAvailableCities] = useState([]);
 
+  // Preferred homes state
+  const [preferredHomeIds, setPreferredHomeIds] = useState([]);
+
   const requestsAndAppointments = useMemo(() => {
     const requestsWithFlag = allRequests.map((item) => ({
       ...item,
@@ -121,6 +125,24 @@ const SelectNewJobList = ({ state }) => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Fetch preferred home IDs for this cleaner
+  useEffect(() => {
+    const fetchPreferredHomes = async () => {
+      try {
+        const response = await FetchData.get("/api/v1/users/preferred-homes", state.currentUser.token);
+        if (response.preferredHomeIds) {
+          setPreferredHomeIds(response.preferredHomeIds);
+        }
+      } catch (error) {
+        console.error("Error fetching preferred homes:", error);
+      }
+    };
+
+    if (state.currentUser.token) {
+      fetchPreferredHomes();
+    }
+  }, [state.currentUser.token]);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -270,9 +292,19 @@ const SelectNewJobList = ({ state }) => {
         if (result.success) {
           setAllAppointments((prev) => {
             const assigned = prev.find((a) => a.id === appointmentId);
-            if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
+            if (assigned && !result.directBooking) {
+              setAllRequests((reqs) => [...reqs, assigned]);
+            }
             return prev.filter((a) => a.id !== appointmentId);
           });
+          // Show success message
+          if (result.directBooking) {
+            Alert.alert(
+              "Job Booked!",
+              "As a preferred cleaner, this job has been confirmed automatically. The homeowner has been notified.",
+              [{ text: "OK" }]
+            );
+          }
         } else if (result.requiresStripeSetup) {
           // Show Stripe setup modal
           setStripeSetupMessage(result.message || "You need to set up your Stripe account to receive payments before you can request appointments.");
@@ -298,12 +330,22 @@ const SelectNewJobList = ({ state }) => {
       if (result.success) {
         setAllAppointments((prev) => {
           const assigned = prev.find((a) => a.id === appointmentId);
-          if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
+          if (assigned && !result.directBooking) {
+            setAllRequests((reqs) => [...reqs, assigned]);
+          }
           return prev.filter((a) => a.id !== appointmentId);
         });
         setShowLargeHomeModal(false);
         setBookingInfo(null);
         setPendingBooking(null);
+        // Show success message for direct bookings
+        if (result.directBooking) {
+          Alert.alert(
+            "Job Booked!",
+            "As a preferred cleaner, this job has been confirmed automatically. The homeowner has been notified.",
+            [{ text: "OK" }]
+          );
+        }
       } else if (result.requiresStripeSetup) {
         setShowLargeHomeModal(false);
         setBookingInfo(null);
@@ -371,6 +413,11 @@ const SelectNewJobList = ({ state }) => {
     return sortedData.filter((appt) => {
       const home = homeDetails[appt.homeId];
 
+      // Preferred homes filter
+      if (filters.preferredOnly && !preferredHomeIds.includes(appt.homeId)) {
+        return false;
+      }
+
       // Distance filter (distance is in km, convert miles for comparison)
       if (filters.distance.preset !== "any" && userLocation) {
         const maxDistMiles = filters.distance.preset === "custom"
@@ -429,7 +476,7 @@ const SelectNewJobList = ({ state }) => {
 
       return true;
     });
-  }, [sortedData, homeDetails, filters, userLocation]);
+  }, [sortedData, homeDetails, filters, userLocation, preferredHomeIds]);
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {
@@ -442,6 +489,7 @@ const SelectNewJobList = ({ state }) => {
     if (filters.timeWindow !== "any") count++;
     if (filters.city !== "any") count++;
     if (filters.minEarnings) count++;
+    if (filters.preferredOnly) count++;
     return count;
   }, [filters]);
 
@@ -613,6 +661,7 @@ const SelectNewJobList = ({ state }) => {
                       {...appointment}
                       cleanerId={userId}
                       assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
+                      isPreferred={preferredHomeIds.includes(appointment.homeId)}
                       addEmployee={handleBookingRequest}
                       removeEmployee={async (employeeId, appointmentId) => {
                         try {
@@ -711,6 +760,7 @@ const SelectNewJobList = ({ state }) => {
         availableCities={availableCities}
         matchCount={filteredData.length}
         hasGeolocation={userLocation && userLocation.latitude !== 0}
+        hasPreferredHomes={preferredHomeIds.length > 0}
       />
 
       {/* Stripe Setup Required Modal */}

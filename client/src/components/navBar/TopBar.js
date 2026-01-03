@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-native";
 import { colors, spacing, radius, shadows } from "../../services/styles/theme";
 import Application from "../../services/fetchRequests/ApplicationClass";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
+import ReferralService from "../../services/fetchRequests/ReferralService";
 
 import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
@@ -43,12 +44,16 @@ import ChecklistEditorButton from "./ChecklistEditorButton";
 import HRManagementButton from "./HRManagementButton";
 import TermsEditorButton from "./TermsEditorButton";
 import WithdrawalsButton from "./WithdrawalsButton";
+import MyClientsButton from "./MyClientsButton";
+import SuspiciousReportsButton from "./SuspiciousReportsButton";
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [signInRedirect, setSignInRedirect] = useState(false);
   const [signUpRedirect, setSignUpRedirect] = useState(false);
   const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
+  const [importBusinessRedirect, setImportBusinessRedirect] = useState(false);
+  const [referralsEnabled, setReferralsEnabled] = useState(false);
 
   // Use global state for pending applications and cleaner requests
   const pendingApplications = state.pendingApplications || 0;
@@ -95,6 +100,41 @@ const TopBar = ({ dispatch, state }) => {
     return () => clearInterval(interval);
   }, [state.account, state.currentUser.token, dispatch]);
 
+  // Fetch referral programs status to determine if referrals button should be shown
+  useEffect(() => {
+    const fetchReferralsStatus = async () => {
+      // Only check for clients and cleaners (not owners - they always see it)
+      if (state.currentUser.token && state.account !== "owner") {
+        try {
+          const data = await ReferralService.getCurrentPrograms();
+
+          if (!data.active || !data.programs || data.programs.length === 0) {
+            setReferralsEnabled(false);
+            return;
+          }
+
+          // Check if there are programs applicable to the user's type
+          const isCleaner = state.account === "cleaner";
+          const hasApplicablePrograms = data.programs.some((program) => {
+            if (isCleaner) {
+              // Cleaners can use cleaner_to_cleaner and cleaner_to_client programs
+              return program.type === "cleaner_to_cleaner" || program.type === "cleaner_to_client";
+            } else {
+              // Homeowners/clients can use client_to_client and client_to_cleaner programs
+              return program.type === "client_to_client" || program.type === "client_to_cleaner";
+            }
+          });
+
+          setReferralsEnabled(hasApplicablePrograms);
+        } catch (error) {
+          console.error("Error fetching referral programs:", error);
+          setReferralsEnabled(false);
+        }
+      }
+    };
+    fetchReferralsStatus();
+  }, [state.currentUser.token, state.account]);
+
   useEffect(() => {
     if (signInRedirect) {
       navigate("/sign-in");
@@ -108,7 +148,11 @@ const TopBar = ({ dispatch, state }) => {
       navigate("/apply");
       setBecomeCleanerRedirect(false);
     }
-  }, [signInRedirect, signUpRedirect, becomeCleanerRedirect]);
+    if (importBusinessRedirect) {
+      navigate("/import-business");
+      setImportBusinessRedirect(false);
+    }
+  }, [signInRedirect, signUpRedirect, becomeCleanerRedirect, importBusinessRedirect]);
 
   const toggleModal = () => setModalVisible(!modalVisible);
   const closeModal = () => setModalVisible(false);
@@ -198,6 +242,7 @@ const TopBar = ({ dispatch, state }) => {
                             <IncentivesButton closeModal={closeModal} />
                             <ChecklistEditorButton closeModal={closeModal} />
                             <HRManagementButton closeModal={closeModal} />
+                            <SuspiciousReportsButton closeModal={closeModal} />
                             <TermsEditorButton closeModal={closeModal} />
                             <WithdrawalsButton closeModal={closeModal} />
                           </>
@@ -206,15 +251,17 @@ const TopBar = ({ dispatch, state }) => {
                             <ChooseNewJobButton closeModal={closeModal} />
                             <EmployeeAssignmentsButton closeModal={closeModal} />
                             <MyRequestsButton closeModal={closeModal} />
+                            <MyClientsButton closeModal={closeModal} />
                             {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                             <EarningsButton closeModal={closeModal} />
-                            <MyReferralsButton closeModal={closeModal} />
+                            {referralsEnabled && <MyReferralsButton closeModal={closeModal} />}
                             <RecommendedSuppliesButton closeModal={closeModal} />
                           </>
                         ) : state.account === "humanResources" ? (
                           <>
                             <ViewApplicationsButton closeModal={closeModal} />
                             <ManageEmployees closeModal={closeModal} />
+                            <SuspiciousReportsButton closeModal={closeModal} />
                           </>
                         ) : (
                           <>
@@ -232,7 +279,7 @@ const TopBar = ({ dispatch, state }) => {
                             <BillButton closeModal={closeModal} />
                             <ArchiveButton closeModal={closeModal} />
                             <ReviewsButton closeModal={closeModal} />
-                            <MyReferralsButton closeModal={closeModal} />
+                            {referralsEnabled && <MyReferralsButton closeModal={closeModal} />}
                           </>
                         )}
 
@@ -283,6 +330,12 @@ const TopBar = ({ dispatch, state }) => {
               onPress={() => setBecomeCleanerRedirect(true)}
             >
               <Text style={styles.authButtonText}>Become a Cleaner</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.authButton, styles.importBusinessButton]}
+              onPress={() => setImportBusinessRedirect(true)}
+            >
+              <Text style={styles.authButtonText}>Business Owner</Text>
             </Pressable>
           </View>
         </View>
@@ -378,16 +431,20 @@ const styles = StyleSheet.create({
   // Auth buttons (Sign In / Sign Up / Become Cleaner)
   authButton: {
     backgroundColor: colors.neutral[700],
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: radius.lg,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.neutral[600],
   },
   authButtonText: {
     color: colors.neutral[100],
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: 12,
+  },
+  importBusinessButton: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[500],
   },
 
   // Overlay behind modal
@@ -467,7 +524,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: 6,
   },
   unauthContainerTitle: {
     flex: 1,
@@ -478,13 +535,16 @@ const styles = StyleSheet.create({
 
   authButtonsContainer: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 6,
   },
   authButtonsContainerTitle: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    marginBottom: 2,
   },
 });
 

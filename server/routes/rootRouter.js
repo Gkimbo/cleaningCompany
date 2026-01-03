@@ -22,6 +22,11 @@ const pushNotificationRouter = require("./api/v1/pushNotificationRouter");
 const homeSizeAdjustmentRouter = require("./api/v1/homeSizeAdjustmentRouter");
 const checklistRouter = require("./api/v1/checklistRouter");
 const referralRouter = require("./api/v1/referralRouter");
+const cleanerClientsRouter = require("./api/v1/cleanerClientsRouter");
+const recurringSchedulesRouter = require("./api/v1/recurringSchedulesRouter");
+const billingRouter = require("./api/v1/billingRouter");
+const preferredCleanerRouter = require("./api/v1/preferredCleanerRouter");
+const suspiciousReportsRouter = require("./api/v1/suspiciousReportsRouter");
 
 const rootRouter = new express.Router();
 
@@ -47,6 +52,11 @@ rootRouter.use("/api/v1/push-notifications", pushNotificationRouter);
 rootRouter.use("/api/v1/home-size-adjustment", homeSizeAdjustmentRouter);
 rootRouter.use("/api/v1/checklist", checklistRouter);
 rootRouter.use("/api/v1/referrals", referralRouter);
+rootRouter.use("/api/v1/cleaner-clients", cleanerClientsRouter);
+rootRouter.use("/api/v1/recurring-schedules", recurringSchedulesRouter);
+rootRouter.use("/api/v1/billing", billingRouter);
+rootRouter.use("/api/v1/preferred-cleaner", preferredCleanerRouter);
+rootRouter.use("/api/v1/suspicious-reports", suspiciousReportsRouter);
 
 rootRouter.use("/", clientRouter);
 

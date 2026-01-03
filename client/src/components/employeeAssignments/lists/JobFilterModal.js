@@ -5,6 +5,7 @@ import {
   ScrollView,
   Slider,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -26,6 +27,7 @@ const defaultFilters = {
   bathrooms: "any", // 'any' | '1' | '1.5' | '2' | '2.5' | '3+'
   timeWindow: "any", // 'any' | 'anytime' | '10-3' | '11-4' | '12-2'
   city: "any",
+  preferredOnly: false, // Show only preferred homes
 };
 
 const distancePresets = [
@@ -78,6 +80,7 @@ const JobFilterModal = ({
   availableCities = [],
   matchCount = 0,
   hasGeolocation = true,
+  hasPreferredHomes = false,
 }) => {
   const [tempFilters, setTempFilters] = useState(filters || defaultFilters);
 
@@ -189,6 +192,29 @@ const JobFilterModal = ({
                 </View>
               )}
             </View>
+
+            {/* Preferred Homes Section */}
+            {hasPreferredHomes && (
+              <View style={styles.section}>
+                <View style={styles.preferredRow}>
+                  <View style={styles.preferredContent}>
+                    <View style={styles.preferredHeader}>
+                      <Icon name="star" size={14} color={colors.success[600]} />
+                      <Text style={styles.preferredLabel}>Preferred Jobs Only</Text>
+                    </View>
+                    <Text style={styles.preferredHint}>
+                      Show only homes where you have preferred status
+                    </Text>
+                  </View>
+                  <Switch
+                    value={tempFilters.preferredOnly}
+                    onValueChange={(value) => updateFilter("preferredOnly", value)}
+                    trackColor={{ false: colors.neutral[300], true: colors.success[400] }}
+                    thumbColor={tempFilters.preferredOnly ? colors.success[600] : colors.neutral[100]}
+                  />
+                </View>
+              </View>
+            )}
 
             {/* Sheets & Towels Section */}
             <View style={styles.section}>
@@ -422,6 +448,36 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     color: colors.primary[600],
     marginTop: spacing.xs,
+  },
+  preferredRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.success[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  preferredContent: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  preferredHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  preferredLabel: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+  },
+  preferredHint: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    lineHeight: 18,
   },
   footer: {
     flexDirection: "row",

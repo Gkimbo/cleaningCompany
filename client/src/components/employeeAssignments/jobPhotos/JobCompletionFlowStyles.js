@@ -362,6 +362,40 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
   },
+
+  // Skip button for business owners
+  skipButton: {
+    backgroundColor: colors.neutral[100],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+
+  skipButtonText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // No photos placeholder for business owners
+  noPhotosPlaceholder: {
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+
+  noPhotosText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    fontStyle: "italic",
+  },
 });
 
 export default styles;

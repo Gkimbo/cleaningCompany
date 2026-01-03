@@ -11,6 +11,7 @@ const {
 const calculatePrice = require("../../../services/CalculatePrice");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const homeSizeAdjustmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -181,7 +182,7 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
         homeowner.email,
         homeowner.firstName || homeowner.username,
         cleaner.firstName || cleaner.username,
-        home.address,
+        EncryptionService.decrypt(home.address),
         {
           originalBeds: home.numBeds,
           originalBaths: home.numBaths,
@@ -472,7 +473,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
         await Email.sendAdjustmentApproved(
           cleaner.email,
           cleaner.firstName || cleaner.username,
-          home.address,
+          EncryptionService.decrypt(home.address),
           request.reportedNumBeds,
           request.reportedNumBaths,
           request.priceDifference
@@ -483,7 +484,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
         await PushNotification.sendPushAdjustmentApproved(
           cleaner.expoPushToken,
           cleaner.firstName || cleaner.username,
-          home.address
+          EncryptionService.decrypt(home.address)
         );
       }
 

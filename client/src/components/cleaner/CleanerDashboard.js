@@ -28,6 +28,7 @@ import ReviewsOverview from "../reviews/ReviewsOverview";
 import TodaysAppointment from "../employeeAssignments/tiles/TodaysAppointment";
 import NextAppointmentPreview from "../employeeAssignments/tiles/NextAppointmentPreview";
 import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlow";
+import ClientAppointmentsSection from "./ClientAppointmentsSection";
 import { usePricing } from "../../context/PricingContext";
 import { parseLocalDate } from "../../utils/dateUtils";
 
@@ -667,6 +668,12 @@ const CleanerDashboard = ({ state, dispatch }) => {
             onPress={() => navigate("/my-requests")}
           />
         </View>
+
+        {/* Client Appointments (for business owners with linked clients) */}
+        <ClientAppointmentsSection
+          token={state.currentUser.token}
+          onRefresh={onRefresh}
+        />
 
         {/* Today's Appointments */}
         {todaysAppointments.length > 0 && (

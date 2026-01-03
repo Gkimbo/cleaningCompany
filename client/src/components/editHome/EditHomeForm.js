@@ -23,6 +23,7 @@ import {
   typography,
 } from "../../services/styles/theme";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
+import PreferredCleanersSection from "./PreferredCleanersSection";
 
 const STEPS = {
   BASICS: 0,
@@ -1258,6 +1259,14 @@ const EditHomeForm = ({ state, dispatch }) => {
           {homeData.towelsProvided === "yes" && "\n+ Fresh towels included"}
         </Text>
       </View>
+
+      {/* Preferred Cleaners Management */}
+      {homeData.id && (
+        <PreferredCleanersSection
+          homeId={homeData.id}
+          token={user?.token}
+        />
+      )}
 
       <TouchableOpacity
         style={{

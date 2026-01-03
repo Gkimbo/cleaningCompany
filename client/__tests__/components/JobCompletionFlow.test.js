@@ -803,4 +803,431 @@ describe("JobCompletionFlow Component", () => {
       });
     });
   });
+
+  describe("Business Owner Skip Functionality", () => {
+    // Home with current user as preferred cleaner (business owner)
+    const mockHomeWithBusinessOwner = {
+      ...mockHome,
+      preferredCleanerId: 1, // Matches currentUser.id
+    };
+
+    // Home without preferred cleaner or different preferred cleaner
+    const mockHomeWithoutBusinessOwner = {
+      ...mockHome,
+      preferredCleanerId: 999, // Different from currentUser.id
+    };
+
+    const mockHomeWithNoPreferred = {
+      ...mockHome,
+      preferredCleanerId: null,
+    };
+
+    describe("Skip Buttons Visibility", () => {
+      it("should show Skip Before Photos button for business owner", async () => {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+        });
+
+        const { getByText } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        await waitFor(() => {
+          expect(getByText("Skip Before Photos")).toBeTruthy();
+        });
+      });
+
+      it("should NOT show Skip Before Photos button for regular cleaner", async () => {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+        });
+
+        const { queryByText } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithoutBusinessOwner} />
+        );
+
+        await waitFor(() => {
+          expect(queryByText("Skip Before Photos")).toBeNull();
+        });
+      });
+
+      it("should NOT show skip button when home has no preferred cleaner", async () => {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+        });
+
+        const { queryByText } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithNoPreferred} />
+        );
+
+        await waitFor(() => {
+          expect(queryByText("Skip Before Photos")).toBeNull();
+        });
+      });
+
+      it("should show Skip Checklist button for business owner on cleaning step", async () => {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
+        });
+
+        const { getByText } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        await waitFor(() => {
+          expect(getByText("Skip Checklist")).toBeTruthy();
+        });
+      });
+
+      it("should NOT show Skip Checklist button for regular cleaner on cleaning step", async () => {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
+        });
+
+        const { queryByText, getByTestId } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithoutBusinessOwner} />
+        );
+
+        await waitFor(() => {
+          expect(getByTestId("cleaning-checklist")).toBeTruthy();
+          expect(queryByText("Skip Checklist")).toBeNull();
+        });
+      });
+    });
+
+    describe("Skip Button Navigation", () => {
+      it("should advance to cleaning step when Skip Before Photos is pressed", async () => {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+        });
+
+        const { getByText, getByTestId, queryByTestId } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        await waitFor(() => {
+          expect(getByText("Skip Before Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Before Photos"));
+        });
+
+        await waitFor(() => {
+          expect(getByTestId("cleaning-checklist")).toBeTruthy();
+          expect(queryByTestId("photo-capture-before")).toBeNull();
+        });
+      });
+
+      it("should advance to after photos step when Skip Checklist is pressed", async () => {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
+        });
+
+        const { getByText, getByTestId, queryByTestId } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        await waitFor(() => {
+          expect(getByText("Skip Checklist")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Checklist"));
+        });
+
+        await waitFor(() => {
+          expect(getByTestId("photo-capture-after")).toBeTruthy();
+          expect(queryByTestId("cleaning-checklist")).toBeNull();
+        });
+      });
+
+      it("should advance to review step when Skip After Photos is pressed", async () => {
+        // Start at before photos, then navigate to after photos step
+        global.fetch
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [] }),
+          });
+
+        const { getByText, getByTestId, queryByTestId } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        // Skip before photos
+        await waitFor(() => {
+          expect(getByText("Skip Before Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Before Photos"));
+        });
+
+        // Skip checklist
+        await waitFor(() => {
+          expect(getByText("Skip Checklist")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Checklist"));
+        });
+
+        // Skip after photos
+        await waitFor(() => {
+          expect(getByText("Skip After Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip After Photos"));
+        });
+
+        // Should be at review step
+        await waitFor(() => {
+          expect(getByText("Review & Complete")).toBeTruthy();
+          expect(queryByTestId("photo-capture-after")).toBeNull();
+        });
+      });
+    });
+
+    describe("Review Step Without Photos (Business Owner)", () => {
+      it("should show appropriate message when no photos taken", async () => {
+        global.fetch
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [] }),
+          });
+
+        const { getByText, queryByText } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        // Skip through all steps to reach review
+        await waitFor(() => {
+          expect(getByText("Skip Before Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Before Photos"));
+        });
+
+        await waitFor(() => {
+          expect(getByText("Skip Checklist")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Checklist"));
+        });
+
+        await waitFor(() => {
+          expect(getByText("Skip After Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip After Photos"));
+        });
+
+        await waitFor(() => {
+          expect(getByText("Complete the job for your client.")).toBeTruthy();
+          expect(getByText("No photos taken for this job")).toBeTruthy();
+          // Should NOT show "Before Photos" or "After Photos" sections
+          expect(queryByText("Before Photos")).toBeNull();
+          expect(queryByText("After Photos")).toBeNull();
+        });
+      });
+
+      it("should show Complete Job button without photos for business owner", async () => {
+        global.fetch
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [] }),
+          });
+
+        const { getByText } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        // Skip through all steps
+        await waitFor(() => {
+          expect(getByText("Skip Before Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Before Photos"));
+        });
+
+        await waitFor(() => {
+          expect(getByText("Skip Checklist")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Checklist"));
+        });
+
+        await waitFor(() => {
+          expect(getByText("Skip After Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip After Photos"));
+        });
+
+        await waitFor(() => {
+          expect(getByText("Complete Job & Get Paid")).toBeTruthy();
+        });
+      });
+
+      it("should show only before photos when skipping after photos", async () => {
+        global.fetch
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
+                afterPhotos: [],
+              }),
+          });
+
+        const { getByText, queryByText, getByTestId } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        // Take before photos (use the mocked complete)
+        await waitFor(() => {
+          expect(getByTestId("photo-capture-before")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByTestId("complete-before-photos"));
+        });
+
+        // Skip checklist
+        await waitFor(() => {
+          expect(getByText("Skip Checklist")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Checklist"));
+        });
+
+        // Skip after photos
+        await waitFor(() => {
+          expect(getByText("Skip After Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip After Photos"));
+        });
+
+        await waitFor(() => {
+          // Should show before photos section but not after
+          expect(getByText("Before Photos")).toBeTruthy();
+          expect(queryByText("After Photos")).toBeNull();
+        });
+      });
+    });
+
+    describe("Business Owner Job Completion", () => {
+      it("should successfully complete job without photos for business owner", async () => {
+        jest.clearAllMocks();
+        global.fetch = jest.fn().mockImplementation((url) => {
+          if (typeof url === "string" && url.includes("/status")) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
+            });
+          }
+          if (typeof url === "string" && url.includes("/job-photos/") && !url.includes("/status")) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [] }),
+            });
+          }
+          if (typeof url === "string" && url.includes("/complete-job")) {
+            return Promise.resolve({
+              ok: true,
+              json: () =>
+                Promise.resolve({
+                  success: true,
+                  payoutResults: [{ cleanerId: 1, status: "success", amountCents: 13500 }],
+                }),
+            });
+          }
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+        });
+
+        const { getByText } = renderWithContext(
+          <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
+        );
+
+        // Skip all steps
+        await waitFor(() => {
+          expect(getByText("Skip Before Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Before Photos"));
+        });
+
+        await waitFor(() => {
+          expect(getByText("Skip Checklist")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Checklist"));
+        });
+
+        await waitFor(() => {
+          expect(getByText("Skip After Photos")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip After Photos"));
+        });
+
+        // Complete the job
+        await waitFor(() => {
+          expect(getByText("Complete Job & Get Paid")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Complete Job & Get Paid"));
+        });
+
+        await waitFor(() => {
+          expect(Alert.alert).toHaveBeenCalledWith(
+            "Job Completed!",
+            "Great work! Your payout of $135.00 has been processed.",
+            expect.any(Array)
+          );
+        });
+      });
+    });
+  });
 });

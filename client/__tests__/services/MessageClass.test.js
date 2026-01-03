@@ -446,4 +446,188 @@ describe("MessageClass", () => {
       expect(result.error).toBe("Only owner or HR can use this endpoint");
     });
   });
+
+  describe("createCleanerClientConversation", () => {
+    describe("When cleaner initiates", () => {
+      it("should create conversation with clientUserId", async () => {
+        const mockResponse = {
+          conversation: {
+            id: 1,
+            conversationType: "cleaner-client",
+            title: "John Cleaner & Jane Client",
+            participants: [
+              { userId: 100, user: { id: 100, firstName: "John" } },
+              { userId: 200, user: { id: 200, firstName: "Jane" } },
+            ],
+          },
+        };
+
+        fetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
+
+        expect(fetch).toHaveBeenCalledWith(
+          "http://localhost:3000/api/v1/messages/conversation/cleaner-client",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${mockToken}`,
+            },
+            body: JSON.stringify({ clientUserId: 200 }),
+          }
+        );
+        expect(result.conversation.conversationType).toBe("cleaner-client");
+      });
+
+      it("should return error when no active relationship with client", async () => {
+        fetch.mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: "No active relationship with this client" }),
+        });
+
+        const result = await MessageService.createCleanerClientConversation(999, null, mockToken);
+
+        expect(result.error).toBe("No active relationship with this client");
+      });
+
+      it("should return existing conversation if one exists", async () => {
+        const mockResponse = {
+          conversation: {
+            id: 5, // Existing conversation ID
+            conversationType: "cleaner-client",
+            title: "John Cleaner & Jane Client",
+            participants: [],
+          },
+        };
+
+        fetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
+
+        expect(result.conversation.id).toBe(5);
+      });
+    });
+
+    describe("When client (homeowner) initiates", () => {
+      it("should create conversation with cleanerUserId", async () => {
+        const mockResponse = {
+          conversation: {
+            id: 1,
+            conversationType: "cleaner-client",
+            title: "John Cleaner & Jane Client",
+            participants: [],
+          },
+        };
+
+        fetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await MessageService.createCleanerClientConversation(null, 100, mockToken);
+
+        expect(fetch).toHaveBeenCalledWith(
+          "http://localhost:3000/api/v1/messages/conversation/cleaner-client",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${mockToken}`,
+            },
+            body: JSON.stringify({ cleanerUserId: 100 }),
+          }
+        );
+      });
+
+      it("should auto-find preferred cleaner when no cleanerUserId specified", async () => {
+        const mockResponse = {
+          conversation: {
+            id: 1,
+            conversationType: "cleaner-client",
+            participants: [],
+          },
+        };
+
+        fetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockResponse,
+        });
+
+        const result = await MessageService.createCleanerClientConversation(null, null, mockToken);
+
+        expect(fetch).toHaveBeenCalledWith(
+          "http://localhost:3000/api/v1/messages/conversation/cleaner-client",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${mockToken}`,
+            },
+            body: JSON.stringify({}),
+          }
+        );
+      });
+
+      it("should return error if no preferred cleaner found", async () => {
+        fetch.mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: "No preferred cleaner found. Please specify cleanerUserId." }),
+        });
+
+        const result = await MessageService.createCleanerClientConversation(null, null, mockToken);
+
+        expect(result.error).toBe("No preferred cleaner found. Please specify cleanerUserId.");
+      });
+
+      it("should return error if no relationship with specified cleaner", async () => {
+        fetch.mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: "No active relationship with this cleaner" }),
+        });
+
+        const result = await MessageService.createCleanerClientConversation(null, 999, mockToken);
+
+        expect(result.error).toBe("No active relationship with this cleaner");
+      });
+    });
+
+    describe("Error handling", () => {
+      it("should handle network errors gracefully", async () => {
+        fetch.mockRejectedValueOnce(new Error("Network error"));
+
+        const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
+
+        expect(result.error).toBe("Network error");
+      });
+
+      it("should handle server errors", async () => {
+        fetch.mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: "Internal server error" }),
+        });
+
+        const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
+
+        expect(result.error).toBe("Internal server error");
+      });
+
+      it("should handle invalid response format", async () => {
+        fetch.mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({}), // No error message
+        });
+
+        const result = await MessageService.createCleanerClientConversation(200, null, mockToken);
+
+        expect(result.error).toBe("Failed to create conversation");
+      });
+    });
+  });
 });

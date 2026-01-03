@@ -1,7 +1,21 @@
 const HomeSerializer = require("./homesSerializer");
 const AppointmentSerializer = require("./AppointmentSerializer");
 const BillSerializer = require("./BillSerializer");
+const EncryptionService = require("../services/EncryptionService");
+
 class UserSerializer {
+	// Fields that are encrypted in the database
+	static encryptedFields = ["firstName", "lastName", "email", "phone"];
+
+	static getValue(user, attribute) {
+		const value = user[attribute];
+		// EncryptionService.decrypt() safely handles both encrypted and unencrypted data
+		if (this.encryptedFields.includes(attribute) && value) {
+			return EncryptionService.decrypt(value);
+		}
+		return value;
+	}
+
 	static serializeOne(user) {
 		const allowedAttributes = [
 			"id",
@@ -17,14 +31,17 @@ class UserSerializer {
 			"reviews",
 			"hasPaymentMethod",
 			"referralCode",
-			"referralCredits"
+			"referralCredits",
+			"isBusinessOwner",
+			"businessName",
+			"yearsInBusiness"
 		];
 
 		const serializedUser = {};
 		let homes = [];
 
 		for (const attribute of allowedAttributes) {
-			serializedUser[attribute] = user[attribute];
+			serializedUser[attribute] = this.getValue(user, attribute);
 		}
 
 		if (user.homes) {
@@ -59,11 +76,14 @@ class UserSerializer {
 			"hasPaymentMethod",
 			"referralCode",
 			"referralCredits",
+			"isBusinessOwner",
+			"businessName",
+			"yearsInBusiness",
 		];
 		const serializedUser = {};
 
 		for (const attribute of allowedAttributes) {
-			serializedUser[attribute] = user[attribute];
+			serializedUser[attribute] = this.getValue(user, attribute);
 		}
 
 		return serializedUser;

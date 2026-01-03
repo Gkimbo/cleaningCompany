@@ -45,6 +45,9 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
     total: 0,
   });
 
+  // Check if current user is the business owner (preferred cleaner) for this home
+  const isBusinessOwner = home?.preferredCleanerId === currentUser?.id;
+
   useEffect(() => {
     // Auto-advance on initial load only (e.g., resuming a job)
     checkPhotoStatus(true);
@@ -242,67 +245,94 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   };
 
   const renderCleaningStep = () => (
-    <CleaningChecklist
-      home={home}
-      token={currentUser.token}
-      appointmentId={appointment.id}
-      onChecklistComplete={handleChecklistComplete}
-      onProgressUpdate={handleChecklistProgress}
-    />
+    <View style={{ flex: 1 }}>
+      <CleaningChecklist
+        home={home}
+        token={currentUser.token}
+        appointmentId={appointment.id}
+        onChecklistComplete={handleChecklistComplete}
+        onProgressUpdate={handleChecklistProgress}
+      />
+      {isBusinessOwner && (
+        <TouchableOpacity
+          style={styles.skipButton}
+          onPress={() => setCurrentStep(STEPS.AFTER_PHOTOS)}
+        >
+          <Text style={styles.skipButtonText}>Skip Checklist</Text>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 
-  const renderReviewStep = () => (
+  const renderReviewStep = () => {
+    const hasAnyPhotos = allPhotos.before.length > 0 || allPhotos.after.length > 0;
+
+    return (
     <ScrollView style={styles.reviewContainer}>
       <View style={styles.reviewHeader}>
         <Text style={styles.reviewTitle}>Review & Complete</Text>
         <Text style={styles.reviewSubtitle}>
-          Review your before and after photos, then complete the job.
+          {hasAnyPhotos
+            ? "Review your before and after photos, then complete the job."
+            : isBusinessOwner
+            ? "Complete the job for your client."
+            : "Review and complete the job."}
         </Text>
       </View>
 
-      <View style={styles.photosReviewSection}>
-        <Text style={styles.photosReviewTitle}>Before Photos</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.photosReviewScroll}
-        >
-          {allPhotos.before.map((photo) => (
-            <View key={photo.id} style={styles.reviewPhotoCard}>
-              <Image
-                source={{ uri: photo.photoData }}
-                style={styles.reviewPhotoImage}
-                resizeMode="cover"
-              />
-              {photo.room && (
-                <Text style={styles.reviewPhotoRoom}>{photo.room}</Text>
-              )}
-            </View>
-          ))}
-        </ScrollView>
-      </View>
+      {allPhotos.before.length > 0 && (
+        <View style={styles.photosReviewSection}>
+          <Text style={styles.photosReviewTitle}>Before Photos</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.photosReviewScroll}
+          >
+            {allPhotos.before.map((photo) => (
+              <View key={photo.id} style={styles.reviewPhotoCard}>
+                <Image
+                  source={{ uri: photo.photoData }}
+                  style={styles.reviewPhotoImage}
+                  resizeMode="cover"
+                />
+                {photo.room && (
+                  <Text style={styles.reviewPhotoRoom}>{photo.room}</Text>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
-      <View style={styles.photosReviewSection}>
-        <Text style={styles.photosReviewTitle}>After Photos</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.photosReviewScroll}
-        >
-          {allPhotos.after.map((photo) => (
-            <View key={photo.id} style={styles.reviewPhotoCard}>
-              <Image
-                source={{ uri: photo.photoData }}
-                style={styles.reviewPhotoImage}
-                resizeMode="cover"
-              />
-              {photo.room && (
-                <Text style={styles.reviewPhotoRoom}>{photo.room}</Text>
-              )}
-            </View>
-          ))}
-        </ScrollView>
-      </View>
+      {allPhotos.after.length > 0 && (
+        <View style={styles.photosReviewSection}>
+          <Text style={styles.photosReviewTitle}>After Photos</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.photosReviewScroll}
+          >
+            {allPhotos.after.map((photo) => (
+              <View key={photo.id} style={styles.reviewPhotoCard}>
+                <Image
+                  source={{ uri: photo.photoData }}
+                  style={styles.reviewPhotoImage}
+                  resizeMode="cover"
+                />
+                {photo.room && (
+                  <Text style={styles.reviewPhotoRoom}>{photo.room}</Text>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {isBusinessOwner && !hasAnyPhotos && (
+        <View style={styles.noPhotosPlaceholder}>
+          <Text style={styles.noPhotosText}>No photos taken for this job</Text>
+        </View>
+      )}
 
       <View style={styles.payoutCard}>
         <Text style={styles.payoutTitle}>Your Payout</Text>
@@ -330,7 +360,8 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         <Text style={styles.addMorePhotosText}>Add More After Photos</Text>
       </TouchableOpacity>
     </ScrollView>
-  );
+    );
+  };
 
   const statusBarHeight = Platform.OS === 'ios' ? 50 : StatusBar.currentHeight || 0;
 
@@ -347,25 +378,48 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
       {renderStepIndicator()}
 
       {currentStep === STEPS.BEFORE_PHOTOS && (
-        <JobPhotoCapture
-          appointmentId={appointment.id}
-          photoType="before"
-          home={home}
-          onPhotosUpdated={checkPhotoStatus}
-          onComplete={handleBeforePhotosComplete}
-        />
+        <View style={{ flex: 1 }}>
+          <JobPhotoCapture
+            appointmentId={appointment.id}
+            photoType="before"
+            home={home}
+            onPhotosUpdated={checkPhotoStatus}
+            onComplete={handleBeforePhotosComplete}
+          />
+          {isBusinessOwner && (
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={() => setCurrentStep(STEPS.CLEANING)}
+            >
+              <Text style={styles.skipButtonText}>Skip Before Photos</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
       {currentStep === STEPS.CLEANING && renderCleaningStep()}
 
       {currentStep === STEPS.AFTER_PHOTOS && (
-        <JobPhotoCapture
-          appointmentId={appointment.id}
-          photoType="after"
-          home={home}
-          onPhotosUpdated={checkPhotoStatus}
-          onComplete={handleAfterPhotosComplete}
-        />
+        <View style={{ flex: 1 }}>
+          <JobPhotoCapture
+            appointmentId={appointment.id}
+            photoType="after"
+            home={home}
+            onPhotosUpdated={checkPhotoStatus}
+            onComplete={handleAfterPhotosComplete}
+          />
+          {isBusinessOwner && (
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={() => {
+                loadAllPhotos();
+                setCurrentStep(STEPS.REVIEW);
+              }}
+            >
+              <Text style={styles.skipButtonText}>Skip After Photos</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
       {currentStep === STEPS.REVIEW && renderReviewStep()}

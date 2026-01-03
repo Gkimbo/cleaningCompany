@@ -494,6 +494,73 @@ class MessageService {
       return { error: error.message };
     }
   }
+
+  /**
+   * Report a message as suspicious activity
+   * @param {number} messageId - The ID of the message to report
+   * @param {string} token - Auth token
+   * @returns {Promise<Object>} - Result with success/error status
+   */
+  static async reportSuspiciousActivity(messageId, token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/${messageId}/report-suspicious`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        // Handle "already reported" case specially
+        if (response.status === 409) {
+          return { alreadyReported: true, message: data.error };
+        }
+        throw new Error(data.error || "Failed to report suspicious activity");
+      }
+      return data;
+    } catch (error) {
+      console.error("Error reporting suspicious activity:", error);
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Create or get a direct conversation between cleaner and their client
+   * @param {number} clientUserId - Required when cleaner is calling (the client to message)
+   * @param {number} cleanerUserId - Optional when client is calling (defaults to their preferred cleaner)
+   * @param {string} token - Auth token
+   */
+  static async createCleanerClientConversation(clientUserId, cleanerUserId, token) {
+    try {
+      const body = {};
+      if (clientUserId) body.clientUserId = clientUserId;
+      if (cleanerUserId) body.cleanerUserId = cleanerUserId;
+
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/conversation/cleaner-client`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create conversation");
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error creating cleaner-client conversation:", error);
+      return { error: error.message };
+    }
+  }
 }
 
 export default MessageService;

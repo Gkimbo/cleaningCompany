@@ -1,3 +1,5 @@
+const EncryptionService = require("../services/EncryptionService");
+
 class ApplicationSerializer {
   static allowedAttributes = [
     // Basic Information
@@ -63,10 +65,39 @@ class ApplicationSerializer {
     "updatedAt",
   ];
 
+  // Fields that are encrypted in the database
+  static encryptedFields = [
+    "firstName",
+    "lastName",
+    "email",
+    "phone",
+    "streetAddress",
+    "city",
+    "state",
+    "zipCode",
+    "ssnLast4",
+    "driversLicenseNumber",
+    "driversLicenseState",
+    "idPhoto",
+    "previousEmployer",
+    "previousEmployerPhone",
+    "emergencyContactName",
+    "emergencyContactPhone",
+  ];
+
+  static getValue(application, attribute) {
+    const value = application[attribute];
+    // EncryptionService.decrypt() safely handles both encrypted and unencrypted data
+    if (this.encryptedFields.includes(attribute) && value) {
+      return EncryptionService.decrypt(value);
+    }
+    return value;
+  }
+
   static serializeOne(application) {
     const serialized = {};
     for (const attribute of this.allowedAttributes) {
-      serialized[attribute] = application[attribute];
+      serialized[attribute] = this.getValue(application, attribute);
     }
     return serialized;
   }

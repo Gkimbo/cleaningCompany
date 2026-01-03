@@ -390,6 +390,9 @@ const ChatScreen = () => {
   }
 
   const isBroadcast = conversation?.conversationType === "broadcast";
+  const isAppointmentCompleted =
+    conversation?.conversationType === "appointment" &&
+    conversation?.appointment?.completed === true;
   const isGroupChat = conversation?.participants?.length > 2;
   const conversationIcon = getConversationIcon();
 
@@ -528,35 +531,44 @@ const ChatScreen = () => {
         )}
       </ScrollView>
 
-      {/* Input - hide for broadcast conversations if not owner */}
-      {(!isBroadcast || state.account === "owner") && (
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.inputField}
-            placeholder="Type a message..."
-            placeholderTextColor={colors.text.tertiary}
-            value={messageText}
-            onChangeText={setMessageText}
-            multiline
-            maxLength={2000}
-            editable={!sending}
-          />
-          <Pressable
-            style={({ pressed }) => [
-              styles.sendButton,
-              (!messageText.trim() || sending) && styles.sendButtonDisabled,
-              pressed && styles.sendButtonPressed,
-            ]}
-            onPress={handleSend}
-            disabled={!messageText.trim() || sending}
-          >
-            {sending ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <Icon name="send" size={18} color={colors.white} />
-            )}
-          </Pressable>
+      {/* Input - hide for broadcast conversations if not owner, show disabled banner for completed appointments */}
+      {isAppointmentCompleted ? (
+        <View style={styles.disabledContainer}>
+          <Icon name="info" size={18} color={colors.text.tertiary} />
+          <Text style={styles.disabledText}>
+            This appointment is complete, messaging for it is disabled.
+          </Text>
         </View>
+      ) : (
+        (!isBroadcast || state.account === "owner") && (
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.inputField}
+              placeholder="Type a message..."
+              placeholderTextColor={colors.text.tertiary}
+              value={messageText}
+              onChangeText={setMessageText}
+              multiline
+              maxLength={2000}
+              editable={!sending}
+            />
+            <Pressable
+              style={({ pressed }) => [
+                styles.sendButton,
+                (!messageText.trim() || sending) && styles.sendButtonDisabled,
+                pressed && styles.sendButtonPressed,
+              ]}
+              onPress={handleSend}
+              disabled={!messageText.trim() || sending}
+            >
+              {sending ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Icon name="send" size={18} color={colors.white} />
+              )}
+            </Pressable>
+          </View>
+        )
       )}
     </KeyboardAvoidingView>
   );
@@ -700,6 +712,23 @@ const styles = StyleSheet.create({
   },
   sendButtonPressed: {
     backgroundColor: colors.primary[600],
+  },
+  // Disabled messaging container (for completed appointments)
+  disabledContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.neutral[100],
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    gap: spacing.sm,
+  },
+  disabledText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
   },
   // Edit Title styles
   editTitleButton: {

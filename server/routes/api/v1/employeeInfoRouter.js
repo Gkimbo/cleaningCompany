@@ -12,6 +12,7 @@ const {
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
+const EncryptionService = require("../../../services/EncryptionService");
 const { Op } = require("sequelize");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 
@@ -109,7 +110,7 @@ employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
     }
 
     // Fallback to ZIP code lookup for old homes without coordinates
-    const { latitude, longitude } = await HomeClass.getLatAndLong(home.zipcode);
+    const { latitude, longitude } = await HomeClass.getLatAndLong(EncryptionService.decrypt(home.zipcode));
     return res.status(200).json({ latitude, longitude });
   } catch (error) {
     console.log(error);

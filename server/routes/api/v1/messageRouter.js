@@ -9,9 +9,13 @@ const {
   UserAppointments,
   MessageReaction,
   MessageReadReceipt,
+  CleanerClient,
+  UserHomes,
+  SuspiciousActivityReport,
 } = require("../../../models");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
+const SuspiciousContentDetector = require("../../../services/SuspiciousContentDetector");
 
 const messageRouter = express.Router();
 
@@ -194,6 +198,30 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Not authorized to send messages in this conversation" });
     }
 
+    // Check if this is a completed appointment conversation
+    const conversation = await Conversation.findByPk(conversationId, {
+      include: [{ model: UserAppointments, as: "appointment" }],
+    });
+
+    if (
+      conversation?.conversationType === "appointment" &&
+      conversation?.appointment?.completed
+    ) {
+      return res.status(403).json({
+        error: "Messaging is disabled for completed appointments",
+      });
+    }
+
+    // Detect suspicious content for appointment conversations
+    let hasSuspiciousContent = false;
+    let suspiciousContentTypes = [];
+
+    if (conversation?.conversationType === "appointment") {
+      const detection = SuspiciousContentDetector.detect(content);
+      hasSuspiciousContent = detection.isSuspicious;
+      suspiciousContentTypes = detection.types;
+    }
+
     // Check if this is the first message in the conversation (for email notification)
     const existingMessageCount = await Message.count({
       where: { conversationId },
@@ -206,6 +234,8 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       senderId,
       content: content.trim(),
       messageType: "text",
+      hasSuspiciousContent,
+      suspiciousContentTypes,
     });
 
     // Get message with sender info
@@ -677,6 +707,207 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
   } catch (error) {
     console.error("Error creating/getting support conversation:", error);
     return res.status(500).json({ error: "Failed to create support conversation" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/conversation/cleaner-client
+ * Create or get a direct conversation between a cleaner (business owner) and their client
+ * Either party can initiate this - the cleaner or the client
+ */
+messageRouter.post("/conversation/cleaner-client", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { clientUserId, cleanerUserId } = req.body;
+
+    // Get current user
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    let cleanerId, clientId, cleanerUser, clientUser;
+
+    if (user.type === "cleaner") {
+      // Cleaner is initiating - they need to specify which client
+      if (!clientUserId) {
+        return res.status(400).json({ error: "clientUserId is required for cleaner" });
+      }
+      cleanerId = userId;
+      clientId = clientUserId;
+
+      // Verify the cleaner-client relationship exists
+      const cleanerClient = await CleanerClient.findOne({
+        where: {
+          cleanerId: cleanerId,
+          clientId: clientId,
+          status: "active",
+        },
+      });
+
+      // Also check if this cleaner is preferred for any of the client's homes
+      const preferredHome = await UserHomes.findOne({
+        where: {
+          userId: clientId,
+          preferredCleanerId: cleanerId,
+        },
+      });
+
+      if (!cleanerClient && !preferredHome) {
+        return res.status(403).json({ error: "No active relationship with this client" });
+      }
+
+      cleanerUser = user;
+      clientUser = await User.findByPk(clientId);
+    } else if (user.type === "homeowner" || !user.type) {
+      // Client is initiating - they need to specify which cleaner (or we find their preferred)
+      clientId = userId;
+      clientUser = user;
+
+      if (cleanerUserId) {
+        cleanerId = cleanerUserId;
+      } else {
+        // Find their preferred cleaner from any of their homes
+        const homeWithPreferred = await UserHomes.findOne({
+          where: {
+            userId: clientId,
+            preferredCleanerId: { [Op.ne]: null },
+          },
+        });
+
+        if (homeWithPreferred) {
+          cleanerId = homeWithPreferred.preferredCleanerId;
+        } else {
+          // Check CleanerClient relationship
+          const cleanerClient = await CleanerClient.findOne({
+            where: {
+              clientId: clientId,
+              status: "active",
+            },
+          });
+
+          if (cleanerClient) {
+            cleanerId = cleanerClient.cleanerId;
+          } else {
+            return res.status(404).json({ error: "No preferred cleaner found. Please specify cleanerUserId." });
+          }
+        }
+      }
+
+      // Verify the relationship
+      const cleanerClient = await CleanerClient.findOne({
+        where: {
+          cleanerId: cleanerId,
+          clientId: clientId,
+          status: "active",
+        },
+      });
+
+      const preferredHome = await UserHomes.findOne({
+        where: {
+          userId: clientId,
+          preferredCleanerId: cleanerId,
+        },
+      });
+
+      if (!cleanerClient && !preferredHome) {
+        return res.status(403).json({ error: "No active relationship with this cleaner" });
+      }
+
+      cleanerUser = await User.findByPk(cleanerId);
+    } else {
+      return res.status(403).json({ error: "Only cleaners and homeowners can use this endpoint" });
+    }
+
+    if (!clientUser) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+    if (!cleanerUser) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    // Check if a cleaner-client conversation already exists between these two users
+    const existingParticipation = await ConversationParticipant.findAll({
+      where: { userId: cleanerId },
+      include: [
+        {
+          model: Conversation,
+          as: "conversation",
+          where: { conversationType: "cleaner-client" },
+          include: [
+            {
+              model: ConversationParticipant,
+              as: "participants",
+              where: { userId: clientId },
+            },
+          ],
+        },
+      ],
+    });
+
+    let conversation;
+
+    if (existingParticipation.length > 0) {
+      // Return existing conversation
+      conversation = await Conversation.findByPk(existingParticipation[0].conversationId, {
+        include: [
+          {
+            model: ConversationParticipant,
+            as: "participants",
+            include: [
+              {
+                model: User,
+                as: "user",
+                attributes: ["id", "username", "type", "firstName", "lastName"],
+              },
+            ],
+          },
+        ],
+      });
+    } else {
+      // Create new cleaner-client conversation
+      const cleanerName = `${cleanerUser.firstName || ""} ${cleanerUser.lastName || ""}`.trim() || cleanerUser.username;
+      const clientName = `${clientUser.firstName || ""} ${clientUser.lastName || ""}`.trim() || clientUser.username;
+
+      conversation = await Conversation.create({
+        conversationType: "cleaner-client",
+        title: `${cleanerName} & ${clientName}`,
+        createdBy: userId,
+      });
+
+      // Add both parties as participants
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: cleanerId,
+      });
+
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: clientId,
+      });
+
+      // Reload conversation with participants
+      conversation = await Conversation.findByPk(conversation.id, {
+        include: [
+          {
+            model: ConversationParticipant,
+            as: "participants",
+            include: [
+              {
+                model: User,
+                as: "user",
+                attributes: ["id", "username", "type", "firstName", "lastName"],
+              },
+            ],
+          },
+        ],
+      });
+    }
+
+    return res.json({ conversation });
+  } catch (error) {
+    console.error("Error creating/getting cleaner-client conversation:", error);
+    return res.status(500).json({ error: "Failed to create conversation" });
   }
 });
 
@@ -1719,5 +1950,191 @@ messageRouter.post("/mark-messages-read", authenticateToken, async (req, res) =>
     return res.status(500).json({ error: "Failed to mark messages as read" });
   }
 });
+
+/**
+ * POST /api/v1/messages/:messageId/report-suspicious
+ * Report a message with suspicious content
+ * Creates a report for HR/Owner review and sends notifications
+ */
+messageRouter.post(
+  "/:messageId/report-suspicious",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const reporterId = req.userId;
+
+      // Get the message with conversation and sender info
+      const message = await Message.findByPk(messageId, {
+        include: [
+          {
+            model: Conversation,
+            as: "conversation",
+            include: [{ model: UserAppointments, as: "appointment" }],
+          },
+          {
+            model: User,
+            as: "sender",
+            attributes: ["id", "username", "firstName", "lastName", "type"],
+          },
+        ],
+      });
+
+      if (!message) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      // Verify the reporter is a participant in this conversation
+      const participant = await ConversationParticipant.findOne({
+        where: { conversationId: message.conversationId, userId: reporterId },
+      });
+
+      if (!participant) {
+        return res.status(403).json({ error: "Not authorized to report this message" });
+      }
+
+      // Cannot report your own message
+      if (message.senderId === reporterId) {
+        return res.status(400).json({ error: "Cannot report your own message" });
+      }
+
+      // Check if the message is flagged as suspicious
+      if (!message.hasSuspiciousContent) {
+        return res.status(400).json({
+          error: "This message is not flagged as suspicious",
+        });
+      }
+
+      // Check if this message has already been reported by this user
+      const existingReport = await SuspiciousActivityReport.findOne({
+        where: { messageId, reporterId },
+      });
+
+      if (existingReport) {
+        return res.status(409).json({
+          error: "You have already reported this message",
+          alreadyReported: true,
+        });
+      }
+
+      // Create the report
+      const report = await SuspiciousActivityReport.create({
+        messageId: message.id,
+        reporterId,
+        reportedUserId: message.senderId,
+        conversationId: message.conversationId,
+        appointmentId: message.conversation?.appointmentId || null,
+        suspiciousContentTypes: message.suspiciousContentTypes || [],
+        messageContent: message.content,
+        status: "pending",
+      });
+
+      // Get reporter info for the notification
+      const reporter = await User.findByPk(reporterId, {
+        attributes: ["id", "username", "firstName", "lastName", "type"],
+      });
+
+      // Get owner and HR users to notify
+      const staffToNotify = await User.findAll({
+        where: {
+          type: { [Op.in]: ["owner", "humanResources"] },
+        },
+        attributes: ["id", "email", "firstName", "lastName", "type", "expoPushToken"],
+      });
+
+      // Send email notifications to owner and HR
+      const reportedUserName = message.sender
+        ? `${message.sender.firstName || ""} ${message.sender.lastName || ""}`.trim() ||
+          message.sender.username
+        : "Unknown User";
+
+      const reporterName = reporter
+        ? `${reporter.firstName || ""} ${reporter.lastName || ""}`.trim() ||
+          reporter.username
+        : "Unknown User";
+
+      const suspiciousTypes = (message.suspiciousContentTypes || [])
+        .map((type) => {
+          const labels = {
+            phone_number: "Phone Number",
+            email: "Email Address",
+            off_platform: "Off-Platform Communication",
+          };
+          return labels[type] || type;
+        })
+        .join(", ");
+
+      // Get pending count for notifications
+      const pendingCount = await SuspiciousActivityReport.count({
+        where: { status: "pending" },
+      });
+
+      // Send notification emails
+      for (const staff of staffToNotify) {
+        try {
+          await Email.sendSuspiciousActivityReport({
+            to: staff.email,
+            staffName: staff.firstName || "Team",
+            reporterName,
+            reportedUserName,
+            reportedUserType: message.sender?.type || "unknown",
+            messageContent: message.content,
+            suspiciousTypes: suspiciousTypes || "Suspicious content",
+            appointmentId: message.conversation?.appointmentId,
+            reportId: report.id,
+          });
+        } catch (emailError) {
+          console.error(
+            `Failed to send suspicious activity email to ${staff.email}:`,
+            emailError
+          );
+        }
+      }
+
+      // Send push notifications to HR and Owner
+      for (const staff of staffToNotify) {
+        if (staff.expoPushToken) {
+          try {
+            await PushNotification.sendPushSuspiciousActivityReport(
+              staff.expoPushToken,
+              staff.firstName || "Team",
+              reporterName,
+              reportedUserName,
+              pendingCount
+            );
+          } catch (pushError) {
+            console.error(
+              `Failed to send suspicious activity push to ${staff.id}:`,
+              pushError
+            );
+          }
+        }
+      }
+
+      // Emit socket event to notify staff in real-time
+      const io = req.app.get("io");
+      for (const staff of staffToNotify) {
+        io.to(`user_${staff.id}`).emit("suspicious_activity_report", {
+          reportId: report.id,
+          reporterName,
+          reportedUserName,
+          messageContent: message.content,
+          suspiciousTypes,
+          pendingCount,
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
+        message:
+          "Report submitted successfully. Our team will review this activity.",
+        reportId: report.id,
+      });
+    } catch (error) {
+      console.error("Error reporting suspicious activity:", error);
+      return res.status(500).json({ error: "Failed to submit report" });
+    }
+  }
+);
 
 module.exports = messageRouter;

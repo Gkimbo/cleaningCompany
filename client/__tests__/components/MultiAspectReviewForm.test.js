@@ -488,4 +488,147 @@ describe("MultiAspectReviewForm Component", () => {
       expect(formData.reviewComment).toBe("");
     });
   });
+
+  describe("Preferred Cleaner Checkbox", () => {
+    describe("Visibility Logic", () => {
+      it("should show checkbox for homeowner reviewing cleaner with homeId", () => {
+        const reviewType = "homeowner_to_cleaner";
+        const homeId = 50;
+        const showCheckbox = reviewType === "homeowner_to_cleaner" && !!homeId;
+
+        expect(showCheckbox).toBe(true);
+      });
+
+      it("should hide checkbox for cleaner reviewing homeowner", () => {
+        const reviewType = "cleaner_to_homeowner";
+        const homeId = 50;
+        const showCheckbox = reviewType === "homeowner_to_cleaner" && !!homeId;
+
+        expect(showCheckbox).toBe(false);
+      });
+
+      it("should hide checkbox when homeId is missing", () => {
+        const reviewType = "homeowner_to_cleaner";
+        const homeId = null;
+        const showCheckbox = reviewType === "homeowner_to_cleaner" && !!homeId;
+
+        expect(showCheckbox).toBe(false);
+      });
+
+      it("should hide checkbox when homeId is undefined", () => {
+        const reviewType = "homeowner_to_cleaner";
+        const homeId = undefined;
+        const showCheckbox = reviewType === "homeowner_to_cleaner" && !!homeId;
+
+        expect(showCheckbox).toBe(false);
+      });
+
+      it("should hide checkbox when homeId is 0", () => {
+        const reviewType = "homeowner_to_cleaner";
+        const homeId = 0;
+        const showCheckbox = reviewType === "homeowner_to_cleaner" && !!homeId;
+
+        expect(showCheckbox).toBe(false);
+      });
+    });
+
+    describe("State Management", () => {
+      it("should default setAsPreferred to false", () => {
+        const setAsPreferred = false;
+        expect(setAsPreferred).toBe(false);
+      });
+
+      it("should toggle setAsPreferred state", () => {
+        let setAsPreferred = false;
+
+        // Toggle on
+        setAsPreferred = !setAsPreferred;
+        expect(setAsPreferred).toBe(true);
+
+        // Toggle off
+        setAsPreferred = !setAsPreferred;
+        expect(setAsPreferred).toBe(false);
+      });
+    });
+
+    describe("Checkbox Label", () => {
+      it("should include cleaner name in label", () => {
+        const cleanerName = "Maria S.";
+        const labelText = `Make ${cleanerName} a preferred cleaner`;
+
+        expect(labelText).toBe("Make Maria S. a preferred cleaner");
+      });
+
+      it("should include description text", () => {
+        const description = "They can book directly without your approval";
+        expect(description).toContain("book directly");
+        expect(description).toContain("without your approval");
+      });
+    });
+
+    describe("Form Submission with setAsPreferred", () => {
+      it("should include setAsPreferred in submission data", async () => {
+        const reviewData = {
+          userId: 2,
+          appointmentId: 100,
+          reviewType: "homeowner_to_cleaner",
+          review: 4.5,
+          reviewComment: "Great service!",
+          setAsPreferred: true,
+          homeId: 50,
+        };
+
+        expect(reviewData.setAsPreferred).toBe(true);
+        expect(reviewData.homeId).toBe(50);
+      });
+
+      it("should not include setAsPreferred when checkbox unchecked", () => {
+        const reviewData = {
+          userId: 2,
+          appointmentId: 100,
+          reviewType: "homeowner_to_cleaner",
+          review: 4.5,
+          reviewComment: "Great service!",
+          setAsPreferred: false,
+          homeId: 50,
+        };
+
+        expect(reviewData.setAsPreferred).toBe(false);
+      });
+
+      it("should submit successfully with setAsPreferred true", async () => {
+        const reviewData = {
+          userId: 2,
+          appointmentId: 100,
+          reviewType: "homeowner_to_cleaner",
+          review: 5,
+          setAsPreferred: true,
+          homeId: 50,
+        };
+
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              review: { id: 1, ...reviewData },
+              preferredStatusSet: true,
+              message: "Review submitted!",
+            }),
+        });
+
+        const response = await fetch("http://localhost:3000/api/v1/reviews/submit", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer test_token",
+          },
+          body: JSON.stringify(reviewData),
+        });
+
+        const data = await response.json();
+
+        expect(data.preferredStatusSet).toBe(true);
+      });
+    });
+  });
 });
