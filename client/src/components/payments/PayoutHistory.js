@@ -3,11 +3,20 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { API_BASE } from "../../services/config";
 import { usePricing } from "../../context/PricingContext";
+import {
+  colors,
+  spacing,
+  radius,
+  shadows,
+  typography,
+} from "../../services/styles/theme";
 
 const PayoutHistory = ({ state, dispatch }) => {
   const { pricing } = usePricing();
@@ -22,14 +31,12 @@ const PayoutHistory = ({ state, dispatch }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Calculate cleaner's share for a given price
   const calculateCleanerShare = (price, numCleaners = 1) => {
     const gross = parseFloat(price) || 0;
     const perCleaner = gross / numCleaners;
     return perCleaner * cleanerSharePercent;
   };
 
-  // Calculate potential earnings from assigned appointments (not completed)
   const calculatePotentialEarnings = () => {
     const userId = String(state?.currentUser?.id);
     const appointments = state?.appointments || [];
@@ -69,25 +76,24 @@ const PayoutHistory = ({ state, dispatch }) => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // Separate past and upcoming payouts
         const pastPayouts = allPayouts.filter((payout) => {
-          const dateStr = payout.appointmentDate?.length === 10
-            ? payout.appointmentDate + "T00:00:00"
-            : payout.appointmentDate;
+          const dateStr =
+            payout.appointmentDate?.length === 10
+              ? payout.appointmentDate + "T00:00:00"
+              : payout.appointmentDate;
           const appointmentDate = new Date(dateStr);
           return appointmentDate <= today;
         });
 
-        // Completed payouts from past jobs only
-        const completedPayouts = pastPayouts.filter((p) => p.status === "completed");
-
-        // Total paid from completed payouts
-        const totalPaidCents = completedPayouts.reduce((sum, p) => sum + (p.netAmount || 0), 0);
-
-        // Calculate potential earnings from appointments (ensures consistency with Overview)
+        const completedPayouts = pastPayouts.filter(
+          (p) => p.status === "completed"
+        );
+        const totalPaidCents = completedPayouts.reduce(
+          (sum, p) => sum + (p.netAmount || 0),
+          0
+        );
         const potentialEarnings = calculatePotentialEarnings();
 
-        // Only show past payouts in the history list (not upcoming appointments)
         setPayouts(pastPayouts);
         setTotals({
           totalPaidDollars: (totalPaidCents / 100).toFixed(2),
@@ -113,21 +119,21 @@ const PayoutHistory = ({ state, dispatch }) => {
     fetchPayouts();
   }, [state?.currentUser?.id, state?.appointments, pricing]);
 
-  const getStatusBadge = (status) => {
+  const getStatusStyle = (status) => {
     const statusConfig = {
-      pending: { text: "Pending", color: "#FFC107" },
-      held: { text: "Held", color: "#2196F3" },
-      processing: { text: "Processing", color: "#9C27B0" },
-      completed: { text: "Paid", color: "#4CAF50" },
-      failed: { text: "Failed", color: "#F44336" },
+      pending: { text: "Pending", type: "warning" },
+      held: { text: "Held", type: "primary" },
+      processing: { text: "Processing", type: "primary" },
+      completed: { text: "Paid", type: "success" },
+      failed: { text: "Failed", type: "error" },
     };
-    return statusConfig[status] || { text: status, color: "#757575" };
+    return statusConfig[status] || { text: status, type: "neutral" };
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
-    // If dateString is a date-only format (YYYY-MM-DD), append T00:00:00 to avoid timezone shift
-    const dateStr = dateString.length === 10 ? dateString + "T00:00:00" : dateString;
+    const dateStr =
+      dateString.length === 10 ? dateString + "T00:00:00" : dateString;
     return new Date(dateStr).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -142,7 +148,7 @@ const PayoutHistory = ({ state, dispatch }) => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007BFF" />
+        <ActivityIndicator size="large" color={colors.primary[600]} />
         <Text style={styles.loadingText}>Loading payout history...</Text>
       </View>
     );
@@ -152,22 +158,32 @@ const PayoutHistory = ({ state, dispatch }) => {
     <ScrollView
       contentContainerStyle={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary[600]}
+        />
       }
     >
       {/* Summary Cards */}
-      <View style={styles.summaryRow}>
-        <View style={[styles.summaryCard, { backgroundColor: "#4CAF50" }]}>
-          <Text style={styles.summaryLabel}>Total Paid</Text>
-          <Text style={styles.summaryAmount}>${totals.totalPaidDollars}</Text>
-          <Text style={styles.summaryCount}>
-            {totals.completedCount} payouts
+      <View style={styles.statsRow}>
+        <View style={[styles.statCard, styles.totalPaidCard]}>
+          <View style={styles.statHeader}>
+            <Feather name="check-circle" size={20} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.statLabel}>Total Paid</Text>
+          </View>
+          <Text style={styles.statAmount}>${totals.totalPaidDollars}</Text>
+          <Text style={styles.statSubtext}>
+            {totals.completedCount} {totals.completedCount === 1 ? "payout" : "payouts"}
           </Text>
         </View>
-        <View style={[styles.summaryCard, { backgroundColor: "#2196F3" }]}>
-          <Text style={styles.summaryLabel}>Potential Earnings</Text>
-          <Text style={styles.summaryAmount}>${totals.pendingAmountDollars}</Text>
-          <Text style={styles.summaryCount}>
+        <View style={[styles.statCard, styles.potentialCard]}>
+          <View style={styles.statHeader}>
+            <Feather name="trending-up" size={20} color="rgba(255,255,255,0.9)" />
+            <Text style={styles.statLabel}>Potential</Text>
+          </View>
+          <Text style={styles.statAmount}>${totals.pendingAmountDollars}</Text>
+          <Text style={styles.statSubtext}>
             {totals.pendingCount} upcoming {totals.pendingCount === 1 ? "job" : "jobs"}
           </Text>
         </View>
@@ -175,6 +191,12 @@ const PayoutHistory = ({ state, dispatch }) => {
 
       {/* Info Banner */}
       <View style={styles.infoBanner}>
+        <Feather
+          name="info"
+          size={18}
+          color={colors.primary[700]}
+          style={styles.infoBannerIcon}
+        />
         <Text style={styles.infoBannerText}>
           Payouts are processed automatically when you mark a job as complete.
         </Text>
@@ -182,10 +204,20 @@ const PayoutHistory = ({ state, dispatch }) => {
 
       {/* Payout History List */}
       <View style={styles.listContainer}>
-        <Text style={styles.listTitle}>Payout History</Text>
+        <View style={styles.listHeader}>
+          <Text style={styles.listTitle}>Payout History</Text>
+          {payouts.length > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{payouts.length}</Text>
+            </View>
+          )}
+        </View>
 
         {payouts.length === 0 ? (
           <View style={styles.emptyState}>
+            <View style={styles.emptyStateIcon}>
+              <Feather name="inbox" size={40} color={colors.neutral[400]} />
+            </View>
             <Text style={styles.emptyStateText}>No payouts yet</Text>
             <Text style={styles.emptyStateSubtext}>
               Complete jobs to start earning!
@@ -193,42 +225,63 @@ const PayoutHistory = ({ state, dispatch }) => {
           </View>
         ) : (
           payouts.map((payout) => {
-            const status = getStatusBadge(payout.status);
+            const status = getStatusStyle(payout.status);
             return (
               <View key={payout.id} style={styles.payoutItem}>
                 <View style={styles.payoutHeader}>
-                  <Text style={styles.payoutDate}>
-                    {formatDate(payout.appointmentDate)}
-                  </Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: status.color },
-                    ]}
-                  >
-                    <Text style={styles.statusText}>{status.text}</Text>
+                  <View style={styles.payoutDateRow}>
+                    <Feather
+                      name="calendar"
+                      size={14}
+                      color={colors.neutral[500]}
+                      style={styles.payoutDateIcon}
+                    />
+                    <Text style={styles.payoutDate}>
+                      {formatDate(payout.appointmentDate)}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusBadge, styles[`statusBadge_${status.type}`]]}>
+                    <Text style={[styles.statusText, styles[`statusText_${status.type}`]]}>
+                      {status.text}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.payoutDetails}>
-                  <View style={[styles.detailRow, styles.netRow]}>
-                    <Text style={styles.netLabel}>Your Earnings:</Text>
-                    <Text style={styles.netValue}>
+                  <View style={styles.earningsRow}>
+                    <Text style={styles.earningsLabel}>Your Earnings</Text>
+                    <Text style={styles.earningsValue}>
                       {formatCurrency(payout.netAmount)}
                     </Text>
                   </View>
                 </View>
 
                 {payout.completedAt && (
-                  <Text style={styles.completedDate}>
-                    Paid on {formatDate(payout.completedAt)}
-                  </Text>
+                  <View style={styles.paidDateRow}>
+                    <Feather
+                      name="check"
+                      size={12}
+                      color={colors.success[600]}
+                      style={styles.paidDateIcon}
+                    />
+                    <Text style={styles.paidDateText}>
+                      Paid on {formatDate(payout.completedAt)}
+                    </Text>
+                  </View>
                 )}
 
                 {payout.status === "held" && (
-                  <Text style={styles.heldNote}>
-                    Funds held until job completion
-                  </Text>
+                  <View style={styles.heldNoteRow}>
+                    <Feather
+                      name="clock"
+                      size={12}
+                      color={colors.primary[600]}
+                      style={styles.heldNoteIcon}
+                    />
+                    <Text style={styles.heldNoteText}>
+                      Funds held until job completion
+                    </Text>
+                  </View>
                 )}
               </View>
             );
@@ -239,169 +292,265 @@ const PayoutHistory = ({ state, dispatch }) => {
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 20,
-    backgroundColor: "#F0F4F7",
+    padding: spacing.lg,
+    backgroundColor: colors.neutral[100],
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F0F4F7",
+    backgroundColor: colors.neutral[100],
   },
   loadingText: {
-    marginTop: 10,
-    color: "#757575",
+    marginTop: spacing.md,
+    color: colors.neutral[500],
+    fontSize: typography.fontSize.sm,
   },
-  summaryRow: {
+
+  // Stats Row
+  statsRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
-  summaryCard: {
+  statCard: {
     flex: 1,
-    borderRadius: 15,
-    padding: 18,
-    marginHorizontal: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 5,
-    elevation: 4,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    ...shadows.md,
   },
-  summaryLabel: {
+  totalPaidCard: {
+    backgroundColor: colors.success[600],
+  },
+  potentialCard: {
+    backgroundColor: colors.primary[600],
+  },
+  statHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  statLabel: {
     color: "rgba(255,255,255,0.9)",
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
   },
-  summaryAmount: {
-    color: "#fff",
-    fontSize: 26,
-    fontWeight: "700",
-    marginVertical: 5,
+  statAmount: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.xs,
   },
-  summaryCount: {
+  statSubtext: {
     color: "rgba(255,255,255,0.8)",
-    fontSize: 12,
+    fontSize: typography.fontSize.xs,
   },
+
+  // Info Banner
   infoBanner: {
-    backgroundColor: "#E3F2FD",
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  infoBannerIcon: {
+    marginRight: spacing.sm,
+    marginTop: 1,
   },
   infoBannerText: {
-    color: "#1565C0",
-    fontSize: 13,
-    lineHeight: 18,
+    flex: 1,
+    color: colors.primary[700],
+    fontSize: typography.fontSize.sm,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
   },
+
+  // List Container
   listContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 4,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    ...shadows.md,
+  },
+  listHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.lg,
   },
   listTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 15,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
+  countBadge: {
+    backgroundColor: colors.primary[100],
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginLeft: spacing.sm,
+  },
+  countBadgeText: {
+    color: colors.primary[700],
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Empty State
   emptyState: {
     alignItems: "center",
-    padding: 30,
+    padding: spacing["3xl"],
+  },
+  emptyStateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
   },
   emptyStateText: {
-    color: "#757575",
-    fontSize: 16,
-    marginBottom: 5,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: spacing.xs,
   },
   emptyStateSubtext: {
-    color: "#9E9E9E",
-    fontSize: 14,
+    color: colors.neutral[400],
+    fontSize: typography.fontSize.sm,
   },
+
+  // Payout Item
   payoutItem: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 12,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
   payoutHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: spacing.md,
+  },
+  payoutDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  payoutDateIcon: {
+    marginRight: spacing.xs,
   },
   payoutDate: {
-    fontWeight: "600",
-    fontSize: 15,
-    color: "#333",
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
   },
+
+  // Status Badges
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  statusBadge_success: {
+    backgroundColor: colors.success[100],
+  },
+  statusBadge_warning: {
+    backgroundColor: colors.warning[100],
+  },
+  statusBadge_primary: {
+    backgroundColor: colors.primary[100],
+  },
+  statusBadge_error: {
+    backgroundColor: colors.error[100],
+  },
+  statusBadge_neutral: {
+    backgroundColor: colors.neutral[200],
   },
   statusText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
   },
+  statusText_success: {
+    color: colors.success[700],
+  },
+  statusText_warning: {
+    color: colors.warning[700],
+  },
+  statusText_primary: {
+    color: colors.primary[700],
+  },
+  statusText_error: {
+    color: colors.error[700],
+  },
+  statusText_neutral: {
+    color: colors.neutral[600],
+  },
+
+  // Payout Details
   payoutDetails: {
     borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
-    paddingTop: 12,
+    borderTopColor: colors.neutral[200],
+    paddingTop: spacing.md,
   },
-  detailRow: {
+  earningsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 6,
+    alignItems: "center",
   },
-  detailLabel: {
-    color: "#757575",
-    fontSize: 13,
+  earningsLabel: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
-  detailValue: {
-    color: "#333",
-    fontSize: 13,
+  earningsValue: {
+    color: colors.success[600],
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
   },
-  detailValueNegative: {
-    color: "#F44336",
-    fontSize: 13,
-  },
-  netRow: {
+
+  // Paid Date
+  paidDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
-    paddingTop: 8,
-    marginTop: 6,
+    borderTopColor: colors.neutral[200],
   },
-  netLabel: {
-    color: "#333",
-    fontSize: 14,
-    fontWeight: "600",
+  paidDateIcon: {
+    marginRight: spacing.xs,
   },
-  netValue: {
-    color: "#4CAF50",
-    fontSize: 16,
-    fontWeight: "700",
+  paidDateText: {
+    color: colors.success[600],
+    fontSize: typography.fontSize.xs,
   },
-  completedDate: {
-    marginTop: 10,
-    color: "#4CAF50",
-    fontSize: 12,
-    fontStyle: "italic",
+
+  // Held Note
+  heldNoteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
   },
-  heldNote: {
-    marginTop: 10,
-    color: "#2196F3",
-    fontSize: 12,
-    fontStyle: "italic",
+  heldNoteIcon: {
+    marginRight: spacing.xs,
   },
-};
+  heldNoteText: {
+    color: colors.primary[600],
+    fontSize: typography.fontSize.xs,
+  },
+});
 
 export default PayoutHistory;
