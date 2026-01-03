@@ -4,13 +4,13 @@ import { Feather } from "@expo/vector-icons";
 import { useNavigate } from "react-router-native";
 import ButtonStyles from "../../services/styles/ButtonStyles";
 
-const MyReferralsButton = ({ closeModal }) => {
+const WithdrawalsButton = ({ closeModal }) => {
   const [redirect, setRedirect] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (redirect) {
-      navigate("/my-referrals");
+      navigate("/owner/withdrawals");
       setRedirect(false);
     }
   }, [redirect]);
@@ -28,10 +28,10 @@ const MyReferralsButton = ({ closeModal }) => {
       ]}
       onPress={handlePress}
     >
-      <Feather name="share-2" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
-      <Text style={ButtonStyles.buttonText}>My Referrals</Text>
+      <Feather name="credit-card" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
+      <Text style={ButtonStyles.buttonText}>Withdrawals</Text>
     </Pressable>
   );
 };
 
-export default MyReferralsButton;
+export default WithdrawalsButton;

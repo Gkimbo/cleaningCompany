@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Modal,
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import DraggableFlatList from "react-native-draggable-flatlist";
@@ -41,8 +42,11 @@ const ChecklistEditor = ({ state }) => {
   // Modals
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [showLoadTemplateConfirm, setShowLoadTemplateConfirm] = useState(false);
   const [versions, setVersions] = useState([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
+  const [templateStats, setTemplateStats] = useState(null);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   // Auto-save timer
   const autoSaveTimer = useRef(null);
@@ -99,12 +103,25 @@ const ChecklistEditor = ({ state }) => {
     }
   };
 
+  // Clean up draft before saving (convert empty pro tips to null)
+  const cleanDraftForSave = (draftToClean) => ({
+    ...draftToClean,
+    sections: draftToClean.sections.map((s) => ({
+      ...s,
+      items: (s.items || []).map((i) => ({
+        ...i,
+        proTip: i.proTip && i.proTip.trim() ? i.proTip.trim() : null,
+      })),
+    })),
+  });
+
   const handleAutoSave = async () => {
     if (!isDirty) return;
     setAutoSaveStatus("saving");
     setSaving(true);
     try {
-      const result = await ChecklistService.saveDraft(token, draft);
+      const cleanedDraft = cleanDraftForSave(draft);
+      const result = await ChecklistService.saveDraft(token, cleanedDraft);
       if (result.success) {
         setAutoSaveStatus("saved");
         setIsDirty(false);
@@ -123,7 +140,8 @@ const ChecklistEditor = ({ state }) => {
     setSaving(true);
     setAutoSaveStatus("saving");
     try {
-      const result = await ChecklistService.saveDraft(token, draft);
+      const cleanedDraft = cleanDraftForSave(draft);
+      const result = await ChecklistService.saveDraft(token, cleanedDraft);
       if (result.success) {
         setAutoSaveStatus("saved");
         setIsDirty(false);
@@ -227,6 +245,41 @@ const ChecklistEditor = ({ state }) => {
       showAlert("Error", "Failed to load default checklist");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleShowLoadTemplate = async () => {
+    // First fetch template stats to show in the confirmation
+    try {
+      const result = await ChecklistService.getTemplateStats(token);
+      if (result && result.stats) {
+        setTemplateStats(result.stats);
+      }
+    } catch (error) {
+      console.error("Error fetching template stats:", error);
+    }
+    setShowLoadTemplateConfirm(true);
+  };
+
+  const handleLoadTemplate = async () => {
+    setLoadingTemplate(true);
+    try {
+      const result = await ChecklistService.loadTemplate(token);
+      if (result.success) {
+        setShowLoadTemplateConfirm(false);
+        await loadData();
+        setIsDirty(true);
+        showAlert(
+          "Template Loaded",
+          `Loaded ${result.stats?.sectionCount || 10} sections with ${result.stats?.itemCount || 300}+ items including ${result.stats?.proTipCount || 18} pro tips. Remember to publish!`
+        );
+      } else {
+        showAlert("Error", result.error || "Failed to load template");
+      }
+    } catch (error) {
+      showAlert("Error", "Failed to load template");
+    } finally {
+      setLoadingTemplate(false);
     }
   };
 
@@ -351,6 +404,20 @@ const ChecklistEditor = ({ state }) => {
     });
   };
 
+  const updateItemProTip = (itemId, proTip) => {
+    // Allow empty string during editing (keeps the box visible)
+    // null means "no pro tip" (hides the box)
+    updateDraft({
+      ...draft,
+      sections: draft.sections.map((s) => ({
+        ...s,
+        items: (s.items || []).map((i) =>
+          i.id === itemId ? { ...i, proTip } : i
+        ),
+      })),
+    });
+  };
+
   const reorderItems = (sectionId, newItems) => {
     updateDraft({
       ...draft,
@@ -420,6 +487,7 @@ const ChecklistEditor = ({ state }) => {
       }}
       onTitleChange={updateSectionTitle}
       onItemContentChange={updateItemContent}
+      onItemProTipChange={updateItemProTip}
       onItemReorder={reorderItems}
       onAddItem={addItem}
       onDeleteItem={deleteItem}
@@ -443,21 +511,28 @@ const ChecklistEditor = ({ state }) => {
       <ScrollView contentContainerStyle={styles.contentContainer}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
+          <View style={styles.headerTopRow}>
             <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+              <Text style={styles.backButtonIcon}>←</Text>
               <Text style={styles.backButtonText}>Back</Text>
             </Pressable>
             <Text style={styles.headerTitle}>Checklist Editor</Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable
-              style={styles.headerButton}
+              style={[styles.headerButton, styles.templateButton]}
+              onPress={handleShowLoadTemplate}
+            >
+              <Text style={styles.templateButtonText}>📋 Load Template</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.headerButton, styles.historyButton]}
               onPress={() => {
                 loadVersionHistory();
                 setShowVersionHistory(true);
               }}
             >
-              <Text style={styles.headerButtonText}>History</Text>
+              <Text style={styles.headerButtonText}>🕐 History</Text>
             </Pressable>
           </View>
         </View>
@@ -598,31 +673,44 @@ const ChecklistEditor = ({ state }) => {
                 </View>
                 <View style={styles.sectionContent}>
                   {(section.items || []).map((item, index) => (
-                    <View
-                      key={item.id}
-                      style={[
-                        styles.itemRow,
-                        { marginLeft: (item.indentLevel || 0) * 24, borderWidth: 0 },
-                      ]}
-                    >
-                      <View style={styles.itemBullet}>
-                        <Text style={styles.itemBulletText}>
-                          {item.formatting?.bulletStyle === "circle"
-                            ? "\u25CB"
-                            : item.formatting?.bulletStyle === "number"
-                            ? `${index + 1}.`
-                            : "\u2022"}
-                        </Text>
-                      </View>
-                      <Text
+                    <View key={item.id} style={{ marginLeft: (item.indentLevel || 0) * 24 }}>
+                      <View
                         style={[
-                          styles.itemContentInput,
-                          item.formatting?.bold && { fontWeight: "bold" },
-                          item.formatting?.italic && { fontStyle: "italic" },
+                          styles.itemRow,
+                          { borderWidth: 0 },
                         ]}
                       >
-                        {item.content}
-                      </Text>
+                        <View style={styles.itemBullet}>
+                          <Text style={styles.itemBulletText}>
+                            {item.formatting?.bulletStyle === "circle"
+                              ? "\u25CB"
+                              : item.formatting?.bulletStyle === "number"
+                              ? `${index + 1}.`
+                              : "\u2022"}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.itemContentInput,
+                            item.formatting?.bold && { fontWeight: "bold" },
+                            item.formatting?.italic && { fontStyle: "italic" },
+                          ]}
+                        >
+                          {item.content}
+                        </Text>
+                      </View>
+                      {/* Pro Tip in Preview */}
+                      {item.proTip && (
+                        <View style={styles.proTipContainerPreview}>
+                          <View style={styles.proTipBox}>
+                            <View style={styles.proTipHeader}>
+                              <Text style={styles.proTipIcon}>💡</Text>
+                              <Text style={styles.proTipLabel}>Pro Tip</Text>
+                            </View>
+                            <Text style={styles.proTipText}>{item.proTip}</Text>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   ))}
                 </View>
@@ -639,15 +727,19 @@ const ChecklistEditor = ({ state }) => {
             disabled={saving}
           >
             {saving ? (
-              <ActivityIndicator size="small" color={colors.neutral[0]} />
+              <ActivityIndicator size="small" color={colors.primary[600]} />
             ) : (
-              <Text style={styles.saveButtonText}>Save Draft</Text>
+              <>
+                <Text style={styles.saveButtonIcon}>💾</Text>
+                <Text style={styles.saveButtonText}>Save Draft</Text>
+              </>
             )}
           </Pressable>
           <Pressable
             style={styles.publishButton}
             onPress={() => setShowPublishConfirm(true)}
           >
+            <Text style={styles.publishButtonIcon}>🚀</Text>
             <Text style={styles.publishButtonText}>Publish</Text>
           </Pressable>
         </View>
@@ -672,6 +764,59 @@ const ChecklistEditor = ({ state }) => {
         sectionCount={draft.sections.length}
         itemCount={countTotalItems()}
       />
+
+      {/* Load Template Confirmation Modal */}
+      <Modal
+        visible={showLoadTemplateConfirm}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLoadTemplateConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>⚠️ Load Checklist Template</Text>
+
+            <View style={styles.warningBox}>
+              <Text style={styles.warningText}>
+                This will REPLACE your current checklist with the master template.
+              </Text>
+              <Text style={styles.warningSubtext}>
+                All your current changes will be lost. This action cannot be undone.
+              </Text>
+            </View>
+
+            {templateStats && (
+              <View style={styles.templateStatsBox}>
+                <Text style={styles.templateStatsTitle}>Template includes:</Text>
+                <Text style={styles.templateStatItem}>• {templateStats.sectionCount} sections</Text>
+                <Text style={styles.templateStatItem}>• {templateStats.itemCount} checklist items</Text>
+                <Text style={styles.templateStatItem}>• {templateStats.proTipCount} pro tips</Text>
+              </View>
+            )}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancelButton}
+                onPress={() => setShowLoadTemplateConfirm(false)}
+                disabled={loadingTemplate}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalConfirmButton, styles.modalDangerButton]}
+                onPress={handleLoadTemplate}
+                disabled={loadingTemplate}
+              >
+                {loadingTemplate ? (
+                  <ActivityIndicator size="small" color={colors.neutral[0]} />
+                ) : (
+                  <Text style={styles.modalConfirmButtonText}>Replace Checklist</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </GestureHandlerRootView>
   );
 };

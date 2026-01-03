@@ -7,6 +7,7 @@ const {
   ChecklistVersion,
   User,
 } = require("../../../models");
+const { getEditorFormat, getTemplateStats } = require("../../../data/checklistTemplate");
 
 const checklistRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -613,6 +614,65 @@ checklistRouter.post("/seed", authenticateToken, requireOwner, async (req, res) 
   } catch (error) {
     console.error("Error seeding checklist:", error);
     return res.status(500).json({ error: "Failed to seed checklist" });
+  }
+});
+
+/**
+ * Get the checklist template data (from seeder)
+ * GET /api/v1/checklist/template
+ */
+checklistRouter.get("/template", authenticateToken, requireOwner, async (req, res) => {
+  try {
+    const templateData = getEditorFormat();
+    const stats = getTemplateStats();
+
+    return res.json({
+      success: true,
+      template: templateData,
+      stats,
+    });
+  } catch (error) {
+    console.error("Error getting checklist template:", error);
+    return res.status(500).json({ error: "Failed to get checklist template" });
+  }
+});
+
+/**
+ * Load template into current draft (replaces current draft)
+ * POST /api/v1/checklist/load-template
+ */
+checklistRouter.post("/load-template", authenticateToken, requireOwner, async (req, res) => {
+  try {
+    const templateData = getEditorFormat();
+    const stats = getTemplateStats();
+
+    // Get existing draft or create new one
+    let draft = await ChecklistDraft.findOne({
+      order: [["updatedAt", "DESC"]],
+    });
+
+    if (draft) {
+      await draft.update({
+        draftData: templateData,
+        createdBy: req.user.userId,
+      });
+    } else {
+      draft = await ChecklistDraft.create({
+        draftData: templateData,
+        createdBy: req.user.userId,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Template loaded successfully",
+      draftId: draft.id,
+      lastModified: draft.updatedAt,
+      stats,
+    });
+  } catch (error) {
+    console.error("Error loading checklist template:", error);
+    return res.status(500).json({ error: "Failed to load checklist template" });
   }
 });
 

@@ -1,13 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React from "react";
-import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
-import Icon from "react-native-vector-icons/FontAwesome";
+import { Pressable, Text } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useNavigate } from "react-router-native";
 import { API_BASE } from "../../services/config";
+import ButtonStyles from "../../services/styles/ButtonStyles";
 
-const SignOutButton = ({ dispatch }) => {
-  const { width } = Dimensions.get("window");
-  const iconSize = width < 400 ? 16 : width < 800 ? 18 : 20;
+const SignOutButton = ({ dispatch, closeModal }) => {
   const navigate = useNavigate();
 
   const signOut = async () => {
@@ -20,6 +19,7 @@ const SignOutButton = ({ dispatch }) => {
       if (response.ok) {
         await AsyncStorage.removeItem("token");
         dispatch({ type: "LOGOUT" });
+        if (closeModal) closeModal();
         navigate("/");
       } else {
         console.error("Failed to log out");
@@ -32,46 +32,15 @@ const SignOutButton = ({ dispatch }) => {
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.glassButton,
-        pressed && { backgroundColor: "rgba(255,255,255,0.25)" },
+        ButtonStyles.glassButton,
+        pressed && ButtonStyles.glassButtonPressed,
       ]}
       onPress={signOut}
     >
-      <View style={styles.row}>
-        <Icon name="sign-out" size={iconSize} color="rgba(0, 0, 0, 0.5)" style={{ marginRight: 8 }} />
-        <Text style={styles.buttonText}>Sign Out</Text>
-      </View>
+      <Feather name="log-out" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
+      <Text style={ButtonStyles.buttonText}>Sign Out</Text>
     </Pressable>
   );
 };
-
-const styles = StyleSheet.create({
-  glassButton: {
-    marginTop: 15,
-    backgroundColor: "rgba(255, 255, 255, 0.59)",
-    borderRadius: 50,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-    shadowColor: "#00BFFF",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonText: {
-    color: "rgba(0, 0, 0, 0.5)",
-    fontWeight: "600",
-    fontSize: 16,
-  },
-});
 
 export default SignOutButton;

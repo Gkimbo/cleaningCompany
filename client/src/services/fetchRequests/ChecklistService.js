@@ -187,6 +187,48 @@ class ChecklistService {
       return { success: false, error: "Network error. Please try again." };
     }
   }
+
+  // Get template stats (for preview before loading)
+  static async getTemplateStats(token) {
+    return this.fetchWithFallback(
+      `${baseURL}/api/v1/checklist/template`,
+      token,
+      null
+    );
+  }
+
+  // Load template into current draft (replaces current draft)
+  static async loadTemplate(token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/checklist/load-template`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || "Failed to load template",
+        };
+      }
+
+      return {
+        success: true,
+        ...data,
+      };
+    } catch (error) {
+      console.error("[Checklist] loadTemplate failed:", error.message);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
 }
 
 export default ChecklistService;

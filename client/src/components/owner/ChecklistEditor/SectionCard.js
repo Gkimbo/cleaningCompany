@@ -11,6 +11,7 @@ const SectionCard = ({
   onTitleChange,
   onIconChange,
   onItemContentChange,
+  onItemProTipChange,
   onItemReorder,
   onAddItem,
   onDeleteItem,
@@ -25,6 +26,7 @@ const SectionCard = ({
       isSelected={selectedItem?.id === item.id}
       onSelect={onSelectItem}
       onContentChange={onItemContentChange}
+      onProTipChange={onItemProTipChange}
       onDelete={onDeleteItem}
       drag={itemDrag}
       isActive={itemIsActive}

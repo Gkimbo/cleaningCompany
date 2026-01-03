@@ -4,6 +4,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableWithoutFeedback,
@@ -38,6 +39,10 @@ import ArchiveButton from "./ArchiveButton";
 import ReviewsButton from "./ReviewsButton";
 import ReferralsButton from "./ReferralsButton";
 import MyReferralsButton from "./MyReferralsButton";
+import ChecklistEditorButton from "./ChecklistEditorButton";
+import HRManagementButton from "./HRManagementButton";
+import TermsEditorButton from "./TermsEditorButton";
+import WithdrawalsButton from "./WithdrawalsButton";
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -176,58 +181,67 @@ const TopBar = ({ dispatch, state }) => {
                     <View style={styles.glassSidebar}>
                       <Text style={styles.sidebarHeader}>Menu</Text>
 
-                      {state.account === "owner" ? (
-                        <>
-                          <ManageEmployees closeModal={closeModal} />
-                          <ManagePricingButton closeModal={closeModal} />
-                          <ReferralsButton closeModal={closeModal} />
-                          <SeeAllAppointments closeModal={closeModal} />
-                          <UnassignedAppointmentsButton
-                            closeModal={closeModal}
-                          />
-                          <ViewApplicationsButton closeModal={closeModal} />
-                          <IncentivesButton closeModal={closeModal} />
-                        </>
-                      ) : state.account === "cleaner" ? (
-                        <>
-                          <ChooseNewJobButton closeModal={closeModal} />
-                          <EmployeeAssignmentsButton closeModal={closeModal} />
-                          <MyRequestsButton closeModal={closeModal} />
-                          {/* <EmployeeShiftButton closeModal={closeModal} /> */}
-                          <EarningsButton closeModal={closeModal} />
-                          <MyReferralsButton closeModal={closeModal} />
-                          <RecommendedSuppliesButton closeModal={closeModal} />
-                        </>
-                      ) : state.account === "humanResources" ? (
-                        <>
-                          <ViewApplicationsButton closeModal={closeModal} />
-                          <ManageEmployees closeModal={closeModal} />
-                        </>
-                      ) : (
-                        <>
-                          <ScheduleCleaningButton closeModal={closeModal} />
-                          <EditHomeButton closeModal={closeModal} />
-                          {/* <CleanerRequestsButton closeModal={closeModal} /> */}
-                        </>
-                      )}
+                      <ScrollView
+                        style={styles.menuScrollView}
+                        showsVerticalScrollIndicator={false}
+                      >
+                        {state.account === "owner" ? (
+                          <>
+                            <ManageEmployees closeModal={closeModal} />
+                            <ManagePricingButton closeModal={closeModal} />
+                            <ReferralsButton closeModal={closeModal} />
+                            <SeeAllAppointments closeModal={closeModal} />
+                            <UnassignedAppointmentsButton
+                              closeModal={closeModal}
+                            />
+                            <ViewApplicationsButton closeModal={closeModal} />
+                            <IncentivesButton closeModal={closeModal} />
+                            <ChecklistEditorButton closeModal={closeModal} />
+                            <HRManagementButton closeModal={closeModal} />
+                            <TermsEditorButton closeModal={closeModal} />
+                            <WithdrawalsButton closeModal={closeModal} />
+                          </>
+                        ) : state.account === "cleaner" ? (
+                          <>
+                            <ChooseNewJobButton closeModal={closeModal} />
+                            <EmployeeAssignmentsButton closeModal={closeModal} />
+                            <MyRequestsButton closeModal={closeModal} />
+                            {/* <EmployeeShiftButton closeModal={closeModal} /> */}
+                            <EarningsButton closeModal={closeModal} />
+                            <MyReferralsButton closeModal={closeModal} />
+                            <RecommendedSuppliesButton closeModal={closeModal} />
+                          </>
+                        ) : state.account === "humanResources" ? (
+                          <>
+                            <ViewApplicationsButton closeModal={closeModal} />
+                            <ManageEmployees closeModal={closeModal} />
+                          </>
+                        ) : (
+                          <>
+                            <ScheduleCleaningButton closeModal={closeModal} />
+                            <EditHomeButton closeModal={closeModal} />
+                            {/* <CleanerRequestsButton closeModal={closeModal} /> */}
+                          </>
+                        )}
 
-                      {state.currentUser.token && !state.account && (
-                        <>
-                          {state.appointments.length !== 0 && (
-                            <AppointmentsButton closeModal={closeModal} />
-                          )}
-                          <BillButton closeModal={closeModal} />
-                          <ArchiveButton closeModal={closeModal} />
-                          <ReviewsButton closeModal={closeModal} />
-                          <MyReferralsButton closeModal={closeModal} />
-                        </>
-                      )}
+                        {state.currentUser.token && !state.account && (
+                          <>
+                            {state.appointments.length !== 0 && (
+                              <AppointmentsButton closeModal={closeModal} />
+                            )}
+                            <BillButton closeModal={closeModal} />
+                            <ArchiveButton closeModal={closeModal} />
+                            <ReviewsButton closeModal={closeModal} />
+                            <MyReferralsButton closeModal={closeModal} />
+                          </>
+                        )}
 
-                      <AccountSettingsButton closeModal={closeModal} />
-                      <SignOutButton
-                        dispatch={dispatch}
-                        closeModal={closeModal}
-                      />
+                        <AccountSettingsButton closeModal={closeModal} />
+                        <SignOutButton
+                          dispatch={dispatch}
+                          closeModal={closeModal}
+                        />
+                      </ScrollView>
 
                       <Pressable
                         style={({ pressed }) => [
@@ -397,6 +411,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 8,
+  },
+
+  // Scrollable menu content
+  menuScrollView: {
+    flex: 1,
+    marginBottom: 10,
   },
 
   // Modal header text
