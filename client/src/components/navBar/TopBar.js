@@ -43,12 +43,14 @@ import ChecklistEditorButton from "./ChecklistEditorButton";
 import HRManagementButton from "./HRManagementButton";
 import TermsEditorButton from "./TermsEditorButton";
 import WithdrawalsButton from "./WithdrawalsButton";
+import MyClientsButton from "./MyClientsButton";
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [signInRedirect, setSignInRedirect] = useState(false);
   const [signUpRedirect, setSignUpRedirect] = useState(false);
   const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
+  const [importBusinessRedirect, setImportBusinessRedirect] = useState(false);
 
   // Use global state for pending applications and cleaner requests
   const pendingApplications = state.pendingApplications || 0;
@@ -108,7 +110,11 @@ const TopBar = ({ dispatch, state }) => {
       navigate("/apply");
       setBecomeCleanerRedirect(false);
     }
-  }, [signInRedirect, signUpRedirect, becomeCleanerRedirect]);
+    if (importBusinessRedirect) {
+      navigate("/import-business");
+      setImportBusinessRedirect(false);
+    }
+  }, [signInRedirect, signUpRedirect, becomeCleanerRedirect, importBusinessRedirect]);
 
   const toggleModal = () => setModalVisible(!modalVisible);
   const closeModal = () => setModalVisible(false);
@@ -206,6 +212,7 @@ const TopBar = ({ dispatch, state }) => {
                             <ChooseNewJobButton closeModal={closeModal} />
                             <EmployeeAssignmentsButton closeModal={closeModal} />
                             <MyRequestsButton closeModal={closeModal} />
+                            <MyClientsButton closeModal={closeModal} />
                             {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                             <EarningsButton closeModal={closeModal} />
                             <MyReferralsButton closeModal={closeModal} />
@@ -283,6 +290,12 @@ const TopBar = ({ dispatch, state }) => {
               onPress={() => setBecomeCleanerRedirect(true)}
             >
               <Text style={styles.authButtonText}>Become a Cleaner</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.authButton, styles.importBusinessButton]}
+              onPress={() => setImportBusinessRedirect(true)}
+            >
+              <Text style={styles.authButtonText}>Business Owner</Text>
             </Pressable>
           </View>
         </View>
@@ -378,16 +391,20 @@ const styles = StyleSheet.create({
   // Auth buttons (Sign In / Sign Up / Become Cleaner)
   authButton: {
     backgroundColor: colors.neutral[700],
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: radius.lg,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.neutral[600],
   },
   authButtonText: {
     color: colors.neutral[100],
     fontWeight: "600",
-    fontSize: 14,
+    fontSize: 12,
+  },
+  importBusinessButton: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[500],
   },
 
   // Overlay behind modal
@@ -467,7 +484,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: 6,
   },
   unauthContainerTitle: {
     flex: 1,
@@ -478,13 +495,16 @@ const styles = StyleSheet.create({
 
   authButtonsContainer: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 8,
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 6,
   },
   authButtonsContainerTitle: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    marginBottom: 2,
   },
 });
 

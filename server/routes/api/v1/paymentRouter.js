@@ -1671,6 +1671,11 @@ paymentRouter.post("/complete-job", async (req, res) => {
       return res.status(400).json({ error: "No cleaner assigned to this job" });
     }
 
+    // Check if this is a business owner completing a job for their client
+    // Business owners (preferred cleaners) can skip photo requirements
+    const home = await UserHomes.findByPk(appointment.homeId);
+    const isBusinessOwner = home && home.preferredCleanerId === parseInt(cleanerIdToCheck, 10);
+
     const beforePhotos = await JobPhoto.count({
       where: {
         appointmentId,
@@ -1687,18 +1692,21 @@ paymentRouter.post("/complete-job", async (req, res) => {
       },
     });
 
-    if (beforePhotos === 0) {
-      return res.status(400).json({
-        error: "Before photos are required to complete the job",
-        missingPhotos: "before"
-      });
-    }
+    // Only require photos for non-business-owner cleaners
+    if (!isBusinessOwner) {
+      if (beforePhotos === 0) {
+        return res.status(400).json({
+          error: "Before photos are required to complete the job",
+          missingPhotos: "before"
+        });
+      }
 
-    if (afterPhotos === 0) {
-      return res.status(400).json({
-        error: "After photos are required to complete the job",
-        missingPhotos: "after"
-      });
+      if (afterPhotos === 0) {
+        return res.status(400).json({
+          error: "After photos are required to complete the job",
+          missingPhotos: "after"
+        });
+      }
     }
 
     // Mark as completed

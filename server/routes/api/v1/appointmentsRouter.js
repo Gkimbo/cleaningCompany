@@ -12,11 +12,13 @@ const {
   JobPhoto,
   CalendarSync,
   StripeConnectAccount,
+  CleanerClient,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const calculatePrice = require("../../../services/CalculatePrice");
 const HomeSerializer = require("../../../serializers/homesSerializer");
+const EncryptionService = require("../../../services/EncryptionService");
 const { emit } = require("nodemon");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
@@ -747,40 +749,68 @@ appointmentRouter.post("/", async (req, res) => {
     // Check if homeowner is eligible for discount incentive
     const discountResult = await IncentiveService.isHomeownerEligible(userId);
 
+    // Check if home has a preferred cleaner (business owner relationship)
+    let cleanerClientRelation = null;
+    const preferredCleanerId = home.dataValues.preferredCleanerId;
+    if (preferredCleanerId) {
+      cleanerClientRelation = await CleanerClient.findOne({
+        where: {
+          cleanerId: preferredCleanerId,
+          homeId: home.dataValues.id,
+          status: "active",
+        },
+      });
+    }
+
     for (const date of dateArray) {
       // Use configurations if provided, otherwise fall back to home defaults
       const sheetConfigs = date.sheetConfigurations || home.dataValues.bedConfigurations;
       const towelConfigs = date.towelConfigurations || home.dataValues.bathroomConfigurations;
 
-      const originalPrice = await calculatePrice(
-        date.bringSheets,
-        date.bringTowels,
-        home.dataValues.numBeds,
-        home.dataValues.numBaths,
-        home.dataValues.timeToBeCompleted,
-        sheetConfigs,
-        towelConfigs
-      );
+      let finalPrice;
 
-      // Apply discount if eligible
-      let finalPrice = originalPrice;
-      if (discountResult.eligible && discountResult.remainingCleanings > 0) {
-        const discountAmount = originalPrice * discountResult.discountPercent;
-        finalPrice = Math.round((originalPrice - discountAmount) * 100) / 100;
-        date.originalPrice = originalPrice.toString();
-        date.discountApplied = true;
-        date.discountPercent = discountResult.discountPercent;
-        // Decrement remaining for this batch of appointments
-        discountResult.remainingCleanings--;
-      } else {
+      // If this home has a preferred cleaner with custom pricing, use their price
+      if (cleanerClientRelation && cleanerClientRelation.dataValues.defaultPrice) {
+        finalPrice = parseFloat(cleanerClientRelation.dataValues.defaultPrice);
+        // No discounts apply to business owner pricing
         date.originalPrice = null;
         date.discountApplied = false;
         date.discountPercent = null;
+        date.isPreferredCleanerPrice = true;
+      } else {
+        // Calculate platform price
+        const originalPrice = await calculatePrice(
+          date.bringSheets,
+          date.bringTowels,
+          home.dataValues.numBeds,
+          home.dataValues.numBaths,
+          home.dataValues.timeToBeCompleted,
+          sheetConfigs,
+          towelConfigs
+        );
+
+        // Apply discount if eligible
+        finalPrice = originalPrice;
+        if (discountResult.eligible && discountResult.remainingCleanings > 0) {
+          const discountAmount = originalPrice * discountResult.discountPercent;
+          finalPrice = Math.round((originalPrice - discountAmount) * 100) / 100;
+          date.originalPrice = originalPrice.toString();
+          date.discountApplied = true;
+          date.discountPercent = discountResult.discountPercent;
+          // Decrement remaining for this batch of appointments
+          discountResult.remainingCleanings--;
+        } else {
+          date.originalPrice = null;
+          date.discountApplied = false;
+          date.discountPercent = null;
+        }
+        date.isPreferredCleanerPrice = false;
       }
 
       date.price = finalPrice;
       date.sheetConfigurations = sheetConfigs;
       date.towelConfigurations = towelConfigs;
+      date.preferredCleanerId = preferredCleanerId || null;
       appointmentTotal += finalPrice;
     }
 
@@ -839,18 +869,46 @@ appointmentRouter.post("/", async (req, res) => {
         });
         const appointmentId = newAppointment.dataValues.id;
 
-        const day = new Date(date.date);
-        const daysOfWeek = [
-          "Monday",
-          "Tuesday",
-          "Wednesday",
-          "Thursday",
-          "Friday",
-          "Saturday",
-          "Sunday",
-        ];
-        const dayOfWeekIndex = day.getDay();
-        const dayOfWeek = daysOfWeek[dayOfWeekIndex];
+        // If this is a preferred cleaner appointment, notify the cleaner
+        if (date.preferredCleanerId) {
+          try {
+            const cleaner = await User.findByPk(date.preferredCleanerId);
+            const client = await User.findByPk(userId);
+            const homeAddress = `${EncryptionService.decrypt(homeBeingScheduled.dataValues.address)}, ${EncryptionService.decrypt(homeBeingScheduled.dataValues.city)}`;
+            const formattedDate = new Date(date.date).toLocaleDateString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            });
+
+            // Send push notification to cleaner
+            if (cleaner && cleaner.dataValues.expoPushToken) {
+              await PushNotification.sendPushNotification(
+                cleaner.dataValues.expoPushToken,
+                "New Client Appointment",
+                `${client.dataValues.firstName} booked a cleaning for ${formattedDate}. Tap to accept or decline.`,
+                { type: "client_appointment_request", appointmentId }
+              );
+            }
+
+            // Send email notification to cleaner
+            if (cleaner && cleaner.dataValues.email) {
+              await Email.sendNewClientAppointmentEmail(
+                cleaner.dataValues.email,
+                cleaner.dataValues.firstName,
+                `${client.dataValues.firstName} ${client.dataValues.lastName}`,
+                date.date,
+                homeAddress,
+                date.price,
+                appointmentId
+              );
+            }
+          } catch (notifyErr) {
+            console.error("Error notifying preferred cleaner:", notifyErr);
+          }
+        }
+
+        return newAppointment;
       })
     );
 

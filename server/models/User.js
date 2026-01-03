@@ -147,6 +147,22 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: 0,
 			comment: "Available referral credits in cents",
 		},
+		isBusinessOwner: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if this cleaner owns their own cleaning business",
+		},
+		businessName: {
+			type: DataTypes.STRING,
+			allowNull: true,
+			comment: "Name of the cleaning business (for business owners)",
+		},
+		yearsInBusiness: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Years the business owner has been in business",
+		},
 	});
 
 	// Helper function to encrypt PII fields

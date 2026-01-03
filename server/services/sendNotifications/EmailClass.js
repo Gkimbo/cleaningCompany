@@ -2304,6 +2304,656 @@ Kleanr Support Team`;
       console.error("❌ Error sending review reminder email:", error);
     }
   }
+
+  // ==========================================
+  // CLEANER CLIENT ONBOARDING EMAILS
+  // ==========================================
+
+  /**
+   * Send invitation email when cleaner invites an existing client
+   */
+  static async sendClientInvitation(
+    email,
+    clientName,
+    cleanerName,
+    inviteToken,
+    homeAddress,
+    personalMessage = null
+  ) {
+    try {
+      const transporter = createTransporter();
+      const inviteUrl = `${process.env.APP_URL || 'https://app.kleanr.com'}/invite/${inviteToken}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "You're Invited!",
+        subtitle: `${cleanerName} uses Kleanr`,
+        headerColor: "linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)",
+        greeting: `Hi ${clientName}! 👋`,
+        content: `
+          <p><strong>${cleanerName}</strong> has invited you to join <strong>Kleanr</strong> to manage your cleaning appointments and payments.</p>
+          ${personalMessage ? `<p style="font-style: italic; background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 3px solid #7c3aed;">"${personalMessage}"</p>` : ''}
+          <p>With Kleanr, you'll enjoy:</p>
+        `,
+        steps: {
+          title: "✨ Why Join Kleanr?",
+          items: [
+            "Easy online scheduling with your cleaner",
+            "Automatic payment processing (no more checks or cash!)",
+            "Reminders before each cleaning",
+            "View your cleaning history and receipts anytime",
+          ],
+        },
+        infoBox: homeAddress ? {
+          icon: "🏠",
+          title: "Your Home on File",
+          items: [
+            { label: "Address", value: homeAddress },
+          ],
+        } : null,
+        ctaText: `
+          <a href="${inviteUrl}" style="display: inline-block; background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Accept Invitation</a>
+          <p style="margin-top: 15px; font-size: 13px; color: #64748b;">Or copy this link: ${inviteUrl}</p>
+        `,
+        footerMessage: "Welcome to easier home cleaning",
+      });
+
+      const textContent = `Hi ${clientName}!
+
+${cleanerName} has invited you to join Kleanr to manage your cleaning appointments and payments.
+
+${personalMessage ? `Personal message from ${cleanerName}: "${personalMessage}"` : ''}
+
+WHY JOIN KLEANR?
+━━━━━━━━━━━━━━━━━━━━━━
+• Easy online scheduling with your cleaner
+• Automatic payment processing (no more checks or cash!)
+• Reminders before each cleaning
+• View your cleaning history and receipts anytime
+
+${homeAddress ? `YOUR HOME ON FILE\n━━━━━━━━━━━━━━━━━━━━━━\nAddress: ${homeAddress}\n` : ''}
+
+ACCEPT INVITATION
+━━━━━━━━━━━━━━━━━━━━━━
+Click here to get started: ${inviteUrl}
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🏠 ${cleanerName} invited you to Kleanr`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Client invitation email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending client invitation email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send reminder for pending invitation
+   */
+  static async sendInvitationReminder(
+    email,
+    clientName,
+    cleanerName,
+    inviteToken
+  ) {
+    try {
+      const transporter = createTransporter();
+      const inviteUrl = `${process.env.APP_URL || 'https://app.kleanr.com'}/invite/${inviteToken}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Friendly Reminder",
+        subtitle: "Your invitation is waiting",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+        greeting: `Hi ${clientName}! 👋`,
+        content: `
+          <p>Just a friendly reminder that <strong>${cleanerName}</strong> invited you to join Kleanr a few days ago.</p>
+          <p>Setting up takes less than 2 minutes, and you'll be all set for hassle-free cleaning appointments!</p>
+        `,
+        ctaText: `
+          <a href="${inviteUrl}" style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Accept Invitation</a>
+        `,
+        footerMessage: "Don't miss out on easier scheduling",
+      });
+
+      const textContent = `Hi ${clientName}!
+
+Just a friendly reminder that ${cleanerName} invited you to join Kleanr a few days ago.
+
+Setting up takes less than 2 minutes, and you'll be all set for hassle-free cleaning appointments!
+
+Click here to accept: ${inviteUrl}
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⏰ Reminder: ${cleanerName} is waiting for you on Kleanr`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Invitation reminder email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending invitation reminder email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Notify cleaner when their client accepts the invitation
+   */
+  static async sendInvitationAccepted(
+    cleanerEmail,
+    cleanerName,
+    clientName,
+    homeAddress
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Client Joined!",
+        subtitle: "Great news for your business",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Congrats ${cleanerName}! 🎉`,
+        content: `
+          <p><strong>${clientName}</strong> has accepted your invitation and joined Kleanr!</p>
+          <p>They're all set up and ready to schedule cleanings with you.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "New Client Details",
+          items: [
+            { label: "Client", value: clientName },
+            { label: "Address", value: homeAddress },
+          ],
+        },
+        steps: {
+          title: "📅 What's Next?",
+          items: [
+            "View your client in 'My Clients'",
+            "Book a cleaning for them or set up a recurring schedule",
+            "They'll be automatically notified of appointments",
+          ],
+        },
+        ctaText: "Log into the Kleanr app to manage your new client.",
+        footerMessage: "Your client base is growing!",
+      });
+
+      const textContent = `Congrats ${cleanerName}!
+
+${clientName} has accepted your invitation and joined Kleanr!
+
+NEW CLIENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Client: ${clientName}
+Address: ${homeAddress}
+
+WHAT'S NEXT?
+━━━━━━━━━━━━━━━━━━━━━━
+1. View your client in 'My Clients'
+2. Book a cleaning for them or set up a recurring schedule
+3. They'll be automatically notified of appointments
+
+Log into the Kleanr app to manage your new client.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: cleanerEmail,
+        subject: `🎉 ${clientName} joined Kleanr!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Invitation accepted email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending invitation accepted email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send recurring schedule confirmation to client
+   */
+  static async sendRecurringScheduleCreated(
+    email,
+    clientName,
+    cleanerName,
+    frequency,
+    dayOfWeek,
+    price,
+    startDate,
+    nextDates
+  ) {
+    try {
+      const transporter = createTransporter();
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const dayName = days[dayOfWeek];
+      const frequencyText = frequency === 'weekly' ? 'Weekly' : frequency === 'biweekly' ? 'Every 2 Weeks' : 'Monthly';
+
+      const htmlContent = createEmailTemplate({
+        title: "Recurring Schedule Set",
+        subtitle: "Your cleaning is on autopilot",
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: `Hi ${clientName}! 📅`,
+        content: `
+          <p><strong>${cleanerName}</strong> has set up a recurring cleaning schedule for you.</p>
+          <p>No need to book each time – we've got it covered!</p>
+        `,
+        infoBox: {
+          icon: "🔄",
+          title: "Your Schedule",
+          items: [
+            { label: "Frequency", value: frequencyText },
+            { label: "Day", value: `${dayName}s` },
+            { label: "Starting", value: formatDate(startDate) },
+            { label: "Price", value: `$${parseFloat(price).toFixed(2)}` },
+          ],
+        },
+        steps: nextDates && nextDates.length > 0 ? {
+          title: "📆 Upcoming Cleanings",
+          items: nextDates.slice(0, 4).map(date => formatDate(date)),
+        } : null,
+        warningBox: {
+          icon: "💳",
+          text: "Your saved payment method will be charged automatically after each cleaning is completed.",
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        ctaText: "You can view or modify your schedule anytime in the Kleanr app.",
+        footerMessage: "Set it and forget it!",
+      });
+
+      const textContent = `Hi ${clientName}!
+
+${cleanerName} has set up a recurring cleaning schedule for you.
+
+YOUR SCHEDULE
+━━━━━━━━━━━━━━━━━━━━━━
+Frequency: ${frequencyText}
+Day: ${dayName}s
+Starting: ${formatDate(startDate)}
+Price: $${parseFloat(price).toFixed(2)}
+
+${nextDates && nextDates.length > 0 ? `UPCOMING CLEANINGS\n━━━━━━━━━━━━━━━━━━━━━━\n${nextDates.slice(0, 4).map(date => formatDate(date)).join('\n')}\n` : ''}
+
+💳 Your saved payment method will be charged automatically after each cleaning.
+
+You can view or modify your schedule anytime in the Kleanr app.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `📅 Recurring ${frequencyText} Cleaning Scheduled`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Recurring schedule email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending recurring schedule email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send cleaning invoice after job completion
+   */
+  static async sendCleaningInvoice(
+    email,
+    clientName,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    price,
+    paymentStatus,
+    paymentMethod = null
+  ) {
+    try {
+      const transporter = createTransporter();
+      const isPaid = paymentStatus === 'paid' || paymentStatus === 'captured';
+
+      const htmlContent = createEmailTemplate({
+        title: isPaid ? "Cleaning Complete & Paid" : "Cleaning Complete - Invoice",
+        subtitle: formatDate(appointmentDate),
+        headerColor: isPaid
+          ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
+          : "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: `Hi ${clientName}! ${isPaid ? '✅' : '📋'}`,
+        content: isPaid
+          ? `<p>Your home at <strong>${homeAddress}</strong> has been cleaned by ${cleanerName}, and payment has been processed successfully.</p>`
+          : `<p>Your home at <strong>${homeAddress}</strong> has been cleaned by ${cleanerName}. Here's your invoice:</p>`,
+        infoBox: {
+          icon: "🧾",
+          title: "Invoice Details",
+          items: [
+            { label: "Service", value: "Home Cleaning" },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Cleaner", value: cleanerName },
+            { label: "Amount", value: `$${parseFloat(price).toFixed(2)}` },
+            { label: "Status", value: isPaid ? '<span style="color: #10b981; font-weight: bold;">PAID</span>' : '<span style="color: #f59e0b; font-weight: bold;">PENDING</span>' },
+            ...(paymentMethod ? [{ label: "Payment Method", value: paymentMethod }] : []),
+          ],
+        },
+        ctaText: isPaid
+          ? "Thank you for your payment! Log into the app to leave a review."
+          : `<a href="${process.env.APP_URL || 'https://app.kleanr.com'}/pay" style="display: inline-block; background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Pay Now</a>`,
+        footerMessage: "Thanks for using Kleanr!",
+      });
+
+      const textContent = `Hi ${clientName}!
+
+Your home at ${homeAddress} has been cleaned by ${cleanerName}.
+
+INVOICE DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Service: Home Cleaning
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Cleaner: ${cleanerName}
+Amount: $${parseFloat(price).toFixed(2)}
+Status: ${isPaid ? 'PAID' : 'PENDING'}
+${paymentMethod ? `Payment Method: ${paymentMethod}` : ''}
+
+${isPaid ? 'Thank you for your payment!' : 'Please log into the Kleanr app to complete payment.'}
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: isPaid
+          ? `✅ Receipt: Cleaning on ${formatDate(appointmentDate)}`
+          : `🧾 Invoice: Cleaning on ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Cleaning invoice email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending cleaning invoice email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send payment reminder for overdue invoices
+   */
+  static async sendPaymentReminder(
+    email,
+    clientName,
+    appointmentDate,
+    homeAddress,
+    price,
+    daysOverdue
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Payment Reminder",
+        subtitle: "Action required",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+        greeting: `Hi ${clientName}! 💳`,
+        content: `
+          <p>This is a friendly reminder that payment is still pending for your cleaning on <strong>${formatDate(appointmentDate)}</strong>.</p>
+        `,
+        infoBox: {
+          icon: "🧾",
+          title: "Outstanding Invoice",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Amount Due", value: `<strong style="color: #dc2626;">$${parseFloat(price).toFixed(2)}</strong>` },
+            { label: "Days Overdue", value: `${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}` },
+          ],
+        },
+        ctaText: `
+          <a href="${process.env.APP_URL || 'https://app.kleanr.com'}/pay" style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: white; padding: 15px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Pay Now</a>
+        `,
+        footerMessage: "Please pay at your earliest convenience",
+      });
+
+      const textContent = `Hi ${clientName}!
+
+This is a friendly reminder that payment is still pending for your cleaning.
+
+OUTSTANDING INVOICE
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Amount Due: $${parseFloat(price).toFixed(2)}
+Days Overdue: ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''}
+
+Please log into the Kleanr app to complete payment.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⚠️ Payment Reminder: $${parseFloat(price).toFixed(2)} due`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Payment reminder email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment reminder email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send payout notification to cleaner
+   */
+  static async sendPayoutNotification(
+    email,
+    cleanerName,
+    clientName,
+    appointmentDate,
+    homeAddress,
+    grossAmount,
+    platformFee,
+    netAmount
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Payout Received!",
+        subtitle: "Money on the way",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${cleanerName}! 💰`,
+        content: `
+          <p>Great news! Payment for your cleaning job has been processed and your payout is on the way.</p>
+        `,
+        infoBox: {
+          icon: "💵",
+          title: "Payout Details",
+          items: [
+            { label: "Client", value: clientName },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Gross Amount", value: `$${parseFloat(grossAmount).toFixed(2)}` },
+            { label: "Platform Fee (10%)", value: `-$${parseFloat(platformFee).toFixed(2)}` },
+            { label: "Your Payout", value: `<strong style="color: #10b981;">$${parseFloat(netAmount).toFixed(2)}</strong>` },
+          ],
+        },
+        warningBox: {
+          icon: "🏦",
+          text: "Funds typically arrive in your bank account within 2-3 business days.",
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        ctaText: "View all your earnings in the Kleanr app.",
+        footerMessage: "Keep up the great work!",
+      });
+
+      const textContent = `Hi ${cleanerName}!
+
+Great news! Payment for your cleaning job has been processed.
+
+PAYOUT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Client: ${clientName}
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Gross Amount: $${parseFloat(grossAmount).toFixed(2)}
+Platform Fee (10%): -$${parseFloat(platformFee).toFixed(2)}
+Your Payout: $${parseFloat(netAmount).toFixed(2)}
+
+🏦 Funds typically arrive in your bank account within 2-3 business days.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `💰 Payout: $${parseFloat(netAmount).toFixed(2)} for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Payout notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payout notification email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send notification to business owner when their client books an appointment
+   * @param {string} email - Cleaner's email
+   * @param {string} cleanerName - Cleaner's first name
+   * @param {string} clientName - Client's full name
+   * @param {string} appointmentDate - Date of appointment
+   * @param {string} homeAddress - Address of home
+   * @param {number} price - Price for the cleaning
+   * @param {number} appointmentId - Appointment ID
+   */
+  static async sendNewClientAppointmentEmail(
+    email,
+    cleanerName,
+    clientName,
+    appointmentDate,
+    homeAddress,
+    price,
+    appointmentId
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "New Client Appointment",
+        subtitle: "Your client has booked a cleaning",
+        headerColor: "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+        greeting: `Hi ${cleanerName}! 📅`,
+        content: `
+          <p><strong>${clientName}</strong> has scheduled a new cleaning appointment with you.</p>
+          <p>Please review and accept or decline this appointment in the Kleanr app.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "Appointment Details",
+          items: [
+            { label: "Client", value: clientName },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Address", value: homeAddress },
+            { label: "Price", value: `$${parseFloat(price).toFixed(2)}` },
+          ],
+        },
+        steps: {
+          title: "What to do next:",
+          items: [
+            "<strong>Accept</strong> - If you can do this cleaning",
+            "<strong>Decline</strong> - If you're unavailable (client will be notified to reschedule or find another cleaner)",
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "Please respond soon so your client knows their cleaning is confirmed.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to respond.",
+        footerMessage: "Thank you for your great service!",
+      });
+
+      const textContent = `Hi ${cleanerName}!
+
+${clientName} has scheduled a new cleaning appointment with you.
+
+APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Client: ${clientName}
+Date: ${formatDate(appointmentDate)}
+Address: ${homeAddress}
+Price: $${parseFloat(price).toFixed(2)}
+
+WHAT TO DO NEXT:
+1. Accept - If you can do this cleaning
+2. Decline - If you're unavailable (client will be notified)
+
+Please respond soon so your client knows their cleaning is confirmed.
+
+Open the Kleanr app to respond.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `📅 New Appointment from ${clientName} - ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ New client appointment email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending new client appointment email:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Email;

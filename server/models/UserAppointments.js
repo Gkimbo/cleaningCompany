@@ -124,6 +124,48 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.STRING,
 			allowNull: true,
 		},
+		// Cleaner-initiated booking fields
+		bookedByCleanerId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		recurringScheduleId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		autoPayEnabled: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: true,
+		},
+		// Preferred cleaner decline flow fields
+		preferredCleanerDeclined: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		declinedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+		},
+		clientResponsePending: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		openToMarket: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		openedToMarketAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+		},
+		businessOwnerPrice: {
+			type: DataTypes.DECIMAL(10, 2),
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User
@@ -132,9 +174,17 @@ module.exports = (sequelize, DataTypes) => {
 			foreignKey: "userId",
 			as: "user",
 		});
-		UserAppointments.belongsTo(models.User, {
+		UserAppointments.belongsTo(models.UserHomes, {
 			foreignKey: "homeId",
 			as: "home",
+		});
+		UserAppointments.belongsTo(models.User, {
+			foreignKey: "bookedByCleanerId",
+			as: "bookedByCleaner",
+		});
+		UserAppointments.belongsTo(models.RecurringSchedule, {
+			foreignKey: "recurringScheduleId",
+			as: "recurringSchedule",
 		});
 		UserAppointments.hasMany(models.UserCleanerAppointments, {
 			foreignKey: "appointmentId",

@@ -300,6 +300,104 @@ class PushNotification {
       pendingReviewCount,
     });
   }
+
+  // ==========================================
+  // CLEANER CLIENT ONBOARDING NOTIFICATIONS
+  // ==========================================
+
+  // 22. Client invitation accepted (to cleaner)
+  static async sendPushInvitationAccepted(expoPushToken, cleanerName, clientName) {
+    const title = "New Client Joined! 🎉";
+    const body = `${clientName} accepted your invitation and is now on Kleanr. View them in My Clients.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "invitation_accepted",
+      clientName,
+    });
+  }
+
+  // 23. Recurring schedule created (to client)
+  static async sendPushRecurringScheduleCreated(expoPushToken, clientName, cleanerName, frequency) {
+    const frequencyText = frequency === 'weekly' ? 'weekly' : frequency === 'biweekly' ? 'bi-weekly' : 'monthly';
+    const title = "Recurring Cleaning Set Up 📅";
+    const body = `Hi ${clientName}! ${cleanerName} set up ${frequencyText} cleanings for you. View your schedule in the app.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "recurring_schedule_created",
+      frequency,
+    });
+  }
+
+  // 24. Cleaner booked appointment (to client - no approval needed)
+  static async sendPushCleanerBookedAppointment(expoPushToken, clientName, cleanerName, appointmentDate, address) {
+    const fullAddress = `${address.street}, ${address.city}`;
+    const title = "Cleaning Scheduled! 🧹";
+    const body = `Hi ${clientName}! ${cleanerName} booked a cleaning for ${formatDate(appointmentDate)} at ${fullAddress}.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "cleaner_booked_appointment",
+      appointmentDate,
+    });
+  }
+
+  // 25. Auto-payment processed (to client)
+  static async sendPushAutoPaymentProcessed(expoPushToken, clientName, amount, appointmentDate) {
+    const title = "Payment Processed ✅";
+    const body = `Hi ${clientName}! $${amount.toFixed(2)} was charged for your cleaning on ${formatDate(appointmentDate)}. View receipt in app.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "auto_payment_processed",
+      amount,
+      appointmentDate,
+    });
+  }
+
+  // 26. Payout received (to cleaner)
+  static async sendPushPayoutReceived(expoPushToken, cleanerName, amount, clientName) {
+    const title = "Payout on the Way! 💰";
+    const body = `Hi ${cleanerName}! $${amount.toFixed(2)} is being sent to your bank for the ${clientName} cleaning.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "payout_received",
+      amount,
+    });
+  }
+
+  // 27. Upcoming cleaner-booked cleaning reminder (to client)
+  static async sendPushUpcomingCleanerBookedCleaning(expoPushToken, clientName, cleanerName, appointmentDate, address) {
+    const fullAddress = `${address.street}, ${address.city}`;
+    const title = "Cleaning Tomorrow! 🏠";
+    const body = `Hi ${clientName}! ${cleanerName} will clean your home at ${fullAddress} tomorrow. Payment will be charged after completion.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "upcoming_cleaner_booked",
+      appointmentDate,
+    });
+  }
+
+  // 28. Recurring schedule paused (to client)
+  static async sendPushRecurringSchedulePaused(expoPushToken, clientName, cleanerName, pausedUntil) {
+    const title = "Schedule Paused ⏸️";
+    const body = pausedUntil
+      ? `Hi ${clientName}! Your recurring cleanings with ${cleanerName} are paused until ${formatDate(pausedUntil)}.`
+      : `Hi ${clientName}! Your recurring cleanings with ${cleanerName} have been paused.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "recurring_schedule_paused",
+      pausedUntil,
+    });
+  }
+
+  // 29. Recurring schedule resumed (to client)
+  static async sendPushRecurringScheduleResumed(expoPushToken, clientName, cleanerName, nextDate) {
+    const title = "Schedule Resumed ▶️";
+    const body = `Hi ${clientName}! Your recurring cleanings with ${cleanerName} are back on. Next cleaning: ${formatDate(nextDate)}.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "recurring_schedule_resumed",
+      nextDate,
+    });
+  }
 }
 
 module.exports = PushNotification;

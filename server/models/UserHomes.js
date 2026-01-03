@@ -141,6 +141,11 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.TEXT,
 			allowNull: true,
 		},
+		// Preferred cleaner for this home (set when cleaner invites existing client)
+		preferredCleanerId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 	});
 
 	// Helper function to encrypt PII fields
@@ -215,9 +220,21 @@ module.exports = (sequelize, DataTypes) => {
 			foreignKey: "userId",
 			as: "user",
 		});
+		UserHomes.belongsTo(models.User, {
+			foreignKey: "preferredCleanerId",
+			as: "preferredCleaner",
+		});
 		UserHomes.hasMany(models.UserAppointments, {
 			foreignKey: "homeId",
 			as: "appointments",
+		});
+		UserHomes.hasMany(models.CleanerClient, {
+			foreignKey: "homeId",
+			as: "cleanerClients",
+		});
+		UserHomes.hasMany(models.RecurringSchedule, {
+			foreignKey: "homeId",
+			as: "recurringSchedules",
 		});
 	};
 

@@ -9,6 +9,8 @@ const {
   UserAppointments,
   MessageReaction,
   MessageReadReceipt,
+  CleanerClient,
+  UserHomes,
 } = require("../../../models");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
@@ -677,6 +679,207 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
   } catch (error) {
     console.error("Error creating/getting support conversation:", error);
     return res.status(500).json({ error: "Failed to create support conversation" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/conversation/cleaner-client
+ * Create or get a direct conversation between a cleaner (business owner) and their client
+ * Either party can initiate this - the cleaner or the client
+ */
+messageRouter.post("/conversation/cleaner-client", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { clientUserId, cleanerUserId } = req.body;
+
+    // Get current user
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    let cleanerId, clientId, cleanerUser, clientUser;
+
+    if (user.type === "cleaner") {
+      // Cleaner is initiating - they need to specify which client
+      if (!clientUserId) {
+        return res.status(400).json({ error: "clientUserId is required for cleaner" });
+      }
+      cleanerId = userId;
+      clientId = clientUserId;
+
+      // Verify the cleaner-client relationship exists
+      const cleanerClient = await CleanerClient.findOne({
+        where: {
+          cleanerId: cleanerId,
+          clientId: clientId,
+          status: "active",
+        },
+      });
+
+      // Also check if this cleaner is preferred for any of the client's homes
+      const preferredHome = await UserHomes.findOne({
+        where: {
+          userId: clientId,
+          preferredCleanerId: cleanerId,
+        },
+      });
+
+      if (!cleanerClient && !preferredHome) {
+        return res.status(403).json({ error: "No active relationship with this client" });
+      }
+
+      cleanerUser = user;
+      clientUser = await User.findByPk(clientId);
+    } else if (user.type === "homeowner" || !user.type) {
+      // Client is initiating - they need to specify which cleaner (or we find their preferred)
+      clientId = userId;
+      clientUser = user;
+
+      if (cleanerUserId) {
+        cleanerId = cleanerUserId;
+      } else {
+        // Find their preferred cleaner from any of their homes
+        const homeWithPreferred = await UserHomes.findOne({
+          where: {
+            userId: clientId,
+            preferredCleanerId: { [Op.ne]: null },
+          },
+        });
+
+        if (homeWithPreferred) {
+          cleanerId = homeWithPreferred.preferredCleanerId;
+        } else {
+          // Check CleanerClient relationship
+          const cleanerClient = await CleanerClient.findOne({
+            where: {
+              clientId: clientId,
+              status: "active",
+            },
+          });
+
+          if (cleanerClient) {
+            cleanerId = cleanerClient.cleanerId;
+          } else {
+            return res.status(404).json({ error: "No preferred cleaner found. Please specify cleanerUserId." });
+          }
+        }
+      }
+
+      // Verify the relationship
+      const cleanerClient = await CleanerClient.findOne({
+        where: {
+          cleanerId: cleanerId,
+          clientId: clientId,
+          status: "active",
+        },
+      });
+
+      const preferredHome = await UserHomes.findOne({
+        where: {
+          userId: clientId,
+          preferredCleanerId: cleanerId,
+        },
+      });
+
+      if (!cleanerClient && !preferredHome) {
+        return res.status(403).json({ error: "No active relationship with this cleaner" });
+      }
+
+      cleanerUser = await User.findByPk(cleanerId);
+    } else {
+      return res.status(403).json({ error: "Only cleaners and homeowners can use this endpoint" });
+    }
+
+    if (!clientUser) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+    if (!cleanerUser) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    // Check if a cleaner-client conversation already exists between these two users
+    const existingParticipation = await ConversationParticipant.findAll({
+      where: { userId: cleanerId },
+      include: [
+        {
+          model: Conversation,
+          as: "conversation",
+          where: { conversationType: "cleaner-client" },
+          include: [
+            {
+              model: ConversationParticipant,
+              as: "participants",
+              where: { userId: clientId },
+            },
+          ],
+        },
+      ],
+    });
+
+    let conversation;
+
+    if (existingParticipation.length > 0) {
+      // Return existing conversation
+      conversation = await Conversation.findByPk(existingParticipation[0].conversationId, {
+        include: [
+          {
+            model: ConversationParticipant,
+            as: "participants",
+            include: [
+              {
+                model: User,
+                as: "user",
+                attributes: ["id", "username", "type", "firstName", "lastName"],
+              },
+            ],
+          },
+        ],
+      });
+    } else {
+      // Create new cleaner-client conversation
+      const cleanerName = `${cleanerUser.firstName || ""} ${cleanerUser.lastName || ""}`.trim() || cleanerUser.username;
+      const clientName = `${clientUser.firstName || ""} ${clientUser.lastName || ""}`.trim() || clientUser.username;
+
+      conversation = await Conversation.create({
+        conversationType: "cleaner-client",
+        title: `${cleanerName} & ${clientName}`,
+        createdBy: userId,
+      });
+
+      // Add both parties as participants
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: cleanerId,
+      });
+
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: clientId,
+      });
+
+      // Reload conversation with participants
+      conversation = await Conversation.findByPk(conversation.id, {
+        include: [
+          {
+            model: ConversationParticipant,
+            as: "participants",
+            include: [
+              {
+                model: User,
+                as: "user",
+                attributes: ["id", "username", "type", "firstName", "lastName"],
+              },
+            ],
+          },
+        ],
+      });
+    }
+
+    return res.json({ conversation });
+  } catch (error) {
+    console.error("Error creating/getting cleaner-client conversation:", error);
+    return res.status(500).json({ error: "Failed to create conversation" });
   }
 });
 

@@ -82,6 +82,10 @@ import ChecklistEditor from "../src/components/owner/ChecklistEditor";
 
 // Cleaner components
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
+import MyClientsPage from "../src/components/cleaner/MyClientsPage";
+
+// Business components
+import { ImportBusinessLanding, BusinessSignupWizard } from "../src/components/business";
 
 // Referral components
 import ReferralManagement from "../src/components/owner/ReferralManagement";
@@ -232,6 +236,15 @@ export default function App() {
                   <CleanerApplicationForm state={state} dispatch={dispatch} />
                 }
               />
+              {/* Business Import */}
+              <Route
+                path="/import-business"
+                element={<ImportBusinessLanding />}
+              />
+              <Route
+                path="/business-signup"
+                element={<BusinessSignupWizard dispatch={dispatch} />}
+              />
               <Route
                 path="/all-reviews"
                 element={<AllReviewsList state={state} dispatch={dispatch} />}
@@ -362,6 +375,11 @@ export default function App() {
               <Route
                 path="/recommended-supplies"
                 element={<RecommendedSupplies />}
+              />
+              {/* Cleaner My Clients */}
+              <Route
+                path="/my-clients"
+                element={<MyClientsPage state={state} />}
               />
               <Route
                 path="/employees"

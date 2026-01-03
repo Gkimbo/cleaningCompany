@@ -26,6 +26,9 @@ import HomeownerAdjustmentNotification from "./HomeownerAdjustmentNotification";
 import { parseLocalDate, isFutureOrToday, isPast, compareDates } from "../../utils/dateUtils";
 import TodaysCleaningCard from "./TodaysCleaningCard";
 import DiscountedPrice from "../pricing/DiscountedPrice";
+import MyCleanerCard from "./MyCleanerCard";
+import RecurringScheduleCard from "./RecurringScheduleCard";
+import DeclinedAppointmentsSection from "./DeclinedAppointmentsSection";
 
 const { width } = Dimensions.get("window");
 
@@ -197,6 +200,9 @@ const ClientDashboard = ({ state, dispatch }) => {
   const [error, setError] = useState(null);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [pendingAdjustments, setPendingAdjustments] = useState([]);
+  const [myCleaner, setMyCleaner] = useState(null);
+  const [myCleanerRelationship, setMyCleanerRelationship] = useState(null);
+  const [recurringSchedules, setRecurringSchedules] = useState([]);
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -213,13 +219,15 @@ const ClientDashboard = ({ state, dispatch }) => {
     setError(null);
 
     try {
-      // Fetch dashboard data, pending requests, and pending adjustments in parallel
-      const [dashboardData, requestsData, adjustmentsData] = await Promise.all([
+      // Fetch dashboard data, pending requests, adjustments, cleaner, and schedules in parallel
+      const [dashboardData, requestsData, adjustmentsData, cleanerData, schedulesData] = await Promise.all([
         ClientDashboardService.getDashboardSummary(state.currentUser.token),
         ClientDashboardService.getPendingRequestsForClient(
           state.currentUser.token
         ),
         FetchData.getPendingAdjustments(state.currentUser.token),
+        ClientDashboardService.getMyCleanerRelationship(state.currentUser.token),
+        ClientDashboardService.getMyRecurringSchedules(state.currentUser.token),
       ]);
 
       if (dashboardData.user) {
@@ -250,6 +258,17 @@ const ClientDashboard = ({ state, dispatch }) => {
       // Set pending home size adjustments
       if (adjustmentsData.adjustments) {
         setPendingAdjustments(adjustmentsData.adjustments);
+      }
+
+      // Set my cleaner data
+      if (cleanerData.cleaner) {
+        setMyCleaner(cleanerData.cleaner);
+        setMyCleanerRelationship(cleanerData.relationship || null);
+      }
+
+      // Set recurring schedules
+      if (schedulesData.schedules) {
+        setRecurringSchedules(schedulesData.schedules);
       }
     } catch (err) {
       console.error("[ClientDashboard] Error fetching data:", err);
@@ -434,6 +453,12 @@ const ClientDashboard = ({ state, dispatch }) => {
         </View>
       )}
 
+      {/* Declined Appointments - cleaner unavailable */}
+      <DeclinedAppointmentsSection
+        token={state.currentUser.token}
+        onRefresh={onRefresh}
+      />
+
       {/* Quick Actions */}
       <View style={styles.quickActionsContainer}>
         <Text style={styles.quickActionsTitle}>Quick Actions</Text>
@@ -486,6 +511,37 @@ const ClientDashboard = ({ state, dispatch }) => {
           />
         </View>
       </View>
+
+      {/* My Cleaner Card - for clients invited by a cleaner */}
+      {myCleaner && (
+        <View style={styles.section}>
+          <MyCleanerCard
+            cleaner={myCleaner}
+            relationship={myCleanerRelationship}
+            onMessage={() => {
+              if (state.currentUser.token && myCleaner.id) {
+                MessageService.createCleanerClientConversation(null, myCleaner.id, state.currentUser.token)
+                  .then((response) => {
+                    if (response.conversation) {
+                      navigate(`/messages/${response.conversation.id}`);
+                    }
+                  })
+                  .catch((err) => console.error(err));
+              }
+            }}
+          />
+        </View>
+      )}
+
+      {/* Recurring Schedules Card */}
+      {recurringSchedules.length > 0 && (
+        <View style={styles.section}>
+          <RecurringScheduleCard
+            schedules={recurringSchedules}
+            onViewAll={() => navigate("/my-schedules")}
+          />
+        </View>
+      )}
 
       {/* Quick Stats */}
       <View style={styles.statsRow}>

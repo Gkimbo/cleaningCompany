@@ -185,6 +185,83 @@ usersRouter.post("/", async (req, res) => {
   }
 });
 
+// POST /api/v1/users/business-owner - Business owner self-registration
+usersRouter.post("/business-owner", async (req, res) => {
+  try {
+    const { firstName, lastName, username, password, email, phone, businessName, yearsInBusiness } = req.body;
+
+    // Validate password strength
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    // Validate username doesn't contain "owner"
+    if (username && username.toLowerCase().includes("owner")) {
+      return res.status(400).json({ error: "Username cannot contain the word 'owner'" });
+    }
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !username || !password) {
+      return res.status(400).json({ error: "First name, last name, email, username, and password are required" });
+    }
+
+    // Check for existing email
+    let existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({ error: "An account already has this email" });
+    }
+
+    // Check for existing username
+    existingUser = await User.findOne({ where: { username } });
+    if (existingUser) {
+      return res.status(410).json({ error: "Username already exists" });
+    }
+
+    // Create business owner account (type: cleaner, isBusinessOwner: true)
+    const newUser = await User.create({
+      firstName,
+      lastName,
+      username,
+      password,
+      email,
+      phone: phone || null,
+      type: "cleaner",
+      isBusinessOwner: true,
+      businessName: businessName || null,
+      yearsInBusiness: yearsInBusiness ? parseInt(yearsInBusiness, 10) : null,
+      notifications: ["phone", "email"],
+    });
+
+    // Create billing record
+    await UserBills.create({
+      userId: newUser.id,
+      appointmentDue: 0,
+      cancellationFee: 0,
+      totalDue: 0,
+    });
+
+    // Generate referral code for the business owner
+    try {
+      await ReferralService.generateReferralCode(newUser, models);
+    } catch (codeError) {
+      console.error("[Referral] Error generating code for business owner:", codeError.message);
+    }
+
+    await newUser.update({ lastLogin: new Date() });
+
+    const serializedUser = UserSerializer.login(newUser.dataValues);
+    const token = jwt.sign({ userId: serializedUser.id }, secretKey, { expiresIn: '24h' });
+
+    console.log(`✅ New business owner account created: ${username}`);
+
+    return res.status(201).json({ user: serializedUser, token });
+  } catch (error) {
+    console.error("Error creating business owner account:", error);
+    return res.status(500).json({ error: "Failed to create account" });
+  }
+});
+
 usersRouter.post("/new-employee", async (req, res) => {
   try {
     const { username, password, email, type, firstName, lastName, phone } = req.body;
