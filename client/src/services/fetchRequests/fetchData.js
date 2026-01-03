@@ -676,6 +676,30 @@ class FetchData {
     }
   }
 
+  static async upgradeToBusinessOwner(token, businessName = null, yearsInBusiness = null) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/users/upgrade-to-business", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ businessName, yearsInBusiness }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to upgrade account" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error upgrading to business owner:", error);
+      return { error: "Failed to upgrade account" };
+    }
+  }
+
   static async forgotUsername(email) {
     try {
       const response = await fetch(baseURL + "/api/v1/user-sessions/forgot-username", {

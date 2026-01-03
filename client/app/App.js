@@ -83,9 +83,17 @@ import ChecklistEditor from "../src/components/owner/ChecklistEditor";
 // Cleaner components
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
 import MyClientsPage from "../src/components/cleaner/MyClientsPage";
+import ClientDetailPage from "../src/components/cleaner/ClientDetailPage";
 
 // Business components
-import { ImportBusinessLanding, BusinessSignupWizard } from "../src/components/business";
+import {
+  ImportBusinessLanding,
+  BusinessSignupWizard,
+  ExistingCleanerCheck,
+  CleanerUpgradeLanding,
+  CleanerUpgradeForm,
+  BusinessCalculator,
+} from "../src/components/business";
 
 // Referral components
 import ReferralManagement from "../src/components/owner/ReferralManagement";
@@ -249,6 +257,24 @@ export default function App() {
                 element={<BusinessSignupWizard dispatch={dispatch} />}
               />
               <Route
+                path="/business-signup-check"
+                element={<ExistingCleanerCheck />}
+              />
+              {/* Cleaner Upgrade Flow */}
+              <Route
+                path="/upgrade-to-business"
+                element={<CleanerUpgradeLanding state={state} />}
+              />
+              <Route
+                path="/upgrade-form"
+                element={<CleanerUpgradeForm state={state} dispatch={dispatch} />}
+              />
+              {/* Business Calculator */}
+              <Route
+                path="/earnings-calculator"
+                element={<BusinessCalculator state={state} />}
+              />
+              <Route
                 path="/all-reviews"
                 element={<AllReviewsList state={state} dispatch={dispatch} />}
               />
@@ -383,6 +409,10 @@ export default function App() {
               <Route
                 path="/my-clients"
                 element={<MyClientsPage state={state} />}
+              />
+              <Route
+                path="/client-detail/:clientId"
+                element={<ClientDetailPage state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/employees"

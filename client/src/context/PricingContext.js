@@ -38,6 +38,7 @@ const defaultPricing = {
   // Platform fees
   platform: {
     feePercent: 0.1,
+    businessOwnerFeePercent: 0.1,
   },
 
   // High volume

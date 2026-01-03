@@ -119,6 +119,12 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0.10,
       comment: "Platform fee percentage (0.10 = 10%)",
     },
+    businessOwnerFeePercent: {
+      type: DataTypes.DECIMAL(3, 2),
+      allowNull: false,
+      defaultValue: 0.10,
+      comment: "Platform fee percentage for business owner cleaners (0.10 = 10%)",
+    },
 
     // Incentive cancellation settings
     incentiveRefundPercent: {
@@ -228,6 +234,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       platform: {
         feePercent: parseFloat(config.platformFeePercent),
+        businessOwnerFeePercent: parseFloat(config.businessOwnerFeePercent || config.platformFeePercent),
       },
       highVolumeFee: config.highVolumeFee,
     };

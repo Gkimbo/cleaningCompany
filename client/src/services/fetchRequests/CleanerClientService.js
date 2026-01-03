@@ -76,6 +76,50 @@ class CleanerClientService {
   }
 
   /**
+   * Get full client details with home info and appointments
+   * @param {string} token - Auth token
+   * @param {number} clientId - CleanerClient ID
+   * @returns {Object} { cleanerClient, client, home, appointments, recurringSchedules }
+   */
+  static async getClientFull(token, clientId) {
+    try {
+      const response = await fetch(`${API_BASE}/cleaner-clients/${clientId}/full`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching full client details:", error);
+      return { error: "Failed to fetch client details" };
+    }
+  }
+
+  /**
+   * Update home details for a client
+   * @param {string} token - Auth token
+   * @param {number} clientId - CleanerClient ID
+   * @param {Object} updates - Home fields to update (specialNotes, keyPadCode, keyLocation, etc.)
+   * @returns {Object} { success, home, error }
+   */
+  static async updateClientHome(token, clientId, updates) {
+    try {
+      const response = await fetch(`${API_BASE}/cleaner-clients/${clientId}/home`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error updating client home:", error);
+      return { success: false, error: "Failed to update home details" };
+    }
+  }
+
+  /**
    * Update a client relationship
    * @param {string} token - Auth token
    * @param {number} clientId - CleanerClient ID

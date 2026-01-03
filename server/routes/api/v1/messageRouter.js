@@ -16,6 +16,19 @@ const {
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const SuspiciousContentDetector = require("../../../services/SuspiciousContentDetector");
+const EncryptionService = require("../../../services/EncryptionService");
+
+// Helper to decrypt user PII fields from included models
+const decryptUserFields = (user) => {
+  if (!user) return null;
+  return {
+    ...user.dataValues || user,
+    firstName: user.firstName ? EncryptionService.decrypt(user.firstName) : null,
+    lastName: user.lastName ? EncryptionService.decrypt(user.lastName) : null,
+    email: user.email ? EncryptionService.decrypt(user.email) : null,
+    phone: user.phone ? EncryptionService.decrypt(user.phone) : null,
+  };
+};
 
 const messageRouter = express.Router();
 
@@ -1458,14 +1471,17 @@ messageRouter.get("/conversations/internal", authenticateToken, async (req, res)
         // Get other participants (not the current user)
         const otherParticipants = conv.participants
           .filter((part) => part.user.id !== userId)
-          .map((part) => ({
-            id: part.user.id,
-            username: part.user.username,
-            firstName: part.user.firstName,
-            lastName: part.user.lastName,
-            type: part.user.type,
-            displayName: `${part.user.firstName || ""} ${part.user.lastName || ""}`.trim() || part.user.username,
-          }));
+          .map((part) => {
+            const decryptedUser = decryptUserFields(part.user);
+            return {
+              id: part.user.id,
+              username: part.user.username,
+              firstName: decryptedUser.firstName,
+              lastName: decryptedUser.lastName,
+              type: part.user.type,
+              displayName: `${decryptedUser.firstName || ""} ${decryptedUser.lastName || ""}`.trim() || part.user.username,
+            };
+          });
 
         // Generate display name for the conversation
         let displayName;
@@ -1491,18 +1507,24 @@ messageRouter.get("/conversations/internal", authenticateToken, async (req, res)
           lastMessage: lastMessage
             ? {
                 content: lastMessage.content,
-                sender: {
-                  ...lastMessage.sender.dataValues || lastMessage.sender,
-                  displayName: `${lastMessage.sender.firstName || ""} ${lastMessage.sender.lastName || ""}`.trim() || lastMessage.sender.username,
-                },
+                sender: (() => {
+                  const decryptedSender = decryptUserFields(lastMessage.sender);
+                  return {
+                    ...decryptedSender,
+                    displayName: `${decryptedSender.firstName || ""} ${decryptedSender.lastName || ""}`.trim() || lastMessage.sender.username,
+                  };
+                })(),
                 createdAt: lastMessage.createdAt,
               }
             : null,
           unreadCount,
-          participants: conv.participants.map((part) => ({
-            ...part.user.dataValues || part.user,
-            displayName: `${part.user.firstName || ""} ${part.user.lastName || ""}`.trim() || part.user.username,
-          })),
+          participants: conv.participants.map((part) => {
+            const decryptedUser = decryptUserFields(part.user);
+            return {
+              ...decryptedUser,
+              displayName: `${decryptedUser.firstName || ""} ${decryptedUser.lastName || ""}`.trim() || part.user.username,
+            };
+          }),
           otherParticipants,
           updatedAt: conv.updatedAt,
         };

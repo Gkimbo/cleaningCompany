@@ -13,14 +13,21 @@ import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import { usePricing } from "../../context/PricingContext";
 
 const { width } = Dimensions.get("window");
 
 const ImportBusinessLanding = () => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
+
+  // Calculate dynamic percentages from pricing config
+  const businessOwnerFee = pricing?.platform?.businessOwnerFeePercent || 0.10;
+  const keepPercent = Math.round((1 - businessOwnerFee) * 100);
+  const feePercent = Math.round(businessOwnerFee * 100);
 
   const stats = [
-    { value: "90%", label: "You Keep" },
+    { value: `${keepPercent}%`, label: "You Keep" },
     { value: "$0", label: "Monthly Fee" },
     { value: "24hr", label: "Fast Payouts" },
   ];
@@ -118,7 +125,7 @@ const ImportBusinessLanding = () => {
 
           <TouchableOpacity
             style={styles.heroCta}
-            onPress={() => navigate("/business-signup")}
+            onPress={() => navigate("/business-signup-check")}
           >
             <Text style={styles.heroCtaText}>Start Free Today</Text>
             <Feather name="arrow-right" size={20} color="#0f172a" />
@@ -268,9 +275,9 @@ const ImportBusinessLanding = () => {
               <Text style={styles.pricingBadgeText}>SIMPLE PRICING</Text>
             </View>
 
-            <Text style={styles.pricingTitle}>Keep 90% of Everything</Text>
+            <Text style={styles.pricingTitle}>Keep {keepPercent}% of Everything</Text>
             <Text style={styles.pricingSubtitle}>
-              We only take a small 10% fee when you get paid.{"\n"}
+              We only take a small {feePercent}% fee when you get paid.{"\n"}
               No monthly fees. No setup costs. No hidden charges.
             </Text>
 
@@ -304,7 +311,7 @@ const ImportBusinessLanding = () => {
 
           <TouchableOpacity
             style={styles.finalCtaButton}
-            onPress={() => navigate("/business-signup")}
+            onPress={() => navigate("/business-signup-check")}
           >
             <Feather name="zap" size={20} color="#fff" />
             <Text style={styles.finalCtaButtonText}>Get Started Free</Text>

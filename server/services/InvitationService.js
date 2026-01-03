@@ -64,13 +64,19 @@ class InvitationService {
       return null;
     }
 
-    // Check if invitation is still pending
-    if (cleanerClient.status !== "pending_invite") {
+    // Check if invitation is still pending or cancelled (cancelled can still create account)
+    if (cleanerClient.status !== "pending_invite" && cleanerClient.status !== "cancelled") {
       return {
         ...cleanerClient.toJSON(),
         isExpired: cleanerClient.status === "declined",
-        isAlreadyAccepted: cleanerClient.status === "active",
+        isAlreadyAccepted: cleanerClient.status === "active" || cleanerClient.status === "inactive",
       };
+    }
+
+    // For cancelled invitations, add isCancelled flag but keep instance for update
+    if (cleanerClient.status === "cancelled") {
+      cleanerClient.isCancelled = true;
+      return cleanerClient;
     }
 
     return cleanerClient;
@@ -130,13 +136,18 @@ class InvitationService {
     const inviteToken = await this.generateInviteToken(models);
 
     // Create the CleanerClient record
+    // Stringify address if it's an object (will be encrypted by model hooks)
+    const addressValue = address && typeof address === "object"
+      ? JSON.stringify(address)
+      : address || null;
+
     const cleanerClient = await CleanerClient.create({
       cleanerId,
       inviteToken,
       invitedEmail: email.toLowerCase().trim(),
       invitedName: name.trim(),
       invitedPhone: phone ? phone.trim() : null,
-      invitedAddress: address || null,
+      invitedAddress: addressValue,
       invitedBeds: beds || null,
       invitedBaths: baths || null,
       invitedNotes: notes || null,
@@ -218,6 +229,9 @@ class InvitationService {
       totalDue: 0,
     });
 
+    // Check if invitation was cancelled by the business owner
+    const isCancelled = cleanerClient.isCancelled || cleanerClient.status === "cancelled";
+
     // Merge address from invitation with any corrections
     const address = {
       ...cleanerClient.invitedAddress,
@@ -238,18 +252,28 @@ class InvitationService {
         numBaths: cleanerClient.invitedBaths || 1,
         contact: user.phone || user.email,
         timeToBeCompleted: cleanerClient.defaultTimeWindow || "anytime",
-        preferredCleanerId: cleanerClient.cleanerId,
+        // Only set preferred cleaner if invitation wasn't cancelled
+        preferredCleanerId: isCancelled ? null : cleanerClient.cleanerId,
         specialNotes: cleanerClient.invitedNotes || null,
       });
     }
 
     // Update the CleanerClient record
-    await cleanerClient.update({
-      clientId: user.id,
-      homeId: home ? home.id : null,
-      status: "active",
-      acceptedAt: new Date(),
-    });
+    // For cancelled invitations, don't link the client - they become a normal user
+    if (isCancelled) {
+      // Just mark as used but don't link - user becomes a regular homeowner
+      await cleanerClient.update({
+        acceptedAt: new Date(),
+      });
+    } else {
+      // Normal flow - link the client to the cleaner
+      await cleanerClient.update({
+        clientId: user.id,
+        homeId: home ? home.id : null,
+        status: "active",
+        acceptedAt: new Date(),
+      });
+    }
 
     return {
       user,

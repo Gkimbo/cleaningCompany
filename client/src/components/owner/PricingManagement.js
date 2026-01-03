@@ -50,6 +50,7 @@ const PricingManagement = ({ state }) => {
     cleanerPenaltyDays: "",
     refundPercentage: "",
     platformFeePercent: "",
+    businessOwnerFeePercent: "",
     highVolumeFee: "",
     incentiveRefundPercent: "",
     incentiveCleanerPercent: "",
@@ -91,6 +92,7 @@ const PricingManagement = ({ state }) => {
             cleanerPenaltyDays: result.config.cleanerPenaltyDays?.toString() || "",
             refundPercentage: (parseFloat(result.config.refundPercentage) * 100).toString() || "",
             platformFeePercent: (parseFloat(result.config.platformFeePercent) * 100).toString() || "",
+            businessOwnerFeePercent: (parseFloat(result.config.businessOwnerFeePercent || result.config.platformFeePercent) * 100).toString() || "",
             highVolumeFee: result.config.highVolumeFee?.toString() || "",
             incentiveRefundPercent: (parseFloat(result.config.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: (parseFloat(result.config.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
@@ -115,6 +117,7 @@ const PricingManagement = ({ state }) => {
             cleanerPenaltyDays: result.staticDefaults.cleanerPenaltyDays?.toString() || "",
             refundPercentage: (result.staticDefaults.refundPercentage * 100).toString() || "",
             platformFeePercent: (result.staticDefaults.platformFeePercent * 100).toString() || "",
+            businessOwnerFeePercent: ((result.staticDefaults.businessOwnerFeePercent || result.staticDefaults.platformFeePercent) * 100).toString() || "",
             highVolumeFee: result.staticDefaults.highVolumeFee?.toString() || "",
             incentiveRefundPercent: ((result.staticDefaults.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: ((result.staticDefaults.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
@@ -174,6 +177,7 @@ const PricingManagement = ({ state }) => {
       "cleanerPenaltyDays",
       "refundPercentage",
       "platformFeePercent",
+      "businessOwnerFeePercent",
       "highVolumeFee",
       "incentiveRefundPercent",
       "incentiveCleanerPercent",
@@ -198,6 +202,11 @@ const PricingManagement = ({ state }) => {
     }
     if (platform < 0 || platform > 100) {
       setError("Platform fee percentage must be between 0 and 100");
+      return;
+    }
+    const businessOwnerFee = parseFloat(formData.businessOwnerFeePercent);
+    if (businessOwnerFee < 0 || businessOwnerFee > 100) {
+      setError("Business owner fee percentage must be between 0 and 100");
       return;
     }
     if (incentiveRefund < 0 || incentiveRefund > 100) {
@@ -237,6 +246,7 @@ const PricingManagement = ({ state }) => {
         cleanerPenaltyDays: parseInt(formData.cleanerPenaltyDays),
         refundPercentage: parseFloat(formData.refundPercentage) / 100,
         platformFeePercent: parseFloat(formData.platformFeePercent) / 100,
+        businessOwnerFeePercent: parseFloat(formData.businessOwnerFeePercent) / 100,
         highVolumeFee: parseInt(formData.highVolumeFee),
         incentiveRefundPercent: parseFloat(formData.incentiveRefundPercent) / 100,
         incentiveCleanerPercent: parseFloat(formData.incentiveCleanerPercent) / 100,
@@ -396,7 +406,8 @@ const PricingManagement = ({ state }) => {
         <Text style={styles.sectionDescription}>
           Service fees for the platform
         </Text>
-        {renderPriceInput("Platform Fee", "platformFeePercent", "", "%", "Percentage taken from cleaner payouts (applies to regular payouts and cancelled appointment compensation)")}
+        {renderPriceInput("Platform Fee (Regular Cleaners)", "platformFeePercent", "", "%", "Percentage taken from regular cleaner payouts")}
+        {renderPriceInput("Business Owner Fee", "businessOwnerFeePercent", "", "%", "Percentage taken from business owner cleaner payouts (for their personal clients)")}
         {renderPriceInput("High Volume Day Fee", "highVolumeFee", "$", "", "Additional fee for holidays and busy days")}
 
         {/* Platform Revenue Calculator */}

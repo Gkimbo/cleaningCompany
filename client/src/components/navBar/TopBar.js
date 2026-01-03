@@ -46,6 +46,7 @@ import TermsEditorButton from "./TermsEditorButton";
 import WithdrawalsButton from "./WithdrawalsButton";
 import MyClientsButton from "./MyClientsButton";
 import SuspiciousReportsButton from "./SuspiciousReportsButton";
+import CalculatorButton from "./CalculatorButton";
 
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -233,6 +234,7 @@ const TopBar = ({ dispatch, state }) => {
                           <>
                             <ManageEmployees closeModal={closeModal} />
                             <ManagePricingButton closeModal={closeModal} />
+                            <CalculatorButton closeModal={closeModal} />
                             <ReferralsButton closeModal={closeModal} />
                             <SeeAllAppointments closeModal={closeModal} />
                             <UnassignedAppointmentsButton
@@ -254,6 +256,7 @@ const TopBar = ({ dispatch, state }) => {
                             <MyClientsButton closeModal={closeModal} />
                             {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                             <EarningsButton closeModal={closeModal} />
+                            {state.isBusinessOwner && <CalculatorButton closeModal={closeModal} />}
                             {referralsEnabled && <MyReferralsButton closeModal={closeModal} />}
                             <RecommendedSuppliesButton closeModal={closeModal} />
                           </>

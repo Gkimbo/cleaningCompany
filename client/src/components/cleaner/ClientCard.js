@@ -9,7 +9,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 
-const ClientCard = ({ client, onPress, onResendInvite, onBookCleaning, onSetupRecurring }) => {
+const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBookCleaning, onSetupRecurring }) => {
   const isPending = client.status === "pending_invite";
   const isActive = client.status === "active";
   const isInactive = client.status === "inactive";
@@ -170,19 +170,35 @@ const ClientCard = ({ client, onPress, onResendInvite, onBookCleaning, onSetupRe
           <Text style={styles.pendingText}>
             Invited {new Date(client.invitedAt).toLocaleDateString()}
           </Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.resendButton,
-              pressed && styles.resendButtonPressed,
-            ]}
-            onPress={(e) => {
-              e.stopPropagation();
-              onResendInvite(client);
-            }}
-          >
-            <Feather name="send" size={14} color={colors.primary[600]} />
-            <Text style={styles.resendButtonText}>Resend</Text>
-          </Pressable>
+          <View style={styles.pendingButtonsRow}>
+            {onDeleteInvitation && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.deleteButton,
+                  pressed && styles.deleteButtonPressed,
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onDeleteInvitation(client);
+                }}
+              >
+                <Feather name="trash-2" size={14} color={colors.error[600]} />
+              </Pressable>
+            )}
+            <Pressable
+              style={({ pressed }) => [
+                styles.resendButton,
+                pressed && styles.resendButtonPressed,
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                onResendInvite(client);
+              }}
+            >
+              <Feather name="send" size={14} color={colors.primary[600]} />
+              <Text style={styles.resendButtonText}>Resend</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -363,6 +379,24 @@ const styles = StyleSheet.create({
   pendingText: {
     fontSize: typography.fontSize.xs,
     color: colors.neutral[400],
+  },
+  pendingButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  deleteButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 36,
+    height: 36,
+    backgroundColor: colors.error[50],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  deleteButtonPressed: {
+    backgroundColor: colors.error[100],
   },
   resendButton: {
     flexDirection: "row",

@@ -374,7 +374,7 @@ recurringSchedulesRouter.get("/", verifyCleaner, async (req, res) => {
         client: s.cleanerClient?.client
           ? {
               id: s.cleanerClient.client.id,
-              name: `${s.cleanerClient.client.firstName} ${s.cleanerClient.client.lastName}`,
+              name: `${EncryptionService.decrypt(s.cleanerClient.client.firstName)} ${EncryptionService.decrypt(s.cleanerClient.client.lastName)}`,
             }
           : null,
         home: s.home
@@ -803,8 +803,8 @@ recurringSchedulesRouter.get("/my-schedules", verifyHomeowner, async (req, res) 
         cleaner: s.cleaner
           ? {
               id: s.cleaner.id,
-              firstName: s.cleaner.firstName,
-              lastName: s.cleaner.lastName,
+              firstName: EncryptionService.decrypt(s.cleaner.firstName),
+              lastName: EncryptionService.decrypt(s.cleaner.lastName),
               profilePhoto: s.cleaner.profilePhoto,
             }
           : null,
