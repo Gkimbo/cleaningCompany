@@ -28,6 +28,7 @@ const billingRouter = require("./api/v1/billingRouter");
 const preferredCleanerRouter = require("./api/v1/preferredCleanerRouter");
 const suspiciousReportsRouter = require("./api/v1/suspiciousReportsRouter");
 const notificationsRouter = require("./api/v1/notificationsRouter");
+const multiCleanerRouter = require("./api/v1/multiCleanerRouter");
 
 const rootRouter = new express.Router();
 
@@ -59,6 +60,7 @@ rootRouter.use("/api/v1/billing", billingRouter);
 rootRouter.use("/api/v1/preferred-cleaner", preferredCleanerRouter);
 rootRouter.use("/api/v1/suspicious-reports", suspiciousReportsRouter);
 rootRouter.use("/api/v1/notifications", notificationsRouter);
+rootRouter.use("/api/v1/multi-cleaner", multiCleanerRouter);
 
 rootRouter.use("/", clientRouter);
 

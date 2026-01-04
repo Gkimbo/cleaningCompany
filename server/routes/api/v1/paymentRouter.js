@@ -17,7 +17,11 @@ const {
   JobPhoto,
   HomeSizeAdjustmentRequest,
   UserPendingRequests,
+  MultiCleanerJob,
+  CleanerRoomAssignment,
+  CleanerJobCompletion,
 } = require("../../../models");
+const MultiCleanerPricingService = require("../../../services/MultiCleanerPricingService");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
@@ -1425,11 +1429,323 @@ paymentRouter.post("/record-bill-payment", async (req, res) => {
 
 /**
  * ------------------------------------------------------
+ * Helper: Process payouts for multi-cleaner jobs
+ * Uses proportional room-based earnings splits
+ * ------------------------------------------------------
+ */
+async function processMultiCleanerPayouts(appointment, multiCleanerJob) {
+  const results = [];
+
+  try {
+    // Get room assignments for this job
+    const roomAssignments = await CleanerRoomAssignment.findAll({
+      where: { multiCleanerJobId: multiCleanerJob.id },
+    });
+
+    // Get job completions to identify which cleaners to pay
+    const completions = await CleanerJobCompletion.findAll({
+      where: {
+        multiCleanerJobId: multiCleanerJob.id,
+        status: { [require("sequelize").Op.in]: ["completed", "started"] },
+      },
+    });
+
+    if (completions.length === 0) {
+      console.log("[MultiCleanerPayout] No completed cleaners found for job", multiCleanerJob.id);
+      return results;
+    }
+
+    // Calculate total price
+    const home = await UserHomes.findByPk(appointment.homeId);
+    const totalPriceCents = await MultiCleanerPricingService.calculateTotalJobPrice(
+      home,
+      appointment,
+      multiCleanerJob.totalCleanersRequired
+    );
+
+    // Calculate earnings breakdown using proportional split
+    const earningsBreakdown = await MultiCleanerPricingService.calculatePerCleanerEarnings(
+      totalPriceCents,
+      completions.length,
+      roomAssignments
+    );
+
+    // Get the charge ID from the payment intent
+    let chargeId = null;
+    if (appointment.paymentIntentId) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
+        chargeId = paymentIntent.latest_charge;
+      } catch (err) {
+        console.error(`[MultiCleanerPayout] Could not retrieve payment intent ${appointment.paymentIntentId}:`, err.message);
+      }
+    }
+
+    // Process payout for each completed cleaner
+    for (const completion of completions) {
+      const cleanerId = completion.cleanerId;
+
+      try {
+        // Check if already paid
+        let payout = await Payout.findOne({
+          where: {
+            appointmentId: appointment.id,
+            cleanerId,
+            multiCleanerJobId: multiCleanerJob.id,
+          },
+        });
+
+        if (payout && payout.status === "completed") {
+          results.push({ cleanerId, status: "already_paid" });
+          continue;
+        }
+
+        // Get cleaner's Stripe Connect account
+        const connectAccount = await StripeConnectAccount.findOne({
+          where: { userId: cleanerId },
+        });
+
+        if (!connectAccount || !connectAccount.payoutsEnabled) {
+          results.push({
+            cleanerId,
+            status: "skipped",
+            reason: "Cleaner has not completed Stripe onboarding",
+          });
+          continue;
+        }
+
+        // Find this cleaner's earnings from the breakdown
+        const cleanerEarning = earningsBreakdown.cleanerEarnings.find(
+          (e) => e.cleanerId == cleanerId
+        );
+
+        if (!cleanerEarning) {
+          // Fallback to equal split if cleaner not found in breakdown
+          const equalShare = Math.round(earningsBreakdown.netForCleaners / completions.length);
+          console.log(`[MultiCleanerPayout] Using equal split fallback for cleaner ${cleanerId}`);
+
+          await processCleanerPayoutWithAmount(
+            cleanerId,
+            appointment,
+            equalShare,
+            Math.round(earningsBreakdown.platformFee / completions.length),
+            multiCleanerJob.id,
+            chargeId,
+            false,
+            results
+          );
+          continue;
+        }
+
+        // Create or update payout record
+        if (!payout) {
+          payout = await Payout.create({
+            appointmentId: appointment.id,
+            cleanerId,
+            multiCleanerJobId: multiCleanerJob.id,
+            grossAmount: cleanerEarning.grossAmount,
+            platformFee: cleanerEarning.platformFee,
+            netAmount: cleanerEarning.netAmount,
+            isPartialPayout: completion.status === "started",
+            status: "processing",
+            paymentCapturedAt: new Date(),
+            transferInitiatedAt: new Date(),
+          });
+        } else {
+          await payout.update({
+            grossAmount: cleanerEarning.grossAmount,
+            platformFee: cleanerEarning.platformFee,
+            netAmount: cleanerEarning.netAmount,
+            isPartialPayout: completion.status === "started",
+            status: "processing",
+            transferInitiatedAt: new Date(),
+          });
+        }
+
+        // Create Stripe Transfer
+        const transferParams = {
+          amount: cleanerEarning.netAmount,
+          currency: "usd",
+          destination: connectAccount.stripeAccountId,
+          metadata: {
+            appointmentId: appointment.id.toString(),
+            cleanerId: cleanerId.toString(),
+            payoutId: payout.id.toString(),
+            multiCleanerJobId: multiCleanerJob.id.toString(),
+            percentOfWork: cleanerEarning.percentOfWork.toString(),
+          },
+        };
+
+        if (chargeId) {
+          transferParams.source_transaction = chargeId;
+        }
+
+        const transfer = await stripe.transfers.create(transferParams);
+
+        await payout.update({
+          stripeTransferId: transfer.id,
+          status: "completed",
+          completedAt: new Date(),
+        });
+
+        // Update completion record with payout ID
+        await completion.update({ payoutId: payout.id });
+
+        // Record payout transaction
+        await recordPaymentTransaction({
+          type: "payout",
+          status: "succeeded",
+          amount: cleanerEarning.netAmount,
+          cleanerId,
+          appointmentId: appointment.id,
+          payoutId: payout.id,
+          stripeTransferId: transfer.id,
+          platformFeeAmount: cleanerEarning.platformFee,
+          netAmount: cleanerEarning.netAmount,
+          description: `Multi-cleaner payout (${cleanerEarning.percentOfWork}% of work) for appointment ${appointment.id}`,
+          metadata: {
+            grossAmount: cleanerEarning.grossAmount,
+            cleanerCount: completions.length,
+            stripeAccountId: connectAccount.stripeAccountId,
+            multiCleanerJobId: multiCleanerJob.id,
+            percentOfWork: cleanerEarning.percentOfWork,
+          },
+        });
+
+        // Record platform fee
+        await recordPaymentTransaction({
+          type: "platform_fee",
+          status: "succeeded",
+          amount: cleanerEarning.platformFee,
+          appointmentId: appointment.id,
+          payoutId: payout.id,
+          description: `Platform fee from multi-cleaner appointment ${appointment.id}`,
+          metadata: {
+            cleanerId,
+            grossAmount: cleanerEarning.grossAmount,
+            feePercent: earningsBreakdown.platformFeePercent * 100,
+            multiCleanerJobId: multiCleanerJob.id,
+          },
+        });
+
+        results.push({
+          cleanerId,
+          status: "success",
+          transferId: transfer.id,
+          amountCents: cleanerEarning.netAmount,
+          percentOfWork: cleanerEarning.percentOfWork,
+        });
+      } catch (error) {
+        console.error(`[MultiCleanerPayout] Failed for cleaner ${cleanerId}:`, error);
+        results.push({
+          cleanerId,
+          status: "failed",
+          error: error.message,
+        });
+      }
+    }
+
+    // Update job status if all cleaners are paid
+    const successCount = results.filter((r) => r.status === "success" || r.status === "already_paid").length;
+    if (successCount === completions.length) {
+      await multiCleanerJob.update({ status: "completed" });
+    }
+
+    return results;
+  } catch (error) {
+    console.error("[MultiCleanerPayout] Error processing payouts:", error);
+    throw error;
+  }
+}
+
+/**
+ * Helper: Process individual cleaner payout with a specific amount
+ */
+async function processCleanerPayoutWithAmount(cleanerId, appointment, netAmount, platformFee, multiCleanerJobId, chargeId, isPartial, results) {
+  try {
+    const connectAccount = await StripeConnectAccount.findOne({
+      where: { userId: cleanerId },
+    });
+
+    if (!connectAccount || !connectAccount.payoutsEnabled) {
+      results.push({
+        cleanerId,
+        status: "skipped",
+        reason: "Cleaner has not completed Stripe onboarding",
+      });
+      return;
+    }
+
+    const payout = await Payout.create({
+      appointmentId: appointment.id,
+      cleanerId,
+      multiCleanerJobId,
+      grossAmount: netAmount + platformFee,
+      platformFee,
+      netAmount,
+      isPartialPayout: isPartial,
+      status: "processing",
+      paymentCapturedAt: new Date(),
+      transferInitiatedAt: new Date(),
+    });
+
+    const transferParams = {
+      amount: netAmount,
+      currency: "usd",
+      destination: connectAccount.stripeAccountId,
+      metadata: {
+        appointmentId: appointment.id.toString(),
+        cleanerId: cleanerId.toString(),
+        payoutId: payout.id.toString(),
+      },
+    };
+
+    if (chargeId) {
+      transferParams.source_transaction = chargeId;
+    }
+
+    const transfer = await stripe.transfers.create(transferParams);
+
+    await payout.update({
+      stripeTransferId: transfer.id,
+      status: "completed",
+      completedAt: new Date(),
+    });
+
+    results.push({
+      cleanerId,
+      status: "success",
+      transferId: transfer.id,
+      amountCents: netAmount,
+    });
+  } catch (error) {
+    console.error(`Payout failed for cleaner ${cleanerId}:`, error);
+    results.push({
+      cleanerId,
+      status: "failed",
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * ------------------------------------------------------
  * Helper: Process payouts to cleaners after job completion
  * Records all transactions in Payment table for tax reporting
+ * Delegates to processMultiCleanerPayouts for multi-cleaner jobs
  * ------------------------------------------------------
  */
 async function processCleanerPayouts(appointment) {
+  // Check if this is a multi-cleaner job
+  if (appointment.isMultiCleanerJob && appointment.multiCleanerJobId) {
+    const multiCleanerJob = await MultiCleanerJob.findByPk(appointment.multiCleanerJobId);
+    if (multiCleanerJob) {
+      console.log(`[Payout] Processing multi-cleaner payouts for job ${multiCleanerJob.id}`);
+      return processMultiCleanerPayouts(appointment, multiCleanerJob);
+    }
+  }
+
+  // Standard single-cleaner payout logic
   const cleanerIds = appointment.employeesAssigned || [];
   const results = [];
 
@@ -3177,6 +3493,366 @@ paymentRouter.post(
     }
   }
 );
+
+/**
+ * ------------------------------------------------------
+ * Process partial payout for multi-cleaner job
+ * Used when a cleaner completes their portion of a job
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/multi-cleaner/partial-payout", async (req, res) => {
+  const { appointmentId, cleanerId } = req.body;
+
+  try {
+    const appointment = await UserAppointments.findByPk(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    if (!appointment.isMultiCleanerJob || !appointment.multiCleanerJobId) {
+      return res.status(400).json({ error: "This is not a multi-cleaner job" });
+    }
+
+    const multiCleanerJob = await MultiCleanerJob.findByPk(appointment.multiCleanerJobId);
+    if (!multiCleanerJob) {
+      return res.status(404).json({ error: "Multi-cleaner job not found" });
+    }
+
+    // Find the cleaner's completion record
+    const completion = await CleanerJobCompletion.findOne({
+      where: {
+        multiCleanerJobId: multiCleanerJob.id,
+        cleanerId,
+      },
+    });
+
+    if (!completion || completion.status !== "completed") {
+      return res.status(400).json({
+        error: "Cleaner has not completed their portion of the job",
+      });
+    }
+
+    // Check if already paid
+    const existingPayout = await Payout.findOne({
+      where: {
+        appointmentId,
+        cleanerId,
+        multiCleanerJobId: multiCleanerJob.id,
+        status: "completed",
+      },
+    });
+
+    if (existingPayout) {
+      return res.status(400).json({ error: "Cleaner has already been paid for this job" });
+    }
+
+    // Get room assignments for this cleaner
+    const roomAssignments = await CleanerRoomAssignment.findAll({
+      where: {
+        multiCleanerJobId: multiCleanerJob.id,
+        cleanerId,
+      },
+    });
+
+    // Calculate this cleaner's earnings
+    const home = await UserHomes.findByPk(appointment.homeId);
+    const totalPriceCents = await MultiCleanerPricingService.calculateTotalJobPrice(
+      home,
+      appointment,
+      multiCleanerJob.totalCleanersRequired
+    );
+
+    const allAssignments = await CleanerRoomAssignment.findAll({
+      where: { multiCleanerJobId: multiCleanerJob.id },
+    });
+
+    const earningsBreakdown = await MultiCleanerPricingService.calculatePerCleanerEarnings(
+      totalPriceCents,
+      multiCleanerJob.totalCleanersRequired,
+      allAssignments
+    );
+
+    const cleanerEarning = earningsBreakdown.cleanerEarnings.find(
+      (e) => e.cleanerId == cleanerId
+    );
+
+    if (!cleanerEarning) {
+      return res.status(400).json({ error: "Could not calculate cleaner earnings" });
+    }
+
+    // Get Connect account
+    const connectAccount = await StripeConnectAccount.findOne({
+      where: { userId: cleanerId },
+    });
+
+    if (!connectAccount || !connectAccount.payoutsEnabled) {
+      return res.status(400).json({
+        error: "Cleaner has not completed Stripe onboarding",
+      });
+    }
+
+    // Get charge ID
+    let chargeId = null;
+    if (appointment.paymentIntentId) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
+        chargeId = paymentIntent.latest_charge;
+      } catch (err) {
+        console.error(`Could not retrieve payment intent:`, err.message);
+      }
+    }
+
+    // Create payout record
+    const payout = await Payout.create({
+      appointmentId,
+      cleanerId,
+      multiCleanerJobId: multiCleanerJob.id,
+      grossAmount: cleanerEarning.grossAmount,
+      platformFee: cleanerEarning.platformFee,
+      netAmount: cleanerEarning.netAmount,
+      isPartialPayout: true,
+      status: "processing",
+      paymentCapturedAt: new Date(),
+      transferInitiatedAt: new Date(),
+    });
+
+    // Create Stripe Transfer
+    const transferParams = {
+      amount: cleanerEarning.netAmount,
+      currency: "usd",
+      destination: connectAccount.stripeAccountId,
+      metadata: {
+        appointmentId: appointmentId.toString(),
+        cleanerId: cleanerId.toString(),
+        payoutId: payout.id.toString(),
+        multiCleanerJobId: multiCleanerJob.id.toString(),
+        isPartialPayout: "true",
+        percentOfWork: cleanerEarning.percentOfWork.toString(),
+      },
+    };
+
+    if (chargeId) {
+      transferParams.source_transaction = chargeId;
+    }
+
+    const transfer = await stripe.transfers.create(transferParams);
+
+    await payout.update({
+      stripeTransferId: transfer.id,
+      status: "completed",
+      completedAt: new Date(),
+    });
+
+    await completion.update({ payoutId: payout.id });
+
+    // Record transaction
+    await recordPaymentTransaction({
+      type: "payout",
+      status: "succeeded",
+      amount: cleanerEarning.netAmount,
+      cleanerId,
+      appointmentId,
+      payoutId: payout.id,
+      stripeTransferId: transfer.id,
+      platformFeeAmount: cleanerEarning.platformFee,
+      netAmount: cleanerEarning.netAmount,
+      description: `Partial multi-cleaner payout (${cleanerEarning.percentOfWork}% of work)`,
+      metadata: {
+        multiCleanerJobId: multiCleanerJob.id,
+        percentOfWork: cleanerEarning.percentOfWork,
+        isPartial: true,
+      },
+    });
+
+    return res.json({
+      success: true,
+      payout: {
+        id: payout.id,
+        netAmount: cleanerEarning.netAmount,
+        percentOfWork: cleanerEarning.percentOfWork,
+        transferId: transfer.id,
+      },
+    });
+  } catch (error) {
+    console.error("[Partial Payout] Error:", error);
+    return res.status(500).json({ error: "Failed to process partial payout" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Process solo completion payout
+ * Used when one cleaner takes over the full job after dropout
+ * ------------------------------------------------------
+ */
+paymentRouter.post("/multi-cleaner/solo-completion-payout", async (req, res) => {
+  const { appointmentId, cleanerId } = req.body;
+
+  try {
+    const appointment = await UserAppointments.findByPk(appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    if (!appointment.isMultiCleanerJob || !appointment.multiCleanerJobId) {
+      return res.status(400).json({ error: "This is not a multi-cleaner job" });
+    }
+
+    const multiCleanerJob = await MultiCleanerJob.findByPk(appointment.multiCleanerJobId);
+    if (!multiCleanerJob) {
+      return res.status(404).json({ error: "Multi-cleaner job not found" });
+    }
+
+    // Check for existing payout
+    const existingPayout = await Payout.findOne({
+      where: {
+        appointmentId,
+        cleanerId,
+        status: "completed",
+      },
+    });
+
+    if (existingPayout) {
+      return res.status(400).json({ error: "Cleaner has already been paid for this job" });
+    }
+
+    // Calculate solo completion earnings (full amount minus platform fee)
+    const soloEarnings = await MultiCleanerPricingService.calculateSoloCompletionEarnings(appointmentId);
+
+    // Get Connect account
+    const connectAccount = await StripeConnectAccount.findOne({
+      where: { userId: cleanerId },
+    });
+
+    if (!connectAccount || !connectAccount.payoutsEnabled) {
+      return res.status(400).json({
+        error: "Cleaner has not completed Stripe onboarding",
+      });
+    }
+
+    // Get charge ID
+    let chargeId = null;
+    if (appointment.paymentIntentId) {
+      try {
+        const paymentIntent = await stripe.paymentIntents.retrieve(appointment.paymentIntentId);
+        chargeId = paymentIntent.latest_charge;
+      } catch (err) {
+        console.error(`Could not retrieve payment intent:`, err.message);
+      }
+    }
+
+    const pricing = await getPricingConfig();
+    const platformFeePercent = pricing.platform.feePercent || 0.10;
+    const home = await UserHomes.findByPk(appointment.homeId);
+    const totalPriceCents = await MultiCleanerPricingService.calculateTotalJobPrice(
+      home,
+      appointment,
+      1
+    );
+    const platformFee = Math.round(totalPriceCents * platformFeePercent);
+
+    // Create payout record
+    const payout = await Payout.create({
+      appointmentId,
+      cleanerId,
+      multiCleanerJobId: multiCleanerJob.id,
+      grossAmount: totalPriceCents,
+      platformFee,
+      netAmount: soloEarnings,
+      originalGrossAmount: totalPriceCents,
+      adjustmentReason: "Solo completion of multi-cleaner job",
+      isPartialPayout: false,
+      status: "processing",
+      paymentCapturedAt: new Date(),
+      transferInitiatedAt: new Date(),
+    });
+
+    // Create Stripe Transfer
+    const transferParams = {
+      amount: soloEarnings,
+      currency: "usd",
+      destination: connectAccount.stripeAccountId,
+      metadata: {
+        appointmentId: appointmentId.toString(),
+        cleanerId: cleanerId.toString(),
+        payoutId: payout.id.toString(),
+        multiCleanerJobId: multiCleanerJob.id.toString(),
+        isSoloCompletion: "true",
+      },
+    };
+
+    if (chargeId) {
+      transferParams.source_transaction = chargeId;
+    }
+
+    const transfer = await stripe.transfers.create(transferParams);
+
+    await payout.update({
+      stripeTransferId: transfer.id,
+      status: "completed",
+      completedAt: new Date(),
+    });
+
+    // Update multi-cleaner job status
+    await multiCleanerJob.update({ status: "completed" });
+
+    // Mark appointment as completed
+    await appointment.update({ completed: true });
+
+    // Record transaction
+    await recordPaymentTransaction({
+      type: "payout",
+      status: "succeeded",
+      amount: soloEarnings,
+      cleanerId,
+      appointmentId,
+      payoutId: payout.id,
+      stripeTransferId: transfer.id,
+      platformFeeAmount: platformFee,
+      netAmount: soloEarnings,
+      description: `Solo completion payout for multi-cleaner job ${multiCleanerJob.id}`,
+      metadata: {
+        multiCleanerJobId: multiCleanerJob.id,
+        originalCleanersRequired: multiCleanerJob.totalCleanersRequired,
+        isSoloCompletion: true,
+      },
+    });
+
+    return res.json({
+      success: true,
+      payout: {
+        id: payout.id,
+        netAmount: soloEarnings,
+        netAmountFormatted: `$${(soloEarnings / 100).toFixed(2)}`,
+        transferId: transfer.id,
+        isSoloCompletion: true,
+      },
+    });
+  } catch (error) {
+    console.error("[Solo Completion Payout] Error:", error);
+    return res.status(500).json({ error: "Failed to process solo completion payout" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Get earnings breakdown for a multi-cleaner job
+ * ------------------------------------------------------
+ */
+paymentRouter.get("/multi-cleaner/earnings/:multiCleanerJobId", async (req, res) => {
+  const { multiCleanerJobId } = req.params;
+
+  try {
+    const breakdown = await MultiCleanerPricingService.generateEarningsBreakdown(
+      parseInt(multiCleanerJobId, 10)
+    );
+
+    return res.json({ breakdown });
+  } catch (error) {
+    console.error("[Earnings Breakdown] Error:", error);
+    return res.status(500).json({ error: "Failed to get earnings breakdown" });
+  }
+});
 
 module.exports = paymentRouter;
 module.exports.recordPaymentTransaction = recordPaymentTransaction;

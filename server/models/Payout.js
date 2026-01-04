@@ -62,6 +62,24 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER, // Original fee before incentive reduction (in cents)
       allowNull: true,
     },
+    // Multi-cleaner job fields
+    multiCleanerJobId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    isPartialPayout: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    originalGrossAmount: {
+      type: DataTypes.INTEGER, // Original amount before adjustments (in cents)
+      allowNull: true,
+    },
+    adjustmentReason: {
+      type: DataTypes.TEXT, // 'solo_completion_bonus', 'partial_work', 'co_cleaner_dropout', etc.
+      allowNull: true,
+    },
   });
 
   Payout.associate = (models) => {
@@ -72,6 +90,10 @@ module.exports = (sequelize, DataTypes) => {
     Payout.belongsTo(models.User, {
       foreignKey: "cleanerId",
       as: "cleaner",
+    });
+    Payout.belongsTo(models.MultiCleanerJob, {
+      foreignKey: "multiCleanerJobId",
+      as: "multiCleanerJob",
     });
   };
 

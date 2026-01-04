@@ -35,6 +35,11 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: DataTypes.NOW,
     },
+    // Multi-cleaner: link photo to specific room assignment
+    roomAssignmentId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   });
 
   JobPhoto.associate = (models) => {
@@ -45,6 +50,10 @@ module.exports = (sequelize, DataTypes) => {
     JobPhoto.belongsTo(models.User, {
       foreignKey: "cleanerId",
       as: "cleaner",
+    });
+    JobPhoto.belongsTo(models.CleanerRoomAssignment, {
+      foreignKey: "roomAssignmentId",
+      as: "roomAssignment",
     });
   };
 

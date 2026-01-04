@@ -36,6 +36,9 @@ const LargeHomeWarningModal = ({
   const {
     homeInfo = {},
     isLargeHome,
+    soloAllowed = true, // Default to true for backwards compatibility
+    multiCleanerRequired = false,
+    recommendedCleaners = 2,
     hasTimeConstraint,
     acknowledgmentMessage,
   } = bookingInfo;
@@ -60,7 +63,7 @@ const LargeHomeWarningModal = ({
                 color={colors.warning[600]}
               />
             </View>
-            <Text style={styles.headerTitle}>Large Home Warning</Text>
+            <Text style={styles.headerTitle}>Large Home Detected</Text>
           </View>
 
           {/* Content */}
@@ -73,15 +76,13 @@ const LargeHomeWarningModal = ({
               </Text>
             </View>
 
-            {/* Cleaners needed */}
-            {cleanersNeeded > 1 && (
-              <View style={styles.infoRow}>
-                <Icon name="users" size={16} color={colors.text.secondary} />
-                <Text style={styles.infoText}>
-                  Typically requires {cleanersNeeded} cleaners
-                </Text>
-              </View>
-            )}
+            {/* Recommended cleaners */}
+            <View style={styles.infoRow}>
+              <Icon name="users" size={16} color={colors.primary[500]} />
+              <Text style={[styles.infoText, styles.recommendedText]}>
+                Recommended: {recommendedCleaners} cleaners
+              </Text>
+            </View>
 
             {/* Time constraint */}
             {hasTimeConstraint && (
@@ -95,19 +96,16 @@ const LargeHomeWarningModal = ({
 
             {/* Warning message box */}
             <View style={styles.messageBox}>
-              <Text style={styles.messageTitle}>Important Information</Text>
+              <Text style={styles.messageTitle}>Clean Solo?</Text>
               <Text style={styles.messageText}>
-                This is a larger home that may require additional help to clean properly.
-              </Text>
-              <Text style={[styles.messageText, styles.messageBold]}>
-                Kleanr will not provide extra cleaners.
+                This is a larger home that we recommend having {recommendedCleaners} cleaners for.
               </Text>
               <Text style={styles.messageText}>
-                You may need to bring your own help to complete this cleaning on time.
+                You can still choose to clean this home by yourself, but it may take longer than usual.
               </Text>
               {hasTimeConstraint && (
                 <Text style={[styles.messageText, styles.timeConstraintText]}>
-                  With the time constraint ({timeToBeCompleted}), completing this job alone may be difficult.
+                  Note: With the time constraint ({timeToBeCompleted}), completing this job alone may be challenging.
                 </Text>
               )}
             </View>
@@ -124,7 +122,7 @@ const LargeHomeWarningModal = ({
                 color={colors.warning[600]}
               />
               <Text style={styles.checkboxLabel}>
-                {acknowledgmentMessage || "I understand I may need to bring extra help and Kleanr will not provide additional cleaners"}
+                {acknowledgmentMessage || `I understand this home is larger than average and may take longer to clean solo. I choose to clean it by myself.`}
               </Text>
             </TouchableOpacity>
           </View>
@@ -152,8 +150,8 @@ const LargeHomeWarningModal = ({
                 <ActivityIndicator size="small" color={colors.neutral[0]} />
               ) : (
                 <>
-                  <Icon name="check" size={16} color={colors.neutral[0]} />
-                  <Text style={styles.confirmButtonText}>Book This Job</Text>
+                  <Icon name="user" size={16} color={colors.neutral[0]} />
+                  <Text style={styles.confirmButtonText}>Clean Solo</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -209,6 +207,10 @@ const styles = StyleSheet.create({
   },
   timeWarning: {
     color: colors.warning[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  recommendedText: {
+    color: colors.primary[600],
     fontWeight: typography.fontWeight.medium,
   },
   messageBox: {

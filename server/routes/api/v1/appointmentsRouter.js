@@ -28,6 +28,7 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { recordPaymentTransaction } = require("./paymentRouter");
 const IncentiveService = require("../../../services/IncentiveService");
 const NotificationService = require("../../../services/NotificationService");
+const MultiCleanerService = require("../../../services/MultiCleanerService");
 const { Notification } = require("../../../models");
 
 const appointmentRouter = express.Router();
@@ -757,25 +758,8 @@ appointmentRouter.get("/pending-approval", async (req, res) => {
 });
 
 // ==========================================
-// PARAMETERIZED ROUTES - Must come AFTER specific string routes
+// STATIC PREFIX ROUTES - Must come BEFORE catch-all /:param routes
 // ==========================================
-
-appointmentRouter.get("/:homeId", async (req, res) => {
-  const { homeId } = req.params;
-  try {
-    const appointments = await UserAppointments.findAll({
-      where: {
-        homeId: homeId,
-      },
-    });
-    const serializedAppointments =
-      AppointmentSerializer.serializeArray(appointments);
-    return res.status(200).json({ appointments: serializedAppointments });
-  } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-});
 
 appointmentRouter.get("/home/:homeId", async (req, res) => {
   const { homeId } = req.params;
@@ -1011,7 +995,30 @@ appointmentRouter.post("/", async (req, res) => {
       })
     );
 
-    return res.status(201).json({ appointments });
+    // Check if this is a large home and include info in response
+    const MultiCleanerService = require("../../../services/MultiCleanerService");
+    let largeHomeInfo = null;
+    try {
+      const isLarge = await MultiCleanerService.isLargeHome(
+        home.dataValues.numBeds,
+        home.dataValues.numBaths
+      );
+      if (isLarge) {
+        const recommendedCleaners = await MultiCleanerService.calculateRecommendedCleaners(home);
+        const estimatedMinutes = await MultiCleanerService.estimateJobDuration(home, recommendedCleaners);
+        largeHomeInfo = {
+          isLargeHome: true,
+          recommendedCleaners,
+          estimatedMinutes,
+          estimatedHours: (estimatedMinutes / 60).toFixed(1),
+          warning: `This is a large home (${home.dataValues.numBeds} beds, ${home.dataValues.numBaths} baths). We recommend ${recommendedCleaners} cleaners for optimal service.`,
+        };
+      }
+    } catch (err) {
+      console.error("Error checking large home:", err);
+    }
+
+    return res.status(201).json({ appointments, largeHomeInfo });
   } catch (error) {
     console.error(error);
     return res.status(401).json({ error: "Invalid or expired token" });
@@ -1392,18 +1399,24 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
     const timeToBeCompleted = home.timeToBeCompleted || "anytime";
     const cleanersNeeded = home.cleanersNeeded || 1;
 
-    // Large home is defined as more than 2 beds AND more than 2 baths
-    const isLargeHome = numBeds > 2 && numBaths > 2;
+    // Use MultiCleanerService for consistent large home detection
+    const isLargeHome = await MultiCleanerService.isLargeHome(numBeds, numBaths);
+    const isEdgeLargeHome = await MultiCleanerService.isEdgeLargeHome(numBeds, numBaths);
+    const soloAllowed = await MultiCleanerService.isSoloAllowed(numBeds, numBaths);
+    const multiCleanerRequired = await MultiCleanerService.isMultiCleanerRequired(numBeds, numBaths);
+    const recommendedCleaners = await MultiCleanerService.calculateRecommendedCleaners(home);
+
     // Time constraint only matters for large homes
     const hasTimeConstraint = isLargeHome && timeToBeCompleted !== "anytime";
 
     // Build acknowledgment message based on conditions
     let acknowledgmentMessage = null;
-    if (isLargeHome) {
+    if (isLargeHome && soloAllowed) {
+      // Edge large home - solo is allowed with warning
       if (hasTimeConstraint) {
-        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - I may need to bring my own help. The cleaning must be completed between ${timeToBeCompleted}, which may be difficult without assistance.`;
+        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional time. The cleaning must be completed between ${timeToBeCompleted}, which may be difficult solo. I choose to clean this home by myself.`;
       } else {
-        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - I may need to bring my own help to complete this cleaning.`;
+        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may take longer to clean. I choose to clean this home by myself.`;
       }
     }
 
@@ -1416,8 +1429,14 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
         cleanersNeeded,
       },
       isLargeHome,
+      isEdgeLargeHome,
+      soloAllowed,
+      multiCleanerRequired,
+      recommendedCleaners,
       hasTimeConstraint,
-      requiresAcknowledgment: isLargeHome,
+      // Only require acknowledgment for edge large homes (solo allowed with warning)
+      // Clearly large homes require multi-cleaner, no solo option
+      requiresAcknowledgment: isLargeHome && soloAllowed,
       acknowledgmentMessage,
     });
   } catch (error) {
@@ -1472,13 +1491,15 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     if (home) {
       const numBeds = parseInt(home.numBeds) || 0;
       const numBaths = parseInt(home.numBaths) || 0;
-      const isLargeHome = numBeds > 2 && numBaths > 2;
+      const MultiCleanerService = require("../../../services/MultiCleanerService");
+      const isLargeHome = await MultiCleanerService.isLargeHome(numBeds, numBaths);
 
       if (isLargeHome && !acknowledged) {
         const timeToBeCompleted = home.timeToBeCompleted || "anytime";
         const hasTimeConstraint = timeToBeCompleted !== "anytime";
+        const recommendedCleaners = await MultiCleanerService.calculateRecommendedCleaners(home);
 
-        let message = `This is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional help. Kleanr will not provide extra cleaners - you may need to bring your own help.`;
+        let message = `This is a large home (${numBeds} beds, ${numBaths} baths). Recommended: ${recommendedCleaners} cleaners. Cleaning alone may take longer than the allowed window.`;
         if (hasTimeConstraint) {
           message += ` The cleaning must be completed between ${timeToBeCompleted}, which may be difficult without assistance.`;
         }
@@ -1489,6 +1510,12 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
           requiresAcknowledgment: true,
           isLargeHome: true,
           hasTimeConstraint,
+          recommendedCleaners,
+          // Offer multi-cleaner option
+          multiCleanerOption: {
+            available: true,
+            message: "You can choose to join as part of a multi-cleaner team, or clean solo with acknowledgment.",
+          },
         });
       }
     }
@@ -3469,6 +3496,29 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
   } catch (error) {
     console.error("Error rebooking appointment:", error);
     res.status(500).json({ error: "Failed to create rebooking" });
+  }
+});
+
+// ==========================================
+// CATCH-ALL PARAMETERIZED ROUTE - MUST BE LAST
+// WARNING: This route matches ANY single-segment GET path
+// All other GET routes MUST be defined above this
+// ==========================================
+
+appointmentRouter.get("/:homeId", async (req, res) => {
+  const { homeId } = req.params;
+  try {
+    const appointments = await UserAppointments.findAll({
+      where: {
+        homeId: homeId,
+      },
+    });
+    const serializedAppointments =
+      AppointmentSerializer.serializeArray(appointments);
+    return res.status(200).json({ appointments: serializedAppointments });
+  } catch (error) {
+    console.log(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
 });
 

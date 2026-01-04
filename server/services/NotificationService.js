@@ -379,6 +379,219 @@ class NotificationService {
     console.log(`[NotificationService] Cleaned up ${deleted} expired notifications`);
     return deleted;
   }
+
+  // ============================================
+  // Multi-Cleaner Job Notification Helpers
+  // ============================================
+
+  /**
+   * Notify cleaner about a multi-cleaner job offer
+   */
+  static async notifyMultiCleanerOffer({
+    cleanerId,
+    appointmentId,
+    multiCleanerJobId,
+    earningsAmount,
+    roomAssignments,
+    appointmentDate,
+    io = null,
+  }) {
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 48);
+
+    return this.notifyUser({
+      userId: cleanerId,
+      type: "multi_cleaner_offer",
+      title: "Multi-Cleaner Job Available",
+      body: `$${(earningsAmount / 100).toFixed(2)} for a multi-cleaner job on ${formatDate(appointmentDate)}. Tap to view details.`,
+      data: {
+        appointmentId,
+        multiCleanerJobId,
+        earningsAmount,
+        roomAssignments,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      expiresAt,
+      sendPush: true,
+      sendEmail: true,
+      io,
+    });
+  }
+
+  /**
+   * Notify when a multi-cleaner slot is filled
+   */
+  static async notifySlotFilled({
+    userId,
+    appointmentId,
+    multiCleanerJobId,
+    remainingSlots,
+    newCleanerName,
+    io = null,
+  }) {
+    const body = remainingSlots > 0
+      ? `${newCleanerName} has joined the job. ${remainingSlots} slot(s) remaining.`
+      : `${newCleanerName} has joined. All slots are now filled!`;
+
+    return this.notifyUser({
+      userId,
+      type: "multi_cleaner_slot_filled",
+      title: "Co-cleaner joined",
+      body,
+      data: {
+        appointmentId,
+        multiCleanerJobId,
+        remainingSlots,
+      },
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify about urgent need to fill multi-cleaner slots
+   */
+  static async notifyUrgentFill({
+    cleanerId,
+    appointmentId,
+    multiCleanerJobId,
+    daysRemaining,
+    earningsAmount,
+    io = null,
+  }) {
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    return this.notifyUser({
+      userId: cleanerId,
+      type: "multi_cleaner_urgent",
+      title: "Urgent: Job needs cleaners!",
+      body: `$${(earningsAmount / 100).toFixed(2)} for a job in ${daysRemaining} days. Tap to join now!`,
+      data: {
+        appointmentId,
+        multiCleanerJobId,
+        earningsAmount,
+        daysRemaining,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      expiresAt,
+      sendPush: true,
+      sendEmail: true,
+      io,
+    });
+  }
+
+  /**
+   * Notify about co-cleaner dropout
+   */
+  static async notifyCleanerDropout({
+    userId,
+    appointmentId,
+    multiCleanerJobId,
+    remainingCleaners,
+    isHomeowner,
+    options = [],
+    io = null,
+  }) {
+    const title = isHomeowner
+      ? "Cleaner update for your appointment"
+      : "Co-cleaner unavailable";
+
+    const body = isHomeowner
+      ? `One cleaner is no longer available. ${remainingCleaners} cleaner(s) still assigned.`
+      : `A co-cleaner has dropped out. You may be offered to complete the job solo for full pay.`;
+
+    return this.notifyUser({
+      userId,
+      type: "cleaner_dropout",
+      title,
+      body,
+      data: {
+        appointmentId,
+        multiCleanerJobId,
+        remainingCleaners,
+        options,
+      },
+      actionRequired: !isHomeowner, // Cleaners need to take action
+      relatedAppointmentId: appointmentId,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      sendPush: true,
+      sendEmail: true,
+      io,
+    });
+  }
+
+  /**
+   * Offer solo completion to remaining cleaner
+   */
+  static async notifySoloCompletionOffer({
+    cleanerId,
+    appointmentId,
+    multiCleanerJobId,
+    bonusAmount,
+    appointmentDate,
+    io = null,
+  }) {
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 12);
+
+    return this.notifyUser({
+      userId: cleanerId,
+      type: "solo_completion_offer",
+      title: "Complete job solo for full pay",
+      body: `You can complete the ${formatDate(appointmentDate)} job solo for $${(bonusAmount / 100).toFixed(2)}. Respond within 12 hours.`,
+      data: {
+        appointmentId,
+        multiCleanerJobId,
+        bonusAmount,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      expiresAt,
+      sendPush: true,
+      sendEmail: true,
+      io,
+    });
+  }
+
+  /**
+   * Notify about partial job completion
+   */
+  static async notifyPartialCompletion({
+    homeownerId,
+    appointmentId,
+    multiCleanerJobId,
+    completedRooms,
+    totalRooms,
+    options = [],
+    io = null,
+  }) {
+    const percentage = Math.round((completedRooms / totalRooms) * 100);
+
+    return this.notifyUser({
+      userId: homeownerId,
+      type: "partial_completion",
+      title: "Partial cleaning complete",
+      body: `Your cleaning is ${percentage}% complete (${completedRooms}/${totalRooms} rooms). Tap to view options.`,
+      data: {
+        appointmentId,
+        multiCleanerJobId,
+        completedRooms,
+        totalRooms,
+        percentage,
+        options,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: true,
+      io,
+    });
+  }
 }
 
 module.exports = NotificationService;

@@ -200,6 +200,30 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: 0,
 		},
+		// Multi-cleaner job fields
+		isMultiCleanerJob: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		multiCleanerJobId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		cleanerSlotsRemaining: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		soloCleanerConsent: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		homeownerSoloWarningAcknowledged: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
 	});
 
 	// Define the one-to-many relationship with User
@@ -235,6 +259,18 @@ module.exports = (sequelize, DataTypes) => {
 		UserAppointments.hasMany(models.Notification, {
 			foreignKey: "relatedAppointmentId",
 			as: "notifications",
+		});
+		UserAppointments.belongsTo(models.MultiCleanerJob, {
+			foreignKey: "multiCleanerJobId",
+			as: "multiCleanerJob",
+		});
+		UserAppointments.hasMany(models.CleanerRoomAssignment, {
+			foreignKey: "appointmentId",
+			as: "roomAssignments",
+		});
+		UserAppointments.hasMany(models.CleanerJobCompletion, {
+			foreignKey: "appointmentId",
+			as: "cleanerCompletions",
 		});
 	};
 

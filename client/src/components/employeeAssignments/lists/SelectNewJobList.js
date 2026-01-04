@@ -283,8 +283,18 @@ const SelectNewJobList = ({ state }) => {
         return;
       }
 
+      if (info.multiCleanerRequired) {
+        // This home requires multiple cleaners - no solo option
+        Alert.alert(
+          "Multi-Cleaner Required",
+          `This is a large home (${info.homeInfo.numBeds} beds, ${info.homeInfo.numBaths} baths) that requires ${info.recommendedCleaners} cleaners. Solo cleaning is not available for this home.`,
+          [{ text: "OK" }]
+        );
+        return;
+      }
+
       if (info.requiresAcknowledgment) {
-        // Show warning modal for large homes
+        // Show warning modal for edge large homes (solo allowed with warning)
         setBookingInfo(info);
         setPendingBooking({ employeeId, appointmentId });
         setShowLargeHomeModal(true);

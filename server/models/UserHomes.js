@@ -158,6 +158,16 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: true,
 		},
+		// Multi-cleaner fields
+		squareFootage: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		roomConfiguration: {
+			type: DataTypes.JSONB,
+			allowNull: true,
+			// [{type: 'bedroom', label: 'Master Bedroom', squareFt: 300}, ...]
+		},
 	});
 
 	// Helper function to encrypt PII fields
