@@ -4,6 +4,7 @@ const verifyBusinessOwner = require("../../../middleware/verifyBusinessOwner");
 const BusinessEmployeeService = require("../../../services/BusinessEmployeeService");
 const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssignmentService");
 const PayCalculatorService = require("../../../services/PayCalculatorService");
+const CustomJobFlowService = require("../../../services/CustomJobFlowService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
 const { UserAppointments, UserHomes, User, Payout } = require("../../../models");
@@ -631,6 +632,354 @@ router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
   } catch (error) {
     console.error("Error marking as paid outside:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Custom Job Flow Routes
+// =====================================
+
+/**
+ * GET /job-flows - List all custom job flows
+ */
+router.get("/job-flows", async (req, res) => {
+  try {
+    const { status } = req.query;
+    const flows = await CustomJobFlowService.getFlowsByBusinessOwner(
+      req.businessOwnerId,
+      { status }
+    );
+
+    res.json({ flows });
+  } catch (error) {
+    console.error("Error fetching job flows:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /job-flows - Create a new job flow
+ */
+router.post("/job-flows", async (req, res) => {
+  try {
+    const { name, description, photoRequirement, jobNotes, isDefault } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: "Flow name is required" });
+    }
+
+    const flow = await CustomJobFlowService.createFlow(req.businessOwnerId, {
+      name,
+      description,
+      photoRequirement,
+      jobNotes,
+      isDefault,
+    });
+
+    res.status(201).json({ message: "Job flow created", flow });
+  } catch (error) {
+    console.error("Error creating job flow:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /job-flows/assignments - List all flow assignments
+ */
+router.get("/job-flows/assignments", async (req, res) => {
+  try {
+    const assignments = await CustomJobFlowService.getFlowAssignments(req.businessOwnerId);
+    res.json({ assignments });
+  } catch (error) {
+    console.error("Error fetching flow assignments:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /job-flows/:flowId - Get a specific job flow
+ */
+router.get("/job-flows/:flowId", async (req, res) => {
+  try {
+    const flow = await CustomJobFlowService.getFlowById(
+      parseInt(req.params.flowId),
+      req.businessOwnerId
+    );
+
+    res.json({ flow });
+  } catch (error) {
+    console.error("Error fetching job flow:", error);
+    res.status(404).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /job-flows/:flowId - Update a job flow
+ */
+router.put("/job-flows/:flowId", async (req, res) => {
+  try {
+    const flow = await CustomJobFlowService.updateFlow(
+      parseInt(req.params.flowId),
+      req.businessOwnerId,
+      req.body
+    );
+
+    res.json({ message: "Job flow updated", flow });
+  } catch (error) {
+    console.error("Error updating job flow:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /job-flows/:flowId - Archive or delete a job flow
+ */
+router.delete("/job-flows/:flowId", async (req, res) => {
+  try {
+    const { permanent } = req.query;
+
+    if (permanent === "true") {
+      await CustomJobFlowService.deleteFlow(
+        parseInt(req.params.flowId),
+        req.businessOwnerId
+      );
+      res.json({ message: "Job flow deleted permanently" });
+    } else {
+      const flow = await CustomJobFlowService.archiveFlow(
+        parseInt(req.params.flowId),
+        req.businessOwnerId
+      );
+      res.json({ message: "Job flow archived", flow });
+    }
+  } catch (error) {
+    console.error("Error deleting job flow:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /job-flows/:flowId/set-default - Set a flow as the default
+ */
+router.post("/job-flows/:flowId/set-default", async (req, res) => {
+  try {
+    const flow = await CustomJobFlowService.setDefaultFlow(
+      req.businessOwnerId,
+      parseInt(req.params.flowId)
+    );
+
+    res.json({ message: "Default flow updated", flow });
+  } catch (error) {
+    console.error("Error setting default flow:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /job-flows/clear-default - Clear the default flow
+ */
+router.post("/job-flows/clear-default", async (req, res) => {
+  try {
+    await CustomJobFlowService.clearDefaultFlow(req.businessOwnerId);
+    res.json({ message: "Default flow cleared" });
+  } catch (error) {
+    console.error("Error clearing default flow:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Job Flow Checklist Routes
+// =====================================
+
+/**
+ * GET /job-flows/:flowId/checklist - Get the checklist for a flow
+ */
+router.get("/job-flows/:flowId/checklist", async (req, res) => {
+  try {
+    const flow = await CustomJobFlowService.getFlowById(
+      parseInt(req.params.flowId),
+      req.businessOwnerId
+    );
+
+    res.json({ checklist: flow.checklist || null });
+  } catch (error) {
+    console.error("Error fetching checklist:", error);
+    res.status(404).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /job-flows/:flowId/checklist - Create a checklist from scratch
+ */
+router.post("/job-flows/:flowId/checklist", async (req, res) => {
+  try {
+    const { sections } = req.body;
+
+    if (!sections || !Array.isArray(sections)) {
+      return res.status(400).json({ error: "Sections array is required" });
+    }
+
+    const checklist = await CustomJobFlowService.createChecklistFromScratch(
+      parseInt(req.params.flowId),
+      req.businessOwnerId,
+      { sections }
+    );
+
+    res.status(201).json({ message: "Checklist created", checklist });
+  } catch (error) {
+    console.error("Error creating checklist:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /job-flows/:flowId/checklist - Update the checklist
+ */
+router.put("/job-flows/:flowId/checklist", async (req, res) => {
+  try {
+    const { sections } = req.body;
+
+    if (!sections || !Array.isArray(sections)) {
+      return res.status(400).json({ error: "Sections array is required" });
+    }
+
+    const checklist = await CustomJobFlowService.updateChecklist(
+      parseInt(req.params.flowId),
+      req.businessOwnerId,
+      { sections }
+    );
+
+    res.json({ message: "Checklist updated", checklist });
+  } catch (error) {
+    console.error("Error updating checklist:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /job-flows/:flowId/checklist - Delete the checklist
+ */
+router.delete("/job-flows/:flowId/checklist", async (req, res) => {
+  try {
+    await CustomJobFlowService.deleteChecklist(
+      parseInt(req.params.flowId),
+      req.businessOwnerId
+    );
+
+    res.json({ message: "Checklist deleted" });
+  } catch (error) {
+    console.error("Error deleting checklist:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /job-flows/:flowId/checklist/fork-platform - Fork platform checklist
+ */
+router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
+  try {
+    const { versionId } = req.body;
+
+    const checklist = await CustomJobFlowService.forkPlatformChecklist(
+      parseInt(req.params.flowId),
+      req.businessOwnerId,
+      versionId
+    );
+
+    res.status(201).json({ message: "Platform checklist forked", checklist });
+  } catch (error) {
+    console.error("Error forking platform checklist:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /job-flows/:flowId/checklist/items/:itemId/notes - Add notes to checklist item
+ */
+router.put("/job-flows/:flowId/checklist/items/:itemId/notes", async (req, res) => {
+  try {
+    const { notes } = req.body;
+
+    const checklist = await CustomJobFlowService.addItemNotes(
+      parseInt(req.params.flowId),
+      req.businessOwnerId,
+      req.params.itemId,
+      notes
+    );
+
+    res.json({ message: "Item notes updated", checklist });
+  } catch (error) {
+    console.error("Error updating item notes:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Flow Assignment Routes
+// =====================================
+
+/**
+ * POST /job-flows/assignments/client/:clientId - Assign flow to a client
+ */
+router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
+  try {
+    const { flowId } = req.body;
+
+    if (!flowId) {
+      return res.status(400).json({ error: "Flow ID is required" });
+    }
+
+    const assignment = await CustomJobFlowService.assignFlowToClient(
+      req.businessOwnerId,
+      parseInt(req.params.clientId),
+      flowId
+    );
+
+    res.status(201).json({ message: "Flow assigned to client", assignment });
+  } catch (error) {
+    console.error("Error assigning flow to client:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /job-flows/assignments/home/:homeId - Assign flow to a home
+ */
+router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
+  try {
+    const { flowId } = req.body;
+
+    if (!flowId) {
+      return res.status(400).json({ error: "Flow ID is required" });
+    }
+
+    const assignment = await CustomJobFlowService.assignFlowToHome(
+      req.businessOwnerId,
+      parseInt(req.params.homeId),
+      flowId
+    );
+
+    res.status(201).json({ message: "Flow assigned to home", assignment });
+  } catch (error) {
+    console.error("Error assigning flow to home:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /job-flows/assignments/:assignmentId - Remove a flow assignment
+ */
+router.delete("/job-flows/assignments/:assignmentId", async (req, res) => {
+  try {
+    await CustomJobFlowService.removeFlowAssignment(
+      parseInt(req.params.assignmentId),
+      req.businessOwnerId
+    );
+
+    res.json({ message: "Flow assignment removed" });
+  } catch (error) {
+    console.error("Error removing flow assignment:", error);
+    res.status(400).json({ error: error.message });
   }
 });
 

@@ -137,6 +137,13 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+
+    // Job Flow reference
+    appointmentJobFlowId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Link to the job flow for this assignment",
+    },
   });
 
   // Instance methods
@@ -225,6 +232,10 @@ module.exports = (sequelize, DataTypes) => {
     EmployeeJobAssignment.hasMany(models.EmployeePayChangeLog, {
       foreignKey: "employeeJobAssignmentId",
       as: "payChanges",
+    });
+    EmployeeJobAssignment.belongsTo(models.AppointmentJobFlow, {
+      foreignKey: "appointmentJobFlowId",
+      as: "jobFlow",
     });
   };
 

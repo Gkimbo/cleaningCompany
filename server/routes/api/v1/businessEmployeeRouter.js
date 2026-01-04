@@ -5,9 +5,10 @@ const authenticateToken = require("../../../middleware/authenticatedToken");
 const BusinessEmployeeService = require("../../../services/BusinessEmployeeService");
 const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssignmentService");
 const MarketplaceJobRequirementsService = require("../../../services/MarketplaceJobRequirementsService");
+const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
-const { BusinessEmployee, EmployeeJobAssignment, User, JobPhoto, sequelize } = require("../../../models");
+const { BusinessEmployee, EmployeeJobAssignment, User, JobPhoto, AppointmentJobFlow, sequelize } = require("../../../models");
 
 // =====================================
 // Public Routes (Invitation)
@@ -436,21 +437,37 @@ router.get("/my-jobs/:assignmentId/checklist", async (req, res) => {
         id: assignmentId,
         businessEmployeeId: req.employeeRecord.id,
       },
+      include: [{ model: AppointmentJobFlow, as: "jobFlow" }],
     });
 
     if (!assignment) {
       return res.status(404).json({ error: "Assignment not found" });
     }
 
-    // Get the published checklist
-    const checklist = await MarketplaceJobRequirementsService.getPublishedChecklist();
-
-    res.json({
-      checklist,
-      progress: assignment.checklistProgress || {},
-      checklistCompleted: assignment.checklistCompleted,
-      isMarketplacePickup: assignment.isMarketplacePickup,
-    });
+    // Use AppointmentJobFlowService if job flow exists, otherwise fall back to legacy
+    if (assignment.jobFlow) {
+      const checklistInfo = await AppointmentJobFlowService.getChecklist(assignment.jobFlow.id);
+      res.json({
+        checklist: checklistInfo.snapshotData,
+        progress: checklistInfo.progress || {},
+        checklistCompleted: checklistInfo.completed,
+        jobNotes: checklistInfo.jobNotes,
+        hasChecklist: checklistInfo.hasChecklist,
+        itemCount: checklistInfo.itemCount,
+        completedCount: checklistInfo.completedCount,
+        completionPercentage: checklistInfo.completionPercentage,
+        isMarketplacePickup: assignment.isMarketplacePickup,
+      });
+    } else {
+      // Legacy fallback for assignments without job flow
+      const checklist = await MarketplaceJobRequirementsService.getPublishedChecklist();
+      res.json({
+        checklist,
+        progress: assignment.checklistProgress || {},
+        checklistCompleted: assignment.checklistCompleted,
+        isMarketplacePickup: assignment.isMarketplacePickup,
+      });
+    }
   } catch (error) {
     console.error("Error fetching checklist:", error);
     res.status(500).json({ error: error.message });
@@ -459,11 +476,20 @@ router.get("/my-jobs/:assignmentId/checklist", async (req, res) => {
 
 /**
  * PUT /my-jobs/:assignmentId/checklist - Update checklist progress
+ * Accepts either:
+ *   - status: "completed" | "na" | null (new format)
+ *   - completed: boolean (legacy format, converted to status)
  */
 router.put("/my-jobs/:assignmentId/checklist", async (req, res) => {
   try {
     const assignmentId = parseInt(req.params.assignmentId);
-    const { sectionId, itemId, completed } = req.body;
+    const { sectionId, itemId, status, completed } = req.body;
+
+    // Normalize status - prefer 'status' param, fall back to 'completed' boolean
+    let normalizedStatus = status;
+    if (normalizedStatus === undefined && completed !== undefined) {
+      normalizedStatus = completed ? "completed" : null;
+    }
 
     // Verify employee is assigned to this job
     const assignment = await EmployeeJobAssignment.findOne({
@@ -472,6 +498,7 @@ router.put("/my-jobs/:assignmentId/checklist", async (req, res) => {
         businessEmployeeId: req.employeeRecord.id,
         status: { [sequelize.Sequelize.Op.in]: ["assigned", "started"] },
       },
+      include: [{ model: AppointmentJobFlow, as: "jobFlow" }],
     });
 
     if (!assignment) {
@@ -479,18 +506,37 @@ router.put("/my-jobs/:assignmentId/checklist", async (req, res) => {
     }
 
     let result;
-    if (completed) {
-      result = await MarketplaceJobRequirementsService.markChecklistItemComplete(
-        assignmentId,
+
+    // Use AppointmentJobFlowService if job flow exists, otherwise fall back to legacy
+    if (assignment.jobFlow) {
+      result = await AppointmentJobFlowService.updateChecklistProgress(
+        assignment.jobFlow.id,
         sectionId,
-        itemId
+        itemId,
+        normalizedStatus
       );
+
+      // Sync to legacy fields for backwards compatibility
+      await assignment.update({
+        checklistProgress: result.checklistProgress,
+        checklistCompleted: result.checklistCompleted,
+      });
     } else {
-      result = await MarketplaceJobRequirementsService.markChecklistItemIncomplete(
-        assignmentId,
-        sectionId,
-        itemId
-      );
+      // Legacy fallback - doesn't support N/A, only completed/incomplete
+      const isCompleted = normalizedStatus === "completed";
+      if (isCompleted) {
+        result = await MarketplaceJobRequirementsService.markChecklistItemComplete(
+          assignmentId,
+          sectionId,
+          itemId
+        );
+      } else {
+        result = await MarketplaceJobRequirementsService.markChecklistItemIncomplete(
+          assignmentId,
+          sectionId,
+          itemId
+        );
+      }
     }
 
     res.json({
@@ -518,16 +564,34 @@ router.put("/my-jobs/:assignmentId/checklist/bulk", async (req, res) => {
         businessEmployeeId: req.employeeRecord.id,
         status: { [sequelize.Sequelize.Op.in]: ["assigned", "started"] },
       },
+      include: [{ model: AppointmentJobFlow, as: "jobFlow" }],
     });
 
     if (!assignment) {
       return res.status(404).json({ error: "Assignment not found or job already completed" });
     }
 
-    const result = await MarketplaceJobRequirementsService.bulkUpdateChecklistProgress(
-      assignmentId,
-      updates
-    );
+    let result;
+
+    // Use AppointmentJobFlowService if job flow exists, otherwise fall back to legacy
+    if (assignment.jobFlow) {
+      result = await AppointmentJobFlowService.bulkUpdateChecklistProgress(
+        assignment.jobFlow.id,
+        updates
+      );
+
+      // Sync to legacy fields for backwards compatibility
+      await assignment.update({
+        checklistProgress: result.checklistProgress,
+        checklistCompleted: result.checklistCompleted,
+      });
+    } else {
+      // Legacy fallback
+      result = await MarketplaceJobRequirementsService.bulkUpdateChecklistProgress(
+        assignmentId,
+        updates
+      );
+    }
 
     res.json({
       message: "Checklist updated",
@@ -593,11 +657,26 @@ router.post("/my-jobs/:assignmentId/photos", async (req, res) => {
       takenAt: new Date(),
     });
 
-    // Update photo counts on the assignment
-    const photoCounts = await MarketplaceJobRequirementsService.updatePhotoCounts(
-      assignmentId,
-      req.user.id
-    );
+    // Update photo counts - use AppointmentJobFlowService if job flow exists
+    let photoCounts;
+    if (assignment.appointmentJobFlowId) {
+      photoCounts = await AppointmentJobFlowService.updatePhotoCounts(
+        assignment.appointmentJobFlowId,
+        req.user.id
+      );
+      // Sync to legacy fields
+      await assignment.update({
+        beforePhotoCount: photoCounts.beforePhotoCount,
+        afterPhotoCount: photoCounts.afterPhotoCount,
+        photosCompleted: photoCounts.photosCompleted,
+      });
+    } else {
+      // Legacy fallback
+      photoCounts = await MarketplaceJobRequirementsService.updatePhotoCounts(
+        assignmentId,
+        req.user.id
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -696,11 +775,26 @@ router.delete("/my-jobs/:assignmentId/photos/:photoId", async (req, res) => {
 
     await photo.destroy();
 
-    // Update photo counts on the assignment
-    const photoCounts = await MarketplaceJobRequirementsService.updatePhotoCounts(
-      assignmentId,
-      req.user.id
-    );
+    // Update photo counts - use AppointmentJobFlowService if job flow exists
+    let photoCounts;
+    if (assignment.appointmentJobFlowId) {
+      photoCounts = await AppointmentJobFlowService.updatePhotoCounts(
+        assignment.appointmentJobFlowId,
+        req.user.id
+      );
+      // Sync to legacy fields
+      await assignment.update({
+        beforePhotoCount: photoCounts.beforePhotoCount,
+        afterPhotoCount: photoCounts.afterPhotoCount,
+        photosCompleted: photoCounts.photosCompleted,
+      });
+    } else {
+      // Legacy fallback
+      photoCounts = await MarketplaceJobRequirementsService.updatePhotoCounts(
+        assignmentId,
+        req.user.id
+      );
+    }
 
     res.json({
       success: true,
@@ -726,18 +820,98 @@ router.get("/my-jobs/:assignmentId/completion-status", async (req, res) => {
         id: assignmentId,
         businessEmployeeId: req.employeeRecord.id,
       },
+      include: [{ model: AppointmentJobFlow, as: "jobFlow" }],
     });
 
     if (!assignment) {
       return res.status(404).json({ error: "Assignment not found" });
     }
 
-    const status = await MarketplaceJobRequirementsService.getCompletionStatus(assignmentId);
-
-    res.json(status);
+    // Use AppointmentJobFlowService if job flow exists, otherwise fall back to legacy
+    if (assignment.jobFlow) {
+      const status = await AppointmentJobFlowService.getCompletionStatus(assignment.jobFlow.id);
+      res.json({
+        ...status,
+        assignmentId,
+        status: assignment.status,
+      });
+    } else {
+      // Legacy fallback
+      const status = await MarketplaceJobRequirementsService.getCompletionStatus(assignmentId);
+      res.json(status);
+    }
   } catch (error) {
     console.error("Error fetching completion status:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /my-jobs/:assignmentId/flow-details - Get full job flow details
+ */
+router.get("/my-jobs/:assignmentId/flow-details", async (req, res) => {
+  try {
+    const assignmentId = parseInt(req.params.assignmentId);
+
+    // Verify employee is assigned to this job
+    const assignment = await EmployeeJobAssignment.findOne({
+      where: {
+        id: assignmentId,
+        businessEmployeeId: req.employeeRecord.id,
+      },
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    const flowDetails = await AppointmentJobFlowService.getFlowDetailsForEmployee(assignmentId);
+
+    res.json(flowDetails);
+  } catch (error) {
+    console.error("Error fetching flow details:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /my-jobs/:assignmentId/notes - Add employee notes
+ */
+router.post("/my-jobs/:assignmentId/notes", async (req, res) => {
+  try {
+    const assignmentId = parseInt(req.params.assignmentId);
+    const { notes } = req.body;
+
+    // Verify employee is assigned to this job
+    const assignment = await EmployeeJobAssignment.findOne({
+      where: {
+        id: assignmentId,
+        businessEmployeeId: req.employeeRecord.id,
+        status: { [sequelize.Sequelize.Op.in]: ["assigned", "started"] },
+      },
+      include: [{ model: AppointmentJobFlow, as: "jobFlow" }],
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found or job already completed" });
+    }
+
+    if (!assignment.jobFlow) {
+      return res.status(400).json({ error: "No job flow associated with this assignment" });
+    }
+
+    const updatedFlow = await AppointmentJobFlowService.updateEmployeeNotes(
+      assignment.jobFlow.id,
+      notes
+    );
+
+    res.json({
+      message: "Notes updated",
+      employeeNotes: updatedFlow.employeeNotes,
+    });
+  } catch (error) {
+    console.error("Error updating notes:", error);
+    res.status(400).json({ error: error.message });
   }
 });
 

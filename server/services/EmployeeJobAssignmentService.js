@@ -12,9 +12,12 @@ const {
   UserHomes,
   User,
   CleanerClient,
+  AppointmentJobFlow,
   sequelize,
 } = require("../models");
 const MarketplaceJobRequirementsService = require("./MarketplaceJobRequirementsService");
+const CustomJobFlowService = require("./CustomJobFlowService");
+const AppointmentJobFlowService = require("./AppointmentJobFlowService");
 
 class EmployeeJobAssignmentService {
   /**
@@ -71,20 +74,30 @@ class EmployeeJobAssignmentService {
       throw new Error("This appointment is already assigned to an employee");
     }
 
-    // Check if this is a marketplace job (not the business owner's own client)
-    const isMarketplacePickup = await MarketplaceJobRequirementsService.isMarketplaceJob(
+    // Resolve the job flow for this appointment
+    const flowResolution = await CustomJobFlowService.resolveFlowForAppointment(
       appointment,
-      businessOwnerId
+      businessOwnerId,
+      assignmentData.jobFlowOverride // Optional job-level override
     );
 
-    // Initialize checklist progress for marketplace jobs
-    let checklistProgress = null;
-    if (isMarketplacePickup) {
-      checklistProgress = await MarketplaceJobRequirementsService.initializeChecklistProgress();
-    }
+    const isMarketplacePickup = flowResolution.usesPlatformFlow;
 
-    // Create the assignment
+    // Create the assignment and job flow
     const assignment = await sequelize.transaction(async (t) => {
+      // Create or get the AppointmentJobFlow
+      let jobFlow = await AppointmentJobFlow.findOne({
+        where: { appointmentId },
+        transaction: t,
+      });
+
+      if (!jobFlow) {
+        jobFlow = await AppointmentJobFlowService.createJobFlowForAppointment(
+          appointmentId,
+          flowResolution
+        );
+      }
+
       const newAssignment = await EmployeeJobAssignment.create(
         {
           businessEmployeeId: employeeId,
@@ -97,7 +110,9 @@ class EmployeeJobAssignmentService {
           payType,
           isSelfAssignment: false,
           isMarketplacePickup,
-          checklistProgress,
+          appointmentJobFlowId: jobFlow.id,
+          // Legacy fields - still populated for backwards compatibility
+          checklistProgress: jobFlow.checklistProgress,
         },
         { transaction: t }
       );
@@ -150,20 +165,29 @@ class EmployeeJobAssignmentService {
       throw new Error("This appointment is already assigned");
     }
 
-    // Check if this is a marketplace job (not the business owner's own client)
-    const isMarketplacePickup = await MarketplaceJobRequirementsService.isMarketplaceJob(
+    // Resolve the job flow for this appointment
+    const flowResolution = await CustomJobFlowService.resolveFlowForAppointment(
       appointment,
       businessOwnerId
     );
 
-    // Initialize checklist progress for marketplace jobs
-    let checklistProgress = null;
-    if (isMarketplacePickup) {
-      checklistProgress = await MarketplaceJobRequirementsService.initializeChecklistProgress();
-    }
+    const isMarketplacePickup = flowResolution.usesPlatformFlow;
 
     // Create self-assignment with $0 pay
     const assignment = await sequelize.transaction(async (t) => {
+      // Create or get the AppointmentJobFlow
+      let jobFlow = await AppointmentJobFlow.findOne({
+        where: { appointmentId },
+        transaction: t,
+      });
+
+      if (!jobFlow) {
+        jobFlow = await AppointmentJobFlowService.createJobFlowForAppointment(
+          appointmentId,
+          flowResolution
+        );
+      }
+
       const newAssignment = await EmployeeJobAssignment.create(
         {
           businessEmployeeId: null, // No employee - self assignment
@@ -176,7 +200,9 @@ class EmployeeJobAssignmentService {
           payType: "flat_rate",
           isSelfAssignment: true,
           isMarketplacePickup,
-          checklistProgress,
+          appointmentJobFlowId: jobFlow.id,
+          // Legacy fields - still populated for backwards compatibility
+          checklistProgress: jobFlow.checklistProgress,
         },
         { transaction: t }
       );
@@ -455,8 +481,11 @@ class EmployeeJobAssignmentService {
       throw new Error("Assignment not found or cannot be completed");
     }
 
-    // For marketplace jobs, validate that checklist and photos are complete
-    if (assignment.isMarketplacePickup) {
+    // Validate completion requirements using AppointmentJobFlow
+    if (assignment.appointmentJobFlowId) {
+      await AppointmentJobFlowService.validateCompletionRequirements(assignment.appointmentJobFlowId);
+    } else if (assignment.isMarketplacePickup) {
+      // Fallback to old method for legacy assignments
       await MarketplaceJobRequirementsService.validateCompletionRequirements(assignmentId);
     }
 

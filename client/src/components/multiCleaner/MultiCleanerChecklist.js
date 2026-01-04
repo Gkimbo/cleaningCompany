@@ -39,12 +39,20 @@ const MultiCleanerChecklist = ({
   const [refreshing, setRefreshing] = useState(false);
 
   // Initialize local checklist state from props
+  // Supports both old boolean format and new status format
   useEffect(() => {
     if (checklistItems) {
       const initialState = {};
       Object.keys(checklistItems).forEach((roomId) => {
         initialState[roomId] = checklistItems[roomId].reduce((acc, item) => {
-          acc[item.id] = item.completed || false;
+          // Handle migration from boolean to status format
+          if (item.status) {
+            acc[item.id] = item.status; // "completed" | "na" | null
+          } else if (item.completed === true) {
+            acc[item.id] = "completed";
+          } else {
+            acc[item.id] = null;
+          }
           return acc;
         }, {});
       });
@@ -60,39 +68,49 @@ const MultiCleanerChecklist = ({
     setRefreshing(false);
   }, [onRefresh]);
 
-  const toggleItem = (roomId, itemId) => {
+  // Set item status: "completed", "na", or null (unchecked)
+  // Clicking the same status again will toggle it off
+  const setItemStatus = (roomId, itemId, newStatus) => {
+    const currentStatus = localChecklist[roomId]?.[itemId];
+    // Toggle off if clicking same status
+    const status = currentStatus === newStatus ? null : newStatus;
     const newState = {
       ...localChecklist,
       [roomId]: {
         ...localChecklist[roomId],
-        [itemId]: !localChecklist[roomId]?.[itemId],
+        [itemId]: status,
       },
     };
     setLocalChecklist(newState);
-    onItemToggle?.(roomId, itemId, newState[roomId][itemId]);
+    onItemToggle?.(roomId, itemId, status);
   };
 
   const getRoomProgress = (roomId) => {
     const items = checklistItems?.[roomId] || [];
     const roomState = localChecklist[roomId] || {};
-    const completed = Object.values(roomState).filter(Boolean).length;
-    return { completed, total: items.length };
+    const completed = Object.values(roomState).filter((s) => s === "completed").length;
+    const na = Object.values(roomState).filter((s) => s === "na").length;
+    const done = completed + na;
+    return { completed, na, done, total: items.length };
   };
 
   const isRoomComplete = (roomId) => {
-    const { completed, total } = getRoomProgress(roomId);
-    return total > 0 && completed === total;
+    const { done, total } = getRoomProgress(roomId);
+    return total > 0 && done === total;
   };
 
   const getTotalProgress = () => {
     let totalCompleted = 0;
+    let totalNA = 0;
     let totalItems = 0;
     Object.keys(localChecklist).forEach((roomId) => {
-      const { completed, total } = getRoomProgress(roomId);
+      const { completed, na, total } = getRoomProgress(roomId);
       totalCompleted += completed;
+      totalNA += na;
       totalItems += total;
     });
-    return { completed: totalCompleted, total: totalItems };
+    const totalDone = totalCompleted + totalNA;
+    return { completed: totalCompleted, na: totalNA, done: totalDone, total: totalItems };
   };
 
   const getRoomIcon = (roomType) => {
@@ -124,7 +142,7 @@ const MultiCleanerChecklist = ({
 
   const totalProgress = getTotalProgress();
   const progressPercent = totalProgress.total > 0
-    ? Math.round((totalProgress.completed / totalProgress.total) * 100)
+    ? Math.round((totalProgress.done / totalProgress.total) * 100)
     : 0;
 
   return (
@@ -136,7 +154,7 @@ const MultiCleanerChecklist = ({
           <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
         </View>
         <Text style={styles.progressText}>
-          {totalProgress.completed} of {totalProgress.total} tasks completed ({progressPercent}%)
+          {totalProgress.completed} completed{totalProgress.na > 0 ? `, ${totalProgress.na} N/A` : ""} ({totalProgress.done} of {totalProgress.total})
         </Text>
       </View>
 
@@ -208,7 +226,7 @@ const MultiCleanerChecklist = ({
                       </Text>
                     </View>
                     <Text style={styles.roomProgress}>
-                      {progress.completed}/{progress.total}
+                      {progress.done}/{progress.total}{progress.na > 0 ? ` (${progress.na} N/A)` : ""}
                     </Text>
                   </View>
                 </View>
@@ -223,32 +241,61 @@ const MultiCleanerChecklist = ({
               {/* Checklist Items */}
               {isExpanded && (
                 <View style={styles.checklistContainer}>
-                  {checklistItems?.[room.id]?.map((item) => (
-                    <Pressable
-                      key={item.id}
-                      style={styles.checklistItem}
-                      onPress={() => toggleItem(room.id, item.id)}
-                    >
+                  {checklistItems?.[room.id]?.map((item) => {
+                    const status = localChecklist[room.id]?.[item.id];
+                    const isCompleted = status === "completed";
+                    const isNA = status === "na";
+                    return (
                       <View
+                        key={item.id}
                         style={[
-                          styles.checkbox,
-                          localChecklist[room.id]?.[item.id] && styles.checkboxChecked,
+                          styles.checklistItem,
+                          isCompleted && styles.checklistItemCompleted,
+                          isNA && styles.checklistItemNA,
                         ]}
                       >
-                        {localChecklist[room.id]?.[item.id] && (
-                          <Feather name="check" size={14} color={colors.white} />
-                        )}
+                        {/* Checkbox for complete */}
+                        <Pressable
+                          onPress={() => setItemStatus(room.id, item.id, "completed")}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <View
+                            style={[
+                              styles.checkbox,
+                              isCompleted && styles.checkboxChecked,
+                            ]}
+                          >
+                            {isCompleted && (
+                              <Feather name="check" size={14} color={colors.white} />
+                            )}
+                          </View>
+                        </Pressable>
+
+                        {/* Task text */}
+                        <Text
+                          style={[
+                            styles.checklistText,
+                            isCompleted && styles.checklistTextChecked,
+                            isNA && styles.checklistTextNA,
+                          ]}
+                        >
+                          {item.text}
+                        </Text>
+
+                        {/* N/A button */}
+                        <Pressable
+                          onPress={() => setItemStatus(room.id, item.id, "na")}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <View style={[styles.naButton, isNA && styles.naButtonActive]}>
+                            <Text style={[styles.naButtonText, isNA && styles.naButtonTextActive]}>
+                              N/A
+                            </Text>
+                          </View>
+                        </Pressable>
                       </View>
-                      <Text
-                        style={[
-                          styles.checklistText,
-                          localChecklist[room.id]?.[item.id] && styles.checklistTextChecked,
-                        ]}
-                      >
-                        {item.text}
-                      </Text>
-                    </Pressable>
-                  ))}
+                    );
+                  })}
 
                   {/* Room Complete Button */}
                   <Pressable
@@ -483,6 +530,42 @@ const styles = StyleSheet.create({
   checklistTextChecked: {
     color: colors.neutral[400],
     textDecorationLine: "line-through",
+  },
+  checklistTextNA: {
+    color: colors.neutral[400],
+    fontStyle: "italic",
+  },
+  checklistItemCompleted: {
+    backgroundColor: colors.success[50],
+    borderRadius: radius.md,
+    marginHorizontal: -spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  checklistItemNA: {
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    marginHorizontal: -spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  naButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+    marginLeft: spacing.sm,
+  },
+  naButtonActive: {
+    backgroundColor: colors.warning[100],
+    borderColor: colors.warning[500],
+  },
+  naButtonText: {
+    ...typography.xs,
+    fontWeight: "600",
+    color: colors.neutral[500],
+  },
+  naButtonTextActive: {
+    color: colors.warning[700],
   },
   completeRoomButton: {
     flexDirection: "row",

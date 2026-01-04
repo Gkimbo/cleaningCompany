@@ -30,6 +30,14 @@ const ImportBusinessLanding = () => {
     { value: `${keepPercent}%`, label: "You Keep" },
     { value: "$0", label: "Monthly Fee" },
     { value: "24hr", label: "Fast Payouts" },
+    { value: "5+", label: "Hours Saved/Week" },
+  ];
+
+  const impactNumbers = [
+    { number: "10+", label: "Hours saved per week on admin", icon: "clock" },
+    { number: "99%", label: "On-time payment rate", icon: "credit-card" },
+    { number: "40%", label: "Fewer no-shows with reminders", icon: "bell" },
+    { number: "500+", label: "Active cleaning businesses", icon: "users" },
   ];
 
   const painPoints = [
@@ -71,18 +79,83 @@ const ImportBusinessLanding = () => {
       description: "Chat with clients directly in the app. No more scattered texts and missed messages.",
       gradient: ["#ec4899", "#db2777"],
     },
+    {
+      icon: "users",
+      title: "Employee Management",
+      description: "Hire employees, assign jobs, track their work, and manage payroll - all in one place.",
+      gradient: ["#3b82f6", "#2563eb"],
+    },
+    {
+      icon: "clipboard",
+      title: "Custom Job Flows",
+      description: "Create your own checklists and workflows. Set photo requirements and add notes for each client or home.",
+      gradient: ["#10b981", "#059669"],
+    },
+    {
+      icon: "bar-chart-2",
+      title: "Financial Dashboard",
+      description: "Track earnings, expenses, and profit margins. See your business performance at a glance.",
+      gradient: ["#6366f1", "#4f46e5"],
+    },
+    {
+      icon: "calendar",
+      title: "Smart Calendar",
+      description: "View all jobs, employee schedules, and availability in one unified calendar view.",
+      gradient: ["#f43f5e", "#e11d48"],
+    },
+  ];
+
+  const businessBenefits = [
+    {
+      icon: "trending-up",
+      title: "Grow Your Client Base",
+      stat: "30%",
+      description: "Average increase in bookings with professional scheduling and reminders",
+    },
+    {
+      icon: "clock",
+      title: "Save 10+ Hours Weekly",
+      stat: "10hrs",
+      description: "Stop doing invoices, chasing payments, and manual scheduling",
+    },
+    {
+      icon: "shield",
+      title: "Never Miss a Payment",
+      stat: "99%",
+      description: "Automatic payments mean you get paid on time, every time",
+    },
+    {
+      icon: "heart",
+      title: "Happier Clients",
+      stat: "4.8",
+      description: "Average rating from clients using the platform",
+    },
   ];
 
   const testimonials = [
     {
-      quote: "I used to spend hours every week on invoicing. Now I just clean and get paid automatically.",
+      quote: "I went from chasing 20% of my payments to getting paid automatically 100% of the time. That's an extra $800/month I was leaving on the table.",
       name: "Maria S.",
       role: "5 years in business",
+      stat: "$800/mo recovered",
     },
     {
-      quote: "My clients love the reminders. No more 'I forgot you were coming today' moments.",
+      quote: "I hired my first employee last month. Kleanr made it so easy to assign jobs and track their work. I'm finally scaling my business!",
       name: "James T.",
-      role: "Independent Cleaner",
+      role: "Business Owner, 3 employees",
+      stat: "3x more jobs",
+    },
+    {
+      quote: "The custom checklists are game-changing. Each of my clients has different needs and now my team knows exactly what to do at each home.",
+      name: "Sarah L.",
+      role: "Owner, Sparkle Clean Co.",
+      stat: "Zero complaints",
+    },
+    {
+      quote: "I used to spend Sunday nights doing invoices. Now I spend it with my family. The app does everything for me.",
+      name: "David R.",
+      role: "Solo Cleaner",
+      stat: "10+ hrs saved/week",
     },
   ];
 
@@ -133,6 +206,46 @@ const ImportBusinessLanding = () => {
 
           <Text style={styles.heroNote}>No credit card required</Text>
         </LinearGradient>
+
+        {/* By The Numbers Section */}
+        <View style={styles.numbersSection}>
+          <Text style={styles.sectionLabel}>BY THE NUMBERS</Text>
+          <Text style={styles.sectionTitle}>Real Results for Real Cleaners</Text>
+          <View style={styles.numbersGrid}>
+            {impactNumbers.map((item, index) => (
+              <View key={index} style={styles.numberCard}>
+                <View style={styles.numberIconContainer}>
+                  <Feather name={item.icon} size={24} color={colors.primary[500]} />
+                </View>
+                <Text style={styles.numberValue}>{item.number}</Text>
+                <Text style={styles.numberLabel}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Business Benefits Section */}
+        <View style={styles.benefitsSection}>
+          <Text style={styles.sectionLabel}>WHY SWITCH</Text>
+          <Text style={styles.sectionTitle}>Transform Your Business</Text>
+          <Text style={styles.sectionSubtitle}>
+            See the difference Kleanr makes for cleaning professionals
+          </Text>
+          <View style={styles.benefitsGrid}>
+            {businessBenefits.map((benefit, index) => (
+              <View key={index} style={styles.benefitCard}>
+                <View style={styles.benefitHeader}>
+                  <View style={styles.benefitIconCircle}>
+                    <Feather name={benefit.icon} size={20} color={colors.primary[600]} />
+                  </View>
+                  <Text style={styles.benefitStat}>{benefit.stat}</Text>
+                </View>
+                <Text style={styles.benefitTitle}>{benefit.title}</Text>
+                <Text style={styles.benefitDescription}>{benefit.description}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         {/* Problem/Solution Section */}
         <View style={styles.problemSolutionSection}>
@@ -243,13 +356,23 @@ const ImportBusinessLanding = () => {
 
         {/* Testimonials */}
         <View style={styles.testimonialsSection}>
-          <Text style={styles.sectionLabel}>TESTIMONIALS</Text>
-          <Text style={styles.sectionTitle}>Loved by Cleaners</Text>
+          <Text style={styles.sectionLabel}>SUCCESS STORIES</Text>
+          <Text style={styles.sectionTitle}>Real Results from Real Cleaners</Text>
+          <Text style={styles.sectionSubtitle}>
+            See how business owners like you are growing with Kleanr
+          </Text>
 
           {testimonials.map((testimonial, index) => (
             <View key={index} style={styles.testimonialCard}>
-              <View style={styles.quoteIcon}>
-                <Feather name="message-circle" size={20} color={colors.primary[400]} />
+              <View style={styles.testimonialHeader}>
+                <View style={styles.quoteIcon}>
+                  <Feather name="message-circle" size={20} color={colors.primary[400]} />
+                </View>
+                {testimonial.stat && (
+                  <View style={styles.testimonialStatBadge}>
+                    <Text style={styles.testimonialStatText}>{testimonial.stat}</Text>
+                  </View>
+                )}
               </View>
               <Text style={styles.testimonialQuote}>"{testimonial.quote}"</Text>
               <View style={styles.testimonialAuthor}>
@@ -304,17 +427,42 @@ const ImportBusinessLanding = () => {
 
         {/* Final CTA */}
         <View style={styles.finalCtaSection}>
-          <Text style={styles.finalCtaTitle}>Ready to Simplify Your Business?</Text>
+          <Text style={styles.finalCtaTitle}>Ready to Work Smarter, Not Harder?</Text>
           <Text style={styles.finalCtaSubtitle}>
-            Join hundreds of cleaning professionals who've already made the switch.
+            Join 500+ cleaning professionals who save 10+ hours every week
           </Text>
+
+          <View style={styles.finalCtaFeatures}>
+            <View style={styles.finalCtaFeatureRow}>
+              <Feather name="check-circle" size={18} color={colors.primary[400]} />
+              <Text style={styles.finalCtaFeatureText}>Free to start, no credit card required</Text>
+            </View>
+            <View style={styles.finalCtaFeatureRow}>
+              <Feather name="check-circle" size={18} color={colors.primary[400]} />
+              <Text style={styles.finalCtaFeatureText}>Set up in under 5 minutes</Text>
+            </View>
+            <View style={styles.finalCtaFeatureRow}>
+              <Feather name="check-circle" size={18} color={colors.primary[400]} />
+              <Text style={styles.finalCtaFeatureText}>Cancel anytime, keep your data</Text>
+            </View>
+          </View>
 
           <TouchableOpacity
             style={styles.finalCtaButton}
             onPress={() => navigate("/business-signup-check")}
           >
             <Feather name="zap" size={20} color="#fff" />
-            <Text style={styles.finalCtaButtonText}>Get Started Free</Text>
+            <Text style={styles.finalCtaButtonText}>Start Growing Your Business</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.calculatorLink}
+            onPress={() => navigate("/earnings-calculator")}
+          >
+            <Feather name="calculator" size={16} color={colors.primary[400]} />
+            <Text style={styles.calculatorLinkText}>
+              See how much you could earn
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -422,6 +570,97 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: "#64748b",
     marginTop: spacing.md,
+  },
+
+  // By The Numbers Section
+  numbersSection: {
+    padding: spacing.xl,
+    backgroundColor: "#fff",
+  },
+  numbersGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: spacing.lg,
+  },
+  numberCard: {
+    width: "48%",
+    backgroundColor: "#f8fafc",
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  numberIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.sm,
+  },
+  numberValue: {
+    fontSize: 32,
+    fontWeight: "800",
+    color: colors.primary[600],
+    marginBottom: 4,
+  },
+  numberLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 16,
+  },
+
+  // Business Benefits Section
+  benefitsSection: {
+    padding: spacing.xl,
+    backgroundColor: "#f0fdf4",
+  },
+  benefitsGrid: {
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  benefitCard: {
+    backgroundColor: "#fff",
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    ...shadows.sm,
+  },
+  benefitHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  benefitIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  benefitStat: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: colors.success[600],
+  },
+  benefitTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  benefitDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: 20,
   },
 
   // Problem/Solution Section
@@ -616,8 +855,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e2e8f0",
   },
-  quoteIcon: {
+  testimonialHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: spacing.md,
+  },
+  quoteIcon: {},
+  testimonialStatBadge: {
+    backgroundColor: colors.success[100],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  testimonialStatText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
   },
   testimonialQuote: {
     fontSize: typography.fontSize.base,
@@ -723,7 +977,20 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: "#94a3b8",
     textAlign: "center",
+    marginBottom: spacing.lg,
+  },
+  finalCtaFeatures: {
     marginBottom: spacing.xl,
+  },
+  finalCtaFeatureRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  finalCtaFeatureText: {
+    fontSize: typography.fontSize.sm,
+    color: "#cbd5e1",
+    marginLeft: spacing.sm,
   },
   finalCtaButton: {
     flexDirection: "row",
@@ -740,6 +1007,18 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: "#fff",
     marginLeft: spacing.sm,
+  },
+  calculatorLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  calculatorLinkText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[400],
+    marginLeft: spacing.xs,
+    textDecorationLine: "underline",
   },
   signInLink: {
     paddingVertical: spacing.sm,
