@@ -119,6 +119,12 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0.10,
       comment: "Platform fee percentage (0.10 = 10%)",
     },
+    businessOwnerFeePercent: {
+      type: DataTypes.DECIMAL(3, 2),
+      allowNull: false,
+      defaultValue: 0.10,
+      comment: "Platform fee percentage for business owner cleaners (0.10 = 10%)",
+    },
 
     // Incentive cancellation settings
     incentiveRefundPercent: {
@@ -140,6 +146,50 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 50,
       comment: "Additional fee for high volume days",
+    },
+
+    // Multi-cleaner job settings
+    multiCleanerPlatformFeePercent: {
+      type: DataTypes.DECIMAL(3, 2),
+      allowNull: false,
+      defaultValue: 0.13,
+      comment: "Platform fee for multi-cleaner jobs (0.13 = 13%)",
+    },
+    soloLargeHomeBonus: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: "Bonus in cents for solo cleaner on large home",
+    },
+    largeHomeBedsThreshold: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 3,
+      comment: "Minimum beds to trigger large home (3 = 3+ beds)",
+    },
+    largeHomeBathsThreshold: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 3,
+      comment: "Minimum baths to trigger large home (3 = 3+ baths)",
+    },
+    multiCleanerOfferExpirationHours: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 48,
+      comment: "Hours before job offer expires",
+    },
+    urgentFillDays: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 7,
+      comment: "Days before appointment to send urgent fill notifications",
+    },
+    finalWarningDays: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 3,
+      comment: "Days before appointment for homeowner final warning",
     },
 
     // Audit fields
@@ -228,8 +278,18 @@ module.exports = (sequelize, DataTypes) => {
       },
       platform: {
         feePercent: parseFloat(config.platformFeePercent),
+        businessOwnerFeePercent: parseFloat(config.businessOwnerFeePercent || config.platformFeePercent),
       },
       highVolumeFee: config.highVolumeFee,
+      multiCleaner: {
+        platformFeePercent: parseFloat(config.multiCleanerPlatformFeePercent || 0.13),
+        soloLargeHomeBonus: config.soloLargeHomeBonus || 0,
+        largeHomeBedsThreshold: config.largeHomeBedsThreshold || 3,
+        largeHomeBathsThreshold: config.largeHomeBathsThreshold || 3,
+        offerExpirationHours: config.multiCleanerOfferExpirationHours || 48,
+        urgentFillDays: config.urgentFillDays || 7,
+        finalWarningDays: config.finalWarningDays || 3,
+      },
     };
   };
 

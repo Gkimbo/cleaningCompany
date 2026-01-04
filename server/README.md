@@ -6,11 +6,11 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-964_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-2809_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
-[Getting Started](#-getting-started) | [API Reference](#-api-reference) | [Database](#-database) | [Services](#-services)
+[Getting Started](#-getting-started) | [Features](#-features) | [API Reference](#-api-reference) | [Database](#-database) | [Services](#-services)
 
 </div>
 
@@ -18,7 +18,20 @@
 
 ## Overview
 
-The Kleanr server is an Express.js API that powers the cleaning service platform. It handles authentication, appointment scheduling, payment processing with Stripe, real-time messaging, calendar synchronization with vacation rental platforms, and comprehensive tax document generation.
+Kleanr is a comprehensive cleaning service marketplace platform that connects homeowners with professional cleaners and cleaning businesses. The platform supports multiple user types including platform clients, independent cleaners, business owners with their own clients, HR staff, and platform administrators.
+
+**Key Capabilities:**
+- Multi-tenant cleaning service marketplace
+- Business owner onboarding with client management
+- Real-time messaging with suspicious content detection
+- Dynamic pricing with incentive programs
+- Stripe Connect for cleaner payouts
+- iCal calendar synchronization with vacation rental platforms
+- Comprehensive tax document generation (1099-NEC)
+- Referral programs for growth
+- HR dispute management system
+- Before/after job photo documentation
+- Home size dispute resolution
 
 ---
 
@@ -43,7 +56,7 @@ createdb cleaning_company_development
 # Run migrations
 npx sequelize-cli db:migrate
 
-# Seed initial data (manager account)
+# Seed initial data (owner account)
 npx sequelize-cli db:seed --seed ownerSeeder.js
 
 # Seed Terms & Conditions and Privacy Policy
@@ -72,6 +85,11 @@ SESSION_SECRET=your_super_secret_key_here
 # Database
 # ===================
 DATABASE_URL=postgresql://localhost/cleaning_company_development
+
+# ===================
+# Encryption (Required for PII)
+# ===================
+ENCRYPTION_KEY=your_32_byte_encryption_key_here
 
 # ===================
 # Stripe Payments (Required)
@@ -109,90 +127,281 @@ API_NINJA_API_KEY=your_api_ninja_key
 
 ---
 
-## Project Structure
+## Features
 
-```
-server/
-├── __tests__/
-│   ├── integration/                # End-to-end tests
-│   │   ├── fullPaymentFlow.test.js
-│   │   ├── stripe.test.js
-│   │   └── stripeConnectFlow.test.js
-│   ├── routes/                     # Route tests
-│   │   ├── appointments.test.js
-│   │   ├── auth.test.js
-│   │   ├── calendarSync.test.js
-│   │   ├── messages.test.js
-│   │   ├── payments.test.js
-│   │   ├── reviews.test.js
-│   │   ├── tax.test.js
-│   │   └── terms.test.js
-│   └── services/                   # Service tests
-│       └── calendarSyncService.test.js
-│
-├── config/
-│   └── database.js                 # Sequelize configuration
-│
-├── migrations/                     # Database migrations
-│   ├── 20251211...-create-users.js
-│   ├── 20251211...-create-homes.js
-│   ├── 20251211...-create-appointments.js
-│   ├── 20251211...-create-payments.js
-│   ├── 20251212...-create-calendar-sync.js
-│   ├── 20251212...-create-reviews.js
-│   └── ...
-│
-├── models/                         # Sequelize models
-│   ├── User.js
-│   ├── UserHomes.js
-│   ├── UserAppointments.js
-│   ├── CalendarSync.js
-│   ├── Payment.js
-│   ├── Payout.js
-│   ├── Review.js
-│   ├── TaxInfo.js
-│   ├── TaxDocument.js
-│   ├── Conversation.js
-│   ├── Message.js
-│   ├── TermsAndConditions.js
-│   ├── UserTermsAcceptance.js
-│   └── index.js
-│
-├── routes/api/v1/
-│   ├── userSessionsRouter.js       # Authentication
-│   ├── usersRouter.js              # User management
-│   ├── appointmentsRouter.js       # Appointments
-│   ├── calendarSyncRouter.js       # iCal sync
-│   ├── paymentRouter.js            # Payments & cron jobs
-│   ├── stripeConnectRouter.js      # Cleaner payouts
-│   ├── taxRouter.js                # Tax documents
-│   ├── reviewsRouter.js            # Reviews
-│   ├── messageRouter.js            # Messaging
-│   ├── pushNotificationRouter.js   # Push notifications
-│   ├── managerDashboardRouter.js   # Manager features
-│   ├── applicationRouter.js        # Job applications
-│   ├── jobPhotosRouter.js          # Photo uploads
-│   └── termsRouter.js              # Terms & Conditions
-│
-├── services/
-│   ├── calendarSyncService.js      # iCal parsing & sync
-│   ├── TaxDocumentService.js       # 1099-NEC generation
-│   ├── PlatformTaxService.js       # Platform tax reporting
-│   └── sendNotifications/
-│       ├── EmailClass.js           # HTML email notifications
-│       └── PushNotificationClass.js # Expo push notifications
-│
-├── middleware/
-│   └── authenticatedToken.js       # JWT authentication
-│
-├── seeders/                        # Database seeds
-│   ├── ownerSeeder.js              # Manager account
-│   ├── termsAndConditionsSeeder.js # Terms for homeowners/cleaners
-│   └── privacyPolicySeeder.js      # Privacy policy document
-│
-├── app.js                          # Express app setup
-└── package.json
-```
+### User Types & Roles
+
+| Role | Description |
+|------|-------------|
+| **Homeowner/Client** | Book cleanings, manage homes, pay bills, leave reviews |
+| **Cleaner** | Apply for platform work, accept jobs, earn money, manage schedule |
+| **Business Owner** | Cleaner who can onboard and manage their own clients directly |
+| **HR Staff** | Handle disputes, review suspicious activity reports, manage support |
+| **Owner** | Platform administrator with full access to all features |
+
+### Authentication & Account Management
+
+- User registration with email/password
+- Business owner signup flow with client management capabilities
+- Cleaner upgrade to business owner (existing cleaners can become business owners)
+- HR account creation with automatic email invitations
+- Password reset/recovery via email
+- Password strength validation (8+ chars, uppercase, lowercase, numbers, special)
+- Username reset functionality
+- Terms & Conditions and Privacy Policy acceptance tracking
+- JWT-based authentication with 24-hour token expiration
+- Encrypted PII storage (names, emails, tax IDs)
+- Login tracking with last login timestamp
+- Account freezing with reasons for policy violations
+- Warning system with violation counts
+
+### Business Owner Onboarding
+
+Business owners are cleaners who can manage their own clients directly:
+
+- **Upgrade Path**: Existing cleaners can upgrade to business owner status
+- **Invite Clients**: Send invitations to new clients by email with home details
+- **Client Setup Flow**: Guided onboarding for invited clients
+- **Invitation Management**: Resend invitations, track pending responses
+- **Recurring Schedules**: Configure weekly/biweekly/monthly cleanings during invite
+- **My Clients Page**: View and manage all direct client relationships
+- **Book For Client**: Create appointments on behalf of clients
+- **Per-Home Pricing**: Set custom pricing for each client's home
+- **Platform Price Alignment**: "Align with Platform Pricing" button for easy rate setting
+- **Direct Revenue**: Earn full amount from owned clients (no platform fee)
+- **Client History**: View historical appointments and payment data per client
+
+### Homeowner Features
+
+- **Multi-Home Management**: Add and manage multiple properties
+- **Home Details**: Beds, baths, half baths, access codes, linen preferences, special notes
+- **Home Setup Wizard**: Guided setup for complete home configuration
+- **Service Area Validation**: Homes must be within service area to book
+- **Appointment Booking**: Schedule one-time or recurring cleanings
+- **Time Windows**: Select preferred cleaning times (anytime, 10-3, 11-4, 12-2)
+- **Preferred Cleaner**: Mark favorite cleaners for priority assignment
+- **Calendar Sync**: Sync with vacation rental platforms (Airbnb, VRBO, Booking.com)
+- **Auto-Booking**: Automatic appointment creation from vacation rental checkouts
+- **Bill Management**: View and pay appointment and cancellation fees
+- **Prepayment**: Pay for multiple upcoming appointments at once
+- **Review System**: Rate cleaners on multiple aspects after completion
+- **Bidirectional Reviews**: See cleaner's review after submitting yours
+- **In-App Messaging**: Communicate with assigned cleaners
+- **Support Chat**: Contact owner/HR for help
+- **Notification Preferences**: Control email and push notifications
+
+**Home Configuration Options:**
+- Access method (keypad code, key location, lockbox)
+- Trash/recycling/compost locations
+- Sheet preferences (homeowner provides, company provides, no sheets)
+- Clean/dirty sheet storage locations
+- Towel preferences and locations
+- Bed configurations by room
+- Bathroom details
+- Special instructions
+- Contact information per home
+- Time requirements (estimated cleaning duration)
+- Multi-cleaner needs
+
+### Cleaner Features
+
+- **Job Application**: Submit detailed application with background info
+- **Application Review Process**: Photo submissions, reference checks, background consent
+- **View Available Jobs**: Browse unassigned appointments to request
+- **Request Assignments**: Request to be assigned to specific appointments
+- **Job Photos**: Upload before/after photos documenting work (required for completion)
+- **Photo Requirements**: Before photos required first, then after photos
+- **Recurring Schedules**: Set up regular clients with recurring appointments
+- **Earnings Dashboard**: Track income with visual charts (daily, weekly, monthly, yearly)
+- **Stripe Connect**: Receive payouts directly to bank account
+- **Review Management**: View and respond to client reviews
+- **Review Statistics**: Aggregate ratings across all reviews
+- **Supply Reminders**: Get reminders to bring supplies (with 1-week snooze option)
+- **Tax Documents**: Access W-9 submission and 1099-NEC downloads
+- **Working Days Configuration**: Set available days for scheduling
+
+### Job Photo System
+
+- **Before Photos**: Document home state before cleaning (required)
+- **After Photos**: Document completed work (requires before photos first)
+- **Room Organization**: Photos organized by area/room
+- **Photo Notes**: Add annotations to photos
+- **Access Control**: Only assigned cleaner and homeowner can view
+- **Completion Check**: Both before/after required to complete job
+- **Photo Deletion**: Uploader can delete before job completion
+
+### Home Size Disputes
+
+- **Size Mismatch Reporting**: Cleaners can report incorrect bed/bath counts
+- **Photo Evidence**: Must provide photos of each bedroom/bathroom as proof
+- **Validation**: Photo count must match reported size
+- **HR Review**: Disputes reviewed by HR staff with photo evidence
+- **Resolution Options**: Approve (adjust price), deny, or expire
+- **False Claim Tracking**: Track cleaners with excessive false claims
+- **False Complaint Tracking**: Track homeowners with repeated false listings
+
+### HR Staff Features
+
+- **Dispute Management**: Review and decide on home size adjustment requests
+- **Photo Evidence Review**: Examine cleaner-submitted photos for disputes
+- **Suspicious Activity Reports**: Review flagged messages with contact info
+- **User Warnings**: Issue warnings to policy violators
+- **Warning Counts**: Track number of warnings per user
+- **Account Freezing**: Freeze accounts of repeat offenders with reasons
+- **Support Conversations**: Handle customer support inquiries
+- **Internal Messaging**: Communicate with owner and other HR staff
+- **Quick Stats Dashboard**: Overview of pending items and metrics
+
+### Owner/Admin Features
+
+- **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
+- **Platform Withdrawals**: Transfer earnings to bank via Stripe
+- **Stripe Balance**: View pending and available platform balance
+- **Employee Management**: Create/edit/delete HR staff and cleaner employees
+- **Pricing Configuration**: Set base prices, per-bed/bath fees, cancellation fees
+- **Advanced Pricing**: Half bath fees, sheet/towel fees, time window premiums
+- **Incentive Programs**: Configure cleaner fee reductions and homeowner discounts
+- **Referral Programs**: Create referral rewards for homeowners and cleaners
+- **Checklist Management**: Create and publish cleaning checklists with sections
+- **Checklist Versioning**: Maintain history, revert to previous versions
+- **Terms & Conditions**: Manage terms versions with acceptance tracking
+- **Application Review**: Approve or reject cleaner applications
+- **Application Notes**: Add private notes during review process
+- **Broadcast Messaging**: Send announcements to all users or specific groups
+- **Suspicious Activity**: Review all flagged messages and take action
+- **Tax Reporting**: Generate platform tax reports and contractor 1099s
+- **Service Area Management**: Configure geographic service restrictions
+
+### Messaging System
+
+- **Conversation Types**: Appointment, support, cleaner-client, internal (HR/owner), custom groups
+- **Real-Time Updates**: Socket.io for instant message delivery
+- **Message Reactions**: React to messages with emojis
+- **Read Receipts**: Track message read status with timestamps
+- **Mark All Read**: Bulk mark messages as read
+- **Suspicious Content Detection**: Auto-flag phone numbers, emails, off-platform offers
+- **Report Functionality**: Users can report suspicious messages
+- **Group Conversations**: Multi-participant chat support
+- **Add Participants**: Invite additional users to conversations
+- **Broadcast Announcements**: Platform-wide announcements from owner
+- **Conversation Titles**: Custom naming for easy identification
+- **Message Deletion**: Delete individual messages
+- **Unread Counts**: Per-conversation and total unread badges
+
+### Payments & Billing
+
+- **Stripe Integration**: Secure payment processing
+- **Payment Methods**: Add, remove, and manage saved payment methods
+- **Payment Intents**: Create and capture payment intents
+- **Dynamic Pricing**: Based on home size, time windows, linens, incentives
+- **Bill Management**: Appointment dues and cancellation fees
+- **Bill Sync**: Automatic synchronization from appointments
+- **Prepayment**: Pay for all upcoming or batch of appointments
+- **Stripe Connect Payouts**: Direct transfers to cleaner bank accounts
+- **Platform Fee**: Configurable percentage (default 10%) on platform jobs
+- **Business Owner Fee**: Separate configurable percentage
+- **Payment History**: Complete transaction records with pagination
+- **Refund Processing**: Handle payment refunds
+- **Payment Retry**: Automatic retry of failed payments
+- **Overdue Reminders**: Configurable reminder frequency
+
+**Pricing Configuration:**
+- Base price per cleaning
+- Per bedroom fee
+- Per bathroom fee
+- Per half-bath fee
+- Sheet service fee (per bed)
+- Towel service fee
+- Face cloth fee
+- Time window premiums (anytime, 10-3, 11-4, 12-2)
+- Cancellation fee and window
+- Refund percentage
+- High volume fees
+
+### Reviews & Ratings
+
+- **Multi-Aspect Reviews**: Rate on professionalism, attention-to-detail, communication
+- **Star Rating**: 1-5 star rating system
+- **Written Feedback**: Optional text reviews
+- **Bidirectional Reviews**: Both parties review before either can see results
+- **Review Visibility**: Reviews hidden until both parties submit
+- **Review Statistics**: Aggregate ratings and breakdowns
+- **Pending Reviews**: Track appointments needing reviews
+- **Preferred Cleaner Award**: Option to mark cleaner as preferred when reviewing
+
+### Incentive Programs
+
+- **Cleaner Incentives**: Fee reduction for qualifying cleaners
+- **Homeowner Incentives**: Discounts for frequent customers
+- **Eligibility Tracking**: Automatic qualification based on activity
+- **Configuration**: Set percentages, max cleanings, eligibility requirements
+- **History Tracking**: Record of incentive applications
+
+### Referral Programs
+
+- **Referral Codes**: Unique codes for each user
+- **Tiered Rewards**: Different rewards for homeowner vs cleaner referrals
+- **Status Tracking**: Pending, qualified, redeemed
+- **Reward Types**: Discounts, fee reductions, credit
+- **Minimum Requirements**: Configurable cleanings required to qualify
+- **Referrer Rewards**: Bonus for successful referrals
+- **Referee Rewards**: Welcome bonus for new users
+
+### Tax & Compliance
+
+- **W-9 Collection**: Secure tax information submission
+- **Tax Info Fields**: Legal name, business name, entity type, TIN
+- **1099-NEC Generation**: Automatic generation for contractors
+- **1099-K Calculations**: Expected amounts for high-volume contractors
+- **Encrypted Storage**: TIN encrypted with AES-256
+- **Platform Tax Reports**: Annual income summaries, quarterly estimates
+- **Monthly Earnings Breakdown**: Detailed income by month
+- **Schedule C Support**: Data for contractor tax filing
+- **Tax Deadlines**: Track important tax filing dates
+- **Tax Document History**: Access previous years' documents
+
+### Calendar Integration
+
+- **iCal Sync**: Parse vacation rental calendars
+- **Supported Platforms**: Airbnb, VRBO, Booking.com (auto-detected)
+- **Auto-Appointment Creation**: Generate appointments from checkout dates
+- **Configurable Offset**: Set days after checkout for cleaning
+- **Calendar Preview**: Preview events before syncing
+- **Multiple Calendars**: Link multiple calendars per home
+- **Auto-Sync Toggle**: Enable/disable automatic updates
+- **Manual Sync**: Trigger sync on demand
+- **Periodic Sync**: Automatic daily calendar updates
+
+### Notifications
+
+- **Push Notifications**: Mobile push via Expo
+- **Email Notifications**: HTML email templates for all events
+- **In-App Notifications**: Notification feed with unread counts
+- **Preferences**: Toggle notification types per channel
+- **Supply Reminder Snooze**: Cleaners can snooze reminders for 1 week
+- **Action Required Badges**: Highlight notifications needing response
+- **Notification Expiration**: Auto-cleanup of old notifications
+- **Multi-Channel Delivery**: Push, email, and in-app simultaneously
+
+**Notification Events:**
+- Appointment confirmations and reminders
+- Booking requests and approvals
+- Booking expiration warnings (48-hour window)
+- Payment confirmations and receipts
+- Review invitations
+- Preferred cleaner status earned
+- Cleaner application updates
+- Support messages
+- Referral rewards earned
+- Appointment cancellations
+- Supply reminders
+
+### Booking Expiration
+
+- **48-Hour Window**: Clients have 48 hours to respond to bookings
+- **Expiration Warnings**: Notifications before booking expires
+- **Automatic Expiration**: Pending bookings expire after window
+- **Cron Job**: Daily check for expired bookings
 
 ---
 
@@ -204,18 +413,24 @@ server/
 |--------|----------|-------------|------|
 | `POST` | `/api/v1/user-sessions/login` | User login | No |
 | `POST` | `/api/v1/users` | Register new user | No |
+| `POST` | `/api/v1/users/business-owner` | Register as business owner | No |
 | `GET` | `/api/v1/user-sessions/current` | Get current user | Yes |
 | `POST` | `/api/v1/user-sessions/logout` | Logout user | Yes |
+| `POST` | `/api/v1/users/reset-password` | Request password reset | No |
+| `POST` | `/api/v1/users/reset-password/confirm` | Confirm password reset | No |
 
 ### Users
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | `GET` | `/api/v1/user-info` | Get user profile | Yes |
+| `PATCH` | `/api/v1/user-info` | Update user profile | Yes |
+| `GET` | `/api/v1/user-info/public/:userId` | Get public profile | Yes |
 | `GET` | `/api/v1/employee-info` | Get employee details | Yes |
-| `POST` | `/api/v1/users/new-employee` | Create employee | Manager |
-| `PATCH` | `/api/v1/users/employee` | Update employee | Manager |
-| `DELETE` | `/api/v1/users/employee` | Delete employee | Manager |
+| `POST` | `/api/v1/users/new-employee` | Create employee | Owner |
+| `PATCH` | `/api/v1/users/employee` | Update employee | Owner |
+| `DELETE` | `/api/v1/users/employee` | Delete employee | Owner |
+| `POST` | `/api/v1/users/upgrade-to-business-owner` | Upgrade cleaner to business owner | Yes |
 
 ### Homes
 
@@ -223,8 +438,10 @@ server/
 |--------|----------|-------------|------|
 | `GET` | `/api/v1/homes` | Get user's homes | Yes |
 | `POST` | `/api/v1/homes` | Add new home | Yes |
+| `GET` | `/api/v1/homes/:id` | Get home details | Yes |
 | `PATCH` | `/api/v1/homes/:id` | Update home | Yes |
 | `DELETE` | `/api/v1/homes/:id` | Delete home | Yes |
+| `PATCH` | `/api/v1/homes/:id/setup-complete` | Mark home setup complete | Yes |
 
 ### Appointments
 
@@ -232,11 +449,42 @@ server/
 |--------|----------|-------------|------|
 | `GET` | `/api/v1/appointments/:homeId` | Get home appointments | Yes |
 | `GET` | `/api/v1/appointments/unassigned` | Get unassigned jobs | Yes |
+| `GET` | `/api/v1/appointments/pending-approval` | Get pending approvals | Owner |
 | `POST` | `/api/v1/appointments` | Create appointment | Yes |
 | `PATCH` | `/api/v1/appointments/:id` | Update appointment | Yes |
 | `DELETE` | `/api/v1/appointments/:id` | Cancel appointment | Yes |
 | `PATCH` | `/api/v1/appointments/request-employee` | Request cleaner | Yes |
-| `PATCH` | `/api/v1/appointments/approve-request` | Approve request | Manager |
+| `PATCH` | `/api/v1/appointments/approve-request` | Approve request | Owner |
+| `PATCH` | `/api/v1/appointments/:id/complete` | Complete appointment | Cleaner |
+| `PATCH` | `/api/v1/appointments/:id/unstart` | Unstart appointment | Cleaner |
+
+### Cleaner Clients (Business Owner)
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/cleaner-clients` | Get all clients | Cleaner |
+| `POST` | `/api/v1/cleaner-clients/invite` | Invite new client | Cleaner |
+| `POST` | `/api/v1/cleaner-clients/resend-invite/:id` | Resend invitation | Cleaner |
+| `GET` | `/api/v1/cleaner-clients/:id` | Get client details | Cleaner |
+| `GET` | `/api/v1/cleaner-clients/:id/full` | Get full client details with history | Cleaner |
+| `PATCH` | `/api/v1/cleaner-clients/:id` | Update client relationship | Cleaner |
+| `DELETE` | `/api/v1/cleaner-clients/:id` | Remove client | Cleaner |
+| `GET` | `/api/v1/cleaner-clients/:id/platform-price` | Get platform price for home | Cleaner |
+| `PATCH` | `/api/v1/cleaner-clients/:id/default-price` | Update default price | Cleaner |
+| `POST` | `/api/v1/cleaner-clients/:id/book` | Book appointment for client | Cleaner |
+
+### Recurring Schedules
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/recurring-schedules` | Get all schedules | Yes |
+| `POST` | `/api/v1/recurring-schedules` | Create schedule | Yes |
+| `PATCH` | `/api/v1/recurring-schedules/:id` | Update schedule | Yes |
+| `DELETE` | `/api/v1/recurring-schedules/:id` | Delete schedule | Yes |
+| `POST` | `/api/v1/recurring-schedules/:id/pause` | Pause schedule | Yes |
+| `POST` | `/api/v1/recurring-schedules/:id/resume` | Resume schedule | Yes |
+| `POST` | `/api/v1/recurring-schedules/:id/generate` | Generate appointments | Yes |
+| `POST` | `/api/v1/recurring-schedules/generate-all` | Generate all schedules | Owner |
 
 ### Calendar Sync
 
@@ -244,10 +492,30 @@ server/
 |--------|----------|-------------|------|
 | `GET` | `/api/v1/calendar-sync/home/:homeId` | Get syncs for home | Yes |
 | `POST` | `/api/v1/calendar-sync` | Create new sync | Yes |
-| `GET` | `/api/v1/calendar-sync/:id` | Get sync details | Yes |
 | `PATCH` | `/api/v1/calendar-sync/:id` | Update sync settings | Yes |
 | `DELETE` | `/api/v1/calendar-sync/:id` | Remove sync | Yes |
 | `POST` | `/api/v1/calendar-sync/:id/sync` | Trigger manual sync | Yes |
+| `GET` | `/api/v1/calendar-sync/:id/preview` | Preview calendar events | Yes |
+
+### Job Photos
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/job-photos/upload` | Upload photo | Cleaner |
+| `GET` | `/api/v1/job-photos/:appointmentId` | Get photos for appointment | Yes |
+| `GET` | `/api/v1/job-photos/:appointmentId/status` | Check photo completion status | Yes |
+| `DELETE` | `/api/v1/job-photos/:photoId` | Delete photo | Cleaner |
+
+### Home Size Adjustment
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/home-size-adjustment` | Submit size dispute | Cleaner |
+| `GET` | `/api/v1/home-size-adjustment/pending` | Get pending disputes | Owner/HR |
+| `GET` | `/api/v1/home-size-adjustment/:id` | Get dispute details | Owner/HR |
+| `POST` | `/api/v1/home-size-adjustment/:id/approve` | Approve dispute | Owner/HR |
+| `POST` | `/api/v1/home-size-adjustment/:id/deny` | Deny dispute | Owner/HR |
+| `GET` | `/api/v1/home-size-adjustment/home/:homeId` | Get disputes for home | Yes |
 
 ### Payments
 
@@ -255,12 +523,24 @@ server/
 |--------|----------|-------------|------|
 | `GET` | `/api/v1/payments/config` | Get Stripe publishable key | No |
 | `POST` | `/api/v1/payments/create-intent` | Create payment intent | Yes |
-| `POST` | `/api/v1/payments/create-payment-intent` | Create with metadata | Yes |
 | `POST` | `/api/v1/payments/capture` | Capture payment | Yes |
 | `POST` | `/api/v1/payments/refund` | Process refund | Yes |
 | `GET` | `/api/v1/payments/history/:userId` | Payment history | Yes |
 | `GET` | `/api/v1/payments/earnings/:employeeId` | Employee earnings | Yes |
 | `POST` | `/api/v1/payments/webhook` | Stripe webhook | No |
+| `POST` | `/api/v1/payments/setup-method` | Setup payment method | Yes |
+| `GET` | `/api/v1/payments/methods` | Get saved payment methods | Yes |
+| `DELETE` | `/api/v1/payments/methods/:id` | Remove payment method | Yes |
+| `POST` | `/api/v1/payments/prepay-all` | Prepay all upcoming | Yes |
+| `POST` | `/api/v1/payments/prepay-batch` | Prepay batch of appointments | Yes |
+
+### Billing
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/billing` | Get billing summary | Yes |
+| `GET` | `/api/v1/billing/history` | Get billing history | Yes |
+| `POST` | `/api/v1/billing/sync` | Sync bills from appointments | Yes |
 
 ### Stripe Connect (Cleaner Payouts)
 
@@ -274,6 +554,36 @@ server/
 | `GET` | `/api/v1/stripe-connect/payouts/:userId` | Payout history | Yes |
 | `POST` | `/api/v1/stripe-connect/webhook` | Connect webhook | No |
 
+### Pricing
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/pricing/config` | Get pricing configuration | Yes |
+| `PUT` | `/api/v1/pricing/config` | Update pricing | Owner |
+| `GET` | `/api/v1/pricing/history` | Get pricing history | Owner |
+| `GET` | `/api/v1/pricing/calculate` | Calculate appointment price | Yes |
+
+### Incentives
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/incentives/current` | Get current incentive config | No |
+| `GET` | `/api/v1/incentives/config` | Get full config (owner) | Owner |
+| `PUT` | `/api/v1/incentives/config` | Update incentives | Owner |
+| `GET` | `/api/v1/incentives/cleaner-eligibility` | Check cleaner eligibility | Yes |
+| `GET` | `/api/v1/incentives/homeowner-eligibility` | Check homeowner eligibility | Yes |
+
+### Referrals
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/referrals/config` | Get referral config | Owner |
+| `PUT` | `/api/v1/referrals/config` | Update referral config | Owner |
+| `GET` | `/api/v1/referrals/my-referrals` | Get user's referrals | Yes |
+| `GET` | `/api/v1/referrals/my-code` | Get user's referral code | Yes |
+| `GET` | `/api/v1/referrals/code/:code` | Validate referral code | No |
+| `POST` | `/api/v1/referrals/apply` | Apply referral code | Yes |
+
 ### Tax Documents
 
 | Method | Endpoint | Description | Auth |
@@ -282,19 +592,10 @@ server/
 | `POST` | `/api/v1/tax/info` | Submit W-9 | Yes |
 | `GET` | `/api/v1/tax/contractor/tax-summary/:year` | Cleaner tax summary | Yes |
 | `GET` | `/api/v1/tax/contractor/1099-nec/:year` | Get 1099-NEC | Yes |
-| `GET` | `/api/v1/tax/payment-history/:year` | Payment history | Yes |
-
-### Platform Tax (Manager Only)
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| `GET` | `/api/v1/tax/platform/income-summary/:year` | Annual income | Manager |
-| `GET` | `/api/v1/tax/platform/quarterly-tax/:year/:quarter` | Quarterly estimates | Manager |
-| `GET` | `/api/v1/tax/platform/schedule-c/:year` | Schedule C data | Manager |
-| `GET` | `/api/v1/tax/platform/1099-k-expectation/:year` | 1099-K info | Manager |
-| `GET` | `/api/v1/tax/platform/deadlines/:year` | Tax deadlines | Manager |
-| `GET` | `/api/v1/tax/platform/comprehensive-report/:year` | Full report | Manager |
-| `GET` | `/api/v1/tax/platform/monthly-breakdown/:year` | Monthly breakdown | Manager |
+| `GET` | `/api/v1/tax/contractor/monthly-breakdown/:year` | Monthly earnings | Yes |
+| `GET` | `/api/v1/tax/platform/comprehensive-report/:year` | Full platform report | Owner |
+| `GET` | `/api/v1/tax/platform/1099-k-summary/:year` | Platform 1099-K summary | Owner |
+| `GET` | `/api/v1/tax/deadlines/:year` | Tax filing deadlines | Yes |
 
 ### Reviews
 
@@ -304,6 +605,18 @@ server/
 | `GET` | `/api/v1/reviews/cleaner/:cleanerId` | Get cleaner reviews | Yes |
 | `POST` | `/api/v1/reviews` | Submit review | Yes |
 | `GET` | `/api/v1/reviews/cleaner/:cleanerId/summary` | Review summary | Yes |
+| `GET` | `/api/v1/reviews/appointment/:appointmentId/status` | Review status for appointment | Yes |
+| `GET` | `/api/v1/reviews/user/:userId` | Get user's reviews | Yes |
+
+### Preferred Cleaners
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/preferred-cleaners/home/:homeId` | Get preferred cleaners for home | Yes |
+| `POST` | `/api/v1/preferred-cleaners` | Set preferred cleaner | Yes |
+| `DELETE` | `/api/v1/preferred-cleaners/:homeId/:cleanerId` | Remove preferred cleaner | Yes |
+| `GET` | `/api/v1/preferred-cleaners/my-clients` | Get homes where cleaner is preferred | Cleaner |
+| `GET` | `/api/v1/preferred-cleaners/client-appointments/:homeId` | Get client appointments | Cleaner |
 
 ### Messaging
 
@@ -314,106 +627,151 @@ server/
 | `POST` | `/api/v1/messages/send` | Send message | Yes |
 | `POST` | `/api/v1/messages/conversation/appointment` | Create for appointment | Yes |
 | `POST` | `/api/v1/messages/conversation/support` | Create support chat | Yes |
-| `POST` | `/api/v1/messages/broadcast` | Broadcast message | Manager |
+| `POST` | `/api/v1/messages/conversation/cleaner-client` | Create cleaner-client chat | Yes |
+| `POST` | `/api/v1/messages/conversation/hr-direct` | Create HR direct chat | Owner/HR |
+| `POST` | `/api/v1/messages/conversation/group` | Create group chat | Yes |
+| `POST` | `/api/v1/messages/broadcast` | Broadcast message | Owner |
 | `GET` | `/api/v1/messages/unread-count` | Get unread count | Yes |
-| `PATCH` | `/api/v1/messages/mark-read/:id` | Mark as read | Yes |
+| `POST` | `/api/v1/messages/:id/react` | Add reaction | Yes |
+| `DELETE` | `/api/v1/messages/:id/react` | Remove reaction | Yes |
+| `POST` | `/api/v1/messages/:id/report` | Report suspicious message | Yes |
+| `POST` | `/api/v1/messages/mark-read/:conversationId` | Mark messages read | Yes |
+| `POST` | `/api/v1/messages/mark-all-read` | Mark all messages read | Yes |
+| `DELETE` | `/api/v1/messages/:id` | Delete message | Yes |
+| `POST` | `/api/v1/messages/conversation/:id/participants` | Add participant | Yes |
+| `PATCH` | `/api/v1/messages/conversation/:id/title` | Update conversation title | Yes |
+
+### Suspicious Activity
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/suspicious-activity/reports` | Get all reports | Owner/HR |
+| `GET` | `/api/v1/suspicious-activity/reports/:id` | Get report details | Owner/HR |
+| `PATCH` | `/api/v1/suspicious-activity/reports/:id` | Update report status | Owner/HR |
+| `POST` | `/api/v1/suspicious-activity/warn/:userId` | Issue warning | Owner/HR |
+| `POST` | `/api/v1/suspicious-activity/freeze/:userId` | Freeze account | Owner/HR |
+| `GET` | `/api/v1/suspicious-activity/user/:userId/history` | Get user report history | Owner/HR |
+
+### HR Dashboard
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/hr-dashboard/pending-disputes` | Get pending disputes | Owner/HR |
+| `GET` | `/api/v1/hr-dashboard/dispute/:id` | Get dispute details | Owner/HR |
+| `POST` | `/api/v1/hr-dashboard/dispute/:id/decide` | Decide dispute | Owner/HR |
+| `GET` | `/api/v1/hr-dashboard/stats` | Get HR statistics | Owner/HR |
+| `GET` | `/api/v1/hr-dashboard/support-conversations` | Get support conversations | Owner/HR |
+
+### Owner Dashboard
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/owner-dashboard/financial-summary` | Financial overview | Owner |
+| `GET` | `/api/v1/owner-dashboard/user-analytics` | User statistics | Owner |
+| `GET` | `/api/v1/owner-dashboard/appointments-analytics` | Appointment stats | Owner |
+| `GET` | `/api/v1/owner-dashboard/business-metrics` | Business KPIs | Owner |
+| `GET` | `/api/v1/owner-dashboard/settings` | Platform settings | Owner |
+| `PUT` | `/api/v1/owner-dashboard/settings/notification-email` | Update notification email | Owner |
+| `POST` | `/api/v1/owner-dashboard/withdraw` | Request withdrawal | Owner |
+| `GET` | `/api/v1/owner-dashboard/stripe-balance` | Get Stripe balance | Owner |
+
+### Notifications
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/notifications` | Get notifications | Yes |
+| `GET` | `/api/v1/notifications/unread-count` | Get unread count | Yes |
+| `POST` | `/api/v1/notifications/:id/read` | Mark as read | Yes |
+| `POST` | `/api/v1/notifications/mark-all-read` | Mark all read | Yes |
+| `DELETE` | `/api/v1/notifications/:id` | Delete notification | Yes |
+| `DELETE` | `/api/v1/notifications/clear-all` | Clear all notifications | Yes |
 
 ### Push Notifications
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| `POST` | `/api/v1/push-notifications/register-token` | Register Expo push token | Yes |
-| `DELETE` | `/api/v1/push-notifications/remove-token` | Remove push token (logout) | Yes |
-| `GET` | `/api/v1/push-notifications/preferences` | Get notification preferences | Yes |
+| `POST` | `/api/v1/push-notifications/register-token` | Register Expo token | Yes |
+| `DELETE` | `/api/v1/push-notifications/remove-token` | Remove token (logout) | Yes |
+| `GET` | `/api/v1/push-notifications/preferences` | Get preferences | Yes |
 | `PATCH` | `/api/v1/push-notifications/preferences` | Update preferences | Yes |
-| `POST` | `/api/v1/push-notifications/snooze-supply-reminder` | Snooze supply reminders for 1 week | Cleaner |
-| `GET` | `/api/v1/push-notifications/supply-reminder-status` | Get snooze status | Yes |
+| `POST` | `/api/v1/push-notifications/snooze-supply-reminder` | Snooze reminders | Cleaner |
 
 ### Terms & Conditions
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| `GET` | `/api/v1/terms/current/:type` | Get current terms (public) | No |
-| `GET` | `/api/v1/terms/check` | Check if user needs to accept terms/privacy | Yes |
-| `POST` | `/api/v1/terms/accept` | Accept terms or privacy policy | Yes |
-| `GET` | `/api/v1/terms/user/history` | Get user's acceptance history | Yes |
-| `POST` | `/api/v1/terms` | Create new terms version | Owner |
-| `GET` | `/api/v1/terms/history/:type` | Get version history | Owner |
-| `GET` | `/api/v1/terms/:id` | Get specific version | Owner |
-| `GET` | `/api/v1/terms/:id/full` | Get full terms content for editing | Owner |
-| `PATCH` | `/api/v1/terms/:id/publish` | Publish terms version | Owner |
+| `GET` | `/api/v1/terms/current/:type` | Get current terms | No |
+| `GET` | `/api/v1/terms/check` | Check acceptance status | Yes |
+| `POST` | `/api/v1/terms/accept` | Accept terms | Yes |
+| `POST` | `/api/v1/terms` | Create new version | Owner |
+| `PATCH` | `/api/v1/terms/:id/publish` | Publish version | Owner |
+| `GET` | `/api/v1/terms/versions/:type` | Get version history | Owner |
 
-**Document Types:**
-- `homeowner` - Terms for homeowners
-- `cleaner` - Terms for cleaners
-- `privacy_policy` - Privacy Policy (applies to all users)
+### Checklist
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/checklist/current` | Get current checklist | Yes |
+| `GET` | `/api/v1/checklist/draft` | Get draft checklist | Owner |
+| `PUT` | `/api/v1/checklist/draft` | Update draft | Owner |
+| `POST` | `/api/v1/checklist/publish` | Publish checklist | Owner |
+| `GET` | `/api/v1/checklist/versions` | Get version history | Owner |
+| `POST` | `/api/v1/checklist/revert/:version` | Revert to version | Owner |
+| `POST` | `/api/v1/checklist/load-template` | Load default template | Owner |
+
+### Applications
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/applications` | Submit application | No |
+| `GET` | `/api/v1/applications` | Get all applications | Owner/HR |
+| `GET` | `/api/v1/applications/pending` | Get pending applications | Owner/HR |
+| `GET` | `/api/v1/applications/:id` | Get application details | Owner/HR |
+| `PATCH` | `/api/v1/applications/:id/approve` | Approve application | Owner/HR |
+| `PATCH` | `/api/v1/applications/:id/reject` | Reject application | Owner/HR |
+| `POST` | `/api/v1/applications/:id/hire` | Hire applicant | Owner/HR |
+| `PATCH` | `/api/v1/applications/:id/notes` | Update application notes | Owner/HR |
 
 ---
 
 ## Database
 
-### Models
+### Core Models
 
-#### User
-```javascript
-{
-  id: INTEGER,
-  username: STRING,
-  email: STRING,
-  passwordHash: STRING,
-  type: STRING,             // 'cleaner', 'manager1', or null (homeowner)
-  stripeConnectId: STRING,  // For cleaners with payouts
-  hasPaymentMethod: BOOLEAN
-}
-```
-
-#### CalendarSync
-```javascript
-{
-  id: INTEGER,
-  userId: INTEGER,
-  homeId: INTEGER,
-  platform: STRING,         // 'airbnb', 'vrbo', 'booking'
-  icalUrl: STRING,
-  isActive: BOOLEAN,
-  autoCreateAppointments: BOOLEAN,
-  daysAfterCheckout: INTEGER,
-  lastSyncAt: DATE,
-  lastSyncStatus: STRING,
-  syncedEventUids: ARRAY
-}
-```
-
-#### Payment
-```javascript
-{
-  id: INTEGER,
-  transactionId: STRING,
-  appointmentId: INTEGER,
-  userId: INTEGER,
-  amountCents: INTEGER,
-  transactionType: STRING,
-  status: STRING,
-  stripePaymentIntentId: STRING,
-  description: STRING
-}
-```
-
-#### Review
-```javascript
-{
-  id: INTEGER,
-  appointmentId: INTEGER,
-  reviewerId: INTEGER,
-  cleanerId: INTEGER,
-  overallRating: DECIMAL,
-  qualityRating: INTEGER,    // 1-5
-  timelinessRating: INTEGER, // 1-5
-  communicationRating: INTEGER, // 1-5
-  comment: TEXT,
-  status: STRING             // 'pending', 'published'
-}
-```
+| Model | Description |
+|-------|-------------|
+| `User` | All user accounts (homeowners, cleaners, HR, owner) |
+| `UserHomes` | Properties owned by homeowners |
+| `UserAppointments` | Cleaning appointments |
+| `CleanerClient` | Business owner to client relationships |
+| `RecurringSchedule` | Recurring appointment configurations |
+| `Payment` | Payment transactions |
+| `Payout` | Cleaner payout records |
+| `Review` | Client reviews of cleaners |
+| `Conversation` | Message conversations |
+| `Message` | Individual messages |
+| `MessageReaction` | Reactions on messages |
+| `SuspiciousActivityReport` | Reported suspicious content |
+| `CalendarSync` | iCal calendar sync configurations |
+| `PricingConfig` | Platform pricing settings |
+| `IncentiveConfig` | Incentive program settings |
+| `ReferralConfig` | Referral program settings |
+| `Referral` | Individual referral records |
+| `UserBills` | Homeowner billing records |
+| `TaxInfo` | W-9 tax information |
+| `TaxDocument` | Generated tax documents |
+| `ChecklistSection` | Cleaning checklist sections |
+| `ChecklistItem` | Individual checklist items |
+| `TermsAndConditions` | Terms versions |
+| `UserTermsAcceptance` | User terms acceptance records |
+| `UserApplications` | Cleaner job applications |
+| `HomeSizeAdjustmentRequest` | Home size dispute requests |
+| `HomeSizeAdjustmentPhoto` | Photos for disputes |
+| `JobPhoto` | Before/after job photos |
+| `Notification` | In-app notifications |
+| `PushToken` | Expo push notification tokens |
+| `NotificationPreference` | User notification preferences |
+| `PreferredCleaner` | Homeowner preferred cleaner relationships |
 
 ### Migrations
 
@@ -424,247 +782,294 @@ npx sequelize-cli db:migrate
 # Undo last migration
 npx sequelize-cli db:migrate:undo
 
-# Undo all migrations
-npx sequelize-cli db:migrate:undo:all
-
 # Create new migration
 npx sequelize-cli migration:generate --name add-new-feature
 ```
 
-### Seeds
+### Seeders
+
+Seed the database with initial required data:
 
 ```bash
-# Run all seeds
+# Run all seeders (recommended order)
+npx sequelize-cli db:seed --seed ownerSeeder.js
+npx sequelize-cli db:seed --seed termsAndConditionsSeeder.js
+npx sequelize-cli db:seed --seed privacyPolicySeeder.js
+npx sequelize-cli db:seed --seed cleanerChecklistSeeder.js
+
+# Or run all seeders at once
 npx sequelize-cli db:seed:all
 
-# Run specific seed
-npx sequelize-cli db:seed --seed ownerSeeder.js
+# Undo last seeder
+npx sequelize-cli db:seed:undo
 
-# Undo seeds
+# Undo all seeders
 npx sequelize-cli db:seed:undo:all
 ```
 
-#### Available Seeders
+| Seeder | Description | Required |
+|--------|-------------|----------|
+| `ownerSeeder.js` | Creates initial platform owner account. Requires `OWNER1_PASSWORD` environment variable. | **Yes** |
+| `termsAndConditionsSeeder.js` | Seeds Terms of Service for homeowners and Independent Contractor Agreement for cleaners. | **Yes** |
+| `privacyPolicySeeder.js` | Seeds the comprehensive Privacy Policy document. | **Yes** |
+| `cleanerChecklistSeeder.js` | Seeds default cleaning checklist with 10 sections (Kitchen, Bathrooms, Bedrooms, Living Areas, Dining Room, Entryway & Hallways, Home Office, Laundry Room, General Tasks, Final Walkthrough) and detailed items with pro tips. | Recommended |
 
-| Seeder | Description |
-|--------|-------------|
-| `ownerSeeder.js` | Creates the initial manager/owner account |
-| `termsAndConditionsSeeder.js` | Seeds Terms & Conditions for homeowners and cleaners |
-| `privacyPolicySeeder.js` | Seeds the Privacy Policy document |
+**Note:** The `ownerSeeder.js` requires the `OWNER1_PASSWORD` environment variable to be set before running:
 
-**Note:** The Terms & Conditions and Privacy Policy seeders create version 1 of each document. Users will be prompted to accept these when they first log in. The owner can later edit and publish new versions through the admin interface.
+```bash
+# Add to .env file
+OWNER1_PASSWORD=your_secure_owner_password
+
+# Then run the seeder
+npx sequelize-cli db:seed --seed ownerSeeder.js
+```
 
 ---
 
 ## Services
 
-### CalendarSyncService
+### EncryptionService
 
-Handles iCal parsing and appointment creation from vacation rental calendars:
+Handles PII encryption/decryption using AES-256-CBC:
 
 ```javascript
-const { syncSingleCalendar, syncAllCalendars, startPeriodicSync } = require('./services/calendarSyncService');
+const EncryptionService = require('./services/EncryptionService');
+
+// Encrypt sensitive data
+const encrypted = EncryptionService.encrypt('sensitive-data');
+
+// Decrypt data
+const decrypted = EncryptionService.decrypt(encrypted);
+
+// Create searchable hash for encrypted email lookups
+const hash = EncryptionService.hash('email@example.com');
+```
+
+### CalendarSyncService
+
+Handles iCal parsing and appointment creation:
+
+```javascript
+const { syncSingleCalendar, syncAllCalendars } = require('./services/calendarSyncService');
 
 // Sync a single calendar
 const result = await syncSingleCalendar(calendarSyncId);
-// Returns: { success: true, checkoutsFound: 5, appointmentsCreated: 3 }
 
 // Sync all active calendars
 const results = await syncAllCalendars();
-// Returns: { totalSyncs: 10, successful: 9, failed: 1, totalAppointmentsCreated: 15 }
+```
 
-// Start periodic sync (runs every X minutes)
-startPeriodicSync(60); // Every 60 minutes
+### InvitationService
+
+Handles business owner client invitations:
+
+```javascript
+const InvitationService = require('./services/InvitationService');
+
+// Send client invitation
+await InvitationService.sendInvitation({
+  cleanerId,
+  clientEmail,
+  clientName,
+  homeDetails
+});
+```
+
+### ReferralService
+
+Manages referral codes and rewards:
+
+```javascript
+const ReferralService = require('./services/ReferralService');
+
+// Generate referral code for user
+const code = await ReferralService.generateReferralCode(user);
+
+// Validate and apply referral
+await ReferralService.applyReferral(userId, referralCode);
+```
+
+### IncentiveService
+
+Handles incentive qualification and application:
+
+```javascript
+const IncentiveService = require('./services/IncentiveService');
+
+// Check eligibility
+const eligible = await IncentiveService.checkCleanerEligibility(cleanerId);
+
+// Apply discount
+const discount = await IncentiveService.calculateDiscount(appointmentId);
+```
+
+### CalculatePrice
+
+Dynamic pricing calculation:
+
+```javascript
+const CalculatePrice = require('./services/CalculatePrice');
+
+// Calculate price for appointment
+const price = await CalculatePrice.calculate({
+  numBeds: 3,
+  numBaths: 2,
+  numHalfBaths: 1,
+  sheets: true,
+  towels: true,
+  timeWindow: '10-3'
+});
 ```
 
 ### TaxDocumentService
 
-Generates 1099-NEC forms for contractors:
+Generates tax documents for contractors:
 
 ```javascript
 const TaxDocumentService = require('./services/TaxDocumentService');
 
-// Validate W-9 data is complete
-const isValid = await TaxDocumentService.validateTaxInfoComplete(userId);
-
-// Generate 1099-NEC data
+// Generate 1099-NEC
 const form = await TaxDocumentService.generate1099NECData(userId, 2024);
 
 // Get tax filing deadlines
 const deadlines = TaxDocumentService.getTaxDeadlines(2024);
-
-// Generate all 1099s for the year
-const results = await TaxDocumentService.generateAll1099NECsForYear(2024);
 ```
 
-### PlatformTaxService
+### SuspiciousContentDetector
 
-Handles platform income tracking and tax reporting:
+Detects suspicious content in messages:
 
 ```javascript
-const PlatformTaxService = require('./services/PlatformTaxService');
+const SuspiciousContentDetector = require('./services/SuspiciousContentDetector');
 
-// Record platform earnings (10% fee on each payment)
-await PlatformTaxService.recordPlatformEarnings(paymentId, {
-  grossServiceAmount: 15000,  // $150.00
-  platformFeeAmount: 1500,    // $15.00 (10%)
-  netPlatformEarnings: 1500
-});
-
-// Get annual income summary
-const summary = await PlatformTaxService.getAnnualIncomeSummary(2024);
-
-// Calculate quarterly estimated taxes
-const quarterly = await PlatformTaxService.calculateQuarterlyEstimatedTax(2024, 1);
-
-// Generate Schedule C data
-const scheduleC = await PlatformTaxService.generateScheduleCData(2024);
-
-// Get comprehensive tax report
-const report = await PlatformTaxService.getComprehensiveTaxReport(2024);
+// Check message for suspicious content
+const result = SuspiciousContentDetector.analyze(messageText);
+// Returns: { isSuspicious: true, reasons: ['phone_number', 'email'] }
 ```
 
-### PushNotificationClass
-
-Sends push notifications via Expo to iOS and Android devices:
+### Email & Push Notifications
 
 ```javascript
+const Email = require('./services/sendNotifications/EmailClass');
 const PushNotification = require('./services/sendNotifications/PushNotificationClass');
 
-// Validate Expo push token
-const isValid = PushNotification.isValidExpoPushToken(token);
+// Send email
+await Email.sendAppointmentConfirmation(user, appointment);
 
-// Send generic notification
-await PushNotification.sendPushNotification(token, 'Title', 'Body message', { type: 'custom' });
-
-// Specific notification types
-await PushNotification.sendPushCancellation(token, userName, appointmentDate, address);
-await PushNotification.sendPushConfirmation(token, userName, appointmentDate, address);
-await PushNotification.sendPushEmployeeRequest(token, userName, cleanerName, rating, date);
-await PushNotification.sendPushRequestApproved(token, cleanerName, homeownerName, date, address);
-await PushNotification.sendPushRequestDenied(token, cleanerName, appointmentDate);
-await PushNotification.sendPushNewMessage(token, userName, senderName, messagePreview);
-await PushNotification.sendPushBroadcast(token, userName, broadcastTitle, content);
-await PushNotification.sendPushSupplyReminder(token, cleanerName, appointmentDate, address);
-await PushNotification.sendPushPaymentFailed(token, userName, appointmentDate, daysRemaining);
+// Send push notification
+await PushNotification.sendPushNewMessage(token, userName, senderName, preview);
 ```
 
 ---
 
 ## Cron Jobs
 
-The server runs scheduled tasks using `node-cron`:
-
 | Schedule | Job | Description |
 |----------|-----|-------------|
-| `0 7 * * *` | Supply Reminder | Sends push notifications to cleaners with appointments today reminding them to bring toilet paper, paper towels, and trash bags |
+| `0 7 * * *` | Supply Reminder | Reminds cleaners to bring supplies for today's appointments |
 | `0 0 * * *` | Payment Retry | Retries failed payments and sends reminders |
 | `0 1 * * *` | Calendar Sync | Syncs all active iCal calendars |
-
-### Supply Reminder Snooze
-
-Cleaners can snooze supply reminders for 1 week to avoid notification fatigue:
-
-```javascript
-// Client-side: Snooze for 1 week
-POST /api/v1/push-notifications/snooze-supply-reminder
-// Response: { message: "Supply reminders snoozed for 1 week", snoozedUntil: "2025-01-02T..." }
-
-// Check snooze status
-GET /api/v1/push-notifications/supply-reminder-status
-// Response: { isSnoozed: true, snoozedUntil: "2025-01-02T..." }
-```
+| `0 2 * * *` | Booking Expiration | Expires old pending bookings (48-hour window) |
+| `0 3 * * 0` | Recurring Generation | Generates appointments from recurring schedules |
 
 ---
 
 ## WebSocket Events
 
-The server uses Socket.io for real-time messaging:
+Real-time messaging via Socket.io:
 
 ```javascript
-// Server-side
-io.on('connection', (socket) => {
-  // User joins a conversation
-  socket.on('join_conversation', (conversationId) => {
-    socket.join(`conversation_${conversationId}`);
-  });
+// Events emitted by server
+socket.emit('new_message', message);
+socket.emit('unread_count', count);
+socket.emit('user_typing', { conversationId, userId });
+socket.emit('new_internal_conversation', conversation);
+socket.emit('message_reaction', { messageId, reaction, userId });
+socket.emit('message_deleted', { messageId, conversationId });
+socket.emit('participant_added', { conversationId, user });
+socket.emit('conversation_updated', { conversationId, title });
 
-  // User sends a message
-  socket.on('send_message', async (data) => {
-    const { conversationId, content, senderId } = data;
-    const message = await Message.create({ ... });
-    io.to(`conversation_${conversationId}`).emit('new_message', message);
-  });
-
-  // Typing indicator
-  socket.on('typing', ({ conversationId, userId }) => {
-    socket.to(`conversation_${conversationId}`).emit('user_typing', userId);
-  });
-});
-
-// Client receives
-socket.on('new_message', (message) => { ... });
-socket.on('unread_count', (count) => { ... });
+// Events received by server
+socket.on('join_conversation', conversationId);
+socket.on('leave_conversation', conversationId);
+socket.on('send_message', { conversationId, content, senderId });
+socket.on('typing', { conversationId, userId });
+socket.on('stop_typing', { conversationId, userId });
+socket.on('add_reaction', { messageId, reaction });
+socket.on('remove_reaction', { messageId, reaction });
+socket.on('mark_read', { conversationId, userId });
 ```
-
----
-
-## Stripe Webhooks
-
-Configure these webhooks in your Stripe dashboard:
-
-### Payment Webhooks (`/api/v1/payments/webhook`)
-- `payment_intent.succeeded` - Payment completed
-- `payment_intent.payment_failed` - Payment failed
-- `charge.refunded` - Refund processed
-
-### Connect Webhooks (`/api/v1/stripe-connect/webhook`)
-- `account.updated` - Connect account status changed
-- `transfer.created` - Payout initiated
-- `transfer.failed` - Payout failed
 
 ---
 
 ## Testing
 
 ```bash
-# Run all tests (909 tests)
+# Run all tests (2809 tests)
 npm test
 
 # Run specific test file
-npm test -- __tests__/routes/tax.test.js
+npm test -- __tests__/routes/messages.test.js
 
 # Run with coverage
 npm test -- --coverage
 
 # Run in watch mode
 npm test -- --watch
-
-# Run only integration tests
-npm test -- __tests__/integration/
 ```
 
 ### Test Categories
 
 | Category | Tests | Description |
 |----------|-------|-------------|
-| Authentication | 15 | Login, registration, JWT validation |
-| Appointments | 24 | CRUD, assignments, requests |
-| Calendar Sync | 16 | iCal parsing, sync logic |
-| Payments | 45 | Stripe intents, capture, refund |
-| Stripe Connect | 44 | Account creation, payouts |
-| Tax Documents | 45 | W-9, 1099-NEC, platform taxes |
-| Reviews | 32 | Create, read, summaries |
-| Messaging | 21 | Conversations, send, broadcast |
-| Push Notifications | 35 | Token registration, preferences, snooze |
-| Supply Reminder Cron | 20 | Daily reminders, snooze logic |
-| Manager Features | 28 | Dashboard, applications |
-| Email Notifications | 54 | HTML templates, all notification types |
-| Pricing & Staffing | 10 | Dynamic pricing, staffing config |
-| Terms & Conditions | 54 | Version management, acceptance tracking |
-| Models | 27 | TermsAndConditions, UserTermsAcceptance |
-| Integration | 27 | Full payment flows |
-| **Total** | **964** | - |
+| Authentication | 45 | Login, registration, JWT validation |
+| Appointments | 89 | CRUD, assignments, requests, recurring |
+| Calendar Sync | 48 | iCal parsing, sync logic |
+| Payments | 112 | Stripe intents, capture, refund, billing |
+| Stripe Connect | 78 | Account creation, payouts |
+| Cleaner Clients | 156 | Business owner client management |
+| Pricing | 67 | Dynamic pricing, configuration |
+| Incentives | 54 | Qualification, discounts |
+| Referrals | 48 | Codes, rewards, tracking |
+| Tax Documents | 89 | W-9, 1099-NEC, platform taxes |
+| Reviews | 67 | Create, read, summaries, bidirectional |
+| Messaging | 234 | Conversations, reactions, suspicious content |
+| HR Dashboard | 78 | Disputes, reports |
+| Owner Dashboard | 89 | Financial, analytics, settings |
+| Push Notifications | 56 | Token registration, preferences |
+| Terms & Conditions | 78 | Version management, acceptance |
+| Checklist | 45 | Editor, publishing, versions |
+| Applications | 56 | Submission, review, approval |
+| Job Photos | 67 | Upload, access control, completion |
+| Home Size Disputes | 45 | Filing, evidence, resolution |
+| Preferred Cleaners | 34 | Assignment, client management |
+| Integration | 67 | Full payment flows, e2e |
+| Services | 156 | All service unit tests |
+| **Total** | **2809** | - |
+
+---
+
+## Security
+
+### Authentication & Authorization
+- JWT tokens with 24-hour expiration
+- Role-based access control (homeowner, cleaner, HR, owner)
+- Password hashed with bcrypt (12 rounds)
+- Middleware validates permissions per route
+- Account freezing for policy violations
+- Warning system with violation tracking
+
+### Data Protection
+- PII encrypted at rest with AES-256-CBC (names, emails, tax IDs)
+- Searchable encrypted fields via hash lookup
+- Stripe webhook signature verification
+- PCI-compliant payment handling via Stripe Elements
+
+### Content Moderation
+- Automatic suspicious content detection (phone numbers, emails, off-platform offers)
+- User reporting system for inappropriate content
+- Warning and account freeze capabilities
+- False report tracking
 
 ---
 
@@ -700,26 +1105,11 @@ All API errors follow a consistent format:
 | `NOT_FOUND` | 404 | Resource not found |
 | `UNAUTHORIZED` | 401 | Invalid or missing token |
 | `FORBIDDEN` | 403 | Insufficient permissions |
+| `ACCOUNT_FROZEN` | 403 | Account has been frozen |
 | `VALIDATION_ERROR` | 400 | Invalid input data |
 | `STRIPE_ERROR` | 400 | Payment processing error |
 | `SYNC_ERROR` | 500 | Calendar sync failed |
-
----
-
-## Security
-
-### Authentication
-- JWT tokens with configurable expiration
-- Passwords hashed with bcrypt
-- Sensitive data encrypted at rest (tax IDs)
-
-### Authorization
-- Role-based access control (homeowner, cleaner, manager)
-- Middleware validates permissions per route
-
-### Stripe
-- Webhook signature verification
-- PCI-compliant payment handling via Stripe Elements
+| `OUT_OF_SERVICE_AREA` | 400 | Home outside service area |
 
 ---
 

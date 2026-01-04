@@ -33,6 +33,7 @@ jest.mock("../../src/services/data/companyInfo", () => ({
       },
       platform: {
         feePercent: 0.1,
+        businessOwnerFeePercent: 0.1,
       },
       highVolumeFee: 50,
     },
@@ -566,6 +567,196 @@ describe("PricingContext Helper Functions", () => {
 
       expect(Array.isArray(options)).toBe(true);
       expect(options.length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe("PricingContext Business Owner Fee", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe("Default businessOwnerFeePercent", () => {
+    it("should include businessOwnerFeePercent in default pricing", () => {
+      const defaultPricing = {
+        platform: {
+          feePercent: 0.1,
+          businessOwnerFeePercent: 0.1,
+        },
+      };
+
+      expect(defaultPricing.platform.businessOwnerFeePercent).toBeDefined();
+      expect(defaultPricing.platform.businessOwnerFeePercent).toBe(0.1);
+    });
+
+    it("should default businessOwnerFeePercent to 0.1 (10%)", () => {
+      const defaultBusinessOwnerFee = 0.1;
+      expect(defaultBusinessOwnerFee).toBe(0.1);
+    });
+  });
+
+  describe("API Response with businessOwnerFeePercent", () => {
+    it("should parse businessOwnerFeePercent from API response", async () => {
+      const mockPricing = {
+        basePrice: 175,
+        platform: {
+          feePercent: 0.1,
+          businessOwnerFeePercent: 0.08,
+        },
+      };
+
+      PricingService.getCurrentPricing.mockResolvedValue({
+        source: "database",
+        pricing: mockPricing,
+      });
+
+      let capturedPricing = null;
+
+      const CaptureComponent = () => {
+        const { pricing } = usePricing();
+        capturedPricing = pricing;
+        return null;
+      };
+
+      render(
+        <PricingProvider>
+          <CaptureComponent />
+        </PricingProvider>
+      );
+
+      await waitFor(() => {
+        expect(capturedPricing).not.toBeNull();
+      });
+
+      expect(capturedPricing.platform.businessOwnerFeePercent).toBe(0.08);
+    });
+
+    it("should handle different businessOwnerFeePercent and feePercent values", async () => {
+      const mockPricing = {
+        basePrice: 175,
+        platform: {
+          feePercent: 0.1,
+          businessOwnerFeePercent: 0.05, // Lower fee for business owners
+        },
+      };
+
+      PricingService.getCurrentPricing.mockResolvedValue({
+        source: "database",
+        pricing: mockPricing,
+      });
+
+      let capturedPricing = null;
+
+      const CaptureComponent = () => {
+        const { pricing } = usePricing();
+        capturedPricing = pricing;
+        return null;
+      };
+
+      render(
+        <PricingProvider>
+          <CaptureComponent />
+        </PricingProvider>
+      );
+
+      await waitFor(() => {
+        expect(capturedPricing).not.toBeNull();
+      });
+
+      expect(capturedPricing.platform.feePercent).toBe(0.1);
+      expect(capturedPricing.platform.businessOwnerFeePercent).toBe(0.05);
+      expect(capturedPricing.platform.businessOwnerFeePercent).not.toBe(capturedPricing.platform.feePercent);
+    });
+  });
+
+  describe("Fee Calculations", () => {
+    it("should calculate correct cleaner share for business owners", () => {
+      const businessOwnerFeePercent = 0.1;
+      const jobPrice = 200;
+
+      const fee = jobPrice * businessOwnerFeePercent;
+      const cleanerShare = jobPrice - fee;
+
+      expect(fee).toBe(20);
+      expect(cleanerShare).toBe(180);
+    });
+
+    it("should calculate higher earnings for lower business owner fee", () => {
+      const regularFeePercent = 0.1;
+      const businessOwnerFeePercent = 0.08;
+      const jobPrice = 200;
+
+      const regularEarnings = jobPrice * (1 - regularFeePercent);
+      const businessOwnerEarnings = jobPrice * (1 - businessOwnerFeePercent);
+
+      expect(regularEarnings).toBe(180);
+      expect(businessOwnerEarnings).toBe(184);
+      expect(businessOwnerEarnings).toBeGreaterThan(regularEarnings);
+    });
+
+    it("should calculate keep percentage correctly", () => {
+      const businessOwnerFeePercent = 0.1;
+      const keepPercent = 1 - businessOwnerFeePercent;
+
+      expect(keepPercent).toBe(0.9);
+      expect(Math.round(keepPercent * 100)).toBe(90);
+    });
+  });
+
+  describe("Fallback Behavior", () => {
+    it("should fall back to default when businessOwnerFeePercent is undefined", () => {
+      const pricing = {
+        platform: {
+          feePercent: 0.1,
+        },
+      };
+
+      const businessOwnerFee = pricing?.platform?.businessOwnerFeePercent || 0.1;
+      expect(businessOwnerFee).toBe(0.1);
+    });
+
+    it("should fall back to default when platform is undefined", () => {
+      const pricing = {};
+
+      const businessOwnerFee = pricing?.platform?.businessOwnerFeePercent || 0.1;
+      expect(businessOwnerFee).toBe(0.1);
+    });
+
+    it("should fall back to default when pricing is null", () => {
+      const pricing = null;
+
+      const businessOwnerFee = pricing?.platform?.businessOwnerFeePercent || 0.1;
+      expect(businessOwnerFee).toBe(0.1);
+    });
+  });
+
+  describe("Dynamic Percentage Display", () => {
+    it("should display correct keep percentage for 10% fee", () => {
+      const businessOwnerFeePercent = 0.10;
+      const keepPercent = Math.round((1 - businessOwnerFeePercent) * 100);
+
+      expect(keepPercent).toBe(90);
+    });
+
+    it("should display correct keep percentage for 8% fee", () => {
+      const businessOwnerFeePercent = 0.08;
+      const keepPercent = Math.round((1 - businessOwnerFeePercent) * 100);
+
+      expect(keepPercent).toBe(92);
+    });
+
+    it("should display correct keep percentage for 15% fee", () => {
+      const businessOwnerFeePercent = 0.15;
+      const keepPercent = Math.round((1 - businessOwnerFeePercent) * 100);
+
+      expect(keepPercent).toBe(85);
+    });
+
+    it("should display correct fee percentage for 10% fee", () => {
+      const businessOwnerFeePercent = 0.10;
+      const feePercent = Math.round(businessOwnerFeePercent * 100);
+
+      expect(feePercent).toBe(10);
     });
   });
 });

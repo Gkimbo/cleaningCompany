@@ -3225,6 +3225,814 @@ The Kleanr Team`;
       throw error;
     }
   }
+
+  // ==========================================
+  // BUSINESS OWNER BOOKING EMAILS
+  // ==========================================
+
+  /**
+   * Send pending booking email to client (needs approval)
+   */
+  static async sendPendingBookingEmail(
+    to,
+    appointmentDate,
+    price,
+    cleanerName,
+    expiresAt
+  ) {
+    try {
+      const transporter = createTransporter();
+      const expiresDate = new Date(expiresAt);
+      const hoursRemaining = Math.round((expiresDate - new Date()) / (1000 * 60 * 60));
+
+      const htmlContent = createEmailTemplate({
+        title: "New Booking Request",
+        subtitle: "Your cleaner has scheduled a cleaning for you",
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: "You have a new booking request!",
+        content: `<p>${cleanerName} has scheduled a cleaning for you and is waiting for your confirmation.</p>
+          <p>Please review the details below and accept or decline this booking.</p>`,
+        infoBox: {
+          icon: "📅",
+          title: "Booking Details",
+          items: [
+            { label: "Cleaner", value: cleanerName },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Price", value: `$${price}` },
+            { label: "Response Required By", value: formatDate(expiresAt) },
+          ],
+        },
+        warningBox: {
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+          icon: "⏰",
+          text: `This request will expire in ${hoursRemaining} hours. Please respond soon!`,
+        },
+        steps: {
+          title: "To Accept or Decline:",
+          items: [
+            "Open the Kleanr app on your phone",
+            "Go to your Dashboard to see the pending booking",
+            "Tap to view details and Accept or Decline",
+          ],
+        },
+        ctaText: "Open the Kleanr app to respond to this booking request.",
+        footerMessage: "Thank you for using Kleanr!",
+      });
+
+      const textContent = `NEW BOOKING REQUEST
+
+${cleanerName} has scheduled a cleaning for you!
+
+BOOKING DETAILS
+━━━━━━━━━━━━━━━
+Cleaner: ${cleanerName}
+Date: ${formatDate(appointmentDate)}
+Price: $${price}
+Response Required By: ${formatDate(expiresAt)}
+
+⏰ This request will expire in ${hoursRemaining} hours!
+
+TO RESPOND:
+1. Open the Kleanr app
+2. View the pending booking on your Dashboard
+3. Accept or Decline the booking
+
+Thank you for using Kleanr!`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `📅 New Booking Request from ${cleanerName} - ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Pending booking email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending pending booking email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send booking accepted email to business owner
+   */
+  static async sendBookingAcceptedEmail(
+    to,
+    appointmentDate,
+    clientName
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Booking Accepted!",
+        subtitle: "Your client confirmed the appointment",
+        headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+        greeting: "Great news!",
+        content: `<p><strong>${clientName}</strong> has accepted your booking request.</p>
+          <p>The appointment is now confirmed and ready to go!</p>`,
+        infoBox: {
+          icon: "✅",
+          title: "Confirmed Appointment",
+          items: [
+            { label: "Client", value: clientName },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "Confirmed" },
+          ],
+        },
+        ctaText: "View the appointment details in the Kleanr app.",
+        footerMessage: "Happy cleaning!",
+      });
+
+      const textContent = `BOOKING ACCEPTED!
+
+Great news! ${clientName} has accepted your booking request.
+
+CONFIRMED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Client: ${clientName}
+Date: ${formatDate(appointmentDate)}
+Status: Confirmed
+
+View the appointment details in the Kleanr app.
+
+Happy cleaning!`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `✅ Booking Accepted - ${clientName} on ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Booking accepted email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending booking accepted email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send booking declined email to business owner
+   */
+  static async sendBookingDeclinedEmail(
+    to,
+    appointmentDate,
+    clientName,
+    declineReason = null,
+    suggestedDates = null
+  ) {
+    try {
+      const transporter = createTransporter();
+      const hasSuggestions = suggestedDates && suggestedDates.length > 0;
+
+      const infoItems = [
+        { label: "Client", value: clientName },
+        { label: "Requested Date", value: formatDate(appointmentDate) },
+        { label: "Status", value: "Declined" },
+      ];
+
+      if (declineReason) {
+        infoItems.push({ label: "Reason", value: declineReason });
+      }
+
+      if (hasSuggestions) {
+        infoItems.push({
+          label: "Suggested Alternatives",
+          value: suggestedDates.map(d => formatDate(d)).join(", "),
+        });
+      }
+
+      const htmlContent = createEmailTemplate({
+        title: "Booking Declined",
+        subtitle: hasSuggestions ? "But your client suggested alternatives" : "Your client couldn't accept this date",
+        headerColor: hasSuggestions
+          ? "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)"
+          : "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+        greeting: hasSuggestions ? "Your client has another option!" : "Unfortunately...",
+        content: hasSuggestions
+          ? `<p><strong>${clientName}</strong> couldn't accept your booking for ${formatDate(appointmentDate)}, but they've suggested some alternative dates that work for them.</p>
+             <p>Consider rebooking with one of their suggested dates!</p>`
+          : `<p><strong>${clientName}</strong> has declined your booking request for ${formatDate(appointmentDate)}.</p>
+             <p>You can try scheduling a different date with them.</p>`,
+        infoBox: {
+          icon: hasSuggestions ? "📅" : "❌",
+          title: "Booking Details",
+          items: infoItems,
+        },
+        steps: hasSuggestions ? {
+          title: "What's Next?",
+          items: [
+            "Open the Kleanr app",
+            "Go to My Clients and find this client",
+            "Create a new booking with one of their suggested dates",
+          ],
+        } : null,
+        ctaText: "Open the Kleanr app to rebook with a different date.",
+        footerMessage: "Don't give up - try another date!",
+      });
+
+      const suggestedDatesText = hasSuggestions
+        ? `\nSuggested Alternatives: ${suggestedDates.map(d => formatDate(d)).join(", ")}`
+        : "";
+      const reasonText = declineReason ? `\nReason: ${declineReason}` : "";
+
+      const textContent = `BOOKING DECLINED
+
+${clientName} has declined your booking request.
+
+BOOKING DETAILS
+━━━━━━━━━━━━━━━
+Client: ${clientName}
+Requested Date: ${formatDate(appointmentDate)}
+Status: Declined${reasonText}${suggestedDatesText}
+
+${hasSuggestions ? "WHAT'S NEXT:\n1. Open the Kleanr app\n2. Go to My Clients\n3. Rebook with one of their suggested dates" : ""}
+
+Open the Kleanr app to try scheduling a different date.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: hasSuggestions
+          ? `📅 ${clientName} suggested new dates - Rebook needed`
+          : `❌ Booking Declined - ${clientName} on ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Booking declined email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending booking declined email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send booking expired email to business owner
+   */
+  static async sendBookingExpiredEmail(
+    to,
+    appointmentDate,
+    clientName
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Booking Request Expired",
+        subtitle: "Your client didn't respond in time",
+        headerColor: "linear-gradient(135deg, #6b7280 0%, #9ca3af 100%)",
+        greeting: "Time's up!",
+        content: `<p>Your booking request for <strong>${clientName}</strong> on ${formatDate(appointmentDate)} has expired.</p>
+          <p>The client didn't respond within 48 hours. You can create a new booking request with a different date.</p>`,
+        infoBox: {
+          icon: "⏰",
+          title: "Expired Request",
+          items: [
+            { label: "Client", value: clientName },
+            { label: "Requested Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "Expired (No Response)" },
+          ],
+        },
+        steps: {
+          title: "What's Next?",
+          items: [
+            "Open the Kleanr app",
+            "Go to My Clients and find this client",
+            "Try booking with a different date",
+            "Or reach out to them via messaging",
+          ],
+        },
+        ctaText: "Open the Kleanr app to schedule a new booking.",
+        footerMessage: "Don't give up - try reaching out!",
+      });
+
+      const textContent = `BOOKING REQUEST EXPIRED
+
+Your booking request for ${clientName} on ${formatDate(appointmentDate)} has expired.
+
+The client didn't respond within 48 hours.
+
+EXPIRED REQUEST
+━━━━━━━━━━━━━━━
+Client: ${clientName}
+Requested Date: ${formatDate(appointmentDate)}
+Status: Expired (No Response)
+
+WHAT'S NEXT:
+1. Open the Kleanr app
+2. Go to My Clients
+3. Try booking with a different date
+4. Or message them to check in
+
+Open the Kleanr app to schedule a new booking.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `⏰ Booking Expired - ${clientName} didn't respond`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Booking expired email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending booking expired email:", error);
+      throw error;
+    }
+  }
+
+  // ============================================
+  // Multi-Cleaner Job Email Templates
+  // ============================================
+
+  /**
+   * Send multi-cleaner job offer email to cleaner
+   */
+  static async sendMultiCleanerOfferEmail(
+    to,
+    cleanerName,
+    appointmentDate,
+    earningsAmount,
+    roomAssignments,
+    homeAddress
+  ) {
+    try {
+      const transporter = createTransporter();
+      const earningsFormatted = `$${(earningsAmount / 100).toFixed(2)}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Multi-Cleaner Job Available",
+        subtitle: "Team cleaning opportunity",
+        headerColor: "linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)",
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>A multi-cleaner job is available and you've been selected to participate!</p>
+          <p>This is a larger home that will be cleaned by a team. Your share of the earnings is shown below.</p>`,
+        infoBox: {
+          icon: "👥",
+          title: "Job Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Your Earnings", value: earningsFormatted },
+            { label: "Your Rooms", value: roomAssignments.join(", ") },
+            { label: "Location", value: homeAddress || "See app for details" },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "This offer expires in 48 hours. Accept soon to secure your spot!",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to accept or decline this offer.",
+        footerMessage: "Team up for bigger earnings!",
+      });
+
+      const textContent = `MULTI-CLEANER JOB AVAILABLE
+
+Hi ${cleanerName}!
+
+A multi-cleaner job is available and you've been selected to participate!
+
+JOB DETAILS
+━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Your Earnings: ${earningsFormatted}
+Your Rooms: ${roomAssignments.join(", ")}
+Location: ${homeAddress || "See app for details"}
+
+⏰ This offer expires in 48 hours. Accept soon to secure your spot!
+
+Open the Kleanr app to accept or decline this offer.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `👥 Multi-Cleaner Job Available - ${earningsFormatted} on ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Multi-cleaner offer email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending multi-cleaner offer email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send cleaner dropout notification email to homeowner
+   */
+  static async sendCleanerDropoutEmail(
+    to,
+    homeownerName,
+    appointmentDate,
+    remainingCleaners,
+    options
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const optionsList = options.map(opt => {
+        switch(opt) {
+          case "proceed_with_one": return "Proceed with remaining cleaner(s)";
+          case "wait_for_replacement": return "Wait for a replacement cleaner";
+          case "cancel": return "Cancel the appointment (no penalty)";
+          case "reschedule": return "Reschedule to a different date";
+          default: return opt;
+        }
+      });
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaner Update",
+        subtitle: "A change to your upcoming cleaning",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+        greeting: `Hi ${homeownerName},`,
+        content: `<p>We wanted to let you know that one of the cleaners scheduled for your upcoming appointment is no longer available.</p>
+          <p>Don't worry - you still have ${remainingCleaners} cleaner(s) assigned, and we have several options for you.</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Your Appointment",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Cleaners Remaining", value: remainingCleaners.toString() },
+            { label: "Status", value: "Needs your decision" },
+          ],
+        },
+        steps: {
+          title: "Your Options",
+          items: optionsList,
+        },
+        ctaText: "Open the Kleanr app to choose how you'd like to proceed.",
+        footerMessage: "We're here to help!",
+      });
+
+      const textContent = `CLEANER UPDATE
+
+Hi ${homeownerName},
+
+One of the cleaners scheduled for your upcoming appointment is no longer available.
+
+YOUR APPOINTMENT
+━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Cleaners Remaining: ${remainingCleaners}
+Status: Needs your decision
+
+YOUR OPTIONS:
+${optionsList.map((opt, i) => `${i + 1}. ${opt}`).join("\n")}
+
+Open the Kleanr app to choose how you'd like to proceed.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `⚠️ Cleaner Update for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Cleaner dropout email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending cleaner dropout email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send solo completion offer email to remaining cleaner
+   */
+  static async sendSoloCompletionOfferEmail(
+    to,
+    cleanerName,
+    appointmentDate,
+    bonusAmount,
+    originalCleanerCount
+  ) {
+    try {
+      const transporter = createTransporter();
+      const bonusFormatted = `$${(bonusAmount / 100).toFixed(2)}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Solo Completion Offer",
+        subtitle: "Earn the full amount!",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>Great news! You have the opportunity to complete the entire job solo and earn the full cleaning amount.</p>
+          <p>Your co-cleaner is no longer available. If you complete the job by yourself, you'll receive the full payment.</p>`,
+        infoBox: {
+          icon: "💰",
+          title: "Earnings Opportunity",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Full Earnings", value: bonusFormatted },
+            { label: "Original Team Size", value: `${originalCleanerCount} cleaners` },
+            { label: "Your Decision", value: "Accept within 12 hours" },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "This offer expires in 12 hours. Respond soon!",
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        ctaText: "Open the Kleanr app to accept or decline this offer.",
+        footerMessage: "You've got this!",
+      });
+
+      const textContent = `SOLO COMPLETION OFFER
+
+Hi ${cleanerName}!
+
+Great news! You can complete the entire job solo and earn the full cleaning amount.
+
+EARNINGS OPPORTUNITY
+━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Full Earnings: ${bonusFormatted}
+Original Team Size: ${originalCleanerCount} cleaners
+Your Decision: Accept within 12 hours
+
+⏰ This offer expires in 12 hours. Respond soon!
+
+Open the Kleanr app to accept or decline.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `💰 Solo Completion Offer - Earn ${bonusFormatted} on ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Solo completion offer email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending solo completion offer email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send partial completion notification to homeowner
+   */
+  static async sendPartialCompletionEmail(
+    to,
+    homeownerName,
+    appointmentDate,
+    completedRooms,
+    totalRooms,
+    options
+  ) {
+    try {
+      const transporter = createTransporter();
+      const percentage = Math.round((completedRooms / totalRooms) * 100);
+
+      const optionsList = options.map(opt => {
+        switch(opt) {
+          case "accept_partial": return "Accept partial clean with prorated payment";
+          case "schedule_completion": return "Schedule completion of remaining rooms";
+          case "full_refund": return "Request full refund and reschedule";
+          default: return opt;
+        }
+      });
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Update",
+        subtitle: "Your cleaning was partially completed",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        greeting: `Hi ${homeownerName},`,
+        content: `<p>We wanted to update you on your recent cleaning. Due to unforeseen circumstances, your cleaning was partially completed.</p>
+          <p>We apologize for any inconvenience and want to make this right.</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Cleaning Status",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Rooms Completed", value: `${completedRooms} of ${totalRooms}` },
+            { label: "Completion", value: `${percentage}%` },
+          ],
+        },
+        steps: {
+          title: "Your Options",
+          items: optionsList,
+        },
+        ctaText: "Open the Kleanr app to choose your preferred option.",
+        footerMessage: "We appreciate your patience!",
+      });
+
+      const textContent = `CLEANING UPDATE
+
+Hi ${homeownerName},
+
+Your recent cleaning was partially completed.
+
+CLEANING STATUS
+━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Rooms Completed: ${completedRooms} of ${totalRooms}
+Completion: ${percentage}%
+
+YOUR OPTIONS:
+${optionsList.map((opt, i) => `${i + 1}. ${opt}`).join("\n")}
+
+Open the Kleanr app to choose your preferred option.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `🏠 Cleaning Update - ${percentage}% Complete`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Partial completion email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending partial completion email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send multi-cleaner job confirmation email to homeowner
+   */
+  static async sendMultiCleanerConfirmationEmail(
+    to,
+    homeownerName,
+    appointmentDate,
+    cleanerCount,
+    cleanerNames,
+    totalPrice
+  ) {
+    try {
+      const transporter = createTransporter();
+      const priceFormatted = `$${(totalPrice / 100).toFixed(2)}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Your Team is Ready!",
+        subtitle: "Multi-cleaner job confirmed",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #14b8a6 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>Great news! Your multi-cleaner team is confirmed and ready to give your home a thorough cleaning.</p>
+          <p>With ${cleanerCount} cleaners working together, your cleaning will be completed faster than ever!</p>`,
+        infoBox: {
+          icon: "✨",
+          title: "Your Cleaning Team",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Team Size", value: `${cleanerCount} cleaners` },
+            { label: "Cleaners", value: cleanerNames.join(", ") },
+            { label: "Total", value: priceFormatted },
+          ],
+        },
+        steps: {
+          title: "What to Expect",
+          items: [
+            "Your cleaners will arrive together at the scheduled time",
+            "Each cleaner is assigned specific rooms for efficient cleaning",
+            "You'll receive real-time updates as rooms are completed",
+            "All cleaners complete before/after photos for quality assurance",
+          ],
+        },
+        ctaText: "Open the Kleanr app to view your team's progress on cleaning day.",
+        footerMessage: "Looking forward to a sparkling clean home!",
+      });
+
+      const textContent = `YOUR TEAM IS READY!
+
+Hi ${homeownerName}!
+
+Your multi-cleaner team is confirmed!
+
+YOUR CLEANING TEAM
+━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Team Size: ${cleanerCount} cleaners
+Cleaners: ${cleanerNames.join(", ")}
+Total: ${priceFormatted}
+
+WHAT TO EXPECT:
+1. Your cleaners will arrive together
+2. Each cleaner is assigned specific rooms
+3. You'll receive real-time updates
+4. All cleaners complete before/after photos
+
+Open the Kleanr app to view your team's progress on cleaning day.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `✨ Your ${cleanerCount}-Person Cleaning Team is Confirmed for ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Multi-cleaner confirmation email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending multi-cleaner confirmation email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send urgent fill notification email to cleaner
+   */
+  static async sendUrgentFillEmail(
+    to,
+    cleanerName,
+    appointmentDate,
+    earningsAmount,
+    daysRemaining
+  ) {
+    try {
+      const transporter = createTransporter();
+      const earningsFormatted = `$${(earningsAmount / 100).toFixed(2)}`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Urgent: Job Needs You!",
+        subtitle: "Help complete a team cleaning",
+        headerColor: "linear-gradient(135deg, #ef4444 0%, #f97316 100%)",
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>A multi-cleaner job is urgently looking for an additional cleaner. The appointment is in just ${daysRemaining} days!</p>
+          <p>This is a great opportunity to earn ${earningsFormatted} and help out a homeowner in need.</p>`,
+        infoBox: {
+          icon: "🔥",
+          title: "Urgent Opportunity",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Days Until Job", value: `${daysRemaining} days` },
+            { label: "Your Earnings", value: earningsFormatted },
+            { label: "Status", value: "Urgently Needed!" },
+          ],
+        },
+        warningBox: {
+          icon: "⚡",
+          text: "This job is filling fast! Accept now to secure your spot.",
+          bgColor: "#fef2f2",
+          borderColor: "#ef4444",
+          textColor: "#b91c1c",
+        },
+        ctaText: "Open the Kleanr app to accept this job now!",
+        footerMessage: "Every cleaner makes a difference!",
+      });
+
+      const textContent = `URGENT: JOB NEEDS YOU!
+
+Hi ${cleanerName}!
+
+A multi-cleaner job urgently needs an additional cleaner!
+
+URGENT OPPORTUNITY
+━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Days Until Job: ${daysRemaining} days
+Your Earnings: ${earningsFormatted}
+Status: Urgently Needed!
+
+⚡ This job is filling fast! Accept now to secure your spot.
+
+Open the Kleanr app to accept this job now!`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `🔥 URGENT: Earn ${earningsFormatted} - Job in ${daysRemaining} Days!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Urgent fill email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending urgent fill email:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Email;

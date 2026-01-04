@@ -14,6 +14,8 @@ import Icon from "react-native-vector-icons/FontAwesome";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 import MessageService from "../../services/fetchRequests/MessageClass";
 import FetchData from "../../services/fetchRequests/fetchData";
+import NotificationsService from "../../services/fetchRequests/NotificationsService";
+import { useSocket } from "../../services/SocketContext";
 import {
   colors,
   spacing,
@@ -29,6 +31,9 @@ import DiscountedPrice from "../pricing/DiscountedPrice";
 import MyCleanerCard from "./MyCleanerCard";
 import RecurringScheduleCard from "./RecurringScheduleCard";
 import DeclinedAppointmentsSection from "./DeclinedAppointmentsSection";
+import IncompleteHomeSetupBanner from "./IncompleteHomeSetupBanner";
+import PendingBookingCard from "./PendingBookingCard";
+import PendingBookingModal from "./PendingBookingModal";
 
 const { width } = Dimensions.get("window");
 
@@ -191,6 +196,7 @@ const HomeCard = ({ home, onPress }) => (
 
 const ClientDashboard = ({ state, dispatch }) => {
   const navigate = useNavigate();
+  const { onBookingRequest } = useSocket();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [homes, setHomes] = useState([]);
@@ -203,12 +209,49 @@ const ClientDashboard = ({ state, dispatch }) => {
   const [myCleaner, setMyCleaner] = useState(null);
   const [myCleanerRelationship, setMyCleanerRelationship] = useState(null);
   const [recurringSchedules, setRecurringSchedules] = useState([]);
+  const [pendingBookings, setPendingBookings] = useState([]);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [showBookingModal, setShowBookingModal] = useState(false);
 
   useEffect(() => {
     if (state.currentUser.token) {
       fetchDashboardData();
+      fetchPendingBookings();
     }
   }, [state.currentUser.token]);
+
+  // Fetch pending bookings (appointments awaiting client approval)
+  const fetchPendingBookings = async () => {
+    try {
+      const data = await NotificationsService.getPendingApprovalAppointments(
+        state.currentUser.token
+      );
+      setPendingBookings(data.appointments || []);
+    } catch (error) {
+      console.error("Error fetching pending bookings:", error);
+    }
+  };
+
+  // Listen for new booking requests via socket
+  useEffect(() => {
+    const unsubscribe = onBookingRequest((data) => {
+      if (data.appointment) {
+        setPendingBookings((prev) => [data.appointment, ...prev]);
+      }
+    });
+    return unsubscribe;
+  }, [onBookingRequest]);
+
+  const handleBookingAction = (action, appointment) => {
+    // Remove from pending bookings list
+    setPendingBookings((prev) =>
+      prev.filter((booking) => booking.id !== appointment.id)
+    );
+    // Refresh dashboard data to reflect changes
+    fetchDashboardData(true);
+    setShowBookingModal(false);
+    setSelectedBooking(null);
+  };
 
   const fetchDashboardData = async (isRefresh = false) => {
     if (isRefresh) {
@@ -425,6 +468,58 @@ const ClientDashboard = ({ state, dispatch }) => {
         <Text style={styles.greeting}>{getGreeting()}</Text>
         <Text style={styles.dateText}>{formatDate()}</Text>
       </View>
+
+      {/* Incomplete Home Setup Banner */}
+      {homes.filter(h => h.isSetupComplete === false).map(incompleteHome => (
+        <IncompleteHomeSetupBanner
+          key={incompleteHome.id}
+          home={incompleteHome}
+          onComplete={() => navigate(`/complete-home-setup/${incompleteHome.id}`)}
+        />
+      ))}
+
+      {/* Pending Bookings - Appointments awaiting client approval */}
+      {pendingBookings.length > 0 && (
+        <View style={styles.pendingBookingsSection}>
+          <View style={styles.pendingBookingsHeader}>
+            <Icon name="bell" size={16} color={colors.warning[600]} />
+            <Text style={styles.pendingBookingsTitle}>
+              {pendingBookings.length === 1
+                ? "1 Booking Awaiting Your Approval"
+                : `${pendingBookings.length} Bookings Awaiting Your Approval`}
+            </Text>
+          </View>
+          {pendingBookings.map((booking) => (
+            <PendingBookingCard
+              key={booking.id}
+              booking={booking}
+              onPress={() => {
+                setSelectedBooking(booking);
+                setShowBookingModal(true);
+              }}
+              onAccept={() => {
+                setSelectedBooking(booking);
+                setShowBookingModal(true);
+              }}
+              onDecline={() => {
+                setSelectedBooking(booking);
+                setShowBookingModal(true);
+              }}
+            />
+          ))}
+        </View>
+      )}
+
+      {/* Pending Booking Modal */}
+      <PendingBookingModal
+        visible={showBookingModal}
+        booking={selectedBooking}
+        onClose={() => {
+          setShowBookingModal(false);
+          setSelectedBooking(null);
+        }}
+        onActionComplete={handleBookingAction}
+      />
 
       {/* Today's Cleaning - Show if there's an appointment today */}
       {todaysAppointment && (
@@ -1456,6 +1551,23 @@ const styles = StyleSheet.create({
   },
   pendingReviewsList: {
     gap: spacing.md,
+  },
+
+  // Pending Bookings Section
+  pendingBookingsSection: {
+    marginBottom: spacing.xl,
+  },
+  pendingBookingsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  pendingBookingsTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
   },
 
   bottomPadding: {

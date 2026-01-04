@@ -411,6 +411,64 @@ class PushNotification {
       pendingCount,
     });
   }
+
+  // ==========================================
+  // BUSINESS OWNER BOOKING NOTIFICATIONS
+  // ==========================================
+
+  // 31. Pending booking request (to client - needs approval)
+  static async sendPushPendingBooking(expoPushToken, clientName, cleanerName, appointmentDate, expiresInHours = 48) {
+    const title = "New Booking Request 📅";
+    const body = `Hi ${clientName}! ${cleanerName} has scheduled a cleaning for ${formatDate(appointmentDate)}. Accept or decline within ${expiresInHours} hours.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "pending_booking",
+      appointmentDate,
+      cleanerName,
+      actionRequired: true,
+    });
+  }
+
+  // 32. Booking accepted (to business owner)
+  static async sendPushBookingAccepted(expoPushToken, cleanerName, clientName, appointmentDate) {
+    const title = "Booking Accepted! ✅";
+    const body = `Great news ${cleanerName}! ${clientName} accepted your booking for ${formatDate(appointmentDate)}.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "booking_accepted",
+      appointmentDate,
+      clientName,
+    });
+  }
+
+  // 33. Booking declined (to business owner)
+  static async sendPushBookingDeclined(expoPushToken, cleanerName, clientName, appointmentDate, hasSuggestedDates = false) {
+    const title = "Booking Declined";
+    const body = hasSuggestedDates
+      ? `${clientName} declined your booking for ${formatDate(appointmentDate)} but suggested alternative dates. Tap to view.`
+      : `${clientName} declined your booking for ${formatDate(appointmentDate)}. You can rebook another date.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "booking_declined",
+      appointmentDate,
+      clientName,
+      hasSuggestedDates,
+      actionRequired: hasSuggestedDates,
+    });
+  }
+
+  // 34. Booking expired (to business owner - client didn't respond)
+  static async sendPushBookingExpired(expoPushToken, cleanerName, clientName, appointmentDate) {
+    const title = "Booking Request Expired ⏰";
+    const body = `Your booking request for ${clientName} on ${formatDate(appointmentDate)} has expired. The client didn't respond in time.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "booking_expired",
+      appointmentDate,
+      clientName,
+      actionRequired: true, // Can rebook
+    });
+  }
 }
 
 module.exports = PushNotification;

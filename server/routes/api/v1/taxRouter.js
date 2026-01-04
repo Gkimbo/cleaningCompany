@@ -27,6 +27,7 @@ const {
 } = require("../../../models");
 const TaxDocumentService = require("../../../services/TaxDocumentService");
 const PlatformTaxService = require("../../../services/PlatformTaxService");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const taxRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -891,7 +892,7 @@ taxRouter.get("/1099-summary/:year", async (req, res) => {
         return {
           userId: row.cleanerId,
           username: user?.username,
-          email: user?.email,
+          email: user?.email ? EncryptionService.decrypt(user.email) : null,
           legalName: taxInfo?.legalName,
           tinLast4: taxInfo?.tinLast4,
           taxInfoStatus: taxInfo?.status || "not_submitted",

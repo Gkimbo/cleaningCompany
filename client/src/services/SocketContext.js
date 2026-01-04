@@ -181,6 +181,46 @@ export const SocketProvider = ({ children, token }) => {
     return () => {};
   }, [socket]);
 
+  // ==========================================
+  // BOOKING NOTIFICATION LISTENERS
+  // ==========================================
+
+  // Listen for new notifications (in-app)
+  const onNotification = useCallback((callback) => {
+    if (socket) {
+      socket.on("notification", callback);
+      return () => socket.off("notification", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for notification count updates
+  const onNotificationCountUpdate = useCallback((callback) => {
+    if (socket) {
+      socket.on("notification_count_update", callback);
+      return () => socket.off("notification_count_update", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for new booking requests (for clients)
+  const onBookingRequest = useCallback((callback) => {
+    if (socket) {
+      socket.on("booking_request", callback);
+      return () => socket.off("booking_request", callback);
+    }
+    return () => {};
+  }, [socket]);
+
+  // Listen for booking responses (for business owners)
+  const onBookingResponse = useCallback((callback) => {
+    if (socket) {
+      socket.on("booking_response", callback);
+      return () => socket.off("booking_response", callback);
+    }
+    return () => {};
+  }, [socket]);
+
   const value = {
     socket,
     connected,
@@ -199,6 +239,11 @@ export const SocketProvider = ({ children, token }) => {
     onConversationTitleChanged,
     onSuspiciousActivityReport,
     onSuspiciousReportUpdated,
+    // Booking notifications
+    onNotification,
+    onNotificationCountUpdate,
+    onBookingRequest,
+    onBookingResponse,
   };
 
   return (

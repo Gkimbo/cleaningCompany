@@ -334,9 +334,9 @@ applicationRouter.patch("/:id/status", async (req, res) => {
 
       // Send rejection email to applicant
       await Email.sendApplicationRejected(
-        application.email,
-        application.firstName,
-        application.lastName,
+        EncryptionService.decrypt(application.email),
+        EncryptionService.decrypt(application.firstName),
+        EncryptionService.decrypt(application.lastName),
         rejectionReason
       );
 
@@ -345,8 +345,8 @@ applicationRouter.patch("/:id/status", async (req, res) => {
         const owners = await User.findAll({
           where: { type: "owner" },
         });
-        const hrName = `${caller.firstName || ""} ${caller.lastName || ""}`.trim() || caller.username;
-        const applicantName = `${application.firstName} ${application.lastName}`;
+        const hrName = `${caller.firstName ? EncryptionService.decrypt(caller.firstName) : ""} ${caller.lastName ? EncryptionService.decrypt(caller.lastName) : ""}`.trim() || caller.username;
+        const applicantName = `${EncryptionService.decrypt(application.firstName)} ${EncryptionService.decrypt(application.lastName)}`;
 
         for (const owner of owners) {
           const ownerEmail = owner.getNotificationEmail();
@@ -355,7 +355,7 @@ applicationRouter.patch("/:id/status", async (req, res) => {
               ownerEmail,
               hrName,
               applicantName,
-              application.email,
+              EncryptionService.decrypt(application.email),
               "rejected",
               rejectionReason
             );
@@ -510,8 +510,8 @@ applicationRouter.post("/:id/hire", async (req, res) => {
       const owners = await User.findAll({
         where: { type: "owner" },
       });
-      const hrName = `${caller.firstName || ""} ${caller.lastName || ""}`.trim() || caller.username;
-      const applicantName = `${newUser.firstName} ${newUser.lastName}`;
+      const hrName = `${caller.firstName ? EncryptionService.decrypt(caller.firstName) : ""} ${caller.lastName ? EncryptionService.decrypt(caller.lastName) : ""}`.trim() || caller.username;
+      const applicantName = `${EncryptionService.decrypt(newUser.firstName)} ${EncryptionService.decrypt(newUser.lastName)}`;
 
       for (const owner of owners) {
         const ownerEmail = owner.getNotificationEmail();
@@ -520,7 +520,7 @@ applicationRouter.post("/:id/hire", async (req, res) => {
             ownerEmail,
             hrName,
             applicantName,
-            newUser.email,
+            EncryptionService.decrypt(newUser.email),
             "hired"
           );
         }
@@ -535,9 +535,9 @@ applicationRouter.post("/:id/hire", async (req, res) => {
       user: {
         id: newUser.id,
         username: newUser.username,
-        email: newUser.email,
-        firstName: newUser.firstName,
-        lastName: newUser.lastName,
+        email: EncryptionService.decrypt(newUser.email),
+        firstName: EncryptionService.decrypt(newUser.firstName),
+        lastName: EncryptionService.decrypt(newUser.lastName),
       },
     });
   } catch (error) {

@@ -516,6 +516,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderTopLeftRadius: radius["2xl"],
     borderTopRightRadius: radius["2xl"],
+    minHeight: "70%",
     maxHeight: "90%",
     ...shadows.xl,
   },

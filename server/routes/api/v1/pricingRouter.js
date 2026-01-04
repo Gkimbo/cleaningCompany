@@ -7,6 +7,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const { User, PricingConfig } = require("../../../models");
 const { getPricingConfig, businessConfig } = require("../../../config/businessConfig");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const pricingRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -145,6 +146,7 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
       cleanerPenaltyDays,
       refundPercentage,
       platformFeePercent,
+      businessOwnerFeePercent,
       highVolumeFee,
       changeNote,
     } = req.body;
@@ -167,6 +169,7 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
       cleanerPenaltyDays,
       refundPercentage,
       platformFeePercent,
+      businessOwnerFeePercent,
       highVolumeFee,
     };
 
@@ -221,6 +224,12 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
       });
     }
 
+    if (businessOwnerFeePercent < 0 || businessOwnerFeePercent > 1) {
+      return res.status(400).json({
+        error: "businessOwnerFeePercent must be between 0 and 1",
+      });
+    }
+
     // Create new pricing config
     const newConfig = await PricingConfig.updatePricing(
       {
@@ -240,6 +249,7 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
         cleanerPenaltyDays,
         refundPercentage,
         platformFeePercent,
+        businessOwnerFeePercent,
         highVolumeFee,
       },
       req.user.id,
@@ -281,7 +291,7 @@ pricingRouter.get("/history", verifyOwner, async (req, res) => {
           ? {
               id: config.updatedByUser.id,
               username: config.updatedByUser.username,
-              email: config.updatedByUser.email,
+              email: EncryptionService.decrypt(config.updatedByUser.email),
             }
           : null,
         changeNote: config.changeNote,
@@ -302,6 +312,7 @@ pricingRouter.get("/history", verifyOwner, async (req, res) => {
           cleanerPenaltyDays: config.cleanerPenaltyDays,
           refundPercentage: parseFloat(config.refundPercentage),
           platformFeePercent: parseFloat(config.platformFeePercent),
+          businessOwnerFeePercent: parseFloat(config.businessOwnerFeePercent || config.platformFeePercent),
           highVolumeFee: config.highVolumeFee,
         },
       })),

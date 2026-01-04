@@ -374,7 +374,7 @@ recurringSchedulesRouter.get("/", verifyCleaner, async (req, res) => {
         client: s.cleanerClient?.client
           ? {
               id: s.cleanerClient.client.id,
-              name: `${s.cleanerClient.client.firstName} ${s.cleanerClient.client.lastName}`,
+              name: `${EncryptionService.decrypt(s.cleanerClient.client.firstName)} ${EncryptionService.decrypt(s.cleanerClient.client.lastName)}`,
             }
           : null,
         home: s.home
@@ -392,6 +392,101 @@ recurringSchedulesRouter.get("/", verifyCleaner, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch schedules" });
   }
 });
+
+// =====================
+// CLIENT ENDPOINTS (for homeowners to see their schedules)
+// MUST be defined BEFORE /:id routes to avoid route conflict
+// =====================
+
+// Middleware to verify homeowner access
+const verifyHomeowner = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const user = await User.findByPk(decoded.userId);
+
+    if (!user || user.type !== "homeowner") {
+      return res.status(403).json({ error: "Homeowner access required" });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+/**
+ * GET /my-schedules
+ * Get all recurring schedules for the authenticated homeowner
+ */
+recurringSchedulesRouter.get("/my-schedules", verifyHomeowner, async (req, res) => {
+  try {
+    const schedules = await RecurringSchedule.findAll({
+      where: {
+        clientId: req.user.id,
+        isActive: true,
+      },
+      include: [
+        {
+          model: User,
+          as: "cleaner",
+          attributes: ["id", "firstName", "lastName", "profilePhoto"],
+        },
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "nickName", "address", "city"],
+        },
+      ],
+      order: [["nextScheduledDate", "ASC"]],
+    });
+
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+    res.json({
+      schedules: schedules.map((s) => ({
+        id: s.id,
+        frequency: s.frequency,
+        dayOfWeek: s.dayOfWeek,
+        dayName: days[s.dayOfWeek],
+        timeWindow: s.timeWindow,
+        price: s.price,
+        nextScheduledDate: s.nextScheduledDate,
+        isPaused: s.isPaused,
+        pausedUntil: s.pausedUntil,
+        cleaner: s.cleaner
+          ? {
+              id: s.cleaner.id,
+              firstName: EncryptionService.decrypt(s.cleaner.firstName),
+              lastName: EncryptionService.decrypt(s.cleaner.lastName),
+              profilePhoto: s.cleaner.profilePhoto,
+            }
+          : null,
+        home: s.home
+          ? {
+              id: s.home.id,
+              nickName: s.home.nickName,
+              address: EncryptionService.decrypt(s.home.address),
+              city: EncryptionService.decrypt(s.home.city),
+            }
+          : null,
+      })),
+    });
+  } catch (err) {
+    console.error("Error fetching homeowner schedules:", err);
+    res.status(500).json({ error: "Failed to fetch schedules" });
+  }
+});
+
+// =====================
+// PARAMETERIZED ROUTES - Must come AFTER specific string routes
+// =====================
 
 /**
  * GET /:id
@@ -731,95 +826,6 @@ recurringSchedulesRouter.post("/generate-all", async (req, res) => {
   } catch (err) {
     console.error("Error in generate-all:", err);
     res.status(500).json({ error: "Failed to generate appointments" });
-  }
-});
-
-// =====================
-// CLIENT ENDPOINTS (for homeowners to see their schedules)
-// =====================
-
-// Middleware to verify homeowner access
-const verifyHomeowner = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  try {
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, secretKey);
-    const user = await User.findByPk(decoded.userId);
-
-    if (!user || user.type !== "homeowner") {
-      return res.status(403).json({ error: "Homeowner access required" });
-    }
-
-    req.user = user;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: "Invalid token" });
-  }
-};
-
-/**
- * GET /my-schedules
- * Get all recurring schedules for the authenticated homeowner
- */
-recurringSchedulesRouter.get("/my-schedules", verifyHomeowner, async (req, res) => {
-  try {
-    const schedules = await RecurringSchedule.findAll({
-      where: {
-        clientId: req.user.id,
-        isActive: true,
-      },
-      include: [
-        {
-          model: User,
-          as: "cleaner",
-          attributes: ["id", "firstName", "lastName", "profilePhoto"],
-        },
-        {
-          model: UserHomes,
-          as: "home",
-          attributes: ["id", "nickName", "address", "city"],
-        },
-      ],
-      order: [["nextScheduledDate", "ASC"]],
-    });
-
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-    res.json({
-      schedules: schedules.map((s) => ({
-        id: s.id,
-        frequency: s.frequency,
-        dayOfWeek: s.dayOfWeek,
-        dayName: days[s.dayOfWeek],
-        timeWindow: s.timeWindow,
-        price: s.price,
-        nextScheduledDate: s.nextScheduledDate,
-        isPaused: s.isPaused,
-        pausedUntil: s.pausedUntil,
-        cleaner: s.cleaner
-          ? {
-              id: s.cleaner.id,
-              firstName: s.cleaner.firstName,
-              lastName: s.cleaner.lastName,
-              profilePhoto: s.cleaner.profilePhoto,
-            }
-          : null,
-        home: s.home
-          ? {
-              id: s.home.id,
-              nickName: s.home.nickName,
-              address: `${EncryptionService.decrypt(s.home.address)}, ${EncryptionService.decrypt(s.home.city)}`,
-            }
-          : null,
-      })),
-    });
-  } catch (err) {
-    console.error("Error fetching my schedules:", err);
-    res.status(500).json({ error: "Failed to fetch recurring schedules" });
   }
 });
 

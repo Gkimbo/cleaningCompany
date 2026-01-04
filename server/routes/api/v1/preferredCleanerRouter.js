@@ -170,7 +170,7 @@ preferredCleanerRouter.get("/pending-responses", verifyHomeowner, async (req, re
           cleaner: cleaner
             ? {
                 id: cleaner.id,
-                name: `${cleaner.firstName} ${cleaner.lastName}`,
+                name: `${EncryptionService.decrypt(cleaner.firstName)} ${EncryptionService.decrypt(cleaner.lastName)}`,
               }
             : null,
         };
@@ -252,7 +252,7 @@ preferredCleanerRouter.get("/homes/:homeId/preferred-cleaners", verifyHomeowner,
         id: pc.id,
         cleanerId: pc.cleanerId,
         cleanerName: pc.cleaner
-          ? `${pc.cleaner.firstName || ""} ${pc.cleaner.lastName || ""}`.trim() || pc.cleaner.username
+          ? `${EncryptionService.decrypt(pc.cleaner.firstName) || ""} ${EncryptionService.decrypt(pc.cleaner.lastName) || ""}`.trim() || pc.cleaner.username
           : "Unknown",
         setAt: pc.setAt,
         setBy: pc.setBy,

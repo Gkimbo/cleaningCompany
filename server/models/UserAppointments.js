@@ -166,6 +166,64 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DECIMAL(10, 2),
 			allowNull: true,
 		},
+		// Client response fields for business owner bookings
+		clientRespondedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+		},
+		clientResponse: {
+			type: DataTypes.STRING(20),
+			allowNull: true,
+			// 'accepted', 'declined', 'expired'
+		},
+		declineReason: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+		},
+		suggestedDates: {
+			type: DataTypes.JSONB,
+			allowNull: true,
+			// Array of dates suggested by client when declining
+		},
+		expiresAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			// Set to 48 hours from creation for pending approval bookings
+		},
+		originalBookingId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			// For tracking rebooking attempts after decline
+		},
+		rebookingAttempts: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+		},
+		// Multi-cleaner job fields
+		isMultiCleanerJob: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		multiCleanerJobId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		cleanerSlotsRemaining: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
+		soloCleanerConsent: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		homeownerSoloWarningAcknowledged: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
 	});
 
 	// Define the one-to-many relationship with User
@@ -189,6 +247,30 @@ module.exports = (sequelize, DataTypes) => {
 		UserAppointments.hasMany(models.UserCleanerAppointments, {
 			foreignKey: "appointmentId",
 			as: "appointments",
+		});
+		UserAppointments.belongsTo(models.UserAppointments, {
+			foreignKey: "originalBookingId",
+			as: "originalBooking",
+		});
+		UserAppointments.hasMany(models.UserAppointments, {
+			foreignKey: "originalBookingId",
+			as: "rebookings",
+		});
+		UserAppointments.hasMany(models.Notification, {
+			foreignKey: "relatedAppointmentId",
+			as: "notifications",
+		});
+		UserAppointments.belongsTo(models.MultiCleanerJob, {
+			foreignKey: "multiCleanerJobId",
+			as: "multiCleanerJob",
+		});
+		UserAppointments.hasMany(models.CleanerRoomAssignment, {
+			foreignKey: "appointmentId",
+			as: "roomAssignments",
+		});
+		UserAppointments.hasMany(models.CleanerJobCompletion, {
+			foreignKey: "appointmentId",
+			as: "cleanerCompletions",
 		});
 	};
 

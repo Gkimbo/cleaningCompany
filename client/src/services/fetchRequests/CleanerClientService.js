@@ -76,6 +76,50 @@ class CleanerClientService {
   }
 
   /**
+   * Get full client details with home info and appointments
+   * @param {string} token - Auth token
+   * @param {number} clientId - CleanerClient ID
+   * @returns {Object} { cleanerClient, client, home, appointments, recurringSchedules }
+   */
+  static async getClientFull(token, clientId) {
+    try {
+      const response = await fetch(`${API_BASE}/cleaner-clients/${clientId}/full`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching full client details:", error);
+      return { error: "Failed to fetch client details" };
+    }
+  }
+
+  /**
+   * Update home details for a client
+   * @param {string} token - Auth token
+   * @param {number} clientId - CleanerClient ID
+   * @param {Object} updates - Home fields to update (specialNotes, keyPadCode, keyLocation, etc.)
+   * @returns {Object} { success, home, error }
+   */
+  static async updateClientHome(token, clientId, updates) {
+    try {
+      const response = await fetch(`${API_BASE}/cleaner-clients/${clientId}/home`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(updates),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error updating client home:", error);
+      return { success: false, error: "Failed to update home details" };
+    }
+  }
+
+  /**
    * Update a client relationship
    * @param {string} token - Auth token
    * @param {number} clientId - CleanerClient ID
@@ -154,7 +198,7 @@ class CleanerClientService {
   static async bookForClient(token, clientId, bookingData) {
     try {
       const response = await fetch(
-        `${API_BASE}/cleaner-clients/${clientId}/book`,
+        `${API_BASE}/cleaner-clients/${clientId}/book-for-client`,
         {
           method: "POST",
           headers: {
@@ -439,6 +483,26 @@ class CleanerClientService {
   }
 
   /**
+   * Get appointments booked FOR clients that are awaiting their response
+   * Returns appointments grouped by: pending, declined, expired
+   * @param {string} token - Auth token
+   * @returns {Object} { pending, declined, expired, total }
+   */
+  static async getPendingClientResponses(token) {
+    try {
+      const response = await fetch(`${API_BASE}/cleaner-clients/pending-client-responses`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching pending client responses:", error);
+      return { pending: [], declined: [], expired: [], total: 0 };
+    }
+  }
+
+  /**
    * Accept an appointment from a client
    * @param {string} token - Auth token
    * @param {number} appointmentId - Appointment ID
@@ -533,6 +597,56 @@ class CleanerClientService {
     } catch (error) {
       console.error("Error responding to decline:", error);
       return { success: false, error: "Failed to respond" };
+    }
+  }
+
+  /**
+   * Get platform price for a client's home
+   * @param {string} token - Auth token
+   * @param {number} cleanerClientId - CleanerClient relationship ID
+   * @returns {Object} { platformPrice, numBeds, numBaths, breakdown }
+   */
+  static async getPlatformPrice(token, cleanerClientId) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/cleaner-clients/${cleanerClientId}/platform-price`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching platform price:", error);
+      return { error: "Failed to fetch platform price" };
+    }
+  }
+
+  /**
+   * Update the default price for a client
+   * @param {string} token - Auth token
+   * @param {number} cleanerClientId - CleanerClient relationship ID
+   * @param {number} price - New default price
+   * @returns {Object} { success, cleanerClient, error }
+   */
+  static async updateDefaultPrice(token, cleanerClientId, price) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/cleaner-clients/${cleanerClientId}/default-price`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ price }),
+        }
+      );
+      return await response.json();
+    } catch (error) {
+      console.error("Error updating default price:", error);
+      return { success: false, error: "Failed to update price" };
     }
   }
 }

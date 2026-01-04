@@ -21,6 +21,7 @@ const {
   sequelize,
 } = require("../../../models");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const EncryptionService = require("../../../services/EncryptionService");
 const {
   businessConfig,
   updateAllHomesServiceAreaStatus,
@@ -944,7 +945,7 @@ ownerDashboardRouter.get(
             ? {
                 id: h.user.id,
                 username: h.user.username,
-                email: h.user.email,
+                email: EncryptionService.decrypt(h.user.email),
               }
             : null,
         })),
@@ -1226,8 +1227,8 @@ ownerDashboardRouter.get("/settings", verifyOwner, async (req, res) => {
     const owner = req.user;
 
     res.json({
-      email: owner.email,
-      notificationEmail: owner.notificationEmail,
+      email: EncryptionService.decrypt(owner.email),
+      notificationEmail: owner.notificationEmail ? EncryptionService.decrypt(owner.notificationEmail) : null,
       effectiveNotificationEmail: owner.getNotificationEmail(),
       notifications: owner.notifications || [],
     });
