@@ -46,8 +46,12 @@ appointmentRouter.get("/unassigned", async (req, res) => {
     return res.status(401).json({ error: "Authorization token required" });
   }
   try {
+    // Filter out appointments that are assigned to business employees
     const userAppointments = await UserAppointments.findAll({
-      where: { hasBeenAssigned: false },
+      where: {
+        hasBeenAssigned: false,
+        assignedToBusinessEmployee: false, // Exclude business-assigned jobs from marketplace
+      },
     });
     const serializedAppointments =
       AppointmentSerializer.serializeArray(userAppointments);

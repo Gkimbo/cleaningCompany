@@ -112,6 +112,28 @@ import { PricingProvider } from "../src/context/PricingContext";
 // Terms and Conditions
 import { TermsAcceptanceScreen } from "../src/components/terms";
 
+// Business Owner components
+import {
+  BusinessOwnerDashboard,
+  EmployeeManagement,
+  JobAssignment,
+  BusinessOwnerCalendar,
+  EmployeeEditForm,
+  FinancialsScreen,
+  PayrollScreen,
+  EmployeeMessaging,
+} from "../src/components/businessOwner";
+
+// Business Employee components
+import {
+  EmployeeDashboard,
+  EmployeeJobList,
+  EmployeeEarnings,
+  EmployeeJobDetail,
+  EmployeeCalendar,
+  CoworkerMessaging,
+} from "../src/components/businessEmployee";
+
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [stripePublishableKey, setStripePublishableKey] = useState(null);
@@ -536,6 +558,64 @@ export default function App() {
               <Route
                 path="/notifications"
                 element={<NotificationsScreen />}
+              />
+              {/* Business Owner routes */}
+              <Route
+                path="/business-owner/dashboard"
+                element={<BusinessOwnerDashboard state={state} />}
+              />
+              <Route
+                path="/business-owner/employees"
+                element={<EmployeeManagement state={state} />}
+              />
+              <Route
+                path="/business-owner/employees/:id/edit"
+                element={<EmployeeEditForm state={state} />}
+              />
+              <Route
+                path="/business-owner/assign"
+                element={<JobAssignment state={state} />}
+              />
+              <Route
+                path="/business-owner/calendar"
+                element={<BusinessOwnerCalendar state={state} />}
+              />
+              <Route
+                path="/business-owner/financials"
+                element={<FinancialsScreen state={state} />}
+              />
+              <Route
+                path="/business-owner/payroll"
+                element={<PayrollScreen state={state} />}
+              />
+              <Route
+                path="/business-owner/messages"
+                element={<EmployeeMessaging state={state} />}
+              />
+              {/* Business Employee routes */}
+              <Route
+                path="/employee/dashboard"
+                element={<EmployeeDashboard state={state} />}
+              />
+              <Route
+                path="/employee/jobs"
+                element={<EmployeeJobList state={state} />}
+              />
+              <Route
+                path="/employee/jobs/:assignmentId"
+                element={<EmployeeJobDetail state={state} />}
+              />
+              <Route
+                path="/employee/calendar"
+                element={<EmployeeCalendar state={state} />}
+              />
+              <Route
+                path="/employee/earnings"
+                element={<EmployeeEarnings state={state} />}
+              />
+              <Route
+                path="/employee/messages"
+                element={<CoworkerMessaging state={state} />}
               />
             </Routes>
             </SafeAreaView>

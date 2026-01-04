@@ -224,6 +224,16 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		// Business employee assignment tracking
+		assignedToBusinessEmployee: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		businessEmployeeAssignmentId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User
@@ -271,6 +281,14 @@ module.exports = (sequelize, DataTypes) => {
 		UserAppointments.hasMany(models.CleanerJobCompletion, {
 			foreignKey: "appointmentId",
 			as: "cleanerCompletions",
+		});
+		UserAppointments.belongsTo(models.EmployeeJobAssignment, {
+			foreignKey: "businessEmployeeAssignmentId",
+			as: "businessEmployeeAssignment",
+		});
+		UserAppointments.hasMany(models.EmployeeJobAssignment, {
+			foreignKey: "appointmentId",
+			as: "employeeJobAssignments",
 		});
 	};
 

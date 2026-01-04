@@ -80,6 +80,26 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT, // 'solo_completion_bonus', 'partial_work', 'co_cleaner_dropout', etc.
       allowNull: true,
     },
+    // Business employee payout fields
+    payoutType: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: "marketplace",
+      // 'marketplace', 'business_employee', 'business_owner_self'
+    },
+    businessOwnerId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    employeeJobAssignmentId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    paidOutsidePlatform: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   });
 
   Payout.associate = (models) => {
@@ -94,6 +114,14 @@ module.exports = (sequelize, DataTypes) => {
     Payout.belongsTo(models.MultiCleanerJob, {
       foreignKey: "multiCleanerJobId",
       as: "multiCleanerJob",
+    });
+    Payout.belongsTo(models.User, {
+      foreignKey: "businessOwnerId",
+      as: "businessOwner",
+    });
+    Payout.belongsTo(models.EmployeeJobAssignment, {
+      foreignKey: "employeeJobAssignmentId",
+      as: "employeeJobAssignment",
     });
   };
 
