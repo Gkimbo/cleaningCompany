@@ -786,6 +786,44 @@ npx sequelize-cli db:migrate:undo
 npx sequelize-cli migration:generate --name add-new-feature
 ```
 
+### Seeders
+
+Seed the database with initial required data:
+
+```bash
+# Run all seeders (recommended order)
+npx sequelize-cli db:seed --seed ownerSeeder.js
+npx sequelize-cli db:seed --seed termsAndConditionsSeeder.js
+npx sequelize-cli db:seed --seed privacyPolicySeeder.js
+npx sequelize-cli db:seed --seed cleanerChecklistSeeder.js
+
+# Or run all seeders at once
+npx sequelize-cli db:seed:all
+
+# Undo last seeder
+npx sequelize-cli db:seed:undo
+
+# Undo all seeders
+npx sequelize-cli db:seed:undo:all
+```
+
+| Seeder | Description | Required |
+|--------|-------------|----------|
+| `ownerSeeder.js` | Creates initial platform owner account. Requires `OWNER1_PASSWORD` environment variable. | **Yes** |
+| `termsAndConditionsSeeder.js` | Seeds Terms of Service for homeowners and Independent Contractor Agreement for cleaners. | **Yes** |
+| `privacyPolicySeeder.js` | Seeds the comprehensive Privacy Policy document. | **Yes** |
+| `cleanerChecklistSeeder.js` | Seeds default cleaning checklist with 10 sections (Kitchen, Bathrooms, Bedrooms, Living Areas, Dining Room, Entryway & Hallways, Home Office, Laundry Room, General Tasks, Final Walkthrough) and detailed items with pro tips. | Recommended |
+
+**Note:** The `ownerSeeder.js` requires the `OWNER1_PASSWORD` environment variable to be set before running:
+
+```bash
+# Add to .env file
+OWNER1_PASSWORD=your_secure_owner_password
+
+# Then run the seeder
+npx sequelize-cli db:seed --seed ownerSeeder.js
+```
+
 ---
 
 ## Services
