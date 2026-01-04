@@ -8,9 +8,22 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { usePricing, calculateBasePrice } from "../../context/PricingContext";
 
-const MyCleanerCard = ({ cleaner, relationship, onMessage, onViewProfile }) => {
+const MyCleanerCard = ({ cleaner, relationship, home, onMessage, onViewProfile }) => {
+  const { pricing } = usePricing();
+
   if (!cleaner) return null;
+
+  // Calculate platform price for comparison
+  const getPlatformPrice = () => {
+    if (!home || !pricing) return null;
+    return calculateBasePrice(pricing, home.numBeds, home.numBaths);
+  };
+
+  const platformPrice = getPlatformPrice();
+  const cleanerPrice = relationship?.defaultPrice;
+  const savings = platformPrice && cleanerPrice ? platformPrice - cleanerPrice : null;
 
   const formatDate = (dateString) => {
     if (!dateString) return "";
@@ -68,6 +81,24 @@ const MyCleanerCard = ({ cleaner, relationship, onMessage, onViewProfile }) => {
             )}
           </View>
         </View>
+
+        {/* Pricing Section */}
+        {cleanerPrice && (
+          <View style={styles.pricingSection}>
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Your Rate</Text>
+              <Text style={styles.priceValue}>${cleanerPrice}/cleaning</Text>
+            </View>
+            {savings > 0 && (
+              <View style={styles.savingsRow}>
+                <Feather name="check-circle" size={14} color={colors.success[600]} />
+                <Text style={styles.savingsText}>
+                  Save ${savings} vs platform rate
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {relationship && (
           <View style={styles.relationshipInfo}>
@@ -202,6 +233,37 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
     marginTop: spacing.xs,
+  },
+  pricingSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  priceLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  priceValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  savingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  savingsText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.medium,
   },
   relationshipInfo: {
     flexDirection: "row",

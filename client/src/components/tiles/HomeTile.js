@@ -23,8 +23,13 @@ const HomeTile = ({
 	pendingRequestCount = 0,
 	onRequestsPress,
 	outsideServiceArea = false,
+	isSetupComplete = true,
+	cleanerRate = null,
+	cleanerName = null,
 }) => {
 	const navigate = useNavigate();
+	const isIncomplete = isSetupComplete === false;
+	const isBookingDisabled = outsideServiceArea || isIncomplete;
 
 	const handleViewDetails = () => {
 		navigate(`/details/${id}`);
@@ -32,8 +37,13 @@ const HomeTile = ({
 
 	const handleQuickBook = (e) => {
 		e.stopPropagation();
-		if (outsideServiceArea) return; // Don't allow booking if outside service area
+		if (isBookingDisabled) return; // Don't allow booking if outside service area or setup incomplete
 		navigate(`/quick-book/${id}`);
+	};
+
+	const handleCompleteSetup = (e) => {
+		e.stopPropagation();
+		navigate(`/complete-home-setup/${id}`);
 	};
 
 	const handleRequestsPress = (e) => {
@@ -44,7 +54,7 @@ const HomeTile = ({
 	};
 
 	return (
-		<View style={[styles.container, outsideServiceArea && styles.containerOutsideArea]}>
+		<View style={[styles.container, (outsideServiceArea || isIncomplete) && styles.containerOutsideArea]}>
 			{pendingRequestCount > 0 && (
 				<TouchableOpacity
 					style={styles.notificationBubble}
@@ -56,7 +66,14 @@ const HomeTile = ({
 					</Text>
 				</TouchableOpacity>
 			)}
-			{outsideServiceArea && (
+			{isIncomplete && (
+				<TouchableOpacity style={styles.serviceAreaWarning} onPress={handleCompleteSetup}>
+					<Text style={styles.serviceAreaWarningText}>
+						Setup Required - Tap to complete setup
+					</Text>
+				</TouchableOpacity>
+			)}
+			{outsideServiceArea && !isIncomplete && (
 				<View style={styles.serviceAreaWarning}>
 					<Text style={styles.serviceAreaWarningText}>
 						Outside Service Area - Booking unavailable
@@ -73,6 +90,23 @@ const HomeTile = ({
 
 				<Text style={styles.address}>{address}</Text>
 				<Text style={styles.cityState}>{city}, {state} {zipcode}</Text>
+
+				{/* Cleaner Rate Display */}
+				{cleanerRate && (
+					<View style={styles.cleanerRateContainer}>
+						<View style={styles.cleanerRateIcon}>
+							<Text style={styles.cleanerRateIconText}>$</Text>
+						</View>
+						<View style={styles.cleanerRateInfo}>
+							<Text style={styles.cleanerRateLabel}>
+								{cleanerName ? `${cleanerName}'s rate` : "Your cleaner's rate"}
+							</Text>
+							<Text style={styles.cleanerRateValue}>
+								${parseFloat(cleanerRate).toFixed(0)}/cleaning
+							</Text>
+						</View>
+					</View>
+				)}
 
 				<View style={styles.divider} />
 
@@ -111,15 +145,24 @@ const HomeTile = ({
 					<Text style={styles.detailsButtonText}>View Details</Text>
 				</TouchableOpacity>
 
-				<TouchableOpacity
-					style={[styles.bookButton, outsideServiceArea && styles.bookButtonDisabled]}
-					onPress={handleQuickBook}
-					disabled={outsideServiceArea}
-				>
-					<Text style={[styles.bookButtonText, outsideServiceArea && styles.bookButtonTextDisabled]}>
-						{outsideServiceArea ? "Unavailable" : "Book Cleaning"}
-					</Text>
-				</TouchableOpacity>
+				{isIncomplete ? (
+					<TouchableOpacity
+						style={styles.setupButton}
+						onPress={handleCompleteSetup}
+					>
+						<Text style={styles.setupButtonText}>Complete Setup</Text>
+					</TouchableOpacity>
+				) : (
+					<TouchableOpacity
+						style={[styles.bookButton, outsideServiceArea && styles.bookButtonDisabled]}
+						onPress={handleQuickBook}
+						disabled={outsideServiceArea}
+					>
+						<Text style={[styles.bookButtonText, outsideServiceArea && styles.bookButtonTextDisabled]}>
+							{outsideServiceArea ? "Unavailable" : "Book Cleaning"}
+						</Text>
+					</TouchableOpacity>
+				)}
 			</View>
 		</View>
 	);
@@ -207,6 +250,43 @@ const styles = StyleSheet.create({
 		fontSize: typography.fontSize.sm,
 		color: colors.text.tertiary,
 	},
+	cleanerRateContainer: {
+		flexDirection: "row",
+		alignItems: "center",
+		backgroundColor: colors.success[50],
+		borderWidth: 1,
+		borderColor: colors.success[200],
+		borderRadius: radius.lg,
+		padding: spacing.md,
+		marginTop: spacing.md,
+	},
+	cleanerRateIcon: {
+		width: 36,
+		height: 36,
+		borderRadius: radius.full,
+		backgroundColor: colors.success[100],
+		alignItems: "center",
+		justifyContent: "center",
+		marginRight: spacing.md,
+	},
+	cleanerRateIconText: {
+		fontSize: typography.fontSize.lg,
+		fontWeight: typography.fontWeight.bold,
+		color: colors.success[600],
+	},
+	cleanerRateInfo: {
+		flex: 1,
+	},
+	cleanerRateLabel: {
+		fontSize: typography.fontSize.xs,
+		color: colors.success[700],
+		marginBottom: 2,
+	},
+	cleanerRateValue: {
+		fontSize: typography.fontSize.lg,
+		fontWeight: typography.fontWeight.bold,
+		color: colors.success[700],
+	},
 	divider: {
 		height: 1,
 		backgroundColor: colors.border.light,
@@ -282,6 +362,19 @@ const styles = StyleSheet.create({
 	},
 	bookButtonTextDisabled: {
 		color: colors.text.tertiary,
+	},
+	setupButton: {
+		flex: 1,
+		backgroundColor: colors.warning[500],
+		paddingVertical: spacing.sm,
+		borderRadius: radius.lg,
+		alignItems: "center",
+		...shadows.sm,
+	},
+	setupButtonText: {
+		fontSize: typography.fontSize.sm,
+		fontWeight: typography.fontWeight.bold,
+		color: colors.neutral[0],
 	},
 });
 

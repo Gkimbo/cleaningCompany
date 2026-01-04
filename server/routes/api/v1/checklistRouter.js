@@ -8,6 +8,7 @@ const {
   User,
 } = require("../../../models");
 const { getEditorFormat, getTemplateStats } = require("../../../data/checklistTemplate");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const checklistRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -426,7 +427,7 @@ checklistRouter.get("/versions", authenticateToken, requireOwner, async (req, re
         version: v.version,
         publishedAt: v.publishedAt,
         publishedBy: v.publisher
-          ? `${v.publisher.firstName} ${v.publisher.lastName}`
+          ? `${EncryptionService.decrypt(v.publisher.firstName)} ${EncryptionService.decrypt(v.publisher.lastName)}`
           : "Unknown",
         isActive: v.isActive,
         sectionsCount: v.snapshotData?.sections?.length || 0,
@@ -469,7 +470,7 @@ checklistRouter.get("/versions/:id", authenticateToken, requireOwner, async (req
       version: version.version,
       publishedAt: version.publishedAt,
       publishedBy: version.publisher
-        ? `${version.publisher.firstName} ${version.publisher.lastName}`
+        ? `${EncryptionService.decrypt(version.publisher.firstName)} ${EncryptionService.decrypt(version.publisher.lastName)}`
         : "Unknown",
       isActive: version.isActive,
       checklist: version.snapshotData,

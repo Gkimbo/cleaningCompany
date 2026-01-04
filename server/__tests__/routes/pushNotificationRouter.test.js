@@ -4,6 +4,16 @@ const express = require("express");
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => {
+    if (!value) return value;
+    if (typeof value !== "string") return value;
+    return value.replace("encrypted_", "");
+  }),
+  encrypt: jest.fn((value) => `encrypted_${value}`),
+}));
+
 // Mock models
 jest.mock("../../models", () => ({
   User: {
@@ -107,7 +117,10 @@ describe("Push Notification Router", () => {
 
     it("should handle database errors gracefully", async () => {
       PushNotification.isValidExpoPushToken.mockReturnValue(true);
-      User.findByPk.mockRejectedValue(new Error("Database error"));
+      // First call (middleware) resolves, second call (route handler) rejects
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false })
+        .mockRejectedValueOnce(new Error("Database error"));
 
       const response = await request(app)
         .post("/api/v1/push-notifications/register-token")
@@ -157,7 +170,10 @@ describe("Push Notification Router", () => {
     });
 
     it("should handle database errors gracefully", async () => {
-      User.findByPk.mockRejectedValue(new Error("Database error"));
+      // First call (middleware) resolves, second call (route handler) rejects
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false })
+        .mockRejectedValueOnce(new Error("Database error"));
 
       const response = await request(app)
         .delete("/api/v1/push-notifications/remove-token")
@@ -349,7 +365,10 @@ describe("Push Notification Router", () => {
     });
 
     it("should handle database errors gracefully", async () => {
-      User.findByPk.mockRejectedValue(new Error("Database error"));
+      // First call (middleware) resolves, second call (route handler) rejects
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false })
+        .mockRejectedValueOnce(new Error("Database error"));
 
       const response = await request(app)
         .patch("/api/v1/push-notifications/preferences")
@@ -442,7 +461,10 @@ describe("Push Notification Router", () => {
     });
 
     it("should handle database errors gracefully", async () => {
-      User.findByPk.mockRejectedValue(new Error("Database error"));
+      // First call (middleware) resolves, second call (route handler) rejects
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false })
+        .mockRejectedValueOnce(new Error("Database error"));
 
       const response = await request(app)
         .post("/api/v1/push-notifications/snooze-supply-reminder")
@@ -528,7 +550,10 @@ describe("Push Notification Router", () => {
     });
 
     it("should handle database errors gracefully", async () => {
-      User.findByPk.mockRejectedValue(new Error("Database error"));
+      // First call (middleware) resolves, second call (route handler) rejects
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false })
+        .mockRejectedValueOnce(new Error("Database error"));
 
       const response = await request(app)
         .get("/api/v1/push-notifications/supply-reminder-status")

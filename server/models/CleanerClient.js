@@ -63,7 +63,7 @@ module.exports = (sequelize, DataTypes) => {
 
     // === Relationship status ===
     status: {
-      type: DataTypes.ENUM("pending_invite", "active", "inactive", "declined"),
+      type: DataTypes.ENUM("pending_invite", "active", "inactive", "declined", "cancelled"),
       allowNull: false,
       defaultValue: "pending_invite",
     },

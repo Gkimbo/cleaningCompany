@@ -337,8 +337,8 @@ paymentRouter.post("/setup-intent", async (req, res) => {
 
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`,
+        email: EncryptionService.decrypt(user.email),
+        name: `${EncryptionService.decrypt(user.firstName)} ${EncryptionService.decrypt(user.lastName)}`,
         metadata: { userId: userId.toString() },
       });
       stripeCustomerId = customer.id;
@@ -382,8 +382,8 @@ paymentRouter.post("/setup-checkout-session", async (req, res) => {
 
     if (!stripeCustomerId) {
       const customer = await stripe.customers.create({
-        email: user.email,
-        name: `${user.firstName} ${user.lastName}`,
+        email: EncryptionService.decrypt(user.email),
+        name: `${EncryptionService.decrypt(user.firstName)} ${EncryptionService.decrypt(user.lastName)}`,
         metadata: { userId: userId.toString() },
       });
       stripeCustomerId = customer.id;
@@ -1750,8 +1750,8 @@ paymentRouter.post("/complete-job", async (req, res) => {
         // Send email notification
         if (homeowner.email) {
           await Email.sendCleaningCompletedNotification(
-            homeowner.email,
-            homeowner.username || homeowner.firstName,
+            EncryptionService.decrypt(homeowner.email),
+            homeowner.username || EncryptionService.decrypt(homeowner.firstName),
             address,
             appointment.date,
             cleanerName
@@ -2276,9 +2276,9 @@ async function runDailyPaymentCheck() {
             zipcode: EncryptionService.decrypt(home.zipcode),
           };
           await Email.sendUnassignedAppointmentWarning(
-            user.email,
+            EncryptionService.decrypt(user.email),
             homeAddress,
-            user.firstName,
+            EncryptionService.decrypt(user.firstName),
             appointmentDate
           );
 
@@ -2286,7 +2286,7 @@ async function runDailyPaymentCheck() {
           if (user.expoPushToken) {
             await PushNotification.sendPushUnassignedWarning(
               user.expoPushToken,
-              user.firstName,
+              EncryptionService.decrypt(user.firstName),
               appointmentDate,
               homeAddress
             );
@@ -2447,9 +2447,9 @@ async function runDailyPaymentCheck() {
 
             // Send email notification
             await Email.sendEmailCancellation(
-              user.email,
+              EncryptionService.decrypt(user.email),
               cancelAddress,
-              user.firstName,
+              EncryptionService.decrypt(user.firstName),
               appointmentDate
             );
 
@@ -2457,7 +2457,7 @@ async function runDailyPaymentCheck() {
             if (user.expoPushToken) {
               await PushNotification.sendPushCancellation(
                 user.expoPushToken,
-                user.firstName,
+                EncryptionService.decrypt(user.firstName),
                 appointmentDate,
                 cancelAddress
               );
@@ -2537,9 +2537,9 @@ async function runDailyPaymentCheck() {
 
           // Send cancellation email
           await Email.sendEmailCancellation(
-            user.email,
+            EncryptionService.decrypt(user.email),
             cancelAddress,
-            user.firstName,
+            EncryptionService.decrypt(user.firstName),
             appointmentDate
           );
 
@@ -2547,7 +2547,7 @@ async function runDailyPaymentCheck() {
           if (user.expoPushToken) {
             await PushNotification.sendPushCancellation(
               user.expoPushToken,
-              user.firstName,
+              EncryptionService.decrypt(user.firstName),
               appointmentDate,
               cancelAddress
             );
@@ -2598,8 +2598,8 @@ async function runDailyPaymentCheck() {
 
           // Send email about payment failure
           await Email.sendPaymentFailedReminder(
-            user.email,
-            user.firstName,
+            EncryptionService.decrypt(user.email),
+            EncryptionService.decrypt(user.firstName),
             homeAddress,
             appointmentDate,
             diffInDays
@@ -2609,7 +2609,7 @@ async function runDailyPaymentCheck() {
           if (user.expoPushToken) {
             await PushNotification.sendPushPaymentFailed(
               user.expoPushToken,
-              user.firstName,
+              EncryptionService.decrypt(user.firstName),
               formattedDate,
               diffInDays
             );
@@ -2800,7 +2800,7 @@ cron.schedule("0 7 * * *", async () => {
             const snoozeEnd = new Date(cleaner.supplyReminderSnoozedUntil);
             if (snoozeEnd > new Date()) {
               console.log(
-                `[Cron] Supply reminder skipped for ${cleaner.firstName} (snoozed until ${snoozeEnd.toISOString()})`
+                `[Cron] Supply reminder skipped for cleaner ${cleanerId} (snoozed until ${snoozeEnd.toISOString()})`
               );
               continue;
             }
@@ -2816,13 +2816,13 @@ cron.schedule("0 7 * * *", async () => {
 
           await PushNotification.sendPushSupplyReminder(
             cleaner.expoPushToken,
-            cleaner.firstName,
+            EncryptionService.decrypt(cleaner.firstName),
             appointment.date,
             address
           );
 
           console.log(
-            `[Cron] Supply reminder sent to ${cleaner.firstName} (ID: ${cleanerId})`
+            `[Cron] Supply reminder sent to cleaner ${cleanerId}`
           );
         } catch (cleanerError) {
           console.error(
@@ -2913,8 +2913,8 @@ cron.schedule("0 9 * * *", async () => {
         // Send email notification
         if (user.email) {
           await Email.sendReviewReminderNotification(
-            user.email,
-            user.username || user.firstName,
+            EncryptionService.decrypt(user.email),
+            user.username || EncryptionService.decrypt(user.firstName),
             appointments
           );
           console.log(`[Cron] Review reminder email sent to user ${userId}`);
@@ -2997,14 +2997,14 @@ paymentRouter.post("/run-review-reminder", async (req, res) => {
         if (user.expoPushToken) {
           await PushNotification.sendPushReviewReminder(
             user.expoPushToken,
-            user.username || user.firstName,
+            user.username || EncryptionService.decrypt(user.firstName),
             pendingCount
           );
         }
         if (user.email) {
           await Email.sendReviewReminderNotification(
-            user.email,
-            user.username || user.firstName,
+            EncryptionService.decrypt(user.email),
+            user.username || EncryptionService.decrypt(user.firstName),
             appointments
           );
         }

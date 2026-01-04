@@ -316,6 +316,145 @@ userInfoRouter.patch("/home", async (req, res) => {
   }
 });
 
+// PATCH /home/:id/complete-setup - Complete home setup for invited clients
+userInfoRouter.patch("/home/:id/complete-setup", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+    const homeId = parseInt(req.params.id, 10);
+
+    // Find the home and verify ownership
+    const home = await UserHomes.findByPk(homeId);
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    if (home.userId !== userId) {
+      return res.status(403).json({ error: "You don't have permission to update this home" });
+    }
+
+    const {
+      keyPadCode,
+      keyLocation,
+      trashLocation,
+      recyclingLocation,
+      compostLocation,
+      sheetsProvided,
+      towelsProvided,
+      cleanSheetsLocation,
+      dirtySheetsLocation,
+      cleanTowelsLocation,
+      dirtyTowelsLocation,
+      bedConfigurations,
+      bathroomConfigurations,
+      contact,
+    } = req.body;
+
+    // Validate required fields
+    const errors = [];
+
+    // Must have at least one access method
+    if (!keyPadCode && !keyLocation) {
+      errors.push("Please provide either a keypad code or key location for access");
+    }
+
+    // Trash location is required
+    if (!trashLocation) {
+      errors.push("Trash location is required");
+    }
+
+    // Linen preferences are required
+    if (sheetsProvided === undefined || sheetsProvided === null) {
+      errors.push("Please indicate whether sheets are provided");
+    }
+
+    if (towelsProvided === undefined || towelsProvided === null) {
+      errors.push("Please indicate whether towels are provided");
+    }
+
+    // If sheets are NOT provided by homeowner (company brings them), need bed configurations
+    if (sheetsProvided === "no" || sheetsProvided === false) {
+      if (!bedConfigurations || !Array.isArray(bedConfigurations) || bedConfigurations.length === 0) {
+        errors.push("Bed configurations are required when we bring sheets");
+      }
+    }
+
+    // If sheets ARE provided by homeowner, need clean/dirty locations
+    if (sheetsProvided === "yes" || sheetsProvided === true) {
+      if (!cleanSheetsLocation || !dirtySheetsLocation) {
+        errors.push("Please provide clean and dirty sheet locations");
+      }
+    }
+
+    // If towels are NOT provided by homeowner (company brings them), need bathroom configurations
+    if (towelsProvided === "no" || towelsProvided === false) {
+      if (!bathroomConfigurations || !Array.isArray(bathroomConfigurations) || bathroomConfigurations.length === 0) {
+        errors.push("Bathroom configurations are required when we bring towels");
+      }
+    }
+
+    // If towels ARE provided by homeowner, need clean/dirty locations
+    if (towelsProvided === "yes" || towelsProvided === true) {
+      if (!cleanTowelsLocation || !dirtyTowelsLocation) {
+        errors.push("Please provide clean and dirty towel locations");
+      }
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ error: errors.join(". ") });
+    }
+
+    // Calculate cleaners needed based on beds/baths
+    const cleanersNeeded = getCleanersNeeded(home.numBeds, home.numBaths);
+
+    // Update the home with all the setup data
+    await home.update({
+      keyPadCode: keyPadCode || null,
+      keyLocation: keyLocation || null,
+      trashLocation,
+      recyclingLocation: recyclingLocation || null,
+      compostLocation: compostLocation || null,
+      sheetsProvided,
+      towelsProvided,
+      cleanSheetsLocation: cleanSheetsLocation || null,
+      dirtySheetsLocation: dirtySheetsLocation || null,
+      cleanTowelsLocation: cleanTowelsLocation || null,
+      dirtyTowelsLocation: dirtyTowelsLocation || null,
+      bedConfigurations: bedConfigurations || null,
+      bathroomConfigurations: bathroomConfigurations || null,
+      contact: contact || home.contact,
+      cleanersNeeded,
+      isSetupComplete: true,
+    });
+
+    // Fetch the updated home to get decrypted values
+    const updatedHome = await UserHomes.findByPk(homeId);
+    const serializedHome = HomeSerializer.serializeOne(updatedHome);
+
+    console.log(`✅ Home ${homeId} setup completed for user ${userId}`);
+
+    return res.status(200).json({
+      success: true,
+      home: serializedHome,
+      message: "Home setup completed successfully",
+    });
+  } catch (error) {
+    console.error("Error completing home setup:", error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    return res.status(500).json({ error: "Failed to complete home setup" });
+  }
+});
+
 userInfoRouter.delete("/home", async (req, res) => {
   const id = req.body.id;
   try {

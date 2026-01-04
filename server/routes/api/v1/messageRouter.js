@@ -16,6 +16,19 @@ const {
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const SuspiciousContentDetector = require("../../../services/SuspiciousContentDetector");
+const EncryptionService = require("../../../services/EncryptionService");
+
+// Helper to decrypt user PII fields from included models
+const decryptUserFields = (user) => {
+  if (!user) return null;
+  return {
+    ...user.dataValues || user,
+    firstName: user.firstName ? EncryptionService.decrypt(user.firstName) : null,
+    lastName: user.lastName ? EncryptionService.decrypt(user.lastName) : null,
+    email: user.email ? EncryptionService.decrypt(user.email) : null,
+    phone: user.phone ? EncryptionService.decrypt(user.phone) : null,
+  };
+};
 
 const messageRouter = express.Router();
 
@@ -281,7 +294,7 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       // Send email notification only for the first message in the conversation
       if (isFirstMessage && p.user.notifications && p.user.notifications.includes("email")) {
         await Email.sendNewMessageNotification(
-          p.user.email,
+          EncryptionService.decrypt(p.user.email),
           p.user.username,
           sender.username,
           content
@@ -496,7 +509,7 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
       // Send email notification if user has it enabled
       if (targetUser.notifications && targetUser.notifications.includes("email")) {
         await Email.sendBroadcastNotification(
-          targetUser.email,
+          EncryptionService.decrypt(targetUser.email),
           targetUser.username,
           title || "Company Announcement",
           content
@@ -1458,14 +1471,17 @@ messageRouter.get("/conversations/internal", authenticateToken, async (req, res)
         // Get other participants (not the current user)
         const otherParticipants = conv.participants
           .filter((part) => part.user.id !== userId)
-          .map((part) => ({
-            id: part.user.id,
-            username: part.user.username,
-            firstName: part.user.firstName,
-            lastName: part.user.lastName,
-            type: part.user.type,
-            displayName: `${part.user.firstName || ""} ${part.user.lastName || ""}`.trim() || part.user.username,
-          }));
+          .map((part) => {
+            const decryptedUser = decryptUserFields(part.user);
+            return {
+              id: part.user.id,
+              username: part.user.username,
+              firstName: decryptedUser.firstName,
+              lastName: decryptedUser.lastName,
+              type: part.user.type,
+              displayName: `${decryptedUser.firstName || ""} ${decryptedUser.lastName || ""}`.trim() || part.user.username,
+            };
+          });
 
         // Generate display name for the conversation
         let displayName;
@@ -1491,18 +1507,24 @@ messageRouter.get("/conversations/internal", authenticateToken, async (req, res)
           lastMessage: lastMessage
             ? {
                 content: lastMessage.content,
-                sender: {
-                  ...lastMessage.sender.dataValues || lastMessage.sender,
-                  displayName: `${lastMessage.sender.firstName || ""} ${lastMessage.sender.lastName || ""}`.trim() || lastMessage.sender.username,
-                },
+                sender: (() => {
+                  const decryptedSender = decryptUserFields(lastMessage.sender);
+                  return {
+                    ...decryptedSender,
+                    displayName: `${decryptedSender.firstName || ""} ${decryptedSender.lastName || ""}`.trim() || lastMessage.sender.username,
+                  };
+                })(),
                 createdAt: lastMessage.createdAt,
               }
             : null,
           unreadCount,
-          participants: conv.participants.map((part) => ({
-            ...part.user.dataValues || part.user,
-            displayName: `${part.user.firstName || ""} ${part.user.lastName || ""}`.trim() || part.user.username,
-          })),
+          participants: conv.participants.map((part) => {
+            const decryptedUser = decryptUserFields(part.user);
+            return {
+              ...decryptedUser,
+              displayName: `${decryptedUser.firstName || ""} ${decryptedUser.lastName || ""}`.trim() || part.user.username,
+            };
+          }),
           otherParticipants,
           updatedAt: conv.updatedAt,
         };
@@ -1607,7 +1629,7 @@ messageRouter.post("/:messageId/react", authenticateToken, async (req, res) => {
       });
 
       const reactorName = reactor.firstName && reactor.lastName
-        ? `${reactor.firstName} ${reactor.lastName}`
+        ? `${EncryptionService.decrypt(reactor.firstName)} ${EncryptionService.decrypt(reactor.lastName)}`
         : reactor.username;
 
       // Send push notification if sender has phone notifications enabled
@@ -1852,7 +1874,7 @@ messageRouter.patch("/conversation/:conversationId/title", authenticateToken, as
 
     // Create system message recording the change
     const userName = user.firstName && user.lastName
-      ? `${user.firstName} ${user.lastName}`
+      ? `${EncryptionService.decrypt(user.firstName)} ${EncryptionService.decrypt(user.lastName)}`
       : user.username;
 
     const systemMessage = await Message.create({
@@ -2073,8 +2095,8 @@ messageRouter.post(
       for (const staff of staffToNotify) {
         try {
           await Email.sendSuspiciousActivityReport({
-            to: staff.email,
-            staffName: staff.firstName || "Team",
+            to: EncryptionService.decrypt(staff.email),
+            staffName: staff.firstName ? EncryptionService.decrypt(staff.firstName) : "Team",
             reporterName,
             reportedUserName,
             reportedUserType: message.sender?.type || "unknown",

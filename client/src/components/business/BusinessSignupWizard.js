@@ -47,6 +47,23 @@ const BusinessSignupWizard = ({ dispatch }) => {
     return phoneRegex.test(phone);
   };
 
+  const formatPhoneNumber = (text) => {
+    // Remove all non-numeric characters
+    const cleaned = text.replace(/\D/g, "");
+
+    // Limit to 10 digits
+    const limited = cleaned.slice(0, 10);
+
+    // Format as 555-555-5555
+    if (limited.length <= 3) {
+      return limited;
+    } else if (limited.length <= 6) {
+      return `${limited.slice(0, 3)}-${limited.slice(3)}`;
+    } else {
+      return `${limited.slice(0, 3)}-${limited.slice(3, 6)}-${limited.slice(6)}`;
+    }
+  };
+
   const getPasswordStrength = (password) => {
     let strength = 0;
     if (password.length >= 8) strength++;
@@ -298,15 +315,16 @@ const BusinessSignupWizard = ({ dispatch }) => {
             focusedField === "phone" && styles.inputFocused,
             errors.phone && styles.inputError,
           ]}
-          placeholder="(555) 123-4567"
+          placeholder="555-555-5555"
           placeholderTextColor="#94a3b8"
           value={formData.phone}
           onChangeText={(text) =>
-            setFormData({ ...formData, phone: text })
+            setFormData({ ...formData, phone: formatPhoneNumber(text) })
           }
           onFocus={() => setFocusedField("phone")}
           onBlur={() => setFocusedField(null)}
           keyboardType="phone-pad"
+          maxLength={12}
         />
         {errors.phone && (
           <Text style={styles.errorText}>{errors.phone}</Text>

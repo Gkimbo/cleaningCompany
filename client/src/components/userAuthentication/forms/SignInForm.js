@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
 import { Text, Pressable, View } from "react-native";
 import { TextInput } from "react-native-paper";
-import { useNavigate } from "react-router-native";
+import { useNavigate, useSearchParams } from "react-router-native";
 
 import FetchData from "../../../services/fetchRequests/fetchData";
 import formStyles from "../../../services/styles/FormStyle";
@@ -15,6 +15,8 @@ const SignInForm = ({ state, dispatch }) => {
 	const [errors, setErrors] = useState([]);
 	const [showPassword, setShowPassword] = useState(false);
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
+	const redirectTo = searchParams.get("redirect");
 	const { login } = useContext(AuthContext);
 
 	const validateForm = () => {
@@ -84,9 +86,14 @@ const SignInForm = ({ state, dispatch }) => {
 
 	useEffect(() => {
 		if (redirect) {
-			navigate("/");
+			// If there's a redirect parameter, navigate there instead of home
+			if (redirectTo) {
+				navigate(redirectTo);
+			} else {
+				navigate("/");
+			}
 		}
-	}, [redirect]);
+	}, [redirect, redirectTo]);
 
 	useEffect(() => {
 		if (redirectToTerms) {

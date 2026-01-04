@@ -3225,6 +3225,335 @@ The Kleanr Team`;
       throw error;
     }
   }
+
+  // ==========================================
+  // BUSINESS OWNER BOOKING EMAILS
+  // ==========================================
+
+  /**
+   * Send pending booking email to client (needs approval)
+   */
+  static async sendPendingBookingEmail(
+    to,
+    appointmentDate,
+    price,
+    cleanerName,
+    expiresAt
+  ) {
+    try {
+      const transporter = createTransporter();
+      const expiresDate = new Date(expiresAt);
+      const hoursRemaining = Math.round((expiresDate - new Date()) / (1000 * 60 * 60));
+
+      const htmlContent = createEmailTemplate({
+        title: "New Booking Request",
+        subtitle: "Your cleaner has scheduled a cleaning for you",
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: "You have a new booking request!",
+        content: `<p>${cleanerName} has scheduled a cleaning for you and is waiting for your confirmation.</p>
+          <p>Please review the details below and accept or decline this booking.</p>`,
+        infoBox: {
+          icon: "📅",
+          title: "Booking Details",
+          items: [
+            { label: "Cleaner", value: cleanerName },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Price", value: `$${price}` },
+            { label: "Response Required By", value: formatDate(expiresAt) },
+          ],
+        },
+        warningBox: {
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+          icon: "⏰",
+          text: `This request will expire in ${hoursRemaining} hours. Please respond soon!`,
+        },
+        steps: {
+          title: "To Accept or Decline:",
+          items: [
+            "Open the Kleanr app on your phone",
+            "Go to your Dashboard to see the pending booking",
+            "Tap to view details and Accept or Decline",
+          ],
+        },
+        ctaText: "Open the Kleanr app to respond to this booking request.",
+        footerMessage: "Thank you for using Kleanr!",
+      });
+
+      const textContent = `NEW BOOKING REQUEST
+
+${cleanerName} has scheduled a cleaning for you!
+
+BOOKING DETAILS
+━━━━━━━━━━━━━━━
+Cleaner: ${cleanerName}
+Date: ${formatDate(appointmentDate)}
+Price: $${price}
+Response Required By: ${formatDate(expiresAt)}
+
+⏰ This request will expire in ${hoursRemaining} hours!
+
+TO RESPOND:
+1. Open the Kleanr app
+2. View the pending booking on your Dashboard
+3. Accept or Decline the booking
+
+Thank you for using Kleanr!`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `📅 New Booking Request from ${cleanerName} - ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Pending booking email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending pending booking email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send booking accepted email to business owner
+   */
+  static async sendBookingAcceptedEmail(
+    to,
+    appointmentDate,
+    clientName
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Booking Accepted!",
+        subtitle: "Your client confirmed the appointment",
+        headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+        greeting: "Great news!",
+        content: `<p><strong>${clientName}</strong> has accepted your booking request.</p>
+          <p>The appointment is now confirmed and ready to go!</p>`,
+        infoBox: {
+          icon: "✅",
+          title: "Confirmed Appointment",
+          items: [
+            { label: "Client", value: clientName },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "Confirmed" },
+          ],
+        },
+        ctaText: "View the appointment details in the Kleanr app.",
+        footerMessage: "Happy cleaning!",
+      });
+
+      const textContent = `BOOKING ACCEPTED!
+
+Great news! ${clientName} has accepted your booking request.
+
+CONFIRMED APPOINTMENT
+━━━━━━━━━━━━━━━━━━━━━━
+Client: ${clientName}
+Date: ${formatDate(appointmentDate)}
+Status: Confirmed
+
+View the appointment details in the Kleanr app.
+
+Happy cleaning!`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `✅ Booking Accepted - ${clientName} on ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Booking accepted email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending booking accepted email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send booking declined email to business owner
+   */
+  static async sendBookingDeclinedEmail(
+    to,
+    appointmentDate,
+    clientName,
+    declineReason = null,
+    suggestedDates = null
+  ) {
+    try {
+      const transporter = createTransporter();
+      const hasSuggestions = suggestedDates && suggestedDates.length > 0;
+
+      const infoItems = [
+        { label: "Client", value: clientName },
+        { label: "Requested Date", value: formatDate(appointmentDate) },
+        { label: "Status", value: "Declined" },
+      ];
+
+      if (declineReason) {
+        infoItems.push({ label: "Reason", value: declineReason });
+      }
+
+      if (hasSuggestions) {
+        infoItems.push({
+          label: "Suggested Alternatives",
+          value: suggestedDates.map(d => formatDate(d)).join(", "),
+        });
+      }
+
+      const htmlContent = createEmailTemplate({
+        title: "Booking Declined",
+        subtitle: hasSuggestions ? "But your client suggested alternatives" : "Your client couldn't accept this date",
+        headerColor: hasSuggestions
+          ? "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)"
+          : "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+        greeting: hasSuggestions ? "Your client has another option!" : "Unfortunately...",
+        content: hasSuggestions
+          ? `<p><strong>${clientName}</strong> couldn't accept your booking for ${formatDate(appointmentDate)}, but they've suggested some alternative dates that work for them.</p>
+             <p>Consider rebooking with one of their suggested dates!</p>`
+          : `<p><strong>${clientName}</strong> has declined your booking request for ${formatDate(appointmentDate)}.</p>
+             <p>You can try scheduling a different date with them.</p>`,
+        infoBox: {
+          icon: hasSuggestions ? "📅" : "❌",
+          title: "Booking Details",
+          items: infoItems,
+        },
+        steps: hasSuggestions ? {
+          title: "What's Next?",
+          items: [
+            "Open the Kleanr app",
+            "Go to My Clients and find this client",
+            "Create a new booking with one of their suggested dates",
+          ],
+        } : null,
+        ctaText: "Open the Kleanr app to rebook with a different date.",
+        footerMessage: "Don't give up - try another date!",
+      });
+
+      const suggestedDatesText = hasSuggestions
+        ? `\nSuggested Alternatives: ${suggestedDates.map(d => formatDate(d)).join(", ")}`
+        : "";
+      const reasonText = declineReason ? `\nReason: ${declineReason}` : "";
+
+      const textContent = `BOOKING DECLINED
+
+${clientName} has declined your booking request.
+
+BOOKING DETAILS
+━━━━━━━━━━━━━━━
+Client: ${clientName}
+Requested Date: ${formatDate(appointmentDate)}
+Status: Declined${reasonText}${suggestedDatesText}
+
+${hasSuggestions ? "WHAT'S NEXT:\n1. Open the Kleanr app\n2. Go to My Clients\n3. Rebook with one of their suggested dates" : ""}
+
+Open the Kleanr app to try scheduling a different date.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: hasSuggestions
+          ? `📅 ${clientName} suggested new dates - Rebook needed`
+          : `❌ Booking Declined - ${clientName} on ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Booking declined email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending booking declined email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send booking expired email to business owner
+   */
+  static async sendBookingExpiredEmail(
+    to,
+    appointmentDate,
+    clientName
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Booking Request Expired",
+        subtitle: "Your client didn't respond in time",
+        headerColor: "linear-gradient(135deg, #6b7280 0%, #9ca3af 100%)",
+        greeting: "Time's up!",
+        content: `<p>Your booking request for <strong>${clientName}</strong> on ${formatDate(appointmentDate)} has expired.</p>
+          <p>The client didn't respond within 48 hours. You can create a new booking request with a different date.</p>`,
+        infoBox: {
+          icon: "⏰",
+          title: "Expired Request",
+          items: [
+            { label: "Client", value: clientName },
+            { label: "Requested Date", value: formatDate(appointmentDate) },
+            { label: "Status", value: "Expired (No Response)" },
+          ],
+        },
+        steps: {
+          title: "What's Next?",
+          items: [
+            "Open the Kleanr app",
+            "Go to My Clients and find this client",
+            "Try booking with a different date",
+            "Or reach out to them via messaging",
+          ],
+        },
+        ctaText: "Open the Kleanr app to schedule a new booking.",
+        footerMessage: "Don't give up - try reaching out!",
+      });
+
+      const textContent = `BOOKING REQUEST EXPIRED
+
+Your booking request for ${clientName} on ${formatDate(appointmentDate)} has expired.
+
+The client didn't respond within 48 hours.
+
+EXPIRED REQUEST
+━━━━━━━━━━━━━━━
+Client: ${clientName}
+Requested Date: ${formatDate(appointmentDate)}
+Status: Expired (No Response)
+
+WHAT'S NEXT:
+1. Open the Kleanr app
+2. Go to My Clients
+3. Try booking with a different date
+4. Or message them to check in
+
+Open the Kleanr app to schedule a new booking.`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to,
+        subject: `⏰ Booking Expired - ${clientName} didn't respond`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Booking expired email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending booking expired email:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Email;

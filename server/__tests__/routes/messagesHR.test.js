@@ -2,6 +2,16 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => {
+    if (!value) return value;
+    if (typeof value !== "string") return value;
+    return value.replace("encrypted_", "");
+  }),
+  encrypt: jest.fn((value) => `encrypted_${value}`),
+}));
+
 // Mock Socket.io
 const mockIo = {
   to: jest.fn().mockReturnThis(),
@@ -527,6 +537,7 @@ describe("Message Routes - HR Integration", () => {
       const token = generateToken(1);
 
       User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
         .mockResolvedValueOnce({ id: 1, username: "owner1", type: "owner" })
         .mockResolvedValueOnce({ id: 2, username: "cleaner1", type: "cleaner" });
 
@@ -543,6 +554,7 @@ describe("Message Routes - HR Integration", () => {
       const token = generateToken(1);
 
       User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
         .mockResolvedValueOnce({ id: 1, username: "owner1", type: "owner" })
         .mockResolvedValueOnce({ id: 2, username: "hr1", type: "humanResources", firstName: "Jane", lastName: "Doe" });
 
@@ -579,11 +591,13 @@ describe("Message Routes - HR Integration", () => {
     it("should allow HR to message owner without specifying targetUserId", async () => {
       const token = generateToken(1);
 
-      User.findByPk.mockResolvedValueOnce({
-        id: 1,
-        username: "hr1",
-        type: "humanResources",
-      });
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
+        .mockResolvedValueOnce({
+          id: 1,
+          username: "hr1",
+          type: "humanResources",
+        });
 
       User.findOne.mockResolvedValue({
         id: 2,
@@ -622,6 +636,7 @@ describe("Message Routes - HR Integration", () => {
       const token = generateToken(1);
 
       User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
         .mockResolvedValueOnce({ id: 1, username: "hr1", type: "humanResources" })
         .mockResolvedValueOnce({ id: 3, username: "hr2", type: "humanResources", firstName: "Bob", lastName: "Jones" });
 
@@ -654,6 +669,7 @@ describe("Message Routes - HR Integration", () => {
       const token = generateToken(1);
 
       User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
         .mockResolvedValueOnce({ id: 1, username: "hr1", type: "humanResources" })
         .mockResolvedValueOnce({ id: 1, username: "hr1", type: "humanResources" });
 
@@ -670,6 +686,7 @@ describe("Message Routes - HR Integration", () => {
       const token = generateToken(1);
 
       User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
         .mockResolvedValueOnce({ id: 1, username: "owner1", type: "owner" })
         .mockResolvedValueOnce({ id: 2, username: "hr1", type: "humanResources" });
 

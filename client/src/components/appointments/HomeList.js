@@ -105,6 +105,7 @@ const HomeList = ({ state, dispatch }) => {
                 pendingRequestCount={requestCounts[home.id] || 0}
                 onRequestsPress={handleRequestsPress}
                 outsideServiceArea={home.outsideServiceArea || false}
+                isSetupComplete={home.isSetupComplete}
               />
             ))}
           </View>

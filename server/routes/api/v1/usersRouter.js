@@ -262,6 +262,61 @@ usersRouter.post("/business-owner", async (req, res) => {
   }
 });
 
+// PATCH /api/v1/users/upgrade-to-business - Existing cleaner upgrades to business owner
+usersRouter.patch("/upgrade-to-business", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secretKey);
+    } catch (err) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    const user = await User.findByPk(decoded.userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Must be a cleaner
+    if (user.type !== "cleaner") {
+      return res.status(403).json({ error: "Only cleaner accounts can be upgraded to business owner" });
+    }
+
+    // Must not already be a business owner
+    if (user.isBusinessOwner) {
+      return res.status(400).json({ error: "Account is already a business owner" });
+    }
+
+    const { businessName, yearsInBusiness } = req.body;
+
+    // Update user to business owner
+    await user.update({
+      isBusinessOwner: true,
+      businessName: businessName || null,
+      yearsInBusiness: yearsInBusiness ? parseInt(yearsInBusiness, 10) : null,
+    });
+
+    const serializedUser = UserSerializer.login(user.dataValues);
+
+    console.log(`✅ Cleaner ${user.id} upgraded to business owner`);
+
+    return res.status(200).json({
+      success: true,
+      user: serializedUser,
+      message: "Account upgraded to business owner",
+    });
+  } catch (error) {
+    console.error("Error upgrading to business owner:", error);
+    return res.status(500).json({ error: "Failed to upgrade account" });
+  }
+});
+
 usersRouter.post("/new-employee", async (req, res) => {
   try {
     const { username, password, email, type, firstName, lastName, phone } = req.body;

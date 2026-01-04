@@ -7,6 +7,16 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => {
+    if (!value) return value;
+    if (typeof value !== "string") return value;
+    return value.replace("encrypted_", "");
+  }),
+  encrypt: jest.fn((value) => `encrypted_${value}`),
+}));
+
 // Mock Socket.io
 const mockIo = {
   to: jest.fn().mockReturnThis(),
@@ -354,6 +364,7 @@ describe("Internal Messaging System", () => {
       it("should reject non-HR target for owner", async () => {
         const token = generateToken(1);
         User.findByPk
+          .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce(mockOwner)
           .mockResolvedValueOnce(mockCleaner);
 
@@ -369,6 +380,7 @@ describe("Internal Messaging System", () => {
       it("should create 1-on-1 conversation with HR staff", async () => {
         const token = generateToken(1);
         User.findByPk
+          .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce(mockOwner)
           .mockResolvedValueOnce(mockHR1);
 
@@ -402,6 +414,7 @@ describe("Internal Messaging System", () => {
       it("should notify target user via socket", async () => {
         const token = generateToken(1);
         User.findByPk
+          .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce(mockOwner)
           .mockResolvedValueOnce(mockHR1);
 
@@ -429,7 +442,9 @@ describe("Internal Messaging System", () => {
     describe("HR Direct Messaging", () => {
       it("should default to owner when no targetUserId provided", async () => {
         const token = generateToken(2);
-        User.findByPk.mockResolvedValueOnce(mockHR1);
+        User.findByPk
+          .mockResolvedValueOnce({ id: 2, accountFrozen: false }) // Middleware call
+          .mockResolvedValueOnce(mockHR1);
         User.findOne.mockResolvedValue(mockOwner);
 
         ConversationParticipant.findAll.mockResolvedValue([]);
@@ -452,6 +467,7 @@ describe("Internal Messaging System", () => {
       it("should allow HR to message another HR", async () => {
         const token = generateToken(2);
         User.findByPk
+          .mockResolvedValueOnce({ id: 2, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce(mockHR1)
           .mockResolvedValueOnce(mockHR2);
 
@@ -480,6 +496,7 @@ describe("Internal Messaging System", () => {
       it("should prevent HR from messaging themselves", async () => {
         const token = generateToken(2);
         User.findByPk
+          .mockResolvedValueOnce({ id: 2, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce(mockHR1)
           .mockResolvedValueOnce(mockHR1);
 
@@ -495,6 +512,7 @@ describe("Internal Messaging System", () => {
       it("should reject HR messaging a cleaner", async () => {
         const token = generateToken(2);
         User.findByPk
+          .mockResolvedValueOnce({ id: 2, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce(mockHR1)
           .mockResolvedValueOnce(mockCleaner);
 
@@ -512,6 +530,7 @@ describe("Internal Messaging System", () => {
       it("should return existing conversation without creating new", async () => {
         const token = generateToken(1);
         User.findByPk
+          .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce(mockOwner)
           .mockResolvedValueOnce(mockHR1);
 
@@ -547,6 +566,7 @@ describe("Internal Messaging System", () => {
       it("should not match group conversations (3+ participants)", async () => {
         const token = generateToken(1);
         User.findByPk
+          .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce(mockOwner)
           .mockResolvedValueOnce(mockHR1);
 

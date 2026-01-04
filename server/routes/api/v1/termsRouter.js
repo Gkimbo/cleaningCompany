@@ -4,6 +4,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { TermsAndConditions, UserTermsAcceptance, User } = require("../../../models");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const termsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -350,7 +351,7 @@ termsRouter.get("/:id/full", authenticateToken, requireOwner, async (req, res) =
       effectiveDate: terms.effectiveDate,
       createdAt: terms.createdAt,
       createdBy: terms.creator
-        ? `${terms.creator.firstName} ${terms.creator.lastName}`
+        ? `${EncryptionService.decrypt(terms.creator.firstName)} ${EncryptionService.decrypt(terms.creator.lastName)}`
         : "Unknown",
     };
 
@@ -402,7 +403,7 @@ termsRouter.get("/history/:type", authenticateToken, requireOwner, async (req, r
         effectiveDate: t.effectiveDate,
         createdAt: t.createdAt,
         createdBy: t.creator
-          ? `${t.creator.firstName} ${t.creator.lastName}`
+          ? `${EncryptionService.decrypt(t.creator.firstName)} ${EncryptionService.decrypt(t.creator.lastName)}`
           : "Unknown",
         pdfFileName: t.pdfFileName,
         pdfUrl: t.contentType === "pdf" ? `/api/v1/terms/pdf/${t.id}` : null,
@@ -604,8 +605,8 @@ termsRouter.get(
       return res.json({
         user: {
           id: user.id,
-          name: `${user.firstName} ${user.lastName}`,
-          email: user.email,
+          name: `${EncryptionService.decrypt(user.firstName)} ${EncryptionService.decrypt(user.lastName)}`,
+          email: EncryptionService.decrypt(user.email),
           type: user.type,
           currentAcceptedVersion: user.termsAcceptedVersion,
         },
@@ -672,7 +673,7 @@ termsRouter.get(
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader(
           "Content-Disposition",
-          `inline; filename="terms_accepted_by_${acceptance.user?.firstName}_${acceptance.user?.lastName}_v${acceptance.terms?.version}.pdf"`
+          `inline; filename="terms_accepted_by_${acceptance.user?.firstName ? EncryptionService.decrypt(acceptance.user.firstName) : "user"}_${acceptance.user?.lastName ? EncryptionService.decrypt(acceptance.user.lastName) : ""}_v${acceptance.terms?.version}.pdf"`
         );
 
         const fileStream = fs.createReadStream(acceptance.pdfSnapshotPath);
@@ -687,8 +688,8 @@ termsRouter.get(
           },
           user: {
             id: acceptance.user?.id,
-            name: `${acceptance.user?.firstName} ${acceptance.user?.lastName}`,
-            email: acceptance.user?.email,
+            name: `${acceptance.user?.firstName ? EncryptionService.decrypt(acceptance.user.firstName) : ""} ${acceptance.user?.lastName ? EncryptionService.decrypt(acceptance.user.lastName) : ""}`.trim(),
+            email: acceptance.user?.email ? EncryptionService.decrypt(acceptance.user.email) : null,
           },
           terms: {
             id: acceptance.terms?.id,
@@ -754,8 +755,8 @@ termsRouter.get(
           id: a.id,
           user: {
             id: a.user?.id,
-            name: `${a.user?.firstName} ${a.user?.lastName}`,
-            email: a.user?.email,
+            name: `${a.user?.firstName ? EncryptionService.decrypt(a.user.firstName) : ""} ${a.user?.lastName ? EncryptionService.decrypt(a.user.lastName) : ""}`.trim(),
+            email: a.user?.email ? EncryptionService.decrypt(a.user.email) : null,
             type: a.user?.type,
           },
           acceptedAt: a.acceptedAt,

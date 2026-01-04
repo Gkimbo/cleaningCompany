@@ -17,6 +17,7 @@
 
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const EncryptionService = require("../../../services/EncryptionService");
 
 // ============================================================================
 // CONFIGURATION & VALIDATION
@@ -604,7 +605,7 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
           bank_account: {
             country: "US",
             currency: "usd",
-            account_holder_name: `${user.firstName || ""} ${user.lastName || ""}`.trim() || user.email,
+            account_holder_name: `${user.firstName ? EncryptionService.decrypt(user.firstName) : ""} ${user.lastName ? EncryptionService.decrypt(user.lastName) : ""}`.trim() || EncryptionService.decrypt(user.email),
             account_holder_type: "individual",
             routing_number: bankAccount.routingNumber,
             account_number: bankAccount.accountNumber,

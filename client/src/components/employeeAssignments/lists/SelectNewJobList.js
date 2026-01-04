@@ -27,6 +27,7 @@ import {
   typography,
   shadows,
 } from "../../../services/styles/theme";
+import { usePricing } from "../../../context/PricingContext";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -50,6 +51,7 @@ const sortOptions = [
 ];
 
 const SelectNewJobList = ({ state }) => {
+  const { pricing } = usePricing();
   const [allAppointments, setAllAppointments] = useState([]);
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
@@ -468,15 +470,16 @@ const SelectNewJobList = ({ state }) => {
         return false;
       }
 
-      // Min earnings filter (90% of job price is cleaner share)
+      // Min earnings filter (cleaner share based on platform fee)
       if (filters.minEarnings) {
-        const earnings = Number(appt.price) * 0.9;
+        const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+        const earnings = Number(appt.price) * cleanerSharePercent;
         if (earnings < filters.minEarnings) return false;
       }
 
       return true;
     });
-  }, [sortedData, homeDetails, filters, userLocation, preferredHomeIds]);
+  }, [sortedData, homeDetails, filters, userLocation, preferredHomeIds, pricing]);
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {

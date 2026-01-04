@@ -184,14 +184,14 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
           if (cleaner && home && homeowner) {
             const homeAddress = home.nickName || EncryptionService.decrypt(home.address) || "their home";
             const homeownerName = homeowner.firstName
-              ? `${homeowner.firstName} ${homeowner.lastName || ""}`.trim()
+              ? `${EncryptionService.decrypt(homeowner.firstName)} ${homeowner.lastName ? EncryptionService.decrypt(homeowner.lastName) : ""}`.trim()
               : "A homeowner";
 
             // Send email notification to the cleaner
             try {
               await EmailClass.sendPreferredCleanerNotification(
                 cleaner.getNotificationEmail(),
-                cleaner.firstName || "there",
+                cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : "there",
                 homeownerName,
                 homeAddress
               );

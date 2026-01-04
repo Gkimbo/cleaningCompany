@@ -152,6 +152,12 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: true,
 		},
+		// Tracks whether home setup is complete (false for homes created via invitation)
+		isSetupComplete: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: true,
+		},
 	});
 
 	// Helper function to encrypt PII fields

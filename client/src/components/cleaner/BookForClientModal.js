@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +35,8 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
   const [timeWindow, setTimeWindow] = useState("anytime");
   const [notes, setNotes] = useState("");
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [platformPriceData, setPlatformPriceData] = useState(null);
+  const [loadingPlatformPrice, setLoadingPlatformPrice] = useState(false);
 
   // Get client display info
   const clientName = client?.client
@@ -48,6 +50,33 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
   const defaultPrice = client?.defaultPrice
     ? parseFloat(client.defaultPrice).toFixed(0)
     : null;
+
+  // Fetch platform price when modal opens
+  useEffect(() => {
+    const fetchPlatformPrice = async () => {
+      if (!visible || !client?.id || !token) return;
+
+      setLoadingPlatformPrice(true);
+      try {
+        const data = await CleanerClientService.getPlatformPrice(token, client.id);
+        if (!data.error) {
+          setPlatformPriceData(data);
+        }
+      } catch (error) {
+        console.error("Error fetching platform price:", error);
+      } finally {
+        setLoadingPlatformPrice(false);
+      }
+    };
+
+    fetchPlatformPrice();
+  }, [visible, client?.id, token]);
+
+  const handleUsePlatformPrice = () => {
+    if (platformPriceData?.platformPrice) {
+      setCustomPrice(platformPriceData.platformPrice.toString());
+    }
+  };
 
   // Generate calendar days for the current month
   const calendarData = useMemo(() => {
@@ -160,6 +189,7 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
     setTimeWindow("anytime");
     setNotes("");
     setCurrentMonth(new Date());
+    setPlatformPriceData(null);
   };
 
   const handleClose = () => {
@@ -323,6 +353,33 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
                   keyboardType="decimal-pad"
                 />
               </View>
+
+              {/* Platform Price Button */}
+              {platformPriceData && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.platformPriceButton,
+                    pressed && styles.platformPriceButtonPressed,
+                  ]}
+                  onPress={handleUsePlatformPrice}
+                >
+                  <Feather name="trending-up" size={14} color={colors.primary[600]} />
+                  <Text style={styles.platformPriceButtonText}>
+                    Use Platform Price: ${platformPriceData.platformPrice}
+                  </Text>
+                  <Text style={styles.platformPriceBreakdown}>
+                    ({platformPriceData.numBeds} bed, {platformPriceData.numBaths} bath)
+                  </Text>
+                </Pressable>
+              )}
+
+              {loadingPlatformPrice && (
+                <View style={styles.loadingPlatformPrice}>
+                  <ActivityIndicator size="small" color={colors.primary[500]} />
+                  <Text style={styles.loadingPlatformPriceText}>Loading platform price...</Text>
+                </View>
+              )}
+
               <Text style={styles.priceHint}>
                 Leave blank to use {defaultPrice ? "default price" : "calculated price"}
               </Text>
@@ -341,6 +398,14 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
                 numberOfLines={3}
                 textAlignVertical="top"
               />
+            </View>
+
+            {/* Info Banner */}
+            <View style={styles.infoBanner}>
+              <Feather name="info" size={16} color={colors.primary[600]} />
+              <Text style={styles.infoBannerText}>
+                {clientName} will receive a notification (push, email, and in-app) to approve this booking. They have 48 hours to respond.
+              </Text>
             </View>
           </ScrollView>
 
@@ -621,6 +686,39 @@ const styles = StyleSheet.create({
     color: colors.neutral[400],
     marginTop: spacing.xs,
   },
+  platformPriceButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  platformPriceButtonPressed: {
+    backgroundColor: colors.primary[100],
+  },
+  platformPriceButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  platformPriceBreakdown: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  loadingPlatformPrice: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  loadingPlatformPriceText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[500],
+  },
 
   // Notes
   notesInput: {
@@ -632,6 +730,25 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
     minHeight: 80,
+  },
+
+  // Info Banner
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: colors.primary[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+    lineHeight: 20,
   },
 
   // Footer

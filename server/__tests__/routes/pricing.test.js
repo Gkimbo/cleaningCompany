@@ -2,6 +2,16 @@ const express = require("express");
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => {
+    if (!value) return value;
+    if (typeof value !== "string") return value;
+    return value.replace("encrypted_", "");
+  }),
+  encrypt: jest.fn((value) => `encrypted_${value}`),
+}));
+
 // Mock models
 jest.mock("../../models", () => ({
   User: {
@@ -285,6 +295,7 @@ describe("Pricing Router", () => {
       cleanerPenaltyDays: 4,
       refundPercentage: 0.5,
       platformFeePercent: 0.12,
+      businessOwnerFeePercent: 0.10,
       highVolumeFee: 60,
       changeNote: "Annual price update",
     };
@@ -574,6 +585,7 @@ describe("Pricing Router", () => {
         cleanerPenaltyDays: 4,
         refundPercentage: 0.5,
         platformFeePercent: 0.12,
+        businessOwnerFeePercent: 0.10,
         highVolumeFee: 60,
       };
 

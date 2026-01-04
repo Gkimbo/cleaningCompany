@@ -9,7 +9,9 @@ import {
   Text,
   View,
 } from "react-native";
+import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
+import Icon from "react-native-vector-icons/FontAwesome";
 import {
   colors,
   spacing,
@@ -17,13 +19,41 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { API_BASE } from "../../services/config";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
+import MessageClass from "../../services/fetchRequests/MessageClass";
 import ClientCard from "./ClientCard";
 import InviteClientModal from "./InviteClientModal";
 import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
 
+// Payment Setup Banner Component
+const PaymentSetupBanner = ({ onPress }) => (
+  <Pressable
+    onPress={onPress}
+    style={({ pressed }) => [
+      styles.paymentBanner,
+      pressed && styles.paymentBannerPressed,
+    ]}
+  >
+    <View style={styles.paymentBannerIcon}>
+      <Icon name="credit-card" size={20} color={colors.warning[600]} />
+    </View>
+    <View style={styles.paymentBannerContent}>
+      <Text style={styles.paymentBannerTitle}>Complete Payment Setup</Text>
+      <Text style={styles.paymentBannerSubtitle}>
+        Set up your bank account to receive payments from your clients
+      </Text>
+    </View>
+    <View style={styles.paymentBannerAction}>
+      <Text style={styles.paymentBannerActionText}>Set Up</Text>
+      <Icon name="chevron-right" size={12} color={colors.primary[600]} />
+    </View>
+  </Pressable>
+);
+
 const MyClientsPage = ({ state }) => {
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,6 +63,9 @@ const MyClientsPage = ({ state }) => {
   const [selectedClientForBooking, setSelectedClientForBooking] = useState(null);
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [selectedClientForRecurring, setSelectedClientForRecurring] = useState(null);
+
+  // Stripe account status for payment setup banner
+  const [showPaymentBanner, setShowPaymentBanner] = useState(false);
 
   const fetchClients = useCallback(async () => {
     if (!state?.currentUser?.token) return;
@@ -52,9 +85,36 @@ const MyClientsPage = ({ state }) => {
     }
   }, [state?.currentUser?.token, activeTab]);
 
+  // Fetch Stripe account status to determine if banner should show
+  const fetchStripeAccountStatus = useCallback(async () => {
+    if (!state?.currentUser?.id) return;
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/stripe-connect/account-status/${state.currentUser.id}`
+      );
+      const data = await res.json();
+
+      if (res.ok) {
+        // Show banner if account doesn't exist or onboarding isn't complete
+        setShowPaymentBanner(!data.hasAccount || !data.onboardingComplete);
+      }
+    } catch (err) {
+      console.log("[MyClientsPage] Error fetching Stripe status:", err.message);
+      // If we can't fetch status, show the banner to be safe
+      setShowPaymentBanner(true);
+    }
+  }, [state?.currentUser?.id]);
+
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
+
+  useEffect(() => {
+    if (state?.currentUser?.token) {
+      fetchStripeAccountStatus();
+    }
+  }, [state?.currentUser?.token, fetchStripeAccountStatus]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -78,9 +138,62 @@ const MyClientsPage = ({ state }) => {
     }
   };
 
+  const handleDeleteInvitation = (client) => {
+    Alert.alert(
+      "Cancel Invitation?",
+      `Are you sure you want to cancel the invitation for ${client.invitedName}?\n\nThey can still create a Kleanr account using the invitation link, but they won't be connected to your business.`,
+      [
+        { text: "Keep Invitation", style: "cancel" },
+        {
+          text: "Cancel Invitation",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const result = await CleanerClientService.deactivateClient(
+                state.currentUser.token,
+                client.id
+              );
+              if (result.success) {
+                Alert.alert("Success", "Invitation cancelled");
+                fetchClients();
+              } else {
+                Alert.alert("Error", result.error || "Failed to cancel invitation");
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to cancel invitation");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleClientPress = (client) => {
-    // TODO: Navigate to client detail page
-    console.log("Client pressed:", client);
+    navigate(`/client-detail/${client.id}`);
+  };
+
+  const handleMessageClient = async (client) => {
+    if (!client.clientId) {
+      Alert.alert("Cannot Message", "This client hasn't accepted their invitation yet.");
+      return;
+    }
+
+    try {
+      const result = await MessageClass.createCleanerClientConversation(
+        client.clientId,
+        null, // null = current user is the cleaner
+        state.currentUser.token
+      );
+
+      if (result.conversation) {
+        navigate(`/messages/${result.conversation.id}`);
+      } else if (result.error) {
+        Alert.alert("Error", result.error);
+      }
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+      Alert.alert("Error", "Failed to start conversation");
+    }
   };
 
   const handleInviteSuccess = () => {
@@ -109,6 +222,32 @@ const MyClientsPage = ({ state }) => {
     setShowRecurringModal(false);
     setSelectedClientForRecurring(null);
     fetchClients();
+  };
+
+  const handlePriceUpdate = async (clientId, newPrice) => {
+    try {
+      const result = await CleanerClientService.updateDefaultPrice(
+        state.currentUser.token,
+        clientId,
+        newPrice
+      );
+
+      if (result.success) {
+        // Update local state
+        setClients((prev) =>
+          prev.map((c) =>
+            c.id === clientId ? { ...c, defaultPrice: newPrice } : c
+          )
+        );
+        return true;
+      } else {
+        Alert.alert("Error", result.error || "Failed to update price");
+        return false;
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to update price");
+      return false;
+    }
   };
 
   const filteredClients = clients.filter((client) => {
@@ -169,6 +308,13 @@ const MyClientsPage = ({ state }) => {
           <Text style={styles.statValue}>{pendingCount}</Text>
         </View>
       </View>
+
+      {/* Payment Setup Banner */}
+      {showPaymentBanner && (
+        <View style={styles.bannerContainer}>
+          <PaymentSetupBanner onPress={() => navigate("/earnings")} />
+        </View>
+      )}
 
       {/* Tab Bar */}
       <View style={styles.tabBar}>
@@ -267,8 +413,11 @@ const MyClientsPage = ({ state }) => {
               client={client}
               onPress={handleClientPress}
               onResendInvite={handleResendInvite}
+              onDeleteInvitation={handleDeleteInvitation}
               onBookCleaning={handleBookCleaning}
               onSetupRecurring={handleSetupRecurring}
+              onMessage={handleMessageClient}
+              onPriceUpdate={handlePriceUpdate}
             />
           ))
         )}
@@ -508,6 +657,58 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Payment Banner
+  bannerContainer: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  paymentBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    ...shadows.sm,
+  },
+  paymentBannerPressed: {
+    backgroundColor: colors.warning[100],
+  },
+  paymentBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  paymentBannerContent: {
+    flex: 1,
+  },
+  paymentBannerTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[800],
+    marginBottom: 2,
+  },
+  paymentBannerSubtitle: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    lineHeight: 16,
+  },
+  paymentBannerAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  paymentBannerActionText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
   },
 });
 

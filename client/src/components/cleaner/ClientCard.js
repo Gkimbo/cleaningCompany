@@ -1,5 +1,5 @@
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
   colors,
@@ -9,7 +9,9 @@ import {
   shadows,
 } from "../../services/styles/theme";
 
-const ClientCard = ({ client, onPress, onResendInvite, onBookCleaning, onSetupRecurring }) => {
+const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBookCleaning, onSetupRecurring, onMessage, onPriceUpdate }) => {
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceInput, setPriceInput] = useState(client.defaultPrice?.toString() || "");
   const isPending = client.status === "pending_invite";
   const isActive = client.status === "active";
   const isInactive = client.status === "inactive";
@@ -40,6 +42,38 @@ const ClientCard = ({ client, onPress, onResendInvite, onBookCleaning, onSetupRe
   };
 
   const status = getStatusBadge();
+
+  const handlePriceEdit = (e) => {
+    e.stopPropagation();
+    setEditingPrice(true);
+    setPriceInput(client.defaultPrice?.toString() || "");
+  };
+
+  const handlePriceSave = async (e) => {
+    e.stopPropagation();
+    if (!priceInput || isNaN(parseFloat(priceInput))) {
+      Alert.alert("Error", "Please enter a valid price");
+      return;
+    }
+
+    const newPrice = parseFloat(priceInput);
+    setEditingPrice(false);
+
+    if (onPriceUpdate) {
+      const success = await onPriceUpdate(client.id, newPrice);
+      if (!success) {
+        // Revert if save failed
+        setPriceInput(client.defaultPrice?.toString() || "");
+      }
+    }
+  };
+
+  const handlePriceCancel = (e) => {
+    e.stopPropagation();
+    setEditingPrice(false);
+    setPriceInput(client.defaultPrice?.toString() || "");
+  };
+
   const displayName = isActive && client.client
     ? `${client.client.firstName} ${client.client.lastName}`
     : client.invitedName;
@@ -102,26 +136,73 @@ const ClientCard = ({ client, onPress, onResendInvite, onBookCleaning, onSetupRe
         </View>
       )}
 
-      {/* Frequency and price info */}
-      {client.defaultFrequency && (
+      {/* Frequency, price, and cleaners info */}
+      {(client.defaultFrequency || client.home?.cleanersNeeded > 1) && (
         <View style={styles.scheduleRow}>
-          <View style={styles.scheduleItem}>
-            <Feather name="calendar" size={14} color={colors.neutral[400]} />
-            <Text style={styles.scheduleText}>
-              {client.defaultFrequency === "weekly"
-                ? "Weekly"
-                : client.defaultFrequency === "biweekly"
-                ? "Every 2 weeks"
-                : client.defaultFrequency === "monthly"
-                ? "Monthly"
-                : "On demand"}
-            </Text>
-          </View>
-          {client.defaultPrice && (
+          {client.defaultFrequency && (
             <View style={styles.scheduleItem}>
-              <Feather name="dollar-sign" size={14} color={colors.neutral[400]} />
+              <Feather name="calendar" size={14} color={colors.neutral[400]} />
               <Text style={styles.scheduleText}>
-                ${parseFloat(client.defaultPrice).toFixed(0)}
+                {client.defaultFrequency === "weekly"
+                  ? "Weekly"
+                  : client.defaultFrequency === "biweekly"
+                  ? "Every 2 weeks"
+                  : client.defaultFrequency === "monthly"
+                  ? "Monthly"
+                  : "On demand"}
+              </Text>
+            </View>
+          )}
+          {(client.defaultPrice || onPriceUpdate) && (
+            editingPrice ? (
+              <View style={styles.priceEditContainer}>
+                <Text style={styles.dollarSign}>$</Text>
+                <TextInput
+                  style={styles.priceEditInput}
+                  value={priceInput}
+                  onChangeText={setPriceInput}
+                  keyboardType="decimal-pad"
+                  autoFocus
+                  onBlur={handlePriceCancel}
+                />
+                <Pressable
+                  style={styles.priceSaveBtn}
+                  onPress={handlePriceSave}
+                >
+                  <Feather name="check" size={14} color={colors.neutral[0]} />
+                </Pressable>
+                <Pressable
+                  style={styles.priceCancelBtn}
+                  onPress={handlePriceCancel}
+                >
+                  <Feather name="x" size={14} color={colors.neutral[600]} />
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.priceDisplayItem,
+                  onPriceUpdate && styles.priceEditable,
+                  pressed && onPriceUpdate && styles.priceEditablePressed,
+                ]}
+                onPress={onPriceUpdate ? handlePriceEdit : undefined}
+                disabled={!onPriceUpdate}
+              >
+                <Feather name="dollar-sign" size={14} color={colors.success[600]} />
+                <Text style={styles.priceText}>
+                  {client.defaultPrice ? parseFloat(client.defaultPrice).toFixed(0) : "Set price"}
+                </Text>
+                {onPriceUpdate && (
+                  <Feather name="edit-2" size={12} color={colors.neutral[400]} />
+                )}
+              </Pressable>
+            )
+          )}
+          {client.home?.cleanersNeeded > 1 && (
+            <View style={styles.scheduleItem}>
+              <Feather name="users" size={14} color={colors.neutral[400]} />
+              <Text style={styles.scheduleText}>
+                {client.home.cleanersNeeded} cleaners
               </Text>
             </View>
           )}
@@ -129,8 +210,22 @@ const ClientCard = ({ client, onPress, onResendInvite, onBookCleaning, onSetupRe
       )}
 
       {/* Active client actions */}
-      {isActive && (onBookCleaning || onSetupRecurring) && (
+      {isActive && (onBookCleaning || onSetupRecurring || onMessage) && (
         <View style={styles.activeActions}>
+          {onMessage && client.clientId && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.messageButton,
+                pressed && styles.messageButtonPressed,
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                onMessage(client);
+              }}
+            >
+              <Feather name="message-circle" size={14} color={colors.neutral[600]} />
+            </Pressable>
+          )}
           {onSetupRecurring && (
             <Pressable
               style={({ pressed }) => [
@@ -170,19 +265,35 @@ const ClientCard = ({ client, onPress, onResendInvite, onBookCleaning, onSetupRe
           <Text style={styles.pendingText}>
             Invited {new Date(client.invitedAt).toLocaleDateString()}
           </Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.resendButton,
-              pressed && styles.resendButtonPressed,
-            ]}
-            onPress={(e) => {
-              e.stopPropagation();
-              onResendInvite(client);
-            }}
-          >
-            <Feather name="send" size={14} color={colors.primary[600]} />
-            <Text style={styles.resendButtonText}>Resend</Text>
-          </Pressable>
+          <View style={styles.pendingButtonsRow}>
+            {onDeleteInvitation && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.deleteButton,
+                  pressed && styles.deleteButtonPressed,
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onDeleteInvitation(client);
+                }}
+              >
+                <Feather name="trash-2" size={14} color={colors.error[600]} />
+              </Pressable>
+            )}
+            <Pressable
+              style={({ pressed }) => [
+                styles.resendButton,
+                pressed && styles.resendButtonPressed,
+              ]}
+              onPress={(e) => {
+                e.stopPropagation();
+                onResendInvite(client);
+              }}
+            >
+              <Feather name="send" size={14} color={colors.primary[600]} />
+              <Text style={styles.resendButtonText}>Resend</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -302,6 +413,66 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
   },
 
+  // Price editing
+  priceDisplayItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  priceEditable: {
+    backgroundColor: colors.success[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  priceEditablePressed: {
+    backgroundColor: colors.success[100],
+  },
+  priceText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  priceEditContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  dollarSign: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  priceEditInput: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    minWidth: 60,
+    textAlign: "right",
+  },
+  priceSaveBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    backgroundColor: colors.success[600],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priceCancelBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.sm,
+    backgroundColor: colors.neutral[200],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   // Active client actions
   activeActions: {
     flexDirection: "row",
@@ -312,6 +483,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
     gap: spacing.sm,
+  },
+  messageButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 36,
+    height: 36,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  messageButtonPressed: {
+    backgroundColor: colors.neutral[200],
   },
   recurringButton: {
     flexDirection: "row",
@@ -363,6 +547,24 @@ const styles = StyleSheet.create({
   pendingText: {
     fontSize: typography.fontSize.xs,
     color: colors.neutral[400],
+  },
+  pendingButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  deleteButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 36,
+    height: 36,
+    backgroundColor: colors.error[50],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  deleteButtonPressed: {
+    backgroundColor: colors.error[100],
   },
   resendButton: {
     flexDirection: "row",

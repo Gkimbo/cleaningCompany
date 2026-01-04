@@ -310,6 +310,33 @@ class FetchData {
     }
   }
 
+  static async completeHomeSetup(homeId, data, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/user-info/home/${homeId}/complete-setup`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(data),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to complete home setup" };
+      }
+
+      return responseData;
+    } catch (err) {
+      console.error("Error completing home setup:", err);
+      return { error: "Failed to complete home setup" };
+    }
+  }
+
   static async deleteHome(id) {
     try {
       const response = await fetch(baseURL + "/api/v1/user-info/home", {
@@ -673,6 +700,30 @@ class FetchData {
     } catch (error) {
       console.error("Error updating phone:", error);
       return { error: "Failed to update phone number" };
+    }
+  }
+
+  static async upgradeToBusinessOwner(token, businessName = null, yearsInBusiness = null) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/users/upgrade-to-business", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ businessName, yearsInBusiness }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to upgrade account" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error upgrading to business owner:", error);
+      return { error: "Failed to upgrade account" };
     }
   }
 

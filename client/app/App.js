@@ -71,6 +71,7 @@ import AccountSettings from "../src/components/account/AccountSettings";
 import ClientRequestsList from "../src/components/client/ClientRequestsList";
 import ArchivedCleanings from "../src/components/client/ArchivedCleanings";
 import ClientReviews from "../src/components/client/ClientReviews";
+import CompleteHomeSetupWizard from "../src/components/client/CompleteHomeSetupWizard";
 
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
@@ -83,9 +84,17 @@ import ChecklistEditor from "../src/components/owner/ChecklistEditor";
 // Cleaner components
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
 import MyClientsPage from "../src/components/cleaner/MyClientsPage";
+import ClientDetailPage from "../src/components/cleaner/ClientDetailPage";
 
 // Business components
-import { ImportBusinessLanding, BusinessSignupWizard } from "../src/components/business";
+import {
+  ImportBusinessLanding,
+  BusinessSignupWizard,
+  ExistingCleanerCheck,
+  CleanerUpgradeLanding,
+  CleanerUpgradeForm,
+  BusinessCalculator,
+} from "../src/components/business";
 
 // Referral components
 import ReferralManagement from "../src/components/owner/ReferralManagement";
@@ -93,6 +102,9 @@ import MyReferralsPage from "../src/components/referrals/MyReferralsPage";
 
 // HR components
 import SuspiciousReportsPage from "../src/components/hr/SuspiciousReportsPage";
+
+// Notifications
+import NotificationsScreen from "../src/components/notifications/NotificationsScreen";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
@@ -249,6 +261,24 @@ export default function App() {
                 element={<BusinessSignupWizard dispatch={dispatch} />}
               />
               <Route
+                path="/business-signup-check"
+                element={<ExistingCleanerCheck />}
+              />
+              {/* Cleaner Upgrade Flow */}
+              <Route
+                path="/upgrade-to-business"
+                element={<CleanerUpgradeLanding state={state} />}
+              />
+              <Route
+                path="/upgrade-form"
+                element={<CleanerUpgradeForm state={state} dispatch={dispatch} />}
+              />
+              {/* Business Calculator */}
+              <Route
+                path="/earnings-calculator"
+                element={<BusinessCalculator state={state} />}
+              />
+              <Route
                 path="/all-reviews"
                 element={<AllReviewsList state={state} dispatch={dispatch} />}
               />
@@ -301,6 +331,10 @@ export default function App() {
               <Route
                 path="/edit-home/:id"
                 element={<EditHomeForm state={state} dispatch={dispatch} />}
+              />
+              <Route
+                path="/complete-home-setup/:id"
+                element={<CompleteHomeSetupWizard state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/calendar-sync/:homeId"
@@ -383,6 +417,10 @@ export default function App() {
               <Route
                 path="/my-clients"
                 element={<MyClientsPage state={state} />}
+              />
+              <Route
+                path="/client-detail/:clientId"
+                element={<ClientDetailPage state={state} dispatch={dispatch} />}
               />
               <Route
                 path="/employees"
@@ -493,6 +531,11 @@ export default function App() {
               <Route
                 path="/suspicious-reports"
                 element={<SuspiciousReportsPage />}
+              />
+              {/* Notifications */}
+              <Route
+                path="/notifications"
+                element={<NotificationsScreen />}
               />
             </Routes>
             </SafeAreaView>

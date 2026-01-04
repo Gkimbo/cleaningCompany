@@ -17,6 +17,7 @@ const {
   HomeSizeAdjustmentPhoto,
 } = require("../../../models");
 const verifyHROrOwner = require("../../../middleware/verifyHROrOwner");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const hrDashboardRouter = express.Router();
 
@@ -170,12 +171,12 @@ hrDashboardRouter.get("/support-conversations", verifyHROrOwner, async (req, res
         lastMessage: conv.messages?.[0]?.content?.substring(0, 100),
         lastMessageAt: conv.messages?.[0]?.createdAt,
         lastMessageSender: conv.messages?.[0]?.sender
-          ? `${conv.messages[0].sender.firstName} ${conv.messages[0].sender.lastName}`
+          ? `${EncryptionService.decrypt(conv.messages[0].sender.firstName)} ${EncryptionService.decrypt(conv.messages[0].sender.lastName)}`
           : null,
         customer: customer?.user
           ? {
               id: customer.user.id,
-              name: `${customer.user.firstName} ${customer.user.lastName}`,
+              name: `${EncryptionService.decrypt(customer.user.firstName)} ${EncryptionService.decrypt(customer.user.lastName)}`,
               type: customer.user.type,
             }
           : null,
