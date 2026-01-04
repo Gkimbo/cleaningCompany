@@ -2,6 +2,16 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => {
+    if (!value) return value;
+    if (typeof value !== "string") return value;
+    return value.replace("encrypted_", "");
+  }),
+  encrypt: jest.fn((value) => `encrypted_${value}`),
+}));
+
 // Mock Socket.io
 const mockIo = {
   to: jest.fn().mockReturnThis(),
@@ -112,6 +122,7 @@ describe("Cleaner-Client Messaging Routes", () => {
         const token = jwt.sign({ userId: cleanerId }, secretKey);
 
         User.findByPk
+          .mockResolvedValueOnce({ id: cleanerId, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce({
             id: cleanerId,
             type: "cleaner",
@@ -167,6 +178,7 @@ describe("Cleaner-Client Messaging Routes", () => {
         const token = jwt.sign({ userId: cleanerId }, secretKey);
 
         User.findByPk
+          .mockResolvedValueOnce({ id: cleanerId, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce({
             id: cleanerId,
             type: "cleaner",
@@ -315,6 +327,7 @@ describe("Cleaner-Client Messaging Routes", () => {
         const token = jwt.sign({ userId: clientId }, secretKey);
 
         User.findByPk
+          .mockResolvedValueOnce({ id: clientId, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce({
             id: clientId,
             type: "homeowner",
@@ -360,6 +373,7 @@ describe("Cleaner-Client Messaging Routes", () => {
         const token = jwt.sign({ userId: clientId }, secretKey);
 
         User.findByPk
+          .mockResolvedValueOnce({ id: clientId, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce({
             id: clientId,
             type: "homeowner",
@@ -463,6 +477,7 @@ describe("Cleaner-Client Messaging Routes", () => {
         const token = jwt.sign({ userId: 100 }, secretKey);
 
         User.findByPk
+          .mockResolvedValueOnce({ id: 100, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce({
             id: 100,
             type: "cleaner",
@@ -484,6 +499,7 @@ describe("Cleaner-Client Messaging Routes", () => {
         const token = jwt.sign({ userId: 100 }, secretKey);
 
         User.findByPk
+          .mockResolvedValueOnce({ id: 100, accountFrozen: false }) // Middleware call
           .mockResolvedValueOnce({
             id: 100,
             type: "homeowner",

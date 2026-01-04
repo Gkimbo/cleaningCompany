@@ -179,9 +179,9 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
     // Send email notification to homeowner
     if (homeowner.notifications?.includes("email")) {
       await Email.sendHomeSizeAdjustmentRequest(
-        homeowner.email,
-        homeowner.firstName || homeowner.username,
-        cleaner.firstName || cleaner.username,
+        EncryptionService.decrypt(homeowner.email),
+        homeowner.firstName ? EncryptionService.decrypt(homeowner.firstName) : homeowner.username,
+        cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : cleaner.username,
         EncryptionService.decrypt(home.address),
         {
           originalBeds: home.numBeds,
@@ -471,8 +471,8 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
       // Notify cleaner of approval
       if (cleaner.notifications?.includes("email")) {
         await Email.sendAdjustmentApproved(
-          cleaner.email,
-          cleaner.firstName || cleaner.username,
+          EncryptionService.decrypt(cleaner.email),
+          cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : cleaner.username,
           EncryptionService.decrypt(home.address),
           request.reportedNumBeds,
           request.reportedNumBaths,
@@ -483,7 +483,7 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
       if (cleaner.notifications?.includes("phone") && cleaner.expoPushToken) {
         await PushNotification.sendPushAdjustmentApproved(
           cleaner.expoPushToken,
-          cleaner.firstName || cleaner.username,
+          cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : cleaner.username,
           EncryptionService.decrypt(home.address)
         );
       }
@@ -626,7 +626,8 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
       // Record false home size claim on homeowner (they disputed but were wrong)
       const timestamp = new Date().toISOString();
       const currentNotes = homeowner.ownerPrivateNotes || '';
-      const newNote = `[${timestamp}] HOME SIZE DISCREPANCY: Homeowner disputed cleaner's claim but ${resolver.type === "humanResources" ? "HR" : "owner"} found home was incorrectly sized. Original: ${request.originalNumBeds}bd/${request.originalNumBaths}ba, Actual: ${bedsToUse}bd/${bathsToUse}ba. Resolved by: ${resolver.firstName} ${resolver.lastName}`;
+      const resolverName = `${resolver.firstName ? EncryptionService.decrypt(resolver.firstName) : ""} ${resolver.lastName ? EncryptionService.decrypt(resolver.lastName) : ""}`.trim() || resolver.username;
+      const newNote = `[${timestamp}] HOME SIZE DISCREPANCY: Homeowner disputed cleaner's claim but ${resolver.type === "humanResources" ? "HR" : "owner"} found home was incorrectly sized. Original: ${request.originalNumBeds}bd/${request.originalNumBaths}ba, Actual: ${bedsToUse}bd/${bathsToUse}ba. Resolved by: ${resolverName}`;
 
       await homeowner.update({
         ownerPrivateNotes: currentNotes ? currentNotes + '\n' + newNote : newNote,
@@ -652,8 +653,8 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
       // Notify both parties
       if (homeowner.notifications?.includes("email")) {
         await Email.sendAdjustmentResolved(
-          homeowner.email,
-          homeowner.firstName || homeowner.username,
+          EncryptionService.decrypt(homeowner.email),
+          homeowner.firstName ? EncryptionService.decrypt(homeowner.firstName) : homeowner.username,
           "approved",
           bedsToUse,
           bathsToUse,
@@ -664,8 +665,8 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
 
       if (cleaner.notifications?.includes("email")) {
         await Email.sendAdjustmentResolved(
-          cleaner.email,
-          cleaner.firstName || cleaner.username,
+          EncryptionService.decrypt(cleaner.email),
+          cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : cleaner.username,
           "approved",
           bedsToUse,
           bathsToUse,
@@ -695,7 +696,8 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
       // Record false claim on cleaner (their report was incorrect)
       const timestamp = new Date().toISOString();
       const currentNotes = cleaner.ownerPrivateNotes || '';
-      const newNote = `[${timestamp}] FALSE CLAIM: Cleaner claimed home was ${request.reportedNumBeds}bd/${request.reportedNumBaths}ba but ${resolver.type === "humanResources" ? "HR" : "owner"} verified it was correctly listed as ${request.originalNumBeds}bd/${request.originalNumBaths}ba. Resolved by: ${resolver.firstName} ${resolver.lastName}`;
+      const resolverName = `${resolver.firstName ? EncryptionService.decrypt(resolver.firstName) : ""} ${resolver.lastName ? EncryptionService.decrypt(resolver.lastName) : ""}`.trim() || resolver.username;
+      const newNote = `[${timestamp}] FALSE CLAIM: Cleaner claimed home was ${request.reportedNumBeds}bd/${request.reportedNumBaths}ba but ${resolver.type === "humanResources" ? "HR" : "owner"} verified it was correctly listed as ${request.originalNumBeds}bd/${request.originalNumBaths}ba. Resolved by: ${resolverName}`;
 
       await cleaner.update({
         ownerPrivateNotes: currentNotes ? currentNotes + '\n' + newNote : newNote,
@@ -707,8 +709,8 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
       // Notify both parties
       if (homeowner.notifications?.includes("email")) {
         await Email.sendAdjustmentResolved(
-          homeowner.email,
-          homeowner.firstName || homeowner.username,
+          EncryptionService.decrypt(homeowner.email),
+          homeowner.firstName ? EncryptionService.decrypt(homeowner.firstName) : homeowner.username,
           "denied",
           null,
           null,
@@ -719,8 +721,8 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
 
       if (cleaner.notifications?.includes("email")) {
         await Email.sendAdjustmentResolved(
-          cleaner.email,
-          cleaner.firstName || cleaner.username,
+          EncryptionService.decrypt(cleaner.email),
+          cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : cleaner.username,
           "denied",
           null,
           null,

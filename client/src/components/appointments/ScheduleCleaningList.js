@@ -68,9 +68,10 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
     navigate("/setup-home");
   };
 
-  // Filter homes that can be scheduled (not outside service area)
-  const schedulableHomes = homes.filter(home => !home.outsideServiceArea);
+  // Filter homes that can be scheduled (not outside service area and setup complete)
+  const schedulableHomes = homes.filter(home => !home.outsideServiceArea && home.isSetupComplete !== false);
   const outsideAreaHomes = homes.filter(home => home.outsideServiceArea);
+  const incompleteSetupHomes = homes.filter(home => home.isSetupComplete === false && !home.outsideServiceArea);
 
   if (loading) {
     return (
@@ -219,6 +220,47 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
             <Icon name="plus" size={14} color="#fff" />
             <Text style={styles.addFirstButtonText}>Add Your First Home</Text>
           </Pressable>
+        </View>
+      )}
+
+      {/* Incomplete Setup Homes */}
+      {incompleteSetupHomes.length > 0 && (
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Icon name="exclamation-circle" size={14} color="#f59e0b" />
+            <Text style={styles.sectionTitle}>Setup Required</Text>
+          </View>
+
+          <View style={styles.outsideNote}>
+            <Icon name="info-circle" size={12} color="#f59e0b" />
+            <Text style={styles.outsideNoteText}>
+              Complete setup to enable booking for these homes
+            </Text>
+          </View>
+
+          {incompleteSetupHomes.map((home, index) => (
+            <View
+              key={home.id}
+              style={[
+                styles.outsideHomeItem,
+                index < incompleteSetupHomes.length - 1 && styles.homeItemBorder
+              ]}
+            >
+              <View style={styles.outsideHomeInfo}>
+                <Text style={styles.outsideHomeNickname}>{home.nickName || "My Home"}</Text>
+                <Text style={styles.outsideHomeAddress}>{home.address}, {home.city}</Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.setupButton,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={() => navigate(`/complete-home-setup/${home.id}`)}
+              >
+                <Text style={styles.setupButtonText}>Complete Setup</Text>
+              </Pressable>
+            </View>
+          ))}
         </View>
       )}
 
@@ -569,6 +611,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     color: "#d97706",
+  },
+  setupButton: {
+    backgroundColor: "#f59e0b",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  setupButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#fff",
   },
 
   // Empty State

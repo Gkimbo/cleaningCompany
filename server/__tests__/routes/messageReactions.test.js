@@ -2,6 +2,16 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => {
+    if (!value) return value;
+    if (typeof value !== "string") return value;
+    return value.replace("encrypted_", "");
+  }),
+  encrypt: jest.fn((value) => `encrypted_${value}`),
+}));
+
 // Mock Socket.io
 const mockIo = {
   to: jest.fn().mockReturnThis(),
@@ -719,6 +729,7 @@ describe("Staff List and Internal Conversations API", () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
         .mockResolvedValueOnce({ id: 1, username: "owner1", type: "owner" })
         .mockResolvedValueOnce({ id: 2, username: "hr1", firstName: "Jane", lastName: "Smith", type: "humanResources" });
 
@@ -757,6 +768,7 @@ describe("Staff List and Internal Conversations API", () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk
+        .mockResolvedValueOnce({ id: 1, accountFrozen: false }) // Middleware call
         .mockResolvedValueOnce({ id: 1, username: "owner1", type: "owner" })
         .mockResolvedValueOnce({ id: 2, username: "hr1", firstName: "Jane", lastName: "Smith", type: "humanResources" });
 

@@ -22,6 +22,7 @@ import {
 } from "../../services/styles/theme";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
 import EditClientHomeModal from "./EditClientHomeModal";
+import BookForClientModal from "./BookForClientModal";
 
 // Status badge component
 const StatusBadge = ({ status }) => {
@@ -128,6 +129,11 @@ const ClientDetailPage = ({ state, dispatch }) => {
   const [notesChanged, setNotesChanged] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showBookModal, setShowBookModal] = useState(false);
+  const [platformPriceData, setPlatformPriceData] = useState(null);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceInput, setPriceInput] = useState("");
+  const [savingPrice, setSavingPrice] = useState(false);
 
   // Fetch client data
   const fetchClientData = useCallback(async () => {
@@ -166,6 +172,34 @@ const ClientDetailPage = ({ state, dispatch }) => {
     fetchClientData();
   }, [fetchClientData]);
 
+  // Fetch platform price when client data loads
+  useEffect(() => {
+    const fetchPlatformPrice = async () => {
+      if (!clientData?.cleanerClient?.id || !state?.currentUser?.token) return;
+
+      try {
+        const data = await CleanerClientService.getPlatformPrice(
+          state.currentUser.token,
+          clientData.cleanerClient.id
+        );
+        if (!data.error) {
+          setPlatformPriceData(data);
+        }
+      } catch (error) {
+        console.error("Error fetching platform price:", error);
+      }
+    };
+
+    fetchPlatformPrice();
+  }, [clientData?.cleanerClient?.id, state?.currentUser?.token]);
+
+  // Update price input when client data changes
+  useEffect(() => {
+    if (clientData?.cleanerClient?.defaultPrice) {
+      setPriceInput(clientData.cleanerClient.defaultPrice.toString());
+    }
+  }, [clientData?.cleanerClient?.defaultPrice]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchClientData();
@@ -195,6 +229,50 @@ const ClientDetailPage = ({ state, dispatch }) => {
     } finally {
       setSavingNotes(false);
     }
+  };
+
+  // Handle save price
+  const handleSavePrice = async () => {
+    if (!priceInput || isNaN(parseFloat(priceInput))) {
+      Alert.alert("Error", "Please enter a valid price");
+      return;
+    }
+
+    setSavingPrice(true);
+    try {
+      const result = await CleanerClientService.updateDefaultPrice(
+        state.currentUser.token,
+        clientData.cleanerClient.id,
+        parseFloat(priceInput)
+      );
+
+      if (result.success) {
+        setEditingPrice(false);
+        // Update local state
+        setClientData((prev) => ({
+          ...prev,
+          cleanerClient: {
+            ...prev.cleanerClient,
+            defaultPrice: parseFloat(priceInput),
+          },
+        }));
+        Alert.alert("Success", "Price updated");
+      } else {
+        Alert.alert("Error", result.error || "Failed to update price");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to update price");
+    } finally {
+      setSavingPrice(false);
+    }
+  };
+
+  // Handle align with platform price
+  const handleAlignWithPlatform = () => {
+    if (!platformPriceData?.platformPrice) return;
+
+    setPriceInput(platformPriceData.platformPrice.toString());
+    setEditingPrice(true);
   };
 
   // Handle edit modal save
@@ -332,6 +410,19 @@ const ClientDetailPage = ({ state, dispatch }) => {
             {displayEmail}
           </Text>
         </View>
+        {/* Book for Client button - only show for active clients */}
+        {cleanerClient.status === "active" && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.bookButton,
+              pressed && styles.bookButtonPressed,
+            ]}
+            onPress={() => setShowBookModal(true)}
+          >
+            <Feather name="calendar" size={16} color={colors.neutral[0]} />
+            <Text style={styles.bookButtonText}>Book</Text>
+          </Pressable>
+        )}
       </View>
 
       <ScrollView
@@ -352,18 +443,16 @@ const ClientDetailPage = ({ state, dispatch }) => {
               <Feather name="home" size={18} color={colors.primary[600]} />
               <Text style={styles.cardTitle}>Home Details</Text>
             </View>
-            {!isPending && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.editButton,
-                  pressed && styles.editButtonPressed,
-                ]}
-                onPress={() => setShowEditModal(true)}
-              >
-                <Feather name="edit-2" size={14} color={colors.primary[600]} />
-                <Text style={styles.editButtonText}>Edit</Text>
-              </Pressable>
-            )}
+            <Pressable
+              style={({ pressed }) => [
+                styles.editButton,
+                pressed && styles.editButtonPressed,
+              ]}
+              onPress={() => setShowEditModal(true)}
+            >
+              <Feather name="edit-2" size={14} color={colors.primary[600]} />
+              <Text style={styles.editButtonText}>Edit</Text>
+            </Pressable>
           </View>
 
           <View style={styles.cardBody}>
@@ -461,20 +550,103 @@ const ClientDetailPage = ({ state, dispatch }) => {
               </>
             )}
 
-            {/* Pricing Info */}
-            {cleanerClient.defaultPrice && (
-              <View style={styles.pricingRow}>
-                <Feather name="dollar-sign" size={14} color={colors.success[600]} />
-                <Text style={styles.pricingText}>
-                  Default: ${cleanerClient.defaultPrice}
-                </Text>
+            {/* Pricing Section - Enhanced */}
+            <View style={styles.pricingSection}>
+              <View style={styles.pricingHeader}>
+                <Text style={styles.pricingSectionTitle}>Pricing</Text>
                 {cleanerClient.defaultFrequency && (
-                  <Text style={styles.frequencyText}>
-                    ({cleanerClient.defaultFrequency})
+                  <Text style={styles.frequencyBadge}>
+                    {cleanerClient.defaultFrequency}
                   </Text>
                 )}
               </View>
-            )}
+
+              {/* Default Price Row */}
+              <View style={styles.priceEditRow}>
+                <Text style={styles.priceLabel}>Default Price:</Text>
+                {editingPrice ? (
+                  <View style={styles.priceInputContainer}>
+                    <Text style={styles.dollarSign}>$</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      value={priceInput}
+                      onChangeText={setPriceInput}
+                      keyboardType="decimal-pad"
+                      autoFocus
+                    />
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.priceSaveButton,
+                        pressed && styles.priceSaveButtonPressed,
+                        savingPrice && styles.priceButtonDisabled,
+                      ]}
+                      onPress={handleSavePrice}
+                      disabled={savingPrice}
+                    >
+                      {savingPrice ? (
+                        <ActivityIndicator size="small" color={colors.neutral[0]} />
+                      ) : (
+                        <Feather name="check" size={16} color={colors.neutral[0]} />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.priceCancelButton,
+                        pressed && styles.priceCancelButtonPressed,
+                      ]}
+                      onPress={() => {
+                        setEditingPrice(false);
+                        setPriceInput(cleanerClient.defaultPrice?.toString() || "");
+                      }}
+                    >
+                      <Feather name="x" size={16} color={colors.neutral[600]} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.priceDisplayRow}>
+                    <Text style={styles.priceValue}>
+                      ${cleanerClient.defaultPrice || "0"}
+                    </Text>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.priceEditButton,
+                        pressed && styles.priceEditButtonPressed,
+                      ]}
+                      onPress={() => setEditingPrice(true)}
+                    >
+                      <Feather name="edit-2" size={14} color={colors.primary[600]} />
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+
+              {/* Platform Price Reference */}
+              {platformPriceData && (
+                <View style={styles.platformPriceSection}>
+                  <View style={styles.platformPriceRow}>
+                    <View style={styles.platformPriceInfo}>
+                      <Text style={styles.platformPriceLabel}>Platform rate:</Text>
+                      <Text style={styles.platformPriceValue}>
+                        ${platformPriceData.platformPrice}
+                      </Text>
+                      <Text style={styles.platformPriceBreakdown}>
+                        ({platformPriceData.numBeds} bed, {platformPriceData.numBaths} bath)
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.alignButton,
+                        pressed && styles.alignButtonPressed,
+                      ]}
+                      onPress={handleAlignWithPlatform}
+                    >
+                      <Feather name="trending-up" size={14} color={colors.neutral[0]} />
+                      <Text style={styles.alignButtonText}>Align with Platform</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            </View>
           </View>
         </View>
 
@@ -649,6 +821,18 @@ const ClientDetailPage = ({ state, dispatch }) => {
         home={home}
         cleanerClient={cleanerClient}
       />
+
+      {/* Book for Client Modal */}
+      <BookForClientModal
+        visible={showBookModal}
+        onClose={() => setShowBookModal(false)}
+        onSuccess={() => {
+          setShowBookModal(false);
+          fetchClientData(); // Refresh to show pending booking
+        }}
+        client={cleanerClient}
+        token={state?.currentUser?.token}
+      />
     </View>
   );
 };
@@ -722,6 +906,25 @@ const styles = StyleSheet.create({
   headerEmail: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
+  },
+
+  // Book button
+  bookButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.lg,
+  },
+  bookButtonPressed: {
+    backgroundColor: colors.primary[700],
+  },
+  bookButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
   },
 
   // Status Badge
@@ -867,24 +1070,157 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
 
-  // Pricing
-  pricingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
+  // Pricing Section - Enhanced
+  pricingSection: {
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
   },
-  pricingText: {
+  pricingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  pricingSectionTitle: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.success[600],
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  frequencyText: {
+  frequencyBadge: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  priceEditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  priceLabel: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
+  },
+  priceDisplayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  priceValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
+  },
+  priceEditButton: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priceEditButtonPressed: {
+    backgroundColor: colors.primary[100],
+  },
+  priceInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  dollarSign: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  priceInput: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    minWidth: 80,
+    textAlign: "right",
+  },
+  priceSaveButton: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.success[600],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priceSaveButtonPressed: {
+    backgroundColor: colors.success[700],
+  },
+  priceCancelButton: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[200],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  priceCancelButtonPressed: {
+    backgroundColor: colors.neutral[300],
+  },
+  priceButtonDisabled: {
+    opacity: 0.7,
+  },
+  platformPriceSection: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  platformPriceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  platformPriceInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flexWrap: "wrap",
+  },
+  platformPriceLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  platformPriceValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  platformPriceBreakdown: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  alignButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.primary[600],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+  },
+  alignButtonPressed: {
+    backgroundColor: colors.primary[700],
+  },
+  alignButtonText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
   },
 
   // Notes

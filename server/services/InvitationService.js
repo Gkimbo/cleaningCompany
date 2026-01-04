@@ -255,6 +255,8 @@ class InvitationService {
         // Only set preferred cleaner if invitation wasn't cancelled
         preferredCleanerId: isCancelled ? null : cleanerClient.cleanerId,
         specialNotes: cleanerClient.invitedNotes || null,
+        // Mark as incomplete - client needs to finish setup (access info, linens)
+        isSetupComplete: false,
       });
     }
 

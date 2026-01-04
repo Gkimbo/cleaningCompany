@@ -23,6 +23,7 @@ const IncentiveService = require("../../../services/IncentiveService");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const EncryptionService = require("../../../services/EncryptionService");
+const NotificationService = require("../../../services/NotificationService");
 
 const cleanerClientsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -116,7 +117,7 @@ cleanerClientsRouter.post("/invite", verifyCleaner, async (req, res) => {
 
     // Send invitation email (non-blocking - don't fail if email fails)
     // Use original values from request since cleanerClient fields are now encrypted
-    const cleanerName = `${req.user.firstName} ${req.user.lastName}`;
+    const cleanerName = `${EncryptionService.decrypt(req.user.firstName)} ${EncryptionService.decrypt(req.user.lastName)}`;
     const clientEmail = email.trim().toLowerCase();
     const clientName = name.trim();
     const addressStr = address
@@ -211,6 +212,367 @@ cleanerClientsRouter.get("/", verifyCleaner, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch clients" });
   }
 });
+
+// =====================
+// PUBLIC ENDPOINTS (for invitation acceptance)
+// MUST be defined before /:id routes to avoid matching "invitations" as an ID
+// =====================
+
+/**
+ * GET /invitations/:token
+ * Validate an invitation token and return pre-filled data
+ * Public endpoint
+ */
+cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const cleanerClient = await InvitationService.validateInviteToken(token, models);
+
+    if (!cleanerClient) {
+      return res.status(404).json({
+        valid: false,
+        error: "Invalid invitation link",
+      });
+    }
+
+    if (cleanerClient.isAlreadyAccepted) {
+      return res.status(400).json({
+        valid: false,
+        error: "This invitation has already been accepted. Please log in.",
+      });
+    }
+
+    if (cleanerClient.isExpired) {
+      return res.status(400).json({
+        valid: false,
+        error: "This invitation has been declined.",
+      });
+    }
+
+    // Check if invitation was cancelled
+    const isCancelled = cleanerClient.isCancelled || false;
+
+    res.json({
+      valid: true,
+      isCancelled,
+      invitation: {
+        // Don't show cleaner name if invitation was cancelled
+        cleanerName: isCancelled
+          ? null
+          : cleanerClient.cleaner
+            ? `${EncryptionService.decrypt(cleanerClient.cleaner.firstName)} ${EncryptionService.decrypt(cleanerClient.cleaner.lastName)}`
+            : "Your Cleaner",
+        name: cleanerClient.invitedName,
+        email: cleanerClient.invitedEmail,
+        phone: cleanerClient.invitedPhone,
+        address: cleanerClient.invitedAddress,
+        beds: cleanerClient.invitedBeds,
+        baths: cleanerClient.invitedBaths,
+      },
+    });
+  } catch (err) {
+    console.error("Error validating invitation:", err);
+    res.status(500).json({ error: "Failed to validate invitation" });
+  }
+});
+
+/**
+ * POST /invitations/:token/accept
+ * Accept an invitation and create user account
+ * Public endpoint
+ */
+cleanerClientsRouter.post("/invitations/:token/accept", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password, phone, addressCorrections } = req.body;
+
+    // Validate required fields
+    if (!password || password.length < 8) {
+      return res.status(400).json({
+        error: "Password must be at least 8 characters",
+      });
+    }
+
+    const result = await InvitationService.acceptInvitation(
+      token,
+      { password, phone, addressCorrections },
+      models,
+      hashPassword
+    );
+
+    // Generate JWT token for the new user
+    const jwtToken = jwt.sign(
+      { userId: result.user.id },
+      secretKey,
+      { expiresIn: "30d" }
+    );
+
+    // Notify the cleaner that their client accepted (non-blocking)
+    try {
+      const cleaner = await User.findByPk(result.cleanerClient.cleanerId);
+      if (cleaner) {
+        const clientName = `${EncryptionService.decrypt(result.user.firstName)} ${EncryptionService.decrypt(result.user.lastName)}`;
+        const cleanerName = `${EncryptionService.decrypt(cleaner.firstName)} ${EncryptionService.decrypt(cleaner.lastName)}`;
+        const homeAddress = result.home
+          ? `${EncryptionService.decrypt(result.home.address)}, ${EncryptionService.decrypt(result.home.city)}`
+          : "Address pending";
+
+        // Send email notification
+        await Email.sendInvitationAccepted(
+          EncryptionService.decrypt(cleaner.email),
+          cleanerName,
+          clientName,
+          homeAddress
+        );
+
+        // Send push notification
+        if (cleaner.expoPushToken) {
+          await PushNotification.sendPushInvitationAccepted(
+            cleaner.expoPushToken,
+            cleanerName,
+            clientName
+          );
+        }
+      }
+    } catch (notifyErr) {
+      console.error("Error notifying cleaner (non-fatal):", notifyErr);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Account created successfully",
+      user: {
+        id: result.user.id,
+        firstName: EncryptionService.decrypt(result.user.firstName),
+        lastName: EncryptionService.decrypt(result.user.lastName),
+        email: EncryptionService.decrypt(result.user.email),
+        type: result.user.type,
+      },
+      token: jwtToken,
+      home: result.home
+        ? {
+            id: result.home.id,
+            nickName: result.home.nickName,
+            address: EncryptionService.decrypt(result.home.address),
+          }
+        : null,
+    });
+  } catch (err) {
+    console.error("Error accepting invitation:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /invitations/:token/decline
+ * Decline an invitation
+ * Public endpoint
+ */
+cleanerClientsRouter.post("/invitations/:token/decline", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    await InvitationService.declineInvitation(token, models);
+
+    res.json({
+      success: true,
+      message: "Invitation declined",
+    });
+  } catch (err) {
+    console.error("Error declining invitation:", err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// =====================
+// CLIENT ENDPOINTS (for homeowners to see their cleaner)
+// MUST be defined before /:id routes to avoid matching "my-cleaner" as an ID
+// =====================
+
+// Middleware to verify homeowner access
+const verifyHomeowner = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const user = await User.findByPk(decoded.userId);
+
+    if (!user || user.type !== "homeowner") {
+      return res.status(403).json({ error: "Homeowner access required" });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+/**
+ * GET /my-cleaner
+ * Get the client's preferred cleaner (if they were invited by one)
+ * For homeowners to see their assigned cleaner on dashboard
+ */
+cleanerClientsRouter.get("/my-cleaner", verifyHomeowner, async (req, res) => {
+  try {
+    // Find active cleaner-client relationship for this user
+    const relationship = await CleanerClient.findOne({
+      where: {
+        clientId: req.user.id,
+        status: "active",
+      },
+      include: [
+        {
+          model: User,
+          as: "cleaner",
+          attributes: ["id", "firstName", "lastName", "email", "phoneNumber", "profilePhoto"],
+        },
+      ],
+    });
+
+    if (!relationship) {
+      return res.json({ cleaner: null });
+    }
+
+    // Get cleaner's average rating
+    const { Review } = models;
+    const reviews = await Review.findAll({
+      where: { cleanerId: relationship.cleanerId },
+    });
+
+    const avgRating = reviews.length > 0
+      ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+      : null;
+
+    res.json({
+      cleaner: {
+        id: relationship.cleaner.id,
+        firstName: EncryptionService.decrypt(relationship.cleaner.firstName),
+        lastName: EncryptionService.decrypt(relationship.cleaner.lastName),
+        profilePhoto: relationship.cleaner.profilePhoto,
+        averageRating: avgRating,
+        totalReviews: reviews.length,
+      },
+      relationship: {
+        id: relationship.id,
+        autoPayEnabled: relationship.autoPayEnabled,
+        autoScheduleEnabled: relationship.autoScheduleEnabled,
+        defaultFrequency: relationship.defaultFrequency,
+        defaultPrice: relationship.defaultPrice,
+        since: relationship.acceptedAt,
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching my cleaner:", err);
+    res.status(500).json({ error: "Failed to fetch cleaner information" });
+  }
+});
+
+/**
+ * GET /pending-client-responses
+ * Get appointments booked by this cleaner that are awaiting client response
+ * Returns pending, expired, and declined bookings
+ * MUST be defined before /:id routes
+ */
+cleanerClientsRouter.get("/pending-client-responses", verifyCleaner, async (req, res) => {
+  try {
+    const cleanerId = req.user.id;
+    const { Op } = require("sequelize");
+    const today = new Date().toISOString().split("T")[0];
+
+    // Get appointments booked by this cleaner that need client response
+    const appointments = await UserAppointments.findAll({
+      where: {
+        bookedByCleanerId: cleanerId,
+        date: { [Op.gte]: today },
+        // Include pending, declined, and expired (but not accepted)
+        [Op.or]: [
+          { clientResponse: null }, // Pending response
+          { clientResponse: "declined" },
+          { clientResponse: "expired" },
+        ],
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "nickName", "address", "city", "numBeds", "numBaths"],
+        },
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+      ],
+      order: [
+        ["expiresAt", "ASC"],
+        ["date", "ASC"],
+      ],
+    });
+
+    // Group by status
+    const pending = [];
+    const declined = [];
+    const expired = [];
+
+    for (const apt of appointments) {
+      const now = new Date();
+      const isExpired = apt.expiresAt && new Date(apt.expiresAt) < now;
+
+      const aptData = {
+        id: apt.id,
+        date: apt.date,
+        price: apt.price,
+        timeWindow: apt.timeToBeCompleted,
+        expiresAt: apt.expiresAt,
+        clientResponse: apt.clientResponse,
+        declineReason: apt.declineReason,
+        clientSuggestedDates: apt.suggestedDates,
+        rebookingAttempts: apt.rebookingAttempts || 0,
+        client: {
+          id: apt.user?.id,
+          name: apt.user ? `${EncryptionService.decrypt(apt.user.firstName)} ${EncryptionService.decrypt(apt.user.lastName)}` : "Unknown",
+          email: apt.user?.email ? EncryptionService.decrypt(apt.user.email) : null,
+        },
+        home: {
+          id: apt.home?.id,
+          nickName: apt.home?.nickName,
+          address: apt.home ? `${EncryptionService.decryptHomeField(apt.home.address)}, ${EncryptionService.decryptHomeField(apt.home.city)}` : "",
+          beds: apt.home?.numBeds,
+          baths: apt.home?.numBaths,
+        },
+      };
+
+      if (apt.clientResponse === "declined") {
+        declined.push(aptData);
+      } else if (isExpired || apt.clientResponse === "expired") {
+        expired.push({ ...aptData, clientResponse: "expired" });
+      } else {
+        pending.push(aptData);
+      }
+    }
+
+    res.json({
+      pending,
+      declined,
+      expired,
+      total: pending.length + declined.length + expired.length,
+    });
+  } catch (err) {
+    console.error("Error fetching pending client responses:", err);
+    res.status(500).json({ error: "Failed to fetch pending client responses" });
+  }
+});
+
+// =====================
+// PARAMETERIZED ID ROUTES
+// These must come AFTER all specific string routes like /invitations, /my-cleaner, /pending-client-responses
+// =====================
 
 /**
  * GET /:id
@@ -597,7 +959,7 @@ cleanerClientsRouter.post("/:id/resend-invite", verifyCleaner, async (req, res) 
 
     // Send invitation reminder email (non-blocking)
     // Decrypt fields in case they're still encrypted after update
-    const cleanerName = `${req.user.firstName} ${req.user.lastName}`;
+    const cleanerName = `${EncryptionService.decrypt(req.user.firstName)} ${EncryptionService.decrypt(req.user.lastName)}`;
     const clientEmail = EncryptionService.decrypt(cleanerClient.invitedEmail) || cleanerClient.invitedEmail;
     const clientName = EncryptionService.decrypt(cleanerClient.invitedName) || cleanerClient.invitedName;
 
@@ -795,261 +1157,290 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
   }
 });
 
-// =====================
-// PUBLIC ENDPOINTS (for invitation acceptance)
-// =====================
+// ==========================================
+// BOOK FOR CLIENT ENDPOINTS (using /:id param)
+// ==========================================
 
 /**
- * GET /invitations/:token
- * Validate an invitation token and return pre-filled data
- * Public endpoint
+ * POST /:id/book-for-client
+ * Business owner books an appointment on behalf of their client
+ * Client will receive notifications and must accept/decline within 48 hours
  */
-cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
+cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res) => {
   try {
-    const { token } = req.params;
-
-    const cleanerClient = await InvitationService.validateInviteToken(token, models);
-
-    if (!cleanerClient) {
-      return res.status(404).json({
-        valid: false,
-        error: "Invalid invitation link",
-      });
-    }
-
-    if (cleanerClient.isAlreadyAccepted) {
-      return res.status(400).json({
-        valid: false,
-        error: "This invitation has already been accepted. Please log in.",
-      });
-    }
-
-    if (cleanerClient.isExpired) {
-      return res.status(400).json({
-        valid: false,
-        error: "This invitation has been declined.",
-      });
-    }
-
-    // Check if invitation was cancelled
-    const isCancelled = cleanerClient.isCancelled || false;
-
-    res.json({
-      valid: true,
-      isCancelled,
-      invitation: {
-        // Don't show cleaner name if invitation was cancelled
-        cleanerName: isCancelled
-          ? null
-          : cleanerClient.cleaner
-            ? `${EncryptionService.decrypt(cleanerClient.cleaner.firstName)} ${EncryptionService.decrypt(cleanerClient.cleaner.lastName)}`
-            : "Your Cleaner",
-        name: cleanerClient.invitedName,
-        email: cleanerClient.invitedEmail,
-        phone: cleanerClient.invitedPhone,
-        address: cleanerClient.invitedAddress,
-        beds: cleanerClient.invitedBeds,
-        baths: cleanerClient.invitedBaths,
-      },
-    });
-  } catch (err) {
-    console.error("Error validating invitation:", err);
-    res.status(500).json({ error: "Failed to validate invitation" });
-  }
-});
-
-/**
- * POST /invitations/:token/accept
- * Accept an invitation and create user account
- * Public endpoint
- */
-cleanerClientsRouter.post("/invitations/:token/accept", async (req, res) => {
-  try {
-    const { token } = req.params;
-    const { password, phone, addressCorrections } = req.body;
+    const { id } = req.params;
+    const { date, price, timeWindow, notes } = req.body;
+    const cleanerId = req.user.id;
 
     // Validate required fields
-    if (!password || password.length < 8) {
-      return res.status(400).json({
-        error: "Password must be at least 8 characters",
-      });
+    if (!date) {
+      return res.status(400).json({ error: "Date is required" });
     }
 
-    const result = await InvitationService.acceptInvitation(
-      token,
-      { password, phone, addressCorrections },
-      models,
-      hashPassword
-    );
-
-    // Generate JWT token for the new user
-    const jwtToken = jwt.sign(
-      { userId: result.user.id },
-      secretKey,
-      { expiresIn: "30d" }
-    );
-
-    // Notify the cleaner that their client accepted (non-blocking)
-    try {
-      const cleaner = await User.findByPk(result.cleanerClient.cleanerId);
-      if (cleaner) {
-        const clientName = `${EncryptionService.decrypt(result.user.firstName)} ${EncryptionService.decrypt(result.user.lastName)}`;
-        const cleanerName = `${cleaner.firstName} ${cleaner.lastName}`;
-        const homeAddress = result.home
-          ? `${EncryptionService.decrypt(result.home.address)}, ${EncryptionService.decrypt(result.home.city)}`
-          : "Address pending";
-
-        // Send email notification
-        await Email.sendInvitationAccepted(
-          cleaner.email,
-          cleanerName,
-          clientName,
-          homeAddress
-        );
-
-        // Send push notification
-        if (cleaner.expoPushToken) {
-          await PushNotification.sendPushInvitationAccepted(
-            cleaner.expoPushToken,
-            cleanerName,
-            clientName
-          );
-        }
-      }
-    } catch (notifyErr) {
-      console.error("Error notifying cleaner (non-fatal):", notifyErr);
-    }
-
-    res.status(201).json({
-      success: true,
-      message: "Account created successfully",
-      user: {
-        id: result.user.id,
-        firstName: EncryptionService.decrypt(result.user.firstName),
-        lastName: EncryptionService.decrypt(result.user.lastName),
-        email: EncryptionService.decrypt(result.user.email),
-        type: result.user.type,
-      },
-      token: jwtToken,
-      home: result.home
-        ? {
-            id: result.home.id,
-            nickName: result.home.nickName,
-            address: EncryptionService.decrypt(result.home.address),
-          }
-        : null,
-    });
-  } catch (err) {
-    console.error("Error accepting invitation:", err);
-    res.status(400).json({ error: err.message });
-  }
-});
-
-/**
- * POST /invitations/:token/decline
- * Decline an invitation
- * Public endpoint
- */
-cleanerClientsRouter.post("/invitations/:token/decline", async (req, res) => {
-  try {
-    const { token } = req.params;
-
-    await InvitationService.declineInvitation(token, models);
-
-    res.json({
-      success: true,
-      message: "Invitation declined",
-    });
-  } catch (err) {
-    console.error("Error declining invitation:", err);
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// =====================
-// CLIENT ENDPOINTS (for homeowners to see their cleaner)
-// =====================
-
-// Middleware to verify homeowner access
-const verifyHomeowner = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  try {
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, secretKey);
-    const user = await User.findByPk(decoded.userId);
-
-    if (!user || user.type !== "homeowner") {
-      return res.status(403).json({ error: "Homeowner access required" });
-    }
-
-    req.user = user;
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: "Invalid token" });
-  }
-};
-
-/**
- * GET /my-cleaner
- * Get the client's preferred cleaner (if they were invited by one)
- * For homeowners to see their assigned cleaner on dashboard
- */
-cleanerClientsRouter.get("/my-cleaner", verifyHomeowner, async (req, res) => {
-  try {
-    // Find active cleaner-client relationship for this user
-    const relationship = await CleanerClient.findOne({
+    // Find the cleaner-client relationship
+    const cleanerClient = await CleanerClient.findOne({
       where: {
-        clientId: req.user.id,
+        id,
+        cleanerId,
         status: "active",
       },
       include: [
         {
           model: User,
-          as: "cleaner",
-          attributes: ["id", "firstName", "lastName", "email", "phoneNumber", "profilePhoto"],
+          as: "client",
+          attributes: ["id", "firstName", "lastName", "email", "expoPushToken", "notifications"],
+        },
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "numBeds", "numBaths", "sheetsProvided", "towelsProvided", "keyPadCode", "keyLocation", "cleanersNeeded", "timeToBeCompleted", "isSetupComplete"],
         },
       ],
     });
 
-    if (!relationship) {
-      return res.json({ cleaner: null });
+    if (!cleanerClient) {
+      return res.status(404).json({ error: "Client relationship not found" });
     }
 
-    // Get cleaner's average rating
-    const { Review } = models;
-    const reviews = await Review.findAll({
-      where: { cleanerId: relationship.cleanerId },
+    if (!cleanerClient.home) {
+      return res.status(400).json({ error: "Client has no associated home" });
+    }
+
+    if (!cleanerClient.home.isSetupComplete) {
+      return res.status(400).json({ error: "Client has not completed home setup" });
+    }
+
+    // Check if there's already a pending booking for this date
+    const existingPending = await UserAppointments.findOne({
+      where: {
+        homeId: cleanerClient.homeId,
+        date,
+        clientResponsePending: true,
+      },
     });
 
-    const avgRating = reviews.length > 0
-      ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
-      : null;
+    if (existingPending) {
+      return res.status(400).json({ error: "A pending booking already exists for this date" });
+    }
 
-    res.json({
-      cleaner: {
-        id: relationship.cleaner.id,
-        firstName: EncryptionService.decrypt(relationship.cleaner.firstName),
-        lastName: EncryptionService.decrypt(relationship.cleaner.lastName),
-        profilePhoto: relationship.cleaner.profilePhoto,
-        averageRating: avgRating,
-        totalReviews: reviews.length,
+    // Check if there's already a confirmed appointment for this date
+    const existingConfirmed = await UserAppointments.findOne({
+      where: {
+        homeId: cleanerClient.homeId,
+        date,
+        clientResponsePending: false,
+        clientResponse: { [models.Sequelize.Op.or]: ["accepted", null] },
       },
-      relationship: {
-        id: relationship.id,
-        autoPayEnabled: relationship.autoPayEnabled,
-        autoScheduleEnabled: relationship.autoScheduleEnabled,
-        defaultFrequency: relationship.defaultFrequency,
-        defaultPrice: relationship.defaultPrice,
-        since: relationship.acceptedAt,
+    });
+
+    if (existingConfirmed) {
+      return res.status(400).json({ error: "An appointment already exists for this date" });
+    }
+
+    // Calculate price if not provided
+    const appointmentPrice = price || cleanerClient.defaultPrice || 150;
+
+    // Calculate expiration (48 hours from now)
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 48);
+
+    // Get cleaner name
+    const cleaner = await User.findByPk(cleanerId);
+    const cleanerName = `${EncryptionService.decrypt(cleaner.firstName)} ${EncryptionService.decrypt(cleaner.lastName)}`;
+
+    // Create the appointment
+    const appointment = await UserAppointments.create({
+      userId: cleanerClient.clientId,
+      homeId: cleanerClient.homeId,
+      date,
+      price: String(appointmentPrice),
+      paid: false,
+      completed: false,
+      hasBeenAssigned: true, // Pre-assigned to the business owner
+      employeesAssigned: [String(cleanerId)],
+      empoyeesNeeded: cleanerClient.home.cleanersNeeded || 1,
+      timeToBeCompleted: timeWindow || cleanerClient.home.timeToBeCompleted || "anytime",
+      bringTowels: cleanerClient.home.towelsProvided ? "no" : "yes",
+      bringSheets: cleanerClient.home.sheetsProvided ? "no" : "yes",
+      keyPadCode: cleanerClient.home.keyPadCode,
+      keyLocation: cleanerClient.home.keyLocation,
+      bookedByCleanerId: cleanerId,
+      clientResponsePending: true,
+      expiresAt,
+      autoPayEnabled: cleanerClient.autoPayEnabled,
+      businessOwnerPrice: appointmentPrice,
+    });
+
+    // Create cleaner-appointment link
+    await UserCleanerAppointments.create({
+      appointmentId: appointment.id,
+      employeeId: cleanerId,
+    });
+
+    // Get io instance for real-time notifications
+    const io = req.app.get("io");
+
+    // Notify client via all channels (push, email, in-app, socket)
+    await NotificationService.notifyPendingBooking({
+      clientId: cleanerClient.clientId,
+      cleanerId,
+      appointmentId: appointment.id,
+      appointmentDate: date,
+      price: appointmentPrice,
+      cleanerName,
+      io,
+    });
+
+    console.log(`[BookForClient] Cleaner ${cleanerId} booked appointment ${appointment.id} for client ${cleanerClient.clientId}`);
+
+    res.status(201).json({
+      message: "Booking created successfully. Waiting for client approval.",
+      appointment: {
+        id: appointment.id,
+        date,
+        price: appointmentPrice,
+        status: "pending_approval",
+        expiresAt,
       },
     });
   } catch (err) {
-    console.error("Error fetching my cleaner:", err);
-    res.status(500).json({ error: "Failed to fetch cleaner information" });
+    console.error("Error booking for client:", err);
+    res.status(500).json({ error: "Failed to create booking" });
+  }
+});
+
+/**
+ * GET /:id/pending-bookings
+ * Get all pending bookings for a specific client relationship
+ */
+cleanerClientsRouter.get("/:id/pending-bookings", verifyCleaner, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanerId = req.user.id;
+
+    const cleanerClient = await CleanerClient.findOne({
+      where: { id, cleanerId },
+    });
+
+    if (!cleanerClient) {
+      return res.status(404).json({ error: "Client relationship not found" });
+    }
+
+    const pendingBookings = await UserAppointments.findAll({
+      where: {
+        homeId: cleanerClient.homeId,
+        bookedByCleanerId: cleanerId,
+        clientResponsePending: true,
+      },
+      order: [["date", "ASC"]],
+    });
+
+    res.json({ pendingBookings });
+  } catch (err) {
+    console.error("Error fetching pending bookings:", err);
+    res.status(500).json({ error: "Failed to fetch pending bookings" });
+  }
+});
+
+/**
+ * GET /:id/platform-price
+ * Calculate platform price for a client's home based on beds/baths
+ */
+cleanerClientsRouter.get("/:id/platform-price", verifyCleaner, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const cleanerId = req.user.id;
+
+    // Get the cleaner-client relationship with home details
+    const cleanerClient = await CleanerClient.findOne({
+      where: { id, cleanerId },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "numBeds", "numBaths"],
+        },
+      ],
+    });
+
+    if (!cleanerClient) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+
+    if (!cleanerClient.home) {
+      return res.status(400).json({ error: "No home associated with this client" });
+    }
+
+    const { numBeds, numBaths } = cleanerClient.home;
+
+    // Calculate base platform price (no linens, anytime window)
+    const platformPrice = await calculatePrice(
+      "no", // sheets
+      "no", // towels
+      numBeds,
+      numBaths,
+      "anytime" // time window
+    );
+
+    res.json({
+      platformPrice,
+      numBeds,
+      numBaths,
+      breakdown: {
+        basePrice: 150,
+        extraBeds: Math.max(0, numBeds - 1),
+        extraBaths: Math.max(0, Math.floor(numBaths) - 1),
+        halfBath: (numBaths % 1) >= 0.5 ? 1 : 0,
+      },
+    });
+  } catch (err) {
+    console.error("Error calculating platform price:", err);
+    res.status(500).json({ error: "Failed to calculate platform price" });
+  }
+});
+
+/**
+ * PATCH /:id/default-price
+ * Update the default price for a client
+ */
+cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { price } = req.body;
+    const cleanerId = req.user.id;
+
+    // Validate price
+    if (price === undefined || price === null) {
+      return res.status(400).json({ error: "Price is required" });
+    }
+
+    const numericPrice = parseFloat(price);
+    if (isNaN(numericPrice) || numericPrice < 0) {
+      return res.status(400).json({ error: "Price must be a positive number" });
+    }
+
+    // Get the cleaner-client relationship
+    const cleanerClient = await CleanerClient.findOne({
+      where: { id, cleanerId },
+    });
+
+    if (!cleanerClient) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+
+    // Update the default price
+    await cleanerClient.update({ defaultPrice: numericPrice });
+
+    res.json({
+      success: true,
+      cleanerClient: {
+        id: cleanerClient.id,
+        defaultPrice: numericPrice,
+      },
+    });
+  } catch (err) {
+    console.error("Error updating default price:", err);
+    res.status(500).json({ error: "Failed to update default price" });
   }
 });
 

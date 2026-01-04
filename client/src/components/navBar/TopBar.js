@@ -15,6 +15,8 @@ import { colors, spacing, radius, shadows } from "../../services/styles/theme";
 import Application from "../../services/fetchRequests/ApplicationClass";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
 import ReferralService from "../../services/fetchRequests/ReferralService";
+import NotificationsService from "../../services/fetchRequests/NotificationsService";
+import { useSocket } from "../../services/SocketContext";
 
 import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
@@ -55,12 +57,14 @@ const TopBar = ({ dispatch, state }) => {
   const [becomeCleanerRedirect, setBecomeCleanerRedirect] = useState(false);
   const [importBusinessRedirect, setImportBusinessRedirect] = useState(false);
   const [referralsEnabled, setReferralsEnabled] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   // Use global state for pending applications and cleaner requests
   const pendingApplications = state.pendingApplications || 0;
   const pendingCleanerRequests = state.pendingCleanerRequests || 0;
 
   const navigate = useNavigate();
+  const { onNotification, onNotificationCountUpdate } = useSocket();
 
   // Fetch pending applications count for owners and HR
   useEffect(() => {
@@ -136,6 +140,47 @@ const TopBar = ({ dispatch, state }) => {
     fetchReferralsStatus();
   }, [state.currentUser.token, state.account]);
 
+  // Fetch unread notifications count for all authenticated users
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      if (state.currentUser.token) {
+        try {
+          const data = await NotificationsService.getUnreadCount(state.currentUser.token);
+          setUnreadNotifications(data.unreadCount || 0);
+        } catch (error) {
+          console.error("Error fetching unread notifications:", error);
+        }
+      }
+    };
+    fetchUnreadCount();
+
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchUnreadCount, 60000);
+    return () => clearInterval(interval);
+  }, [state.currentUser.token]);
+
+  // Listen for real-time notification updates via socket
+  useEffect(() => {
+    // When a new notification arrives, increment count
+    const unsubNotification = onNotification((data) => {
+      if (data.notification) {
+        setUnreadNotifications((prev) => prev + 1);
+      }
+    });
+
+    // When notification count is explicitly updated from server
+    const unsubCountUpdate = onNotificationCountUpdate((data) => {
+      if (typeof data.unreadCount === "number") {
+        setUnreadNotifications(data.unreadCount);
+      }
+    });
+
+    return () => {
+      unsubNotification();
+      unsubCountUpdate();
+    };
+  }, [onNotification, onNotificationCountUpdate]);
+
   useEffect(() => {
     if (signInRedirect) {
       navigate("/sign-in");
@@ -204,6 +249,23 @@ const TopBar = ({ dispatch, state }) => {
                   </View>
                 </Pressable>
               )}
+              {/* Notifications bell for all authenticated users */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.notificationBellButton,
+                  pressed && { opacity: 0.7 },
+                ]}
+                onPress={() => navigate("/notifications")}
+              >
+                <Feather name="bell" size={20} color="white" />
+                {unreadNotifications > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
               <Pressable
                 style={({ pressed }) => [
                   styles.hamburgerButton,
@@ -409,6 +471,13 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: radius.lg,
     backgroundColor: colors.primary[600],
+    position: "relative",
+  },
+  // Notification bell button (always visible for auth users)
+  notificationBellButton: {
+    padding: 8,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[700],
     position: "relative",
   },
   badge: {

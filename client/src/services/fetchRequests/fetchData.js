@@ -310,6 +310,33 @@ class FetchData {
     }
   }
 
+  static async completeHomeSetup(homeId, data, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/user-info/home/${homeId}/complete-setup`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(data),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to complete home setup" };
+      }
+
+      return responseData;
+    } catch (err) {
+      console.error("Error completing home setup:", err);
+      return { error: "Failed to complete home setup" };
+    }
+  }
+
   static async deleteHome(id) {
     try {
       const response = await fetch(baseURL + "/api/v1/user-info/home", {

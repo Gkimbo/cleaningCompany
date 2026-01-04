@@ -21,7 +21,7 @@ import {
 } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
-import MessageService from "../../services/fetchRequests/MessageService";
+import MessageClass from "../../services/fetchRequests/MessageClass";
 import ClientCard from "./ClientCard";
 import InviteClientModal from "./InviteClientModal";
 import BookForClientModal from "./BookForClientModal";
@@ -179,7 +179,7 @@ const MyClientsPage = ({ state }) => {
     }
 
     try {
-      const result = await MessageService.createCleanerClientConversation(
+      const result = await MessageClass.createCleanerClientConversation(
         client.clientId,
         null, // null = current user is the cleaner
         state.currentUser.token
@@ -222,6 +222,32 @@ const MyClientsPage = ({ state }) => {
     setShowRecurringModal(false);
     setSelectedClientForRecurring(null);
     fetchClients();
+  };
+
+  const handlePriceUpdate = async (clientId, newPrice) => {
+    try {
+      const result = await CleanerClientService.updateDefaultPrice(
+        state.currentUser.token,
+        clientId,
+        newPrice
+      );
+
+      if (result.success) {
+        // Update local state
+        setClients((prev) =>
+          prev.map((c) =>
+            c.id === clientId ? { ...c, defaultPrice: newPrice } : c
+          )
+        );
+        return true;
+      } else {
+        Alert.alert("Error", result.error || "Failed to update price");
+        return false;
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to update price");
+      return false;
+    }
   };
 
   const filteredClients = clients.filter((client) => {
@@ -391,6 +417,7 @@ const MyClientsPage = ({ state }) => {
               onBookCleaning={handleBookCleaning}
               onSetupRecurring={handleSetupRecurring}
               onMessage={handleMessageClient}
+              onPriceUpdate={handlePriceUpdate}
             />
           ))
         )}

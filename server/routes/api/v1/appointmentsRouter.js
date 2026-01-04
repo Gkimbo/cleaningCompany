@@ -27,6 +27,8 @@ const { businessConfig, getPricingConfig } = require("../../../config/businessCo
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const { recordPaymentTransaction } = require("./paymentRouter");
 const IncentiveService = require("../../../services/IncentiveService");
+const NotificationService = require("../../../services/NotificationService");
+const { Notification } = require("../../../models");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -673,6 +675,91 @@ appointmentRouter.get("/archived", async (req, res) => {
   }
 });
 
+// ==========================================
+// CLIENT BOOKING RESPONSE ENDPOINTS
+// NOTE: These must be defined BEFORE /:homeId to avoid route conflict
+// ==========================================
+
+/**
+ * GET /pending-approval
+ * Get all appointments pending client approval
+ * For clients to see bookings their business owner made for them
+ */
+appointmentRouter.get("/pending-approval", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+
+    const pendingAppointments = await UserAppointments.findAll({
+      where: {
+        userId,
+        clientResponsePending: true,
+        [Op.or]: [
+          { expiresAt: null },
+          { expiresAt: { [Op.gt]: new Date() } },
+        ],
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "nickName", "address", "city", "state", "numBeds", "numBaths"],
+        },
+        {
+          model: User,
+          as: "bookedByCleaner",
+          attributes: ["id", "firstName", "lastName", "profilePhoto"],
+        },
+      ],
+      order: [["expiresAt", "ASC"]],
+    });
+
+    // Decrypt and serialize response
+    const serializedAppointments = pendingAppointments.map((apt) => {
+      const cleanerName = apt.bookedByCleaner
+        ? `${EncryptionService.decrypt(apt.bookedByCleaner.firstName)} ${EncryptionService.decrypt(apt.bookedByCleaner.lastName)}`
+        : "Your Cleaner";
+
+      return {
+        id: apt.id,
+        date: apt.date,
+        price: apt.price,
+        expiresAt: apt.expiresAt,
+        timeToBeCompleted: apt.timeToBeCompleted,
+        home: apt.home ? {
+          id: apt.home.id,
+          nickName: apt.home.nickName,
+          address: EncryptionService.decrypt(apt.home.address),
+          city: EncryptionService.decrypt(apt.home.city),
+          state: EncryptionService.decrypt(apt.home.state),
+          numBeds: apt.home.numBeds,
+          numBaths: apt.home.numBaths,
+        } : null,
+        bookedBy: {
+          id: apt.bookedByCleaner?.id,
+          name: cleanerName,
+          profilePhoto: apt.bookedByCleaner?.profilePhoto,
+        },
+      };
+    });
+
+    res.json({ appointments: serializedAppointments });
+  } catch (error) {
+    console.error("Error fetching pending approval appointments:", error);
+    res.status(500).json({ error: "Failed to fetch pending appointments" });
+  }
+});
+
+// ==========================================
+// PARAMETERIZED ROUTES - Must come AFTER specific string routes
+// ==========================================
+
 appointmentRouter.get("/:homeId", async (req, res) => {
   const { homeId } = req.params;
   try {
@@ -721,6 +808,13 @@ appointmentRouter.post("/", async (req, res) => {
   if (home.dataValues.outsideServiceArea) {
     return res.status(403).json({
       error: "Booking is not available for homes outside our service area"
+    });
+  }
+
+  // Check if home setup is complete (for homes created via invitation)
+  if (home.dataValues.isSetupComplete === false) {
+    return res.status(403).json({
+      error: "Please complete your home setup before booking. You need to provide access information and linen preferences."
     });
   }
 
@@ -891,7 +985,7 @@ appointmentRouter.post("/", async (req, res) => {
               await PushNotification.sendPushNotification(
                 cleaner.dataValues.expoPushToken,
                 "New Client Appointment",
-                `${client.dataValues.firstName} booked a cleaning for ${formattedDate}. Tap to accept or decline.`,
+                `${EncryptionService.decrypt(client.dataValues.firstName)} booked a cleaning for ${formattedDate}. Tap to accept or decline.`,
                 { type: "client_appointment_request", appointmentId }
               );
             }
@@ -899,9 +993,9 @@ appointmentRouter.post("/", async (req, res) => {
             // Send email notification to cleaner
             if (cleaner && cleaner.dataValues.email) {
               await Email.sendNewClientAppointmentEmail(
-                cleaner.dataValues.email,
-                cleaner.dataValues.firstName,
-                `${client.dataValues.firstName} ${client.dataValues.lastName}`,
+                EncryptionService.decrypt(cleaner.dataValues.email),
+                EncryptionService.decrypt(cleaner.dataValues.firstName),
+                `${EncryptionService.decrypt(client.dataValues.firstName)} ${EncryptionService.decrypt(client.dataValues.lastName)}`,
                 date.date,
                 homeAddress,
                 date.price,
@@ -1045,14 +1139,14 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
                 const latestPayout = Number(latestAppointment.dataValues.price) * cleanerSharePercent;
 
                 await Email.sendLinensConfigurationUpdated(
-                  cleaner.dataValues.email,
+                  EncryptionService.decrypt(cleaner.dataValues.email),
                   cleaner.dataValues.username,
                   homeowner.dataValues.username,
                   latestAppointment.dataValues.date,
                   latestPayout,
                   latestLinensConfig
                 );
-                console.log(`[Linens Update] Email sent to cleaner ${cleaner.dataValues.email} for appointment ${id}`);
+                console.log(`[Linens Update] Email sent to cleaner for appointment ${id}`);
               }
             } catch (emailError) {
               console.error(`[Linens Update] Failed to send email for appointment ${id}:`, emailError);
@@ -1562,10 +1656,10 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
       });
 
       await Email.sendPreferredCleanerBookingNotification(
-        client.dataValues.email,
+        EncryptionService.decrypt(client.dataValues.email),
         client.dataValues.username,
         cleaner.dataValues.username,
-        home?.address || "your property",
+        home?.address ? EncryptionService.decrypt(home.address) : "your property",
         formattedDate
       );
 
@@ -1573,7 +1667,7 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
         await PushNotification.sendPushNotification(
           client.dataValues.expoPushToken,
           "Preferred Cleaner Booked",
-          `${cleaner.dataValues.username} (your preferred cleaner) has booked the ${formattedDate} cleaning at ${home?.address || "your property"}.`
+          `${cleaner.dataValues.username} (your preferred cleaner) has booked the ${formattedDate} cleaning at ${home?.address ? EncryptionService.decrypt(home.address) : "your property"}.`
         );
       }
 
@@ -1614,7 +1708,7 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     const averageRating = getAverageRating();
 
     await Email.sendEmployeeRequest(
-      client.dataValues.email,
+      EncryptionService.decrypt(client.dataValues.email),
       client.dataValues.username,
       cleaner.dataValues.username,
       averageRating,
@@ -1889,7 +1983,7 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
           towelConfigurations: appointment.dataValues.towelConfigurations,
         };
         await Email.sendRequestApproved(
-          cleaner.dataValues.email,
+          EncryptionService.decrypt(cleaner.dataValues.email),
           cleaner.dataValues.username,
           homeowner.dataValues.username,
           address,
@@ -1977,7 +2071,7 @@ appointmentRouter.patch("/deny-request", async (req, res) => {
 
     // Send denial notification to the cleaner (not the homeowner)
     await Email.sendRequestDenied(
-      cleaner.dataValues.email,
+      EncryptionService.decrypt(cleaner.dataValues.email),
       cleaner.dataValues.username,
       appointment.dataValues.date
     );
@@ -2234,7 +2328,7 @@ appointmentRouter.patch("/remove-request", async (req, res) => {
     await request.destroy();
 
     await Email.removeRequestEmail(
-      client.dataValues.email,
+      EncryptionService.decrypt(client.dataValues.email),
       client.dataValues.username,
       appointment.dataValues.date
     );
@@ -2676,8 +2770,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
 
             try {
               await Email.sendHomeownerCancelledNotification(
-                cleaner.email,
-                cleaner.firstName || cleaner.username,
+                EncryptionService.decrypt(cleaner.email),
+                cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : cleaner.username,
                 appointment.date,
                 homeAddress,
                 showPayment,
@@ -2907,13 +3001,13 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
             // Send email notification
             if (futureHome) {
               const futureAddress = {
-                street: futureHome.address,
-                city: futureHome.city,
-                state: futureHome.state,
-                zipcode: futureHome.zipcode,
+                street: EncryptionService.decrypt(futureHome.address),
+                city: EncryptionService.decrypt(futureHome.city),
+                state: EncryptionService.decrypt(futureHome.state),
+                zipcode: EncryptionService.decrypt(futureHome.zipcode),
               };
               await Email.sendEmailCancellation(
-                futureHomeowner.email,
+                EncryptionService.decrypt(futureHomeowner.email),
                 futureAddress,
                 futureHomeowner.username,
                 futureAppointment.date
@@ -3000,7 +3094,7 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
           zipcode: EncryptionService.decrypt(home.zipcode),
         };
         await Email.sendEmailCancellation(
-          homeowner.email,
+          EncryptionService.decrypt(homeowner.email),
           homeAddress,
           homeowner.username,
           appointment.date
@@ -3093,6 +3187,288 @@ appointmentRouter.patch("/:id", async (req, res) => {
     }
 
     return res.status(401).json({ error: "Invalid token" });
+  }
+});
+
+/**
+ * POST /:id/respond
+ * Client accepts or declines a pending booking
+ * Body: { action: 'accept' | 'decline', declineReason?: string, suggestedDates?: string[] }
+ */
+appointmentRouter.post("/:id/respond", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const userId = decoded.userId;
+    const { id } = req.params;
+    const { action, declineReason, suggestedDates } = req.body;
+
+    if (!action || !["accept", "decline"].includes(action)) {
+      return res.status(400).json({ error: "Invalid action. Must be 'accept' or 'decline'" });
+    }
+
+    // Find the appointment
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id,
+        userId,
+        clientResponsePending: true,
+      },
+      include: [
+        {
+          model: User,
+          as: "bookedByCleaner",
+          attributes: ["id", "firstName", "lastName", "email", "expoPushToken", "notifications"],
+        },
+        {
+          model: UserHomes,
+          as: "home",
+        },
+      ],
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Pending appointment not found" });
+    }
+
+    // Check if expired
+    if (appointment.expiresAt && new Date(appointment.expiresAt) < new Date()) {
+      return res.status(400).json({ error: "This booking request has expired" });
+    }
+
+    const client = await User.findByPk(userId);
+    const clientName = `${EncryptionService.decrypt(client.firstName)} ${EncryptionService.decrypt(client.lastName)}`;
+    const cleanerName = appointment.bookedByCleaner
+      ? `${EncryptionService.decrypt(appointment.bookedByCleaner.firstName)} ${EncryptionService.decrypt(appointment.bookedByCleaner.lastName)}`
+      : "Your Cleaner";
+
+    const io = req.app.get("io");
+
+    if (action === "accept") {
+      // Accept the booking
+      await appointment.update({
+        clientResponsePending: false,
+        clientResponse: "accepted",
+        clientRespondedAt: new Date(),
+      });
+
+      // Notify business owner
+      await NotificationService.notifyBookingAccepted({
+        cleanerId: appointment.bookedByCleanerId,
+        clientId: userId,
+        appointmentId: appointment.id,
+        appointmentDate: appointment.date,
+        clientName,
+        io,
+      });
+
+      // Mark related notification as actioned
+      const relatedNotification = await Notification.findOne({
+        where: {
+          userId,
+          relatedAppointmentId: appointment.id,
+          type: "pending_booking",
+        },
+      });
+      if (relatedNotification) {
+        await NotificationService.markAsActioned(relatedNotification.id);
+      }
+
+      console.log(`[BookingResponse] Client ${userId} accepted appointment ${id}`);
+
+      res.json({
+        message: "Booking accepted successfully",
+        appointment: {
+          id: appointment.id,
+          date: appointment.date,
+          price: appointment.price,
+          status: "confirmed",
+        },
+      });
+    } else {
+      // Decline the booking
+      await appointment.update({
+        clientResponsePending: false,
+        clientResponse: "declined",
+        clientRespondedAt: new Date(),
+        declineReason: declineReason || null,
+        suggestedDates: suggestedDates || null,
+      });
+
+      // Notify business owner
+      await NotificationService.notifyBookingDeclined({
+        cleanerId: appointment.bookedByCleanerId,
+        clientId: userId,
+        appointmentId: appointment.id,
+        appointmentDate: appointment.date,
+        clientName,
+        declineReason,
+        suggestedDates,
+        io,
+      });
+
+      // Mark related notification as actioned
+      const relatedNotification = await Notification.findOne({
+        where: {
+          userId,
+          relatedAppointmentId: appointment.id,
+          type: "pending_booking",
+        },
+      });
+      if (relatedNotification) {
+        await NotificationService.markAsActioned(relatedNotification.id);
+      }
+
+      console.log(`[BookingResponse] Client ${userId} declined appointment ${id}`);
+
+      res.json({
+        message: "Booking declined",
+        appointment: {
+          id: appointment.id,
+          date: appointment.date,
+          status: "declined",
+        },
+      });
+    }
+  } catch (error) {
+    console.error("Error responding to booking:", error);
+    res.status(500).json({ error: "Failed to respond to booking" });
+  }
+});
+
+/**
+ * POST /:id/rebook
+ * Business owner creates a new booking after a previous one was declined
+ * Body: { date, price?, timeWindow? }
+ */
+appointmentRouter.post("/:id/rebook", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const cleanerId = decoded.userId;
+    const { id } = req.params;
+    const { date, price, timeWindow } = req.body;
+
+    if (!date) {
+      return res.status(400).json({ error: "Date is required" });
+    }
+
+    // Find the original declined appointment
+    const originalAppointment = await UserAppointments.findOne({
+      where: {
+        id,
+        bookedByCleanerId: cleanerId,
+        clientResponse: "declined",
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+        },
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "firstName", "lastName"],
+        },
+      ],
+    });
+
+    if (!originalAppointment) {
+      return res.status(404).json({ error: "Original declined appointment not found" });
+    }
+
+    // Check rebooking limit
+    if (originalAppointment.rebookingAttempts >= 3) {
+      return res.status(400).json({ error: "Maximum rebooking attempts reached" });
+    }
+
+    // Calculate price
+    const appointmentPrice = price || originalAppointment.price;
+
+    // Calculate expiration
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 48);
+
+    // Get cleaner name
+    const cleaner = await User.findByPk(cleanerId);
+    const cleanerName = `${EncryptionService.decrypt(cleaner.firstName)} ${EncryptionService.decrypt(cleaner.lastName)}`;
+
+    // Create new appointment
+    const newAppointment = await UserAppointments.create({
+      userId: originalAppointment.userId,
+      homeId: originalAppointment.homeId,
+      date,
+      price: String(appointmentPrice),
+      paid: false,
+      completed: false,
+      hasBeenAssigned: true,
+      employeesAssigned: [String(cleanerId)],
+      empoyeesNeeded: originalAppointment.empoyeesNeeded,
+      timeToBeCompleted: timeWindow || originalAppointment.timeToBeCompleted,
+      bringTowels: originalAppointment.bringTowels,
+      bringSheets: originalAppointment.bringSheets,
+      keyPadCode: originalAppointment.keyPadCode,
+      keyLocation: originalAppointment.keyLocation,
+      bookedByCleanerId: cleanerId,
+      clientResponsePending: true,
+      expiresAt,
+      autoPayEnabled: originalAppointment.autoPayEnabled,
+      businessOwnerPrice: appointmentPrice,
+      originalBookingId: originalAppointment.id,
+      rebookingAttempts: originalAppointment.rebookingAttempts + 1,
+    });
+
+    // Update original appointment's rebooking count
+    await originalAppointment.update({
+      rebookingAttempts: originalAppointment.rebookingAttempts + 1,
+    });
+
+    // Create cleaner-appointment link
+    await UserCleanerAppointments.create({
+      appointmentId: newAppointment.id,
+      employeeId: cleanerId,
+    });
+
+    const io = req.app.get("io");
+
+    // Notify client
+    await NotificationService.notifyRebooking({
+      clientId: originalAppointment.userId,
+      cleanerId,
+      appointmentId: newAppointment.id,
+      appointmentDate: date,
+      price: appointmentPrice,
+      cleanerName,
+      rebookingAttempt: newAppointment.rebookingAttempts,
+      io,
+    });
+
+    console.log(`[Rebook] Cleaner ${cleanerId} rebooked appointment ${newAppointment.id} from original ${id}`);
+
+    res.status(201).json({
+      message: "Rebooking created successfully",
+      appointment: {
+        id: newAppointment.id,
+        date,
+        price: appointmentPrice,
+        status: "pending_approval",
+        expiresAt,
+        rebookingAttempt: newAppointment.rebookingAttempts,
+      },
+    });
+  } catch (error) {
+    console.error("Error rebooking appointment:", error);
+    res.status(500).json({ error: "Failed to create rebooking" });
   }
 });
 

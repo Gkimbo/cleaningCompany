@@ -7,6 +7,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const { User, PricingConfig } = require("../../../models");
 const { getPricingConfig, businessConfig } = require("../../../config/businessConfig");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const pricingRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -290,7 +291,7 @@ pricingRouter.get("/history", verifyOwner, async (req, res) => {
           ? {
               id: config.updatedByUser.id,
               username: config.updatedByUser.username,
-              email: config.updatedByUser.email,
+              email: EncryptionService.decrypt(config.updatedByUser.email),
             }
           : null,
         changeNote: config.changeNote,

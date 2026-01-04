@@ -14,8 +14,11 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import { Feather } from "@expo/vector-icons";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
 import MessageService from "../../services/fetchRequests/MessageClass";
+import PendingClientResponseCard from "./PendingClientResponseCard";
+import RebookingModal from "./RebookingModal";
 import {
   colors,
   spacing,
@@ -177,19 +180,39 @@ const ClientAppointmentsSection = ({ token, onRefresh }) => {
   const [declinedAppointments, setDeclinedAppointments] = useState([]);
   const [hasClients, setHasClients] = useState(false);
 
+  // State for pending client responses (bookings made FOR clients)
+  const [awaitingClientResponse, setAwaitingClientResponse] = useState([]);
+  const [showRebookModal, setShowRebookModal] = useState(false);
+  const [selectedAppointmentForRebook, setSelectedAppointmentForRebook] = useState(null);
+
   const fetchClientAppointments = useCallback(async () => {
     if (!token) return;
 
     try {
       setLoading(true);
-      const result = await CleanerClientService.getClientAppointments(token);
-      setPendingAppointments(result.pending || []);
-      setDeclinedAppointments(result.declined || []);
+      // Fetch both types of appointments in parallel
+      const [clientAppts, pendingResponses] = await Promise.all([
+        CleanerClientService.getClientAppointments(token),
+        CleanerClientService.getPendingClientResponses(token),
+      ]);
+
+      setPendingAppointments(clientAppts.pending || []);
+      setDeclinedAppointments(clientAppts.declined || []);
+
+      // Combine pending, declined, and expired into one list
+      const allAwaitingResponse = [
+        ...(pendingResponses.pending || []),
+        ...(pendingResponses.declined || []),
+        ...(pendingResponses.expired || []),
+      ];
+      setAwaitingClientResponse(allAwaitingResponse);
+
       // If there are any appointments, they have clients
       setHasClients(
-        (result.pending?.length > 0) ||
-        (result.declined?.length > 0) ||
-        (result.upcoming?.length > 0)
+        (clientAppts.pending?.length > 0) ||
+        (clientAppts.declined?.length > 0) ||
+        (clientAppts.upcoming?.length > 0) ||
+        allAwaitingResponse.length > 0
       );
     } catch (error) {
       console.error("Error fetching client appointments:", error);
@@ -274,13 +297,47 @@ const ClientAppointmentsSection = ({ token, onRefresh }) => {
     }
   };
 
+  const handleRebook = (appointment) => {
+    setSelectedAppointmentForRebook(appointment);
+    setShowRebookModal(true);
+  };
+
+  const handleRebookSuccess = () => {
+    setShowRebookModal(false);
+    setSelectedAppointmentForRebook(null);
+    fetchClientAppointments();
+    if (onRefresh) onRefresh();
+  };
+
+  const handleCancelBooking = async (appointment) => {
+    Alert.alert(
+      "Cancel Booking Request",
+      `Are you sure you want to cancel this booking request for ${appointment.client?.name || "this client"}?`,
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            // TODO: Implement cancel endpoint if needed
+            // For now, just remove from local state
+            setAwaitingClientResponse((prev) =>
+              prev.filter((a) => a.id !== appointment.id)
+            );
+            if (onRefresh) onRefresh();
+          },
+        },
+      ]
+    );
+  };
+
   // Don't show section if user has no clients
-  if (!loading && !hasClients && pendingAppointments.length === 0 && declinedAppointments.length === 0) {
+  if (!loading && !hasClients && pendingAppointments.length === 0 && declinedAppointments.length === 0 && awaitingClientResponse.length === 0) {
     return null;
   }
 
-  // Don't show section if no pending or declined appointments
-  if (!loading && pendingAppointments.length === 0 && declinedAppointments.length === 0) {
+  // Don't show section if no appointments at all
+  if (!loading && pendingAppointments.length === 0 && declinedAppointments.length === 0 && awaitingClientResponse.length === 0) {
     return null;
   }
 
@@ -341,6 +398,41 @@ const ClientAppointmentsSection = ({ token, onRefresh }) => {
           ))}
         </View>
       )}
+
+      {/* Bookings sent to clients awaiting their response */}
+      {awaitingClientResponse.length > 0 && (
+        <View style={styles.awaitingSection}>
+          <View style={styles.awaitingSectionHeader}>
+            <Feather name="send" size={14} color={colors.primary[600]} />
+            <Text style={styles.subsectionTitle}>Sent to Clients</Text>
+          </View>
+          <Text style={styles.subsectionDescription}>
+            Booking requests you've sent that are waiting for client approval
+          </Text>
+          {awaitingClientResponse.map((appointment) => (
+            <PendingClientResponseCard
+              key={appointment.id}
+              appointment={appointment}
+              onMessage={handleMessage}
+              onRebook={handleRebook}
+              onCancel={handleCancelBooking}
+              loading={actionLoading === appointment.id}
+            />
+          ))}
+        </View>
+      )}
+
+      {/* Rebooking Modal */}
+      <RebookingModal
+        visible={showRebookModal}
+        appointment={selectedAppointmentForRebook}
+        onClose={() => {
+          setShowRebookModal(false);
+          setSelectedAppointmentForRebook(null);
+        }}
+        onSuccess={handleRebookSuccess}
+        token={token}
+      />
     </View>
   );
 };
@@ -387,6 +479,23 @@ const styles = StyleSheet.create({
   },
   declinedSection: {
     marginTop: spacing.sm,
+  },
+  awaitingSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+  },
+  awaitingSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  subsectionDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginBottom: spacing.md,
   },
   subsectionTitle: {
     fontSize: typography.fontSize.sm,

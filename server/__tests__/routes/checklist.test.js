@@ -2,6 +2,16 @@ const express = require("express");
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => {
+    if (!value) return value;
+    if (typeof value !== "string") return value;
+    return value.replace("encrypted_", "");
+  }),
+  encrypt: jest.fn((value) => `encrypted_${value}`),
+}));
+
 // Mock models
 jest.mock("../../models", () => ({
   ChecklistSection: {

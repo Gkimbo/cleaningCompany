@@ -294,7 +294,7 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       // Send email notification only for the first message in the conversation
       if (isFirstMessage && p.user.notifications && p.user.notifications.includes("email")) {
         await Email.sendNewMessageNotification(
-          p.user.email,
+          EncryptionService.decrypt(p.user.email),
           p.user.username,
           sender.username,
           content
@@ -509,7 +509,7 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
       // Send email notification if user has it enabled
       if (targetUser.notifications && targetUser.notifications.includes("email")) {
         await Email.sendBroadcastNotification(
-          targetUser.email,
+          EncryptionService.decrypt(targetUser.email),
           targetUser.username,
           title || "Company Announcement",
           content
@@ -1629,7 +1629,7 @@ messageRouter.post("/:messageId/react", authenticateToken, async (req, res) => {
       });
 
       const reactorName = reactor.firstName && reactor.lastName
-        ? `${reactor.firstName} ${reactor.lastName}`
+        ? `${EncryptionService.decrypt(reactor.firstName)} ${EncryptionService.decrypt(reactor.lastName)}`
         : reactor.username;
 
       // Send push notification if sender has phone notifications enabled
@@ -1874,7 +1874,7 @@ messageRouter.patch("/conversation/:conversationId/title", authenticateToken, as
 
     // Create system message recording the change
     const userName = user.firstName && user.lastName
-      ? `${user.firstName} ${user.lastName}`
+      ? `${EncryptionService.decrypt(user.firstName)} ${EncryptionService.decrypt(user.lastName)}`
       : user.username;
 
     const systemMessage = await Message.create({
@@ -2095,8 +2095,8 @@ messageRouter.post(
       for (const staff of staffToNotify) {
         try {
           await Email.sendSuspiciousActivityReport({
-            to: staff.email,
-            staffName: staff.firstName || "Team",
+            to: EncryptionService.decrypt(staff.email),
+            staffName: staff.firstName ? EncryptionService.decrypt(staff.firstName) : "Team",
             reporterName,
             reportedUserName,
             reportedUserType: message.sender?.type || "unknown",

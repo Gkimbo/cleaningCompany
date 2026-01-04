@@ -170,7 +170,7 @@ preferredCleanerRouter.get("/pending-responses", verifyHomeowner, async (req, re
           cleaner: cleaner
             ? {
                 id: cleaner.id,
-                name: `${cleaner.firstName} ${cleaner.lastName}`,
+                name: `${EncryptionService.decrypt(cleaner.firstName)} ${EncryptionService.decrypt(cleaner.lastName)}`,
               }
             : null,
         };

@@ -7,6 +7,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const { User, IncentiveConfig } = require("../../../models");
 const IncentiveService = require("../../../services/IncentiveService");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const incentivesRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -247,7 +248,7 @@ incentivesRouter.get("/history", verifyOwner, async (req, res) => {
           ? {
               id: config.updatedByUser.id,
               username: config.updatedByUser.username,
-              email: config.updatedByUser.email,
+              email: EncryptionService.decrypt(config.updatedByUser.email),
             }
           : null,
         changeNote: config.changeNote,

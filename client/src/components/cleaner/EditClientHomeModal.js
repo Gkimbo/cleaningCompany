@@ -26,6 +26,8 @@ const TIME_WINDOWS = [
 ];
 
 const EditClientHomeModal = ({ visible, onClose, onSave, home, cleanerClient }) => {
+  const isPending = cleanerClient?.status === "pending_invite";
+
   const [formData, setFormData] = useState({
     keyPadCode: "",
     keyLocation: "",
@@ -40,7 +42,18 @@ const EditClientHomeModal = ({ visible, onClose, onSave, home, cleanerClient }) 
 
   // Initialize form data when modal opens
   useEffect(() => {
-    if (home) {
+    if (isPending && cleanerClient) {
+      // For pending invitations, only notes are editable
+      setFormData({
+        keyPadCode: "",
+        keyLocation: "",
+        sheetsProvided: false,
+        towelsProvided: false,
+        timeToBeCompleted: "anytime",
+        cleanersNeeded: 1,
+        specialNotes: cleanerClient.invitedNotes || "",
+      });
+    } else if (home) {
       setFormData({
         keyPadCode: home.keyPadCode || "",
         keyLocation: home.keyLocation || "",
@@ -51,7 +64,7 @@ const EditClientHomeModal = ({ visible, onClose, onSave, home, cleanerClient }) 
         specialNotes: home.specialNotes || "",
       });
     }
-  }, [home, visible]);
+  }, [home, cleanerClient, isPending, visible]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -77,7 +90,9 @@ const EditClientHomeModal = ({ visible, onClose, onSave, home, cleanerClient }) 
         <View style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Edit Home Details</Text>
+            <Text style={styles.headerTitle}>
+              {isPending ? "Edit Invitation Notes" : "Edit Home Details"}
+            </Text>
             <Pressable
               style={styles.closeButton}
               onPress={onClose}
@@ -91,144 +106,150 @@ const EditClientHomeModal = ({ visible, onClose, onSave, home, cleanerClient }) 
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* Access Info Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Feather name="lock" size={18} color={colors.primary[600]} />
-                <Text style={styles.sectionTitle}>Access Information</Text>
-              </View>
-
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Keypad Code</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.keyPadCode}
-                  onChangeText={(value) => updateField("keyPadCode", value)}
-                  placeholder="Enter keypad code"
-                  placeholderTextColor={colors.neutral[400]}
-                />
-              </View>
-
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Key Location</Text>
-                <TextInput
-                  style={styles.input}
-                  value={formData.keyLocation}
-                  onChangeText={(value) => updateField("keyLocation", value)}
-                  placeholder="e.g., Under the mat, in lockbox"
-                  placeholderTextColor={colors.neutral[400]}
-                />
-              </View>
-            </View>
-
-            {/* Linens Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Feather name="box" size={18} color={colors.primary[600]} />
-                <Text style={styles.sectionTitle}>Linens</Text>
-              </View>
-
-              <View style={styles.toggleRow}>
-                <View style={styles.toggleInfo}>
-                  <Text style={styles.toggleLabel}>Sheets Provided</Text>
-                  <Text style={styles.toggleDescription}>
-                    Client provides their own sheets
-                  </Text>
+            {/* Access Info Section - only for active clients */}
+            {!isPending && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Feather name="lock" size={18} color={colors.primary[600]} />
+                  <Text style={styles.sectionTitle}>Access Information</Text>
                 </View>
-                <Switch
-                  value={formData.sheetsProvided}
-                  onValueChange={(value) => updateField("sheetsProvided", value)}
-                  trackColor={{ false: colors.neutral[300], true: colors.primary[300] }}
-                  thumbColor={formData.sheetsProvided ? colors.primary[600] : colors.neutral[100]}
-                />
-              </View>
 
-              <View style={styles.toggleRow}>
-                <View style={styles.toggleInfo}>
-                  <Text style={styles.toggleLabel}>Towels Provided</Text>
-                  <Text style={styles.toggleDescription}>
-                    Client provides their own towels
-                  </Text>
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Keypad Code</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.keyPadCode}
+                    onChangeText={(value) => updateField("keyPadCode", value)}
+                    placeholder="Enter keypad code"
+                    placeholderTextColor={colors.neutral[400]}
+                  />
                 </View>
-                <Switch
-                  value={formData.towelsProvided}
-                  onValueChange={(value) => updateField("towelsProvided", value)}
-                  trackColor={{ false: colors.neutral[300], true: colors.primary[300] }}
-                  thumbColor={formData.towelsProvided ? colors.primary[600] : colors.neutral[100]}
-                />
-              </View>
-            </View>
 
-            {/* Service Preferences Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Feather name="settings" size={18} color={colors.primary[600]} />
-                <Text style={styles.sectionTitle}>Service Preferences</Text>
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Key Location</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={formData.keyLocation}
+                    onChangeText={(value) => updateField("keyLocation", value)}
+                    placeholder="e.g., Under the mat, in lockbox"
+                    placeholderTextColor={colors.neutral[400]}
+                  />
+                </View>
               </View>
+            )}
 
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Preferred Time</Text>
-                <View style={styles.optionsRow}>
-                  {TIME_WINDOWS.map((option) => (
-                    <Pressable
-                      key={option.value}
-                      style={[
-                        styles.optionButton,
-                        formData.timeToBeCompleted === option.value &&
-                          styles.optionButtonActive,
-                      ]}
-                      onPress={() => updateField("timeToBeCompleted", option.value)}
-                    >
-                      <Text
+            {/* Linens Section - only for active clients */}
+            {!isPending && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Feather name="box" size={18} color={colors.primary[600]} />
+                  <Text style={styles.sectionTitle}>Linens</Text>
+                </View>
+
+                <View style={styles.toggleRow}>
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>Sheets Provided</Text>
+                    <Text style={styles.toggleDescription}>
+                      Client provides their own sheets
+                    </Text>
+                  </View>
+                  <Switch
+                    value={formData.sheetsProvided}
+                    onValueChange={(value) => updateField("sheetsProvided", value)}
+                    trackColor={{ false: colors.neutral[300], true: colors.primary[300] }}
+                    thumbColor={formData.sheetsProvided ? colors.primary[600] : colors.neutral[100]}
+                  />
+                </View>
+
+                <View style={styles.toggleRow}>
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>Towels Provided</Text>
+                    <Text style={styles.toggleDescription}>
+                      Client provides their own towels
+                    </Text>
+                  </View>
+                  <Switch
+                    value={formData.towelsProvided}
+                    onValueChange={(value) => updateField("towelsProvided", value)}
+                    trackColor={{ false: colors.neutral[300], true: colors.primary[300] }}
+                    thumbColor={formData.towelsProvided ? colors.primary[600] : colors.neutral[100]}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Service Preferences Section - only for active clients */}
+            {!isPending && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Feather name="settings" size={18} color={colors.primary[600]} />
+                  <Text style={styles.sectionTitle}>Service Preferences</Text>
+                </View>
+
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Preferred Time</Text>
+                  <View style={styles.optionsRow}>
+                    {TIME_WINDOWS.map((option) => (
+                      <Pressable
+                        key={option.value}
                         style={[
-                          styles.optionButtonText,
+                          styles.optionButton,
                           formData.timeToBeCompleted === option.value &&
-                            styles.optionButtonTextActive,
+                            styles.optionButtonActive,
                         ]}
+                        onPress={() => updateField("timeToBeCompleted", option.value)}
                       >
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text
+                          style={[
+                            styles.optionButtonText,
+                            formData.timeToBeCompleted === option.value &&
+                              styles.optionButtonTextActive,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 </View>
-              </View>
 
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Cleaners Needed</Text>
-                <View style={styles.counterRow}>
-                  <Pressable
-                    style={[
-                      styles.counterButton,
-                      formData.cleanersNeeded <= 1 && styles.counterButtonDisabled,
-                    ]}
-                    onPress={() =>
-                      formData.cleanersNeeded > 1 &&
-                      updateField("cleanersNeeded", formData.cleanersNeeded - 1)
-                    }
-                    disabled={formData.cleanersNeeded <= 1}
-                  >
-                    <Feather
-                      name="minus"
-                      size={18}
-                      color={
-                        formData.cleanersNeeded <= 1
-                          ? colors.neutral[300]
-                          : colors.primary[600]
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Cleaners Needed</Text>
+                  <View style={styles.counterRow}>
+                    <Pressable
+                      style={[
+                        styles.counterButton,
+                        formData.cleanersNeeded <= 1 && styles.counterButtonDisabled,
+                      ]}
+                      onPress={() =>
+                        formData.cleanersNeeded > 1 &&
+                        updateField("cleanersNeeded", formData.cleanersNeeded - 1)
                       }
-                    />
-                  </Pressable>
-                  <Text style={styles.counterValue}>{formData.cleanersNeeded}</Text>
-                  <Pressable
-                    style={styles.counterButton}
-                    onPress={() =>
-                      updateField("cleanersNeeded", formData.cleanersNeeded + 1)
-                    }
-                  >
-                    <Feather name="plus" size={18} color={colors.primary[600]} />
-                  </Pressable>
+                      disabled={formData.cleanersNeeded <= 1}
+                    >
+                      <Feather
+                        name="minus"
+                        size={18}
+                        color={
+                          formData.cleanersNeeded <= 1
+                            ? colors.neutral[300]
+                            : colors.primary[600]
+                        }
+                      />
+                    </Pressable>
+                    <Text style={styles.counterValue}>{formData.cleanersNeeded}</Text>
+                    <Pressable
+                      style={styles.counterButton}
+                      onPress={() =>
+                        updateField("cleanersNeeded", formData.cleanersNeeded + 1)
+                      }
+                    >
+                      <Feather name="plus" size={18} color={colors.primary[600]} />
+                    </Pressable>
+                  </View>
                 </View>
               </View>
-            </View>
+            )}
 
             {/* Notes Section */}
             <View style={styles.section}>

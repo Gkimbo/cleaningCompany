@@ -71,6 +71,7 @@ import AccountSettings from "../src/components/account/AccountSettings";
 import ClientRequestsList from "../src/components/client/ClientRequestsList";
 import ArchivedCleanings from "../src/components/client/ArchivedCleanings";
 import ClientReviews from "../src/components/client/ClientReviews";
+import CompleteHomeSetupWizard from "../src/components/client/CompleteHomeSetupWizard";
 
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
@@ -101,6 +102,9 @@ import MyReferralsPage from "../src/components/referrals/MyReferralsPage";
 
 // HR components
 import SuspiciousReportsPage from "../src/components/hr/SuspiciousReportsPage";
+
+// Notifications
+import NotificationsScreen from "../src/components/notifications/NotificationsScreen";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
@@ -329,6 +333,10 @@ export default function App() {
                 element={<EditHomeForm state={state} dispatch={dispatch} />}
               />
               <Route
+                path="/complete-home-setup/:id"
+                element={<CompleteHomeSetupWizard state={state} dispatch={dispatch} />}
+              />
+              <Route
                 path="/calendar-sync/:homeId"
                 element={<CalendarSyncManager state={state} dispatch={dispatch} />}
               />
@@ -523,6 +531,11 @@ export default function App() {
               <Route
                 path="/suspicious-reports"
                 element={<SuspiciousReportsPage />}
+              />
+              {/* Notifications */}
+              <Route
+                path="/notifications"
+                element={<NotificationsScreen />}
               />
             </Routes>
             </SafeAreaView>

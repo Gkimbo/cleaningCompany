@@ -155,8 +155,8 @@ billingRouter.get("/pending-reminders", async (req, res) => {
         homeowner: a.homeowner
           ? {
               id: a.homeowner.id,
-              name: `${a.homeowner.firstName} ${a.homeowner.lastName}`,
-              email: a.homeowner.email,
+              name: `${EncryptionService.decrypt(a.homeowner.firstName)} ${EncryptionService.decrypt(a.homeowner.lastName)}`,
+              email: EncryptionService.decrypt(a.homeowner.email),
             }
           : null,
         home: a.home
