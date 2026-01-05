@@ -1,3 +1,18 @@
+const EncryptionService = require("../services/EncryptionService");
+
+// PII fields that need to be encrypted
+const PII_FIELDS = [
+  "legalName",
+  "businessName",
+  "addressLine1",
+  "addressLine2",
+  "city",
+  "state",
+  "zipCode",
+  "tinEncrypted",
+  "certificationSignature"
+];
+
 /**
  * TaxInfo Model
  *
@@ -261,6 +276,45 @@ module.exports = (sequelize, DataTypes) => {
     // IRS threshold is $600 for 1099-NEC
     return total.totalAmountCents >= 60000;
   };
+
+  // Encryption hooks
+  const encryptPIIFields = (record) => {
+    PII_FIELDS.forEach((field) => {
+      if (record[field] !== undefined && record[field] !== null) {
+        const value = String(record[field]);
+        // Only encrypt if not already encrypted (check for colon format)
+        if (!value.includes(":") || value.split(":").length !== 2) {
+          record[field] = EncryptionService.encrypt(value);
+        }
+      }
+    });
+  };
+
+  const decryptPIIFields = (record) => {
+    if (!record) return;
+    PII_FIELDS.forEach((field) => {
+      if (record.dataValues && record.dataValues[field]) {
+        record.dataValues[field] = EncryptionService.decrypt(record.dataValues[field]);
+      }
+    });
+  };
+
+  TaxInfo.beforeCreate((record) => {
+    encryptPIIFields(record);
+  });
+
+  TaxInfo.beforeUpdate((record) => {
+    encryptPIIFields(record);
+  });
+
+  TaxInfo.afterFind((result) => {
+    if (!result) return;
+    if (Array.isArray(result)) {
+      result.forEach((record) => decryptPIIFields(record));
+    } else {
+      decryptPIIFields(result);
+    }
+  });
 
   return TaxInfo;
 };

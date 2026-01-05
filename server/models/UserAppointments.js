@@ -1,5 +1,10 @@
+const EncryptionService = require("../services/EncryptionService");
+
+// PII fields that need to be encrypted
+const PII_FIELDS = ["keyPadCode", "keyLocation", "contact"];
+
 module.exports = (sequelize, DataTypes) => {
-	// Define the UserHomes model
+	// Define the UserAppointments model
 	const UserAppointments = sequelize.define("UserAppointments", {
 		id: {
 			type: DataTypes.INTEGER,
@@ -291,6 +296,45 @@ module.exports = (sequelize, DataTypes) => {
 			as: "employeeJobAssignments",
 		});
 	};
+
+	// Encryption hooks
+	const encryptPIIFields = (record) => {
+		PII_FIELDS.forEach((field) => {
+			if (record[field] !== undefined && record[field] !== null) {
+				const value = String(record[field]);
+				// Only encrypt if not already encrypted (check for colon format)
+				if (!value.includes(":") || value.split(":").length !== 2) {
+					record[field] = EncryptionService.encrypt(value);
+				}
+			}
+		});
+	};
+
+	const decryptPIIFields = (record) => {
+		if (!record) return;
+		PII_FIELDS.forEach((field) => {
+			if (record.dataValues && record.dataValues[field]) {
+				record.dataValues[field] = EncryptionService.decrypt(record.dataValues[field]);
+			}
+		});
+	};
+
+	UserAppointments.beforeCreate((record) => {
+		encryptPIIFields(record);
+	});
+
+	UserAppointments.beforeUpdate((record) => {
+		encryptPIIFields(record);
+	});
+
+	UserAppointments.afterFind((result) => {
+		if (!result) return;
+		if (Array.isArray(result)) {
+			result.forEach((record) => decryptPIIFields(record));
+		} else {
+			decryptPIIFields(result);
+		}
+	});
 
 	return UserAppointments;
 };

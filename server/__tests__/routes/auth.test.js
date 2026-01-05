@@ -7,6 +7,7 @@ const bcrypt = require("bcrypt");
 jest.mock("../../models", () => ({
   User: {
     findOne: jest.fn(),
+    findAll: jest.fn(),
     findByPk: jest.fn(),
     create: jest.fn(),
   },
@@ -79,6 +80,7 @@ describe("Authentication Routes", () => {
         loginCount: 0,
         update: jest.fn().mockResolvedValue(true),
       });
+      User.findAll.mockResolvedValue([]); // No linked accounts
       TermsAndConditions.findOne.mockResolvedValue(null); // No terms to accept
 
       const res = await request(app)
@@ -92,6 +94,7 @@ describe("Authentication Routes", () => {
       expect(res.body).toHaveProperty("user");
       expect(res.body).toHaveProperty("token");
       expect(res.body.requiresTermsAcceptance).toBe(false);
+      expect(res.body.linkedAccounts).toEqual([]);
     });
 
     it("should return 401 for invalid password (generic error to prevent enumeration)", async () => {

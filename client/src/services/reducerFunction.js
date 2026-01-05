@@ -15,6 +15,7 @@ const reducer = (state, action) => {
         isBusinessOwner: false,
         businessName: null,
         yearsInBusiness: null,
+        linkedAccounts: [],
       };
     case "ERROR":
       return {
@@ -231,6 +232,11 @@ const reducer = (state, action) => {
         isBusinessOwner: action.payload.isBusinessOwner,
         businessName: action.payload.businessName,
         yearsInBusiness: action.payload.yearsInBusiness,
+      };
+    case "SET_LINKED_ACCOUNTS":
+      return {
+        ...state,
+        linkedAccounts: action.payload,
       };
     default:
       throw new Error();

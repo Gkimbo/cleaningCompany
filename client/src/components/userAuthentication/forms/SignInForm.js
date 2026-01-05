@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useContext } from "react";
-import { Text, Pressable, View } from "react-native";
-import { TextInput } from "react-native-paper";
+import { Text, Pressable, View, StyleSheet, ActivityIndicator } from "react-native";
+import { TextInput, RadioButton } from "react-native-paper";
 import { useNavigate, useSearchParams } from "react-router-native";
 
 import FetchData from "../../../services/fetchRequests/fetchData";
 import formStyles from "../../../services/styles/FormStyle";
 import { AuthContext } from "../../../services/AuthContext";
+import { colors, spacing, radius, typography } from "../../../services/styles/theme";
 
 const SignInForm = ({ state, dispatch }) => {
 	const [userName, setUserName] = useState("");
@@ -14,10 +15,43 @@ const SignInForm = ({ state, dispatch }) => {
 	const [redirectToTerms, setRedirectToTerms] = useState(false);
 	const [errors, setErrors] = useState([]);
 	const [showPassword, setShowPassword] = useState(false);
+	const [isLoading, setIsLoading] = useState(false);
+
+	// Multi-account state
+	const [accountOptions, setAccountOptions] = useState([]);
+	const [selectedAccountType, setSelectedAccountType] = useState(null);
+	const [checkingAccounts, setCheckingAccounts] = useState(false);
+
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const redirectTo = searchParams.get("redirect");
 	const { login } = useContext(AuthContext);
+
+	// Debounced check for multiple accounts when email is entered
+	useEffect(() => {
+		// Only check if it looks like an email
+		if (!userName.includes("@")) {
+			setAccountOptions([]);
+			setSelectedAccountType(null);
+			return;
+		}
+
+		const timer = setTimeout(async () => {
+			setCheckingAccounts(true);
+			const result = await FetchData.checkAccountsByEmail(userName);
+			if (result.multipleAccounts && result.accountOptions) {
+				setAccountOptions(result.accountOptions);
+				// Pre-select the first option
+				setSelectedAccountType(result.accountOptions[0].accountType);
+			} else {
+				setAccountOptions([]);
+				setSelectedAccountType(null);
+			}
+			setCheckingAccounts(false);
+		}, 500);
+
+		return () => clearTimeout(timer);
+	}, [userName]);
 
 	const validateForm = () => {
 		const validationErrors = [];
@@ -34,17 +68,32 @@ const SignInForm = ({ state, dispatch }) => {
 	const onSubmit = async () => {
 		const isValid = validateForm();
 		if (isValid) {
+			setIsLoading(true);
 			const loginData = {
 				userName: userName,
 				password: password,
+				accountType: selectedAccountType,
 			};
 
 			const response = await FetchData.login(loginData);
+			setIsLoading(false);
+
 			if (response === "No account found with that email or username.") {
 				setErrors([response]);
 			}
 			if (response === "Invalid password") {
 				setErrors([response]);
+			}
+			if (typeof response === "string" && response.includes("locked")) {
+				setErrors([response]);
+			}
+			if (response.requiresAccountSelection) {
+				// Backend returned 300 - update account options
+				setAccountOptions(response.accountOptions);
+				if (!selectedAccountType && response.accountOptions.length > 0) {
+					setSelectedAccountType(response.accountOptions[0].accountType);
+				}
+				setErrors(["Please select which account you want to sign into"]);
 			}
 			if (response.user) {
 				dispatch({ type: "CURRENT_USER", payload: response.token });
@@ -54,6 +103,9 @@ const SignInForm = ({ state, dispatch }) => {
 				}
 				if (response.user.type === "owner") {
 					dispatch({ type: "USER_ACCOUNT", payload: "owner" });
+				}
+				if (response.user.type === "employee") {
+					dispatch({ type: "USER_ACCOUNT", payload: "employee" });
 				}
 				if (response.user.type === "cleaner") {
 					dispatch({ type: "USER_ACCOUNT", payload: response.user.type });
@@ -71,6 +123,10 @@ const SignInForm = ({ state, dispatch }) => {
 							yearsInBusiness: response.user.yearsInBusiness,
 						},
 					});
+				}
+				// Store linked accounts for account switching
+				if (response.linkedAccounts && response.linkedAccounts.length > 0) {
+					dispatch({ type: "SET_LINKED_ACCOUNTS", payload: response.linkedAccounts });
 				}
 				login(response.token);
 
@@ -101,6 +157,25 @@ const SignInForm = ({ state, dispatch }) => {
 		}
 	}, [redirectToTerms]);
 
+	const getAccountIcon = (accountType) => {
+		switch (accountType) {
+			case "employee":
+				return "🏢";
+			case "marketplace_cleaner":
+				return "🧹";
+			case "cleaner":
+				return "🧹";
+			case "owner":
+				return "👔";
+			case "hr":
+				return "📋";
+			case "homeowner":
+				return "🏠";
+			default:
+				return "👤";
+		}
+	};
+
 	return (
 		<View>
 			{errors.length > 0 && (
@@ -119,7 +194,50 @@ const SignInForm = ({ state, dispatch }) => {
 				onChangeText={setUserName}
 				placeholder="Enter your email or username"
 				style={formStyles.input}
+				autoCapitalize="none"
+				autoCorrect={false}
 			/>
+
+			{/* Account Type Selection */}
+			{checkingAccounts && (
+				<View style={styles.checkingContainer}>
+					<ActivityIndicator size="small" color={colors.primary[600]} />
+					<Text style={styles.checkingText}>Checking accounts...</Text>
+				</View>
+			)}
+
+			{accountOptions.length > 0 && !checkingAccounts && (
+				<View style={styles.accountSelector}>
+					<Text style={styles.accountSelectorLabel}>
+						Multiple accounts found. Select one:
+					</Text>
+					<RadioButton.Group
+						onValueChange={(value) => setSelectedAccountType(value)}
+						value={selectedAccountType}
+					>
+						{accountOptions.map((option) => (
+							<Pressable
+								key={option.accountType}
+								style={[
+									styles.accountOption,
+									selectedAccountType === option.accountType && styles.accountOptionSelected,
+								]}
+								onPress={() => setSelectedAccountType(option.accountType)}
+							>
+								<View style={styles.accountOptionContent}>
+									<Text style={styles.accountIcon}>{getAccountIcon(option.accountType)}</Text>
+									<Text style={styles.accountLabel}>{option.displayName}</Text>
+								</View>
+								<RadioButton
+									value={option.accountType}
+									color={colors.primary[600]}
+								/>
+							</Pressable>
+						))}
+					</RadioButton.Group>
+				</View>
+			)}
+
 			<TextInput
 				mode="outlined"
 				label="Password"
@@ -139,8 +257,16 @@ const SignInForm = ({ state, dispatch }) => {
 				}
 				style={formStyles.input}
 			/>
-			<Pressable style={formStyles.button} onPress={onSubmit}>
-				<Text style={formStyles.buttonText}>Sign In</Text>
+			<Pressable
+				style={[formStyles.button, isLoading && formStyles.buttonDisabled]}
+				onPress={onSubmit}
+				disabled={isLoading}
+			>
+				{isLoading ? (
+					<ActivityIndicator size="small" color={colors.neutral[0]} />
+				) : (
+					<Text style={formStyles.buttonText}>Sign In</Text>
+				)}
 			</Pressable>
 
 			<Pressable style={formStyles.linkButton} onPress={() => navigate("/forgot-credentials")}>
@@ -149,5 +275,61 @@ const SignInForm = ({ state, dispatch }) => {
 		</View>
 	);
 };
+
+const styles = StyleSheet.create({
+	checkingContainer: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "center",
+		paddingVertical: spacing.sm,
+		gap: spacing.sm,
+	},
+	checkingText: {
+		color: colors.text.secondary,
+		fontSize: typography.fontSize.sm,
+	},
+	accountSelector: {
+		backgroundColor: colors.primary[50],
+		borderRadius: radius.lg,
+		padding: spacing.md,
+		marginBottom: spacing.md,
+		borderWidth: 1,
+		borderColor: colors.primary[200],
+	},
+	accountSelectorLabel: {
+		fontSize: typography.fontSize.sm,
+		fontWeight: typography.fontWeight.semibold,
+		color: colors.primary[700],
+		marginBottom: spacing.sm,
+	},
+	accountOption: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+		backgroundColor: colors.neutral[0],
+		borderRadius: radius.md,
+		padding: spacing.sm,
+		marginVertical: spacing.xs,
+		borderWidth: 1,
+		borderColor: colors.border.light,
+	},
+	accountOptionSelected: {
+		borderColor: colors.primary[500],
+		backgroundColor: colors.primary[50],
+	},
+	accountOptionContent: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: spacing.sm,
+	},
+	accountIcon: {
+		fontSize: 20,
+	},
+	accountLabel: {
+		fontSize: typography.fontSize.base,
+		fontWeight: typography.fontWeight.medium,
+		color: colors.text.primary,
+	},
+});
 
 export default SignInForm;
