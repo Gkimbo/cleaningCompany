@@ -64,6 +64,7 @@ const {
 
 // Import services
 const PlatformTaxService = require("../../../services/PlatformTaxService");
+const PayoutSerializer = require("../../../serializers/PayoutSerializer");
 
 const stripeConnectRouter = express.Router();
 
@@ -884,22 +885,14 @@ stripeConnectRouter.get("/payouts/:userId", async (req, res) => {
       { totalPaid: 0, pendingAmount: 0, completedCount: 0, pendingCount: 0 }
     );
 
+    // Serialize payouts with preferred cleaner perk fields
+    const serializedPayouts = PayoutSerializer.serializeArrayForCleanerView(payouts).map((p, index) => ({
+      ...p,
+      appointmentDate: payouts[index].appointment?.date,
+    }));
+
     return res.json({
-      payouts: payouts.map((p) => ({
-        id: p.id,
-        appointmentId: p.appointmentId,
-        appointmentDate: p.appointment?.date,
-        grossAmount: p.grossAmount,
-        platformFee: p.platformFee,
-        netAmount: p.netAmount,
-        status: p.status,
-        stripeTransferId: p.stripeTransferId,
-        paymentCapturedAt: p.paymentCapturedAt,
-        transferInitiatedAt: p.transferInitiatedAt,
-        completedAt: p.completedAt,
-        failureReason: p.failureReason,
-        createdAt: p.createdAt,
-      })),
+      payouts: serializedPayouts,
       totals: {
         totalPaidCents: totals.totalPaid,
         totalPaidDollars: (totals.totalPaid / 100).toFixed(2),
@@ -1200,7 +1193,7 @@ stripeConnectRouter.post("/create-payout-record", async (req, res) => {
     if (existingPayout) {
       return res.json({
         success: true,
-        payout: existingPayout,
+        payout: PayoutSerializer.serializeOne(existingPayout),
         message: "Payout record already exists",
       });
     }
@@ -1225,7 +1218,7 @@ stripeConnectRouter.post("/create-payout-record", async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      payout,
+      payout: PayoutSerializer.serializeOne(payout),
     });
   } catch (error) {
     console.error("[StripeConnect] Error creating payout record:", error);

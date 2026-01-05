@@ -5,7 +5,7 @@ const EncryptionService = require("../services/EncryptionService");
 
 class UserSerializer {
 	// Fields that are encrypted in the database
-	static encryptedFields = ["firstName", "lastName", "email", "phone"];
+	static encryptedFields = ["firstName", "lastName", "email", "phone", "notificationEmail"];
 
 	static getValue(user, attribute) {
 		const value = user[attribute];

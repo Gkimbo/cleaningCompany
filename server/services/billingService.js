@@ -198,6 +198,7 @@ class BillingService {
   static async processCleanerPayout(appointment, models) {
     const { StripeConnectAccount, Payout } = models;
     const { getPricingConfig } = require("../config/businessConfig");
+    const PreferredCleanerPerksService = require("./PreferredCleanerPerksService");
 
     try {
       const pricing = await getPricingConfig();
@@ -229,11 +230,30 @@ class BillingService {
           where: { appointmentId: appointment.id, cleanerId },
         });
 
-        const platformFee = Math.round(perCleanerGross * (platformFeePercent / 100));
-        const netAmount = perCleanerGross - platformFee;
+        // Calculate preferred cleaner bonus if applicable
+        const bonusInfo = await PreferredCleanerPerksService.calculatePayoutBonus(
+          cleanerId,
+          appointment.homeId,
+          perCleanerGross,
+          platformFeePercent,
+          models
+        );
+
+        const platformFee = bonusInfo.adjustedPlatformFee;
+        const netAmount = bonusInfo.adjustedNetAmount;
 
         if (payout) {
-          await payout.update({ amount: netAmount / 100, platformFee: platformFee / 100, status: "processing" });
+          await payout.update({
+            amount: netAmount / 100,
+            platformFee: platformFee / 100,
+            status: "processing",
+            // Preferred perk fields
+            isPreferredHomeJob: bonusInfo.isPreferredJob,
+            preferredBonusApplied: bonusInfo.bonusApplied,
+            preferredBonusPercent: bonusInfo.bonusApplied ? bonusInfo.bonusPercent : null,
+            preferredBonusAmount: bonusInfo.bonusApplied ? bonusInfo.bonusAmountCents : null,
+            cleanerTierAtPayout: bonusInfo.tierLevel,
+          });
         } else {
           payout = await Payout.create({
             appointmentId: appointment.id,
@@ -241,6 +261,12 @@ class BillingService {
             amount: netAmount / 100,
             platformFee: platformFee / 100,
             status: "processing",
+            // Preferred perk fields
+            isPreferredHomeJob: bonusInfo.isPreferredJob,
+            preferredBonusApplied: bonusInfo.bonusApplied,
+            preferredBonusPercent: bonusInfo.bonusApplied ? bonusInfo.bonusPercent : null,
+            preferredBonusAmount: bonusInfo.bonusApplied ? bonusInfo.bonusAmountCents : null,
+            cleanerTierAtPayout: bonusInfo.tierLevel,
           });
         }
 

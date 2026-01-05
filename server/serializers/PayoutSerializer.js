@@ -42,6 +42,12 @@ class PayoutSerializer {
 			businessOwnerId: data.businessOwnerId,
 			employeeJobAssignmentId: data.employeeJobAssignmentId,
 			paidOutsidePlatform: data.paidOutsidePlatform,
+			// Preferred cleaner perk fields
+			isPreferredHomeJob: data.isPreferredHomeJob,
+			preferredBonusApplied: data.preferredBonusApplied,
+			preferredBonusPercent: data.preferredBonusPercent ? parseFloat(data.preferredBonusPercent) : null,
+			preferredBonusAmount: data.preferredBonusAmount,
+			cleanerTierAtPayout: data.cleanerTierAtPayout,
 			createdAt: data.createdAt,
 			updatedAt: data.updatedAt
 		};
@@ -71,7 +77,7 @@ class PayoutSerializer {
 	static serializeForCleanerView(payout) {
 		const data = payout.dataValues || payout;
 
-		return {
+		const serialized = {
 			id: data.id,
 			appointmentId: data.appointmentId,
 			netAmount: data.netAmount,
@@ -81,8 +87,21 @@ class PayoutSerializer {
 			incentiveApplied: data.incentiveApplied,
 			payoutType: data.payoutType,
 			paidOutsidePlatform: data.paidOutsidePlatform,
+			// Preferred cleaner perk fields (visible to cleaner)
+			isPreferredHomeJob: data.isPreferredHomeJob,
+			preferredBonusApplied: data.preferredBonusApplied,
+			preferredBonusPercent: data.preferredBonusPercent ? parseFloat(data.preferredBonusPercent) : null,
+			preferredBonusAmount: data.preferredBonusAmount,
+			cleanerTierAtPayout: data.cleanerTierAtPayout,
 			createdAt: data.createdAt
 		};
+
+		// Add bonus amount in dollars if applicable
+		if (data.preferredBonusAmount) {
+			serialized.preferredBonusAmountDollars = (data.preferredBonusAmount / 100).toFixed(2);
+		}
+
+		return serialized;
 	}
 
 	static serializeArrayForCleanerView(payouts) {

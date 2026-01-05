@@ -33,6 +33,18 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: "review",
 			comment: "How the cleaner was set as preferred (via review, settings page, or invitation)",
 		},
+		preferenceLevel: {
+			type: DataTypes.ENUM("preferred", "favorite"),
+			allowNull: false,
+			defaultValue: "preferred",
+			comment: "Tier level: preferred (auto-book) or favorite (notification only)",
+		},
+		priority: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Priority ordering when multiple cleaners exist (higher = more priority)",
+		},
 	}, {
 		indexes: [
 			{

@@ -167,6 +167,23 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 		},
+		// Backup cleaner notification fields
+		backupCleanersNotified: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "Whether backup preferred cleaners have been notified",
+		},
+		backupNotificationSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When backup cleaners were notified",
+		},
+		backupNotificationExpiresAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When backup notification window expires",
+		},
 		businessOwnerPrice: {
 			type: DataTypes.DECIMAL(10, 2),
 			allowNull: true,

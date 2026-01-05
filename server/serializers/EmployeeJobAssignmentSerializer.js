@@ -54,12 +54,12 @@ class EmployeeJobAssignmentSerializer {
         : null;
     }
 
-    // Serialize employee if present
+    // Serialize employee if present (BusinessEmployee has encrypted PII fields)
     if (includeEmployee && data.employee) {
       serialized.employee = {
         id: data.employee.id,
-        firstName: data.employee.firstName,
-        lastName: data.employee.lastName,
+        firstName: this.decryptUserField(data.employee.firstName),
+        lastName: this.decryptUserField(data.employee.lastName),
         paymentMethod: data.employee.paymentMethod,
       };
     }
@@ -142,9 +142,9 @@ class EmployeeJobAssignmentSerializer {
     };
 
     if (includeDetails) {
-      serialized.address = data.address;
-      serialized.keyPadCode = data.keyPadCode;
-      serialized.keyLocation = data.keyLocation;
+      serialized.address = this.decryptUserField(data.address);
+      serialized.keyPadCode = this.decryptUserField(data.keyPadCode);
+      serialized.keyLocation = this.decryptUserField(data.keyLocation);
       serialized.notes = data.notes;
     }
 
@@ -282,8 +282,8 @@ class EmployeeJobAssignmentSerializer {
       payoutStatus: data.payoutStatus,
       employee: data.employee ? {
         id: data.employee.id,
-        firstName: data.employee.firstName,
-        lastName: data.employee.lastName,
+        firstName: this.decryptUserField(data.employee.firstName),
+        lastName: this.decryptUserField(data.employee.lastName),
         paymentMethod: data.employee.paymentMethod,
       } : null,
       appointment: data.appointment ? {
@@ -292,7 +292,7 @@ class EmployeeJobAssignmentSerializer {
         price: data.appointment.price,
         home: data.appointment.home ? {
           id: data.appointment.home.id,
-          address: data.appointment.home.address,
+          address: this.decryptUserField(data.appointment.home.address),
         } : null,
       } : null,
     };
