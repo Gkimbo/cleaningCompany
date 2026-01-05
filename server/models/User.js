@@ -190,6 +190,11 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: true,
 			comment: "False for business employees who cannot see marketplace jobs",
 		},
+		calendarSyncDisclaimerAcceptedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp when user accepted the calendar sync disclaimer",
+		},
 	});
 
 	// Helper function to encrypt PII fields

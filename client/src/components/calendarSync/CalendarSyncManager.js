@@ -14,6 +14,8 @@ import { useNavigate, useParams } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
+import CalendarSyncDisclaimerModal from "./CalendarSyncDisclaimerModal";
+import CalendarSyncDisclaimerView from "./CalendarSyncDisclaimerView";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
@@ -60,6 +62,11 @@ const CalendarSyncManager = ({ state, dispatch }) => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [syncingId, setSyncingId] = useState(null);
+  const [disclaimerAccepted, setDisclaimerAccepted] = useState(null); // null = loading, true/false = known
+  const [disclaimerAcceptedAt, setDisclaimerAcceptedAt] = useState(null);
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
+  const [showDisclaimerView, setShowDisclaimerView] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
 
   const home = state.homes?.find((h) => h.id === Number(homeId));
 
@@ -68,6 +75,62 @@ const CalendarSyncManager = ({ state, dispatch }) => {
       fetchSyncs();
     }
   }, [homeId]);
+
+  useEffect(() => {
+    fetchDisclaimerStatus();
+  }, []);
+
+  const fetchDisclaimerStatus = async () => {
+    try {
+      const response = await fetch(`${baseURL}/api/v1/calendar-sync/disclaimer/status`, {
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setDisclaimerAccepted(data.accepted);
+        setDisclaimerAcceptedAt(data.acceptedAt);
+      }
+    } catch (err) {
+      console.error("Error fetching disclaimer status:", err);
+      setDisclaimerAccepted(false);
+    }
+  };
+
+  const acceptDisclaimer = async () => {
+    try {
+      const response = await fetch(`${baseURL}/api/v1/calendar-sync/disclaimer/accept`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user?.token}`,
+        },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setDisclaimerAccepted(true);
+        setDisclaimerAcceptedAt(data.acceptedAt);
+        setShowDisclaimerModal(false);
+        // Execute pending action if any
+        if (pendingAction) {
+          pendingAction();
+          setPendingAction(null);
+        }
+      }
+    } catch (err) {
+      setError("Failed to accept disclaimer. Please try again.");
+    }
+  };
+
+  const requireDisclaimer = (action) => {
+    if (disclaimerAccepted) {
+      action();
+    } else {
+      setPendingAction(() => action);
+      setShowDisclaimerModal(true);
+    }
+  };
 
   const fetchSyncs = async () => {
     try {
@@ -238,7 +301,12 @@ const CalendarSyncManager = ({ state, dispatch }) => {
           <Text style={styles.backButtonText}>{"<"} Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Calendar Sync</Text>
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity
+          style={styles.infoButton}
+          onPress={() => setShowDisclaimerView(true)}
+        >
+          <Text style={styles.infoButtonText}>i</Text>
+        </TouchableOpacity>
       </View>
 
       {home && (
@@ -332,7 +400,10 @@ const CalendarSyncManager = ({ state, dispatch }) => {
 
       {/* Add New Calendar */}
       {!showAddForm ? (
-        <TouchableOpacity style={styles.addButton} onPress={() => setShowAddForm(true)}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => requireDisclaimer(() => setShowAddForm(true))}
+        >
           <Text style={styles.addButtonText}>+ Connect a Calendar</Text>
         </TouchableOpacity>
       ) : (
@@ -462,6 +533,23 @@ const CalendarSyncManager = ({ state, dispatch }) => {
           </Text>
         </View>
       )}
+
+      {/* Disclaimer Modal */}
+      <CalendarSyncDisclaimerModal
+        visible={showDisclaimerModal}
+        onAccept={acceptDisclaimer}
+        onCancel={() => {
+          setShowDisclaimerModal(false);
+          setPendingAction(null);
+        }}
+      />
+
+      {/* Disclaimer View (read-only) */}
+      <CalendarSyncDisclaimerView
+        visible={showDisclaimerView}
+        onClose={() => setShowDisclaimerView(false)}
+        acceptedAt={disclaimerAcceptedAt}
+      />
     </ScrollView>
   );
 };
@@ -500,8 +588,20 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
-  headerSpacer: {
-    width: 60,
+  infoButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
+  infoButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
   },
   homeLabel: {
     fontSize: typography.fontSize.lg,
