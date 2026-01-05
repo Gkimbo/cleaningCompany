@@ -220,4 +220,76 @@ describe("Reducer Function", () => {
       }).toThrow();
     });
   });
+
+  describe("Offline mode actions", () => {
+    describe("SET_OFFLINE_MODE", () => {
+      it("should set offline mode to true", () => {
+        const state = { ...initialState, offlineMode: false };
+
+        const newState = reducer(state, { type: "SET_OFFLINE_MODE", payload: true });
+
+        expect(newState.offlineMode).toBe(true);
+      });
+
+      it("should set offline mode to false", () => {
+        const state = { ...initialState, offlineMode: true };
+
+        const newState = reducer(state, { type: "SET_OFFLINE_MODE", payload: false });
+
+        expect(newState.offlineMode).toBe(false);
+      });
+    });
+
+    describe("SET_NETWORK_STATUS", () => {
+      it("should set network status to online", () => {
+        const state = { ...initialState, networkStatus: "offline", isOnline: false };
+
+        const newState = reducer(state, {
+          type: "SET_NETWORK_STATUS",
+          payload: { status: "online", isOnline: true },
+        });
+
+        expect(newState.networkStatus).toBe("online");
+        expect(newState.isOnline).toBe(true);
+      });
+
+      it("should set network status to offline", () => {
+        const state = { ...initialState, networkStatus: "online", isOnline: true };
+
+        const newState = reducer(state, {
+          type: "SET_NETWORK_STATUS",
+          payload: { status: "offline", isOnline: false },
+        });
+
+        expect(newState.networkStatus).toBe("offline");
+        expect(newState.isOnline).toBe(false);
+      });
+    });
+
+    describe("SET_SYNC_STATUS", () => {
+      it("should set sync status", () => {
+        const state = { ...initialState, syncStatus: "idle", pendingSyncCount: 0 };
+
+        const newState = reducer(state, {
+          type: "SET_SYNC_STATUS",
+          payload: { status: "syncing", pendingCount: 5 },
+        });
+
+        expect(newState.syncStatus).toBe("syncing");
+        expect(newState.pendingSyncCount).toBe(5);
+      });
+
+      it("should preserve pendingSyncCount if not provided", () => {
+        const state = { ...initialState, syncStatus: "idle", pendingSyncCount: 10 };
+
+        const newState = reducer(state, {
+          type: "SET_SYNC_STATUS",
+          payload: { status: "completed" },
+        });
+
+        expect(newState.syncStatus).toBe("completed");
+        expect(newState.pendingSyncCount).toBe(10);
+      });
+    });
+  });
 });

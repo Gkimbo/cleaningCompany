@@ -380,6 +380,38 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     marginTop: spacing.xs,
   },
+
+  // Offline-specific styles
+  offlineBanner: {
+    backgroundColor: colors.warning[100],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
+  },
+
+  offlineBannerText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[800],
+    fontWeight: typography.fontWeight.medium,
+    textAlign: "center",
+  },
+
+  localBadge: {
+    position: "absolute",
+    bottom: spacing.xs,
+    left: spacing.xs,
+    backgroundColor: colors.warning[500],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
+  },
+
+  localBadgeText: {
+    fontSize: 10,
+    color: colors.neutral[0],
+    fontWeight: typography.fontWeight.bold,
+  },
 });
 
 export default styles;
