@@ -261,8 +261,9 @@ describe("Business Employee Messaging Routes", () => {
 
       User.findByPk
         .mockResolvedValueOnce(mockEmployee) // For auth check
-        .mockResolvedValueOnce(mockBusinessOwner) // For business owner lookup
-        .mockResolvedValueOnce(mockEmployee); // For employee user lookup
+        .mockResolvedValueOnce(mockEmployee) // For route handler user check (line 2220)
+        .mockResolvedValueOnce(mockBusinessOwner) // For business owner lookup (line 2292)
+        .mockResolvedValueOnce(mockEmployee); // For employee user lookup (line 2293)
 
       BusinessEmployee.findOne.mockResolvedValue(mockBusinessEmployee);
       Conversation.findOne.mockResolvedValue(null);
@@ -452,10 +453,20 @@ describe("Business Employee Messaging Routes", () => {
       expect(res.body.conversations).toHaveLength(2);
     });
 
-    it("should return 403 for non-business owner", async () => {
-      const token = generateToken(2);
+    it("should return 403 for non-business owner and non-employee", async () => {
+      const token = generateToken(3);
 
-      User.findByPk.mockResolvedValue(mockEmployee);
+      // Regular user who is neither business owner nor employee
+      const regularUser = {
+        id: 3,
+        username: "regularuser",
+        isBusinessOwner: false,
+        employeeOfBusinessId: null,
+        firstName: "Regular",
+        lastName: "User",
+      };
+
+      User.findByPk.mockResolvedValue(regularUser);
 
       const res = await request(app)
         .get("/api/v1/messages/my-business-conversations")

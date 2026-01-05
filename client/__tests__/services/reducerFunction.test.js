@@ -654,6 +654,264 @@ describe("Reducer Function", () => {
     });
   });
 
+  describe("SET_BUSINESS_OWNER_INFO action", () => {
+    it("should set business owner info", () => {
+      const stateWithDefaults = {
+        ...initialState,
+        isBusinessOwner: false,
+        businessName: null,
+        yearsInBusiness: null,
+      };
+      const action = {
+        type: "SET_BUSINESS_OWNER_INFO",
+        payload: {
+          isBusinessOwner: true,
+          businessName: "Clean Co",
+          yearsInBusiness: 5,
+        },
+      };
+      const newState = reducer(stateWithDefaults, action);
+
+      expect(newState.isBusinessOwner).toBe(true);
+      expect(newState.businessName).toBe("Clean Co");
+      expect(newState.yearsInBusiness).toBe(5);
+    });
+
+    it("should set isBusinessOwner to false", () => {
+      const stateWithOwner = {
+        ...initialState,
+        isBusinessOwner: true,
+        businessName: "Old Business",
+        yearsInBusiness: 3,
+      };
+      const action = {
+        type: "SET_BUSINESS_OWNER_INFO",
+        payload: {
+          isBusinessOwner: false,
+          businessName: null,
+          yearsInBusiness: null,
+        },
+      };
+      const newState = reducer(stateWithOwner, action);
+
+      expect(newState.isBusinessOwner).toBe(false);
+      expect(newState.businessName).toBeNull();
+      expect(newState.yearsInBusiness).toBeNull();
+    });
+  });
+
+  // ==========================================
+  // LINKED ACCOUNTS TESTS (Multi-Account Support)
+  // ==========================================
+  describe("SET_LINKED_ACCOUNTS action", () => {
+    it("should set linked accounts array", () => {
+      const stateWithDefaults = { ...initialState, linkedAccounts: [] };
+      const linkedAccounts = [
+        { accountType: "employee", displayName: "Business Employee" },
+        { accountType: "marketplace_cleaner", displayName: "Marketplace Cleaner" },
+      ];
+      const action = { type: "SET_LINKED_ACCOUNTS", payload: linkedAccounts };
+      const newState = reducer(stateWithDefaults, action);
+
+      expect(newState.linkedAccounts).toEqual(linkedAccounts);
+      expect(newState.linkedAccounts).toHaveLength(2);
+    });
+
+    it("should set empty linked accounts array", () => {
+      const stateWithAccounts = {
+        ...initialState,
+        linkedAccounts: [
+          { accountType: "employee", displayName: "Business Employee" },
+        ],
+      };
+      const action = { type: "SET_LINKED_ACCOUNTS", payload: [] };
+      const newState = reducer(stateWithAccounts, action);
+
+      expect(newState.linkedAccounts).toEqual([]);
+      expect(newState.linkedAccounts).toHaveLength(0);
+    });
+
+    it("should replace existing linked accounts", () => {
+      const stateWithAccounts = {
+        ...initialState,
+        linkedAccounts: [
+          { accountType: "employee", displayName: "Business Employee" },
+        ],
+      };
+      const newLinkedAccounts = [
+        { accountType: "marketplace_cleaner", displayName: "Marketplace Cleaner" },
+        { accountType: "homeowner", displayName: "Homeowner" },
+      ];
+      const action = { type: "SET_LINKED_ACCOUNTS", payload: newLinkedAccounts };
+      const newState = reducer(stateWithAccounts, action);
+
+      expect(newState.linkedAccounts).toEqual(newLinkedAccounts);
+      expect(newState.linkedAccounts).toHaveLength(2);
+      expect(newState.linkedAccounts[0].accountType).toBe("marketplace_cleaner");
+    });
+
+    it("should handle all account types", () => {
+      const stateWithDefaults = { ...initialState, linkedAccounts: [] };
+      const allAccountTypes = [
+        { accountType: "employee", displayName: "Business Employee" },
+        { accountType: "marketplace_cleaner", displayName: "Marketplace Cleaner" },
+        { accountType: "cleaner", displayName: "Cleaner" },
+        { accountType: "owner", displayName: "Owner" },
+        { accountType: "hr", displayName: "HR Staff" },
+        { accountType: "homeowner", displayName: "Homeowner" },
+      ];
+      const action = { type: "SET_LINKED_ACCOUNTS", payload: allAccountTypes };
+      const newState = reducer(stateWithDefaults, action);
+
+      expect(newState.linkedAccounts).toHaveLength(6);
+      expect(newState.linkedAccounts.map(a => a.accountType)).toEqual([
+        "employee", "marketplace_cleaner", "cleaner", "owner", "hr", "homeowner"
+      ]);
+    });
+
+    it("should preserve other state properties", () => {
+      const stateWithUser = {
+        ...initialState,
+        currentUser: { token: "jwt_token", id: 1, email: "test@example.com" },
+        account: "cleaner",
+        linkedAccounts: [],
+      };
+      const linkedAccounts = [
+        { accountType: "employee", displayName: "Business Employee" },
+      ];
+      const action = { type: "SET_LINKED_ACCOUNTS", payload: linkedAccounts };
+      const newState = reducer(stateWithUser, action);
+
+      expect(newState.linkedAccounts).toEqual(linkedAccounts);
+      expect(newState.currentUser.token).toBe("jwt_token");
+      expect(newState.currentUser.id).toBe(1);
+      expect(newState.account).toBe("cleaner");
+    });
+
+    it("should handle single linked account", () => {
+      const stateWithDefaults = { ...initialState, linkedAccounts: [] };
+      const singleAccount = [{ accountType: "homeowner", displayName: "Homeowner" }];
+      const action = { type: "SET_LINKED_ACCOUNTS", payload: singleAccount };
+      const newState = reducer(stateWithDefaults, action);
+
+      expect(newState.linkedAccounts).toHaveLength(1);
+      expect(newState.linkedAccounts[0].accountType).toBe("homeowner");
+      expect(newState.linkedAccounts[0].displayName).toBe("Homeowner");
+    });
+  });
+
+  describe("LOGOUT action", () => {
+    it("should clear all user data on logout", () => {
+      const loggedInState = {
+        account: "cleaner",
+        currentUser: { token: "jwt_token", id: 1, email: "test@example.com" },
+        homes: [{ id: 1, nickName: "Home" }],
+        appointments: [{ id: 1, date: "2025-01-15" }],
+        bill: { cancellationFee: 25, totalPaid: 100 },
+        requests: [{ id: 1 }],
+        conversations: [{ conversationId: 1 }],
+        currentMessages: [{ id: 1, content: "Hello" }],
+        unreadCount: 5,
+        isBusinessOwner: true,
+        businessName: "Test Business",
+        yearsInBusiness: 3,
+        linkedAccounts: [
+          { accountType: "employee", displayName: "Business Employee" },
+          { accountType: "marketplace_cleaner", displayName: "Marketplace Cleaner" },
+        ],
+      };
+      const action = { type: "LOGOUT" };
+      const newState = reducer(loggedInState, action);
+
+      expect(newState.account).toBeNull();
+      expect(newState.currentUser).toEqual({ token: null, id: null, email: null });
+      expect(newState.homes).toEqual([]);
+      expect(newState.appointments).toEqual([]);
+      expect(newState.bill).toEqual({ cancellationFee: 0, totalPaid: 0 });
+      expect(newState.requests).toEqual([]);
+      expect(newState.conversations).toEqual([]);
+      expect(newState.currentMessages).toEqual([]);
+      expect(newState.unreadCount).toBe(0);
+      expect(newState.isBusinessOwner).toBe(false);
+      expect(newState.businessName).toBeNull();
+      expect(newState.yearsInBusiness).toBeNull();
+      expect(newState.linkedAccounts).toEqual([]);
+    });
+
+    it("should clear linkedAccounts on logout", () => {
+      const stateWithLinkedAccounts = {
+        ...initialState,
+        linkedAccounts: [
+          { accountType: "employee", displayName: "Business Employee" },
+          { accountType: "marketplace_cleaner", displayName: "Marketplace Cleaner" },
+        ],
+        isBusinessOwner: false,
+        businessName: null,
+        yearsInBusiness: null,
+      };
+      const action = { type: "LOGOUT" };
+      const newState = reducer(stateWithLinkedAccounts, action);
+
+      expect(newState.linkedAccounts).toEqual([]);
+      expect(newState.linkedAccounts).toHaveLength(0);
+    });
+
+    it("should handle logout when already logged out", () => {
+      const loggedOutState = {
+        account: null,
+        currentUser: { token: null, id: null, email: null },
+        homes: [],
+        appointments: [],
+        bill: { cancellationFee: 0, totalPaid: 0 },
+        requests: [],
+        conversations: [],
+        currentMessages: [],
+        unreadCount: 0,
+        isBusinessOwner: false,
+        businessName: null,
+        yearsInBusiness: null,
+        linkedAccounts: [],
+      };
+      const action = { type: "LOGOUT" };
+      const newState = reducer(loggedOutState, action);
+
+      expect(newState.linkedAccounts).toEqual([]);
+      expect(newState.currentUser.token).toBeNull();
+    });
+
+    it("should clear linkedAccounts but preserve state structure", () => {
+      const stateWithManyLinkedAccounts = {
+        account: "marketplace_cleaner",
+        currentUser: { token: "token123", id: 42, email: "user@example.com" },
+        homes: [],
+        appointments: [],
+        bill: { cancellationFee: 0, totalPaid: 0 },
+        requests: [],
+        conversations: [],
+        currentMessages: [],
+        unreadCount: 0,
+        isBusinessOwner: false,
+        businessName: null,
+        yearsInBusiness: null,
+        linkedAccounts: [
+          { accountType: "employee", displayName: "Business Employee" },
+          { accountType: "cleaner", displayName: "Cleaner" },
+          { accountType: "owner", displayName: "Owner" },
+          { accountType: "homeowner", displayName: "Homeowner" },
+        ],
+      };
+      const action = { type: "LOGOUT" };
+      const newState = reducer(stateWithManyLinkedAccounts, action);
+
+      // Verify linkedAccounts is cleared
+      expect(newState.linkedAccounts).toEqual([]);
+
+      // Verify structure is maintained
+      expect(newState).toHaveProperty("linkedAccounts");
+      expect(Array.isArray(newState.linkedAccounts)).toBe(true);
+    });
+  });
+
   describe("Unknown action", () => {
     it("should throw error for unknown action type", () => {
       const action = { type: "UNKNOWN_ACTION", payload: {} };

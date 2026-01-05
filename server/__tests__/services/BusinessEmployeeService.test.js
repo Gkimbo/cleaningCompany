@@ -23,6 +23,7 @@ jest.mock("../../models", () => ({
   sequelize: {
     fn: jest.fn(),
     col: jest.fn(),
+    transaction: jest.fn((callback) => callback({ commit: jest.fn(), rollback: jest.fn() })),
     Sequelize: {
       Op: {
         between: Symbol("between"),
@@ -57,6 +58,11 @@ describe("BusinessEmployeeService", () => {
         paymentMethod: "direct_payment",
       };
 
+      // Mock business owner
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        isBusinessOwner: true,
+      });
       BusinessEmployee.findOne.mockResolvedValue(null); // No existing employee
       BusinessEmployee.create.mockResolvedValue({
         id: 10,
@@ -84,6 +90,11 @@ describe("BusinessEmployeeService", () => {
     it("should throw error if email already exists for this business", async () => {
       const businessOwnerId = 1;
 
+      // Mock business owner
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        isBusinessOwner: true,
+      });
       BusinessEmployee.findOne.mockResolvedValue({
         id: 10,
         email: "existing@example.com",
@@ -370,6 +381,7 @@ describe("BusinessEmployeeService", () => {
         id: 10,
         status: "active",
         update: jest.fn().mockResolvedValue(true),
+        reload: jest.fn().mockResolvedValue(true),
         toJSON: function() { return { ...this, update: undefined, toJSON: undefined }; },
       };
 
@@ -382,7 +394,8 @@ describe("BusinessEmployeeService", () => {
           status: "terminated",
           terminationReason: "Performance issues",
           terminatedAt: expect.any(Date),
-        })
+        }),
+        expect.objectContaining({ transaction: expect.anything() })
       );
     });
 
@@ -401,6 +414,7 @@ describe("BusinessEmployeeService", () => {
         id: 10,
         status: "terminated",
         update: jest.fn().mockResolvedValue(true),
+        reload: jest.fn().mockResolvedValue(true),
         toJSON: function() { return { ...this, update: undefined, toJSON: undefined }; },
       };
 
@@ -413,7 +427,8 @@ describe("BusinessEmployeeService", () => {
           status: "active",
           terminatedAt: null,
           terminationReason: null,
-        })
+        }),
+        expect.objectContaining({ transaction: expect.anything() })
       );
     });
   });

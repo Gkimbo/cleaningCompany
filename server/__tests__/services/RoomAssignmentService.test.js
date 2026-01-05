@@ -625,6 +625,13 @@ describe("RoomAssignmentService", () => {
   // rebalanceAfterDropout Tests
   // ============================================
   describe("rebalanceAfterDropout", () => {
+    beforeEach(() => {
+      // Reset mocks to clear any leftover mockResolvedValueOnce
+      mockCleanerRoomAssignment.findAll.mockReset();
+      mockCleanerJobCompletion.findAll.mockReset();
+      mockCleanerRoomAssignment.update.mockReset();
+    });
+
     it("should return empty array if no active cleaners", async () => {
       mockCleanerJobCompletion.findAll.mockResolvedValue([]);
 
@@ -650,10 +657,16 @@ describe("RoomAssignmentService", () => {
       mockCleanerJobCompletion.findAll.mockResolvedValue([
         { cleanerId: 50, status: "assigned" },
       ]);
-      mockCleanerRoomAssignment.findAll.mockResolvedValue([
-        { id: 1, cleanerId: null },
-        { id: 2, cleanerId: null },
-      ]);
+      // First call returns unassigned rooms, second call returns final state
+      mockCleanerRoomAssignment.findAll
+        .mockResolvedValueOnce([
+          { id: 1, cleanerId: null, status: "pending" },
+          { id: 2, cleanerId: null, status: "pending" },
+        ])
+        .mockResolvedValueOnce([
+          { id: 1, cleanerId: 50 },
+          { id: 2, cleanerId: 50 },
+        ]);
       mockCleanerRoomAssignment.update.mockResolvedValue([2]);
 
       await RoomAssignmentService.rebalanceAfterDropout(10);
@@ -692,6 +705,11 @@ describe("RoomAssignmentService", () => {
   // calculateCleanerEarningsShare Tests
   // ============================================
   describe("calculateCleanerEarningsShare", () => {
+    beforeEach(() => {
+      // Reset all mocks to clear any leftover mockResolvedValueOnce
+      mockCleanerRoomAssignment.findAll.mockReset();
+    });
+
     it("should sum up earnings from all assignments", async () => {
       mockCleanerRoomAssignment.findAll.mockResolvedValue([
         { cleanerEarningsShare: 3000 },

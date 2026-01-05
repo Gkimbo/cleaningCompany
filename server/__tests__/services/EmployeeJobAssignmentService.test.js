@@ -23,6 +23,17 @@ jest.mock("../../services/MarketplaceJobRequirementsService", () => ({
   validateCompletionRequirements: jest.fn(),
 }));
 
+// Mock AppointmentJobFlowService
+jest.mock("../../services/AppointmentJobFlowService", () => ({
+  createJobFlowForAppointment: jest.fn(),
+  getOrCreateJobFlow: jest.fn(),
+}));
+
+// Mock CustomJobFlowService
+jest.mock("../../services/CustomJobFlowService", () => ({
+  resolveFlowForAppointment: jest.fn(),
+}));
+
 // Mock models
 jest.mock("../../models", () => {
   const mockTransaction = {
@@ -52,7 +63,22 @@ jest.mock("../../models", () => {
     User: {
       findByPk: jest.fn(),
     },
-    CleanerClient: {},
+    CleanerClient: {
+      findOne: jest.fn(),
+    },
+    AppointmentJobFlow: {
+      findOne: jest.fn(),
+      create: jest.fn(),
+    },
+    ChecklistVersion: {
+      findOne: jest.fn(),
+    },
+    CustomJobFlow: {
+      findOne: jest.fn(),
+    },
+    CustomJobFlowChecklist: {
+      findAll: jest.fn(),
+    },
     sequelize: {
       transaction: jest.fn((callback) => callback(mockTransaction)),
     },
@@ -64,10 +90,14 @@ const {
   EmployeeJobAssignment,
   UserAppointments,
   User,
+  CleanerClient,
+  AppointmentJobFlow,
   sequelize,
 } = require("../../models");
 
 const MarketplaceJobRequirementsService = require("../../services/MarketplaceJobRequirementsService");
+const AppointmentJobFlowService = require("../../services/AppointmentJobFlowService");
+const CustomJobFlowService = require("../../services/CustomJobFlowService");
 const EmployeeJobAssignmentService = require("../../services/EmployeeJobAssignmentService");
 
 describe("EmployeeJobAssignmentService", () => {
@@ -99,6 +129,14 @@ describe("EmployeeJobAssignmentService", () => {
       MarketplaceJobRequirementsService.initializeChecklistProgress.mockResolvedValue({
         kitchen: { total: ["k1"], completed: [] },
       });
+      CustomJobFlowService.resolveFlowForAppointment.mockResolvedValue({
+        usesPlatformFlow: true,
+        customFlowId: null,
+      });
+      AppointmentJobFlowService.createJobFlowForAppointment.mockResolvedValue({
+        id: 1,
+        checklistProgress: { kitchen: { total: ["k1"], completed: [] } },
+      });
 
       const mockCreatedAssignment = {
         id: 1,
@@ -117,11 +155,11 @@ describe("EmployeeJobAssignmentService", () => {
       });
 
       expect(result.isMarketplacePickup).toBe(true);
-      expect(MarketplaceJobRequirementsService.initializeChecklistProgress).toHaveBeenCalled();
+      // Job flow creation is now handled by AppointmentJobFlowService
+      expect(AppointmentJobFlowService.createJobFlowForAppointment).toHaveBeenCalled();
       expect(EmployeeJobAssignment.create).toHaveBeenCalledWith(
         expect.objectContaining({
           isMarketplacePickup: true,
-          checklistProgress: { kitchen: { total: ["k1"], completed: [] } },
         }),
         expect.any(Object)
       );
@@ -132,6 +170,14 @@ describe("EmployeeJobAssignmentService", () => {
       UserAppointments.findOne.mockResolvedValue(mockAppointment);
       EmployeeJobAssignment.findOne.mockResolvedValue(null);
       MarketplaceJobRequirementsService.isMarketplaceJob.mockResolvedValue(false);
+      CustomJobFlowService.resolveFlowForAppointment.mockResolvedValue({
+        usesPlatformFlow: false,
+        customFlowId: null,
+      });
+      AppointmentJobFlowService.createJobFlowForAppointment.mockResolvedValue({
+        id: 2,
+        checklistProgress: null,
+      });
 
       const mockCreatedAssignment = {
         id: 1,
@@ -195,12 +241,21 @@ describe("EmployeeJobAssignmentService", () => {
   describe("assignSelfToJob", () => {
     it("should create self-assignment for marketplace job with $0 pay", async () => {
       User.findByPk.mockResolvedValue({ id: 10, isBusinessOwner: true });
-      UserAppointments.findByPk.mockResolvedValue({ id: 100, update: jest.fn() });
+      UserAppointments.findByPk.mockResolvedValue({ id: 100, userId: 50, update: jest.fn() });
       EmployeeJobAssignment.findOne.mockResolvedValue(null);
       MarketplaceJobRequirementsService.isMarketplaceJob.mockResolvedValue(true);
       MarketplaceJobRequirementsService.initializeChecklistProgress.mockResolvedValue({
         kitchen: { total: ["k1"], completed: [] },
       });
+      CustomJobFlowService.resolveFlowForAppointment.mockResolvedValue({
+        usesPlatformFlow: true,
+        customFlowId: null,
+      });
+      AppointmentJobFlowService.createJobFlowForAppointment.mockResolvedValue({
+        id: 1,
+        checklistProgress: { kitchen: { total: ["k1"], completed: [] } },
+      });
+      AppointmentJobFlow.findOne.mockResolvedValue(null);
 
       const mockCreatedAssignment = {
         id: 1,
