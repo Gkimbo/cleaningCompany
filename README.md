@@ -248,6 +248,7 @@ npx sequelize-cli db:migrate
 npx sequelize-cli db:seed --seed ownerSeeder.js
 npx sequelize-cli db:seed --seed termsAndConditionsSeeder.js
 npx sequelize-cli db:seed --seed privacyPolicySeeder.js
+npx sequelize-cli db:seed --seed cleanerChecklistSeeder.js
 
 # Setup Client
 cd ../client
