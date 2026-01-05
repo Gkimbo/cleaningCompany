@@ -228,7 +228,7 @@ export default function App() {
         <SocketProvider token={state.currentUser.token}>
           <UserContext.Provider value={{ state, dispatch, currentUser: state.currentUser }}>
           <NativeRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <SafeAreaView style={{ ...appStyles.container, paddingBottom: 60 }}>
+            <SafeAreaView style={appStyles.container}>
               <TopBar dispatch={dispatch} state={state} />
               <Routes>
               <Route

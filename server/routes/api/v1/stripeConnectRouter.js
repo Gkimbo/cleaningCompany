@@ -60,6 +60,7 @@ const {
   Payout,
   PlatformEarnings,
   Payment,
+  PricingConfig,
 } = require("../../../models");
 
 // Import services
@@ -73,10 +74,24 @@ const stripeConnectRouter = express.Router();
 // ============================================================================
 
 /**
- * Platform fee percentage (10%)
- * Platform keeps 10%, cleaner receives 90%
+ * Default platform fee percentage (10%) - used as fallback if PricingConfig unavailable
+ * Actual fee is fetched from PricingConfig.platformFeePercent
  */
-const PLATFORM_FEE_PERCENT = 0.10;
+const DEFAULT_PLATFORM_FEE_PERCENT = 0.10;
+
+/**
+ * Helper to get current platform fee from database
+ * @returns {Promise<number>} Fee as decimal (e.g., 0.10 for 10%)
+ */
+const getPlatformFeePercent = async () => {
+  try {
+    const config = await PricingConfig.getActive();
+    return config?.platformFeePercent || DEFAULT_PLATFORM_FEE_PERCENT;
+  } catch (error) {
+    console.error("[StripeConnect] Error fetching platform fee, using default:", error.message);
+    return DEFAULT_PLATFORM_FEE_PERCENT;
+  }
+};
 
 /**
  * Valid payout statuses
@@ -125,10 +140,11 @@ const verifyToken = (token) => {
  * Calculates the platform fee and net amount for a payout.
  *
  * @param {number} grossAmountCents - Gross amount in cents
+ * @param {number} feePercent - Platform fee as decimal (e.g., 0.10 for 10%). Defaults to DEFAULT_PLATFORM_FEE_PERCENT.
  * @returns {object} - { platformFee, netAmount } in cents
  */
-const calculatePayoutSplit = (grossAmountCents) => {
-  const platformFee = Math.round(grossAmountCents * PLATFORM_FEE_PERCENT);
+const calculatePayoutSplit = (grossAmountCents, feePercent = DEFAULT_PLATFORM_FEE_PERCENT) => {
+  const platformFee = Math.round(grossAmountCents * feePercent);
   const netAmount = grossAmountCents - platformFee;
   return { platformFee, netAmount };
 };
@@ -854,6 +870,9 @@ stripeConnectRouter.get("/payouts/:userId", async (req, res) => {
   }
 
   try {
+    // Get current platform fee from config
+    const feePercent = await getPlatformFeePercent();
+
     // Fetch payouts with appointment details
     const payouts = await Payout.findAll({
       where: { cleanerId: userId },
@@ -901,8 +920,8 @@ stripeConnectRouter.get("/payouts/:userId", async (req, res) => {
         completedCount: totals.completedCount,
         pendingCount: totals.pendingCount,
       },
-      platformFeePercent: PLATFORM_FEE_PERCENT * 100,
-      cleanerPercent: (1 - PLATFORM_FEE_PERCENT) * 100,
+      platformFeePercent: feePercent * 100,
+      cleanerPercent: (1 - feePercent) * 100,
     });
   } catch (error) {
     console.error("[StripeConnect] Error fetching payouts:", error);
@@ -969,12 +988,15 @@ stripeConnectRouter.post("/process-payout", async (req, res) => {
       });
     }
 
+    // Get current platform fee from config
+    const platformFeePercent = await getPlatformFeePercent();
+
     // Process payout for each cleaner
     const results = [];
 
     for (const cleanerIdStr of cleanerIds) {
       const cleanerIdInt = parseInt(cleanerIdStr, 10);
-      const result = await processCleanerPayout(appointment, cleanerIdInt, cleanerIds.length);
+      const result = await processCleanerPayout(appointment, cleanerIdInt, cleanerIds.length, platformFeePercent);
       results.push(result);
     }
 
@@ -1010,9 +1032,10 @@ stripeConnectRouter.post("/process-payout", async (req, res) => {
  * @param {object} appointment - Appointment record
  * @param {string} cleanerId - Cleaner user ID
  * @param {number} totalCleaners - Total number of cleaners
+ * @param {number} feePercent - Platform fee as decimal (e.g., 0.10 for 10%)
  * @returns {object} - Payout result
  */
-async function processCleanerPayout(appointment, cleanerId, totalCleaners) {
+async function processCleanerPayout(appointment, cleanerId, totalCleaners, feePercent) {
   try {
     // Check for existing payout
     let payout = await Payout.findOne({
@@ -1055,7 +1078,7 @@ async function processCleanerPayout(appointment, cleanerId, totalCleaners) {
     // Calculate amounts
     const priceInCents = Math.round(parseFloat(appointment.price) * 100);
     const perCleanerGross = Math.round(priceInCents / totalCleaners);
-    const { platformFee, netAmount } = calculatePayoutSplit(perCleanerGross);
+    const { platformFee, netAmount } = calculatePayoutSplit(perCleanerGross, feePercent);
 
     // Create or update payout record
     if (!payout) {
@@ -1198,11 +1221,14 @@ stripeConnectRouter.post("/create-payout-record", async (req, res) => {
       });
     }
 
+    // Get current platform fee from config
+    const feePercent = await getPlatformFeePercent();
+
     // Calculate amounts
     const cleanerCount = appointment.employeesAssigned?.length || 1;
     const priceInCents = Math.round(parseFloat(appointment.price) * 100);
     const perCleanerGross = Math.round(priceInCents / cleanerCount);
-    const { platformFee, netAmount } = calculatePayoutSplit(perCleanerGross);
+    const { platformFee, netAmount } = calculatePayoutSplit(perCleanerGross, feePercent);
 
     // Create payout record
     const payout = await Payout.create({
@@ -1406,6 +1432,9 @@ module.exports = stripeConnectRouter;
 module.exports.calculatePayoutSplit = calculatePayoutSplit;
 module.exports.determineAccountStatus = determineAccountStatus;
 module.exports.validateUserId = validateUserId;
-module.exports.PLATFORM_FEE_PERCENT = PLATFORM_FEE_PERCENT;
+module.exports.getPlatformFeePercent = getPlatformFeePercent;
+module.exports.DEFAULT_PLATFORM_FEE_PERCENT = DEFAULT_PLATFORM_FEE_PERCENT;
+// Backward compatibility alias
+module.exports.PLATFORM_FEE_PERCENT = DEFAULT_PLATFORM_FEE_PERCENT;
 module.exports.PAYOUT_STATUS = PAYOUT_STATUS;
 module.exports.ACCOUNT_STATUS = ACCOUNT_STATUS;

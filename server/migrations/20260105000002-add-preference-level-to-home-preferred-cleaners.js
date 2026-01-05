@@ -2,13 +2,22 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    // Add preferenceLevel field (preferred = auto-book, favorite = notification only)
-    await queryInterface.addColumn("HomePreferredCleaners", "preferenceLevel", {
-      type: Sequelize.ENUM("preferred", "favorite"),
-      allowNull: false,
-      defaultValue: "preferred",
-      comment: "Tier level: preferred (auto-book) or favorite (notification only)",
-    });
+    // Create the ENUM type first (Postgres requires this to be separate)
+    await queryInterface.sequelize.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_HomePreferredCleaners_preferenceLevel') THEN
+          CREATE TYPE "enum_HomePreferredCleaners_preferenceLevel" AS ENUM('preferred', 'favorite');
+        END IF;
+      END$$;
+    `);
+
+    // Add preferenceLevel field using raw SQL to avoid Sequelize ENUM bug
+    await queryInterface.sequelize.query(`
+      ALTER TABLE "HomePreferredCleaners"
+      ADD COLUMN "preferenceLevel" "enum_HomePreferredCleaners_preferenceLevel" NOT NULL DEFAULT 'preferred';
+      COMMENT ON COLUMN "HomePreferredCleaners"."preferenceLevel" IS 'Tier level: preferred (auto-book) or favorite (notification only)';
+    `);
 
     // Add priority field for ordering multiple cleaners at same level
     await queryInterface.addColumn("HomePreferredCleaners", "priority", {

@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import FetchData from "../../services/fetchRequests/fetchData";
@@ -79,7 +78,7 @@ const CleanerUpgradeForm = ({ state, dispatch }) => {
 
   if (success) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.successContainer}>
           <View style={styles.successIcon}>
             <Feather name="check-circle" size={64} color={colors.success[500]} />
@@ -90,12 +89,12 @@ const CleanerUpgradeForm = ({ state, dispatch }) => {
           </Text>
           <Text style={styles.successNote}>Redirecting to My Clients...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
@@ -205,7 +204,7 @@ const CleanerUpgradeForm = ({ state, dispatch }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
 

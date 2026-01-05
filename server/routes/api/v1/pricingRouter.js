@@ -114,6 +114,10 @@ pricingRouter.get("/config", verifyOwner, async (req, res) => {
         cleanerPenaltyDays: pricing.cancellation.cleanerPenaltyDays,
         refundPercentage: pricing.cancellation.refundPercentage,
         platformFeePercent: pricing.platform.feePercent,
+        businessOwnerFeePercent: pricing.platform.businessOwnerFeePercent,
+        largeBusinessFeePercent: pricing.platform.largeBusinessFeePercent,
+        largeBusinessMonthlyThreshold: pricing.platform.largeBusinessMonthlyThreshold,
+        largeBusinessLookbackMonths: pricing.platform.largeBusinessLookbackMonths,
         highVolumeFee: pricing.highVolumeFee,
       },
     });
@@ -130,28 +134,48 @@ pricingRouter.get("/config", verifyOwner, async (req, res) => {
 pricingRouter.put("/config", verifyOwner, async (req, res) => {
   try {
     const {
+      // Base pricing
       basePrice,
       extraBedBathFee,
       halfBathFee,
       sheetFeePerBed,
       towelFee,
       faceClothFee,
+      // Time windows
       timeWindowAnytime,
       timeWindow10To3,
       timeWindow11To4,
       timeWindow12To2,
+      // Cancellation
       cancellationFee,
       cancellationWindowDays,
       homeownerPenaltyDays,
       cleanerPenaltyDays,
       refundPercentage,
+      // Platform fees
       platformFeePercent,
       businessOwnerFeePercent,
+      multiCleanerPlatformFeePercent,
+      // Incentive settings
+      incentiveRefundPercent,
+      incentiveCleanerPercent,
+      // Multi-cleaner settings
+      soloLargeHomeBonus,
+      largeHomeBedsThreshold,
+      largeHomeBathsThreshold,
+      multiCleanerOfferExpirationHours,
+      urgentFillDays,
+      finalWarningDays,
+      // Large business fee settings
+      largeBusinessFeePercent,
+      largeBusinessMonthlyThreshold,
+      largeBusinessLookbackMonths,
+      // Other
       highVolumeFee,
       changeNote,
     } = req.body;
 
-    // Validate required fields
+    // Validate required fields (base fields required, multi-cleaner fields optional)
     const requiredFields = {
       basePrice,
       extraBedBathFee,
@@ -230,28 +254,82 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
       });
     }
 
+    // Validate optional percentage fields if provided
+    if (multiCleanerPlatformFeePercent !== undefined && (multiCleanerPlatformFeePercent < 0 || multiCleanerPlatformFeePercent > 1)) {
+      return res.status(400).json({
+        error: "multiCleanerPlatformFeePercent must be between 0 and 1",
+      });
+    }
+
+    if (incentiveRefundPercent !== undefined && (incentiveRefundPercent < 0 || incentiveRefundPercent > 1)) {
+      return res.status(400).json({
+        error: "incentiveRefundPercent must be between 0 and 1",
+      });
+    }
+
+    if (incentiveCleanerPercent !== undefined && (incentiveCleanerPercent < 0 || incentiveCleanerPercent > 1)) {
+      return res.status(400).json({
+        error: "incentiveCleanerPercent must be between 0 and 1",
+      });
+    }
+
+    if (largeBusinessFeePercent !== undefined && (largeBusinessFeePercent < 0 || largeBusinessFeePercent > 1)) {
+      return res.status(400).json({
+        error: "largeBusinessFeePercent must be between 0 and 1",
+      });
+    }
+
+    if (largeBusinessMonthlyThreshold !== undefined && (typeof largeBusinessMonthlyThreshold !== "number" || largeBusinessMonthlyThreshold < 1)) {
+      return res.status(400).json({
+        error: "largeBusinessMonthlyThreshold must be a positive integer",
+      });
+    }
+
+    if (largeBusinessLookbackMonths !== undefined && (typeof largeBusinessLookbackMonths !== "number" || largeBusinessLookbackMonths < 1 || largeBusinessLookbackMonths > 12)) {
+      return res.status(400).json({
+        error: "largeBusinessLookbackMonths must be between 1 and 12",
+      });
+    }
+
+    // Build config update object with required and optional fields
+    const configData = {
+      basePrice,
+      extraBedBathFee,
+      halfBathFee,
+      sheetFeePerBed,
+      towelFee,
+      faceClothFee,
+      timeWindowAnytime,
+      timeWindow10To3,
+      timeWindow11To4,
+      timeWindow12To2,
+      cancellationFee,
+      cancellationWindowDays,
+      homeownerPenaltyDays,
+      cleanerPenaltyDays,
+      refundPercentage,
+      platformFeePercent,
+      businessOwnerFeePercent,
+      highVolumeFee,
+    };
+
+    // Add optional multi-cleaner and incentive fields if provided
+    if (multiCleanerPlatformFeePercent !== undefined) configData.multiCleanerPlatformFeePercent = multiCleanerPlatformFeePercent;
+    if (incentiveRefundPercent !== undefined) configData.incentiveRefundPercent = incentiveRefundPercent;
+    if (incentiveCleanerPercent !== undefined) configData.incentiveCleanerPercent = incentiveCleanerPercent;
+    if (soloLargeHomeBonus !== undefined) configData.soloLargeHomeBonus = soloLargeHomeBonus;
+    if (largeHomeBedsThreshold !== undefined) configData.largeHomeBedsThreshold = largeHomeBedsThreshold;
+    if (largeHomeBathsThreshold !== undefined) configData.largeHomeBathsThreshold = largeHomeBathsThreshold;
+    if (multiCleanerOfferExpirationHours !== undefined) configData.multiCleanerOfferExpirationHours = multiCleanerOfferExpirationHours;
+    if (urgentFillDays !== undefined) configData.urgentFillDays = urgentFillDays;
+    if (finalWarningDays !== undefined) configData.finalWarningDays = finalWarningDays;
+    if (largeBusinessFeePercent !== undefined) configData.largeBusinessFeePercent = largeBusinessFeePercent;
+    if (largeBusinessMonthlyThreshold !== undefined) configData.largeBusinessMonthlyThreshold = largeBusinessMonthlyThreshold;
+    if (largeBusinessLookbackMonths !== undefined) configData.largeBusinessLookbackMonths = largeBusinessLookbackMonths;
+
     // Create new pricing config
     const newConfig = await PricingConfig.updatePricing(
-      {
-        basePrice,
-        extraBedBathFee,
-        halfBathFee,
-        sheetFeePerBed,
-        towelFee,
-        faceClothFee,
-        timeWindowAnytime,
-        timeWindow10To3,
-        timeWindow11To4,
-        timeWindow12To2,
-        cancellationFee,
-        cancellationWindowDays,
-        homeownerPenaltyDays,
-        cleanerPenaltyDays,
-        refundPercentage,
-        platformFeePercent,
-        businessOwnerFeePercent,
-        highVolumeFee,
-      },
+      configData,
       req.user.id,
       changeNote || null
     );
@@ -313,6 +391,18 @@ pricingRouter.get("/history", verifyOwner, async (req, res) => {
           refundPercentage: parseFloat(config.refundPercentage),
           platformFeePercent: parseFloat(config.platformFeePercent),
           businessOwnerFeePercent: parseFloat(config.businessOwnerFeePercent || config.platformFeePercent),
+          multiCleanerPlatformFeePercent: parseFloat(config.multiCleanerPlatformFeePercent || 0.13),
+          incentiveRefundPercent: parseFloat(config.incentiveRefundPercent || 0.10),
+          incentiveCleanerPercent: parseFloat(config.incentiveCleanerPercent || 0.40),
+          soloLargeHomeBonus: config.soloLargeHomeBonus || 0,
+          largeHomeBedsThreshold: config.largeHomeBedsThreshold || 3,
+          largeHomeBathsThreshold: config.largeHomeBathsThreshold || 3,
+          multiCleanerOfferExpirationHours: config.multiCleanerOfferExpirationHours || 48,
+          urgentFillDays: config.urgentFillDays || 7,
+          finalWarningDays: config.finalWarningDays || 3,
+          largeBusinessFeePercent: parseFloat(config.largeBusinessFeePercent || 0.07),
+          largeBusinessMonthlyThreshold: config.largeBusinessMonthlyThreshold || 50,
+          largeBusinessLookbackMonths: config.largeBusinessLookbackMonths || 1,
           highVolumeFee: config.highVolumeFee,
         },
       })),

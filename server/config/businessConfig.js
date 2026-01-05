@@ -94,7 +94,11 @@ const businessConfig = {
 
     // Platform fees
     platform: {
-      feePercent: 0.1, // 10% platform fee on cleaner payouts
+      feePercent: 0.1, // 10% platform fee on regular cleaner payouts
+      businessOwnerFeePercent: 0.1, // 10% platform fee on business owner cleaner payouts
+      largeBusinessFeePercent: 0.07, // 7% platform fee for large volume business owners
+      largeBusinessMonthlyThreshold: 50, // 50 cleanings per month to qualify
+      largeBusinessLookbackMonths: 1, // Check last 1 month (rolling window)
     },
 
     // High volume day surcharge

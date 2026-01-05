@@ -69,6 +69,10 @@ const mockModels = {
   PreferredPerksConfig: {
     findOne: jest.fn(),
   },
+  EmployeeJobAssignment: {
+    findOne: jest.fn(),
+  },
+  BusinessEmployee: {},
 };
 
 // Mock node-cron
@@ -79,7 +83,7 @@ jest.mock("node-cron", () => ({
 // Mock businessConfig
 jest.mock("../../config/businessConfig", () => ({
   getPricingConfig: jest.fn().mockResolvedValue({
-    platform: { feePercent: 10 },
+    platform: { feePercent: 0.10, businessOwnerFeePercent: 0.10 },
   }),
 }));
 

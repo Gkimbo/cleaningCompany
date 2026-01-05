@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import { usePricing } from "../../context/PricingContext";
 import {
   colors,
   spacing,
@@ -173,6 +174,10 @@ const AssignModal = ({
   const [payAmount, setPayAmount] = useState("");
   const [payType, setPayType] = useState("flat_rate");
   const [showFinancials, setShowFinancials] = useState(false);
+  const { pricing } = usePricing();
+
+  // Get platform fee from config (default 10%)
+  const platformFeePercent = (pricing?.platform?.businessOwnerFeePercent || 0.10) * 100;
 
   useEffect(() => {
     if (job && visible) {
@@ -204,7 +209,8 @@ const AssignModal = ({
   const financials = job
     ? BusinessOwnerService.calculateJobFinancials(
         job.totalPrice || 0,
-        Math.round(parseFloat(payAmount || 0) * 100)
+        Math.round(parseFloat(payAmount || 0) * 100),
+        platformFeePercent
       )
     : null;
 
@@ -374,7 +380,7 @@ const AssignModal = ({
                       </Text>
                     </View>
                     <View style={styles.financialRow}>
-                      <Text style={styles.financialLabel}>Platform Fee (10%)</Text>
+                      <Text style={styles.financialLabel}>Platform Fee ({platformFeePercent}%)</Text>
                       <Text style={[styles.financialValue, { color: colors.error[600] }]}>
                         -{financials.formatted.platformFee}
                       </Text>

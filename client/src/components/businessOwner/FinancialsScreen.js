@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import { usePricing } from "../../context/PricingContext";
 import {
   colors,
   spacing,
@@ -135,6 +136,7 @@ const EmployeeEarningsRow = ({ employee, earnings, onPress }) => (
 // Main Component
 const FinancialsScreen = ({ state }) => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState("month");
@@ -235,8 +237,8 @@ const FinancialsScreen = ({ state }) => {
     pendingPayroll = 0,
   } = financials || {};
 
-  // Calculate percentages for breakdown
-  const platformFeePercent = 10; // Fixed at 10%
+  // Calculate percentages for breakdown - get from pricing config
+  const platformFeePercent = (pricing?.platform?.businessOwnerFeePercent || 0.10) * 100;
   const payrollPercent = totalRevenue > 0 ? ((totalPayroll / totalRevenue) * 100).toFixed(1) : 0;
   const profitPercent = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : 0;
 
@@ -311,7 +313,7 @@ const FinancialsScreen = ({ state }) => {
               value={formatCurrency(totalRevenue)}
             />
             <BreakdownRow
-              label="Platform Fee (10%)"
+              label={`Platform Fee (${platformFeePercent}%)`}
               value={`-${formatCurrency(platformFees)}`}
               color={colors.error[600]}
               isLocked
@@ -402,7 +404,7 @@ const FinancialsScreen = ({ state }) => {
         <View style={styles.infoCard}>
           <Icon name="info-circle" size={20} color={colors.primary[600]} />
           <Text style={styles.infoText}>
-            Platform fees are fixed at 10% and cannot be modified. You'll receive a 1099-K
+            Platform fees are currently {platformFeePercent}%. You'll receive a 1099-K
             from Stripe at year end based on your total earnings.
           </Text>
         </View>

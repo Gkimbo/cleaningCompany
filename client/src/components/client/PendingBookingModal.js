@@ -12,13 +12,13 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { StateContext } from "../../../App";
+import { UserContext } from "../../context/UserContext";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import useCountdown from "../../hooks/useCountdown";
 
 const PendingBookingModal = ({ visible, booking, onClose, onActionComplete }) => {
-  const { state } = useContext(StateContext);
+  const { state } = useContext(UserContext);
   const [loading, setLoading] = useState(false);
   const [showDeclineOptions, setShowDeclineOptions] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.neutral[200],
   },
   headerTitle: {
-    fontSize: typography.sizes.xl,
+    fontSize: typography.fontSize.xl,
     fontWeight: "700",
     color: colors.neutral[900],
   },
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   timerBannerText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     fontWeight: "600",
     color: colors.primary[700],
   },
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   sectionTitle: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     fontWeight: "600",
     color: colors.neutral[500],
     textTransform: "uppercase",
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   businessName: {
-    fontSize: typography.sizes.lg,
+    fontSize: typography.fontSize.lg,
     fontWeight: "600",
     color: colors.neutral[900],
   },
@@ -474,27 +474,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   detailLabel: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     color: colors.neutral[500],
     marginBottom: 2,
   },
   detailValue: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     fontWeight: "500",
     color: colors.neutral[800],
   },
   priceValue: {
     color: colors.success[600],
-    fontSize: typography.sizes.lg,
+    fontSize: typography.fontSize.lg,
     fontWeight: "700",
   },
   notesText: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     color: colors.neutral[700],
     lineHeight: 22,
   },
   inputLabel: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     fontWeight: "500",
     color: colors.neutral[700],
     marginBottom: spacing.xs,
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     borderColor: colors.neutral[300],
     borderRadius: radius.md,
     padding: spacing.sm,
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     color: colors.neutral[800],
     minHeight: 80,
     textAlignVertical: "top",
@@ -529,7 +529,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary[500],
   },
   suggestToggleText: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     color: colors.neutral[700],
   },
   suggestedDatesContainer: {
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   suggestedDateText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.primary[700],
     fontWeight: "500",
   },
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
   },
   addDateText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.primary[600],
     fontWeight: "500",
   },
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
     borderColor: colors.neutral[300],
   },
   declineButtonText: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     fontWeight: "600",
     color: colors.neutral[700],
   },
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   acceptButtonText: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     fontWeight: "700",
     color: colors.neutral[0],
   },
@@ -615,7 +615,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cancelButtonText: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     fontWeight: "600",
     color: colors.neutral[700],
   },
@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   confirmDeclineText: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     fontWeight: "700",
     color: colors.neutral[0],
   },

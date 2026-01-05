@@ -27,6 +27,7 @@ export {
   resetDatabase,
   getPendingSyncCount,
   getJobsRequiringSync,
+  isOfflineAvailable,
 } from "./database";
 
 // Context

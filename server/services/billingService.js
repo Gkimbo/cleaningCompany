@@ -196,13 +196,17 @@ class BillingService {
    * Process cleaner payout after payment is captured
    */
   static async processCleanerPayout(appointment, models) {
-    const { StripeConnectAccount, Payout } = models;
+    const { StripeConnectAccount, Payout, EmployeeJobAssignment, BusinessEmployee } = models;
     const { getPricingConfig } = require("../config/businessConfig");
     const PreferredCleanerPerksService = require("./PreferredCleanerPerksService");
+    const BusinessVolumeService = require("./BusinessVolumeService");
 
     try {
       const pricing = await getPricingConfig();
-      const platformFeePercent = pricing.platform?.feePercent || 10;
+      // Base platform fee percentages from database config
+      const regularFeePercent = pricing.platform?.feePercent || 0.10;
+      const businessOwnerFeePercent = pricing.platform?.businessOwnerFeePercent || regularFeePercent;
+      const largeBusinessFeePercent = pricing.platform?.largeBusinessFeePercent || 0.07;
 
       const cleanerIds = appointment.employeesAssigned || [];
       if (cleanerIds.length === 0) {
@@ -226,6 +230,26 @@ class BillingService {
           continue;
         }
 
+        // Determine appropriate fee: check if cleaner is a business employee for this job
+        let platformFeePercent = regularFeePercent;
+        let businessOwnerId = null;
+        const employeeAssignment = await EmployeeJobAssignment.findOne({
+          where: { appointmentId: appointment.id },
+          include: [{ model: BusinessEmployee, as: "employee", where: { userId: cleanerId } }],
+        });
+
+        if (employeeAssignment) {
+          businessOwnerId = employeeAssignment.businessOwnerId;
+          // Check if this business qualifies for large business discount
+          const qualification = await BusinessVolumeService.qualifiesForLargeBusinessFee(businessOwnerId);
+          if (qualification.qualifies) {
+            platformFeePercent = largeBusinessFeePercent;
+          } else {
+            // Standard business owner fee
+            platformFeePercent = businessOwnerFeePercent;
+          }
+        }
+
         let payout = await Payout.findOne({
           where: { appointmentId: appointment.id, cleanerId },
         });
@@ -235,7 +259,7 @@ class BillingService {
           cleanerId,
           appointment.homeId,
           perCleanerGross,
-          platformFeePercent,
+          platformFeePercent * 100, // Convert to percentage for this service
           models
         );
 
@@ -317,6 +341,11 @@ class BillingService {
             payoutId: payout.id,
             description: "Platform fee",
           });
+
+          // Update business volume stats if this is a business owner job
+          if (businessOwnerId) {
+            await BusinessVolumeService.incrementVolumeStats(businessOwnerId, perCleanerGross);
+          }
 
           payoutResults.push({ cleanerId, success: true, amount: netAmount / 100, transferId: transfer.id });
         } catch (transferError) {

@@ -1,5 +1,6 @@
 import { Database } from "@nozbe/watermelondb";
 import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
+import Constants from "expo-constants";
 import { offlineSchema } from "./schema";
 import migrations from "./migrations";
 import OfflineJob from "./models/OfflineJob";
@@ -14,55 +15,71 @@ import OfflineDashboardCache from "./models/OfflineDashboardCache";
 // Messaging
 import OfflineMessage from "./models/OfflineMessage";
 
-// Create the SQLite adapter
-const adapter = new SQLiteAdapter({
-  schema: offlineSchema,
-  migrations,
-  // React Native SQLite location
-  dbName: "cleaningapp_offline",
-  // Enable WAL mode for better performance
-  jsi: true,
-  onSetUpError: (error) => {
-    console.error("WatermelonDB setup error:", error);
-  },
-});
+// Check if running in Expo Go (native modules not available)
+const isExpoGo = Constants.appOwnership === "expo";
 
-// Create the database instance
-const database = new Database({
-  adapter,
-  modelClasses: [
-    OfflineJob,
-    OfflinePhoto,
-    OfflineChecklistItem,
-    SyncQueue,
-    SyncConflict,
-    // Business Owner models
-    OfflineEmployee,
-    OfflineOwnerAssignment,
-    OfflineDashboardCache,
-    // Messaging
-    OfflineMessage,
-  ],
-});
+let database = null;
 
-// Export collections for direct access
-export const offlineJobsCollection = database.get("offline_jobs");
-export const offlinePhotosCollection = database.get("offline_photos");
-export const offlineChecklistItemsCollection = database.get("offline_checklist_items");
-export const syncQueueCollection = database.get("sync_queue");
-export const syncConflictsCollection = database.get("sync_conflicts");
+if (isExpoGo) {
+  console.warn(
+    "WatermelonDB offline database is not available in Expo Go. " +
+    "Use a development build for offline functionality: npx expo run:ios"
+  );
+} else {
+  // Create the SQLite adapter
+  const adapter = new SQLiteAdapter({
+    schema: offlineSchema,
+    migrations,
+    // React Native SQLite location
+    dbName: "cleaningapp_offline",
+    // Enable WAL mode for better performance
+    jsi: true,
+    onSetUpError: (error) => {
+      console.error("WatermelonDB setup error:", error);
+    },
+  });
+
+  // Create the database instance
+  database = new Database({
+    adapter,
+    modelClasses: [
+      OfflineJob,
+      OfflinePhoto,
+      OfflineChecklistItem,
+      SyncQueue,
+      SyncConflict,
+      // Business Owner models
+      OfflineEmployee,
+      OfflineOwnerAssignment,
+      OfflineDashboardCache,
+      // Messaging
+      OfflineMessage,
+    ],
+  });
+}
+
+// Export collections for direct access (null if in Expo Go)
+export const offlineJobsCollection = database?.get("offline_jobs") ?? null;
+export const offlinePhotosCollection = database?.get("offline_photos") ?? null;
+export const offlineChecklistItemsCollection = database?.get("offline_checklist_items") ?? null;
+export const syncQueueCollection = database?.get("sync_queue") ?? null;
+export const syncConflictsCollection = database?.get("sync_conflicts") ?? null;
 // Business Owner collections
-export const offlineEmployeesCollection = database.get("offline_employees");
-export const offlineOwnerAssignmentsCollection = database.get("offline_owner_assignments");
-export const offlineDashboardCacheCollection = database.get("offline_dashboard_cache");
+export const offlineEmployeesCollection = database?.get("offline_employees") ?? null;
+export const offlineOwnerAssignmentsCollection = database?.get("offline_owner_assignments") ?? null;
+export const offlineDashboardCacheCollection = database?.get("offline_dashboard_cache") ?? null;
 // Messaging collection
-export const offlineMessagesCollection = database.get("offline_messages");
+export const offlineMessagesCollection = database?.get("offline_messages") ?? null;
 
-// Export the database instance
+// Export the database instance (null if in Expo Go)
 export default database;
+
+// Export flag to check if offline is available
+export const isOfflineAvailable = !isExpoGo && database !== null;
 
 // Utility function to reset the database (for testing/debugging)
 export async function resetDatabase() {
+  if (!database) return;
   await database.write(async () => {
     await database.unsafeResetDatabase();
   });
@@ -70,6 +87,7 @@ export async function resetDatabase() {
 
 // Get pending sync count
 export async function getPendingSyncCount() {
+  if (!syncQueueCollection) return 0;
   const pending = await syncQueueCollection
     .query()
     .fetch();
@@ -78,6 +96,7 @@ export async function getPendingSyncCount() {
 
 // Get all jobs requiring sync
 export async function getJobsRequiringSync() {
+  if (!offlineJobsCollection) return [];
   return await offlineJobsCollection
     .query()
     .fetch()

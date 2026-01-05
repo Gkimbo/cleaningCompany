@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
-import { StateContext } from "../../../App";
+import { UserContext } from "../../context/UserContext";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
 import { useSocket } from "../../services/SocketContext";
 import NotificationCard from "./NotificationCard";
@@ -18,7 +18,7 @@ import RebookingModal from "../cleaner/RebookingModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const NotificationsScreen = () => {
-  const { state } = useContext(StateContext);
+  const { state } = useContext(UserContext);
   const navigate = useNavigate();
   const { onNotification, onNotificationCountUpdate } = useSocket();
 
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     flex: 1,
-    fontSize: typography.sizes.xl,
+    fontSize: typography.fontSize.xl,
     fontWeight: "600",
     color: colors.neutral[900],
   },
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   markAllText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.primary[600],
     fontWeight: "500",
   },
@@ -287,13 +287,13 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   emptyTitle: {
-    fontSize: typography.sizes.lg,
+    fontSize: typography.fontSize.lg,
     fontWeight: "600",
     color: colors.neutral[700],
     marginTop: spacing.md,
   },
   emptyText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[500],
     textAlign: "center",
     marginTop: spacing.sm,

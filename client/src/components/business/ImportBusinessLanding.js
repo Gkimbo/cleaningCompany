@@ -8,7 +8,6 @@ import {
   Platform,
   Dimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,14 +22,27 @@ const ImportBusinessLanding = () => {
 
   // Calculate dynamic percentages from pricing config
   const businessOwnerFee = pricing?.platform?.businessOwnerFeePercent || 0.10;
+  const largeBusinessFee = pricing?.platform?.largeBusinessFeePercent || 0.07;
+  const volumeThreshold = pricing?.platform?.largeBusinessMonthlyThreshold || 50;
   const keepPercent = Math.round((1 - businessOwnerFee) * 100);
+  const keepPercentLarge = Math.round((1 - largeBusinessFee) * 100);
   const feePercent = Math.round(businessOwnerFee * 100);
+  const feePercentLarge = Math.round(largeBusinessFee * 100);
+
+  // ROI Calculations
+  const avgJobPrice = 200; // Average cleaning price
+  const jobsPerMonth = 60; // Average for growing business
+  const monthlyRevenue = avgJobPrice * jobsPerMonth;
+  const standardFeeAmount = monthlyRevenue * businessOwnerFee;
+  const largeFeeAmount = monthlyRevenue * largeBusinessFee;
+  const monthlySavingsWithVolume = standardFeeAmount - largeFeeAmount;
+  const yearlySavingsWithVolume = monthlySavingsWithVolume * 12;
 
   const stats = [
     { value: `${keepPercent}%`, label: "You Keep" },
     { value: "$0", label: "Monthly Fee" },
     { value: "24hr", label: "Fast Payouts" },
-    { value: "5+", label: "Hours Saved/Week" },
+    { value: `${keepPercentLarge}%`, label: "High Volume" },
   ];
 
   const impactNumbers = [
@@ -132,6 +144,34 @@ const ImportBusinessLanding = () => {
     },
   ];
 
+  // Key differentiators - Your Business, Your Rules
+  const ownershipBenefits = [
+    {
+      icon: "users",
+      title: "Your Clients, Forever",
+      description: "Bring your existing clients to the platform. They're YOUR clients - we never market to them or try to steal them. You own those relationships.",
+      highlight: "100% yours",
+    },
+    {
+      icon: "briefcase",
+      title: "Build Your Team",
+      description: "Hire employees, set their pay rates, assign jobs, and track their performance. Grow from solo cleaner to full cleaning company.",
+      highlight: "Unlimited employees",
+    },
+    {
+      icon: "tag",
+      title: "Set Your Own Prices",
+      description: "You decide what to charge. Set different rates for different clients, add custom fees, and keep what you earn.",
+      highlight: "Your prices",
+    },
+    {
+      icon: "award",
+      title: "Your Brand, Your Business",
+      description: "Clients see YOUR business name, not ours. Build your reputation and brand while we handle the backend.",
+      highlight: "White label",
+    },
+  ];
+
   const testimonials = [
     {
       quote: "I went from chasing 20% of my payments to getting paid automatically 100% of the time. That's an extra $800/month I was leaving on the table.",
@@ -160,7 +200,7 @@ const ImportBusinessLanding = () => {
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -206,6 +246,32 @@ const ImportBusinessLanding = () => {
 
           <Text style={styles.heroNote}>No credit card required</Text>
         </LinearGradient>
+
+        {/* Your Business, Your Rules Section */}
+        <View style={styles.ownershipSection}>
+          <Text style={styles.sectionLabel}>YOUR BUSINESS, YOUR RULES</Text>
+          <Text style={styles.sectionTitle}>We Work For You, Not The Other Way Around</Text>
+          <Text style={styles.sectionSubtitle}>
+            Unlike other platforms that treat you like a contractor, you stay in control
+          </Text>
+
+          <View style={styles.ownershipGrid}>
+            {ownershipBenefits.map((benefit, index) => (
+              <View key={index} style={styles.ownershipCard}>
+                <View style={styles.ownershipIconRow}>
+                  <View style={styles.ownershipIconCircle}>
+                    <Feather name={benefit.icon} size={24} color={colors.primary[600]} />
+                  </View>
+                  <View style={styles.ownershipHighlight}>
+                    <Text style={styles.ownershipHighlightText}>{benefit.highlight}</Text>
+                  </View>
+                </View>
+                <Text style={styles.ownershipTitle}>{benefit.title}</Text>
+                <Text style={styles.ownershipDescription}>{benefit.description}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
 
         {/* By The Numbers Section */}
         <View style={styles.numbersSection}>
@@ -388,6 +454,56 @@ const ImportBusinessLanding = () => {
           ))}
         </View>
 
+        {/* Volume Discount Section */}
+        <View style={styles.volumeDiscountSection}>
+          <Text style={styles.sectionLabel}>VOLUME REWARDS</Text>
+          <Text style={styles.sectionTitle}>Grow More, Keep More</Text>
+          <Text style={styles.sectionSubtitle}>
+            High-volume businesses unlock lower fees automatically
+          </Text>
+
+          <View style={styles.volumeCompare}>
+            {/* Standard Tier */}
+            <View style={styles.volumeTierCard}>
+              <Text style={styles.tierLabel}>STANDARD</Text>
+              <Text style={styles.tierFee}>{feePercent}%</Text>
+              <Text style={styles.tierKeep}>Keep {keepPercent}%</Text>
+              <Text style={styles.tierDesc}>All business owners</Text>
+            </View>
+
+            {/* Arrow */}
+            <View style={styles.volumeArrow}>
+              <Feather name="arrow-right" size={24} color={colors.primary[400]} />
+            </View>
+
+            {/* Large Business Tier */}
+            <View style={[styles.volumeTierCard, styles.volumeTierCardHighlight]}>
+              <View style={styles.tierBadge}>
+                <Feather name="star" size={12} color="#fff" />
+              </View>
+              <Text style={styles.tierLabel}>HIGH VOLUME</Text>
+              <Text style={styles.tierFeeHighlight}>{feePercentLarge}%</Text>
+              <Text style={styles.tierKeepHighlight}>Keep {keepPercentLarge}%</Text>
+              <Text style={styles.tierDescHighlight}>{volumeThreshold}+ cleanings/month</Text>
+            </View>
+          </View>
+
+          <View style={styles.volumeSavingsBox}>
+            <View style={styles.savingsRow}>
+              <Feather name="trending-up" size={20} color={colors.success[600]} />
+              <Text style={styles.savingsText}>
+                At {jobsPerMonth} jobs/month, save <Text style={styles.savingsAmount}>${monthlySavingsWithVolume.toLocaleString()}/mo</Text>
+              </Text>
+            </View>
+            <View style={styles.savingsRow}>
+              <Feather name="gift" size={20} color={colors.success[600]} />
+              <Text style={styles.savingsText}>
+                That's <Text style={styles.savingsAmount}>${yearlySavingsWithVolume.toLocaleString()}/year</Text> back in your pocket
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Pricing Highlight */}
         <View style={styles.pricingSection}>
           <LinearGradient
@@ -398,9 +514,9 @@ const ImportBusinessLanding = () => {
               <Text style={styles.pricingBadgeText}>SIMPLE PRICING</Text>
             </View>
 
-            <Text style={styles.pricingTitle}>Keep {keepPercent}% of Everything</Text>
+            <Text style={styles.pricingTitle}>Keep {keepPercent}%-{keepPercentLarge}% of Everything</Text>
             <Text style={styles.pricingSubtitle}>
-              We only take a small {feePercent}% fee when you get paid.{"\n"}
+              Start at {feePercent}% fee, drop to {feePercentLarge}% at {volumeThreshold}+ jobs/month.{"\n"}
               No monthly fees. No setup costs. No hidden charges.
             </Text>
 
@@ -415,7 +531,7 @@ const ImportBusinessLanding = () => {
               </View>
               <View style={styles.pricingFeatureRow}>
                 <Feather name="check" size={20} color={colors.success[600]} />
-                <Text style={styles.pricingFeatureText}>All features included</Text>
+                <Text style={styles.pricingFeatureText}>Volume discounts unlock automatically</Text>
               </View>
               <View style={styles.pricingFeatureRow}>
                 <Feather name="check" size={20} color={colors.success[600]} />
@@ -475,7 +591,7 @@ const ImportBusinessLanding = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -613,6 +729,62 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     textAlign: "center",
     lineHeight: 16,
+  },
+
+  // Ownership Section (Your Business, Your Rules)
+  ownershipSection: {
+    padding: spacing.xl,
+    backgroundColor: "#faf5ff",
+  },
+  ownershipGrid: {
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  ownershipCard: {
+    backgroundColor: "#fff",
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    borderWidth: 2,
+    borderColor: "#e9d5ff",
+    ...shadows.md,
+  },
+  ownershipIconRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  ownershipIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#f3e8ff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ownershipHighlight: {
+    backgroundColor: "#7c3aed",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  ownershipHighlightText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: "#fff",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  ownershipTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+  },
+  ownershipDescription: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    lineHeight: 24,
   },
 
   // Business Benefits Section
@@ -840,6 +1012,107 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.primary[200],
     textAlign: "center",
+  },
+
+  // Volume Discount Section
+  volumeDiscountSection: {
+    padding: spacing.xl,
+    backgroundColor: colors.primary[50],
+  },
+  volumeCompare: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xl,
+  },
+  volumeTierCard: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    maxWidth: 140,
+  },
+  volumeTierCardHighlight: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
+  },
+  tierBadge: {
+    position: "absolute",
+    top: -10,
+    right: -10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.warning[500],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tierLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.tertiary,
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  tierFee: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: colors.text.primary,
+  },
+  tierFeeHighlight: {
+    fontSize: 36,
+    fontWeight: "800",
+    color: "#fff",
+  },
+  tierKeep: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+    marginBottom: spacing.xs,
+  },
+  tierKeepHighlight: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: "#a5f3fc",
+    marginBottom: spacing.xs,
+  },
+  tierDesc: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  tierDescHighlight: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[200],
+    textAlign: "center",
+  },
+  volumeArrow: {
+    paddingHorizontal: spacing.md,
+  },
+  volumeSavingsBox: {
+    backgroundColor: colors.success[50],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  savingsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  savingsText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    marginLeft: spacing.md,
+    flex: 1,
+  },
+  savingsAmount: {
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
   },
 
   // Testimonials Section

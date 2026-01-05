@@ -2,6 +2,7 @@ import database, {
   offlineJobsCollection,
   offlineChecklistItemsCollection,
   syncQueueCollection,
+  isOfflineAvailable,
 } from "./database";
 import NetworkMonitor from "./NetworkMonitor";
 import PhotoStorage from "./PhotoStorage";
@@ -17,9 +18,18 @@ class OfflineManager {
     this._preloadInProgress = false;
   }
 
+  // Check if offline functionality is available
+  get isAvailable() {
+    return isOfflineAvailable;
+  }
+
   // Initialize the offline manager with auth token
   async initialize(authToken) {
     if (this._initialized) return;
+    if (!isOfflineAvailable) {
+      console.warn("Offline manager: database not available (running in Expo Go)");
+      return;
+    }
 
     this._authToken = authToken;
 
@@ -41,7 +51,7 @@ class OfflineManager {
 
   // Preload jobs for today and tomorrow
   async preloadJobs() {
-    if (!this._authToken || this._preloadInProgress) return;
+    if (!isOfflineAvailable || !this._authToken || this._preloadInProgress) return;
 
     this._preloadInProgress = true;
 
@@ -124,6 +134,7 @@ class OfflineManager {
 
   // Get locally stored jobs
   async getLocalJobs(filters = {}) {
+    if (!isOfflineAvailable) return [];
     const jobs = await offlineJobsCollection.query().fetch();
 
     let filtered = jobs;
@@ -146,6 +157,7 @@ class OfflineManager {
 
   // Get a specific local job by server ID
   async getLocalJob(serverId) {
+    if (!isOfflineAvailable) return null;
     const jobs = await offlineJobsCollection.query().fetch();
     return jobs.find((j) => j.serverId === serverId);
   }
@@ -345,6 +357,7 @@ class OfflineManager {
 
   // Clean up completed synced jobs (older than 24 hours)
   async cleanupOldJobs() {
+    if (!isOfflineAvailable) return;
     const jobs = await offlineJobsCollection.query().fetch();
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
 
@@ -368,9 +381,11 @@ class OfflineManager {
 
   // Reset all offline data (for debugging/logout)
   async reset() {
-    await database.write(async () => {
-      await database.unsafeResetDatabase();
-    });
+    if (isOfflineAvailable && database) {
+      await database.write(async () => {
+        await database.unsafeResetDatabase();
+      });
+    }
     await PhotoStorage.clearAllPhotos();
     this._lastPreloadTime = null;
     this._initialized = false;
