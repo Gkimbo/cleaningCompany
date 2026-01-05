@@ -4,7 +4,7 @@
 
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
-![TypeScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
+![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 ![Tests](https://img.shields.io/badge/Tests-1217_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
@@ -17,7 +17,16 @@
 
 ## Overview
 
-The Kleanr mobile app is a React Native application built with Expo that provides a seamless experience for homeowners to book cleanings, cleaners to manage their schedules and earnings, and owners to oversee platform operations.
+The Kleanr mobile app is a React Native application built with Expo that provides a comprehensive experience for all user types: homeowners booking cleanings, cleaners managing schedules and earnings, business owners managing employees and clients, and platform owners overseeing operations.
+
+**Key Features:**
+- Full offline-first architecture with background sync
+- Multi-user role support (6 user types)
+- Real-time messaging with WebSocket
+- Stripe payment integration with Apple Pay/Google Pay
+- iCal calendar sync for vacation rentals
+- Photo documentation with offline capture
+- Push notifications via Expo
 
 ---
 
@@ -63,60 +72,116 @@ export const API_BASE = "http://localhost:3000/api/v1";
 
 ## Features
 
-### By User Type
+### User Types
 
 <table>
 <tr>
-<td width="33%" valign="top">
+<td width="50%" valign="top">
 
 #### Homeowners
 - Book cleaning appointments
 - Manage multiple properties
-- Calendar sync (Airbnb, VRBO)
+- Calendar sync (Airbnb, VRBO, Booking.com)
 - Secure Stripe payments
-- Real-time messaging
-- Payment history & receipts
+- Real-time messaging with cleaners
+- Recurring schedule setup
+- Bill management & history
+- Multi-aspect cleaner reviews
+- Preferred cleaner selection
+- Respond to size adjustment claims
 
 </td>
-<td width="33%" valign="top">
+<td width="50%" valign="top">
 
 #### Cleaners
-- View assigned jobs
-- Photo documentation
-- Digital checklists
-- Earnings dashboard
+- View and request available jobs
+- Photo documentation (before/after)
+- Digital cleaning checklists (73 tasks)
+- Earnings dashboard with charts
 - Stripe Connect payouts
-- 1099-NEC tax access
+- W-9 submission & 1099-NEC access
+- Preferred cleaner tier status
+- Guest-not-left reporting
+- Home size adjustment filing
+- Supply reminders with snooze
 
 </td>
-<td width="33%" valign="top">
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-#### Owners
-- Assign cleaners to jobs
-- Platform overview
-- Broadcast messages
-- Process applications
+#### Business Owners
+- Employee invitation & management
+- Team calendar view
+- Job assignment to employees
+- Payroll tracking (hourly/flat rate)
+- Client invitation via email
+- Direct client management
+- Custom per-home pricing
+- Financial dashboard
+- Team messaging
+- Recurring schedule setup
+
+</td>
+<td width="50%" valign="top">
+
+#### Business Employees
+- Personal job dashboard
+- Assigned job list & calendar
+- Earnings tracking
+- Availability settings
+- Photo & checklist workflow
+- Coworker messaging
+- Job completion with pay tracking
+- Self-assignment (if owner)
+- Marketplace job pickup (if enabled)
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+#### HR Staff
+- Dispute management dashboard
+- Suspicious activity review
+- Photo evidence examination
+- User warning system
+- Account freezing
+- Support conversation handling
+- Application processing
+
+</td>
+<td width="50%" valign="top">
+
+#### Platform Owner/Admin
+- Financial dashboard & analytics
+- Employee management
+- Pricing configuration
+- Incentive & referral programs
+- Preferred perks configuration
+- Checklist editor with versioning
+- Terms & Conditions management
+- Broadcast messaging
 - Tax reporting
-- Terms & Conditions editor
-- Service area management
-- Notification email settings
+- Platform withdrawals
 
 </td>
 </tr>
 </table>
 
-### Key Features
+### Core Features
 
 | Feature | Description |
 |---------|-------------|
-| **Calendar Sync** | Connect Airbnb, VRBO, Booking.com calendars. Auto-create cleanings after checkouts. |
-| **Photo Documentation** | Before/after photos with room-by-room organization |
-| **Cleaning Checklists** | Digital task lists with progress tracking |
-| **Real-time Messaging** | WebSocket-powered chat with unread message badges in navigation |
-| **Stripe Payments** | Apple Pay, Google Pay, and card payments |
-| **Review System** | Multi-aspect cleaner reviews |
-| **Notification Badges** | Unread messages and pending applications shown in top bar |
-| **Quick Action Dashboard** | Styled quick action buttons for common tasks on cleaner/client dashboards |
+| **Offline Mode** | Full offline-first architecture with local database, background sync, conflict resolution, and photo queuing |
+| **Calendar Sync** | Connect Airbnb, VRBO, Booking.com calendars. Auto-create cleanings after checkouts with configurable offset |
+| **Photo Documentation** | Before/after photos with room-by-room organization, offline capture support, and automatic sync |
+| **Cleaning Checklists** | Digital task lists with 73 tasks across 10 sections, progress tracking, and completion percentage |
+| **Real-time Messaging** | WebSocket-powered chat with message reactions, read receipts, typing indicators, and unread badges |
+| **Stripe Payments** | Apple Pay, Google Pay, and card payments with saved payment methods |
+| **Review System** | Multi-aspect bidirectional reviews (cleaning quality, punctuality, professionalism, communication) |
+| **Push Notifications** | Expo push notifications with preferences per notification type |
+| **Preferred Tiers** | Display cleaner tier status (Bronze/Silver/Gold/Platinum) with bonus tracking |
 
 ---
 
@@ -129,60 +194,159 @@ client/
 ├── src/
 │   ├── components/
 │   │   ├── account/              # Account settings
+│   │   ├── admin/                # Admin/owner features
+│   │   │   ├── CleanerApplications/
+│   │   │   ├── AssignAppointments/
+│   │   │   └── forms/
 │   │   ├── appointments/         # Booking & scheduling
+│   │   ├── business/             # Business signup & upgrade
+│   │   ├── businessEmployee/     # Employee portal
+│   │   │   ├── EmployeeDashboard.js
+│   │   │   ├── EmployeeJobList.js
+│   │   │   ├── EmployeeCalendar.js
+│   │   │   ├── EmployeeEarnings.js
+│   │   │   └── CoworkerMessaging.js
+│   │   ├── businessOwner/        # Business owner dashboard
+│   │   │   ├── BusinessOwnerDashboard.js
+│   │   │   ├── EmployeeManagement.js
+│   │   │   ├── JobAssignment.js
+│   │   │   ├── FinancialsScreen.js
+│   │   │   ├── PayrollScreen.js
+│   │   │   └── BusinessOwnerCalendar.js
 │   │   ├── calendarSync/         # iCal integration
 │   │   ├── cleaner/              # Cleaner dashboard
 │   │   ├── client/               # Homeowner views
-│   │   ├── employeeAssignments/  # Job photos & checklists
-│   │   │   └── jobPhotos/
-│   │   │       └── CleaningChecklist.js
-│   │   ├── owner/                # Owner dashboard
+│   │   ├── editHome/             # Home configuration
+│   │   ├── employeeAssignments/  # Job assignments & photos
+│   │   │   ├── jobPhotos/
+│   │   │   │   ├── JobCompletionFlow.js
+│   │   │   │   ├── JobPhotoCapture.js
+│   │   │   │   ├── OfflineJobPhotoCapture.js
+│   │   │   │   └── CleaningChecklist.js
+│   │   │   ├── lists/
+│   │   │   └── tiles/
+│   │   ├── hr/                   # HR staff features
+│   │   ├── incentives/           # Incentive banners
 │   │   ├── messaging/            # Chat system
-│   │   ├── navBar/               # Navigation
-│   │   ├── onboarding/           # User onboarding flow
+│   │   ├── modals/               # Modal components
+│   │   ├── multiCleaner/         # Multi-cleaner support
+│   │   ├── notifications/        # Notification feed
+│   │   ├── offline/              # Offline mode UI
+│   │   │   ├── OfflineBanner.js
+│   │   │   ├── SyncStatusIndicator.js
+│   │   │   ├── ManualSyncButton.js
+│   │   │   └── OfflineLimitWarning.js
+│   │   ├── onboarding/           # User onboarding
+│   │   ├── owner/                # Owner dashboard
+│   │   │   ├── OwnerDashboard.js
+│   │   │   ├── TermsEditor.js
+│   │   │   ├── PricingManagement.js
+│   │   │   ├── IncentivesManagement.js
+│   │   │   ├── ReferralManagement.js
+│   │   │   └── ChecklistEditor/
 │   │   ├── payments/             # Stripe integration
+│   │   ├── pricing/              # Price display
+│   │   ├── referrals/            # Referral management
 │   │   ├── reviews/              # Review components
 │   │   ├── tax/                  # Tax documents
 │   │   ├── terms/                # Terms & Conditions
-│   │   │   ├── TermsModal.js     # Terms acceptance modal
-│   │   │   └── TermsAcceptanceScreen.js
 │   │   ├── tiles/                # Reusable UI tiles
-│   │   ├── userAuthentication/   # Login/registration
-│   │   └── HomePage.js           # Landing page & dashboard
+│   │   └── userAuthentication/   # Login/registration
+│   │
+│   ├── context/
+│   │   ├── AuthContext.js        # Auth state provider
+│   │   ├── PricingContext.js     # Pricing configuration
+│   │   └── UserContext.js        # User state
+│   │
+│   ├── hooks/
+│   │   └── useCountdown.js       # Countdown timer hook
 │   │
 │   └── services/
 │       ├── fetchRequests/        # API service classes
-│       │   ├── fetchData.js      # General API
-│       │   ├── MessageService.js # Messaging API
-│       │   ├── OwnerDashboardService.js # Owner dashboard API
-│       │   ├── PaymentService.js # Payment API
-│       │   └── TaxService.js     # Tax API
-│       ├── styles/
-│       │   └── theme.js          # Design system
-│       ├── AuthContext.js        # Auth state provider
-│       ├── SocketContext.js      # WebSocket provider
-│       └── config.js             # App configuration
+│       │   ├── AppointmentClass.js
+│       │   ├── ApplicationClass.js
+│       │   ├── BillingService.js
+│       │   ├── BusinessEmployeeService.js
+│       │   ├── BusinessOwnerService.js
+│       │   ├── ChecklistService.js
+│       │   ├── ClientDashboardService.js
+│       │   ├── CleanerClientService.js
+│       │   ├── HRDashboardService.js
+│       │   ├── IncentivesService.js
+│       │   ├── MessageClass.js
+│       │   ├── NotificationsService.js
+│       │   ├── OwnerDashboardService.js
+│       │   ├── PreferredCleanerService.js
+│       │   ├── PricingService.js
+│       │   ├── ReferralService.js
+│       │   ├── ReviewClass.js
+│       │   ├── SuspiciousReportsService.js
+│       │   └── TaxService.js
+│       │
+│       ├── offline/              # Offline sync system
+│       │   ├── OfflineManager.js
+│       │   ├── NetworkMonitor.js
+│       │   ├── SyncEngine.js
+│       │   ├── ConflictResolver.js
+│       │   ├── BackgroundSync.js
+│       │   ├── StorageManager.js
+│       │   ├── PhotoStorage.js
+│       │   ├── OfflineBusinessEmployeeService.js
+│       │   ├── OfflineBusinessOwnerService.js
+│       │   ├── OfflineMessagingService.js
+│       │   └── database/
+│       │       ├── index.js
+│       │       ├── schema.js
+│       │       ├── migrations.js
+│       │       └── models/
+│       │
+│       ├── stripe/               # Stripe integration
+│       │   ├── StripeProvider.native.js
+│       │   ├── StripeProvider.web.js
+│       │   ├── usePaymentSheet.native.js
+│       │   └── usePaymentSheet.web.js
+│       │
+│       ├── styles/               # Design system
+│       │   ├── theme.js
+│       │   └── [ComponentStyles].js
+│       │
+│       ├── AuthContext.js
+│       ├── SocketContext.js
+│       ├── PushNotificationContext.js
+│       ├── PushNotificationService.js
+│       └── config.js
 │
-├── __tests__/
-│   ├── components/               # Component tests
-│   │   ├── CalendarSyncManager.test.js
-│   │   ├── CleaningChecklist.test.js
-│   │   ├── Earnings.test.js
-│   │   ├── Bill.test.js
-│   │   ├── TermsModal.test.js
-│   │   ├── TermsEditor.test.js
-│   │   ├── SignUpForm.test.js
-│   │   └── ...
-│   └── services/                 # Service tests
-│       ├── TaxService.test.js
-│       ├── AuthContext.test.js
-│       └── reducerFunction.test.js
-│
+├── __tests__/                    # Test files
 ├── assets/                       # Images, fonts
-├── jest.config.js                # Jest configuration
-├── jest.setup.js                 # Test setup
 └── package.json
 ```
+
+### Offline Architecture
+
+The app implements a complete offline-first architecture:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    App Layer                         │
+├─────────────────────────────────────────────────────┤
+│  OfflineManager    NetworkMonitor    SyncEngine     │
+├─────────────────────────────────────────────────────┤
+│              Local Database (SQLite)                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐            │
+│  │OfflineJob│ │OfflineMsg│ │SyncQueue │            │
+│  └──────────┘ └──────────┘ └──────────┘            │
+├─────────────────────────────────────────────────────┤
+│  PhotoStorage    ConflictResolver   BackgroundSync  │
+└─────────────────────────────────────────────────────┘
+```
+
+**Key Components:**
+- **OfflineManager**: Orchestrates offline functionality
+- **NetworkMonitor**: Tracks network connectivity status
+- **SyncEngine**: Handles data synchronization when online
+- **ConflictResolver**: Resolves sync conflicts
+- **PhotoStorage**: Local photo caching and sync
+- **SyncQueue**: Queues operations for later sync
 
 ### State Management
 
@@ -194,18 +358,20 @@ const initialState = {
     token: null,
     id: null,
     email: null,
-    type: null,        // 'cleaner', 'owner1', or null (homeowner)
+    type: null,        // 'cleaner', 'owner1', 'hr', 'businessOwner', 'businessEmployee'
   },
   homes: [],           // User's properties
   appointments: [],    // Scheduled cleanings
-  bill: {},           // Current billing info
+  bill: {},            // Current billing info
   cleaningRequests: [], // Pending job requests
+  employees: [],       // Business employees (for owners)
 };
 
 // Actions
 dispatch({ type: 'SET_USER', payload: user });
 dispatch({ type: 'ADD_HOME', payload: home });
 dispatch({ type: 'UPDATE_APPOINTMENT', payload: appointment });
+dispatch({ type: 'SET_EMPLOYEES', payload: employees });
 ```
 
 ### Navigation
@@ -222,6 +388,8 @@ import { NativeRouter, Route, Routes } from 'react-router-native';
     <Route path="/calendar-sync/:homeId" element={<CalendarSyncManager />} />
     <Route path="/messages" element={<MessagingHub />} />
     <Route path="/earnings" element={<EarningsDashboard />} />
+    <Route path="/business-dashboard" element={<BusinessOwnerDashboard />} />
+    <Route path="/employee-dashboard" element={<EmployeeDashboard />} />
   </Routes>
 </NativeRouter>
 ```
@@ -229,6 +397,60 @@ import { NativeRouter, Route, Routes } from 'react-router-native';
 ---
 
 ## API Services
+
+### BusinessOwnerService
+
+```javascript
+import BusinessOwnerService from './services/fetchRequests/BusinessOwnerService';
+
+// Get employees
+const employees = await BusinessOwnerService.getEmployees(token);
+
+// Invite employee
+await BusinessOwnerService.inviteEmployee(token, { email, firstName, lastName, payType, payRate });
+
+// Assign job to employee
+await BusinessOwnerService.assignJob(token, employeeId, appointmentId);
+
+// Get team calendar
+const calendar = await BusinessOwnerService.getTeamCalendar(token, startDate, endDate);
+```
+
+### BusinessEmployeeService
+
+```javascript
+import BusinessEmployeeService from './services/fetchRequests/BusinessEmployeeService';
+
+// Get my assignments
+const assignments = await BusinessEmployeeService.getMyAssignments(token);
+
+// Get my earnings
+const earnings = await BusinessEmployeeService.getMyEarnings(token);
+
+// Complete assignment
+await BusinessEmployeeService.completeAssignment(token, assignmentId);
+
+// Update availability
+await BusinessEmployeeService.updateAvailability(token, availabilityData);
+```
+
+### PreferredCleanerService
+
+```javascript
+import PreferredCleanerService from './services/fetchRequests/PreferredCleanerService';
+
+// Get my perk status (cleaner)
+const status = await PreferredCleanerService.getMyPerkStatus(token);
+
+// Get tier info
+const tiers = await PreferredCleanerService.getPerkTierInfo(token);
+
+// Get my availability config
+const config = await PreferredCleanerService.getMyAvailabilityConfig(token);
+
+// Update availability config
+await PreferredCleanerService.updateAvailabilityConfig(token, config);
+```
 
 ### TaxService
 
@@ -241,94 +463,97 @@ const summary = await TaxService.getCleanerTaxSummary(token, 2024);
 // Cleaner: Get 1099-NEC data
 const form = await TaxService.get1099NECData(token, 2024);
 
-// Manager: Get platform tax report
+// Owner: Get platform tax report
 const report = await TaxService.getPlatformTaxReport(token, 2024);
-
-// Homeowner: Get payment history
-const history = await TaxService.getPaymentHistory(token, 2024);
 ```
 
-### MessageService
+### OfflineManager
 
 ```javascript
-import MessageService from './services/fetchRequests/MessageService';
+import OfflineManager from './services/offline/OfflineManager';
 
-// Get all conversations
-const conversations = await MessageService.getConversations(token);
+// Initialize offline support
+await OfflineManager.initialize();
 
-// Get messages in a conversation
-const messages = await MessageService.getMessages(token, conversationId);
+// Check if online
+const isOnline = OfflineManager.isOnline();
 
-// Send a message
-await MessageService.sendMessage(token, conversationId, content);
+// Queue operation for sync
+await OfflineManager.queueOperation('createAppointment', appointmentData);
 
-// Create support conversation
-await MessageService.createSupportConversation(token);
-```
+// Force sync
+await OfflineManager.syncNow();
 
-### PaymentService
-
-```javascript
-import PaymentService from './services/fetchRequests/PaymentService';
-
-// Create payment intent
-const intent = await PaymentService.createPaymentIntent(token, {
-  amount: 15000, // $150.00
-  appointmentId: 123,
-});
-
-// Get payment history
-const history = await PaymentService.getPaymentHistory(token);
-
-// Get cleaner earnings
-const earnings = await PaymentService.getEarnings(token);
-```
-
-### OwnerDashboardService
-
-```javascript
-import OwnerDashboardService from './services/fetchRequests/OwnerDashboardService';
-
-// Get financial summary
-const financial = await OwnerDashboardService.getFinancialSummary(token);
-
-// Get user analytics
-const users = await OwnerDashboardService.getUserAnalytics(token);
-
-// Get service areas
-const areas = await OwnerDashboardService.getServiceAreas(token);
-
-// Update notification email
-await OwnerDashboardService.updateNotificationEmail(token, 'notify@example.com');
-
-// Get owner settings
-const settings = await OwnerDashboardService.getSettings(token);
+// Get pending operations count
+const count = await OfflineManager.getPendingCount();
 ```
 
 ---
 
 ## Key Components
 
-### CalendarSyncManager
+### BusinessOwnerDashboard
 
-Manages iCal sync connections with vacation rental platforms:
+Main dashboard for business owners:
 
 ```javascript
-<CalendarSyncManager
-  homeId={homeId}
-  onSyncComplete={(results) => console.log(results)}
+<BusinessOwnerDashboard
+  onNavigateToEmployees={() => navigate('/employees')}
+  onNavigateToClients={() => navigate('/clients')}
+  onNavigateToCalendar={() => navigate('/team-calendar')}
 />
 ```
 
 **Features:**
-- Connect Airbnb, VRBO, Booking.com calendars
-- Auto-create appointments from checkout dates
-- Manual sync trigger
-- Sync status and error display
+- Financial overview (revenue, pending payouts)
+- Quick stats (employees, clients, jobs)
+- Recent activity feed
+- Quick action buttons
+
+### EmployeeDashboard
+
+Dashboard for business employees:
+
+```javascript
+<EmployeeDashboard
+  onNavigateToJobs={() => navigate('/my-jobs')}
+  onNavigateToEarnings={() => navigate('/earnings')}
+/>
+```
+
+**Features:**
+- Today's assignments
+- Earnings summary
+- Upcoming jobs calendar
+- Availability settings
+
+### OfflineBanner
+
+Displays offline status and sync progress:
+
+```javascript
+<OfflineBanner
+  showSyncButton={true}
+  onSyncPress={() => OfflineManager.syncNow()}
+/>
+```
+
+### JobPhotoCapture (with Offline Support)
+
+Photo documentation with offline capability:
+
+```javascript
+<JobPhotoCapture
+  appointmentId={appointmentId}
+  photoType="before"
+  onPhotoAdded={(photo) => handlePhotoAdded(photo)}
+  offlineMode={!isOnline}
+/>
+```
 
 ### CleaningChecklist
 
-Digital checklist for cleaners with progress tracking:
+Digital checklist with 73 tasks across 10 sections:
 
 ```javascript
 <CleaningChecklist
@@ -345,18 +570,12 @@ Digital checklist for cleaners with progress tracking:
 - Bathrooms (18 tasks)
 - Bedrooms (15 tasks)
 - Living Areas (15 tasks)
-- General (10 tasks)
-
-### EarningsDashboard
-
-Cleaner earnings and payout management:
-
-```javascript
-<EarningsDashboard
-  cleanerId={userId}
-  showPayoutButton={true}
-/>
-```
+- Dining Room (5 tasks)
+- Entryway & Hallways (5 tasks)
+- Home Office (5 tasks)
+- Laundry Room (3 tasks)
+- General Tasks (5 tasks)
+- Final Walkthrough (3 tasks)
 
 ---
 
@@ -397,6 +616,12 @@ export const colors = {
     success: '#28A745',
     warning: '#FFC107',
     error: '#DC3545',
+  },
+  tiers: {
+    bronze: '#CD7F32',
+    silver: '#C0C0C0',
+    gold: '#FFD700',
+    platinum: '#E5E4E2',
   },
 };
 
@@ -441,34 +666,12 @@ npm test -- CleaningChecklist.test.js
 | TopBar | 25 | Navigation, notification badges |
 | ApplicationClass | 23 | Application API methods |
 | CreateNewEmployeeForm | 28 | Username generation, form validation |
+| BusinessOwnerDashboard | 45 | Business owner features |
+| BusinessEmployeeComponents | 38 | Employee portal features |
+| OfflineComponents | 56 | Offline mode UI and sync |
 | Pricing & Staffing | 15 | Dynamic pricing, config |
 | OwnerDashboard | 45 | Owner dashboard, analytics |
 | **Total** | **1217** | - |
-
-### Example Test
-
-```javascript
-describe('CleaningChecklist Component', () => {
-  it('should update progress when tasks are checked', async () => {
-    const mockOnProgressUpdate = jest.fn();
-    const { getByText } = render(
-      <CleaningChecklist
-        home={mockHome}
-        onProgressUpdate={mockOnProgressUpdate}
-      />
-    );
-
-    fireEvent.press(getByText(/Clean all countertops/));
-
-    await waitFor(() => {
-      const callWithCompleted = mockOnProgressUpdate.mock.calls.find(
-        call => call[1] > 0
-      );
-      expect(callWithCompleted[1]).toBe(1);
-    });
-  });
-});
-```
 
 ---
 
@@ -483,6 +686,10 @@ describe('CleaningChecklist Component', () => {
 | `socket.io-client` | ^4.x | Real-time messaging |
 | `react-native-calendars` | ^1.x | Calendar views |
 | `react-native-paper` | ^5.x | UI components |
+| `@react-native-async-storage/async-storage` | ^1.x | Local persistence |
+| `expo-location` | ~17.x | GPS verification |
+| `expo-notifications` | ~0.28.x | Push notifications |
+| `expo-file-system` | ~17.x | Photo storage |
 | `@testing-library/react-native` | ^12.x | Testing utilities |
 
 ---
@@ -519,6 +726,20 @@ xcrun simctl erase all
 **Android build issues:**
 ```bash
 cd android && ./gradlew clean
+```
+
+**Offline sync stuck:**
+```javascript
+// Force clear sync queue
+await OfflineManager.clearSyncQueue();
+await OfflineManager.syncNow();
+```
+
+**Photo upload failures:**
+```javascript
+// Check pending photos
+const pending = await PhotoStorage.getPendingPhotos();
+console.log(`${pending.length} photos pending sync`);
 ```
 
 ---
