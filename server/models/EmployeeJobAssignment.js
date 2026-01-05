@@ -144,6 +144,47 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       comment: "Link to the job flow for this assignment",
     },
+
+    // Guest Not Left tracking
+    guestNotLeftReported: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "True if guest-not-left was most recently reported (cleared on successful start)",
+    },
+    guestNotLeftReportCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: "Total number of guest-not-left reports for this assignment",
+    },
+    lastGuestNotLeftAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "Timestamp of most recent guest-not-left report",
+    },
+
+    // GPS tracking at job start
+    startLocationVerified: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      comment: "True if GPS was verified at job start, false if skipped, null if not checked",
+    },
+    startLatitude: {
+      type: DataTypes.DECIMAL(10, 8),
+      allowNull: true,
+      comment: "GPS latitude when job started (if available)",
+    },
+    startLongitude: {
+      type: DataTypes.DECIMAL(11, 8),
+      allowNull: true,
+      comment: "GPS longitude when job started (if available)",
+    },
+    startDistanceFromHome: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Distance in meters from home at job start",
+    },
   });
 
   // Instance methods
@@ -236,6 +277,10 @@ module.exports = (sequelize, DataTypes) => {
     EmployeeJobAssignment.belongsTo(models.AppointmentJobFlow, {
       foreignKey: "appointmentJobFlowId",
       as: "jobFlow",
+    });
+    EmployeeJobAssignment.hasMany(models.GuestNotLeftReport, {
+      foreignKey: "employeeJobAssignmentId",
+      as: "guestNotLeftReports",
     });
   };
 

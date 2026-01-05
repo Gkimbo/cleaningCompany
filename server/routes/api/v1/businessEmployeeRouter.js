@@ -6,6 +6,7 @@ const BusinessEmployeeService = require("../../../services/BusinessEmployeeServi
 const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssignmentService");
 const MarketplaceJobRequirementsService = require("../../../services/MarketplaceJobRequirementsService");
 const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
+const GuestNotLeftService = require("../../../services/GuestNotLeftService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
 const { BusinessEmployee, EmployeeJobAssignment, User, JobPhoto, AppointmentJobFlow, sequelize } = require("../../../models");
@@ -251,13 +252,74 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
 });
 
 /**
+ * POST /my-jobs/:assignmentId/guest-not-left - Report that guest has not left
+ * Called when cleaner arrives at property but guests are still present
+ */
+router.post("/my-jobs/:assignmentId/guest-not-left", async (req, res) => {
+  try {
+    const { latitude, longitude, notes } = req.body;
+    const io = req.app.get("io");
+
+    const result = await GuestNotLeftService.reportGuestNotLeft(
+      parseInt(req.params.assignmentId),
+      req.user.id,
+      { latitude, longitude },
+      notes,
+      io
+    );
+
+    res.json({
+      success: true,
+      message: result.message,
+      reportCount: result.reportCount,
+      homeownerNotified: result.homeownerNotified,
+    });
+  } catch (error) {
+    console.error("Error reporting guest not left:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /my-jobs/:assignmentId/guest-not-left-status - Get guest not left status
+ */
+router.get("/my-jobs/:assignmentId/guest-not-left-status", async (req, res) => {
+  try {
+    const status = await GuestNotLeftService.getGuestNotLeftStatus(
+      parseInt(req.params.assignmentId)
+    );
+
+    if (!status) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    res.json(status);
+  } catch (error) {
+    console.error("Error getting guest not left status:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
  * POST /my-jobs/:assignmentId/start - Start a job
+ * Accepts optional GPS coordinates and requires manual confirmation
  */
 router.post("/my-jobs/:assignmentId/start", async (req, res) => {
   try {
+    const { latitude, longitude, confirmAtProperty } = req.body;
+
+    // Require manual confirmation that cleaner is at property
+    if (!confirmAtProperty) {
+      return res.status(400).json({
+        error: "Please confirm you are at the property before starting the job",
+        requiresConfirmation: true,
+      });
+    }
+
     const assignment = await EmployeeJobAssignmentService.startJob(
       parseInt(req.params.assignmentId),
-      req.user.id
+      req.user.id,
+      { latitude, longitude }
     );
 
     res.json({ message: "Job started", assignment });

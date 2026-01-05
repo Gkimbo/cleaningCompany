@@ -18,6 +18,9 @@ const {
 const MarketplaceJobRequirementsService = require("./MarketplaceJobRequirementsService");
 const CustomJobFlowService = require("./CustomJobFlowService");
 const AppointmentJobFlowService = require("./AppointmentJobFlowService");
+const GuestNotLeftService = require("./GuestNotLeftService");
+const { calculateDistance } = require("../utils/geoUtils");
+const EncryptionService = require("./EncryptionService");
 
 class EmployeeJobAssignmentService {
   /**
@@ -412,9 +415,10 @@ class EmployeeJobAssignmentService {
    * Start a job (employee action)
    * @param {number} assignmentId - Assignment ID
    * @param {number} employeeUserId - User ID of the employee
+   * @param {Object} [locationData] - Optional GPS coordinates { latitude, longitude }
    * @returns {Promise<Object>} Updated assignment
    */
-  static async startJob(assignmentId, employeeUserId) {
+  static async startJob(assignmentId, employeeUserId, locationData = {}) {
     // Find employee record for this user
     const employee = await BusinessEmployee.findOne({
       where: {
@@ -436,15 +440,47 @@ class EmployeeJobAssignmentService {
         ],
         status: "assigned",
       },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          include: [{ model: UserHomes, as: "home" }],
+        },
+      ],
     });
 
     if (!assignment) {
       throw new Error("Assignment not found or cannot be started");
     }
 
+    // Calculate distance from home if GPS data provided
+    const { latitude, longitude } = locationData;
+    let startDistanceFromHome = null;
+    let startLocationVerified = null;
+
+    if (latitude && longitude) {
+      const home = assignment.appointment?.home;
+      if (home?.latitude && home?.longitude) {
+        const homeLat = parseFloat(EncryptionService.decrypt(home.latitude));
+        const homeLon = parseFloat(EncryptionService.decrypt(home.longitude));
+
+        if (homeLat && homeLon) {
+          startDistanceFromHome = calculateDistance(latitude, longitude, homeLat, homeLon);
+          startLocationVerified = true;
+        }
+      }
+    }
+
+    // Clear any guest not left flag
+    await GuestNotLeftService.clearGuestNotLeftFlag(assignmentId);
+
     await assignment.update({
       status: "started",
       startedAt: new Date(),
+      startLatitude: latitude || null,
+      startLongitude: longitude || null,
+      startDistanceFromHome,
+      startLocationVerified,
     });
 
     return assignment;
