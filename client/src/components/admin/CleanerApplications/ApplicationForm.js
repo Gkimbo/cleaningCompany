@@ -125,7 +125,6 @@ const CleanerApplicationForm = () => {
     IncentivesService.getCurrentIncentives().then(setIncentiveConfig);
   }, []);
 
-  
   const [formData, setFormData] = useState({
     // Basic Information
     firstName: "",
@@ -559,26 +558,22 @@ const CleanerApplicationForm = () => {
       statLabel: "Payouts",
     },
     {
-      icon: "💰",
-      title: `Keep ${keepPercent}% of Every Job`,
-      description: `Earn $${minCleanerPay}-$${maxCleanerPay} per house. We only take ${Math.round(platformFeePercent * 100)}% for payment processing & support. Top cleaners earn $${hustleModeEarnings.monthly.toLocaleString()}+/month.`,
-      stat: `${keepPercent}%`,
-      statLabel: "You Keep",
-    },
-    {
       icon: "📈",
       title: "Unlimited Earning Potential",
-      description:
-        `No caps, no limits. Work more, earn more. Full-time cleaners average $${fullTimeEarnings.yearly.toLocaleString()}/year. Your success = your effort.`,
+      description: `No caps, no limits. Work more, earn more. Full-time cleaners average $${fullTimeEarnings.yearly.toLocaleString()}/year. Your success = your effort.`,
       stat: `$${Math.round(fullTimeEarnings.yearly / 1000)}k+`,
       statLabel: "Per Year",
     },
   ];
 
   const perks = [
-    { icon: "✓", text: `Get paid within 24 hours of each cleaning`, highlight: true },
+    {
+      icon: "✓",
+      text: `Get paid within 48 hours of each cleaning`,
+      highlight: true,
+    },
     { icon: "✓", text: "Flexible scheduling - accept only jobs you want" },
-    { icon: "✓", text: "No experience necessary - we'll train you" },
+    { icon: "✓", text: "No experience necessary" },
     { icon: "✓", text: "Work independently, no boss hovering over you" },
     { icon: "✓", text: "Build recurring clients for steady income" },
     { icon: "✓", text: "Guaranteed payments - never chase money again" },
@@ -586,19 +581,22 @@ const CleanerApplicationForm = () => {
 
   const testimonials = [
     {
-      quote: "I left my retail job 6 months ago. Now I make $4,200/month cleaning 3 houses a day, and I actually have time for my kids.",
+      quote:
+        "I left my retail job 6 months ago. Now I make $4,200/month cleaning 3 houses a day, and I actually have time for my kids.",
       name: "Maria G.",
       earnings: "$4,200/mo",
       time: "6 months on platform",
     },
     {
-      quote: "Started part-time while finishing school. Best side hustle ever - I made $1,800 last month working just weekends.",
+      quote:
+        "Started part-time while finishing school. Best side hustle ever - I made $1,800 last month working just weekends.",
       name: "James T.",
       earnings: "$1,800/mo",
       time: "Part-time cleaner",
     },
     {
-      quote: "The 24-hour payouts changed everything. I can actually plan my finances now instead of waiting 2 weeks for a paycheck.",
+      quote:
+        "The 24-hour payouts changed everything. I can actually plan my finances now instead of waiting 2 weeks for a paycheck.",
       name: "Lisa M.",
       earnings: "$3,500/mo",
       time: "1 year on platform",
@@ -610,7 +608,11 @@ const CleanerApplicationForm = () => {
     { feature: "Get paid within 24 hours", us: true, traditional: false },
     { feature: "Choose which jobs to take", us: true, traditional: false },
     { feature: "No boss or supervisor", us: true, traditional: false },
-    { feature: `Keep ${keepPercent}% of earnings`, us: true, traditional: false },
+    {
+      feature: `Keep ${keepPercent}% of earnings`,
+      us: true,
+      traditional: false,
+    },
     { feature: "Work from anywhere", us: true, traditional: false },
   ];
 
@@ -633,7 +635,7 @@ const CleanerApplicationForm = () => {
             borderBottomRightRadius: 32,
           }}
         >
-          <View
+          {/* <View
             style={{
               backgroundColor: "rgba(255,255,255,0.15)",
               paddingHorizontal: spacing.md,
@@ -652,7 +654,7 @@ const CleanerApplicationForm = () => {
             >
               🔥 500+ Cleaners Already Earning
             </Text>
-          </View>
+          </View> */}
           <Text
             style={{
               fontSize: responsive(28, 36, 44),
@@ -663,8 +665,12 @@ const CleanerApplicationForm = () => {
               lineHeight: responsive(34, 44, 52),
             }}
           >
-            Earn Up To{"\n"}
-            <Text style={{ color: "#fde68a" }}>${hustleModeEarnings.yearly.toLocaleString()}/Year</Text>
+            Earn
+            <Text style={{ color: "#fde68a" }}>
+              {` $${minCleanerPay} - $${maxCleanerPay} `}
+            </Text>
+            {"\n"}
+            Per House Cleaned
           </Text>
           <Text
             style={{
@@ -675,7 +681,9 @@ const CleanerApplicationForm = () => {
               lineHeight: 26,
             }}
           >
-            Keep {keepPercent}% of every job. Get paid in 24 hours.{"\n"}
+            Thats about ${Math.round(minCleanerPay * 0.7)} - $
+            {Math.round(maxCleanerPay * 0.7)} / Hour
+            {"\n"}
             No boss. No limits. Start this week.
           </Text>
 
@@ -689,7 +697,7 @@ const CleanerApplicationForm = () => {
             }}
           >
             {[
-              { value: `${keepPercent}%`, label: "You Keep" },
+              // { value: `${keepPercent}%`, label: "You Keep" },
               { value: "24hr", label: "Payouts" },
               { value: "4.9", label: "Rating" },
               { value: "$0", label: "To Start" },
@@ -797,26 +805,33 @@ const CleanerApplicationForm = () => {
         </View>
 
         {/* Incentive Banner */}
-        {incentiveConfig?.cleaner?.enabled && (() => {
-          const feeReduction = incentiveConfig.cleaner.feeReductionPercent;
-          const maxCleanings = incentiveConfig.cleaner.maxCleanings;
+        {incentiveConfig?.cleaner?.enabled &&
+          (() => {
+            const feeReduction = incentiveConfig.cleaner.feeReductionPercent;
+            const maxCleanings = incentiveConfig.cleaner.maxCleanings;
 
-          // Extra percentage = platform fee * fee reduction (e.g., 10% * 100% = 10% extra)
-          const extraPercent = Math.round(platformFeePercent * feeReduction * 100);
+            // Extra percentage = platform fee * fee reduction (e.g., 10% * 100% = 10% extra)
+            const extraPercent = Math.round(
+              platformFeePercent * feeReduction * 100
+            );
 
-          // Calculate estimated total extra earnings
-          const avgPayPerHouse = Math.round((minCleanerPay + maxCleanerPay) / 2);
-          const extraPerCleaning = Math.round(avgPayPerHouse * platformFeePercent * feeReduction);
-          const totalExtra = extraPerCleaning * maxCleanings;
+            // Calculate estimated total extra earnings
+            const avgPayPerHouse = Math.round(
+              (minCleanerPay + maxCleanerPay) / 2
+            );
+            const extraPerCleaning = Math.round(
+              avgPayPerHouse * platformFeePercent * feeReduction
+            );
+            const totalExtra = extraPerCleaning * maxCleanings;
 
-          return (
-            <IncentiveBanner
-              type="cleaner"
-              message={`New cleaners earn an extra ${extraPercent}% on each of your first ${maxCleanings} cleanings - that's up to $${totalExtra} extra!`}
-              icon="trending-up"
-            />
-          );
-        })()}
+            return (
+              <IncentiveBanner
+                type="cleaner"
+                message={`New cleaners earn an extra ${extraPercent}% on each of your first ${maxCleanings} cleanings - that's up to $${totalExtra} extra!`}
+                icon="trending-up"
+              />
+            );
+          })()}
 
         {/* Benefits Grid */}
         <View
@@ -1091,8 +1106,9 @@ const CleanerApplicationForm = () => {
               marginTop: spacing.xl,
             }}
           >
-            *Earnings based on ${minCleanerPay}-${maxCleanerPay} per house.
-            Results vary by location and availability.
+            *Earnings based on ${minCleanerPay}-${maxCleanerPay} per house. $
+            {minCleanerPay} per house is the absolute mininimum you'll earn
+            cleaning a 1 bed 1 bath home. It only goes up from there!
           </Text>
         </View>
 
@@ -1165,7 +1181,7 @@ const CleanerApplicationForm = () => {
           </View>
         </View>
 
-        {/* Testimonials */}
+        {/* Testimonials
         <View
           style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
         >
@@ -1288,7 +1304,7 @@ const CleanerApplicationForm = () => {
               </View>
             </View>
           ))}
-        </View>
+        </View> */}
 
         {/* Requirements */}
         <View
@@ -1976,7 +1992,8 @@ const CleanerApplicationForm = () => {
           <TouchableOpacity
             style={[
               localStyles.termsCheckbox,
-              formData.privacyPolicyAccepted && localStyles.termsCheckboxChecked,
+              formData.privacyPolicyAccepted &&
+                localStyles.termsCheckboxChecked,
             ]}
             onPress={() => {
               if (!formData.privacyPolicyAccepted) {
@@ -2005,7 +2022,9 @@ const CleanerApplicationForm = () => {
           </View>
         </View>
         {formData.privacyPolicyAccepted && (
-          <Text style={localStyles.termsAcceptedText}>Privacy policy accepted</Text>
+          <Text style={localStyles.termsAcceptedText}>
+            Privacy policy accepted
+          </Text>
         )}
       </View>
 

@@ -9,7 +9,13 @@ import {
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
+import {
+  colors,
+  spacing,
+  radius,
+  typography,
+  shadows,
+} from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
 
 const CleanerUpgradeLanding = ({ state }) => {
@@ -17,7 +23,7 @@ const CleanerUpgradeLanding = ({ state }) => {
   const { pricing } = usePricing();
 
   // Calculate dynamic percentages from pricing config
-  const businessOwnerFee = pricing?.platform?.businessOwnerFeePercent || 0.10;
+  const businessOwnerFee = pricing?.platform?.businessOwnerFeePercent || 0.1;
   const keepPercent = Math.round((1 - businessOwnerFee) * 100);
   const feePercent = Math.round(businessOwnerFee * 100);
 
@@ -46,32 +52,32 @@ const CleanerUpgradeLanding = ({ state }) => {
     {
       icon: "users",
       title: "Manage Your Own Clients",
-      description: "Invite and manage clients directly through the app"
+      description: "Invite and manage clients directly through the app",
     },
     {
       icon: "dollar-sign",
       title: `Keep ${keepPercent}% of Earnings`,
-      description: `Only a small ${feePercent}% platform fee on client jobs`
+      description: `Only a small ${feePercent}% platform fee on client jobs`,
     },
     {
       icon: "repeat",
       title: "Recurring Schedules",
-      description: "Set up weekly, bi-weekly, or monthly appointments"
+      description: "Set up weekly, bi-weekly, or monthly appointments",
     },
     {
       icon: "send",
       title: "Easy Client Invites",
-      description: "Invite clients with one click via email"
+      description: "Invite clients with one click via email",
     },
     {
       icon: "briefcase",
       title: "Still Work Platform Jobs",
-      description: "Keep access to all regular platform appointments"
+      description: "Keep access to all regular platform appointments",
     },
     {
       icon: "credit-card",
       title: "Automatic Payments",
-      description: "Get paid instantly when jobs are completed"
+      description: "Get paid instantly when jobs are completed",
     },
   ];
 
@@ -107,7 +113,8 @@ const CleanerUpgradeLanding = ({ state }) => {
 
           <Text style={styles.title}>Become a Business Owner</Text>
           <Text style={styles.subtitle}>
-            Upgrade your cleaner account to manage your own cleaning business while still having access to platform jobs.
+            Upgrade your cleaner account to manage your own cleaning business
+            while still having access to platform jobs.
           </Text>
         </LinearGradient>
 
@@ -119,11 +126,17 @@ const CleanerUpgradeLanding = ({ state }) => {
             {benefits.map((benefit, index) => (
               <View key={index} style={styles.benefitCard}>
                 <View style={styles.benefitIcon}>
-                  <Feather name={benefit.icon} size={24} color={colors.primary[600]} />
+                  <Feather
+                    name={benefit.icon}
+                    size={24}
+                    color={colors.primary[600]}
+                  />
                 </View>
                 <View style={styles.benefitContent}>
                   <Text style={styles.benefitTitle}>{benefit.title}</Text>
-                  <Text style={styles.benefitDescription}>{benefit.description}</Text>
+                  <Text style={styles.benefitDescription}>
+                    {benefit.description}
+                  </Text>
                 </View>
               </View>
             ))}
