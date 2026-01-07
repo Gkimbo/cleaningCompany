@@ -1,4 +1,10 @@
-import React, { createContext, useState, useEffect, useCallback, useContext } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useCallback,
+  useContext,
+} from "react";
 import PricingService from "../services/fetchRequests/PricingService";
 
 /**
@@ -20,10 +26,26 @@ const defaultPricing = {
 
   // Time window surcharges
   timeWindows: {
-    anytime: { surcharge: 0, label: "Anytime", description: "Most flexible, best pricing" },
-    "10-3": { surcharge: 25, label: "10am - 3pm", description: "+$25 per cleaning" },
-    "11-4": { surcharge: 25, label: "11am - 4pm", description: "+$25 per cleaning" },
-    "12-2": { surcharge: 30, label: "12pm - 2pm", description: "+$30 per cleaning" },
+    anytime: {
+      surcharge: 0,
+      label: "Anytime",
+      description: "Most flexible, best pricing",
+    },
+    "10-3": {
+      surcharge: 25,
+      label: "10am - 3pm",
+      description: "+$25 per cleaning",
+    },
+    "11-4": {
+      surcharge: 25,
+      label: "11am - 4pm",
+      description: "+$25 per cleaning",
+    },
+    "12-2": {
+      surcharge: 30,
+      label: "12pm - 2pm",
+      description: "+$30 per cleaning",
+    },
   },
 
   // Cancellation policy
@@ -80,7 +102,10 @@ export const PricingProvider = ({ children }) => {
         setSource("config");
       }
     } catch (err) {
-      console.warn("[PricingContext] Failed to fetch pricing, using fallback:", err.message);
+      console.warn(
+        "[PricingContext] Failed to fetch pricing, using fallback:",
+        err.message
+      );
       setError(err.message);
       setPricing(defaultPricing);
       setSource("config");
@@ -103,9 +128,7 @@ export const PricingProvider = ({ children }) => {
   };
 
   return (
-    <PricingContext.Provider value={value}>
-      {children}
-    </PricingContext.Provider>
+    <PricingContext.Provider value={value}>{children}</PricingContext.Provider>
   );
 };
 
@@ -151,9 +174,10 @@ export const getTimeWindowOptions = (pricing) => {
     return {
       value,
       label: isObject && config.label ? config.label : labels.label,
-      description: isObject && config.description
-        ? config.description
-        : surcharge > 0
+      description:
+        isObject && config.description
+          ? config.description
+          : surcharge > 0
           ? `+$${surcharge} per cleaning`
           : labels.description,
       surcharge,
@@ -202,8 +226,16 @@ export const getTimeWindowLabel = (pricing, timeWindow) => {
     return { label: "Anytime", surcharge: 0, shortLabel: null };
   }
 
-  const surcharge = typeof config === "object" ? (config.surcharge || 0) : (typeof config === "number" ? config : 0);
-  const label = typeof config === "object" && config.label ? config.label : (timeWindowLabels[timeWindow] || timeWindow);
+  const surcharge =
+    typeof config === "object"
+      ? config.surcharge || 0
+      : typeof config === "number"
+      ? config
+      : 0;
+  const label =
+    typeof config === "object" && config.label
+      ? config.label
+      : timeWindowLabels[timeWindow] || timeWindow;
 
   // Create a short label for calendar cells (e.g., "10-3")
   const shortLabel = timeWindow;
@@ -220,16 +252,22 @@ export const getTimeWindowLabel = (pricing, timeWindow) => {
  */
 export const calculateBasePrice = (pricing, numBeds, numBaths) => {
   const basePrice = pricing?.basePrice || defaultPricing.basePrice;
-  const extraBedBathFee = pricing?.extraBedBathFee || defaultPricing.extraBedBathFee;
+  const extraBedBathFee =
+    pricing?.extraBedBathFee || defaultPricing.extraBedBathFee;
   const halfBathFee = pricing?.halfBathFee || defaultPricing.halfBathFee;
 
   const baths = parseFloat(numBaths) || 0;
   const fullBaths = Math.floor(baths);
-  const hasHalfBath = (baths % 1) >= 0.5;
+  const hasHalfBath = baths % 1 >= 0.5;
 
   const extraBeds = Math.max(0, numBeds - 1);
   const extraFullBaths = Math.max(0, fullBaths - 1);
   const halfBathCount = hasHalfBath ? 1 : 0;
 
-  return basePrice + (extraBeds * extraBedBathFee) + (extraFullBaths * extraBedBathFee) + (halfBathCount * halfBathFee);
+  return (
+    basePrice +
+    extraBeds * extraBedBathFee +
+    extraFullBaths * extraBedBathFee +
+    halfBathCount * halfBathFee
+  );
 };

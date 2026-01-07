@@ -299,28 +299,28 @@ const HomePage = ({ state, dispatch }) => {
 
   const features = [
     {
-      icon: "calendar",
-      title: "Book in 30 Seconds",
+      icon: "trending-up",
+      title: "Effortless Booking",
       description:
-        "Schedule cleanings instantly with our app. Recurring? One-time? Last minute? We've got you covered.",
+        "Schedule professional cleanings in seconds—on demand or recurring. Designed for hosts who value speed, simplicity, and control.",
     },
     {
       icon: "clock",
-      title: "Perfect Timing Every Time",
+      title: "Precisely Timed Turnovers",
       description:
-        "Choose flexible windows (10am-4pm) that align with your check-out/check-in times. Never stress about turnovers.",
-    },
-    {
-      icon: "star",
-      title: "5-Star Cleaners, Every Clean",
-      description:
-        "Background-checked, vetted professionals with 4.9 average rating. Your property is in expert hands.",
+        "Flexible service windows (10am–4pm) align seamlessly with guest check-outs and check-ins, ensuring every stay starts spotless.",
     },
     {
       icon: "shield",
-      title: "Guaranteed Satisfaction",
+      title: "Trusted, Elite Cleaners",
       description:
-        "Not happy? We'll re-clean for free or refund you. Your guests' experience is our priority.",
+        "Every cleaner is background-checked, professionally trained, and held to five-star standards—so your property is always in expert hands.",
+    },
+    {
+      icon: "calendar",
+      title: "Smart Calendar Sync",
+      description:
+        "Connect your AirBNB, VRBO, or any other app calendar. When guests check out, we automatically schedule the clean—no coordination required.",
     },
   ];
 
