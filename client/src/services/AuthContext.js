@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import PushNotificationService from "./PushNotificationService";
+import { OfflineManager } from "./offline";
 
 const AuthContext = createContext({
 	user: null,
@@ -23,6 +24,8 @@ const AuthProvider = ({ children }) => {
 				// You need to implement the server-side validation logic here
 				// If the token is valid, set the user as logged in
 				setUser({ token });
+				// Initialize offline manager with token
+				OfflineManager.initialize(token).catch(console.error);
 			}
 		} catch (error) {
 			console.log("Error checking token:", error);
@@ -35,6 +38,8 @@ const AuthProvider = ({ children }) => {
 			await AsyncStorage.setItem("token", token);
 			// Set the user as logged in
 			setUser({ token });
+			// Initialize offline manager with token
+			OfflineManager.initialize(token).catch(console.error);
 		} catch (error) {
 			console.log("Error saving token:", error);
 		}
@@ -50,6 +55,8 @@ const AuthProvider = ({ children }) => {
 			}
 			// Remove the token from AsyncStorage
 			await AsyncStorage.removeItem("token");
+			// Reset offline manager (keeps data encrypted locally)
+			OfflineManager.reset().catch(console.error);
 			// Set the user as logged out
 			setUser(null);
 		} catch (error) {

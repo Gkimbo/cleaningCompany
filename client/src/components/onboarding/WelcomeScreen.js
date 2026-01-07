@@ -1,6 +1,5 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigate } from "react-router-native";
 import styles from "./OnboardingStyles";
 
@@ -15,7 +14,7 @@ const WelcomeScreen = () => {
   ];
 
   return (
-    <SafeAreaView style={styles.welcomeContainer}>
+    <View style={styles.welcomeContainer}>
       <Text style={styles.welcomeTitle}>Welcome to CleanHome</Text>
       <Text style={styles.welcomeSubtitle}>
         Professional home cleaning made simple. Book trusted cleaners in minutes.
@@ -47,7 +46,7 @@ const WelcomeScreen = () => {
           Already have an account? Sign In
         </Text>
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 };
 

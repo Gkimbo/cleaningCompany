@@ -29,6 +29,8 @@ const preferredCleanerRouter = require("./api/v1/preferredCleanerRouter");
 const suspiciousReportsRouter = require("./api/v1/suspiciousReportsRouter");
 const notificationsRouter = require("./api/v1/notificationsRouter");
 const multiCleanerRouter = require("./api/v1/multiCleanerRouter");
+const businessOwnerRouter = require("./api/v1/businessOwnerRouter");
+const businessEmployeeRouter = require("./api/v1/businessEmployeeRouter");
 
 const rootRouter = new express.Router();
 
@@ -61,6 +63,8 @@ rootRouter.use("/api/v1/preferred-cleaner", preferredCleanerRouter);
 rootRouter.use("/api/v1/suspicious-reports", suspiciousReportsRouter);
 rootRouter.use("/api/v1/notifications", notificationsRouter);
 rootRouter.use("/api/v1/multi-cleaner", multiCleanerRouter);
+rootRouter.use("/api/v1/business-owner", businessOwnerRouter);
+rootRouter.use("/api/v1/business-employee", businessEmployeeRouter);
 
 rootRouter.use("/", clientRouter);
 

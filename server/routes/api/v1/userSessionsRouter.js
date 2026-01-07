@@ -46,19 +46,126 @@ const detectDeviceType = (userAgent) => {
 	return "desktop";
 };
 
-sessionRouter.post("/login", async (req, res) => {
-	const { username, password } = req.body;
+// Helper to get display name for account type
+const getAccountDisplayName = (user) => {
+	if (user.type === "employee") {
+		return "Business Employee";
+	}
+	if (user.type === "cleaner" && user.isMarketplaceCleaner) {
+		return "Marketplace Cleaner";
+	}
+	if (user.type === "cleaner") {
+		return "Cleaner";
+	}
+	if (user.type === "owner") {
+		return "Owner";
+	}
+	if (user.type === "humanResources") {
+		return "HR Staff";
+	}
+	return "Homeowner";
+};
+
+// Helper to get account type identifier
+const getAccountType = (user) => {
+	if (user.type === "employee") return "employee";
+	if (user.type === "cleaner" && user.isMarketplaceCleaner) return "marketplace_cleaner";
+	if (user.type === "cleaner") return "cleaner";
+	if (user.type === "owner") return "owner";
+	if (user.type === "humanResources") return "hr";
+	return "homeowner";
+};
+
+// Helper to match user to account type
+const matchesAccountType = (user, accountType) => {
+	if (accountType === "employee") return user.type === "employee";
+	if (accountType === "marketplace_cleaner") return user.type === "cleaner" && user.isMarketplaceCleaner === true;
+	if (accountType === "cleaner") return user.type === "cleaner" && !user.isMarketplaceCleaner;
+	if (accountType === "owner") return user.type === "owner";
+	if (accountType === "hr") return user.type === "humanResources";
+	if (accountType === "homeowner") return !user.type || user.type === null;
+	return false;
+};
+
+// GET: Check if email has multiple accounts (for login form account type selection)
+sessionRouter.get("/check-accounts", async (req, res) => {
+	const { email } = req.query;
+
+	// If not an email, no need to check
+	if (!email || !email.includes("@")) {
+		return res.json({ multipleAccounts: false });
+	}
 
 	try {
-		// Allow login with either username or email
-		const user = await User.findOne({
-			where: {
-				[Op.or]: [
-					{ username: username },
-					{ email: username }
-				]
-			}
+		const users = await User.findAll({ where: { email } });
+
+		if (users.length <= 1) {
+			return res.json({ multipleAccounts: false });
+		}
+
+		// Multiple accounts found - return account options
+		const accountOptions = users.map((u) => ({
+			accountType: getAccountType(u),
+			displayName: getAccountDisplayName(u),
+		}));
+
+		return res.json({
+			multipleAccounts: true,
+			accountOptions,
 		});
+	} catch (error) {
+		console.error("Error checking accounts:", error);
+		return res.json({ multipleAccounts: false });
+	}
+});
+
+sessionRouter.post("/login", async (req, res) => {
+	const { username, password, accountType } = req.body;
+
+	try {
+		let user;
+		const isEmail = username && username.includes("@");
+
+		if (isEmail) {
+			// Email login - check for multiple accounts
+			const usersWithEmail = await User.findAll({
+				where: { email: username }
+			});
+
+			if (usersWithEmail.length === 0) {
+				// No users with this email, try as username
+				user = await User.findOne({ where: { username } });
+			} else if (usersWithEmail.length === 1) {
+				// Only one account with this email
+				user = usersWithEmail[0];
+			} else {
+				// Multiple accounts with same email - need account type selection
+				if (!accountType) {
+					// Return available account types for selection
+					const accountOptions = usersWithEmail.map((u) => ({
+						accountType: getAccountType(u),
+						displayName: getAccountDisplayName(u),
+					}));
+
+					return res.status(300).json({
+						message: "Multiple accounts found. Please select account type.",
+						requiresAccountSelection: true,
+						accountOptions,
+					});
+				}
+
+				// User specified account type, find matching account
+				user = usersWithEmail.find((u) => matchesAccountType(u, accountType));
+
+				if (!user) {
+					return res.status(401).json({ error: "Invalid credentials" });
+				}
+			}
+		} else {
+			// Username login - works as before (username is unique)
+			user = await User.findOne({ where: { username } });
+		}
+
 		if (user) {
 			// Check if account is locked
 			if (user.lockedUntil && user.lockedUntil > new Date()) {
@@ -116,11 +223,27 @@ sessionRouter.post("/login", async (req, res) => {
 							}
 						}
 
+						// Get linked accounts (other accounts with same email) for account switching
+						let linkedAccounts = [];
+						if (user.email) {
+							const otherAccounts = await User.findAll({
+								where: {
+									email: user.email,
+									id: { [Op.ne]: user.id }
+								}
+							});
+							linkedAccounts = otherAccounts.map((u) => ({
+								accountType: getAccountType(u),
+								displayName: getAccountDisplayName(u),
+							}));
+						}
+
 						return res.status(201).json({
 							user: serializedUser,
 							token: token,
 							requiresTermsAcceptance,
 							terms: termsData,
+							linkedAccounts,
 						});
 					}
 				});
@@ -176,7 +299,8 @@ sessionRouter.post("/logout", (req, res) => {
 	res.status(200).json({ message: "Logout successful" });
 });
 
-// POST: Forgot Username - sends username to email
+// POST: Forgot Username - sends username(s) to email
+// If multiple accounts share the same email, sends all usernames
 sessionRouter.post("/forgot-username", async (req, res) => {
 	const { email } = req.body;
 
@@ -185,22 +309,30 @@ sessionRouter.post("/forgot-username", async (req, res) => {
 	}
 
 	try {
-		const user = await User.findOne({ where: { email } });
+		const usersWithEmail = await User.findAll({ where: { email } });
 
-		if (!user) {
+		if (usersWithEmail.length === 0) {
 			// Return success even if user not found for security (don't reveal if email exists)
 			return res.status(200).json({
 				message: "If an account with that email exists, we've sent the username to it."
 			});
 		}
 
-		// Send username recovery email
-		await Email.sendUsernameRecovery(email, user.username);
-		console.log(`✅ Username recovery email sent`);
+		// Collect all usernames with their account types
+		const usernames = usersWithEmail.map((u) => ({
+			username: u.username,
+			accountType: getAccountDisplayName(u),
+		}));
 
-		// Send push notification if user has a stored token
-		if (user.expoPushToken) {
-			await PushNotification.sendPushUsernameRecovery(user.expoPushToken, user.username);
+		// Send username recovery email with all usernames
+		await Email.sendUsernameRecovery(email, usernames.map((u) => `${u.username} (${u.accountType})`).join(", "));
+		console.log(`✅ Username recovery email sent with ${usernames.length} username(s)`);
+
+		// Send push notification to each user that has a token
+		for (const user of usersWithEmail) {
+			if (user.expoPushToken) {
+				await PushNotification.sendPushUsernameRecovery(user.expoPushToken, user.username);
+			}
 		}
 
 		return res.status(200).json({
@@ -214,20 +346,45 @@ sessionRouter.post("/forgot-username", async (req, res) => {
 
 // POST: Forgot Password - generates temporary password and sends to email
 sessionRouter.post("/forgot-password", async (req, res) => {
-	const { email } = req.body;
+	const { email, accountType } = req.body;
 
 	if (!email) {
 		return res.status(400).json({ error: "Email is required" });
 	}
 
 	try {
-		const user = await User.findOne({ where: { email } });
+		const usersWithEmail = await User.findAll({ where: { email } });
 
-		if (!user) {
+		if (usersWithEmail.length === 0) {
 			// Return success even if user not found for security
 			return res.status(200).json({
 				message: "If an account with that email exists, we've sent password reset instructions to it."
 			});
+		}
+
+		// If multiple accounts and no accountType specified, ask which one
+		if (usersWithEmail.length > 1 && !accountType) {
+			const accountOptions = usersWithEmail.map((u) => ({
+				accountType: getAccountType(u),
+				displayName: getAccountDisplayName(u),
+			}));
+
+			return res.status(300).json({
+				message: "Multiple accounts found. Please select which account to reset.",
+				requiresAccountSelection: true,
+				accountOptions,
+			});
+		}
+
+		// Find the user to reset
+		let user;
+		if (usersWithEmail.length === 1) {
+			user = usersWithEmail[0];
+		} else {
+			user = usersWithEmail.find((u) => matchesAccountType(u, accountType));
+			if (!user) {
+				return res.status(400).json({ error: "Invalid account type selected" });
+			}
 		}
 
 		// Generate a temporary password (12 characters)
@@ -242,7 +399,7 @@ sessionRouter.post("/forgot-password", async (req, res) => {
 
 		// Send password reset email
 		await Email.sendPasswordReset(email, user.username, temporaryPassword);
-		console.log(`✅ Password reset email sent`);
+		console.log(`✅ Password reset email sent for ${user.username}`);
 
 		// Send push notification if user has a stored token
 		if (user.expoPushToken) {

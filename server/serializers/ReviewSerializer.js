@@ -1,4 +1,11 @@
+const EncryptionService = require("../services/EncryptionService");
+
 class ReviewSerializer {
+	static decryptField(value) {
+		if (!value) return null;
+		return EncryptionService.decrypt(value);
+	}
+
 	static serializeArray(reviewArray) {
 		const allowedAttributes = [
 			"id",
@@ -40,8 +47,8 @@ class ReviewSerializer {
 				newReview.reviewer = {
 					id: reviewerData.id,
 					username: reviewerData.username,
-					firstName: reviewerData.firstName,
-					lastName: reviewerData.lastName,
+					firstName: this.decryptField(reviewerData.firstName),
+					lastName: this.decryptField(reviewerData.lastName),
 				};
 			} else if (review.dataValues.reviewerName) {
 				// Reviewer was deleted but we have their stored name

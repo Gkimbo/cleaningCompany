@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[200],
   },
   statusText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     fontWeight: "600",
     color: colors.warning[700],
   },
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error[500],
   },
   timerText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     fontWeight: "700",
     color: colors.neutral[0],
   },
@@ -333,12 +333,12 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   clientName: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     fontWeight: "600",
     color: colors.neutral[900],
   },
   homeAddress: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[600],
     marginTop: 2,
   },
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   detailText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[600],
   },
   priceText: {
@@ -380,13 +380,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   declineReasonLabel: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     fontWeight: "600",
     color: colors.error[700],
     marginBottom: 2,
   },
   declineReasonText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.error[800],
   },
   suggestedDatesContainer: {
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   suggestedDatesLabel: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     fontWeight: "600",
     color: colors.primary[700],
     marginBottom: spacing.xs,
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   suggestedDateText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     fontWeight: "500",
     color: colors.primary[700],
   },
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     borderColor: colors.neutral[300],
   },
   cancelButtonText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     fontWeight: "600",
     color: colors.neutral[700],
   },
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   rebookButtonText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     fontWeight: "700",
     color: colors.neutral[0],
   },
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   maxAttemptsText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     color: colors.neutral[500],
     fontStyle: "italic",
   },

@@ -22,7 +22,7 @@ class PreferredCleanerService {
    * @returns {Object} Result with updated appointment
    */
   static async declineAppointment(appointmentId, cleanerId, models) {
-    const { UserAppointments, UserHomes, User, CleanerClient } = models;
+    const { UserAppointments, UserHomes, User, CleanerClient, HomePreferredCleaner, PreferredPerksConfig } = models;
 
     // Find the appointment with home details
     const appointment = await UserAppointments.findByPk(appointmentId, {
@@ -52,19 +52,100 @@ class PreferredCleanerService {
 
     // Get the cleaner's details for notifications
     const cleaner = await User.findByPk(cleanerId);
+    const cleanerName = `${cleaner.firstName} ${cleaner.lastName}`;
+
+    // Check for backup preferred cleaners (other cleaners at same home)
+    const backupCleaners = await HomePreferredCleaner.findAll({
+      where: {
+        homeId: appointment.homeId,
+        cleanerId: { [require("sequelize").Op.ne]: cleanerId },
+      },
+      include: [{
+        model: User,
+        as: "cleaner",
+        attributes: ["id", "firstName", "lastName", "email", "expoPushToken"],
+      }],
+      order: [["priority", "DESC"], ["setAt", "ASC"]],
+    });
+
+    // Get backup timeout from config (default 24 hours)
+    let backupTimeoutHours = 24;
+    if (PreferredPerksConfig) {
+      try {
+        const config = await PreferredPerksConfig.findOne();
+        if (config) {
+          backupTimeoutHours = config.backupCleanerTimeoutHours || 24;
+        }
+      } catch (err) {
+        console.log("[PreferredCleaner] Could not load config, using default timeout");
+      }
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + backupTimeoutHours * 60 * 60 * 1000);
 
     // Update the appointment
     await appointment.update({
       preferredCleanerDeclined: true,
-      declinedAt: new Date(),
-      clientResponsePending: true,
+      declinedAt: now,
+      // If we have backup cleaners, notify them first before escalating to client
+      clientResponsePending: backupCleaners.length === 0,
+      backupCleanersNotified: backupCleaners.length > 0,
+      backupNotificationSentAt: backupCleaners.length > 0 ? now : null,
+      backupNotificationExpiresAt: backupCleaners.length > 0 ? expiresAt : null,
     });
 
-    // Send notification to the client
     const client = appointment.user;
-    const cleanerName = `${cleaner.firstName} ${cleaner.lastName}`;
     const homeAddress = `${decryptHomeField(appointment.home.address)}, ${decryptHomeField(appointment.home.city)}`;
 
+    // If we have backup cleaners, notify them instead of the client
+    if (backupCleaners.length > 0) {
+      console.log(`[PreferredCleaner] Notifying ${backupCleaners.length} backup cleaners for appointment ${appointmentId}`);
+
+      for (const backup of backupCleaners) {
+        if (!backup.cleaner) continue;
+
+        try {
+          // Push notification to backup cleaner
+          if (backup.cleaner.expoPushToken) {
+            await PushNotification.sendPushNotification(
+              backup.cleaner.expoPushToken,
+              "Job Available - Preferred Home",
+              `A cleaning job at ${homeAddress} on ${this.formatDate(appointment.date)} is now available. You have ${backupTimeoutHours} hours to accept.`,
+              { type: "backup_cleaner_opportunity", appointmentId: appointment.id }
+            );
+          }
+
+          // Email notification
+          if (backup.cleaner.email) {
+            await this.sendBackupCleanerNotificationEmail(
+              EncryptionService.decrypt(backup.cleaner.email),
+              EncryptionService.decrypt(backup.cleaner.firstName),
+              appointment.date,
+              homeAddress,
+              appointment.id,
+              backupTimeoutHours
+            );
+          }
+        } catch (notifyErr) {
+          console.error(`Error notifying backup cleaner ${backup.cleanerId}:`, notifyErr);
+        }
+      }
+
+      return {
+        success: true,
+        appointment: {
+          id: appointment.id,
+          date: appointment.date,
+          clientResponsePending: false,
+          backupCleanersNotified: true,
+          backupCleanerCount: backupCleaners.length,
+          expiresAt,
+        },
+      };
+    }
+
+    // No backup cleaners - notify client directly
     try {
       // Email notification
       await this.sendDeclineNotificationEmail(
@@ -343,6 +424,104 @@ class PreferredCleanerService {
     };
   }
 
+  /**
+   * Get cleaner stats for a specific home
+   * @param {number} homeId - The home ID
+   * @param {number} cleanerId - The cleaner ID
+   * @param {Object} models - Sequelize models
+   * @returns {Object} Stats for this cleaner at this home
+   */
+  static async getCleanerStatsForHome(homeId, cleanerId, models) {
+    const { UserAppointments, UserReviews, HomePreferredCleaner, CleanerJobCompletion } = models;
+    const { Op, fn, col, literal } = require("sequelize");
+
+    // Get when they were set as preferred
+    const preferredRecord = await HomePreferredCleaner.findOne({
+      where: { homeId, cleanerId },
+    });
+
+    if (!preferredRecord) {
+      return {
+        isPreferred: false,
+        error: "Cleaner is not preferred for this home",
+      };
+    }
+
+    // Get all completed appointments for this cleaner at this home
+    const appointments = await UserAppointments.findAll({
+      where: {
+        homeId,
+        [Op.or]: [
+          { employeesAssigned: { [Op.contains]: [cleanerId.toString()] } },
+          { bookedByCleanerId: cleanerId },
+        ],
+        completed: true,
+      },
+      attributes: ["id", "date", "price"],
+      order: [["date", "DESC"]],
+    });
+
+    const appointmentIds = appointments.map(a => a.id);
+    const totalBookings = appointments.length;
+
+    // Get average review score for this cleaner at this home
+    let avgReviewScore = null;
+    let reviewCount = 0;
+    if (appointmentIds.length > 0) {
+      const reviews = await UserReviews.findAll({
+        where: {
+          appointmentId: { [Op.in]: appointmentIds },
+          userId: cleanerId,
+          reviewType: "homeowner_to_cleaner",
+        },
+        attributes: ["review"],
+      });
+      reviewCount = reviews.length;
+      if (reviewCount > 0) {
+        const sum = reviews.reduce((acc, r) => acc + (r.review || 0), 0);
+        avgReviewScore = (sum / reviewCount).toFixed(1);
+      }
+    }
+
+    // Get average job duration from CleanerJobCompletion if available
+    let avgDurationMinutes = null;
+    if (appointmentIds.length > 0 && CleanerJobCompletion) {
+      try {
+        const completions = await CleanerJobCompletion.findAll({
+          where: {
+            appointmentId: { [Op.in]: appointmentIds },
+            cleanerId,
+            actualMinutesWorked: { [Op.ne]: null },
+          },
+          attributes: ["actualMinutesWorked"],
+        });
+        if (completions.length > 0) {
+          const totalMinutes = completions.reduce((acc, c) => acc + (c.actualMinutesWorked || 0), 0);
+          avgDurationMinutes = Math.round(totalMinutes / completions.length);
+        }
+      } catch (err) {
+        // CleanerJobCompletion might not exist for all appointments
+        console.log("[PreferredCleanerService] Could not fetch job completion data:", err.message);
+      }
+    }
+
+    // Get last cleaning date
+    const lastCleaningDate = appointments.length > 0 ? appointments[0].date : null;
+
+    return {
+      isPreferred: true,
+      cleanerId,
+      homeId,
+      totalBookings,
+      avgDurationMinutes,
+      avgReviewScore: avgReviewScore ? parseFloat(avgReviewScore) : null,
+      reviewCount,
+      lastCleaningDate,
+      preferredSince: preferredRecord.setAt,
+      setBy: preferredRecord.setBy,
+    };
+  }
+
   // Helper methods
 
   static formatDate(dateString) {
@@ -465,6 +644,115 @@ The Kleanr Team`;
       from: process.env.EMAIL_USER,
       to: email,
       subject: `⚠️ ${cleanerName} is unavailable for ${formattedDate}`,
+      text: textContent,
+      html: htmlContent,
+    });
+  }
+
+  static async sendBackupCleanerNotificationEmail(
+    email,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    appointmentId,
+    timeoutHours
+  ) {
+    const nodemailer = require("nodemailer");
+
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+      },
+    });
+
+    const formattedDate = this.formatDate(appointmentDate);
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f7fa;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+    <tr>
+      <td style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%); padding: 40px 30px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">Job Opportunity!</h1>
+        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">A home you're preferred at needs cleaning</p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 40px 30px;">
+        <h2 style="color: #1e293b; margin: 0 0 20px 0; font-size: 22px;">Hi ${cleanerName}!</h2>
+        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+          Great news! A cleaning job at one of your preferred homes is now available.
+          The primary cleaner couldn't make it, and you're next on the list!
+        </p>
+
+        <div style="background-color: #d1fae5; border: 2px solid #10b981; border-radius: 12px; padding: 25px; margin: 25px 0;">
+          <h3 style="color: #065f46; margin: 0 0 15px 0; font-size: 18px;">📅 Job Details</h3>
+          <div style="padding: 8px 0; border-bottom: 1px solid #6ee7b7;">
+            <span style="color: #065f46; font-size: 14px;">Date:</span>
+            <span style="color: #064e3b; font-size: 15px; font-weight: 600; margin-left: 8px;">${formattedDate}</span>
+          </div>
+          <div style="padding: 8px 0;">
+            <span style="color: #065f46; font-size: 14px;">Address:</span>
+            <span style="color: #064e3b; font-size: 15px; font-weight: 600; margin-left: 8px;">${homeAddress}</span>
+          </div>
+        </div>
+
+        <div style="background-color: #fef3c7; border-radius: 8px; padding: 15px; margin: 20px 0;">
+          <p style="color: #92400e; font-size: 14px; margin: 0;">
+            ⏰ <strong>Act fast!</strong> You have ${timeoutHours} hours to accept this job before it's offered to others.
+          </p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <p style="color: #475569; font-size: 15px; margin: 0;">
+            Open the Kleanr app to accept this job.
+          </p>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td style="background-color: #1e293b; padding: 30px; text-align: center;">
+        <p style="color: #94a3b8; font-size: 14px; margin: 0 0 10px 0;">
+          Happy cleaning! 🧹✨
+        </p>
+        <p style="color: #64748b; font-size: 12px; margin: 0;">
+          © ${new Date().getFullYear()} Kleanr. All rights reserved.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const textContent = `Hi ${cleanerName}!
+
+Great news! A cleaning job at one of your preferred homes is now available.
+
+JOB DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formattedDate}
+Address: ${homeAddress}
+
+⏰ ACT FAST! You have ${timeoutHours} hours to accept this job before it's offered to others.
+
+Open the Kleanr app to accept this job.
+
+Best regards,
+The Kleanr Team`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: `🎉 Job Available at Your Preferred Home - ${formattedDate}`,
       text: textContent,
       html: htmlContent,
     });

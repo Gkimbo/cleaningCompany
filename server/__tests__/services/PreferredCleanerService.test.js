@@ -69,6 +69,15 @@ describe("PreferredCleanerService", () => {
           }),
         },
         CleanerClient: {},
+        // Added for backup cleaner notification flow
+        HomePreferredCleaner: {
+          findAll: jest.fn().mockResolvedValue([]),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue({
+            backupCleanerTimeoutHours: 24,
+          }),
+        },
         mockAppointment,
         mockAppointmentUpdate,
       };
@@ -88,10 +97,14 @@ describe("PreferredCleanerService", () => {
 
       expect(result.success).toBe(true);
       expect(result.appointment.clientResponsePending).toBe(true);
+      // When no backup cleaners, should escalate to client immediately
       expect(models.mockAppointmentUpdate).toHaveBeenCalledWith({
         preferredCleanerDeclined: true,
         declinedAt: expect.any(Date),
-        clientResponsePending: true,
+        clientResponsePending: true, // No backup cleaners = escalate to client
+        backupCleanersNotified: false,
+        backupNotificationSentAt: null,
+        backupNotificationExpiresAt: null,
       });
     });
 

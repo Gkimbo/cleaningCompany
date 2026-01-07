@@ -120,13 +120,28 @@ class FetchData {
         body: JSON.stringify({
           username: loginData.userName,
           password: loginData.password,
+          accountType: loginData.accountType || undefined,
         }),
       });
+
+      // Handle 300 - Multiple accounts require selection
+      if (response.status === 300) {
+        const data = await response.json();
+        return {
+          requiresAccountSelection: true,
+          accountOptions: data.accountOptions,
+          message: data.message,
+        };
+      }
+
       if (!response.ok) {
         if (response.status === 401) {
           return "Invalid password";
         } else if (response.status === 404) {
           return "No account found with that email or username.";
+        } else if (response.status === 423) {
+          const data = await response.json();
+          return data.error || "Account temporarily locked";
         } else {
           throw new Error("Failed to login");
         }
@@ -135,6 +150,24 @@ class FetchData {
       return responseData;
     } catch (error) {
       return error;
+    }
+  }
+
+  static async checkAccountsByEmail(email) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/user-sessions/check-accounts?email=${encodeURIComponent(email)}`
+      );
+
+      if (!response.ok) {
+        return { multipleAccounts: false };
+      }
+
+      const responseData = await response.json();
+      return responseData;
+    } catch (error) {
+      console.error("Error checking accounts by email:", error);
+      return { multipleAccounts: false };
     }
   }
 

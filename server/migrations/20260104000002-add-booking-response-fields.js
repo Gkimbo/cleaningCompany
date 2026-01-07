@@ -1,38 +1,54 @@
 "use strict";
 
+// Helper to safely add column (skip if exists)
+async function safeAddColumn(queryInterface, table, column, options) {
+  try {
+    await queryInterface.addColumn(table, column, options);
+  } catch (e) {
+    if (!e.message.includes("already exists")) throw e;
+    console.log(`Column ${column} already exists in ${table}, skipping`);
+  }
+}
+
+// Helper to safely add index (skip if exists)
+async function safeAddIndex(queryInterface, table, columns, options) {
+  try {
+    await queryInterface.addIndex(table, columns, options);
+  } catch (e) {
+    if (!e.message.includes("already exists")) throw e;
+    console.log(`Index ${options.name} already exists, skipping`);
+  }
+}
+
 module.exports = {
   async up(queryInterface, Sequelize) {
     // Add client response tracking fields
-    await queryInterface.addColumn("UserAppointments", "clientRespondedAt", {
+    await safeAddColumn(queryInterface, "UserAppointments", "clientRespondedAt", {
       type: Sequelize.DATE,
       allowNull: true,
     });
 
-    await queryInterface.addColumn("UserAppointments", "clientResponse", {
+    await safeAddColumn(queryInterface, "UserAppointments", "clientResponse", {
       type: Sequelize.STRING(20),
       allowNull: true,
-      // 'accepted', 'declined', 'expired'
     });
 
-    await queryInterface.addColumn("UserAppointments", "declineReason", {
+    await safeAddColumn(queryInterface, "UserAppointments", "declineReason", {
       type: Sequelize.TEXT,
       allowNull: true,
     });
 
-    await queryInterface.addColumn("UserAppointments", "suggestedDates", {
+    await safeAddColumn(queryInterface, "UserAppointments", "suggestedDates", {
       type: Sequelize.JSONB,
       allowNull: true,
-      // Array of dates suggested by client when declining
-      // e.g., ["2026-01-10", "2026-01-15", "2026-01-20"]
     });
 
-    await queryInterface.addColumn("UserAppointments", "expiresAt", {
+    await safeAddColumn(queryInterface, "UserAppointments", "expiresAt", {
       type: Sequelize.DATE,
       allowNull: true,
-      // Set to 48 hours from creation for pending approval bookings
     });
 
-    await queryInterface.addColumn("UserAppointments", "originalBookingId", {
+    await safeAddColumn(queryInterface, "UserAppointments", "originalBookingId", {
       type: Sequelize.INTEGER,
       allowNull: true,
       references: {
@@ -41,31 +57,26 @@ module.exports = {
       },
       onUpdate: "CASCADE",
       onDelete: "SET NULL",
-      // For tracking rebooking attempts after decline
     });
 
-    await queryInterface.addColumn("UserAppointments", "rebookingAttempts", {
+    await safeAddColumn(queryInterface, "UserAppointments", "rebookingAttempts", {
       type: Sequelize.INTEGER,
       allowNull: false,
       defaultValue: 0,
     });
 
     // Add indexes for efficient querying
-    await queryInterface.addIndex(
-      "UserAppointments",
-      ["clientResponsePending"],
-      {
-        name: "appointments_client_response_pending_idx",
-        where: { clientResponsePending: true },
-      }
-    );
+    await safeAddIndex(queryInterface, "UserAppointments", ["clientResponsePending"], {
+      name: "appointments_client_response_pending_idx",
+      where: { clientResponsePending: true },
+    });
 
-    await queryInterface.addIndex("UserAppointments", ["expiresAt"], {
+    await safeAddIndex(queryInterface, "UserAppointments", ["expiresAt"], {
       name: "appointments_expires_at_idx",
       where: { expiresAt: { [Sequelize.Op.ne]: null } },
     });
 
-    await queryInterface.addIndex("UserAppointments", ["bookedByCleanerId"], {
+    await safeAddIndex(queryInterface, "UserAppointments", ["bookedByCleanerId"], {
       name: "appointments_booked_by_cleaner_idx",
     });
   },

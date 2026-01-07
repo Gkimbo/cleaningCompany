@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
@@ -14,7 +13,7 @@ const ExistingCleanerCheck = () => {
   const navigate = useNavigate();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.content}>
         {/* Back button */}
         <TouchableOpacity
@@ -61,7 +60,7 @@ const ExistingCleanerCheck = () => {
           </Text>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

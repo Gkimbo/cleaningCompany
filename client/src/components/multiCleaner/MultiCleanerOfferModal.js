@@ -23,6 +23,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import { usePricing } from "../../context/PricingContext";
 
 const MultiCleanerOfferModal = ({
   visible,
@@ -34,6 +35,10 @@ const MultiCleanerOfferModal = ({
 }) => {
   const [showDeclineReason, setShowDeclineReason] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
+  const { pricing } = usePricing();
+
+  // Get multi-cleaner platform fee (default 13%)
+  const multiCleanerFeePercent = (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13) * 100;
 
   if (!offer) return null;
 
@@ -188,7 +193,7 @@ const MultiCleanerOfferModal = ({
                 <Text style={styles.breakdownValue}>{formatPrice(offer.totalJobPrice)}</Text>
               </View>
               <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Platform Fee (13%)</Text>
+                <Text style={styles.breakdownLabel}>Platform Fee ({multiCleanerFeePercent}%)</Text>
                 <Text style={styles.breakdownValue}>-{formatPrice(offer.platformFee)}</Text>
               </View>
               <View style={[styles.breakdownRow, styles.breakdownTotal]}>

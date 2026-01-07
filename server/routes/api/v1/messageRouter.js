@@ -2159,4 +2159,840 @@ messageRouter.post(
   }
 );
 
+// =====================================
+// Business Owner <-> Employee Messaging
+// =====================================
+
+const { BusinessEmployee } = require("../../../models");
+
+/**
+ * GET /api/v1/messages/business-employees
+ * Get list of employees for messaging (business owner only)
+ */
+messageRouter.get("/business-employees", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const user = await User.findByPk(userId);
+
+    if (!user || !user.isBusinessOwner) {
+      return res.status(403).json({ error: "Only business owners can access this endpoint" });
+    }
+
+    // Get all active employees for this business owner
+    const employees = await BusinessEmployee.findAll({
+      where: {
+        businessOwnerId: userId,
+        status: "active",
+        userId: { [Op.ne]: null }, // Only employees who have accepted invite
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "firstName", "lastName", "expoPushToken"],
+        },
+      ],
+    });
+
+    const formattedEmployees = employees.map((emp) => ({
+      id: emp.id,
+      userId: emp.userId,
+      firstName: emp.firstName,
+      lastName: emp.lastName,
+      canMessageClients: emp.canMessageClients,
+    }));
+
+    return res.json({ employees: formattedEmployees });
+  } catch (error) {
+    console.error("Error fetching business employees for messaging:", error);
+    return res.status(500).json({ error: "Failed to fetch employees" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/employee-conversation
+ * Create or get a 1:1 conversation between business owner and employee
+ */
+messageRouter.post("/employee-conversation", authenticateToken, async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+    const userId = req.userId;
+    const user = await User.findByPk(userId);
+
+    // Check if user is a business owner or an employee
+    let businessOwnerId, employeeUserId, employee;
+
+    if (user.isBusinessOwner) {
+      // Business owner is initiating
+      if (!employeeId) {
+        return res.status(400).json({ error: "Employee ID is required" });
+      }
+
+      employee = await BusinessEmployee.findOne({
+        where: {
+          id: employeeId,
+          businessOwnerId: userId,
+          status: "active",
+        },
+        include: [{ model: User, as: "user" }],
+      });
+
+      if (!employee || !employee.userId) {
+        return res.status(404).json({ error: "Employee not found or not onboarded" });
+      }
+
+      businessOwnerId = userId;
+      employeeUserId = employee.userId;
+    } else if (user.employeeOfBusinessId) {
+      // Employee is initiating - talk to their business owner
+      businessOwnerId = user.employeeOfBusinessId;
+      employeeUserId = userId;
+
+      employee = await BusinessEmployee.findOne({
+        where: {
+          userId,
+          businessOwnerId,
+          status: "active",
+        },
+      });
+
+      if (!employee) {
+        return res.status(404).json({ error: "Employee record not found" });
+      }
+    } else {
+      return res.status(403).json({ error: "Not authorized for employee messaging" });
+    }
+
+    // Check if conversation already exists
+    const existingConversation = await Conversation.findOne({
+      where: {
+        conversationType: "business_employee",
+        relatedEntityId: employee.id,
+      },
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "username"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (existingConversation) {
+      return res.json({ conversation: existingConversation });
+    }
+
+    // Create new conversation
+    const businessOwner = await User.findByPk(businessOwnerId);
+    const employeeUser = await User.findByPk(employeeUserId);
+
+    const ownerName = businessOwner.firstName && businessOwner.lastName
+      ? `${EncryptionService.decrypt(businessOwner.firstName)}`
+      : businessOwner.username;
+    const empName = employee.firstName;
+
+    const conversation = await Conversation.create({
+      conversationType: "business_employee",
+      title: `${ownerName} & ${empName}`,
+      relatedEntityId: employee.id, // Link to BusinessEmployee record
+    });
+
+    // Add participants
+    await ConversationParticipant.bulkCreate([
+      { conversationId: conversation.id, userId: businessOwnerId, role: "business_owner" },
+      { conversationId: conversation.id, userId: employeeUserId, role: "employee" },
+    ]);
+
+    // Reload with participants
+    const fullConversation = await Conversation.findByPk(conversation.id, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "username"],
+            },
+          ],
+        },
+      ],
+    });
+
+    return res.status(201).json({ conversation: fullConversation });
+  } catch (error) {
+    console.error("Error creating employee conversation:", error);
+    return res.status(500).json({ error: "Failed to create conversation" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/employee-broadcast
+ * Send a broadcast message to all employees (business owner only)
+ */
+messageRouter.post("/employee-broadcast", authenticateToken, async (req, res) => {
+  try {
+    const { content } = req.body;
+    const userId = req.userId;
+    const io = req.app.get("io");
+
+    const user = await User.findByPk(userId);
+    if (!user || !user.isBusinessOwner) {
+      return res.status(403).json({ error: "Only business owners can broadcast to employees" });
+    }
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: "Message content is required" });
+    }
+
+    // Get all active employees
+    const employees = await BusinessEmployee.findAll({
+      where: {
+        businessOwnerId: userId,
+        status: "active",
+        userId: { [Op.ne]: null },
+      },
+      include: [{ model: User, as: "user" }],
+    });
+
+    if (employees.length === 0) {
+      return res.status(400).json({ error: "No active employees to broadcast to" });
+    }
+
+    // Find or create broadcast conversation
+    let broadcastConversation = await Conversation.findOne({
+      where: {
+        conversationType: "employee_broadcast",
+        relatedEntityId: userId, // business owner ID
+      },
+    });
+
+    if (!broadcastConversation) {
+      const ownerName = user.firstName
+        ? EncryptionService.decrypt(user.firstName)
+        : user.username;
+
+      broadcastConversation = await Conversation.create({
+        conversationType: "employee_broadcast",
+        title: `${ownerName}'s Team Announcements`,
+        relatedEntityId: userId,
+      });
+
+      // Add business owner as participant
+      await ConversationParticipant.create({
+        conversationId: broadcastConversation.id,
+        userId,
+        role: "business_owner",
+      });
+    }
+
+    // Ensure all employees are participants
+    for (const emp of employees) {
+      const existing = await ConversationParticipant.findOne({
+        where: {
+          conversationId: broadcastConversation.id,
+          userId: emp.userId,
+        },
+      });
+
+      if (!existing) {
+        await ConversationParticipant.create({
+          conversationId: broadcastConversation.id,
+          userId: emp.userId,
+          role: "employee",
+        });
+      }
+    }
+
+    // Create the broadcast message
+    const message = await Message.create({
+      conversationId: broadcastConversation.id,
+      senderId: userId,
+      content: content.trim(),
+      messageType: "broadcast",
+    });
+
+    // Notify all employees
+    const senderName = user.firstName && user.lastName
+      ? `${EncryptionService.decrypt(user.firstName)} ${EncryptionService.decrypt(user.lastName)}`
+      : user.username;
+
+    for (const emp of employees) {
+      // Socket notification
+      io.to(`user_${emp.userId}`).emit("new_message", {
+        conversationId: broadcastConversation.id,
+        message: {
+          id: message.id,
+          content: message.content,
+          senderId: userId,
+          senderName,
+          messageType: "broadcast",
+          createdAt: message.createdAt,
+        },
+      });
+
+      // Push notification
+      if (emp.user?.expoPushToken) {
+        await PushNotification.sendPush({
+          pushToken: emp.user.expoPushToken,
+          title: "Team Announcement",
+          body: content.trim().substring(0, 100),
+          data: {
+            type: "employee_broadcast",
+            conversationId: broadcastConversation.id,
+            messageId: message.id,
+          },
+        });
+      }
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Broadcast sent to all employees",
+      messageId: message.id,
+      recipientCount: employees.length,
+    });
+  } catch (error) {
+    console.error("Error sending employee broadcast:", error);
+    return res.status(500).json({ error: "Failed to send broadcast" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/job-conversation
+ * Create or get a job-specific conversation for an assignment
+ */
+messageRouter.post("/job-conversation", authenticateToken, async (req, res) => {
+  try {
+    const { assignmentId } = req.body;
+    const userId = req.userId;
+    const user = await User.findByPk(userId);
+
+    if (!assignmentId) {
+      return res.status(400).json({ error: "Assignment ID is required" });
+    }
+
+    const { EmployeeJobAssignment } = require("../../../models");
+
+    // Find the assignment
+    const assignment = await EmployeeJobAssignment.findByPk(assignmentId, {
+      include: [
+        { model: BusinessEmployee, as: "employee" },
+        {
+          model: UserAppointments,
+          as: "appointment",
+          include: [{ model: UserHomes, as: "home" }],
+        },
+      ],
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    // Verify user is either the business owner or the assigned employee
+    const isBusinessOwner = user.isBusinessOwner && assignment.businessOwnerId === userId;
+    const isEmployee = assignment.employee?.userId === userId;
+
+    if (!isBusinessOwner && !isEmployee) {
+      return res.status(403).json({ error: "Not authorized for this job conversation" });
+    }
+
+    // Check if conversation already exists
+    let conversation = await Conversation.findOne({
+      where: {
+        conversationType: "job_chat",
+        relatedEntityId: assignmentId,
+      },
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "username"],
+            },
+          ],
+        },
+        {
+          model: Message,
+          as: "messages",
+          limit: 50,
+          order: [["createdAt", "DESC"]],
+          include: [
+            {
+              model: User,
+              as: "sender",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (conversation) {
+      return res.json({ conversation });
+    }
+
+    // Create new job conversation
+    const jobDate = assignment.appointment?.date
+      ? new Date(assignment.appointment.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "";
+    const address = assignment.appointment?.home?.address?.split(",")[0] || "Job";
+
+    conversation = await Conversation.create({
+      conversationType: "job_chat",
+      title: `${address} - ${jobDate}`,
+      relatedEntityId: assignmentId,
+    });
+
+    // Add participants
+    const participants = [
+      { conversationId: conversation.id, userId: assignment.businessOwnerId, role: "business_owner" },
+    ];
+
+    if (assignment.employee?.userId) {
+      participants.push({
+        conversationId: conversation.id,
+        userId: assignment.employee.userId,
+        role: "employee",
+      });
+    }
+
+    await ConversationParticipant.bulkCreate(participants);
+
+    // Create system message
+    await Message.create({
+      conversationId: conversation.id,
+      senderId: null,
+      content: `Job chat created for ${address} on ${jobDate}`,
+      messageType: "system",
+    });
+
+    // Reload with full data
+    const fullConversation = await Conversation.findByPk(conversation.id, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "username"],
+            },
+          ],
+        },
+        {
+          model: Message,
+          as: "messages",
+          order: [["createdAt", "DESC"]],
+          include: [
+            {
+              model: User,
+              as: "sender",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+    });
+
+    return res.status(201).json({ conversation: fullConversation });
+  } catch (error) {
+    console.error("Error creating job conversation:", error);
+    return res.status(500).json({ error: "Failed to create job conversation" });
+  }
+});
+
+/**
+ * GET /api/v1/messages/my-business-conversations
+ * Get all business-related conversations for the current user
+ */
+messageRouter.get("/my-business-conversations", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const user = await User.findByPk(userId);
+
+    if (!user.isBusinessOwner && !user.employeeOfBusinessId) {
+      return res.status(403).json({ error: "Not a business owner or employee" });
+    }
+
+    // Get all business-related conversations
+    const participations = await ConversationParticipant.findAll({
+      where: { userId },
+      include: [
+        {
+          model: Conversation,
+          as: "conversation",
+          where: {
+            conversationType: { [Op.in]: ["business_employee", "employee_broadcast", "job_chat"] },
+          },
+          include: [
+            {
+              model: Message,
+              as: "messages",
+              limit: 1,
+              order: [["createdAt", "DESC"]],
+              include: [
+                {
+                  model: User,
+                  as: "sender",
+                  attributes: ["id", "firstName", "lastName"],
+                },
+              ],
+            },
+            {
+              model: ConversationParticipant,
+              as: "participants",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "firstName", "lastName", "username"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const conversations = participations
+      .map((p) => p.conversation)
+      .filter((c) => c !== null)
+      .sort((a, b) => {
+        const aLastMessage = a.messages?.[0]?.createdAt || a.createdAt;
+        const bLastMessage = b.messages?.[0]?.createdAt || b.createdAt;
+        return new Date(bLastMessage) - new Date(aLastMessage);
+      });
+
+    // Decrypt participant names
+    for (const conv of conversations) {
+      if (conv.participants) {
+        conv.participants = conv.participants.map((p) => ({
+          ...p.toJSON(),
+          user: p.user ? decryptUserFields(p.user) : null,
+        }));
+      }
+      if (conv.messages?.[0]?.sender) {
+        conv.messages[0].sender = decryptUserFields(conv.messages[0].sender);
+      }
+    }
+
+    return res.json({ conversations });
+  } catch (error) {
+    console.error("Error fetching business conversations:", error);
+    return res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
+
+// =====================================
+// Employee <-> Employee Messaging
+// =====================================
+
+/**
+ * GET /api/v1/messages/coworkers
+ * Get list of coworkers (other employees of the same business) for messaging
+ */
+messageRouter.get("/coworkers", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const user = await User.findByPk(userId);
+
+    if (!user || !user.employeeOfBusinessId) {
+      return res.status(403).json({ error: "Only business employees can access this endpoint" });
+    }
+
+    // Get all active employees of the same business (excluding self)
+    const coworkers = await BusinessEmployee.findAll({
+      where: {
+        businessOwnerId: user.employeeOfBusinessId,
+        status: "active",
+        userId: {
+          [Op.and]: [
+            { [Op.ne]: null },
+            { [Op.ne]: userId }
+          ]
+        },
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "firstName", "lastName", "expoPushToken"],
+        },
+      ],
+    });
+
+    const formattedCoworkers = coworkers.map((emp) => ({
+      id: emp.id,
+      oderId: emp.userId,
+      firstName: emp.firstName,
+      lastName: emp.lastName,
+      status: emp.status,
+    }));
+
+    return res.json({ coworkers: formattedCoworkers });
+  } catch (error) {
+    console.error("Error fetching coworkers for messaging:", error);
+    return res.status(500).json({ error: "Failed to fetch coworkers" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/coworker-conversation
+ * Create or get a 1:1 conversation between two employees
+ */
+messageRouter.post("/coworker-conversation", authenticateToken, async (req, res) => {
+  try {
+    const { coworkerId } = req.body;
+    const userId = req.userId;
+    const user = await User.findByPk(userId);
+
+    if (!user || !user.employeeOfBusinessId) {
+      return res.status(403).json({ error: "Only business employees can message coworkers" });
+    }
+
+    if (!coworkerId) {
+      return res.status(400).json({ error: "Coworker ID is required" });
+    }
+
+    // Get my employee record
+    const myEmployee = await BusinessEmployee.findOne({
+      where: {
+        userId,
+        businessOwnerId: user.employeeOfBusinessId,
+        status: "active",
+      },
+    });
+
+    if (!myEmployee) {
+      return res.status(404).json({ error: "Your employee record not found" });
+    }
+
+    // Get coworker record
+    const coworker = await BusinessEmployee.findOne({
+      where: {
+        id: coworkerId,
+        businessOwnerId: user.employeeOfBusinessId,
+        status: "active",
+        userId: { [Op.ne]: null },
+      },
+      include: [{ model: User, as: "user" }],
+    });
+
+    if (!coworker || !coworker.userId) {
+      return res.status(404).json({ error: "Coworker not found" });
+    }
+
+    // Generate a unique entity ID for this pair (smaller id first for consistency)
+    const sortedIds = [myEmployee.id, coworker.id].sort((a, b) => a - b);
+    const pairKey = `emp_${sortedIds[0]}_${sortedIds[1]}`;
+
+    // Check if conversation already exists
+    const existingConversation = await Conversation.findOne({
+      where: {
+        conversationType: "employee_peer",
+        title: pairKey,
+      },
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "username"],
+            },
+          ],
+        },
+        {
+          model: Message,
+          as: "messages",
+          limit: 1,
+          order: [["createdAt", "DESC"]],
+        },
+      ],
+    });
+
+    if (existingConversation) {
+      // Decrypt user names in participants
+      const decryptedConversation = {
+        ...existingConversation.toJSON(),
+        participants: existingConversation.participants.map((p) => ({
+          ...p.toJSON(),
+          user: decryptUserFields(p.user),
+        })),
+      };
+      return res.json({ conversation: decryptedConversation });
+    }
+
+    // Create new conversation
+    const displayTitle = `${myEmployee.firstName} & ${coworker.firstName}`;
+
+    const conversation = await Conversation.create({
+      conversationType: "employee_peer",
+      title: pairKey, // Use pair key for lookups
+    });
+
+    // Add participants
+    await ConversationParticipant.bulkCreate([
+      { conversationId: conversation.id, userId: userId, role: "employee", businessEmployeeId: myEmployee.id },
+      { conversationId: conversation.id, userId: coworker.userId, role: "employee", businessEmployeeId: coworker.id },
+    ]);
+
+    // Reload with participants
+    const fullConversation = await Conversation.findByPk(conversation.id, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "username"],
+            },
+          ],
+        },
+      ],
+    });
+
+    // Decrypt user names
+    const decryptedConversation = {
+      ...fullConversation.toJSON(),
+      displayTitle,
+      participants: fullConversation.participants.map((p) => ({
+        ...p.toJSON(),
+        user: decryptUserFields(p.user),
+      })),
+    };
+
+    return res.status(201).json({ conversation: decryptedConversation });
+  } catch (error) {
+    console.error("Error creating coworker conversation:", error);
+    return res.status(500).json({ error: "Failed to create conversation" });
+  }
+});
+
+/**
+ * GET /api/v1/messages/my-coworker-conversations
+ * Get all employee-to-employee conversations for the current employee
+ */
+messageRouter.get("/my-coworker-conversations", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const user = await User.findByPk(userId);
+
+    if (!user || !user.employeeOfBusinessId) {
+      return res.status(403).json({ error: "Only business employees can access this endpoint" });
+    }
+
+    // Find all conversations where user is a participant and type is employee_peer or business_employee
+    const participations = await ConversationParticipant.findAll({
+      where: { userId },
+      include: [
+        {
+          model: Conversation,
+          as: "conversation",
+          where: {
+            conversationType: { [Op.in]: ["employee_peer", "business_employee"] },
+          },
+          include: [
+            {
+              model: Message,
+              as: "messages",
+              limit: 1,
+              order: [["createdAt", "DESC"]],
+              include: [
+                {
+                  model: User,
+                  as: "sender",
+                  attributes: ["id", "firstName", "lastName"],
+                },
+              ],
+            },
+            {
+              model: ConversationParticipant,
+              as: "participants",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "firstName", "lastName", "username", "isBusinessOwner"],
+                },
+                {
+                  model: BusinessEmployee,
+                  as: "businessEmployee",
+                  attributes: ["id", "firstName", "lastName"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      order: [[{ model: Conversation, as: "conversation" }, "updatedAt", "DESC"]],
+    });
+
+    // Calculate unread counts and format
+    const conversations = await Promise.all(
+      participations.map(async (p) => {
+        const conv = p.conversation;
+        if (!conv) return null;
+
+        const unreadCount = await Message.count({
+          where: {
+            conversationId: conv.id,
+            createdAt: { [Op.gt]: p.lastReadAt || new Date(0) },
+            senderId: { [Op.ne]: userId },
+          },
+        });
+
+        // Format participants with decrypted names
+        const formattedParticipants = conv.participants.map((part) => {
+          const isBusinessOwner = part.user?.isBusinessOwner;
+          return {
+            ...part.toJSON(),
+            user: decryptUserFields(part.user),
+            displayName: isBusinessOwner
+              ? (part.user?.firstName ? EncryptionService.decrypt(part.user.firstName) : "Business Owner")
+              : (part.businessEmployee?.firstName || "Employee"),
+          };
+        });
+
+        // Get the other participant's name for display
+        const otherParticipant = formattedParticipants.find((part) => part.userId !== userId);
+        const displayTitle = otherParticipant?.displayName || "Conversation";
+
+        return {
+          ...conv.toJSON(),
+          displayTitle,
+          participants: formattedParticipants,
+          unreadCount,
+          messages: conv.messages?.map((m) => ({
+            ...m.toJSON(),
+            sender: decryptUserFields(m.sender),
+          })),
+        };
+      })
+    );
+
+    return res.json({ conversations: conversations.filter(Boolean) });
+  } catch (error) {
+    console.error("Error fetching coworker conversations:", error);
+    return res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
+
 module.exports = messageRouter;

@@ -58,7 +58,9 @@ const HomePage = ({ state, dispatch }) => {
   const pricing = fetchedPricing?.basePrice ? fetchedPricing : defaultPricing;
 
   // Display the full base price (no platform fee deduction - that's only shown to cleaners)
-  const displayBasePrice = Math.round(pricing.basePrice ?? defaultPricing.basePrice);
+  const displayBasePrice = Math.round(
+    pricing.basePrice ?? defaultPricing.basePrice
+  );
 
   useEffect(() => {
     if (redirect) {
@@ -132,7 +134,12 @@ const HomePage = ({ state, dispatch }) => {
 
     if (appointmentDate.toDateString() === today.toDateString()) {
       foundToday = true;
-      todaysAppointment = <TodaysAppointment appointment={appointment} token={state.currentUser.token} />;
+      todaysAppointment = (
+        <TodaysAppointment
+          appointment={appointment}
+          token={state.currentUser.token}
+        />
+      );
       if (index < sortedAppointments.length - 1) {
         nextAppointment = (
           <View style={{ marginVertical: 15 }}>
@@ -276,43 +283,103 @@ const HomePage = ({ state, dispatch }) => {
   }
 
   // Landing page for unauthenticated users
+
+  // Calculate cost savings
+  const avgCleaningPrice = displayBasePrice;
+  const managementFeePercent = 20; // Traditional management companies charge 20-30%
+  const avgRentalIncome = 250; // Average per night
+  const nightsPerMonth = 15;
+  const monthlyRentalIncome = avgRentalIncome * nightsPerMonth;
+  const traditionalManagementFee = Math.round(
+    monthlyRentalIncome * (managementFeePercent / 100)
+  );
+  const ourMonthlyCleaningCost = Math.round(avgCleaningPrice * 4); // ~4 turnovers per month
+  const monthlySavings = traditionalManagementFee - ourMonthlyCleaningCost;
+  const yearlySavings = monthlySavings * 12;
+
   const features = [
     {
-      icon: "calendar",
-      title: "Easy Booking",
+      icon: "trending-up",
+      title: "Effortless Booking",
       description:
-        "Schedule cleanings up to 1 weeks in advance with our simple booking system",
+        "Schedule professional cleanings in seconds—on demand or recurring. Designed for hosts who value speed, simplicity, and control.",
     },
     {
       icon: "clock",
-      title: "Flexible Scheduling",
+      title: "Precisely Timed Turnovers",
       description:
-        "Available daily 10am-4pm to fit your guests' check-out times",
+        "Flexible service windows (10am–4pm) align seamlessly with guest check-outs and check-ins, ensuring every stay starts spotless.",
     },
     {
-      icon: "star",
-      title: "Professional Team",
-      description: "Trusted, vetted cleaners who treat your property with care",
+      icon: "shield",
+      title: "Trusted, Elite Cleaners",
+      description:
+        "Every cleaner is background-checked, professionally trained, and held to five-star standards—so your property is always in expert hands.",
+    },
+    {
+      icon: "calendar",
+      title: "Smart Calendar Sync",
+      description:
+        "Connect your AirBNB, VRBO, or any other app calendar. When guests check out, we automatically schedule the clean—no coordination required.",
     },
   ];
 
   const stats = [
-    { value: "500+", label: "Happy Clients" },
-    { value: "2,000+", label: "Cleanings Done" },
-    { value: "4.9", label: "Average Rating" },
-    { value: "24hr", label: "Guarantee" },
+    // { value: "500+", label: "Happy Hosts" },
+    // { value: "10,000+", label: "Cleanings Done" },
+    // { value: "4.9", label: "Average Rating" },
+    { value: "$0", label: "Monthly Fee" },
+    { value: "Book now", label: "Pay just before the appointment" },
+  ];
+
+  const valueProps = [
+    {
+      icon: "dollar-sign",
+      title: `Save $${yearlySavings.toLocaleString()}/Year`,
+      description: `vs traditional property managers who take ${managementFeePercent}% of your revenue. Pay only for cleanings, keep the rest.`,
+      highlight: `$${monthlySavings}/mo savings`,
+    },
+    {
+      icon: "trending-up",
+      title: "Boost Your Reviews",
+      description:
+        "Properties using pro cleaners average 0.4 stars higher on Airbnb. Better reviews = more bookings = more income.",
+      highlight: "+15% bookings",
+    },
+    {
+      icon: "clock",
+      title: "Get 10+ Hours Back",
+      description:
+        "Stop coordinating cleaners, chasing no-shows, and doing turnovers yourself. We handle everything.",
+      highlight: "10hrs/month saved",
+    },
+    {
+      icon: "shield",
+      title: "Never Get Caught Off Guard",
+      description:
+        "Automated reminders, real-time updates, and backup cleaners if needed. Your property is always guest-ready.",
+      highlight: "99.5% on-time",
+    },
   ];
 
   const testimonials = [
     {
-      text: "The best cleaning service we've used for our vacation rental. Our guests always leave 5-star reviews about cleanliness!",
+      text: "I switched from a property manager and save $4,800/year. The cleaning quality is actually better and I have full control over my rental.",
       author: "Sarah M.",
-      role: "Property Owner",
+      role: "Airbnb Superhost, 3 properties",
+      stat: "$4,800/yr saved",
     },
     {
-      text: "Reliable, thorough, and so easy to work with. They've made managing my Airbnb so much simpler.",
+      text: "My reviews went from 4.6 to 4.9 stars after switching to professional cleaners. The ROI is incredible - more 5-star reviews means more bookings.",
       author: "Michael R.",
-      role: "Vacation Rental Host",
+      role: "VRBO Host",
+      stat: "+0.3 star rating",
+    },
+    {
+      text: "Last-minute booking? No problem. I can schedule a same-day cleaning and know my place will be spotless. Game changer for my business.",
+      author: "Jennifer L.",
+      role: "Vacation Rental Owner",
+      stat: "Same-day cleanings",
     },
   ];
 
@@ -322,6 +389,8 @@ const HomePage = ({ state, dispatch }) => {
       shield: "🛡️",
       clock: "⏰",
       star: "⭐",
+      "dollar-sign": "💰",
+      "trending-up": "📈",
     };
     return (
       <View
@@ -367,7 +436,19 @@ const HomePage = ({ state, dispatch }) => {
             lineHeight: responsive(34, 44, 52),
           }}
         >
-          Sparkling Clean{"\n"}Vacation Rentals
+          5-Star Cleanings. {"\n"}
+          <Text
+            style={{
+              fontSize: responsive(16, 18, 20),
+              color: colors.primary[50],
+              textAlign: "center",
+              marginBottom: spacing["2xl"],
+              lineHeight: 30,
+            }}
+          >
+            That means you'll get
+          </Text>
+          {"\n"}5-Star Reviews.
         </Text>
         <Text
           style={{
@@ -378,8 +459,9 @@ const HomePage = ({ state, dispatch }) => {
             lineHeight: 26,
           }}
         >
-          Professional cleaning services for short-term rentals in{" "}
-          {cleaningCompany.location}
+          Book a professional cleaning in seconds
+          {"\n"}
+          Save ${yearlySavings.toLocaleString()}/year vs property managers.
         </Text>
 
         {/* CTA Buttons */}
@@ -446,49 +528,62 @@ const HomePage = ({ state, dispatch }) => {
       {!state.currentUser.token && incentiveConfig?.homeowner?.enabled && (
         <IncentiveBanner
           type="homeowner"
-          message={`First ${incentiveConfig.homeowner.maxCleanings} cleanings get ${Math.round(incentiveConfig.homeowner.discountPercent * 100)}% off!`}
+          message={`First ${
+            incentiveConfig.homeowner.maxCleanings
+          } cleanings get ${Math.round(
+            incentiveConfig.homeowner.discountPercent * 100
+          )}% off!`}
           icon="tag"
         />
       )}
 
-      {/* Stats Section
-      <View style={{
-        flexDirection: "row",
-        flexWrap: "wrap",
-        justifyContent: "space-around",
-        paddingVertical: spacing["2xl"],
-        paddingHorizontal: spacing.lg,
-        marginTop: -spacing["2xl"],
-        marginHorizontal: spacing.lg,
-        backgroundColor: colors.neutral[0],
-        borderRadius: radius["2xl"],
-        ...shadows.lg,
-      }}>
+      {/* Stats Section */}
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          justifyContent: "space-around",
+          paddingVertical: spacing["2xl"],
+          paddingHorizontal: spacing.lg,
+          marginTop: -spacing["2xl"],
+          marginHorizontal: spacing.lg,
+          backgroundColor: colors.neutral[0],
+          borderRadius: radius["2xl"],
+          ...shadows.lg,
+        }}
+      >
         {stats.map((stat, index) => (
-          <View key={index} style={{
-            alignItems: "center",
-            minWidth: 70,
-            paddingVertical: spacing.sm,
-            paddingHorizontal: spacing.sm,
-          }}>
-            <Text style={{
-              fontSize: responsive(20, 24, 28),
-              fontWeight: typography.fontWeight.bold,
-              color: colors.primary[600],
-            }}>
+          <View
+            key={index}
+            style={{
+              alignItems: "center",
+              minWidth: 70,
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.sm,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: responsive(20, 24, 28),
+                fontWeight: typography.fontWeight.bold,
+                color: colors.primary[600],
+              }}
+            >
               {stat.value}
             </Text>
-            <Text style={{
-              fontSize: typography.fontSize.xs,
-              color: colors.text.tertiary,
-              marginTop: spacing.xs,
-              textAlign: "center",
-            }}>
+            <Text
+              style={{
+                fontSize: typography.fontSize.xs,
+                color: colors.text.tertiary,
+                marginTop: spacing.xs,
+                textAlign: "center",
+              }}
+            >
               {stat.label}
             </Text>
           </View>
         ))}
-      </View> */}
+      </View>
 
       {/* Hero Image */}
       <View
@@ -574,6 +669,275 @@ const HomePage = ({ state, dispatch }) => {
             </View>
           ))}
         </View>
+      </View>
+
+      {/* Pricing Preview */}
+      <View
+        style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
+      >
+        <Text
+          style={{
+            fontSize: responsive(22, 26, 30),
+            fontWeight: typography.fontWeight.bold,
+            color: colors.text.primary,
+            textAlign: "center",
+            marginBottom: spacing.sm,
+          }}
+        >
+          Simple, Transparent Pricing
+        </Text>
+        <Text
+          style={{
+            fontSize: typography.fontSize.base,
+            color: colors.text.secondary,
+            textAlign: "center",
+            marginBottom: spacing["2xl"],
+          }}
+        >
+          No hidden fees, no surprises
+        </Text>
+
+        <View
+          style={{
+            backgroundColor: colors.neutral[0],
+            borderRadius: radius["2xl"],
+            padding: spacing["2xl"],
+            borderWidth: 2,
+            borderColor: colors.primary[500],
+            ...shadows.lg,
+          }}
+        >
+          <View style={{ alignItems: "center", marginBottom: spacing.xl }}>
+            <Text
+              style={{
+                fontSize: typography.fontSize.sm,
+                color: colors.text.tertiary,
+                textTransform: "uppercase",
+                letterSpacing: 1,
+              }}
+            >
+              Starting at
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+              <Text
+                style={{
+                  fontSize: typography.fontSize.xl,
+                  color: colors.text.primary,
+                  marginTop: 8,
+                }}
+              >
+                $
+              </Text>
+              <Text
+                style={{
+                  fontSize: responsive(48, 56, 64),
+                  fontWeight: typography.fontWeight.bold,
+                  color: colors.primary[600],
+                }}
+              >
+                {displayBasePrice}
+              </Text>
+            </View>
+            <Text
+              style={{
+                fontSize: typography.fontSize.sm,
+                color: colors.text.secondary,
+              }}
+            >
+              per cleaning
+            </Text>
+          </View>
+
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: colors.border.light,
+              paddingTop: spacing.lg,
+            }}
+          >
+            {[
+              "1 bed / 1 bath base rate",
+              `+$${
+                pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee
+              } per additional bed or bath`,
+              `Fresh sheets (+$${
+                pricing.linens?.sheetFeePerBed ??
+                defaultPricing.linens.sheetFeePerBed
+              }/bed)`,
+              `Fresh towels (+$${
+                pricing.linens?.towelFee ?? defaultPricing.linens.towelFee
+              }/towel)`,
+              "Flexible 10am-4pm scheduling",
+            ].map((item, index) => (
+              <View
+                key={index}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: spacing.md,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: colors.success[500],
+                    marginRight: spacing.md,
+                  }}
+                >
+                  ✓
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.sm,
+                    color: colors.text.secondary,
+                  }}
+                >
+                  {item}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <Pressable
+            onPress={() => navigate("/sign-up")}
+            style={({ pressed }) => ({
+              backgroundColor: colors.primary[600],
+              paddingVertical: spacing.lg,
+              borderRadius: radius.xl,
+              marginTop: spacing.lg,
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: colors.neutral[0],
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.bold,
+                textAlign: "center",
+              }}
+            >
+              Start Booking Today
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Value Props Section - ROI Focus */}
+      <View
+        style={{
+          backgroundColor: colors.success[50],
+          marginTop: spacing["2xl"],
+          paddingVertical: spacing["3xl"],
+          paddingHorizontal: spacing.lg,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: typography.fontSize.xs,
+            fontWeight: typography.fontWeight.bold,
+            color: colors.success[700],
+            letterSpacing: 1.5,
+            textAlign: "center",
+            marginBottom: spacing.sm,
+          }}
+        >
+          THE SMART CHOICE
+        </Text>
+        <Text
+          style={{
+            fontSize: responsive(22, 26, 30),
+            fontWeight: typography.fontWeight.bold,
+            color: colors.text.primary,
+            textAlign: "center",
+            marginBottom: spacing.sm,
+          }}
+        >
+          Why Hosts Love Us
+        </Text>
+        <Text
+          style={{
+            fontSize: typography.fontSize.base,
+            color: colors.text.secondary,
+            textAlign: "center",
+            marginBottom: spacing["2xl"],
+          }}
+        >
+          Real results for real vacation rental owners
+        </Text>
+
+        {valueProps.map((prop, index) => (
+          <View
+            key={index}
+            style={{
+              backgroundColor: colors.neutral[0],
+              borderRadius: radius.xl,
+              padding: spacing.xl,
+              marginBottom: spacing.lg,
+              borderWidth: 1,
+              borderColor: colors.success[200],
+              ...shadows.sm,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: spacing.md,
+              }}
+            >
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: colors.success[100],
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <FeatureIcon icon={prop.icon} />
+              </View>
+              <View
+                style={{
+                  backgroundColor: colors.success[600],
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: spacing.xs,
+                  borderRadius: radius.full,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.sm,
+                    fontWeight: typography.fontWeight.bold,
+                    color: colors.neutral[0],
+                  }}
+                >
+                  {prop.highlight}
+                </Text>
+              </View>
+            </View>
+            <Text
+              style={{
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.bold,
+                color: colors.text.primary,
+                marginBottom: spacing.xs,
+              }}
+            >
+              {prop.title}
+            </Text>
+            <Text
+              style={{
+                fontSize: typography.fontSize.sm,
+                color: colors.text.secondary,
+                lineHeight: 22,
+              }}
+            >
+              {prop.description}
+            </Text>
+          </View>
+        ))}
       </View>
 
       {/* How It Works Section */}
@@ -673,198 +1037,132 @@ const HomePage = ({ state, dispatch }) => {
         </View>
       </View>
 
-      {/* Pricing Preview */}
+      {/* Testimonials */}
       <View
         style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
       >
+        <Text
+          style={{
+            fontSize: typography.fontSize.xs,
+            fontWeight: typography.fontWeight.bold,
+            color: colors.primary[600],
+            letterSpacing: 1.5,
+            textAlign: "center",
+            marginBottom: spacing.sm,
+          }}
+        >
+          SUCCESS STORIES
+        </Text>
         <Text
           style={{
             fontSize: responsive(22, 26, 30),
             fontWeight: typography.fontWeight.bold,
             color: colors.text.primary,
             textAlign: "center",
-            marginBottom: spacing.sm,
-          }}
-        >
-          Simple, Transparent Pricing
-        </Text>
-        <Text
-          style={{
-            fontSize: typography.fontSize.base,
-            color: colors.text.secondary,
-            textAlign: "center",
             marginBottom: spacing["2xl"],
           }}
         >
-          No hidden fees, no surprises
-        </Text>
-
-        <View
-          style={{
-            backgroundColor: colors.neutral[0],
-            borderRadius: radius["2xl"],
-            padding: spacing["2xl"],
-            borderWidth: 2,
-            borderColor: colors.primary[500],
-            ...shadows.lg,
-          }}
-        >
-          <View style={{ alignItems: "center", marginBottom: spacing.xl }}>
-            <Text
-              style={{
-                fontSize: typography.fontSize.sm,
-                color: colors.text.tertiary,
-                textTransform: "uppercase",
-                letterSpacing: 1,
-              }}
-            >
-              Starting at
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-              <Text
-                style={{
-                  fontSize: typography.fontSize.xl,
-                  color: colors.text.primary,
-                  marginTop: 8,
-                }}
-              >
-                $
-              </Text>
-              <Text
-                style={{
-                  fontSize: responsive(48, 56, 64),
-                  fontWeight: typography.fontWeight.bold,
-                  color: colors.primary[600],
-                }}
-              >
-                {displayBasePrice}
-              </Text>
-            </View>
-            <Text
-              style={{
-                fontSize: typography.fontSize.sm,
-                color: colors.text.secondary,
-              }}
-            >
-              per cleaning
-            </Text>
-          </View>
-
-          <View
-            style={{
-              borderTopWidth: 1,
-              borderTopColor: colors.border.light,
-              paddingTop: spacing.lg,
-            }}
-          >
-            {[
-              "1 bed / 1 bath base rate",
-              `+$${pricing.extraBedBathFee ?? defaultPricing.extraBedBathFee} per additional bed or bath`,
-              `Fresh sheets (+$${pricing.linens?.sheetFeePerBed ?? defaultPricing.linens.sheetFeePerBed}/bed)`,
-              `Fresh towels (+$${pricing.linens?.towelFee ?? defaultPricing.linens.towelFee}/towel)`,
-              "Flexible 10am-4pm scheduling",
-            ].map((item, index) => (
-              <View
-                key={index}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginBottom: spacing.md,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 16,
-                    color: colors.success[500],
-                    marginRight: spacing.md,
-                  }}
-                >
-                  ✓
-                </Text>
-                <Text
-                  style={{
-                    fontSize: typography.fontSize.sm,
-                    color: colors.text.secondary,
-                  }}
-                >
-                  {item}
-                </Text>
-              </View>
-            ))}
-          </View>
-
-          <Pressable
-            onPress={() => navigate("/sign-up")}
-            style={({ pressed }) => ({
-              backgroundColor: colors.primary[600],
-              paddingVertical: spacing.lg,
-              borderRadius: radius.xl,
-              marginTop: spacing.lg,
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <Text
-              style={{
-                color: colors.neutral[0],
-                fontSize: typography.fontSize.lg,
-                fontWeight: typography.fontWeight.bold,
-                textAlign: "center",
-              }}
-            >
-              Start Booking Today
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Testimonials
-      <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}>
-        <Text style={{
-          fontSize: responsive(22, 26, 30),
-          fontWeight: typography.fontWeight.bold,
-          color: colors.text.primary,
-          textAlign: "center",
-          marginBottom: spacing["2xl"],
-        }}>
-          What Our Clients Say
+          Hosts Who Made the Switch
         </Text>
 
         {testimonials.map((testimonial, index) => (
-          <View key={index} style={{
-            backgroundColor: colors.neutral[50],
-            borderRadius: radius.xl,
-            padding: spacing.xl,
-            marginBottom: spacing.lg,
-            borderLeftWidth: 4,
-            borderLeftColor: colors.secondary[500],
-          }}>
-            <Text style={{
-              fontSize: typography.fontSize.base,
-              color: colors.text.primary,
-              lineHeight: 24,
-              fontStyle: "italic",
+          <View
+            key={index}
+            style={{
+              backgroundColor: colors.neutral[50],
+              borderRadius: radius.xl,
+              padding: spacing.xl,
               marginBottom: spacing.lg,
-            }}>
+              borderWidth: 1,
+              borderColor: colors.border.light,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: spacing.md,
+              }}
+            >
+              <Text style={{ fontSize: 24 }}>💬</Text>
+              {testimonial.stat && (
+                <View
+                  style={{
+                    backgroundColor: colors.primary[600],
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.xs,
+                    borderRadius: radius.full,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typography.fontSize.sm,
+                      fontWeight: typography.fontWeight.bold,
+                      color: colors.neutral[0],
+                    }}
+                  >
+                    {testimonial.stat}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text
+              style={{
+                fontSize: typography.fontSize.base,
+                color: colors.text.primary,
+                lineHeight: 24,
+                fontStyle: "italic",
+                marginBottom: spacing.lg,
+              }}
+            >
               "{testimonial.text}"
             </Text>
-            <View>
-              <Text style={{
-                fontSize: typography.fontSize.sm,
-                fontWeight: typography.fontWeight.semibold,
-                color: colors.text.primary,
-              }}>
-                {testimonial.author}
-              </Text>
-              <Text style={{
-                fontSize: typography.fontSize.xs,
-                color: colors.text.tertiary,
-              }}>
-                {testimonial.role}
-              </Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: colors.primary[100],
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: spacing.md,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.lg,
+                    fontWeight: typography.fontWeight.bold,
+                    color: colors.primary[600],
+                  }}
+                >
+                  {testimonial.author[0]}
+                </Text>
+              </View>
+              <View>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.sm,
+                    fontWeight: typography.fontWeight.semibold,
+                    color: colors.text.primary,
+                  }}
+                >
+                  {testimonial.author}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.xs,
+                    color: colors.text.tertiary,
+                  }}
+                >
+                  {testimonial.role}
+                </Text>
+              </View>
             </View>
           </View>
         ))}
-      </View> */}
+      </View>
 
       {/* Guarantee Section */}
       <View
@@ -945,18 +1243,90 @@ const HomePage = ({ state, dispatch }) => {
             marginBottom: spacing.sm,
           }}
         >
-          Ready to Get Started?
+          Ready for 5-Star Reviews?
         </Text>
         <Text
           style={{
             fontSize: typography.fontSize.base,
             color: colors.primary[100],
             textAlign: "center",
-            marginBottom: spacing.xl,
+            marginBottom: spacing.lg,
           }}
         >
-          Join hundreds of property owners who trust us with their rentals
+          Join 500+ hosts saving ${yearlySavings.toLocaleString()}/year with
+          professional cleanings
         </Text>
+        <View style={{ marginBottom: spacing.xl }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: spacing.sm,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                color: colors.success[300],
+                marginRight: spacing.sm,
+              }}
+            >
+              ✓
+            </Text>
+            <Text
+              style={{
+                color: colors.primary[100],
+                fontSize: typography.fontSize.sm,
+              }}
+            >
+              Book your first cleaning in 2 minutes
+            </Text>
+          </View>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: spacing.sm,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                color: colors.success[300],
+                marginRight: spacing.sm,
+              }}
+            >
+              ✓
+            </Text>
+            <Text
+              style={{
+                color: colors.primary[100],
+                fontSize: typography.fontSize.sm,
+              }}
+            >
+              Cancel free up to 7 days before*
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text
+              style={{
+                fontSize: 16,
+                color: colors.success[300],
+                marginRight: spacing.sm,
+              }}
+            >
+              ✓
+            </Text>
+            <Text
+              style={{
+                color: colors.primary[100],
+                fontSize: typography.fontSize.sm,
+              }}
+            >
+              Satisfaction guaranteed or we re-clean free
+            </Text>
+          </View>
+        </View>
         <Pressable
           onPress={() => navigate("/sign-up")}
           style={({ pressed }) => ({
@@ -975,7 +1345,7 @@ const HomePage = ({ state, dispatch }) => {
               fontWeight: typography.fontWeight.bold,
             }}
           >
-            Create Free Account
+            Start Your Free Account
           </Text>
         </Pressable>
       </View>

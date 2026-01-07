@@ -22,11 +22,22 @@ const mockSequelize = {
   define: mockDefine,
 };
 
+// Mock DataTypes with function support (e.g., STRING(30))
+const createMockType = (typeName) => {
+  const mock = () => typeName;
+  mock.UNSIGNED = typeName;
+  return mock;
+};
+
 const DataTypes = {
-  INTEGER: "INTEGER",
-  STRING: "STRING",
-  DATE: "DATE",
-  TEXT: "TEXT",
+  INTEGER: createMockType("INTEGER"),
+  STRING: createMockType("STRING"),
+  DATE: createMockType("DATE"),
+  TEXT: createMockType("TEXT"),
+  DECIMAL: createMockType("DECIMAL"),
+  BOOLEAN: createMockType("BOOLEAN"),
+  JSON: createMockType("JSON"),
+  ENUM: (...values) => `ENUM(${values.join(",")})`,
 };
 
 // Import the model factory
@@ -174,17 +185,27 @@ describe("Payout Model", () => {
 
     it("should have grossAmount as INTEGER (cents)", () => {
       const schema = mockDefine.mock.calls[0][1];
-      expect(schema.grossAmount.type).toBe("INTEGER");
+      // Type can be either the mock function or the result of calling it
+      const typeValue = typeof schema.grossAmount.type === "function"
+        ? schema.grossAmount.type()
+        : schema.grossAmount.type;
+      expect(typeValue).toBe("INTEGER");
     });
 
     it("should have platformFee as INTEGER (cents)", () => {
       const schema = mockDefine.mock.calls[0][1];
-      expect(schema.platformFee.type).toBe("INTEGER");
+      const typeValue = typeof schema.platformFee.type === "function"
+        ? schema.platformFee.type()
+        : schema.platformFee.type;
+      expect(typeValue).toBe("INTEGER");
     });
 
     it("should have netAmount as INTEGER (cents)", () => {
       const schema = mockDefine.mock.calls[0][1];
-      expect(schema.netAmount.type).toBe("INTEGER");
+      const typeValue = typeof schema.netAmount.type === "function"
+        ? schema.netAmount.type()
+        : schema.netAmount.type;
+      expect(typeValue).toBe("INTEGER");
     });
   });
 });

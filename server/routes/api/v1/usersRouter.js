@@ -262,6 +262,159 @@ usersRouter.post("/business-owner", async (req, res) => {
   }
 });
 
+// POST /api/v1/users/marketplace-cleaner - Business employee creates separate marketplace account
+// Allows duplicate emails when one is an employee account and one is a marketplace cleaner account
+usersRouter.post("/marketplace-cleaner", async (req, res) => {
+  try {
+    const { firstName, lastName, username, password, email, phone, termsId, privacyPolicyId, referralCode } = req.body;
+
+    // Validate required fields
+    if (!firstName || !lastName || !email || !username || !password) {
+      return res.status(400).json({ error: "First name, last name, email, username, and password are required" });
+    }
+
+    // Validate password strength
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
+    }
+
+    // Validate username doesn't contain "owner"
+    if (username && username.toLowerCase().includes("owner")) {
+      return res.status(400).json({ error: "Username cannot contain the word 'owner'" });
+    }
+
+    // Username must be globally unique
+    const existingUsername = await User.findOne({ where: { username } });
+    if (existingUsername) {
+      return res.status(410).json({ error: "Username already exists" });
+    }
+
+    // Check for existing email - only block if already a marketplace cleaner
+    const existingUsers = await User.findAll({ where: { email } });
+    const hasMarketplaceAccount = existingUsers.some(
+      (u) => u.type === "cleaner" && u.isMarketplaceCleaner === true
+    );
+
+    if (hasMarketplaceAccount) {
+      return res.status(409).json({
+        error: "A marketplace cleaner account already exists with this email",
+      });
+    }
+
+    // Get terms version if termsId provided
+    let termsVersion = null;
+    let termsRecord = null;
+    if (termsId) {
+      termsRecord = await TermsAndConditions.findByPk(termsId);
+      if (termsRecord) {
+        termsVersion = termsRecord.version;
+      }
+    }
+
+    // Get privacy policy version if privacyPolicyId provided
+    let privacyVersion = null;
+    let privacyRecord = null;
+    if (privacyPolicyId) {
+      privacyRecord = await TermsAndConditions.findByPk(privacyPolicyId);
+      if (privacyRecord) {
+        privacyVersion = privacyRecord.version;
+      }
+    }
+
+    // Create the marketplace cleaner account
+    const newUser = await User.create({
+      firstName,
+      lastName,
+      username,
+      password,
+      email,
+      phone: phone || null,
+      type: "cleaner",
+      isMarketplaceCleaner: true,
+      employeeOfBusinessId: null,
+      notifications: ["phone", "email"],
+      termsAcceptedVersion: termsVersion,
+      privacyPolicyAcceptedVersion: privacyVersion,
+    });
+
+    // Create billing record
+    await UserBills.create({
+      userId: newUser.id,
+      appointmentDue: 0,
+      cancellationFee: 0,
+      totalDue: 0,
+    });
+
+    const ipAddress = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+    // Record terms acceptance if terms were accepted
+    if (termsId && termsRecord) {
+      await UserTermsAcceptance.create({
+        userId: newUser.id,
+        termsId,
+        acceptedAt: new Date(),
+        ipAddress,
+        termsContentSnapshot: termsRecord.contentType === "text" ? termsRecord.content : null,
+      });
+    }
+
+    // Record privacy policy acceptance if privacy policy was accepted
+    if (privacyPolicyId && privacyRecord) {
+      await UserTermsAcceptance.create({
+        userId: newUser.id,
+        termsId: privacyPolicyId,
+        acceptedAt: new Date(),
+        ipAddress,
+        termsContentSnapshot: privacyRecord.contentType === "text" ? privacyRecord.content : null,
+      });
+    }
+
+    // Process referral code if provided
+    if (referralCode) {
+      try {
+        const validation = await ReferralService.validateReferralCode(
+          referralCode,
+          "cleaner",
+          models
+        );
+
+        if (validation.valid) {
+          await ReferralService.generateReferralCode(newUser, models);
+          await ReferralService.createReferral(
+            referralCode,
+            newUser,
+            validation.programType,
+            validation.rewards,
+            models
+          );
+          console.log(`[Referral] New marketplace cleaner ${newUser.id} referred by code ${referralCode}`);
+        }
+      } catch (referralError) {
+        console.error("[Referral] Error processing referral:", referralError.message);
+      }
+    } else {
+      try {
+        await ReferralService.generateReferralCode(newUser, models);
+      } catch (codeError) {
+        console.error("[Referral] Error generating code:", codeError.message);
+      }
+    }
+
+    await newUser.update({ lastLogin: new Date() });
+
+    const serializedUser = UserSerializer.login(newUser.dataValues);
+    const token = jwt.sign({ userId: serializedUser.id }, secretKey, { expiresIn: "24h" });
+
+    console.log(`✅ New marketplace cleaner account created: ${username}`);
+
+    return res.status(201).json({ user: serializedUser, token });
+  } catch (error) {
+    console.error("Error creating marketplace cleaner account:", error);
+    return res.status(500).json({ error: "Failed to create account" });
+  }
+});
+
 // PATCH /api/v1/users/upgrade-to-business - Existing cleaner upgrades to business owner
 usersRouter.patch("/upgrade-to-business", async (req, res) => {
   try {

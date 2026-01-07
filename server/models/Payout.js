@@ -80,6 +80,53 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT, // 'solo_completion_bonus', 'partial_work', 'co_cleaner_dropout', etc.
       allowNull: true,
     },
+    // Business employee payout fields
+    payoutType: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: "marketplace",
+      // 'marketplace', 'business_employee', 'business_owner_self'
+    },
+    businessOwnerId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    employeeJobAssignmentId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    paidOutsidePlatform: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    // Preferred cleaner perk tracking
+    preferredBonusApplied: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    preferredBonusPercent: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+      comment: "Bonus percentage applied from preferred cleaner tier",
+    },
+    preferredBonusAmount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Bonus amount in cents added to payout",
+    },
+    cleanerTierAtPayout: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      comment: "Cleaner tier level at time of payout (bronze/silver/gold/platinum)",
+    },
+    isPreferredHomeJob: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "Whether this job was at a home where cleaner is preferred",
+    },
   });
 
   Payout.associate = (models) => {
@@ -94,6 +141,14 @@ module.exports = (sequelize, DataTypes) => {
     Payout.belongsTo(models.MultiCleanerJob, {
       foreignKey: "multiCleanerJobId",
       as: "multiCleanerJob",
+    });
+    Payout.belongsTo(models.User, {
+      foreignKey: "businessOwnerId",
+      as: "businessOwner",
+    });
+    Payout.belongsTo(models.EmployeeJobAssignment, {
+      foreignKey: "employeeJobAssignmentId",
+      as: "employeeJobAssignment",
     });
   };
 

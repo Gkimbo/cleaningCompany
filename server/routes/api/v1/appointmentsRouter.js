@@ -46,8 +46,40 @@ appointmentRouter.get("/unassigned", async (req, res) => {
     return res.status(401).json({ error: "Authorization token required" });
   }
   try {
+    const { preferredOnly } = req.query;
+
+    // Build the where clause
+    const whereClause = {
+      hasBeenAssigned: false,
+      assignedToBusinessEmployee: false, // Exclude business-assigned jobs from marketplace
+    };
+
+    // If preferredOnly filter is enabled, filter to cleaner's preferred homes
+    if (preferredOnly === "true") {
+      const decodedToken = jwt.verify(token, secretKey);
+      const cleanerId = decodedToken.userId;
+
+      // Get all home IDs where this cleaner is preferred
+      const preferredHomeRecords = await HomePreferredCleaner.findAll({
+        where: { cleanerId },
+        attributes: ["homeId"],
+      });
+
+      const preferredHomeIds = preferredHomeRecords.map((ph) => ph.homeId);
+
+      // If cleaner has no preferred homes, return empty list
+      if (preferredHomeIds.length === 0) {
+        return res.status(200).json({ appointments: [], preferredHomeCount: 0 });
+      }
+
+      // Filter appointments to only those from preferred homes
+      const { Op } = require("sequelize");
+      whereClause.homeId = { [Op.in]: preferredHomeIds };
+    }
+
+    // Filter out appointments that are assigned to business employees
     const userAppointments = await UserAppointments.findAll({
-      where: { hasBeenAssigned: false },
+      where: whereClause,
     });
     const serializedAppointments =
       AppointmentSerializer.serializeArray(userAppointments);

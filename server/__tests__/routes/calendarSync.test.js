@@ -36,7 +36,7 @@ jest.mock("../../models", () => ({
   },
 }));
 
-const { CalendarSync, UserHomes, UserAppointments, UserBills } = require("../../models");
+const { User, CalendarSync, UserHomes, UserAppointments, UserBills } = require("../../models");
 const { getCheckoutDates, validateIcalUrl, detectPlatform } = require("../../services/icalParser");
 const calendarSyncRouter = require("../../routes/api/v1/calendarSyncRouter");
 
@@ -579,6 +579,117 @@ describe("Calendar Sync Router", () => {
         .set("Authorization", `Bearer ${createToken()}`);
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe("GET /api/v1/calendar-sync/disclaimer/status", () => {
+    it("should return accepted: true when disclaimer has been accepted", async () => {
+      const acceptedDate = new Date("2025-01-15T10:30:00Z");
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        calendarSyncDisclaimerAcceptedAt: acceptedDate,
+      });
+
+      const response = await request(app)
+        .get("/api/v1/calendar-sync/disclaimer/status")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.accepted).toBe(true);
+      expect(response.body.acceptedAt).toBe(acceptedDate.toISOString());
+    });
+
+    it("should return accepted: false when disclaimer has not been accepted", async () => {
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        calendarSyncDisclaimerAcceptedAt: null,
+      });
+
+      const response = await request(app)
+        .get("/api/v1/calendar-sync/disclaimer/status")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.accepted).toBe(false);
+      expect(response.body.acceptedAt).toBeNull();
+    });
+
+    it("should return 404 if user not found", async () => {
+      User.findByPk.mockResolvedValue(null);
+
+      const response = await request(app)
+        .get("/api/v1/calendar-sync/disclaimer/status")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("User not found");
+    });
+
+    it("should return 401 without authorization", async () => {
+      const response = await request(app)
+        .get("/api/v1/calendar-sync/disclaimer/status");
+
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe("POST /api/v1/calendar-sync/disclaimer/accept", () => {
+    it("should accept the disclaimer and return timestamp", async () => {
+      const mockUser = {
+        id: 1,
+        calendarSyncDisclaimerAcceptedAt: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const response = await request(app)
+        .post("/api/v1/calendar-sync/disclaimer/accept")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.acceptedAt).toBeDefined();
+      expect(mockUser.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          calendarSyncDisclaimerAcceptedAt: expect.any(Date),
+        })
+      );
+    });
+
+    it("should allow re-accepting the disclaimer", async () => {
+      const mockUser = {
+        id: 1,
+        calendarSyncDisclaimerAcceptedAt: new Date("2024-01-01"),
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const response = await request(app)
+        .post("/api/v1/calendar-sync/disclaimer/accept")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+
+    it("should return 404 if user not found", async () => {
+      User.findByPk.mockResolvedValue(null);
+
+      const response = await request(app)
+        .post("/api/v1/calendar-sync/disclaimer/accept")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe("User not found");
+    });
+
+    it("should return 401 without authorization", async () => {
+      const response = await request(app)
+        .post("/api/v1/calendar-sync/disclaimer/accept");
+
+      expect(response.status).toBe(401);
     });
   });
 });

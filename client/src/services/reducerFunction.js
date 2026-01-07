@@ -15,6 +15,7 @@ const reducer = (state, action) => {
         isBusinessOwner: false,
         businessName: null,
         yearsInBusiness: null,
+        linkedAccounts: [],
       };
     case "ERROR":
       return {
@@ -231,6 +232,29 @@ const reducer = (state, action) => {
         isBusinessOwner: action.payload.isBusinessOwner,
         businessName: action.payload.businessName,
         yearsInBusiness: action.payload.yearsInBusiness,
+      };
+    case "SET_LINKED_ACCOUNTS":
+      return {
+        ...state,
+        linkedAccounts: action.payload,
+      };
+    // Offline mode actions
+    case "SET_OFFLINE_MODE":
+      return {
+        ...state,
+        offlineMode: action.payload,
+      };
+    case "SET_NETWORK_STATUS":
+      return {
+        ...state,
+        networkStatus: action.payload.status,
+        isOnline: action.payload.isOnline,
+      };
+    case "SET_SYNC_STATUS":
+      return {
+        ...state,
+        syncStatus: action.payload.status,
+        pendingSyncCount: action.payload.pendingCount ?? state.pendingSyncCount,
       };
     default:
       throw new Error();

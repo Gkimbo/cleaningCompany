@@ -125,7 +125,6 @@ const CleanerApplicationForm = () => {
     IncentivesService.getCurrentIncentives().then(setIncentiveConfig);
   }, []);
 
-  
   const [formData, setFormData] = useState({
     // Basic Information
     firstName: "",
@@ -537,38 +536,84 @@ const CleanerApplicationForm = () => {
     );
   }
 
+  // Keep percentage calculation
+  const keepPercent = Math.round((1 - platformFeePercent) * 100);
+
   // Benefits data
   const benefits = [
     {
       icon: "👑",
       title: "Be Your Own Boss",
       description:
-        "You decide when and where you work. No micromanaging, no office politics.",
+        "You decide when and where you work. No micromanaging, no office politics. 100% control over your schedule.",
+      stat: "100%",
+      statLabel: "Freedom",
     },
     {
-      icon: "🕐",
-      title: "Set Your Own Hours",
+      icon: "⚡",
+      title: "Get Paid in 24 Hours",
       description:
-        "Work mornings, afternoons, or weekends. Build a schedule that fits your life.",
-    },
-    {
-      icon: "💰",
-      title: "Earn Great Money",
-      description: `Earn $${minCleanerPay}-$${maxCleanerPay} per house cleaned. Average cleaners make $${fullTimeEarnings.weekly.toLocaleString()}+ per week.`,
+        "No more waiting weeks for paychecks. Finish a job, get paid within 24 hours directly to your bank account.",
+      stat: "24hr",
+      statLabel: "Payouts",
     },
     {
       icon: "📈",
-      title: "Grow Your Income",
-      description:
-        "The more you work, the more you earn. No caps, no limits on your potential.",
+      title: "Unlimited Earning Potential",
+      description: `No caps, no limits. Work more, earn more. Full-time cleaners average $${fullTimeEarnings.yearly.toLocaleString()}/year. Your success = your effort.`,
+      stat: `$${Math.round(fullTimeEarnings.yearly / 1000)}k+`,
+      statLabel: "Per Year",
     },
   ];
 
   const perks = [
-    { icon: "✓", text: "Get paid as soon as you finish each cleaning" },
-    { icon: "✓", text: "Flexible scheduling - you choose your jobs" },
+    {
+      icon: "✓",
+      text: `Get paid within 48 hours of each cleaning`,
+      highlight: true,
+    },
+    { icon: "✓", text: "Flexible scheduling - accept only jobs you want" },
     { icon: "✓", text: "No experience necessary" },
-    { icon: "✓", text: "Work independently, no supervisor hovering" },
+    { icon: "✓", text: "Work independently, no boss hovering over you" },
+    { icon: "✓", text: "Build recurring clients for steady income" },
+    { icon: "✓", text: "Guaranteed payments - never chase money again" },
+  ];
+
+  const testimonials = [
+    {
+      quote:
+        "I left my retail job 6 months ago. Now I make $4,200/month cleaning 3 houses a day, and I actually have time for my kids.",
+      name: "Maria G.",
+      earnings: "$4,200/mo",
+      time: "6 months on platform",
+    },
+    {
+      quote:
+        "Started part-time while finishing school. Best side hustle ever - I made $1,800 last month working just weekends.",
+      name: "James T.",
+      earnings: "$1,800/mo",
+      time: "Part-time cleaner",
+    },
+    {
+      quote:
+        "The 24-hour payouts changed everything. I can actually plan my finances now instead of waiting 2 weeks for a paycheck.",
+      name: "Lisa M.",
+      earnings: "$3,500/mo",
+      time: "1 year on platform",
+    },
+  ];
+
+  const comparisonData = [
+    { feature: "Set your own schedule", us: true, traditional: false },
+    { feature: "Get paid within 24 hours", us: true, traditional: false },
+    { feature: "Choose which jobs to take", us: true, traditional: false },
+    { feature: "No boss or supervisor", us: true, traditional: false },
+    {
+      feature: `Keep ${keepPercent}% of earnings`,
+      us: true,
+      traditional: false,
+    },
+    { feature: "Work from anywhere", us: true, traditional: false },
   ];
 
   // Hero Landing Page
@@ -590,43 +635,94 @@ const CleanerApplicationForm = () => {
             borderBottomRightRadius: 32,
           }}
         >
-          <Text
+          {/* <View
             style={{
-              fontSize: responsive(14, 16, 18),
-              color: colors.secondary[100],
-              textAlign: "center",
-              textTransform: "uppercase",
-              letterSpacing: 2,
-              marginBottom: spacing.sm,
-              fontWeight: typography.fontWeight.semibold,
+              backgroundColor: "rgba(255,255,255,0.15)",
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.xs,
+              borderRadius: radius.full,
+              alignSelf: "center",
+              marginBottom: spacing.md,
             }}
           >
-            Now Hiring
-          </Text>
+            <Text
+              style={{
+                fontSize: typography.fontSize.sm,
+                color: colors.neutral[0],
+                fontWeight: typography.fontWeight.semibold,
+              }}
+            >
+              🔥 500+ Cleaners Already Earning
+            </Text>
+          </View> */}
           <Text
             style={{
               fontSize: responsive(28, 36, 44),
-              fontWeight: typography.fontWeight.bold,
+              fontWeight: "800",
               color: colors.neutral[0],
               textAlign: "center",
               marginBottom: spacing.md,
               lineHeight: responsive(34, 44, 52),
             }}
           >
-            Earn ${minCleanerPay}-${maxCleanerPay}
-            {"\n"}Per House Cleaned
+            Earn
+            <Text style={{ color: "#fde68a" }}>
+              {` $${minCleanerPay} - $${maxCleanerPay} `}
+            </Text>
+            {"\n"}
+            Per House Cleaned
           </Text>
           <Text
             style={{
               fontSize: responsive(16, 18, 20),
               color: colors.secondary[100],
               textAlign: "center",
-              marginBottom: spacing["2xl"],
+              marginBottom: spacing.lg,
               lineHeight: 26,
             }}
           >
-            Join Kleanr and start earning great money doing what you love
+            Thats about ${Math.round(minCleanerPay * 0.7)} - $
+            {Math.round(maxCleanerPay * 0.7)} / Hour
+            {"\n"}
+            No boss. No limits. Start this week.
           </Text>
+
+          {/* Quick Stats */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-around",
+              marginBottom: spacing.xl,
+              paddingHorizontal: spacing.sm,
+            }}
+          >
+            {[
+              // { value: `${keepPercent}%`, label: "You Keep" },
+              { value: "24hr", label: "Payouts" },
+              { value: "4.9", label: "Rating" },
+              { value: "$0", label: "To Start" },
+            ].map((stat, index) => (
+              <View key={index} style={{ alignItems: "center" }}>
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: "800",
+                    color: colors.neutral[0],
+                  }}
+                >
+                  {stat.value}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typography.fontSize.xs,
+                    color: colors.secondary[200],
+                  }}
+                >
+                  {stat.label}
+                </Text>
+              </View>
+            ))}
+          </View>
 
           <TouchableOpacity
             onPress={() => setShowForm(true)}
@@ -636,6 +732,8 @@ const CleanerApplicationForm = () => {
               paddingHorizontal: spacing["2xl"],
               borderRadius: radius.xl,
               alignSelf: "center",
+              flexDirection: "row",
+              alignItems: "center",
               ...shadows.lg,
             }}
           >
@@ -647,9 +745,19 @@ const CleanerApplicationForm = () => {
                 textAlign: "center",
               }}
             >
-              Apply Now - It's Free
+              Apply Now - Takes 5 Minutes
             </Text>
           </TouchableOpacity>
+          <Text
+            style={{
+              fontSize: typography.fontSize.sm,
+              color: colors.secondary[200],
+              textAlign: "center",
+              marginTop: spacing.md,
+            }}
+          >
+            Free to apply. No experience needed.
+          </Text>
         </View>
 
         {/* Income Highlight */}
@@ -697,26 +805,33 @@ const CleanerApplicationForm = () => {
         </View>
 
         {/* Incentive Banner */}
-        {incentiveConfig?.cleaner?.enabled && (() => {
-          const feeReduction = incentiveConfig.cleaner.feeReductionPercent;
-          const maxCleanings = incentiveConfig.cleaner.maxCleanings;
+        {incentiveConfig?.cleaner?.enabled &&
+          (() => {
+            const feeReduction = incentiveConfig.cleaner.feeReductionPercent;
+            const maxCleanings = incentiveConfig.cleaner.maxCleanings;
 
-          // Extra percentage = platform fee * fee reduction (e.g., 10% * 100% = 10% extra)
-          const extraPercent = Math.round(platformFeePercent * feeReduction * 100);
+            // Extra percentage = platform fee * fee reduction (e.g., 10% * 100% = 10% extra)
+            const extraPercent = Math.round(
+              platformFeePercent * feeReduction * 100
+            );
 
-          // Calculate estimated total extra earnings
-          const avgPayPerHouse = Math.round((minCleanerPay + maxCleanerPay) / 2);
-          const extraPerCleaning = Math.round(avgPayPerHouse * platformFeePercent * feeReduction);
-          const totalExtra = extraPerCleaning * maxCleanings;
+            // Calculate estimated total extra earnings
+            const avgPayPerHouse = Math.round(
+              (minCleanerPay + maxCleanerPay) / 2
+            );
+            const extraPerCleaning = Math.round(
+              avgPayPerHouse * platformFeePercent * feeReduction
+            );
+            const totalExtra = extraPerCleaning * maxCleanings;
 
-          return (
-            <IncentiveBanner
-              type="cleaner"
-              message={`New cleaners earn an extra ${extraPercent}% on each of your first ${maxCleanings} cleanings - that's up to $${totalExtra} extra!`}
-              icon="trending-up"
-            />
-          );
-        })()}
+            return (
+              <IncentiveBanner
+                type="cleaner"
+                message={`New cleaners earn an extra ${extraPercent}% on each of your first ${maxCleanings} cleanings - that's up to $${totalExtra} extra!`}
+                icon="trending-up"
+              />
+            );
+          })()}
 
         {/* Benefits Grid */}
         <View
@@ -764,9 +879,45 @@ const CleanerApplicationForm = () => {
                   borderColor: colors.primary[100],
                 }}
               >
-                <Text style={{ fontSize: 32, marginBottom: spacing.md }}>
-                  {benefit.icon}
-                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: spacing.md,
+                  }}
+                >
+                  <Text style={{ fontSize: 32 }}>{benefit.icon}</Text>
+                  {benefit.stat && (
+                    <View
+                      style={{
+                        backgroundColor: colors.primary[600],
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.lg,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: typography.fontSize.lg,
+                          fontWeight: "800",
+                          color: colors.neutral[0],
+                        }}
+                      >
+                        {benefit.stat}
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          color: colors.primary[200],
+                        }}
+                      >
+                        {benefit.statLabel}
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 <Text
                   style={{
                     fontSize: typography.fontSize.lg,
@@ -955,8 +1106,9 @@ const CleanerApplicationForm = () => {
               marginTop: spacing.xl,
             }}
           >
-            *Earnings based on ${minCleanerPay}-${maxCleanerPay} per house.
-            Results vary by location and availability.
+            *Earnings based on ${minCleanerPay}-${maxCleanerPay} per house. $
+            {minCleanerPay} per house is the absolute mininimum you'll earn
+            cleaning a 1 bed 1 bath home. It only goes up from there!
           </Text>
         </View>
 
@@ -1029,54 +1181,129 @@ const CleanerApplicationForm = () => {
           </View>
         </View>
 
-        {/* Testimonial
+        {/* Testimonials
         <View
           style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
         >
-          <View
+          <Text
             style={{
-              backgroundColor: colors.neutral[50],
-              borderRadius: radius["2xl"],
-              padding: spacing["2xl"],
-              borderLeftWidth: 4,
-              borderLeftColor: colors.secondary[500],
+              fontSize: typography.fontSize.xs,
+              fontWeight: typography.fontWeight.bold,
+              color: colors.secondary[600],
+              letterSpacing: 1.5,
+              textAlign: "center",
+              marginBottom: spacing.sm,
             }}
           >
-            <Text style={{ fontSize: 32, marginBottom: spacing.md }}>💬</Text>
-            <Text
+            SUCCESS STORIES
+          </Text>
+          <Text
+            style={{
+              fontSize: responsive(22, 26, 30),
+              fontWeight: typography.fontWeight.bold,
+              color: colors.text.primary,
+              textAlign: "center",
+              marginBottom: spacing["2xl"],
+            }}
+          >
+            Real Cleaners, Real Results
+          </Text>
+
+          {testimonials.map((testimonial, index) => (
+            <View
+              key={index}
               style={{
-                fontSize: typography.fontSize.lg,
-                color: colors.text.primary,
-                lineHeight: 28,
-                fontStyle: "italic",
+                backgroundColor: colors.neutral[50],
+                borderRadius: radius["2xl"],
+                padding: spacing.xl,
                 marginBottom: spacing.lg,
+                borderWidth: 1,
+                borderColor: colors.border.light,
               }}
             >
-              "I quit my 9-5 job and now I make more money working fewer hours.
-              I clean about 3 houses a day and take home over $1,500 a week. I
-              set my own schedule and finally have time for my family. Best
-              decision I ever made."
-            </Text>
-            <View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: spacing.md,
+                }}
+              >
+                <Text style={{ fontSize: 24 }}>💬</Text>
+                <View
+                  style={{
+                    backgroundColor: colors.success[500],
+                    paddingHorizontal: spacing.md,
+                    paddingVertical: spacing.xs,
+                    borderRadius: radius.full,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typography.fontSize.sm,
+                      fontWeight: typography.fontWeight.bold,
+                      color: colors.neutral[0],
+                    }}
+                  >
+                    {testimonial.earnings}
+                  </Text>
+                </View>
+              </View>
               <Text
                 style={{
                   fontSize: typography.fontSize.base,
-                  fontWeight: typography.fontWeight.bold,
                   color: colors.text.primary,
+                  lineHeight: 26,
+                  fontStyle: "italic",
+                  marginBottom: spacing.lg,
                 }}
               >
-                Jessica T.
+                "{testimonial.quote}"
               </Text>
-              <Text
-                style={{
-                  fontSize: typography.fontSize.sm,
-                  color: colors.text.tertiary,
-                }}
-              >
-                Kleanr Pro since 2023
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: colors.secondary[100],
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: spacing.md,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typography.fontSize.lg,
+                      fontWeight: typography.fontWeight.bold,
+                      color: colors.secondary[600],
+                    }}
+                  >
+                    {testimonial.name[0]}
+                  </Text>
+                </View>
+                <View>
+                  <Text
+                    style={{
+                      fontSize: typography.fontSize.sm,
+                      fontWeight: typography.fontWeight.bold,
+                      color: colors.text.primary,
+                    }}
+                  >
+                    {testimonial.name}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: typography.fontSize.xs,
+                      color: colors.text.tertiary,
+                    }}
+                  >
+                    {testimonial.time}
+                  </Text>
+                </View>
+              </View>
             </View>
-          </View>
+          ))}
         </View> */}
 
         {/* Requirements */}
@@ -1765,7 +1992,8 @@ const CleanerApplicationForm = () => {
           <TouchableOpacity
             style={[
               localStyles.termsCheckbox,
-              formData.privacyPolicyAccepted && localStyles.termsCheckboxChecked,
+              formData.privacyPolicyAccepted &&
+                localStyles.termsCheckboxChecked,
             ]}
             onPress={() => {
               if (!formData.privacyPolicyAccepted) {
@@ -1794,7 +2022,9 @@ const CleanerApplicationForm = () => {
           </View>
         </View>
         {formData.privacyPolicyAccepted && (
-          <Text style={localStyles.termsAcceptedText}>Privacy policy accepted</Text>
+          <Text style={localStyles.termsAcceptedText}>
+            Privacy policy accepted
+          </Text>
         )}
       </View>
 

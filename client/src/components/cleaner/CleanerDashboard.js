@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import * as Location from "expo-location";
 import FetchData from "../../services/fetchRequests/fetchData";
+import PreferredCleanerService from "../../services/fetchRequests/PreferredCleanerService";
 import { API_BASE } from "../../services/config";
 import {
   colors,
@@ -56,6 +57,54 @@ const PaymentSetupBanner = ({ onPress }) => (
     </View>
   </Pressable>
 );
+
+// Perk Tier Badge Component
+const TIER_COLORS = {
+  bronze: { bg: "#CD7F32", text: "#fff" },
+  silver: { bg: "#C0C0C0", text: "#333" },
+  gold: { bg: "#FFD700", text: "#333" },
+  platinum: { bg: "#E5E4E2", text: "#333", border: "#8E8E8E" },
+};
+
+const PerkTierBadge = ({ perkStatus, onPress }) => {
+  if (!perkStatus) return null;
+
+  const tierColor = TIER_COLORS[perkStatus.tier] || TIER_COLORS.bronze;
+  const tierName = perkStatus.tier.charAt(0).toUpperCase() + perkStatus.tier.slice(1);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.perkBadgeContainer,
+        pressed && styles.perkBadgePressed,
+      ]}
+    >
+      <View style={[
+        styles.perkBadge,
+        { backgroundColor: tierColor.bg },
+        tierColor.border && { borderWidth: 1, borderColor: tierColor.border },
+      ]}>
+        <Icon
+          name={perkStatus.tier === "platinum" ? "diamond" : perkStatus.tier === "gold" ? "star" : "trophy"}
+          size={12}
+          color={tierColor.text}
+        />
+        <Text style={[styles.perkBadgeText, { color: tierColor.text }]}>
+          {tierName}
+        </Text>
+      </View>
+      <View style={styles.perkBadgeInfo}>
+        <Text style={styles.perkBadgeLabel}>Preferred Status</Text>
+        <Text style={styles.perkBadgeValue}>
+          {perkStatus.preferredHomeCount} home{perkStatus.preferredHomeCount !== 1 ? "s" : ""}
+          {perkStatus.bonusPercent > 0 && ` • +${perkStatus.bonusPercent}% bonus`}
+        </Text>
+      </View>
+      <Icon name="chevron-right" size={14} color={colors.text.tertiary} />
+    </Pressable>
+  );
+};
 
 const { width } = Dimensions.get("window");
 
@@ -280,12 +329,26 @@ const CleanerDashboard = ({ state, dispatch }) => {
   const [stripeAccountStatus, setStripeAccountStatus] = useState(null);
   const [showPaymentBanner, setShowPaymentBanner] = useState(false);
 
+  // Preferred cleaner perk status
+  const [perkStatus, setPerkStatus] = useState(null);
+
   useEffect(() => {
     if (state.currentUser.token) {
       fetchDashboardData();
       fetchStripeAccountStatus();
+      fetchPerkStatus();
     }
   }, [state.currentUser.token]);
+
+  // Fetch preferred cleaner perk status
+  const fetchPerkStatus = async () => {
+    try {
+      const status = await PreferredCleanerService.getMyPerkStatus(state.currentUser.token);
+      setPerkStatus(status);
+    } catch (err) {
+      console.log("[CleanerDashboard] Error fetching perk status:", err.message);
+    }
+  };
 
   // Fetch Stripe account status to determine if banner should show
   const fetchStripeAccountStatus = async () => {
@@ -475,7 +538,8 @@ const CleanerDashboard = ({ state, dispatch }) => {
 
   const onRefresh = useCallback(() => {
     fetchDashboardData(true);
-    fetchStripeAccountStatus(); // Also refresh Stripe status
+    fetchStripeAccountStatus();
+    fetchPerkStatus();
   }, [state.currentUser.token]);
 
   const getGreeting = () => {
@@ -584,6 +648,14 @@ const CleanerDashboard = ({ state, dispatch }) => {
         {/* Payment Setup Banner */}
         {showPaymentBanner && (
           <PaymentSetupBanner onPress={() => navigate("/earnings")} />
+        )}
+
+        {/* Perk Tier Badge - show if cleaner has preferred status at any home */}
+        {perkStatus && perkStatus.preferredHomeCount > 0 && (
+          <PerkTierBadge
+            perkStatus={perkStatus}
+            onPress={() => navigate("/preferred-perks")}
+          />
         )}
 
         {/* Quick Actions */}
@@ -1206,6 +1278,46 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],
+  },
+
+  // Perk Tier Badge
+  perkBadgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    ...shadows.sm,
+  },
+  perkBadgePressed: {
+    opacity: 0.9,
+  },
+  perkBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  perkBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+  },
+  perkBadgeInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  perkBadgeLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  perkBadgeValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+    marginTop: 2,
   },
 });
 

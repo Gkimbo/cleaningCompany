@@ -21,17 +21,19 @@
 Kleanr is a comprehensive cleaning service marketplace platform that connects homeowners with professional cleaners and cleaning businesses. The platform supports multiple user types including platform clients, independent cleaners, business owners with their own clients, HR staff, and platform administrators.
 
 **Key Capabilities:**
-- Multi-tenant cleaning service marketplace
-- Business owner onboarding with client management
+- Multi-tenant cleaning service marketplace with offline support
+- Business owner onboarding with employee management and payroll
+- Multi-cleaner job support for large homes with room assignments
 - Real-time messaging with suspicious content detection
-- Dynamic pricing with incentive programs
-- Stripe Connect for cleaner payouts
+- Dynamic pricing with incentive and referral programs
+- Preferred cleaner tier system (Bronze/Silver/Gold/Platinum) with bonuses
+- Stripe Connect for instant cleaner payouts
 - iCal calendar synchronization with vacation rental platforms
-- Comprehensive tax document generation (1099-NEC)
-- Referral programs for growth
-- HR dispute management system
-- Before/after job photo documentation
-- Home size dispute resolution
+- Comprehensive tax document generation (1099-NEC with IRS filing tracking)
+- Guest-not-left tracking with GPS verification
+- HR dispute management and content moderation
+- Before/after job photo documentation with offline capture
+- Home size dispute resolution with photo evidence
 
 ---
 
@@ -134,8 +136,9 @@ API_NINJA_API_KEY=your_api_ninja_key
 | Role | Description |
 |------|-------------|
 | **Homeowner/Client** | Book cleanings, manage homes, pay bills, leave reviews |
-| **Cleaner** | Apply for platform work, accept jobs, earn money, manage schedule |
-| **Business Owner** | Cleaner who can onboard and manage their own clients directly |
+| **Cleaner** | Apply for platform work, accept jobs, earn money, achieve tier bonuses |
+| **Business Owner** | Cleaner who can onboard clients and manage employees with payroll |
+| **Business Employee** | Works for a business owner, accepts assigned jobs, tracks earnings |
 | **HR Staff** | Handle disputes, review suspicious activity reports, manage support |
 | **Owner** | Platform administrator with full access to all features |
 
@@ -170,6 +173,63 @@ Business owners are cleaners who can manage their own clients directly:
 - **Platform Price Alignment**: "Align with Platform Pricing" button for easy rate setting
 - **Direct Revenue**: Earn full amount from owned clients (no platform fee)
 - **Client History**: View historical appointments and payment data per client
+
+### Business Employee Management
+
+Business owners can hire and manage employees:
+
+- **Invite Employees**: Send email invitations with secure tokens
+- **Employee Onboarding**: Guided setup with availability configuration
+- **Availability Scheduling**: Per-day availability windows (start/end times)
+- **Job Type Restrictions**: Limit employees to specific job types
+- **Max Daily Jobs**: Configure maximum jobs per employee per day
+- **Payment Methods**: Stripe Connect or direct payment from owner
+- **Hourly vs Flat Rate**: Flexible pay structure per employee
+- **Job Assignment**: Assign specific jobs to employees
+- **Self-Assignment**: Business owners can assign jobs to themselves
+- **Marketplace Pickup**: Allow employees to pick up open marketplace jobs
+- **Pay Tracking**: Track pay per job with audit trail
+- **Earnings Dashboard**: Employees view their earnings history
+- **Coworker Messaging**: Team communication channels
+
+### Multi-Cleaner Job System
+
+Large homes (3+ beds AND 3+ baths) require multiple cleaners:
+
+- **Automatic Detection**: Homes flagged as multi-cleaner based on size
+- **Edge Case Homes**: Allow solo cleaning with warning for borderline homes
+- **Slot Management**: Track cleaner slots needed and filled
+- **Job Offers**: Send offers to qualified cleaners
+- **Offer Expiration**: Configurable timeout for offer responses
+- **Room Assignments**: Assign specific rooms to each cleaner
+- **Split Pricing**: Automatically split job price across cleaners
+- **Completion Tracking**: Track individual cleaner completion status
+- **Fill Monitoring**: Cron job escalates unfilled slots
+- **Bonus Calculations**: Apply preferred cleaner bonuses per slot
+
+### Preferred Cleaner Tier System
+
+4-tier loyalty program based on preferred home count:
+
+- **Bronze Tier**: 1-2 preferred homes (default)
+- **Silver Tier**: 3-5 preferred homes → 3% bonus on preferred jobs
+- **Gold Tier**: 6-10 preferred homes → 5% bonus + faster payouts (24h)
+- **Platinum Tier**: 11+ preferred homes → 7% bonus + faster payouts + early job access
+- **Owner Configurable**: Tier thresholds and bonuses adjustable via Priority Perks menu
+- **Backup Cleaner Priority**: Higher tiers get priority for backup notifications
+- **Perk Tracking**: Track bonuses applied per payout
+- **Config History**: Audit trail of tier configuration changes
+
+### Guest-Not-Left Tracking
+
+Handle situations when guests haven't left by checkout time:
+
+- **Cleaner Reporting**: Cleaners can report guest-not-left scenarios
+- **GPS Verification**: Verify cleaner is at the job location
+- **Distance Validation**: Check cleaner is within acceptable distance of home
+- **Escalation Workflow**: Notify homeowner and support
+- **Resolution Options**: Job completed, cancelled, expired, manually resolved
+- **Business Employee Support**: Works with employee-assigned jobs
 
 ### Homeowner Features
 
@@ -486,6 +546,47 @@ Business owners are cleaners who can manage their own clients directly:
 | `POST` | `/api/v1/recurring-schedules/:id/generate` | Generate appointments | Yes |
 | `POST` | `/api/v1/recurring-schedules/generate-all` | Generate all schedules | Owner |
 
+### Business Employees
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/business-employees` | Get all employees | Business Owner |
+| `POST` | `/api/v1/business-employees/invite` | Invite new employee | Business Owner |
+| `GET` | `/api/v1/business-employees/:id` | Get employee details | Business Owner |
+| `PATCH` | `/api/v1/business-employees/:id` | Update employee | Business Owner |
+| `DELETE` | `/api/v1/business-employees/:id` | Remove employee | Business Owner |
+| `GET` | `/api/v1/business-employees/:id/availability` | Get availability | Business Owner |
+| `PATCH` | `/api/v1/business-employees/:id/availability` | Update availability | Business Owner |
+| `POST` | `/api/v1/business-employees/accept-invite/:token` | Accept invitation | No |
+| `GET` | `/api/v1/business-employees/my-assignments` | Get my assignments | Employee |
+| `GET` | `/api/v1/business-employees/my-earnings` | Get my earnings | Employee |
+
+### Employee Job Assignments
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/employee-assignments` | Get all assignments | Business Owner |
+| `POST` | `/api/v1/employee-assignments` | Assign job to employee | Business Owner |
+| `PATCH` | `/api/v1/employee-assignments/:id` | Update assignment | Business Owner |
+| `DELETE` | `/api/v1/employee-assignments/:id` | Remove assignment | Business Owner |
+| `POST` | `/api/v1/employee-assignments/:id/complete` | Mark completed | Employee |
+| `GET` | `/api/v1/employee-assignments/pending-payouts` | Get pending payouts | Business Owner |
+
+### Multi-Cleaner Jobs
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/multi-cleaner/jobs` | Get multi-cleaner jobs | Yes |
+| `POST` | `/api/v1/multi-cleaner/jobs` | Create multi-cleaner job | Yes |
+| `GET` | `/api/v1/multi-cleaner/jobs/:id` | Get job details | Yes |
+| `POST` | `/api/v1/multi-cleaner/jobs/:id/offers` | Send job offers | Yes |
+| `GET` | `/api/v1/multi-cleaner/jobs/:id/offers` | Get job offers | Yes |
+| `POST` | `/api/v1/multi-cleaner/offers/:id/accept` | Accept offer | Cleaner |
+| `POST` | `/api/v1/multi-cleaner/offers/:id/decline` | Decline offer | Cleaner |
+| `GET` | `/api/v1/multi-cleaner/jobs/:id/rooms` | Get room assignments | Yes |
+| `POST` | `/api/v1/multi-cleaner/jobs/:id/rooms` | Assign rooms | Yes |
+| `POST` | `/api/v1/multi-cleaner/jobs/:id/complete-slot` | Complete slot | Cleaner |
+
 ### Calendar Sync
 
 | Method | Endpoint | Description | Auth |
@@ -608,15 +709,29 @@ Business owners are cleaners who can manage their own clients directly:
 | `GET` | `/api/v1/reviews/appointment/:appointmentId/status` | Review status for appointment | Yes |
 | `GET` | `/api/v1/reviews/user/:userId` | Get user's reviews | Yes |
 
-### Preferred Cleaners
+### Preferred Cleaners & Tier System
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| `GET` | `/api/v1/preferred-cleaners/home/:homeId` | Get preferred cleaners for home | Yes |
+| `GET` | `/api/v1/preferred-cleaners/homes/:homeId/preferred-cleaners` | Get preferred cleaners for home | Yes |
 | `POST` | `/api/v1/preferred-cleaners` | Set preferred cleaner | Yes |
 | `DELETE` | `/api/v1/preferred-cleaners/:homeId/:cleanerId` | Remove preferred cleaner | Yes |
-| `GET` | `/api/v1/preferred-cleaners/my-clients` | Get homes where cleaner is preferred | Cleaner |
-| `GET` | `/api/v1/preferred-cleaners/client-appointments/:homeId` | Get client appointments | Cleaner |
+| `GET` | `/api/v1/preferred-cleaners/my-preferred-homes` | Get homes where cleaner is preferred | Cleaner |
+| `GET` | `/api/v1/preferred-cleaners/my-perk-status` | Get cleaner's tier and perks | Cleaner |
+| `GET` | `/api/v1/preferred-cleaners/perk-tier-info` | Get tier thresholds and bonuses | Yes |
+| `GET` | `/api/v1/preferred-cleaners/my-availability-config` | Get availability config | Cleaner |
+| `PUT` | `/api/v1/preferred-cleaners/my-availability-config` | Update availability config | Cleaner |
+| `POST` | `/api/v1/preferred-cleaners/my-blackout-dates` | Add blackout dates | Cleaner |
+| `GET` | `/api/v1/preferred-cleaners/my-job-counts` | Get daily job counts | Cleaner |
+| `GET` | `/api/v1/preferred-cleaners/check-availability/:date` | Check availability for date | Cleaner |
+
+### Priority Perks Config (Owner)
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/owner-dashboard/priority-perks/config` | Get tier configuration | Owner |
+| `PUT` | `/api/v1/owner-dashboard/priority-perks/config` | Update tier thresholds | Owner |
+| `GET` | `/api/v1/owner-dashboard/priority-perks/history` | Get config change history | Owner |
 
 ### Messaging
 
@@ -736,42 +851,121 @@ Business owners are cleaners who can manage their own clients directly:
 
 ## Database
 
-### Core Models
+### Models (57 Total)
+
+#### Core Models
 
 | Model | Description |
 |-------|-------------|
-| `User` | All user accounts (homeowners, cleaners, HR, owner) |
-| `UserHomes` | Properties owned by homeowners |
-| `UserAppointments` | Cleaning appointments |
-| `CleanerClient` | Business owner to client relationships |
-| `RecurringSchedule` | Recurring appointment configurations |
-| `Payment` | Payment transactions |
-| `Payout` | Cleaner payout records |
-| `Review` | Client reviews of cleaners |
-| `Conversation` | Message conversations |
-| `Message` | Individual messages |
-| `MessageReaction` | Reactions on messages |
-| `SuspiciousActivityReport` | Reported suspicious content |
-| `CalendarSync` | iCal calendar sync configurations |
-| `PricingConfig` | Platform pricing settings |
-| `IncentiveConfig` | Incentive program settings |
-| `ReferralConfig` | Referral program settings |
-| `Referral` | Individual referral records |
-| `UserBills` | Homeowner billing records |
-| `TaxInfo` | W-9 tax information |
-| `TaxDocument` | Generated tax documents |
-| `ChecklistSection` | Cleaning checklist sections |
+| `User` | All user accounts with PII encryption, account status, and role tracking |
+| `UserHomes` | Properties with encrypted address, access codes, and configuration |
+| `UserAppointments` | Appointments with multi-cleaner support and business employee assignments |
+| `UserBills` | Homeowner billing records (appointment + cancellation fees) |
+| `UserTermsAcceptance` | Terms and privacy policy acceptance tracking |
+| `UserIntroApplication` | Cleaner job applications with comprehensive info |
+
+#### Business & Employment Models
+
+| Model | Description |
+|-------|-------------|
+| `BusinessEmployee` | Employees of business owners with availability and pay settings |
+| `EmployeeJobAssignment` | Job assignments to employees with pay tracking |
+| `EmployeePayChangeLog` | Audit trail for pay rate changes |
+| `CleanerClient` | Business owner to client relationships with invitation flow |
+
+#### Multi-Cleaner Models
+
+| Model | Description |
+|-------|-------------|
+| `MultiCleanerJob` | Multi-cleaner job tracking with slot management |
+| `CleanerJobOffer` | Job offers sent to cleaners for multi-cleaner jobs |
+| `CleanerJobCompletion` | Individual cleaner completion tracking |
+| `CleanerRoomAssignment` | Room assignments for multi-cleaner jobs |
+
+#### Preferred Cleaner Models
+
+| Model | Description |
+|-------|-------------|
+| `HomePreferredCleaner` | Preferred cleaner relationships per home |
+| `CleanerPreferredPerks` | Cleaner tier status and earned perks |
+| `PreferredPerksConfig` | Owner-configurable tier thresholds and bonuses |
+| `PreferredPerksConfigHistory` | Audit trail of tier configuration changes |
+| `CleanerAvailabilityConfig` | Cleaner availability windows and blackout dates |
+
+#### Financial Models
+
+| Model | Description |
+|-------|-------------|
+| `Payment` | Complete payment transaction audit trail |
+| `Payout` | Cleaner payouts with preferred bonus tracking |
+| `PlatformEarnings` | Aggregated platform earnings |
+| `OwnerWithdrawal` | Platform owner withdrawal requests |
+| `StripeConnectAccount` | Stripe Connect account status tracking |
+| `PricingConfig` | Platform pricing configuration |
+
+#### Communication Models
+
+| Model | Description |
+|-------|-------------|
+| `Conversation` | Message conversations (appointment, support, group) |
+| `ConversationParticipant` | Users in conversations |
+| `Message` | Individual messages with content |
+| `MessageReaction` | Emoji reactions on messages |
+| `MessageReadReceipt` | Read status tracking |
+| `Notification` | In-app notifications with types and actions |
+| `SuspiciousActivityReport` | Flagged messages for moderation |
+
+#### Scheduling Models
+
+| Model | Description |
+|-------|-------------|
+| `RecurringSchedule` | Weekly/biweekly/monthly schedules with pause support |
+| `CalendarSync` | iCal feed configurations with platform detection |
+| `UserPendingRequests` | Pending appointment requests |
+
+#### Review & Compliance Models
+
+| Model | Description |
+|-------|-------------|
+| `UserReviews` | Bidirectional reviews with multi-aspect ratings |
+| `HomeSizeAdjustmentRequest` | Home size dispute requests with approval workflow |
+| `HomeSizeAdjustmentPhoto` | Photo evidence for disputes |
+| `GuestNotLeftReport` | Guest-not-left scenarios with GPS verification |
+
+#### Tax & Legal Models
+
+| Model | Description |
+|-------|-------------|
+| `TaxInfo` | W-9 information with encrypted TIN |
+| `TaxDocument` | 1099-NEC documents with IRS filing tracking |
+| `TermsAndConditions` | Terms versions with PDF/text support |
+
+#### Program Models
+
+| Model | Description |
+|-------|-------------|
+| `IncentiveConfig` | Cleaner and homeowner incentive configuration |
+| `ReferralConfig` | Referral program configuration |
+| `Referral` | Individual referral tracking with status workflow |
+
+#### Checklist & Photo Models
+
+| Model | Description |
+|-------|-------------|
+| `ChecklistVersion` | Published checklist versions |
+| `ChecklistDraft` | Work-in-progress checklist drafts |
+| `ChecklistSection` | Checklist sections |
 | `ChecklistItem` | Individual checklist items |
-| `TermsAndConditions` | Terms versions |
-| `UserTermsAcceptance` | User terms acceptance records |
-| `UserApplications` | Cleaner job applications |
-| `HomeSizeAdjustmentRequest` | Home size dispute requests |
-| `HomeSizeAdjustmentPhoto` | Photos for disputes |
 | `JobPhoto` | Before/after job photos |
-| `Notification` | In-app notifications |
-| `PushToken` | Expo push notification tokens |
-| `NotificationPreference` | User notification preferences |
-| `PreferredCleaner` | Homeowner preferred cleaner relationships |
+
+#### Job Flow Models
+
+| Model | Description |
+|-------|-------------|
+| `AppointmentJobFlow` | Job flow state per appointment |
+| `CustomJobFlow` | Custom job flow templates |
+| `CustomJobFlowChecklist` | Checklist associations for custom flows |
+| `ClientJobFlowAssignment` | Client-specific job flow assignments |
 
 ### Migrations
 
@@ -947,6 +1141,86 @@ const result = SuspiciousContentDetector.analyze(messageText);
 // Returns: { isSuspicious: true, reasons: ['phone_number', 'email'] }
 ```
 
+### BusinessEmployeeService
+
+Manages business employee lifecycle:
+
+```javascript
+const BusinessEmployeeService = require('./services/BusinessEmployeeService');
+
+// Invite new employee
+await BusinessEmployeeService.inviteEmployee(ownerId, {
+  email, firstName, lastName, payType, payRate
+});
+
+// Get employee assignments
+const assignments = await BusinessEmployeeService.getEmployeeAssignments(employeeId);
+```
+
+### MultiCleanerService
+
+Handles multi-cleaner job logic:
+
+```javascript
+const MultiCleanerService = require('./services/MultiCleanerService');
+
+// Check if home requires multiple cleaners
+const isMultiCleaner = MultiCleanerService.isLargeHome(numBeds, numBaths);
+
+// Create multi-cleaner job
+const job = await MultiCleanerService.createJob(appointmentId, cleanerCount);
+
+// Send offers to cleaners
+await MultiCleanerService.sendOffers(jobId, cleanerIds);
+```
+
+### PreferredCleanerPerksService
+
+Calculates tier bonuses and perks:
+
+```javascript
+const PreferredCleanerPerksService = require('./services/PreferredCleanerPerksService');
+
+// Get cleaner's current tier
+const tier = await PreferredCleanerPerksService.getCleanerTier(cleanerId);
+
+// Calculate bonus for a job
+const bonus = await PreferredCleanerPerksService.calculateBonus(cleanerId, jobAmount);
+
+// Check if cleaner has faster payouts
+const hasFasterPayouts = await PreferredCleanerPerksService.hasFasterPayouts(cleanerId);
+```
+
+### CleanerAvailabilityService
+
+Manages cleaner availability and overbooking safeguards:
+
+```javascript
+const CleanerAvailabilityService = require('./services/CleanerAvailabilityService');
+
+// Check if cleaner is available for a date
+const available = await CleanerAvailabilityService.isAvailable(cleanerId, date);
+
+// Get cleaner's job count for date
+const count = await CleanerAvailabilityService.getDailyJobCount(cleanerId, date);
+```
+
+### GuestNotLeftService
+
+Handles guest-not-left scenarios:
+
+```javascript
+const GuestNotLeftService = require('./services/GuestNotLeftService');
+
+// Report guest not left with GPS verification
+await GuestNotLeftService.reportGuestNotLeft(appointmentId, cleanerId, {
+  latitude, longitude
+});
+
+// Resolve a report
+await GuestNotLeftService.resolveReport(reportId, resolution);
+```
+
 ### Email & Push Notifications
 
 ```javascript
@@ -966,11 +1240,30 @@ await PushNotification.sendPushNewMessage(token, userName, senderName, preview);
 
 | Schedule | Job | Description |
 |----------|-----|-------------|
-| `0 7 * * *` | Supply Reminder | Reminds cleaners to bring supplies for today's appointments |
+| `*/15 * * * *` | Backup Cleaner Timeout | Escalates unresponded backup cleaner notifications |
+| `*/30 * * * *` | Multi-Cleaner Fill Monitor | Escalates unfilled multi-cleaner job slots |
+| `*/10 * * * *` | Multi-Cleaner Offer Expiration | Expires unanswered job offers |
+| `0 0 * * *` | Booking Expiration | Expires old pending bookings (48-hour window) |
 | `0 0 * * *` | Payment Retry | Retries failed payments and sends reminders |
 | `0 1 * * *` | Calendar Sync | Syncs all active iCal calendars |
-| `0 2 * * *` | Booking Expiration | Expires old pending bookings (48-hour window) |
 | `0 3 * * 0` | Recurring Generation | Generates appointments from recurring schedules |
+| `0 7 * * *` | Supply Reminder | Reminds cleaners to bring supplies for today's appointments |
+
+### Cron Job Details
+
+**Backup Cleaner Timeout** (`BackupCleanerTimeoutJob.js`)
+- Processes expired backup cleaner notifications
+- Escalates to client when no backup cleaner responds within timeout window
+- Timeout configurable per tier via Priority Perks config
+
+**Multi-Cleaner Fill Monitor** (`MultiCleanerFillMonitor.js`)
+- Monitors multi-cleaner jobs approaching their date
+- Sends escalation notifications if slots are not filled
+- Alerts owner/HR for manual intervention
+
+**Multi-Cleaner Offer Expiration** (`MultiCleanerOfferExpiration.js`)
+- Expires job offers that haven't been accepted
+- Frees up slots for new offers
 
 ---
 

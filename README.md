@@ -18,18 +18,21 @@
 
 ## Overview
 
-Kleanr is a full-stack mobile platform that connects vacation rental hosts with professional cleaners and cleaning businesses. The platform supports multiple user types including homeowners, independent cleaners, business owners managing their own clients, HR staff for dispute resolution, and platform administrators.
+Kleanr is a full-stack mobile platform that connects vacation rental hosts with professional cleaners and cleaning businesses. The platform supports multiple user types including homeowners, independent cleaners, business owners with their own employees, HR staff for dispute resolution, and platform administrators.
 
 **Key Capabilities:**
-- Multi-tenant cleaning service marketplace
-- Business owner onboarding with direct client management
+- Multi-tenant cleaning service marketplace with offline support
+- Business owner onboarding with employee management and payroll
+- Multi-cleaner job support for large homes with room assignments
 - Real-time messaging with suspicious content detection
 - Dynamic pricing with incentive and referral programs
+- Preferred cleaner tier system (Bronze/Silver/Gold/Platinum) with bonuses
 - Stripe Connect for instant cleaner payouts
 - iCal calendar sync with Airbnb, VRBO, Booking.com
-- Comprehensive tax reporting (1099-NEC, platform reports)
+- Comprehensive tax reporting (1099-NEC, W-9 collection, platform reports)
 - HR dispute management and content moderation
-- Before/after job photo documentation
+- Before/after job photo documentation with offline capture
+- Guest-not-left tracking with GPS verification
 
 ---
 
@@ -42,31 +45,37 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 ### Homeowners
 
 - **Multi-Home Management**: Add multiple properties with detailed configurations
-- **Calendar Sync**: Auto-sync with Airbnb, VRBO, Booking.com
+- **Calendar Sync**: Auto-sync with Airbnb, VRBO, Booking.com via iCal
 - **Auto-Booking**: Automatic appointments from guest checkouts
-- **Flexible Scheduling**: One-time or recurring cleanings
-- **Time Windows**: Choose preferred cleaning times
-- **Preferred Cleaners**: Mark favorites for priority assignment
-- **Secure Payments**: Stripe with prepayment options
+- **Flexible Scheduling**: One-time or recurring cleanings (weekly/biweekly/monthly)
+- **Time Windows**: Choose preferred cleaning times with surcharges
+- **Preferred Cleaners**: Mark favorites for priority assignment with tier tracking
+- **Multi-Cleaner Jobs**: Large homes automatically split across multiple cleaners
+- **Secure Payments**: Stripe with prepayment options and saved cards
 - **Real-time Messaging**: Chat with cleaners and support
-- **Bidirectional Reviews**: Rate and be rated by cleaners
+- **Bidirectional Reviews**: Multi-aspect ratings for cleaners
 - **Bill Management**: View dues, pay, access history
+- **Home Size Disputes**: Respond to cleaner-reported size adjustments
+- **Linen Services**: Add-on pricing for sheets, towels, face cloths
 
 </td>
 <td width="50%" valign="top">
 
 ### Cleaners
 
-- **Job Application**: Comprehensive onboarding process
-- **View Available Jobs**: Browse and request assignments
-- **Photo Documentation**: Before/after photos (required)
-- **Digital Checklists**: Room-by-room cleaning guides
+- **Job Application**: Comprehensive onboarding with background check consent
+- **View Available Jobs**: Browse and request assignments with filters
+- **Photo Documentation**: Before/after photos (required) with offline capture
+- **Digital Checklists**: Room-by-room cleaning guides (73 tasks)
 - **Earnings Dashboard**: Track daily/weekly/monthly income
 - **Stripe Connect**: Instant payouts to bank account
 - **Tax Documents**: W-9 submission, 1099-NEC access
-- **Review Management**: View ratings and feedback
+- **Review Management**: View ratings and multi-aspect feedback
 - **Supply Reminders**: Notifications with snooze option
 - **Recurring Clients**: Build regular client relationships
+- **Preferred Tier System**: Bronze/Silver/Gold/Platinum with bonuses (0-7%)
+- **Guest-Not-Left Reporting**: GPS-verified escalation workflow
+- **Home Size Adjustments**: Report incorrect bed/bath counts with photos
 
 </td>
 </tr>
@@ -76,7 +85,9 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 ### Business Owners
 
 - **Upgrade Path**: Cleaners can become business owners
-- **Client Invitations**: Invite clients via email
+- **Employee Management**: Invite and manage team members
+- **Employee Payroll**: Hourly or flat-rate pay with automatic calculations
+- **Client Invitations**: Invite clients via email with token expiration
 - **Client Management**: View all direct clients
 - **Book For Clients**: Create appointments on their behalf
 - **Custom Pricing**: Set per-home pricing
@@ -84,25 +95,48 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Direct Revenue**: No platform fee on own clients
 - **Client History**: View appointment and payment history
 - **Recurring Schedules**: Set up weekly/biweekly/monthly
+- **Job Assignment**: Assign jobs to specific employees
+- **Team Calendar**: View all employee schedules
+- **Team Messaging**: Communicate with employees
+- **Financial Dashboard**: Revenue, payroll, and analytics
 
 </td>
+<td width="50%" valign="top">
+
+### Business Employees
+
+- **Invitation-Based Onboarding**: Accept invites with secure tokens
+- **Personal Dashboard**: View assigned jobs and earnings
+- **Job List & Calendar**: Track upcoming and past assignments
+- **Availability Settings**: Set daily availability windows
+- **Job Type Restrictions**: Owner can limit job types
+- **Max Daily Jobs**: Configurable limits per employee
+- **Payment Methods**: Stripe Connect or direct from owner
+- **Self-Assignment**: Business owners can assign themselves
+- **Marketplace Pickup**: Option to pick up open jobs
+- **Coworker Messaging**: Communicate with team members
+- **Earnings Tracking**: View pay history and totals
+- **Photo & Checklist**: Same job completion workflow as cleaners
+
+</td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 
 ### HR Staff
 
 - **Dispute Management**: Review home size adjustment claims
 - **Photo Evidence Review**: Examine cleaner-submitted photos
-- **Suspicious Activity**: Review flagged messages
-- **User Warnings**: Issue warnings to violators
+- **Suspicious Activity**: Review flagged messages and reports
+- **User Warnings**: Issue warnings to policy violators
 - **Account Freezing**: Freeze repeat offenders
 - **Support Conversations**: Handle customer inquiries
 - **Internal Messaging**: Communicate with owner/staff
 - **Quick Stats Dashboard**: Overview of pending items
+- **Application Review**: Process cleaner applications
 
 </td>
-</tr>
-<tr>
-<td colspan="2" valign="top">
+<td width="50%" valign="top">
 
 ### Platform Owner/Admin
 
@@ -111,12 +145,13 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Employee Management**: Create/edit HR staff and cleaners
 - **Pricing Configuration**: Base prices, per-bed/bath fees, time windows, cancellation fees
 - **Incentive Programs**: Configure cleaner fee reductions, homeowner discounts
-- **Referral Programs**: Create tiered referral rewards
+- **Referral Programs**: Create tiered referral rewards (4 program types)
+- **Preferred Perks Config**: Set tier thresholds, bonuses, payout speeds
 - **Checklist Management**: Create and publish cleaning checklists with versioning
 - **Terms & Conditions**: Manage legal documents with acceptance tracking
-- **Application Review**: Approve/reject cleaner applications
+- **Application Review**: Approve/reject cleaner applications with hire flow
 - **Broadcast Messaging**: Send announcements to all users
-- **Tax Reporting**: Platform reports, contractor 1099s
+- **Tax Reporting**: Platform reports, contractor 1099s with IRS filing tracking
 - **Service Area Management**: Configure geographic restrictions
 
 </td>
@@ -127,18 +162,22 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 
 | Feature | Description |
 |---------|-------------|
-| **Calendar Sync** | Automatic iCal sync with Airbnb, VRBO, Booking.com. Auto-create cleaning appointments based on guest checkouts with configurable offset days. |
-| **Real-time Messaging** | Socket.io-powered chat with message reactions, read receipts, typing indicators. Suspicious content auto-detection for phone numbers/emails. |
-| **Payment Processing** | Stripe integration with saved payment methods. Platform fee collection and instant cleaner payouts via Stripe Connect. Prepayment support. |
-| **Tax Management** | Automated W-9 collection, 1099-NEC generation for cleaners, platform income tracking, Schedule C data, quarterly tax estimates, monthly breakdowns. |
-| **Photo Documentation** | Before/after photo capture required for job completion. Room-by-room organization with notes. Access control for cleaners and homeowners. |
-| **Review System** | Multi-aspect bidirectional reviews. Both parties must review before either can see results. Option to mark cleaner as preferred. |
-| **Home Size Disputes** | Cleaners can report incorrect bed/bath counts with photo evidence. HR reviews and decides with false claim tracking. |
-| **Incentive Programs** | Configurable fee reductions for cleaners and discounts for homeowners based on activity and eligibility requirements. |
-| **Referral Programs** | Unique referral codes, tiered rewards for homeowner/cleaner referrals, minimum requirements, referrer and referee bonuses. |
+| **Calendar Sync** | Automatic iCal sync with Airbnb, VRBO, Booking.com. Auto-create cleaning appointments based on guest checkouts with configurable offset days. Duplicate prevention and manual deletion tracking. |
+| **Multi-Cleaner Jobs** | Large homes (3+ beds AND 3+ baths) automatically require multiple cleaners. Room-level assignments, offer management, slot tracking, and split pricing. Edge-case homes allow solo with warning. |
+| **Real-time Messaging** | Socket.io-powered chat with message reactions, read receipts, typing indicators. Suspicious content auto-detection for phone numbers/emails. Broadcast messaging for owners. |
+| **Payment Processing** | Stripe integration with saved payment methods. Platform fee collection and instant cleaner payouts via Stripe Connect. Authorization, capture, and refund tracking. |
+| **Tax Management** | Automated W-9 collection, 1099-NEC generation for cleaners with all box fields, platform income tracking, IRS filing status, corrections support, and delivery tracking. |
+| **Photo Documentation** | Before/after photo capture required for job completion. Room-by-room organization with notes. Offline capture with automatic sync. Access control for cleaners and homeowners. |
+| **Review System** | Multi-aspect bidirectional reviews (cleaning quality, punctuality, professionalism, communication, etc.). Both parties must review before either can see results. Option to mark cleaner as preferred. |
+| **Home Size Disputes** | Cleaners can report incorrect bed/bath counts with photo evidence. Two-stage approval (homeowner then HR). Automatic price recalculation and expiration windows. |
+| **Preferred Cleaner Tiers** | 4-tier loyalty program (Bronze/Silver/Gold/Platinum) based on preferred home count. Bonuses (0-7%), faster payouts (24h vs 48h), early job access, backup cleaner priority. |
+| **Incentive Programs** | Configurable fee reductions for cleaners (up to 100%) and discounts for homeowners based on activity and eligibility requirements. |
+| **Referral Programs** | 4 program types (client-to-client, client-to-cleaner, cleaner-to-cleaner, cleaner-to-client). Progress tracking, qualification requirements, rewards for both parties. |
+| **Guest-Not-Left Tracking** | Cleaners report when guests haven't left by checkout time. GPS verification at job location. Escalation workflow with resolution tracking. |
+| **Offline Mode** | Full offline-first architecture with local database. Background sync, conflict resolution, photo queuing. Works for employees, business owners, and messaging. |
 | **Terms & Conditions** | Version-controlled legal documents with PDF/text support, user acceptance tracking, and compliance snapshots. |
 | **Push Notifications** | Expo push notifications with preferences. Supply reminder snooze. Multi-channel delivery (push, email, in-app). |
-| **Account Security** | JWT authentication, encrypted PII (AES-256), account freezing, warning system, password strength validation. |
+| **Account Security** | JWT authentication, encrypted PII (AES-256-CBC), account freezing, warning system, password strength validation. |
 
 ---
 
@@ -157,7 +196,9 @@ React Native + Expo SDK 52
 ├── socket.io-client        # Real-time messaging
 ├── react-native-calendars  # Calendar UI
 ├── expo-notifications      # Push notifications
-└── react-native-paper      # UI components
+├── react-native-paper      # UI components
+├── AsyncStorage            # Local persistence
+└── expo-location           # GPS verification
 ```
 
 </td>
@@ -167,13 +208,14 @@ React Native + Expo SDK 52
 
 ```
 Node.js + Express.js
-├── PostgreSQL + Sequelize  # Database & ORM
+├── PostgreSQL + Sequelize  # Database & ORM (57 models)
 ├── Socket.io               # WebSocket server
 ├── Passport.js + JWT       # Authentication
 ├── Stripe API              # Payment processing
 ├── Nodemailer              # Email notifications
 ├── node-ical               # Calendar parsing
-└── crypto (AES-256)        # PII encryption
+├── crypto (AES-256-CBC)    # PII encryption
+└── node-cron               # Scheduled jobs
 ```
 
 </td>
@@ -206,6 +248,7 @@ npx sequelize-cli db:migrate
 npx sequelize-cli db:seed --seed ownerSeeder.js
 npx sequelize-cli db:seed --seed termsAndConditionsSeeder.js
 npx sequelize-cli db:seed --seed privacyPolicySeeder.js
+npx sequelize-cli db:seed --seed cleanerChecklistSeeder.js
 
 # Setup Client
 cd ../client
@@ -292,11 +335,16 @@ kleanr/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── appointments/        # Booking & scheduling UI
+│   │   │   ├── businessEmployee/    # Employee portal components
+│   │   │   ├── businessOwner/       # Business owner dashboard
 │   │   │   ├── calendarSync/        # iCal sync management
-│   │   │   ├── cleaner/             # Business owner/cleaner features
+│   │   │   ├── cleaner/             # Cleaner features
 │   │   │   ├── client/              # Homeowner dashboard & features
+│   │   │   ├── employeeAssignments/ # Job assignments, photos, checklists
 │   │   │   ├── hr/                  # HR staff features
 │   │   │   ├── messaging/           # Real-time chat
+│   │   │   ├── multiCleaner/        # Multi-cleaner job support
+│   │   │   ├── offline/             # Offline mode UI
 │   │   │   ├── owner/               # Admin dashboard
 │   │   │   ├── payments/            # Stripe payment UI
 │   │   │   ├── reviews/             # Review system
@@ -307,38 +355,51 @@ kleanr/
 │   │   │   ├── SocketContext.js     # WebSocket provider
 │   │   │   └── PricingContext.js    # Pricing state
 │   │   └── services/
-│   │       └── fetchRequests/       # API service classes
+│   │       ├── fetchRequests/       # API service classes
+│   │       ├── offline/             # Offline sync engine
+│   │       └── stripe/              # Stripe integration
 │   └── package.json
 │
 ├── server/                          # Express.js API Server
-│   ├── routes/api/v1/
+│   ├── routes/api/v1/               # 33 API routers
 │   │   ├── appointmentsRouter.js    # Scheduling endpoints
+│   │   ├── businessEmployeeRouter.js # Employee management
+│   │   ├── businessOwnerRouter.js   # Business owner features
 │   │   ├── calendarSyncRouter.js    # iCal sync endpoints
-│   │   ├── cleanerClientsRouter.js  # Business owner client management
+│   │   ├── cleanerClientsRouter.js  # Client management
 │   │   ├── homeSizeAdjustmentRouter.js  # Dispute system
 │   │   ├── hrDashboardRouter.js     # HR features
 │   │   ├── incentivesRouter.js      # Incentive programs
 │   │   ├── jobPhotosRouter.js       # Before/after photos
 │   │   ├── messageRouter.js         # Messaging endpoints
+│   │   ├── multiCleanerRouter.js    # Multi-cleaner jobs
 │   │   ├── ownerDashboardRouter.js  # Admin features
 │   │   ├── paymentRouter.js         # Stripe payments
+│   │   ├── preferredCleanerRouter.js # Preferred cleaner system
 │   │   ├── pricingRouter.js         # Dynamic pricing
 │   │   ├── referralsRouter.js       # Referral programs
 │   │   ├── stripeConnectRouter.js   # Cleaner payouts
 │   │   ├── suspiciousActivityRouter.js  # Content moderation
 │   │   ├── taxRouter.js             # Tax documents
 │   │   └── termsRouter.js           # Terms & Conditions
-│   ├── services/
+│   ├── services/                    # 33 business logic services
+│   │   ├── BusinessEmployeeService.js # Employee management
 │   │   ├── CalculatePrice.js        # Dynamic pricing logic
 │   │   ├── calendarSyncService.js   # iCal parsing & sync
+│   │   ├── CleanerAvailabilityService.js # Availability tracking
 │   │   ├── EncryptionService.js     # PII encryption (AES-256)
+│   │   ├── GuestNotLeftService.js   # Guest escalation
 │   │   ├── IncentiveService.js      # Incentive calculations
-│   │   ├── InvitationService.js     # Client invitations
+│   │   ├── MultiCleanerService.js   # Multi-cleaner logic
+│   │   ├── PreferredCleanerPerksService.js # Tier bonuses
+│   │   ├── PreferredCleanerService.js # Preferred matching
 │   │   ├── ReferralService.js       # Referral code management
 │   │   ├── SuspiciousContentDetector.js  # Content moderation
 │   │   ├── TaxDocumentService.js    # 1099-NEC generation
+│   │   ├── cron/                    # Scheduled background jobs
 │   │   └── sendNotifications/       # Email & push services
-│   ├── models/                      # Sequelize models (30+)
+│   ├── models/                      # 57 Sequelize models
+│   ├── serializers/                 # 37 API serializers
 │   ├── migrations/                  # Database migrations
 │   ├── __tests__/                   # 2809 server tests
 │   └── package.json
@@ -352,11 +413,12 @@ kleanr/
 
 | Role | Description | Key Capabilities |
 |------|-------------|------------------|
-| **Homeowner** | Property owners needing cleaning services | Book appointments, manage homes, pay bills, review cleaners |
-| **Cleaner** | Independent cleaning professionals | Apply for work, accept jobs, upload photos, earn money |
-| **Business Owner** | Cleaner with own client base | All cleaner features + invite/manage own clients directly |
+| **Homeowner** | Property owners needing cleaning services | Book appointments, manage homes, pay bills, review cleaners, respond to disputes |
+| **Cleaner** | Independent cleaning professionals | Apply for work, accept jobs, upload photos, earn money, achieve tier bonuses |
+| **Business Owner** | Cleaner with own client base and employees | All cleaner features + manage employees, payroll, direct clients, team calendar |
+| **Business Employee** | Works for a business owner | Accept assigned jobs, track earnings, availability settings, coworker messaging |
 | **HR Staff** | Support and moderation team | Handle disputes, review reports, manage support, freeze accounts |
-| **Owner** | Platform administrator | Full access: financials, employees, pricing, settings, reports |
+| **Owner** | Platform administrator | Full access: financials, employees, pricing, settings, reports, tax filing |
 
 ---
 
@@ -386,21 +448,26 @@ npm test -- --watch
 | Payments | 112 | Stripe intents, capture, refund, billing |
 | Stripe Connect | 78 | Account creation, payouts |
 | Cleaner Clients | 156 | Business owner client management |
+| Business Employees | 89 | Employee management, assignments, payroll |
+| Multi-Cleaner | 67 | Large home jobs, offers, room assignments |
 | Pricing | 67 | Dynamic pricing, configuration |
 | Incentives | 54 | Qualification, discounts |
 | Referrals | 48 | Codes, rewards, tracking |
+| Preferred Cleaners | 56 | Tiers, perks, bonuses |
 | Tax Documents | 89 | W-9, 1099-NEC, platform taxes |
 | Reviews | 67 | Create, read, bidirectional |
 | Messaging | 234 | Conversations, reactions, suspicious content |
 | Job Photos | 67 | Upload, access control, completion |
 | Home Size Disputes | 45 | Filing, evidence, resolution |
+| Guest Not Left | 34 | Reporting, GPS, escalation |
 | HR Dashboard | 78 | Disputes, reports, support |
 | Owner Dashboard | 89 | Financial, analytics, settings |
 | Push Notifications | 56 | Token registration, preferences |
 | Terms & Conditions | 78 | Version management, acceptance |
 | Checklist | 45 | Editor, publishing, versions |
-| Applications | 56 | Submission, review, approval |
+| Applications | 56 | Submission, review, hire |
 | Services | 156 | All service unit tests |
+| Serializers | 89 | PII encryption, data formatting |
 | Integration | 67 | Full payment flows, e2e |
 | **Total** | **2809** | - |
 
@@ -408,56 +475,28 @@ npm test -- --watch
 
 ## API Reference
 
-See [Server README](./server/README.md) for complete API documentation. Key endpoint groups:
+See [Server README](./server/README.md) for complete API documentation.
 
-### Core Endpoints
+### Endpoint Summary (33 Routers, 180+ Endpoints)
 
-| Category | Endpoints | Description |
-|----------|-----------|-------------|
-| Authentication | 7 | Login, register, password reset, current user |
-| Users | 8 | Profile management, employee CRUD |
-| Homes | 6 | Property CRUD, setup completion |
-| Appointments | 10 | Booking, assignments, completion |
-| Cleaner Clients | 10 | Business owner client management |
-| Recurring Schedules | 8 | Recurring appointment setup |
-| Calendar Sync | 6 | iCal integration |
-
-### Payments & Billing
-
-| Category | Endpoints | Description |
-|----------|-----------|-------------|
-| Payments | 12 | Stripe intents, capture, refund, methods |
-| Billing | 3 | Bill summary, history, sync |
-| Stripe Connect | 7 | Cleaner account setup, payouts |
-| Pricing | 4 | Configuration, calculation |
-
-### Communication
-
-| Category | Endpoints | Description |
-|----------|-----------|-------------|
-| Messaging | 18 | Conversations, send, reactions, reports |
-| Notifications | 6 | In-app notification management |
-| Push Notifications | 5 | Token registration, preferences |
-
-### Moderation & Support
-
-| Category | Endpoints | Description |
-|----------|-----------|-------------|
-| Suspicious Activity | 6 | Reports, warnings, account freeze |
-| HR Dashboard | 5 | Disputes, stats, support |
-| Home Size Adjustment | 6 | Dispute filing and resolution |
-
-### Programs & Compliance
-
-| Category | Endpoints | Description |
-|----------|-----------|-------------|
-| Incentives | 5 | Configuration, eligibility |
-| Referrals | 6 | Codes, rewards, validation |
-| Reviews | 6 | Submit, view, summaries |
-| Tax Documents | 8 | W-9, 1099-NEC, platform reports |
-| Terms & Conditions | 6 | Version management, acceptance |
-| Checklist | 7 | Editor, publishing, versions |
-| Applications | 8 | Submission, review, hire |
+| Category | Router | Key Endpoints |
+|----------|--------|---------------|
+| **Auth & Users** | usersRouter | Login, register, profile, password reset |
+| **Appointments** | appointmentsRouter | CRUD, assign, complete, decline, recurring |
+| **Multi-Cleaner** | multiCleanerRouter | Create, offers, slots, room assignments |
+| **Business** | businessOwnerRouter | Dashboard, employees, clients, payroll |
+| **Employees** | businessEmployeeRouter | Invite, accept, assign, availability |
+| **Payments** | paymentRouter | Intents, capture, refund, methods |
+| **Payouts** | stripeConnectRouter | Account setup, transfers, history |
+| **Messaging** | messageRouter | Conversations, send, reactions, reports |
+| **Calendar** | calendarSyncRouter | iCal feeds, sync, auto-appointments |
+| **Reviews** | reviewsRouter | Submit, view, multi-aspect ratings |
+| **Tax** | taxRouter | W-9, 1099-NEC, platform reports |
+| **Preferred** | preferredCleanerRouter | Tiers, perks, availability config |
+| **Incentives** | incentivesRouter | Configuration, eligibility |
+| **Referrals** | referralsRouter | Codes, rewards, validation |
+| **HR** | hrDashboardRouter | Disputes, reports, support |
+| **Owner** | ownerDashboardRouter | Financials, settings, perks config |
 
 ---
 
@@ -465,10 +504,13 @@ See [Server README](./server/README.md) for complete API documentation. Key endp
 
 | Schedule | Job | Description |
 |----------|-----|-------------|
+| `*/15 * * * *` | Backup Cleaner Timeout | Escalates unresponded backup cleaner notifications |
+| `0 0 * * *` | Booking Expiration | Expires pending bookings (48-hour window) |
+| `0 1 * * *` | Calendar Sync | Syncs all active iCal calendars |
+| `*/30 * * * *` | Multi-Cleaner Fill Monitor | Escalates unfilled multi-cleaner job slots |
+| `*/10 * * * *` | Multi-Cleaner Offer Expiration | Expires unanswered job offers |
 | `0 7 * * *` | Supply Reminder | Reminds cleaners to bring supplies |
 | `0 0 * * *` | Payment Retry | Retries failed payments |
-| `0 1 * * *` | Calendar Sync | Syncs all active iCal calendars |
-| `0 2 * * *` | Booking Expiration | Expires pending bookings (48-hour window) |
 | `0 3 * * 0` | Recurring Generation | Creates appointments from schedules |
 
 ---
@@ -486,6 +528,8 @@ Real-time communication via Socket.io:
 'message_deleted'          // Message was deleted
 'participant_added'        // New conversation participant
 'conversation_updated'     // Conversation title changed
+'job_offer_received'       // Multi-cleaner job offer
+'appointment_update'       // Appointment status change
 
 // Client → Server
 'join_conversation'        // Join a conversation room
@@ -501,10 +545,48 @@ Real-time communication via Socket.io:
 
 - **Authentication**: JWT tokens with 24-hour expiration, bcrypt password hashing
 - **Authorization**: Role-based access control with middleware validation
-- **Encryption**: AES-256-CBC for PII (names, emails, tax IDs)
+- **Encryption**: AES-256-CBC for PII (names, emails, addresses, tax IDs, phone numbers)
 - **Payments**: PCI-compliant via Stripe Elements, webhook signature verification
 - **Content Moderation**: Automatic suspicious content detection, user reporting
 - **Account Protection**: Freezing, warning system, violation tracking
+- **Data Serialization**: All API responses sanitized through serializers with automatic decryption
+
+---
+
+## Database Models (57 Total)
+
+### Core Models
+- User, UserHomes, UserAppointments, UserBills
+
+### Business & Employment
+- BusinessEmployee, EmployeeJobAssignment, EmployeePayChangeLog
+
+### Multi-Cleaner
+- MultiCleanerJob, CleanerJobOffer, CleanerJobCompletion, CleanerRoomAssignment
+
+### Financial
+- Payment, Payout, PlatformEarnings, OwnerWithdrawal, StripeConnectAccount
+
+### Preferred Cleaner System
+- HomePreferredCleaner, CleanerPreferredPerks, PreferredPerksConfig, PreferredPerksConfigHistory, CleanerAvailabilityConfig
+
+### Communication
+- Conversation, ConversationParticipant, Message, MessageReaction, MessageReadReceipt, Notification
+
+### Reviews & Compliance
+- UserReviews, SuspiciousActivityReport, HomeSizeAdjustmentRequest, HomeSizeAdjustmentPhoto, GuestNotLeftReport
+
+### Tax & Legal
+- TaxDocument, TaxInfo, UserTermsAcceptance
+
+### Programs
+- Referral, ReferralConfig, IncentiveConfig
+
+### Scheduling
+- RecurringSchedule, CalendarSync, CleanerClient
+
+### Checklists & Photos
+- ChecklistVersion, ChecklistDraft, ChecklistSection, ChecklistItem, JobPhoto
 
 ---
 
@@ -513,7 +595,7 @@ Real-time communication via Socket.io:
 | Document | Description |
 |----------|-------------|
 | [Server README](./server/README.md) | Complete API reference, database models, services, testing |
-| [Client README](./client/README.md) | Component documentation, state management, UI patterns |
+| [Client README](./client/README.md) | Component documentation, offline architecture, state management |
 
 ---
 

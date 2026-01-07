@@ -363,6 +363,49 @@ calendarSyncRouter.post("/:id/sync", verifyToken, async (req, res) => {
   }
 });
 
+// Get disclaimer acceptance status
+calendarSyncRouter.get("/disclaimer/status", verifyToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.userId, {
+      attributes: ["id", "calendarSyncDisclaimerAcceptedAt"],
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    return res.status(200).json({
+      accepted: !!user.calendarSyncDisclaimerAcceptedAt,
+      acceptedAt: user.calendarSyncDisclaimerAcceptedAt,
+    });
+  } catch (error) {
+    console.error("Error fetching disclaimer status:", error);
+    return res.status(500).json({ error: "Failed to fetch disclaimer status" });
+  }
+});
+
+// Accept the disclaimer
+calendarSyncRouter.post("/disclaimer/accept", verifyToken, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const acceptedAt = new Date();
+    await user.update({ calendarSyncDisclaimerAcceptedAt: acceptedAt });
+
+    return res.status(200).json({
+      success: true,
+      acceptedAt,
+    });
+  } catch (error) {
+    console.error("Error accepting disclaimer:", error);
+    return res.status(500).json({ error: "Failed to accept disclaimer" });
+  }
+});
+
 // Preview what appointments would be created from a sync
 calendarSyncRouter.get("/:id/preview", verifyToken, async (req, res) => {
   const { id } = req.params;

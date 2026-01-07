@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 jest.mock("../../models", () => ({
   User: {
     findOne: jest.fn(),
+    findAll: jest.fn(),
   },
   TermsAndConditions: {
     findOne: jest.fn(),
@@ -57,6 +58,11 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendPasswordReset: jest.fn(),
 }));
 
+jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
+  sendPushUsernameRecovery: jest.fn(),
+  sendPushPasswordReset: jest.fn(),
+}));
+
 jest.mock("passport", () => ({
   authenticate: jest.fn(() => (req, res, next) => next()),
 }));
@@ -96,6 +102,7 @@ describe("User Sessions Router", () => {
 
     it("should login successfully with valid credentials", async () => {
       User.findOne.mockResolvedValue(mockUser);
+      User.findAll.mockResolvedValue([]); // No linked accounts
       bcrypt.compare.mockResolvedValue(true);
       TermsAndConditions.findOne.mockResolvedValue(null); // No terms to accept
 
@@ -107,6 +114,7 @@ describe("User Sessions Router", () => {
       expect(response.body.user).toBeDefined();
       expect(response.body.token).toBeDefined();
       expect(response.body.requiresTermsAcceptance).toBe(false);
+      expect(response.body.linkedAccounts).toEqual([]);
     });
 
     it("should return 401 for non-existent user (generic error to prevent enumeration)", async () => {
@@ -197,26 +205,27 @@ describe("User Sessions Router", () => {
 
   describe("POST /forgot-username", () => {
     it("should send username recovery email for existing user", async () => {
-      User.findOne.mockResolvedValue({
+      User.findAll.mockResolvedValue([{
         id: 1,
         username: "testuser",
         email: "test@test.com",
-      });
+        type: null,
+      }]);
 
       const response = await request(app)
         .post("/api/v1/sessions/forgot-username")
         .send({ email: "test@test.com" });
 
       expect(response.status).toBe(200);
-      expect(response.body.message).toContain("username");
+      expect(response.body.message).toContain("If an account");
       expect(Email.sendUsernameRecovery).toHaveBeenCalledWith(
         "test@test.com",
-        "testuser"
+        "testuser (Homeowner)"
       );
     });
 
     it("should return success even for non-existent email (security)", async () => {
-      User.findOne.mockResolvedValue(null);
+      User.findAll.mockResolvedValue([]);
 
       const response = await request(app)
         .post("/api/v1/sessions/forgot-username")
@@ -237,11 +246,12 @@ describe("User Sessions Router", () => {
     });
 
     it("should handle email sending error", async () => {
-      User.findOne.mockResolvedValue({
+      User.findAll.mockResolvedValue([{
         id: 1,
         username: "testuser",
         email: "test@test.com",
-      });
+        type: null,
+      }]);
       Email.sendUsernameRecovery.mockRejectedValue(new Error("Email error"));
 
       const response = await request(app)
@@ -251,6 +261,24 @@ describe("User Sessions Router", () => {
       expect(response.status).toBe(500);
       expect(response.body.error).toContain("Failed to process");
     });
+
+    it("should send all usernames for email with multiple accounts", async () => {
+      User.findAll.mockResolvedValue([
+        { id: 1, username: "testuser1", email: "test@test.com", type: "cleaner", expoPushToken: null },
+        { id: 2, username: "testuser2", email: "test@test.com", type: null, expoPushToken: null },
+      ]);
+      Email.sendUsernameRecovery.mockResolvedValue(true);
+
+      const response = await request(app)
+        .post("/api/v1/sessions/forgot-username")
+        .send({ email: "test@test.com" });
+
+      expect(response.status).toBe(200);
+      expect(Email.sendUsernameRecovery).toHaveBeenCalledWith(
+        "test@test.com",
+        "testuser1 (Cleaner), testuser2 (Homeowner)"
+      );
+    });
   });
 
   describe("POST /forgot-password", () => {
@@ -258,11 +286,12 @@ describe("User Sessions Router", () => {
       id: 1,
       username: "testuser",
       email: "test@test.com",
+      type: null,
       update: jest.fn(),
     };
 
     it("should send password reset email for existing user", async () => {
-      User.findOne.mockResolvedValue(mockUser);
+      User.findAll.mockResolvedValue([mockUser]);
       bcrypt.genSalt.mockResolvedValue("salt");
       bcrypt.hash.mockResolvedValue("hashedpassword");
 
@@ -277,7 +306,7 @@ describe("User Sessions Router", () => {
     });
 
     it("should return success even for non-existent email (security)", async () => {
-      User.findOne.mockResolvedValue(null);
+      User.findAll.mockResolvedValue([]);
 
       const response = await request(app)
         .post("/api/v1/sessions/forgot-password")
@@ -298,10 +327,10 @@ describe("User Sessions Router", () => {
     });
 
     it("should handle password update error", async () => {
-      User.findOne.mockResolvedValue({
+      User.findAll.mockResolvedValue([{
         ...mockUser,
         update: jest.fn().mockRejectedValue(new Error("Update error")),
-      });
+      }]);
       bcrypt.genSalt.mockResolvedValue("salt");
       bcrypt.hash.mockResolvedValue("hashedpassword");
 
@@ -311,6 +340,38 @@ describe("User Sessions Router", () => {
 
       expect(response.status).toBe(500);
       expect(response.body.error).toContain("Failed to process");
+    });
+
+    it("should return 300 for multiple accounts without accountType", async () => {
+      User.findAll.mockResolvedValue([
+        { id: 1, username: "user1", email: "test@test.com", type: "cleaner", update: jest.fn() },
+        { id: 2, username: "user2", email: "test@test.com", type: null, update: jest.fn() },
+      ]);
+
+      const response = await request(app)
+        .post("/api/v1/sessions/forgot-password")
+        .send({ email: "test@test.com" });
+
+      expect(response.status).toBe(300);
+      expect(response.body.requiresAccountSelection).toBe(true);
+      expect(response.body.accountOptions).toHaveLength(2);
+    });
+
+    it("should reset specific account when accountType provided", async () => {
+      const cleanerUser = { id: 1, username: "cleaner1", email: "test@test.com", type: "cleaner", update: jest.fn() };
+      const homeownerUser = { id: 2, username: "homeowner1", email: "test@test.com", type: null, update: jest.fn() };
+
+      User.findAll.mockResolvedValue([cleanerUser, homeownerUser]);
+      bcrypt.genSalt.mockResolvedValue("salt");
+      bcrypt.hash.mockResolvedValue("hashedpassword");
+
+      const response = await request(app)
+        .post("/api/v1/sessions/forgot-password")
+        .send({ email: "test@test.com", accountType: "cleaner" });
+
+      expect(response.status).toBe(200);
+      expect(cleanerUser.update).toHaveBeenCalled();
+      expect(homeownerUser.update).not.toHaveBeenCalled();
     });
   });
 });

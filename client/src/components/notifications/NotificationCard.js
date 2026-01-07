@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   title: {
-    fontSize: typography.sizes.md,
+    fontSize: typography.fontSize.md,
     fontWeight: "500",
     color: colors.neutral[700],
     flex: 1,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   body: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[600],
     lineHeight: 20,
     marginBottom: spacing.xs,
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   time: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     color: colors.neutral[500],
   },
   expiresContainer: {
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[100],
   },
   expiresText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     color: colors.primary[600],
     fontWeight: "500",
   },
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   rebookButtonText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     fontWeight: "600",
     color: colors.neutral[0],
   },
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   actionBadgeText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     color: colors.warning[700],
     fontWeight: "600",
   },

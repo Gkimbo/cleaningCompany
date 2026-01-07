@@ -180,7 +180,22 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
       const saved = await AsyncStorage.getItem(getProgressKey(appointmentId));
       if (saved) {
         const parsed = JSON.parse(saved);
-        setCheckedItems(parsed);
+        // Migrate old boolean format to new status format
+        const migrated = {};
+        for (const [key, value] of Object.entries(parsed)) {
+          if (value === true) {
+            migrated[key] = "completed";
+          } else if (value === "completed" || value === "na") {
+            migrated[key] = value;
+          } else {
+            migrated[key] = null;
+          }
+        }
+        setCheckedItems(migrated);
+        // Save migrated format if it was different
+        if (JSON.stringify(migrated) !== saved) {
+          await AsyncStorage.setItem(getProgressKey(appointmentId), JSON.stringify(migrated));
+        }
       }
     } catch (error) {
       console.warn("Error loading checklist progress:", error);
@@ -268,28 +283,34 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
   // Use checklistData or fallback
   const CLEANING_CHECKLIST = checklistData || FALLBACK_CHECKLIST;
 
-  // Calculate total tasks and completed tasks
+  // Calculate total tasks, completed tasks, and N/A tasks
   const totalTasks = Object.values(CLEANING_CHECKLIST).reduce(
     (sum, section) => sum + section.tasks.length,
     0
   );
-  const completedTasks = Object.keys(checkedItems).filter(
-    (key) => checkedItems[key]
+  const completedTasks = Object.values(checkedItems).filter(
+    (status) => status === "completed"
   ).length;
-  const progressPercent = Math.round((completedTasks / totalTasks) * 100);
+  const naTasks = Object.values(checkedItems).filter(
+    (status) => status === "na"
+  ).length;
+  const doneTasks = completedTasks + naTasks;
+  const progressPercent = Math.round((doneTasks / totalTasks) * 100);
 
   useEffect(() => {
     if (onProgressUpdate) {
-      onProgressUpdate(progressPercent, completedTasks, totalTasks);
+      onProgressUpdate(progressPercent, doneTasks, totalTasks);
     }
-  }, [completedTasks, totalTasks]);
+  }, [doneTasks, totalTasks]);
 
-  const toggleItem = (itemId) => {
+  // Set item status: "completed", "na", or null (unchecked)
+  // Clicking the same status again will toggle it off
+  const setItemStatus = (itemId, newStatus) => {
     setCheckedItems((prev) => {
-      const newItems = {
-        ...prev,
-        [itemId]: !prev[itemId],
-      };
+      const currentStatus = prev[itemId];
+      // Toggle off if clicking same status
+      const status = currentStatus === newStatus ? null : newStatus;
+      const newItems = { ...prev, [itemId]: status };
       // Save immediately when item is toggled
       saveProgress(newItems);
       return newItems;
@@ -305,16 +326,18 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
 
   const getSectionProgress = (sectionKey) => {
     const section = CLEANING_CHECKLIST[sectionKey];
-    const completed = section.tasks.filter((t) => checkedItems[t.id]).length;
-    return { completed, total: section.tasks.length };
+    const completed = section.tasks.filter((t) => checkedItems[t.id] === "completed").length;
+    const na = section.tasks.filter((t) => checkedItems[t.id] === "na").length;
+    const done = completed + na;
+    return { completed, na, done, total: section.tasks.length };
   };
 
   const isSectionComplete = (sectionKey) => {
-    const { completed, total } = getSectionProgress(sectionKey);
-    return completed === total;
+    const { done, total } = getSectionProgress(sectionKey);
+    return done === total;
   };
 
-  const isAllComplete = completedTasks === totalTasks;
+  const isAllComplete = doneTasks === totalTasks;
 
   const renderProgressBar = () => (
     <View style={styles.progressContainer}>
@@ -326,35 +349,67 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
         <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
       </View>
       <Text style={styles.progressSubtext}>
-        {completedTasks} of {totalTasks} tasks completed
+        {completedTasks} completed{naTasks > 0 ? `, ${naTasks} N/A` : ""} ({doneTasks} of {totalTasks})
       </Text>
     </View>
   );
 
   const renderChecklistItem = (item) => {
-    const isChecked = checkedItems[item.id];
+    const status = checkedItems[item.id];
+    const isCompleted = status === "completed";
+    const isNA = status === "na";
     return (
-      <TouchableOpacity
+      <View
         key={item.id}
-        style={[styles.checklistItem, isChecked && styles.checklistItemChecked]}
-        onPress={() => toggleItem(item.id)}
-        activeOpacity={0.7}
+        style={[
+          styles.checklistItem,
+          isCompleted && styles.checklistItemChecked,
+          isNA && styles.checklistItemNA,
+        ]}
       >
-        <View style={[styles.checkbox, isChecked && styles.checkboxChecked]}>
-          {isChecked && <Text style={styles.checkmark}>✓</Text>}
-        </View>
-        <Text style={[styles.taskText, isChecked && styles.taskTextChecked]}>
+        {/* Checkbox for complete */}
+        <TouchableOpacity
+          onPress={() => setItemStatus(item.id, "completed")}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <View style={[styles.checkbox, isCompleted && styles.checkboxChecked]}>
+            {isCompleted && <Text style={styles.checkmark}>✓</Text>}
+          </View>
+        </TouchableOpacity>
+
+        {/* Task text */}
+        <Text
+          style={[
+            styles.taskText,
+            isCompleted && styles.taskTextChecked,
+            isNA && styles.taskTextNA,
+          ]}
+        >
           {item.task}
         </Text>
-      </TouchableOpacity>
+
+        {/* N/A button */}
+        <TouchableOpacity
+          onPress={() => setItemStatus(item.id, "na")}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <View style={[styles.naButton, isNA && styles.naButtonActive]}>
+            <Text style={[styles.naButtonText, isNA && styles.naButtonTextActive]}>
+              N/A
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
     );
   };
 
   const renderSection = (sectionKey) => {
     const section = CLEANING_CHECKLIST[sectionKey];
     const isExpanded = expandedSections[sectionKey];
-    const { completed, total } = getSectionProgress(sectionKey);
-    const sectionComplete = completed === total;
+    const { completed, na, done, total } = getSectionProgress(sectionKey);
+    const sectionComplete = done === total;
 
     return (
       <View key={sectionKey} style={styles.section}>
@@ -385,7 +440,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
             <View>
               <Text style={styles.sectionTitle}>{section.title}</Text>
               <Text style={styles.sectionProgress}>
-                {completed}/{total} tasks
+                {done}/{total} tasks{na > 0 ? ` (${na} N/A)` : ""}
               </Text>
             </View>
           </View>
@@ -425,7 +480,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
         {/* Tip about non-applicable tasks */}
         <View style={styles.tipCard}>
           <Text style={styles.tipText}>
-            If a task doesn't apply to this home, mark it complete anyway.
+            Mark tasks complete with ✓ or tap N/A if a task doesn't apply to this home.
           </Text>
         </View>
 
@@ -503,7 +558,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
           <Text style={styles.completeChecklistButtonText}>
             {isAllComplete
               ? "Checklist Complete - Take After Photos"
-              : `Complete All Tasks (${totalTasks - completedTasks} remaining)`}
+              : `Complete All Tasks (${totalTasks - doneTasks} remaining)`}
           </Text>
         </TouchableOpacity>
 
@@ -516,7 +571,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
                 onChecklistComplete && onChecklistComplete();
               } else {
                 alert(
-                  "Please complete at least 90% of the checklist before proceeding. If a task doesn't apply, mark it complete anyway."
+                  "Please complete at least 90% of the checklist before proceeding. Use the N/A button for tasks that don't apply to this home."
                 );
               }
             }}
@@ -726,6 +781,33 @@ const styles = StyleSheet.create({
   taskTextChecked: {
     color: colors.text.secondary,
     textDecorationLine: "line-through",
+  },
+  taskTextNA: {
+    color: colors.text.tertiary,
+    fontStyle: "italic",
+  },
+  checklistItemNA: {
+    backgroundColor: colors.warning[50],
+  },
+  naButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
+    marginLeft: spacing.sm,
+  },
+  naButtonActive: {
+    backgroundColor: colors.warning[100],
+    borderColor: colors.warning[500],
+  },
+  naButtonText: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: colors.neutral[500],
+  },
+  naButtonTextActive: {
+    color: colors.warning[700],
   },
   completeChecklistButton: {
     backgroundColor: colors.success[600],

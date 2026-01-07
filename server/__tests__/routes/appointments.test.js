@@ -395,7 +395,37 @@ describe("Appointment Routes", () => {
       expect(res.body.acknowledgmentMessage).toBeNull();
     });
 
-    it("should return acknowledgment required for large home", async () => {
+    it("should return acknowledgment required for edge large home (3x3)", async () => {
+      // Edge large home: exactly 3 beds AND 3 baths - solo allowed with warning
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 1,
+        homeId: 1,
+      });
+
+      UserHomes.findByPk.mockResolvedValue({
+        numBeds: "3",
+        numBaths: "3",
+        timeToBeCompleted: "anytime",
+        cleanersNeeded: 2,
+      });
+
+      const res = await request(app)
+        .get("/api/v1/appointments/booking-info/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
+      expect(res.body.soloAllowed).toBe(true);
+      expect(res.body.hasTimeConstraint).toBe(false);
+      expect(res.body.requiresAcknowledgment).toBe(true);
+      expect(res.body.acknowledgmentMessage).toContain("larger home");
+      expect(res.body.acknowledgmentMessage).toContain("3 beds, 3 baths");
+      expect(res.body.acknowledgmentMessage).toContain("may take longer to clean");
+    });
+
+    it("should require multi-cleaner for clearly large home (4x3+)", async () => {
+      // Clearly large home: beyond edge threshold - multi-cleaner required, no solo option
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         homeId: 1,
@@ -414,14 +444,41 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.isLargeHome).toBe(true);
-      expect(res.body.hasTimeConstraint).toBe(false);
-      expect(res.body.requiresAcknowledgment).toBe(true);
-      expect(res.body.acknowledgmentMessage).toContain("larger home");
-      expect(res.body.acknowledgmentMessage).toContain("4 beds, 3 baths");
-      expect(res.body.acknowledgmentMessage).toContain("Kleanr will not provide extra cleaners");
+      expect(res.body.isEdgeLargeHome).toBe(false);
+      expect(res.body.soloAllowed).toBe(false);
+      expect(res.body.multiCleanerRequired).toBe(true);
+      expect(res.body.requiresAcknowledgment).toBe(false); // No solo option, so no acknowledgment needed
+      expect(res.body.acknowledgmentMessage).toBeNull();
     });
 
-    it("should include time constraint warning for large home with time limit", async () => {
+    it("should include time constraint warning for edge large home with time limit", async () => {
+      // Edge large home (3x3) with time constraint - should have acknowledgment message
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 1,
+        homeId: 1,
+      });
+
+      UserHomes.findByPk.mockResolvedValue({
+        numBeds: "3",
+        numBaths: "3",
+        timeToBeCompleted: "10-3",
+        cleanersNeeded: 2,
+      });
+
+      const res = await request(app)
+        .get("/api/v1/appointments/booking-info/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
+      expect(res.body.hasTimeConstraint).toBe(true);
+      expect(res.body.acknowledgmentMessage).toContain("10-3");
+      expect(res.body.acknowledgmentMessage).toContain("difficult solo");
+    });
+
+    it("should show time constraint for clearly large home (no acknowledgment)", async () => {
+      // Clearly large home (5x4) - multi-cleaner required, no solo acknowledgment
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         homeId: 1,
@@ -440,9 +497,10 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(false);
+      expect(res.body.multiCleanerRequired).toBe(true);
       expect(res.body.hasTimeConstraint).toBe(true);
-      expect(res.body.acknowledgmentMessage).toContain("10-3");
-      expect(res.body.acknowledgmentMessage).toContain("difficult without assistance");
+      expect(res.body.acknowledgmentMessage).toBeNull(); // No solo option for clearly large home
     });
 
     it("should return 401 without authorization", async () => {
@@ -556,15 +614,15 @@ describe("Appointment Routes", () => {
       expect(res.body.requiresAcknowledgment).toBe(false);
     });
 
-    // Test different time constraints
-    it("should show time constraint for large home with 11-4 time window", async () => {
+    // Test different time constraints - edge case (3x3) with acknowledgment
+    it("should show time constraint for edge large home with 11-4 time window", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         homeId: 1,
       });
 
       UserHomes.findByPk.mockResolvedValue({
-        numBeds: "4",
+        numBeds: "3",
         numBaths: "3",
         timeToBeCompleted: "11-4",
         cleanersNeeded: 2,
@@ -576,21 +634,22 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
       expect(res.body.hasTimeConstraint).toBe(true);
       expect(res.body.acknowledgmentMessage).toContain("11-4");
     });
 
-    it("should show time constraint for large home with 12-2 time window", async () => {
+    it("should show time constraint for edge large home with 12-2 time window", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         homeId: 1,
       });
 
       UserHomes.findByPk.mockResolvedValue({
-        numBeds: "5",
-        numBaths: "4",
+        numBeds: "3",
+        numBaths: "3",
         timeToBeCompleted: "12-2",
-        cleanersNeeded: 3,
+        cleanersNeeded: 2,
       });
 
       const res = await request(app)
@@ -599,11 +658,12 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
       expect(res.body.hasTimeConstraint).toBe(true);
       expect(res.body.acknowledgmentMessage).toContain("12-2");
     });
 
-    // Very large home test
+    // Very large home test - multi-cleaner required, no solo option
     it("should handle very large homes (6+ beds and baths)", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
@@ -623,8 +683,11 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(false);
+      expect(res.body.multiCleanerRequired).toBe(true);
       expect(res.body.hasTimeConstraint).toBe(true);
-      expect(res.body.requiresAcknowledgment).toBe(true);
+      expect(res.body.requiresAcknowledgment).toBe(false); // Clearly large - no solo option
+      expect(res.body.acknowledgmentMessage).toBeNull();
       expect(res.body.homeInfo.numBeds).toBe(7);
       expect(res.body.homeInfo.numBaths).toBe(6);
       expect(res.body.homeInfo.cleanersNeeded).toBe(4);
@@ -657,7 +720,7 @@ describe("Appointment Routes", () => {
       expect(res.body.appointmentId).toBe(1);
     });
 
-    // Test with numeric bed/bath values instead of strings
+    // Test with numeric bed/bath values instead of strings (edge case 3x3)
     it("should handle numeric bed/bath values", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
@@ -665,7 +728,7 @@ describe("Appointment Routes", () => {
       });
 
       UserHomes.findByPk.mockResolvedValue({
-        numBeds: 4,
+        numBeds: 3,
         numBaths: 3,
         timeToBeCompleted: "anytime",
         cleanersNeeded: 2,
@@ -677,6 +740,7 @@ describe("Appointment Routes", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
       expect(res.body.requiresAcknowledgment).toBe(true);
     });
 
@@ -774,8 +838,8 @@ describe("Appointment Routes", () => {
       expect(res.body.error).toBe("Acknowledgment required");
       expect(res.body.requiresAcknowledgment).toBe(true);
       expect(res.body.isLargeHome).toBe(true);
-      expect(res.body.message).toContain("larger home");
-      expect(res.body.message).toContain("Kleanr will not provide extra cleaners");
+      expect(res.body.message).toContain("large home");
+      expect(res.body.message).toContain("4 beds, 3 baths");
     });
 
     it("should include time warning for large home with time constraint", async () => {
@@ -1105,7 +1169,7 @@ describe("Appointment Routes", () => {
       expect(res.body).toHaveProperty("isLargeHome", true);
       expect(res.body).toHaveProperty("hasTimeConstraint", true);
       expect(res.body.message).toContain("5 beds, 4 baths");
-      expect(res.body.message).toContain("Kleanr will not provide extra cleaners");
+      expect(res.body.message).toContain("Cleaning alone may take longer");
       expect(res.body.message).toContain("10-3");
     });
 

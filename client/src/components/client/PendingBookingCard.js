@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   urgentText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     fontWeight: "600",
     color: colors.warning[700],
   },
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.error[500],
   },
   timerText: {
-    fontSize: typography.sizes.xs,
+    fontSize: typography.fontSize.xs,
     fontWeight: "700",
     color: colors.neutral[0],
   },
@@ -182,13 +182,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   title: {
-    fontSize: typography.sizes.lg,
+    fontSize: typography.fontSize.lg,
     fontWeight: "700",
     color: colors.neutral[900],
     marginBottom: 2,
   },
   businessName: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[600],
     marginBottom: spacing.sm,
   },
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   detailText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[700],
   },
   priceRow: {
@@ -213,16 +213,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   priceLabel: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[600],
   },
   priceValue: {
-    fontSize: typography.sizes.lg,
+    fontSize: typography.fontSize.lg,
     fontWeight: "700",
     color: colors.success[600],
   },
   notes: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[500],
     fontStyle: "italic",
     marginTop: spacing.sm,
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     borderColor: colors.neutral[300],
   },
   declineButtonText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     fontWeight: "600",
     color: colors.neutral[700],
   },
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   acceptButtonText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     fontWeight: "700",
     color: colors.neutral[0],
   },
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   expiredText: {
-    fontSize: typography.sizes.sm,
+    fontSize: typography.fontSize.sm,
     color: colors.neutral[500],
   },
 });

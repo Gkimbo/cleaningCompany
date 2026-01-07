@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Pressable,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
@@ -73,7 +72,7 @@ const BusinessCalculator = ({ state }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
@@ -295,7 +294,7 @@ const BusinessCalculator = ({ state }) => {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 

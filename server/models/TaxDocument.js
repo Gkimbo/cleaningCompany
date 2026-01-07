@@ -1,3 +1,14 @@
+const EncryptionService = require("../services/EncryptionService");
+
+// PII fields that need to be encrypted
+const PII_FIELDS = [
+  "recipientName",
+  "recipientTin",
+  "recipientAddress",
+  "payerTin",
+  "payerAddress"
+];
+
 /**
  * TaxDocument Model
  *
@@ -242,6 +253,45 @@ module.exports = (sequelize, DataTypes) => {
     });
     return !!doc;
   };
+
+  // Encryption hooks
+  const encryptPIIFields = (record) => {
+    PII_FIELDS.forEach((field) => {
+      if (record[field] !== undefined && record[field] !== null) {
+        const value = String(record[field]);
+        // Only encrypt if not already encrypted (check for colon format)
+        if (!value.includes(":") || value.split(":").length !== 2) {
+          record[field] = EncryptionService.encrypt(value);
+        }
+      }
+    });
+  };
+
+  const decryptPIIFields = (record) => {
+    if (!record) return;
+    PII_FIELDS.forEach((field) => {
+      if (record.dataValues && record.dataValues[field]) {
+        record.dataValues[field] = EncryptionService.decrypt(record.dataValues[field]);
+      }
+    });
+  };
+
+  TaxDocument.beforeCreate((record) => {
+    encryptPIIFields(record);
+  });
+
+  TaxDocument.beforeUpdate((record) => {
+    encryptPIIFields(record);
+  });
+
+  TaxDocument.afterFind((result) => {
+    if (!result) return;
+    if (Array.isArray(result)) {
+      result.forEach((record) => decryptPIIFields(record));
+    } else {
+      decryptPIIFields(result);
+    }
+  });
 
   return TaxDocument;
 };

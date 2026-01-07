@@ -2777,6 +2777,15 @@ The Kleanr Team`;
 
   /**
    * Send payout notification to cleaner
+   * @param {string} email - Cleaner's email
+   * @param {string} cleanerName - Cleaner's first name
+   * @param {string} clientName - Client's full name
+   * @param {string} appointmentDate - Date of appointment
+   * @param {string} homeAddress - Address of home
+   * @param {number} grossAmount - Gross amount before platform fee
+   * @param {number} platformFee - Platform fee amount
+   * @param {number} netAmount - Net amount after platform fee
+   * @param {number} platformFeePercent - Platform fee percentage (default 10)
    */
   static async sendPayoutNotification(
     email,
@@ -2786,10 +2795,12 @@ The Kleanr Team`;
     homeAddress,
     grossAmount,
     platformFee,
-    netAmount
+    netAmount,
+    platformFeePercent = 10
   ) {
     try {
       const transporter = createTransporter();
+      const feeLabel = `Platform Fee (${platformFeePercent}%)`;
 
       const htmlContent = createEmailTemplate({
         title: "Payout Received!",
@@ -2807,7 +2818,7 @@ The Kleanr Team`;
             { label: "Date", value: formatDate(appointmentDate) },
             { label: "Address", value: homeAddress },
             { label: "Gross Amount", value: `$${parseFloat(grossAmount).toFixed(2)}` },
-            { label: "Platform Fee (10%)", value: `-$${parseFloat(platformFee).toFixed(2)}` },
+            { label: feeLabel, value: `-$${parseFloat(platformFee).toFixed(2)}` },
             { label: "Your Payout", value: `<strong style="color: #10b981;">$${parseFloat(netAmount).toFixed(2)}</strong>` },
           ],
         },
@@ -2832,7 +2843,7 @@ Client: ${clientName}
 Date: ${formatDate(appointmentDate)}
 Address: ${homeAddress}
 Gross Amount: $${parseFloat(grossAmount).toFixed(2)}
-Platform Fee (10%): -$${parseFloat(platformFee).toFixed(2)}
+${feeLabel}: -$${parseFloat(platformFee).toFixed(2)}
 Your Payout: $${parseFloat(netAmount).toFixed(2)}
 
 🏦 Funds typically arrive in your bank account within 2-3 business days.

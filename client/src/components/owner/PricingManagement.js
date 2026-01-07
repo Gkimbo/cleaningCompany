@@ -51,6 +51,10 @@ const PricingManagement = ({ state }) => {
     refundPercentage: "",
     platformFeePercent: "",
     businessOwnerFeePercent: "",
+    largeBusinessFeePercent: "",
+    largeBusinessMonthlyThreshold: "",
+    largeBusinessLookbackMonths: "",
+    multiCleanerPlatformFeePercent: "",
     highVolumeFee: "",
     incentiveRefundPercent: "",
     incentiveCleanerPercent: "",
@@ -58,6 +62,9 @@ const PricingManagement = ({ state }) => {
     exampleOriginalPrice: "150",
     exampleDiscountPercent: "50",
     exampleCleaningPrice: "150",
+    exampleBusinessOwnerPrice: "200",
+    exampleLargeBusinessPrice: "200",
+    exampleMultiCleanerPrice: "300",
   });
 
   useEffect(() => {
@@ -93,6 +100,10 @@ const PricingManagement = ({ state }) => {
             refundPercentage: (parseFloat(result.config.refundPercentage) * 100).toString() || "",
             platformFeePercent: (parseFloat(result.config.platformFeePercent) * 100).toString() || "",
             businessOwnerFeePercent: (parseFloat(result.config.businessOwnerFeePercent || result.config.platformFeePercent) * 100).toString() || "",
+            largeBusinessFeePercent: (parseFloat(result.config.largeBusinessFeePercent || 0.07) * 100).toString() || "7",
+            largeBusinessMonthlyThreshold: result.config.largeBusinessMonthlyThreshold?.toString() || "50",
+            largeBusinessLookbackMonths: result.config.largeBusinessLookbackMonths?.toString() || "1",
+            multiCleanerPlatformFeePercent: (parseFloat(result.config.multiCleanerPlatformFeePercent || 0.13) * 100).toString() || "13",
             highVolumeFee: result.config.highVolumeFee?.toString() || "",
             incentiveRefundPercent: (parseFloat(result.config.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: (parseFloat(result.config.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
@@ -118,6 +129,10 @@ const PricingManagement = ({ state }) => {
             refundPercentage: (result.staticDefaults.refundPercentage * 100).toString() || "",
             platformFeePercent: (result.staticDefaults.platformFeePercent * 100).toString() || "",
             businessOwnerFeePercent: ((result.staticDefaults.businessOwnerFeePercent || result.staticDefaults.platformFeePercent) * 100).toString() || "",
+            largeBusinessFeePercent: ((result.staticDefaults.largeBusinessFeePercent || 0.07) * 100).toString() || "7",
+            largeBusinessMonthlyThreshold: result.staticDefaults.largeBusinessMonthlyThreshold?.toString() || "50",
+            largeBusinessLookbackMonths: result.staticDefaults.largeBusinessLookbackMonths?.toString() || "1",
+            multiCleanerPlatformFeePercent: ((result.staticDefaults.multiCleanerPlatformFeePercent || 0.13) * 100).toString() || "13",
             highVolumeFee: result.staticDefaults.highVolumeFee?.toString() || "",
             incentiveRefundPercent: ((result.staticDefaults.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: ((result.staticDefaults.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
@@ -145,7 +160,7 @@ const PricingManagement = ({ state }) => {
     // Check if values have changed from original
     // Exclude changeNote and calculator fields from change detection
     if (originalValues) {
-      const excludeFromChangeDetection = ["changeNote", "exampleOriginalPrice", "exampleDiscountPercent", "exampleCleaningPrice"];
+      const excludeFromChangeDetection = ["changeNote", "exampleOriginalPrice", "exampleDiscountPercent", "exampleCleaningPrice", "exampleBusinessOwnerPrice", "exampleLargeBusinessPrice", "exampleMultiCleanerPrice"];
       const changed = Object.keys(originalValues).some(
         (key) => !excludeFromChangeDetection.includes(key) && newFormData[key] !== originalValues[key]
       );
@@ -178,6 +193,10 @@ const PricingManagement = ({ state }) => {
       "refundPercentage",
       "platformFeePercent",
       "businessOwnerFeePercent",
+      "largeBusinessFeePercent",
+      "largeBusinessMonthlyThreshold",
+      "largeBusinessLookbackMonths",
+      "multiCleanerPlatformFeePercent",
       "highVolumeFee",
       "incentiveRefundPercent",
       "incentiveCleanerPercent",
@@ -217,6 +236,16 @@ const PricingManagement = ({ state }) => {
       setError("Incentive cleaner percentage must be between 0 and 100");
       return;
     }
+    const largeBusiness = parseFloat(formData.largeBusinessFeePercent);
+    if (largeBusiness < 0 || largeBusiness > 100) {
+      setError("Large business fee percentage must be between 0 and 100");
+      return;
+    }
+    const multiCleaner = parseFloat(formData.multiCleanerPlatformFeePercent);
+    if (multiCleaner < 0 || multiCleaner > 100) {
+      setError("Multi-cleaner fee percentage must be between 0 and 100");
+      return;
+    }
 
     setError(null);
     setShowWarningModal(true);
@@ -247,6 +276,10 @@ const PricingManagement = ({ state }) => {
         refundPercentage: parseFloat(formData.refundPercentage) / 100,
         platformFeePercent: parseFloat(formData.platformFeePercent) / 100,
         businessOwnerFeePercent: parseFloat(formData.businessOwnerFeePercent) / 100,
+        largeBusinessFeePercent: parseFloat(formData.largeBusinessFeePercent) / 100,
+        largeBusinessMonthlyThreshold: parseInt(formData.largeBusinessMonthlyThreshold),
+        largeBusinessLookbackMonths: parseInt(formData.largeBusinessLookbackMonths),
+        multiCleanerPlatformFeePercent: parseFloat(formData.multiCleanerPlatformFeePercent) / 100,
         highVolumeFee: parseInt(formData.highVolumeFee),
         incentiveRefundPercent: parseFloat(formData.incentiveRefundPercent) / 100,
         incentiveCleanerPercent: parseFloat(formData.incentiveCleanerPercent) / 100,
@@ -404,128 +437,284 @@ const PricingManagement = ({ state }) => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Platform Fees</Text>
         <Text style={styles.sectionDescription}>
-          Service fees for the platform
+          Service fees for the platform by cleaner type
         </Text>
-        {renderPriceInput("Platform Fee (Regular Cleaners)", "platformFeePercent", "", "%", "Percentage taken from regular cleaner payouts")}
-        {renderPriceInput("Business Owner Fee", "businessOwnerFeePercent", "", "%", "Percentage taken from business owner cleaner payouts (for their personal clients)")}
-        {renderPriceInput("High Volume Day Fee", "highVolumeFee", "$", "", "Additional fee for holidays and busy days")}
 
-        {/* Platform Revenue Calculator */}
-        {(() => {
-          const platformFeePercent = parseFloat(formData.platformFeePercent) / 100 || 0.10;
-          const cleaningPrice = parseFloat(formData.exampleCleaningPrice) || 150;
-          const stripeFeePercent = 0.029; // Stripe's 2.9%
-          const stripeFlatFee = 0.30; // Stripe's $0.30
+        {/* Regular Cleaner Fee */}
+        <View style={styles.feeTypeContainer}>
+          <View style={styles.feeTypeHeader}>
+            <Icon name="user" size={16} color={colors.primary[600]} />
+            <Text style={styles.feeTypeTitle}>Regular Cleaners</Text>
+          </View>
+          {renderPriceInput("Platform Fee", "platformFeePercent", "", "%", "Percentage taken from independent cleaner payouts")}
 
-          // Calculate amounts
-          const stripeProcessingFee = (cleaningPrice * stripeFeePercent) + stripeFlatFee;
-          const platformFee = cleaningPrice * platformFeePercent;
-          const cleanerReceives = cleaningPrice - platformFee;
-          const platformNet = platformFee - stripeProcessingFee;
-          const isProfit = platformNet > 0;
-          const profitMargin = cleaningPrice > 0 ? (platformNet / cleaningPrice) * 100 : 0;
+          {/* Regular Cleaner Calculator */}
+          {(() => {
+            const feePercent = parseFloat(formData.platformFeePercent) / 100 || 0.10;
+            const price = parseFloat(formData.exampleCleaningPrice) || 150;
+            const platformFee = price * feePercent;
+            const cleanerReceives = price - platformFee;
+            const stripeFee = (price * 0.029) + 0.30;
+            const platformNet = platformFee - stripeFee;
 
-          return (
-            <View style={styles.revenueCalculator}>
-              <View style={styles.revenueHeader}>
-                <Icon name="calculator" size={18} color={colors.primary[600]} />
-                <Text style={styles.revenueTitle}>Revenue Calculator</Text>
-              </View>
-
-              <View style={styles.revenueInputRow}>
-                <Text style={styles.revenueInputLabel}>Cleaning price:</Text>
-                <View style={styles.revenueInputWrapper}>
-                  <Text style={styles.revenueInputPrefix}>$</Text>
-                  <TextInput
-                    style={styles.revenueInput}
-                    value={formData.exampleCleaningPrice}
-                    onChangeText={(value) => handleInputChange("exampleCleaningPrice", value)}
-                    keyboardType="numeric"
-                    placeholder="150"
-                    placeholderTextColor={colors.text.tertiary}
-                  />
+            return (
+              <View style={styles.miniCalculator}>
+                <View style={styles.miniCalcHeader}>
+                  <Icon name="calculator" size={14} color={colors.primary[500]} />
+                  <Text style={styles.miniCalcTitle}>Calculator</Text>
                 </View>
-              </View>
-
-              <View style={styles.revenueVisual}>
-                <View style={styles.revenueBar}>
-                  <View style={[styles.revenueBarSegment, styles.revenueBarCleaner, { flex: cleanerReceives }]}>
-                    <Text style={styles.revenueBarLabel}>Cleaner</Text>
-                  </View>
-                  <View style={[styles.revenueBarSegment, styles.revenueBarPlatform, { flex: platformFee }]}>
-                    <Text style={styles.revenueBarLabelSmall}>Fee</Text>
-                  </View>
-                </View>
-                <View style={styles.revenueBarLegend}>
-                  <Text style={styles.revenueBarLegendText}>${cleanerReceives.toFixed(2)}</Text>
-                  <Text style={styles.revenueBarLegendText}>${platformFee.toFixed(2)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.revenueBreakdown}>
-                <View style={styles.revenueRow}>
-                  <View style={styles.revenueRowLeft}>
-                    <View style={[styles.revenueDot, styles.revenueDotCleaner]} />
-                    <Text style={styles.revenueLabel}>Cleaner receives</Text>
-                  </View>
-                  <Text style={styles.revenueValue}>${cleanerReceives.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.revenueRow}>
-                  <View style={styles.revenueRowLeft}>
-                    <View style={[styles.revenueDot, styles.revenueDotPlatform]} />
-                    <Text style={styles.revenueLabel}>Platform fee ({(platformFeePercent * 100).toFixed(0)}%)</Text>
-                  </View>
-                  <Text style={styles.revenueValue}>${platformFee.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.revenueDivider} />
-
-                <View style={styles.revenueRow}>
-                  <View style={styles.revenueRowLeft}>
-                    <Icon name="cc-stripe" size={14} color={colors.text.tertiary} />
-                    <Text style={[styles.revenueLabel, styles.revenueLabelMuted]}>Stripe fees (2.9% + $0.30)</Text>
-                  </View>
-                  <Text style={[styles.revenueValue, styles.revenueValueMuted]}>-${stripeProcessingFee.toFixed(2)}</Text>
-                </View>
-
-                <View style={[styles.revenueRow, styles.revenueRowTotal]}>
-                  <View style={styles.revenueRowLeft}>
-                    <Icon
-                      name={isProfit ? "arrow-up" : "arrow-down"}
-                      size={14}
-                      color={isProfit ? colors.success[600] : colors.error[600]}
+                <View style={styles.miniCalcInputRow}>
+                  <Text style={styles.miniCalcLabel}>Job price:</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <Text style={styles.miniCalcPrefix}>$</Text>
+                    <TextInput
+                      style={styles.miniCalcInput}
+                      value={formData.exampleCleaningPrice}
+                      onChangeText={(value) => handleInputChange("exampleCleaningPrice", value)}
+                      keyboardType="numeric"
+                      placeholder="150"
+                      placeholderTextColor={colors.text.tertiary}
                     />
-                    <Text style={styles.revenueLabelTotal}>Platform net</Text>
                   </View>
-                  <View style={styles.revenueValueContainer}>
-                    <Text style={[
-                      styles.revenueValueTotal,
-                      isProfit ? styles.revenueValueProfit : styles.revenueValueLoss
-                    ]}>
-                      {isProfit ? "" : "-"}${Math.abs(platformNet).toFixed(2)}
-                    </Text>
-                    <Text style={[
-                      styles.revenueMargin,
-                      isProfit ? styles.revenueMarginProfit : styles.revenueMarginLoss
-                    ]}>
-                      {profitMargin.toFixed(1)}% margin
+                </View>
+                <View style={styles.miniCalcResults}>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Cleaner takes home:</Text>
+                    <Text style={[styles.miniCalcRowValue, styles.miniCalcValueGreen]}>${cleanerReceives.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Platform fee ({(feePercent * 100).toFixed(0)}%):</Text>
+                    <Text style={styles.miniCalcRowValue}>${platformFee.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={[styles.miniCalcRowLabel, styles.miniCalcMuted]}>Platform net (after Stripe):</Text>
+                    <Text style={[styles.miniCalcRowValue, platformNet > 0 ? styles.miniCalcValueGreen : styles.miniCalcValueRed]}>
+                      ${platformNet.toFixed(2)}
                     </Text>
                   </View>
                 </View>
               </View>
+            );
+          })()}
+        </View>
 
-              {!isProfit && (
-                <View style={styles.revenueLossWarning}>
-                  <Icon name="exclamation-triangle" size={14} color={colors.error[600]} />
-                  <Text style={styles.revenueLossText}>
-                    Platform loses money at this fee level
+        {/* Business Owner Fee */}
+        <View style={styles.feeTypeContainer}>
+          <View style={styles.feeTypeHeader}>
+            <Icon name="briefcase" size={16} color={colors.warning[600]} />
+            <Text style={styles.feeTypeTitle}>Business Owners</Text>
+          </View>
+          {renderPriceInput("Platform Fee", "businessOwnerFeePercent", "", "%", "Percentage taken from business owner cleaner payouts (for their personal clients)")}
+
+          {/* Business Owner Calculator */}
+          {(() => {
+            const feePercent = parseFloat(formData.businessOwnerFeePercent) / 100 || 0.10;
+            const price = parseFloat(formData.exampleBusinessOwnerPrice) || 200;
+            const platformFee = price * feePercent;
+            const cleanerReceives = price - platformFee;
+            const stripeFee = (price * 0.029) + 0.30;
+            const platformNet = platformFee - stripeFee;
+
+            return (
+              <View style={styles.miniCalculator}>
+                <View style={styles.miniCalcHeader}>
+                  <Icon name="calculator" size={14} color={colors.warning[500]} />
+                  <Text style={styles.miniCalcTitle}>Calculator</Text>
+                </View>
+                <View style={styles.miniCalcInputRow}>
+                  <Text style={styles.miniCalcLabel}>Job price:</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <Text style={styles.miniCalcPrefix}>$</Text>
+                    <TextInput
+                      style={styles.miniCalcInput}
+                      value={formData.exampleBusinessOwnerPrice}
+                      onChangeText={(value) => handleInputChange("exampleBusinessOwnerPrice", value)}
+                      keyboardType="numeric"
+                      placeholder="200"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+                <View style={styles.miniCalcResults}>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Business owner takes home:</Text>
+                    <Text style={[styles.miniCalcRowValue, styles.miniCalcValueGreen]}>${cleanerReceives.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Platform fee ({(feePercent * 100).toFixed(0)}%):</Text>
+                    <Text style={styles.miniCalcRowValue}>${platformFee.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={[styles.miniCalcRowLabel, styles.miniCalcMuted]}>Platform net (after Stripe):</Text>
+                    <Text style={[styles.miniCalcRowValue, platformNet > 0 ? styles.miniCalcValueGreen : styles.miniCalcValueRed]}>
+                      ${platformNet.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })()}
+        </View>
+
+        {/* Large Business Fee */}
+        <View style={styles.feeTypeContainer}>
+          <View style={styles.feeTypeHeader}>
+            <Icon name="building" size={16} color={colors.success[600]} />
+            <Text style={styles.feeTypeTitle}>Large Volume Businesses</Text>
+          </View>
+          <Text style={styles.feeTypeDescription}>
+            Discounted rate for high-volume business owners
+          </Text>
+          {renderPriceInput("Platform Fee", "largeBusinessFeePercent", "", "%", "Reduced fee for qualifying high-volume businesses")}
+          {renderPriceInput("Monthly Threshold", "largeBusinessMonthlyThreshold", "", " jobs", "Minimum completed cleanings per month to qualify")}
+          {renderPriceInput("Lookback Period", "largeBusinessLookbackMonths", "", " month(s)", "Number of months to calculate volume")}
+
+          {/* Large Business Calculator */}
+          {(() => {
+            const feePercent = parseFloat(formData.largeBusinessFeePercent) / 100 || 0.07;
+            const threshold = parseInt(formData.largeBusinessMonthlyThreshold) || 50;
+            const price = parseFloat(formData.exampleLargeBusinessPrice) || 200;
+            const platformFee = price * feePercent;
+            const cleanerReceives = price - platformFee;
+            const stripeFee = (price * 0.029) + 0.30;
+            const platformNet = platformFee - stripeFee;
+            const regularFeePercent = parseFloat(formData.businessOwnerFeePercent) / 100 || 0.10;
+            const regularPlatformFee = price * regularFeePercent;
+            const savings = regularPlatformFee - platformFee;
+
+            return (
+              <View style={[styles.miniCalculator, styles.miniCalculatorSuccess]}>
+                <View style={styles.miniCalcHeader}>
+                  <Icon name="calculator" size={14} color={colors.success[500]} />
+                  <Text style={styles.miniCalcTitle}>Calculator</Text>
+                </View>
+                <View style={styles.miniCalcInputRow}>
+                  <Text style={styles.miniCalcLabel}>Job price:</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <Text style={styles.miniCalcPrefix}>$</Text>
+                    <TextInput
+                      style={styles.miniCalcInput}
+                      value={formData.exampleLargeBusinessPrice}
+                      onChangeText={(value) => handleInputChange("exampleLargeBusinessPrice", value)}
+                      keyboardType="numeric"
+                      placeholder="200"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+                <View style={styles.miniCalcResults}>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Business takes home:</Text>
+                    <Text style={[styles.miniCalcRowValue, styles.miniCalcValueGreen]}>${cleanerReceives.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Platform fee ({(feePercent * 100).toFixed(0)}%):</Text>
+                    <Text style={styles.miniCalcRowValue}>${platformFee.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={[styles.miniCalcRowLabel, styles.miniCalcMuted]}>Platform net (after Stripe):</Text>
+                    <Text style={[styles.miniCalcRowValue, platformNet > 0 ? styles.miniCalcValueGreen : styles.miniCalcValueRed]}>
+                      ${platformNet.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={[styles.miniCalcRow, styles.miniCalcRowHighlight]}>
+                    <Text style={styles.miniCalcRowLabel}>Savings vs regular rate:</Text>
+                    <Text style={[styles.miniCalcRowValue, styles.miniCalcValueGreen]}>${savings.toFixed(2)}/job</Text>
+                  </View>
+                </View>
+                <View style={styles.miniCalcNote}>
+                  <Icon name="info-circle" size={12} color={colors.success[600]} />
+                  <Text style={styles.miniCalcNoteText}>
+                    Qualifies after {threshold}+ cleanings/month
                   </Text>
                 </View>
-              )}
-            </View>
-          );
-        })()}
+              </View>
+            );
+          })()}
+        </View>
+
+        {/* Multi-Cleaner/Split Job Fee */}
+        <View style={styles.feeTypeContainer}>
+          <View style={styles.feeTypeHeader}>
+            <Icon name="users" size={16} color={colors.secondary ? colors.secondary[600] : colors.primary[600]} />
+            <Text style={styles.feeTypeTitle}>Multi-Cleaner Jobs (Split)</Text>
+          </View>
+          <Text style={styles.feeTypeDescription}>
+            Fee for large homes requiring multiple cleaners
+          </Text>
+          {renderPriceInput("Platform Fee", "multiCleanerPlatformFeePercent", "", "%", "Higher fee for coordinating multi-cleaner jobs")}
+
+          {/* Multi-Cleaner Calculator */}
+          {(() => {
+            const feePercent = parseFloat(formData.multiCleanerPlatformFeePercent) / 100 || 0.13;
+            const totalPrice = parseFloat(formData.exampleMultiCleanerPrice) || 300;
+            const numCleaners = 2; // Example: 2 cleaners splitting
+            const pricePerCleaner = totalPrice / numCleaners;
+            const platformFeePerCleaner = pricePerCleaner * feePercent;
+            const cleanerReceivesEach = pricePerCleaner - platformFeePerCleaner;
+            const totalPlatformFee = platformFeePerCleaner * numCleaners;
+            const stripeFee = (totalPrice * 0.029) + 0.30;
+            const platformNet = totalPlatformFee - stripeFee;
+
+            return (
+              <View style={[styles.miniCalculator, styles.miniCalculatorPurple]}>
+                <View style={styles.miniCalcHeader}>
+                  <Icon name="calculator" size={14} color={colors.secondary ? colors.secondary[500] : colors.primary[500]} />
+                  <Text style={styles.miniCalcTitle}>Calculator (2 cleaners)</Text>
+                </View>
+                <View style={styles.miniCalcInputRow}>
+                  <Text style={styles.miniCalcLabel}>Total job price:</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <Text style={styles.miniCalcPrefix}>$</Text>
+                    <TextInput
+                      style={styles.miniCalcInput}
+                      value={formData.exampleMultiCleanerPrice}
+                      onChangeText={(value) => handleInputChange("exampleMultiCleanerPrice", value)}
+                      keyboardType="numeric"
+                      placeholder="300"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+                <View style={styles.miniCalcResults}>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Each cleaner's share:</Text>
+                    <Text style={styles.miniCalcRowValue}>${pricePerCleaner.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Each cleaner takes home:</Text>
+                    <Text style={[styles.miniCalcRowValue, styles.miniCalcValueGreen]}>${cleanerReceivesEach.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Platform fee ({(feePercent * 100).toFixed(0)}% each):</Text>
+                    <Text style={styles.miniCalcRowValue}>${totalPlatformFee.toFixed(2)} total</Text>
+                  </View>
+                  <View style={styles.miniCalcRow}>
+                    <Text style={[styles.miniCalcRowLabel, styles.miniCalcMuted]}>Platform net (after Stripe):</Text>
+                    <Text style={[styles.miniCalcRowValue, platformNet > 0 ? styles.miniCalcValueGreen : styles.miniCalcValueRed]}>
+                      ${platformNet.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.miniCalcNote}>
+                  <Icon name="info-circle" size={12} color={colors.text.tertiary} />
+                  <Text style={styles.miniCalcNoteText}>
+                    Large homes (3+ beds AND 3+ baths) require multiple cleaners
+                  </Text>
+                </View>
+              </View>
+            );
+          })()}
+        </View>
+
+        {/* High Volume Day Fee */}
+        <View style={styles.feeTypeContainer}>
+          <View style={styles.feeTypeHeader}>
+            <Icon name="calendar" size={16} color={colors.error[500]} />
+            <Text style={styles.feeTypeTitle}>High Volume Days</Text>
+          </View>
+          {renderPriceInput("Surcharge", "highVolumeFee", "$", "", "Additional fee for holidays and busy days")}
+        </View>
       </View>
 
       {/* Incentive Cancellation Section */}
@@ -1238,6 +1427,139 @@ const styles = StyleSheet.create({
     color: colors.warning[700],
     marginTop: spacing.sm,
     fontWeight: typography.fontWeight.medium,
+  },
+  // Fee Type Container Styles
+  feeTypeContainer: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  feeTypeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  feeTypeTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  feeTypeDescription: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: spacing.md,
+  },
+  // Mini Calculator Styles
+  miniCalculator: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+  },
+  miniCalculatorSuccess: {
+    backgroundColor: colors.success[50],
+    borderColor: colors.success[100],
+  },
+  miniCalculatorPurple: {
+    backgroundColor: "#F3E8FF",
+    borderColor: "#DDD6FE",
+  },
+  miniCalcHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  miniCalcTitle: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  miniCalcInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  miniCalcLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  miniCalcInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    paddingHorizontal: spacing.sm,
+  },
+  miniCalcPrefix: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  miniCalcInput: {
+    width: 60,
+    padding: spacing.xs,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    textAlign: "right",
+  },
+  miniCalcResults: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  miniCalcRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 3,
+  },
+  miniCalcRowHighlight: {
+    backgroundColor: colors.success[50],
+    marginHorizontal: -spacing.sm,
+    paddingHorizontal: spacing.sm,
+    marginTop: spacing.xs,
+    borderRadius: radius.sm,
+  },
+  miniCalcRowLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  miniCalcRowValue: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  miniCalcValueGreen: {
+    color: colors.success[600],
+  },
+  miniCalcValueRed: {
+    color: colors.error[600],
+  },
+  miniCalcMuted: {
+    color: colors.text.tertiary,
+  },
+  miniCalcNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  miniCalcNoteText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    flex: 1,
   },
 });
 

@@ -592,6 +592,187 @@ class NotificationService {
       io,
     });
   }
+
+  // =====================================
+  // Business Employee Notifications
+  // =====================================
+
+  /**
+   * Notify an employee that they have been assigned to a job
+   */
+  static async notifyEmployeeJobAssigned({
+    employeeUserId,
+    employeeName,
+    appointmentId,
+    appointmentDate,
+    clientName,
+    address,
+    payAmount,
+    io = null,
+  }) {
+    const formattedDate = formatDate(appointmentDate);
+    const payDisplay = payAmount ? `$${(payAmount / 100).toFixed(2)}` : "";
+
+    return this.notifyUser({
+      userId: employeeUserId,
+      type: "employee_job_assigned",
+      title: "New job assigned",
+      body: `You've been assigned a cleaning on ${formattedDate}${payDisplay ? ` for ${payDisplay}` : ""}.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientName,
+        address,
+        payAmount,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify an employee that their job has been reassigned
+   */
+  static async notifyEmployeeJobReassigned({
+    employeeUserId,
+    appointmentId,
+    appointmentDate,
+    io = null,
+  }) {
+    const formattedDate = formatDate(appointmentDate);
+
+    return this.notifyUser({
+      userId: employeeUserId,
+      type: "employee_job_reassigned",
+      title: "Job reassigned",
+      body: `Your job on ${formattedDate} has been reassigned to another team member.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify an employee that their pay has been changed
+   */
+  static async notifyEmployeePayChanged({
+    employeeUserId,
+    appointmentId,
+    appointmentDate,
+    oldPay,
+    newPay,
+    io = null,
+  }) {
+    const formattedDate = formatDate(appointmentDate);
+    const oldPayDisplay = `$${(oldPay / 100).toFixed(2)}`;
+    const newPayDisplay = `$${(newPay / 100).toFixed(2)}`;
+
+    return this.notifyUser({
+      userId: employeeUserId,
+      type: "employee_pay_changed",
+      title: "Pay updated",
+      body: `Pay for your ${formattedDate} job changed from ${oldPayDisplay} to ${newPayDisplay}.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        oldPay,
+        newPay,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify business owner that an employee accepted their invite
+   */
+  static async notifyEmployeeAcceptedInvite({
+    businessOwnerId,
+    employeeName,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "employee_accepted_invite",
+      title: "New team member",
+      body: `${employeeName} has joined your team!`,
+      data: {
+        employeeName,
+      },
+      actionRequired: false,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify business owner that an employee started a job
+   */
+  static async notifyEmployeeJobStarted({
+    businessOwnerId,
+    employeeName,
+    appointmentId,
+    clientName,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "employee_started_job",
+      title: "Job started",
+      body: `${employeeName} has started the cleaning for ${clientName}.`,
+      data: {
+        employeeName,
+        appointmentId,
+        clientName,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify business owner that an employee completed a job
+   */
+  static async notifyEmployeeJobCompleted({
+    businessOwnerId,
+    employeeName,
+    appointmentId,
+    clientName,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "employee_completed_job",
+      title: "Job completed",
+      body: `${employeeName} has completed the cleaning for ${clientName}.`,
+      data: {
+        employeeName,
+        appointmentId,
+        clientName,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
 }
 
 module.exports = NotificationService;

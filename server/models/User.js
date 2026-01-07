@@ -178,6 +178,23 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "Years the business owner has been in business",
 		},
+		// Business employee fields
+		employeeOfBusinessId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "If this user is an employee, the ID of the business owner",
+		},
+		isMarketplaceCleaner: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: true,
+			comment: "False for business employees who cannot see marketplace jobs",
+		},
+		calendarSyncDisclaimerAcceptedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp when user accepted the calendar sync disclaimer",
+		},
 	});
 
 	// Helper function to encrypt PII fields
@@ -340,6 +357,24 @@ module.exports = (sequelize, DataTypes) => {
 		User.hasMany(models.Referral, {
 		  foreignKey: "referredId",
 		  as: "referralsReceived",
+		});
+
+		// Business employee relationships
+		User.belongsTo(models.User, {
+		  foreignKey: "employeeOfBusinessId",
+		  as: "employerBusinessOwner",
+		});
+		User.hasMany(models.User, {
+		  foreignKey: "employeeOfBusinessId",
+		  as: "businessEmployeeUsers",
+		});
+		User.hasMany(models.BusinessEmployee, {
+		  foreignKey: "businessOwnerId",
+		  as: "businessEmployees",
+		});
+		User.hasOne(models.BusinessEmployee, {
+		  foreignKey: "userId",
+		  as: "businessEmployeeRecord",
 		});
 	  };
 	  

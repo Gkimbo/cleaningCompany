@@ -1,5 +1,5 @@
 import { Feather } from "@expo/vector-icons";
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   Modal,
   Platform,
@@ -17,6 +17,8 @@ import ClientDashboardService from "../../services/fetchRequests/ClientDashboard
 import ReferralService from "../../services/fetchRequests/ReferralService";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
 import { useSocket } from "../../services/SocketContext";
+import { AuthContext } from "../../services/AuthContext";
+import SwitchAccountModal from "../modals/SwitchAccountModal";
 
 import AppointmentsButton from "./AppointmentsButton";
 import BillButton from "./BillButton";
@@ -50,6 +52,15 @@ import MyClientsButton from "./MyClientsButton";
 import SuspiciousReportsButton from "./SuspiciousReportsButton";
 import CalculatorButton from "./CalculatorButton";
 
+// Helper to get display name for current account type
+const getCurrentAccountDisplayName = (account) => {
+  if (account === "owner") return "Owner";
+  if (account === "employee") return "Employee";
+  if (account === "cleaner") return "Cleaner";
+  if (account === "humanResources") return "HR Staff";
+  return "Homeowner";
+};
+
 const TopBar = ({ dispatch, state }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [signInRedirect, setSignInRedirect] = useState(false);
@@ -58,6 +69,7 @@ const TopBar = ({ dispatch, state }) => {
   const [importBusinessRedirect, setImportBusinessRedirect] = useState(false);
   const [referralsEnabled, setReferralsEnabled] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [showSwitchModal, setShowSwitchModal] = useState(false);
 
   // Use global state for pending applications and cleaner requests
   const pendingApplications = state.pendingApplications || 0;
@@ -65,6 +77,7 @@ const TopBar = ({ dispatch, state }) => {
 
   const navigate = useNavigate();
   const { onNotification, onNotificationCountUpdate } = useSocket();
+  const { login } = useContext(AuthContext);
 
   // Fetch pending applications count for owners and HR
   useEffect(() => {
@@ -202,6 +215,67 @@ const TopBar = ({ dispatch, state }) => {
 
   const toggleModal = () => setModalVisible(!modalVisible);
   const closeModal = () => setModalVisible(false);
+
+  // Handle account switch
+  const handleAccountSwitch = (response) => {
+    dispatch({ type: "CURRENT_USER", payload: response.token });
+    dispatch({ type: "SET_USER_ID", payload: response.user.id });
+    if (response.user.email) {
+      dispatch({ type: "SET_USER_EMAIL", payload: response.user.email });
+    }
+    // Set account type
+    if (response.user.type === "owner") {
+      dispatch({ type: "USER_ACCOUNT", payload: "owner" });
+    } else if (response.user.type === "employee") {
+      dispatch({ type: "USER_ACCOUNT", payload: "employee" });
+    } else if (response.user.type === "cleaner") {
+      dispatch({ type: "USER_ACCOUNT", payload: "cleaner" });
+    } else if (response.user.type === "humanResources") {
+      dispatch({ type: "USER_ACCOUNT", payload: "humanResources" });
+    } else {
+      dispatch({ type: "USER_ACCOUNT", payload: null });
+    }
+    // Set business owner info
+    if (response.user.isBusinessOwner) {
+      dispatch({
+        type: "SET_BUSINESS_OWNER_INFO",
+        payload: {
+          isBusinessOwner: response.user.isBusinessOwner,
+          businessName: response.user.businessName,
+          yearsInBusiness: response.user.yearsInBusiness,
+        },
+      });
+    } else {
+      dispatch({
+        type: "SET_BUSINESS_OWNER_INFO",
+        payload: {
+          isBusinessOwner: false,
+          businessName: null,
+          yearsInBusiness: null,
+        },
+      });
+    }
+    // Update linked accounts
+    if (response.linkedAccounts && response.linkedAccounts.length > 0) {
+      dispatch({ type: "SET_LINKED_ACCOUNTS", payload: response.linkedAccounts });
+    }
+    // Update auth context token
+    login(response.token);
+    // Navigate to home
+    navigate("/");
+  };
+
+  // Get current account type for the switch modal (must match backend accountType format)
+  const getCurrentAccountType = () => {
+    if (state.account === "owner") return "owner";
+    if (state.account === "employee") return "employee";
+    if (state.account === "cleaner") {
+      // Check if marketplace cleaner - this info might be in user data
+      return state.isMarketplaceCleaner ? "marketplace_cleaner" : "cleaner";
+    }
+    if (state.account === "humanResources") return "hr";
+    return "homeowner";
+  };
 
   return (
     <View style={styles.glassContainer}>
@@ -348,6 +422,31 @@ const TopBar = ({ dispatch, state }) => {
                           </>
                         )}
 
+                        {/* Switch Account Button - only show if user has linked accounts */}
+                        {state.linkedAccounts && state.linkedAccounts.length > 0 && (
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.glassButton,
+                              styles.switchAccountButton,
+                              pressed && { opacity: 0.8 },
+                            ]}
+                            onPress={() => {
+                              closeModal();
+                              setShowSwitchModal(true);
+                            }}
+                          >
+                            <View style={styles.switchAccountContent}>
+                              <Feather name="repeat" size={18} color={colors.primary[400]} />
+                              <View style={styles.switchAccountText}>
+                                <Text style={styles.glassButtonText}>Switch Account</Text>
+                                <Text style={styles.currentAccountLabel}>
+                                  Currently: {getCurrentAccountDisplayName(state.account)}
+                                </Text>
+                              </View>
+                            </View>
+                          </Pressable>
+                        )}
+
                         <AccountSettingsButton closeModal={closeModal} />
                         <SignOutButton
                           dispatch={dispatch}
@@ -368,6 +467,16 @@ const TopBar = ({ dispatch, state }) => {
                   </View>
                 </TouchableWithoutFeedback>
               </Modal>
+
+              {/* Switch Account Modal */}
+              <SwitchAccountModal
+                visible={showSwitchModal}
+                onClose={() => setShowSwitchModal(false)}
+                linkedAccounts={state.linkedAccounts || []}
+                currentAccountType={getCurrentAccountType()}
+                userEmail={state.currentUser.email}
+                onSwitch={handleAccountSwitch}
+              />
             </View>
           </View>
         </>
@@ -591,6 +700,25 @@ const styles = StyleSheet.create({
     color: colors.neutral[100],
     fontWeight: "600",
     fontSize: 15,
+  },
+  // Switch Account button styles
+  switchAccountButton: {
+    borderColor: colors.primary[500],
+    borderWidth: 1,
+  },
+  switchAccountContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+  },
+  switchAccountText: {
+    flex: 1,
+  },
+  currentAccountLabel: {
+    color: colors.primary[400],
+    fontSize: 11,
+    marginTop: 2,
   },
   unauthContainer: {
     flex: 1,

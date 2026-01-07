@@ -11,7 +11,7 @@
  * - Tax form data generation (Schedule C, Form 1120, etc.)
  * - IRS compliance helpers
  *
- * The company earns 10% of each cleaning as a platform fee.
+ * The company earns a configurable percentage of each cleaning as a platform fee.
  * This income must be reported and taxes paid accordingly.
  * ============================================================================
  */
@@ -73,10 +73,19 @@ class PlatformTaxService {
     cleanerId,
     grossServiceAmount,
     platformFeeAmount,
+    platformFeePercentage = null,
     stripeFeeAmount = 0,
   }) {
     const now = new Date();
     const netPlatformEarnings = platformFeeAmount - stripeFeeAmount;
+
+    // Get fee percentage from config if not provided
+    let feePercentage = platformFeePercentage;
+    if (feePercentage === null) {
+      const { getPricingConfig } = require("../config/businessConfig");
+      const pricing = await getPricingConfig();
+      feePercentage = pricing.platform?.feePercent || 0.10;
+    }
 
     const earning = await PlatformEarnings.create({
       transactionId: PlatformEarnings.generateTransactionId(),
@@ -87,7 +96,7 @@ class PlatformTaxService {
       cleanerId,
       grossServiceAmount,
       platformFeeAmount,
-      platformFeePercentage: 0.10,
+      platformFeePercentage: feePercentage,
       stripeFeeAmount,
       netPlatformEarnings,
       taxYear: now.getFullYear(),

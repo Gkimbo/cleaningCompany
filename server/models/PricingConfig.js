@@ -192,6 +192,26 @@ module.exports = (sequelize, DataTypes) => {
       comment: "Days before appointment for homeowner final warning",
     },
 
+    // Large business fee settings
+    largeBusinessFeePercent: {
+      type: DataTypes.DECIMAL(3, 2),
+      allowNull: false,
+      defaultValue: 0.07,
+      comment: "Platform fee for large volume business owners (0.07 = 7%)",
+    },
+    largeBusinessMonthlyThreshold: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 50,
+      comment: "Minimum completed cleanings per month to qualify for large business fee",
+    },
+    largeBusinessLookbackMonths: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+      comment: "Number of months to look back for volume calculation",
+    },
+
     // Audit fields
     isActive: {
       type: DataTypes.BOOLEAN,
@@ -279,6 +299,9 @@ module.exports = (sequelize, DataTypes) => {
       platform: {
         feePercent: parseFloat(config.platformFeePercent),
         businessOwnerFeePercent: parseFloat(config.businessOwnerFeePercent || config.platformFeePercent),
+        largeBusinessFeePercent: parseFloat(config.largeBusinessFeePercent || 0.07),
+        largeBusinessMonthlyThreshold: config.largeBusinessMonthlyThreshold || 50,
+        largeBusinessLookbackMonths: config.largeBusinessLookbackMonths || 1,
       },
       highVolumeFee: config.highVolumeFee,
       multiCleaner: {

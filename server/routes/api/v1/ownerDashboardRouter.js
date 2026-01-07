@@ -1543,4 +1543,227 @@ ownerDashboardRouter.handlePayoutWebhook = async (event) => {
   }
 };
 
+// =====================
+// PRIORITY PERKS CONFIG ENDPOINTS
+// =====================
+
+const { PreferredPerksConfig } = require("../../../models");
+const PreferredPerksConfigSerializer = require("../../../serializers/PreferredPerksConfigSerializer");
+
+/**
+ * GET /priority-perks/config
+ * Get current Priority Perks configuration
+ */
+ownerDashboardRouter.get("/priority-perks/config", verifyOwner, async (req, res) => {
+  try {
+    let config = await PreferredPerksConfig.findOne();
+
+    // Create default config if none exists
+    if (!config) {
+      config = await PreferredPerksConfig.create({});
+    }
+
+    // Use serializer for consistent formatting
+    res.json({
+      config: PreferredPerksConfigSerializer.serializeForForm(config),
+      updatedAt: config.updatedAt,
+    });
+  } catch (err) {
+    console.error("Error fetching priority perks config:", err);
+    res.status(500).json({ error: "Failed to fetch configuration" });
+  }
+});
+
+/**
+ * PUT /priority-perks/config
+ * Update Priority Perks configuration
+ */
+ownerDashboardRouter.put("/priority-perks/config", verifyOwner, async (req, res) => {
+  try {
+    const { bronze, silver, gold, platinum, backupCleanerTimeoutHours, platformMaxDailyJobs, platformMaxConcurrentJobs } = req.body;
+
+    let config = await PreferredPerksConfig.findOne();
+    if (!config) {
+      config = await PreferredPerksConfig.create({});
+    }
+
+    const updates = {};
+
+    // Bronze tier
+    if (bronze) {
+      if (bronze.minHomes !== undefined) updates.bronzeMinHomes = bronze.minHomes;
+      if (bronze.maxHomes !== undefined) updates.bronzeMaxHomes = bronze.maxHomes;
+      if (bronze.bonusPercent !== undefined) updates.bronzeBonusPercent = bronze.bonusPercent;
+    }
+
+    // Silver tier
+    if (silver) {
+      if (silver.minHomes !== undefined) updates.silverMinHomes = silver.minHomes;
+      if (silver.maxHomes !== undefined) updates.silverMaxHomes = silver.maxHomes;
+      if (silver.bonusPercent !== undefined) updates.silverBonusPercent = silver.bonusPercent;
+    }
+
+    // Gold tier
+    if (gold) {
+      if (gold.minHomes !== undefined) updates.goldMinHomes = gold.minHomes;
+      if (gold.maxHomes !== undefined) updates.goldMaxHomes = gold.maxHomes;
+      if (gold.bonusPercent !== undefined) updates.goldBonusPercent = gold.bonusPercent;
+      if (gold.fasterPayouts !== undefined) updates.goldFasterPayouts = gold.fasterPayouts;
+      if (gold.payoutHours !== undefined) updates.goldPayoutHours = gold.payoutHours;
+    }
+
+    // Platinum tier
+    if (platinum) {
+      if (platinum.minHomes !== undefined) updates.platinumMinHomes = platinum.minHomes;
+      if (platinum.bonusPercent !== undefined) updates.platinumBonusPercent = platinum.bonusPercent;
+      if (platinum.fasterPayouts !== undefined) updates.platinumFasterPayouts = platinum.fasterPayouts;
+      if (platinum.payoutHours !== undefined) updates.platinumPayoutHours = platinum.payoutHours;
+      if (platinum.earlyAccess !== undefined) updates.platinumEarlyAccess = platinum.earlyAccess;
+    }
+
+    // Other settings
+    if (backupCleanerTimeoutHours !== undefined) updates.backupCleanerTimeoutHours = backupCleanerTimeoutHours;
+    if (platformMaxDailyJobs !== undefined) updates.platformMaxDailyJobs = platformMaxDailyJobs;
+    if (platformMaxConcurrentJobs !== undefined) updates.platformMaxConcurrentJobs = platformMaxConcurrentJobs;
+
+    updates.updatedBy = req.user.id;
+
+    // Capture previous values for history
+    const previousValues = config.toJSON();
+    delete previousValues.id;
+    delete previousValues.createdAt;
+    delete previousValues.updatedAt;
+
+    await config.update(updates);
+
+    // Record history
+    try {
+      const { PreferredPerksConfigHistory } = require("../../../models");
+      if (PreferredPerksConfigHistory) {
+        // Calculate what actually changed
+        const changes = {};
+        for (const [key, newValue] of Object.entries(updates)) {
+          if (key === "updatedBy") continue;
+          const oldValue = previousValues[key];
+          if (oldValue !== newValue) {
+            changes[key] = { old: oldValue, new: newValue };
+          }
+        }
+
+        if (Object.keys(changes).length > 0) {
+          const newValues = config.toJSON();
+          delete newValues.id;
+          delete newValues.createdAt;
+          delete newValues.updatedAt;
+
+          await PreferredPerksConfigHistory.create({
+            configId: config.id,
+            changedBy: req.user.id,
+            changeType: "update",
+            changes,
+            previousValues,
+            newValues,
+          });
+        }
+      }
+    } catch (histErr) {
+      console.error("Error recording config history:", histErr);
+      // Don't fail the request, just log the error
+    }
+
+    console.log(`[OwnerDashboard] Priority Perks config updated by user ${req.user.id}`);
+
+    res.json({
+      success: true,
+      message: "Configuration updated successfully",
+    });
+  } catch (err) {
+    console.error("Error updating priority perks config:", err);
+    res.status(500).json({ error: "Failed to update configuration" });
+  }
+});
+
+/**
+ * GET /priority-perks/history
+ * Get Priority Perks configuration change history
+ */
+ownerDashboardRouter.get("/priority-perks/history", verifyOwner, async (req, res) => {
+  try {
+    const { PreferredPerksConfigHistory, User } = require("../../../models");
+
+    if (!PreferredPerksConfigHistory) {
+      return res.json({ history: [], message: "History tracking not available" });
+    }
+
+    const { limit = 50, offset = 0 } = req.query;
+
+    const history = await PreferredPerksConfigHistory.findAll({
+      include: [{
+        model: User,
+        as: "changer",
+        attributes: ["id", "firstName", "lastName", "username"],
+      }],
+      order: [["createdAt", "DESC"]],
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+    });
+
+    const EncryptionService = require("../../../services/EncryptionService");
+
+    const formattedHistory = history.map((entry) => ({
+      id: entry.id,
+      changedAt: entry.createdAt,
+      changeType: entry.changeType,
+      changedBy: entry.changer
+        ? {
+            id: entry.changer.id,
+            name: `${EncryptionService.decrypt(entry.changer.firstName) || ""} ${EncryptionService.decrypt(entry.changer.lastName) || ""}`.trim() || entry.changer.username,
+          }
+        : null,
+      changes: entry.changes,
+      summary: formatChangeSummary(entry.changes),
+    }));
+
+    res.json({ history: formattedHistory });
+  } catch (err) {
+    console.error("Error fetching priority perks history:", err);
+    res.status(500).json({ error: "Failed to fetch configuration history" });
+  }
+});
+
+/**
+ * Format a change summary for display
+ */
+function formatChangeSummary(changes) {
+  const summaries = [];
+  const fieldLabels = {
+    bronzeMinHomes: "Bronze Min Homes",
+    bronzeMaxHomes: "Bronze Max Homes",
+    bronzeBonusPercent: "Bronze Bonus %",
+    silverMinHomes: "Silver Min Homes",
+    silverMaxHomes: "Silver Max Homes",
+    silverBonusPercent: "Silver Bonus %",
+    goldMinHomes: "Gold Min Homes",
+    goldMaxHomes: "Gold Max Homes",
+    goldBonusPercent: "Gold Bonus %",
+    goldFasterPayouts: "Gold Faster Payouts",
+    goldPayoutHours: "Gold Payout Hours",
+    platinumMinHomes: "Platinum Min Homes",
+    platinumBonusPercent: "Platinum Bonus %",
+    platinumFasterPayouts: "Platinum Faster Payouts",
+    platinumPayoutHours: "Platinum Payout Hours",
+    platinumEarlyAccess: "Platinum Early Access",
+    backupCleanerTimeoutHours: "Backup Timeout Hours",
+    platformMaxDailyJobs: "Max Daily Jobs",
+    platformMaxConcurrentJobs: "Max Concurrent Jobs",
+  };
+
+  for (const [field, change] of Object.entries(changes)) {
+    const label = fieldLabels[field] || field;
+    summaries.push(`${label}: ${change.old} → ${change.new}`);
+  }
+
+  return summaries;
+}
+
 module.exports = ownerDashboardRouter;

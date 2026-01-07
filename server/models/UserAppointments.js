@@ -1,5 +1,10 @@
+const EncryptionService = require("../services/EncryptionService");
+
+// PII fields that need to be encrypted
+const PII_FIELDS = ["keyPadCode", "keyLocation", "contact"];
+
 module.exports = (sequelize, DataTypes) => {
-	// Define the UserHomes model
+	// Define the UserAppointments model
 	const UserAppointments = sequelize.define("UserAppointments", {
 		id: {
 			type: DataTypes.INTEGER,
@@ -162,6 +167,23 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 		},
+		// Backup cleaner notification fields
+		backupCleanersNotified: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "Whether backup preferred cleaners have been notified",
+		},
+		backupNotificationSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When backup cleaners were notified",
+		},
+		backupNotificationExpiresAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When backup notification window expires",
+		},
 		businessOwnerPrice: {
 			type: DataTypes.DECIMAL(10, 2),
 			allowNull: true,
@@ -224,6 +246,16 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: false,
 		},
+		// Business employee assignment tracking
+		assignedToBusinessEmployee: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		businessEmployeeAssignmentId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+		},
 	});
 
 	// Define the one-to-many relationship with User
@@ -272,7 +304,54 @@ module.exports = (sequelize, DataTypes) => {
 			foreignKey: "appointmentId",
 			as: "cleanerCompletions",
 		});
+		UserAppointments.belongsTo(models.EmployeeJobAssignment, {
+			foreignKey: "businessEmployeeAssignmentId",
+			as: "businessEmployeeAssignment",
+		});
+		UserAppointments.hasMany(models.EmployeeJobAssignment, {
+			foreignKey: "appointmentId",
+			as: "employeeJobAssignments",
+		});
 	};
+
+	// Encryption hooks
+	const encryptPIIFields = (record) => {
+		PII_FIELDS.forEach((field) => {
+			if (record[field] !== undefined && record[field] !== null) {
+				const value = String(record[field]);
+				// Only encrypt if not already encrypted (check for colon format)
+				if (!value.includes(":") || value.split(":").length !== 2) {
+					record[field] = EncryptionService.encrypt(value);
+				}
+			}
+		});
+	};
+
+	const decryptPIIFields = (record) => {
+		if (!record) return;
+		PII_FIELDS.forEach((field) => {
+			if (record.dataValues && record.dataValues[field]) {
+				record.dataValues[field] = EncryptionService.decrypt(record.dataValues[field]);
+			}
+		});
+	};
+
+	UserAppointments.beforeCreate((record) => {
+		encryptPIIFields(record);
+	});
+
+	UserAppointments.beforeUpdate((record) => {
+		encryptPIIFields(record);
+	});
+
+	UserAppointments.afterFind((result) => {
+		if (!result) return;
+		if (Array.isArray(result)) {
+			result.forEach((record) => decryptPIIFields(record));
+		} else {
+			decryptPIIFields(result);
+		}
+	});
 
 	return UserAppointments;
 };

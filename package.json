@@ -1,14 +1,15 @@
 {
-	"name": "cleaningcompany",
-	"version": "1.0.0",
-	"main": "node_modules/expo/AppEntry.js",
-	"scripts": {
-		"start": "concurrently \"cd client && npm start\" \"cd server && npm start\""
-	},
-	"dependencies": {
-		"concurrently": "^8.2.2",
-		"expo": "^49.0.16",
-		"mysql2": "^3.9.2",
-		"sequelize": "^6.37.1"
-	}
+  "name": "cleaningcompany",
+  "version": "1.0.0",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "concurrently \"cd client && npm start\" \"cd server && npm start\""
+  },
+  "dependencies": {
+    "@react-native-community/datetimepicker": "^7.6.1",
+    "concurrently": "^8.2.2",
+    "expo": "^49.0.16",
+    "mysql2": "^3.9.2",
+    "sequelize": "^6.37.1"
+  }
 }
