@@ -1,6 +1,7 @@
 import { Database } from "@nozbe/watermelondb";
 import SQLiteAdapter from "@nozbe/watermelondb/adapters/sqlite";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 import { offlineSchema } from "./schema";
 import migrations from "./migrations";
 import OfflineJob from "./models/OfflineJob";
@@ -18,9 +19,15 @@ import OfflineMessage from "./models/OfflineMessage";
 // Check if running in Expo Go (native modules not available)
 const isExpoGo = Constants.appOwnership === "expo";
 
+// Check if running in SSR/Node.js context (expo-router server rendering)
+const isSSR = typeof window === "undefined" && Platform.OS === "web";
+
 let database = null;
 
-if (isExpoGo) {
+if (isSSR) {
+  // Skip database initialization during server-side rendering
+  console.log("WatermelonDB skipped during SSR");
+} else if (isExpoGo) {
   console.warn(
     "WatermelonDB offline database is not available in Expo Go. " +
     "Use a development build for offline functionality: npx expo run:ios"
