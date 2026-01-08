@@ -9,6 +9,7 @@ export { default as SyncEngine } from "./SyncEngine";
 export { default as ConflictResolver } from "./ConflictResolver";
 export { default as BackgroundSync } from "./BackgroundSync";
 export { default as StorageManager } from "./StorageManager";
+export { default as AutoSyncOrchestrator } from "./AutoSyncOrchestrator";
 
 // Database
 export { default as database } from "./database";

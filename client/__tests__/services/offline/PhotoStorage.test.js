@@ -4,9 +4,6 @@
  * Tests for the photo storage service that manages local photo files.
  */
 
-import * as FileSystem from "expo-file-system";
-import * as Crypto from "expo-crypto";
-
 // Mock dependencies
 jest.mock("expo-file-system", () => ({
   documentDirectory: "/mock/documents/",
@@ -38,12 +35,17 @@ jest.mock("../../../src/services/offline/database", () => ({
 let PhotoStorage;
 let database;
 let offlinePhotosCollection;
+let FileSystem;
+let Crypto;
 
 describe("PhotoStorage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.resetModules();
 
+    // Re-require all mocked modules after resetModules
+    FileSystem = require("expo-file-system");
+    Crypto = require("expo-crypto");
     database = require("../../../src/services/offline/database").default;
     offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
     PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
@@ -54,7 +56,7 @@ describe("PhotoStorage", () => {
     FileSystem.copyAsync.mockResolvedValue(undefined);
     FileSystem.deleteAsync.mockResolvedValue(undefined);
     FileSystem.readDirectoryAsync.mockResolvedValue([]);
-    Crypto.randomUUID.mockResolvedValue("test-uuid-1234");
+    Crypto.randomUUID.mockReturnValue("test-uuid-1234");
   });
 
   describe("initialize", () => {
@@ -91,7 +93,16 @@ describe("PhotoStorage", () => {
     beforeEach(async () => {
       // Reset initialization state
       jest.resetModules();
+      FileSystem = require("expo-file-system");
+      Crypto = require("expo-crypto");
+      offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
       PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
+
+      // Re-apply default mocks
+      FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
+      FileSystem.makeDirectoryAsync.mockResolvedValue(undefined);
+      FileSystem.copyAsync.mockResolvedValue(undefined);
+      Crypto.randomUUID.mockReturnValue("test-uuid-1234");
     });
 
     it("should copy photo to local storage", async () => {
@@ -307,7 +318,12 @@ describe("PhotoStorage", () => {
   describe("getStorageStats", () => {
     beforeEach(async () => {
       jest.resetModules();
+      FileSystem = require("expo-file-system");
       PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
+
+      // Re-apply default mocks
+      FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
+      FileSystem.readDirectoryAsync.mockResolvedValue([]);
     });
 
     it("should return storage statistics", async () => {
@@ -336,7 +352,10 @@ describe("PhotoStorage", () => {
     });
 
     it("should handle errors gracefully", async () => {
-      FileSystem.getInfoAsync.mockRejectedValue(new Error("Access denied"));
+      // First call succeeds (for initialize), then subsequent calls fail
+      FileSystem.getInfoAsync
+        .mockResolvedValueOnce({ exists: true }) // initialize succeeds
+        .mockRejectedValue(new Error("Access denied")); // stats call fails
 
       const stats = await PhotoStorage.getStorageStats();
 
@@ -348,7 +367,15 @@ describe("PhotoStorage", () => {
   describe("clearAllPhotos", () => {
     beforeEach(async () => {
       jest.resetModules();
+      FileSystem = require("expo-file-system");
+      database = require("../../../src/services/offline/database").default;
+      offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
       PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
+
+      // Re-apply default mocks
+      FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
+      FileSystem.deleteAsync.mockResolvedValue(undefined);
+      FileSystem.makeDirectoryAsync.mockResolvedValue(undefined);
     });
 
     it("should delete all photos and recreate directory", async () => {
@@ -401,7 +428,13 @@ describe("PhotoStorage", () => {
   describe("syncWithFileSystem", () => {
     beforeEach(async () => {
       jest.resetModules();
+      FileSystem = require("expo-file-system");
+      database = require("../../../src/services/offline/database").default;
+      offlinePhotosCollection = require("../../../src/services/offline/database").offlinePhotosCollection;
       PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
+
+      // Re-apply default mocks
+      FileSystem.getInfoAsync.mockResolvedValue({ exists: true });
     });
 
     it("should delete orphaned photo records", async () => {
@@ -450,6 +483,7 @@ describe("PhotoStorage", () => {
   describe("_formatBytes", () => {
     beforeEach(() => {
       jest.resetModules();
+      FileSystem = require("expo-file-system");
       PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
     });
 

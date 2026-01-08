@@ -11,6 +11,7 @@ jest.mock("../../../src/services/offline/database", () => ({
   __esModule: true,
   default: {
     write: jest.fn((fn) => fn()),
+    unsafeResetDatabase: jest.fn(),
   },
   offlineJobsCollection: {
     query: jest.fn(() => ({
@@ -27,6 +28,7 @@ jest.mock("../../../src/services/offline/database", () => ({
   syncQueueCollection: {
     create: jest.fn(),
   },
+  isOfflineAvailable: true,
 }));
 
 jest.mock("../../../src/services/offline/NetworkMonitor", () => ({
@@ -55,8 +57,10 @@ jest.mock("../../../src/services/fetchRequests/BusinessEmployeeService", () => (
 let OfflineManager;
 let database;
 let offlineJobsCollection;
+let offlineChecklistItemsCollection;
 let syncQueueCollection;
 let BusinessEmployeeService;
+let PhotoStorage;
 
 describe("OfflineManager", () => {
   beforeEach(() => {
@@ -66,9 +70,20 @@ describe("OfflineManager", () => {
     // Re-require modules to get fresh mocks
     database = require("../../../src/services/offline/database").default;
     offlineJobsCollection = require("../../../src/services/offline/database").offlineJobsCollection;
+    offlineChecklistItemsCollection = require("../../../src/services/offline/database").offlineChecklistItemsCollection;
     syncQueueCollection = require("../../../src/services/offline/database").syncQueueCollection;
     BusinessEmployeeService = require("../../../src/services/fetchRequests/BusinessEmployeeService").default;
+    PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
     OfflineManager = require("../../../src/services/offline/OfflineManager").default;
+
+    // Re-apply default mock implementations
+    offlineJobsCollection.query.mockReturnValue({
+      fetch: jest.fn().mockResolvedValue([]),
+    });
+    offlineChecklistItemsCollection.query.mockReturnValue({
+      fetch: jest.fn().mockResolvedValue([]),
+    });
+    BusinessEmployeeService.getMyJobs.mockResolvedValue({ jobs: [] });
   });
 
   describe("initialization", () => {
@@ -111,7 +126,18 @@ describe("OfflineManager", () => {
     beforeEach(async () => {
       // Reset initialization state
       jest.resetModules();
+      database = require("../../../src/services/offline/database").default;
+      offlineJobsCollection = require("../../../src/services/offline/database").offlineJobsCollection;
+      syncQueueCollection = require("../../../src/services/offline/database").syncQueueCollection;
+      BusinessEmployeeService = require("../../../src/services/fetchRequests/BusinessEmployeeService").default;
+      PhotoStorage = require("../../../src/services/offline/PhotoStorage").default;
       OfflineManager = require("../../../src/services/offline/OfflineManager").default;
+
+      // Re-apply default mock implementations
+      offlineJobsCollection.query.mockReturnValue({
+        fetch: jest.fn().mockResolvedValue([]),
+      });
+      BusinessEmployeeService.getMyJobs.mockResolvedValue({ jobs: [] });
     });
 
     it("should not preload without auth token", async () => {
@@ -385,7 +411,6 @@ describe("OfflineManager", () => {
         fetch: jest.fn().mockResolvedValue([mockJob]),
       });
 
-      const offlineChecklistItemsCollection = require("../../../src/services/offline/database").offlineChecklistItemsCollection;
       offlineChecklistItemsCollection.query.mockReturnValue({
         fetch: jest.fn().mockResolvedValue([]),
       });

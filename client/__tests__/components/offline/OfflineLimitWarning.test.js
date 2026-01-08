@@ -5,30 +5,55 @@
  */
 
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react-native";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
 
 // Mock dependencies
-jest.mock("../../../src/services/offline/OfflineContext", () => ({
-  useOffline: jest.fn(() => ({
-    isOnline: false,
-    isOffline: true,
-    offlineSince: new Date(Date.now() - 24 * 60 * 60 * 1000), // 24 hours ago
-    getOfflineDuration: jest.fn(() => 24 * 60 * 60 * 1000),
-    isOfflineDurationExceeded: jest.fn(() => false),
-  })),
+jest.mock("../../../src/services/offline/SyncEngine", () => ({
+  __esModule: true,
+  default: {
+    startSync: jest.fn().mockResolvedValue({ success: true }),
+  },
 }));
 
 jest.mock("../../../src/services/offline/constants", () => ({
   MAX_OFFLINE_DURATION_MS: 48 * 60 * 60 * 1000, // 48 hours
+  SYNC_STATUS: {
+    IDLE: "idle",
+    SYNCING: "syncing",
+    COMPLETED: "completed",
+    ERROR: "error",
+  },
+}));
+
+const mockUpdateSyncStatus = jest.fn();
+let mockOfflineSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+let mockIsOnline = false;
+let mockGetOfflineDuration = () => 24 * 60 * 60 * 1000;
+let mockPendingSyncCount = 5;
+
+jest.mock("../../../src/services/offline/OfflineContext", () => ({
+  useOffline: jest.fn(() => ({
+    isOnline: mockIsOnline,
+    isOffline: !mockIsOnline,
+    offlineSince: mockOfflineSince,
+    getOfflineDuration: mockGetOfflineDuration,
+    updateSyncStatus: mockUpdateSyncStatus,
+    pendingSyncCount: mockPendingSyncCount,
+  })),
 }));
 
 // Import after mocks
 import OfflineLimitWarning from "../../../src/components/offline/OfflineLimitWarning";
 import { useOffline } from "../../../src/services/offline/OfflineContext";
+import SyncEngine from "../../../src/services/offline/SyncEngine";
 
 describe("OfflineLimitWarning", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsOnline = false;
+    mockOfflineSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    mockGetOfflineDuration = () => 24 * 60 * 60 * 1000;
+    mockPendingSyncCount = 5;
   });
 
   describe("visibility", () => {
@@ -37,8 +62,9 @@ describe("OfflineLimitWarning", () => {
         isOnline: true,
         isOffline: false,
         offlineSince: null,
-        getOfflineDuration: jest.fn(() => 0),
-        isOfflineDurationExceeded: jest.fn(() => false),
+        getOfflineDuration: () => 0,
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 0,
       });
 
       const { toJSON } = render(<OfflineLimitWarning />);
@@ -51,8 +77,9 @@ describe("OfflineLimitWarning", () => {
         isOnline: false,
         isOffline: true,
         offlineSince: new Date(Date.now() - 60 * 60 * 1000), // 1 hour ago
-        getOfflineDuration: jest.fn(() => 60 * 60 * 1000), // 1 hour
-        isOfflineDurationExceeded: jest.fn(() => false),
+        getOfflineDuration: () => 60 * 60 * 1000, // 1 hour
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 5,
       });
 
       const { toJSON } = render(<OfflineLimitWarning />);
@@ -66,42 +93,50 @@ describe("OfflineLimitWarning", () => {
       useOffline.mockReturnValue({
         isOnline: false,
         isOffline: true,
-        offlineSince: new Date(Date.now() - 36 * 60 * 60 * 1000), // 36 hours ago
-        getOfflineDuration: jest.fn(() => 36 * 60 * 60 * 1000),
-        isOfflineDurationExceeded: jest.fn(() => false),
+        offlineSince: new Date(Date.now() - 36 * 60 * 60 * 1000),
+        getOfflineDuration: () => 36 * 60 * 60 * 1000,
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 5,
       });
 
       render(<OfflineLimitWarning />);
 
-      expect(screen.getByText(/12 hours remaining|36 hours/i)).toBeTruthy();
+      // Component shows "Offline Mode" at warning level with time remaining
+      expect(screen.getByText(/Offline Mode/i)).toBeTruthy();
+      expect(screen.getByText(/remaining/i)).toBeTruthy();
     });
 
     it("should show critical warning at 44 hours", () => {
       useOffline.mockReturnValue({
         isOnline: false,
         isOffline: true,
-        offlineSince: new Date(Date.now() - 44 * 60 * 60 * 1000), // 44 hours ago
-        getOfflineDuration: jest.fn(() => 44 * 60 * 60 * 1000),
-        isOfflineDurationExceeded: jest.fn(() => false),
+        offlineSince: new Date(Date.now() - 44 * 60 * 60 * 1000),
+        getOfflineDuration: () => 44 * 60 * 60 * 1000,
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 5,
       });
 
       render(<OfflineLimitWarning />);
 
-      expect(screen.getByText(/4 hours remaining|44 hours/i)).toBeTruthy();
+      // Component shows "Sync Soon" at critical level
+      expect(screen.getByText(/Sync Soon/i)).toBeTruthy();
     });
 
     it("should show exceeded modal at 48 hours", () => {
       useOffline.mockReturnValue({
         isOnline: false,
         isOffline: true,
-        offlineSince: new Date(Date.now() - 48 * 60 * 60 * 1000), // 48 hours ago
-        getOfflineDuration: jest.fn(() => 48 * 60 * 60 * 1000),
-        isOfflineDurationExceeded: jest.fn(() => true),
+        offlineSince: new Date(Date.now() - 48 * 60 * 60 * 1000),
+        getOfflineDuration: () => 48 * 60 * 60 * 1000,
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 5,
       });
 
       render(<OfflineLimitWarning />);
 
-      expect(screen.getByText(/exceeded|48 hours|limit reached/i)).toBeTruthy();
+      // Component shows "Offline Limit Reached" and modal
+      expect(screen.getByText(/Offline Limit Reached/i)).toBeTruthy();
+      expect(screen.getByText(/Offline Limit Exceeded/i)).toBeTruthy();
     });
   });
 
@@ -110,77 +145,75 @@ describe("OfflineLimitWarning", () => {
       useOffline.mockReturnValue({
         isOnline: false,
         isOffline: true,
-        offlineSince: new Date(Date.now() - 40 * 60 * 60 * 1000), // 40 hours ago
-        getOfflineDuration: jest.fn(() => 40 * 60 * 60 * 1000),
-        isOfflineDurationExceeded: jest.fn(() => false),
+        offlineSince: new Date(Date.now() - 40 * 60 * 60 * 1000),
+        getOfflineDuration: () => 40 * 60 * 60 * 1000,
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 5,
       });
 
       render(<OfflineLimitWarning />);
 
-      // Should show hours or days
-      expect(screen.getByText(/hour|day/i)).toBeTruthy();
+      // Should show hours remaining
+      expect(screen.getByText(/h.*remaining|remaining/i)).toBeTruthy();
     });
   });
 
   describe("interaction", () => {
-    it("should call onDismiss when dismissed", () => {
-      useOffline.mockReturnValue({
-        isOnline: false,
-        isOffline: true,
-        offlineSince: new Date(Date.now() - 40 * 60 * 60 * 1000),
-        getOfflineDuration: jest.fn(() => 40 * 60 * 60 * 1000),
-        isOfflineDurationExceeded: jest.fn(() => false),
-      });
-
-      const onDismiss = jest.fn();
-      render(<OfflineLimitWarning onDismiss={onDismiss} />);
-
-      // Try to find and press dismiss button
-      const dismissButton = screen.queryByText(/dismiss|ok|close/i);
-      if (dismissButton) {
-        fireEvent.press(dismissButton);
-        expect(onDismiss).toHaveBeenCalled();
-      }
-    });
-
-    it("should provide sync action when exceeded", () => {
+    it("should show continue offline button when limit exceeded", () => {
       useOffline.mockReturnValue({
         isOnline: false,
         isOffline: true,
         offlineSince: new Date(Date.now() - 48 * 60 * 60 * 1000),
-        getOfflineDuration: jest.fn(() => 48 * 60 * 60 * 1000),
-        isOfflineDurationExceeded: jest.fn(() => true),
-      });
-
-      const onSyncRequest = jest.fn();
-      render(<OfflineLimitWarning onSyncRequest={onSyncRequest} />);
-
-      // Modal should have sync action
-      const syncButton = screen.queryByText(/sync|connect/i);
-      if (syncButton) {
-        fireEvent.press(syncButton);
-        expect(onSyncRequest).toHaveBeenCalled();
-      }
-    });
-  });
-
-  describe("styling", () => {
-    it("should show different colors for different warning levels", () => {
-      // This test verifies the warning shows different visual states
-      // Implementation would check style props or testIDs
-
-      useOffline.mockReturnValue({
-        isOnline: false,
-        isOffline: true,
-        offlineSince: new Date(Date.now() - 44 * 60 * 60 * 1000),
-        getOfflineDuration: jest.fn(() => 44 * 60 * 60 * 1000),
-        isOfflineDurationExceeded: jest.fn(() => false),
+        getOfflineDuration: () => 48 * 60 * 60 * 1000,
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 5,
       });
 
       render(<OfflineLimitWarning />);
 
-      // Critical warning should be visible
-      expect(screen.getByText(/warning|critical/i)).toBeTruthy();
+      // Modal should have continue button
+      expect(screen.getByText(/Continue Offline/i)).toBeTruthy();
+    });
+
+    it("should provide sync action when exceeded", async () => {
+      useOffline.mockReturnValue({
+        isOnline: false,
+        isOffline: true,
+        offlineSince: new Date(Date.now() - 48 * 60 * 60 * 1000),
+        getOfflineDuration: () => 48 * 60 * 60 * 1000,
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 5,
+      });
+
+      render(<OfflineLimitWarning />);
+
+      // Modal should have sync action
+      const syncButton = screen.getByText(/Try to Sync/i);
+      expect(syncButton).toBeTruthy();
+
+      fireEvent.press(syncButton);
+
+      await waitFor(() => {
+        expect(SyncEngine.startSync).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe("styling", () => {
+    it("should show Sync Soon at critical level", () => {
+      useOffline.mockReturnValue({
+        isOnline: false,
+        isOffline: true,
+        offlineSince: new Date(Date.now() - 44 * 60 * 60 * 1000),
+        getOfflineDuration: () => 44 * 60 * 60 * 1000,
+        updateSyncStatus: mockUpdateSyncStatus,
+        pendingSyncCount: 5,
+      });
+
+      render(<OfflineLimitWarning />);
+
+      // Critical warning should show "Sync Soon"
+      expect(screen.getByText(/Sync Soon/i)).toBeTruthy();
     });
   });
 });

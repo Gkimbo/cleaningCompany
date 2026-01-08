@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import NetworkMonitor from "./NetworkMonitor";
+import AutoSyncOrchestrator from "./AutoSyncOrchestrator";
 import database, { getPendingSyncCount } from "./database";
 import { NETWORK_STATUS, SYNC_STATUS, MAX_OFFLINE_DURATION_MS } from "./constants";
 
@@ -13,8 +14,10 @@ export function OfflineProvider({ children }) {
   const [offlineSince, setOfflineSince] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState(null);
+  const [autoSyncEvent, setAutoSyncEvent] = useState(null);
 
   const offlineTimerRef = useRef(null);
+  const autoSyncEventTimerRef = useRef(null);
 
   // Initialize the offline system
   useEffect(() => {
@@ -58,15 +61,57 @@ export function OfflineProvider({ children }) {
       // Track when we went offline
       if (!state.isOnline && state.wasOnline) {
         setOfflineSince(new Date());
+        // Cancel any pending retries when going offline
+        AutoSyncOrchestrator.cancelPendingRetry();
       } else if (state.isOnline && !state.wasOnline) {
         setOfflineSince(null);
-        // Trigger sync when coming back online
-        refreshPendingCount();
+        // Trigger automatic sync when coming back online
+        AutoSyncOrchestrator.onConnectivityRestored();
       }
     });
 
     return unsubscribe;
   }, []);
+
+  // Subscribe to AutoSyncOrchestrator events
+  useEffect(() => {
+    const unsubscribe = AutoSyncOrchestrator.subscribe((event) => {
+      setAutoSyncEvent(event);
+
+      // Update sync status based on event
+      switch (event.type) {
+        case "sync_started":
+          setSyncStatus(SYNC_STATUS.SYNCING);
+          break;
+        case "sync_completed":
+          setSyncStatus(SYNC_STATUS.COMPLETED);
+          refreshPendingCount();
+          // Auto-clear completed status after 3 seconds
+          if (autoSyncEventTimerRef.current) {
+            clearTimeout(autoSyncEventTimerRef.current);
+          }
+          autoSyncEventTimerRef.current = setTimeout(() => {
+            setSyncStatus(SYNC_STATUS.IDLE);
+            setAutoSyncEvent(null);
+          }, 3000);
+          break;
+        case "sync_error":
+        case "sync_gave_up":
+          setSyncStatus(SYNC_STATUS.ERROR);
+          refreshPendingCount();
+          break;
+        default:
+          break;
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (autoSyncEventTimerRef.current) {
+        clearTimeout(autoSyncEventTimerRef.current);
+      }
+    };
+  }, [refreshPendingCount]);
 
   // Track offline duration
   useEffect(() => {
@@ -116,6 +161,11 @@ export function OfflineProvider({ children }) {
     return getOfflineDuration() >= MAX_OFFLINE_DURATION_MS;
   }, [getOfflineDuration]);
 
+  // Trigger manual sync (bypasses cooldown)
+  const triggerManualSync = useCallback(async () => {
+    return AutoSyncOrchestrator.triggerManualSync();
+  }, []);
+
   const value = {
     // State
     networkStatus,
@@ -126,12 +176,14 @@ export function OfflineProvider({ children }) {
     offlineSince,
     isInitialized,
     error,
+    autoSyncEvent,
 
     // Actions
     refreshPendingCount,
     updateSyncStatus,
     getOfflineDuration,
     isOfflineDurationExceeded,
+    triggerManualSync,
 
     // Database access
     database,

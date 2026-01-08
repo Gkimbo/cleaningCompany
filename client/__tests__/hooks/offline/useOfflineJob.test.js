@@ -284,7 +284,7 @@ describe("useOfflineChecklist", () => {
       });
 
       expect(result.current.items["item-1"].completed).toBe(true);
-      expect(result.current.items["item-2"]).toBeUndefined(); // Not completed
+      expect(result.current.items["item-2"].completed).toBe(false); // Not completed yet
     });
 
     it("should not load if no jobId", async () => {

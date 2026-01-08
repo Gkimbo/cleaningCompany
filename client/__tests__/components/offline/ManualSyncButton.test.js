@@ -12,26 +12,33 @@ jest.mock("../../../src/services/offline/SyncEngine", () => ({
   __esModule: true,
   default: {
     startSync: jest.fn().mockResolvedValue({ success: true, synced: 5 }),
-    retryFailed: jest.fn().mockResolvedValue({ success: true }),
-    getPendingSummary: jest.fn().mockResolvedValue({
-      pendingCount: 0,
-      failedCount: 0,
-      canRetryFailed: false,
-    }),
-    isSyncing: false,
-    subscribe: jest.fn(() => () => {}),
+    retryFailed: jest.fn().mockResolvedValue({ success: true, synced: 3 }),
   },
 }));
 
+jest.mock("../../../src/services/offline/constants", () => ({
+  SYNC_STATUS: {
+    IDLE: "idle",
+    SYNCING: "syncing",
+    COMPLETED: "completed",
+    ERROR: "error",
+  },
+}));
+
+const mockUpdateSyncStatus = jest.fn();
+let mockSyncStatus = "idle";
+let mockPendingSyncCount = 5;
+let mockIsOffline = false;
+
 jest.mock("../../../src/services/offline/OfflineContext", () => ({
   useNetworkStatus: jest.fn(() => ({
-    isOnline: true,
-    isOffline: false,
+    isOnline: !mockIsOffline,
+    isOffline: mockIsOffline,
   })),
   useSyncStatus: jest.fn(() => ({
-    syncStatus: "idle",
-    pendingSyncCount: 5,
-    updateSyncStatus: jest.fn(),
+    syncStatus: mockSyncStatus,
+    pendingSyncCount: mockPendingSyncCount,
+    updateSyncStatus: mockUpdateSyncStatus,
   })),
 }));
 
@@ -43,54 +50,49 @@ import { useNetworkStatus, useSyncStatus } from "../../../src/services/offline/O
 describe("ManualSyncButton", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    SyncEngine.isSyncing = false;
+    mockSyncStatus = "idle";
+    mockPendingSyncCount = 5;
+    mockIsOffline = false;
+
+    // Reset hook mocks with current values
+    useNetworkStatus.mockImplementation(() => ({
+      isOnline: !mockIsOffline,
+      isOffline: mockIsOffline,
+    }));
+    useSyncStatus.mockImplementation(() => ({
+      syncStatus: mockSyncStatus,
+      pendingSyncCount: mockPendingSyncCount,
+      updateSyncStatus: mockUpdateSyncStatus,
+    }));
   });
 
   describe("rendering", () => {
     it("should render sync button when items pending", async () => {
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 5,
-        failedCount: 0,
-        canRetryFailed: false,
-      });
-
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/sync/i)).toBeTruthy();
+        expect(screen.getByText(/Sync Now/i)).toBeTruthy();
       });
     });
 
     it("should show pending count", async () => {
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 5,
-        failedCount: 0,
-        canRetryFailed: false,
-      });
-
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/5/)).toBeTruthy();
+        expect(screen.getByText(/5 items/)).toBeTruthy();
       });
     });
   });
 
   describe("sync functionality", () => {
     it("should call startSync when pressed", async () => {
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 5,
-        failedCount: 0,
-        canRetryFailed: false,
-      });
-
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/sync/i)).toBeTruthy();
+        expect(screen.getByText(/Sync Now/i)).toBeTruthy();
       });
 
-      fireEvent.press(screen.getByText(/sync/i));
+      fireEvent.press(screen.getByText(/Sync Now/i));
 
       await waitFor(() => {
         expect(SyncEngine.startSync).toHaveBeenCalled();
@@ -98,75 +100,68 @@ describe("ManualSyncButton", () => {
     });
 
     it("should disable button while syncing", async () => {
-      SyncEngine.isSyncing = true;
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 5,
-        failedCount: 0,
-        canRetryFailed: false,
-      });
+      mockSyncStatus = "syncing";
+      useSyncStatus.mockImplementation(() => ({
+        syncStatus: mockSyncStatus,
+        pendingSyncCount: mockPendingSyncCount,
+        updateSyncStatus: mockUpdateSyncStatus,
+      }));
 
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/syncing/i)).toBeTruthy();
+        expect(screen.getByText(/Syncing/i)).toBeTruthy();
       });
     });
 
     it("should disable button when offline", async () => {
-      useNetworkStatus.mockReturnValue({
+      mockIsOffline = true;
+      useNetworkStatus.mockImplementation(() => ({
         isOnline: false,
         isOffline: true,
-      });
-
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 5,
-        failedCount: 0,
-        canRetryFailed: false,
-      });
+      }));
 
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/offline/i)).toBeTruthy();
-      });
-
-      // Reset mock
-      useNetworkStatus.mockReturnValue({
-        isOnline: true,
-        isOffline: false,
+        expect(screen.getByText(/Offline/i)).toBeTruthy();
       });
     });
   });
 
   describe("retry functionality", () => {
-    it("should show retry option when failed operations exist", async () => {
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 0,
-        failedCount: 3,
-        canRetryFailed: true,
-      });
+    it("should show retry option when sync has error status", async () => {
+      mockSyncStatus = "error";
+      mockPendingSyncCount = 0;
+      useSyncStatus.mockImplementation(() => ({
+        syncStatus: mockSyncStatus,
+        pendingSyncCount: mockPendingSyncCount,
+        updateSyncStatus: mockUpdateSyncStatus,
+      }));
 
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/retry|failed/i)).toBeTruthy();
+        expect(screen.getByText(/Retry Sync/i)).toBeTruthy();
       });
     });
 
     it("should call retryFailed when retry pressed", async () => {
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 0,
-        failedCount: 3,
-        canRetryFailed: true,
-      });
+      mockSyncStatus = "error";
+      mockPendingSyncCount = 3;
+      useSyncStatus.mockImplementation(() => ({
+        syncStatus: mockSyncStatus,
+        pendingSyncCount: mockPendingSyncCount,
+        updateSyncStatus: mockUpdateSyncStatus,
+      }));
 
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/retry/i)).toBeTruthy();
+        expect(screen.getByText(/Retry Sync/i)).toBeTruthy();
       });
 
-      fireEvent.press(screen.getByText(/retry/i));
+      fireEvent.press(screen.getByText(/Retry Sync/i));
 
       await waitFor(() => {
         expect(SyncEngine.retryFailed).toHaveBeenCalled();
@@ -176,47 +171,35 @@ describe("ManualSyncButton", () => {
 
   describe("success/error states", () => {
     it("should show success message after sync", async () => {
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 5,
-        failedCount: 0,
-        canRetryFailed: false,
-      });
-
       SyncEngine.startSync.mockResolvedValue({ success: true, synced: 5 });
 
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/sync/i)).toBeTruthy();
+        expect(screen.getByText(/Sync Now/i)).toBeTruthy();
       });
 
-      fireEvent.press(screen.getByText(/sync/i));
+      fireEvent.press(screen.getByText(/Sync Now/i));
 
       await waitFor(() => {
         // Should show success feedback
-        expect(screen.queryByText(/sync/i) || screen.queryByText(/success|synced/i)).toBeTruthy();
+        expect(screen.getByText(/Synced 5 items/i)).toBeTruthy();
       });
     });
 
     it("should show error message when sync fails", async () => {
-      SyncEngine.getPendingSummary.mockResolvedValue({
-        pendingCount: 5,
-        failedCount: 0,
-        canRetryFailed: false,
-      });
-
       SyncEngine.startSync.mockResolvedValue({ success: false, error: "Network error" });
 
       render(<ManualSyncButton />);
 
       await waitFor(() => {
-        expect(screen.getByText(/sync/i)).toBeTruthy();
+        expect(screen.getByText(/Sync Now/i)).toBeTruthy();
       });
 
-      fireEvent.press(screen.getByText(/sync/i));
+      fireEvent.press(screen.getByText(/Sync Now/i));
 
       await waitFor(() => {
-        expect(screen.getByText(/error|failed/i)).toBeTruthy();
+        expect(screen.getByText(/Network error/i)).toBeTruthy();
       });
     });
   });
