@@ -2637,6 +2637,17 @@ async function runDailyPaymentCheck() {
         const home = await UserHomes.findByPk(appointment.homeId);
         if (!user || !home) continue;
 
+        // Check for pending edge case decision on multi-cleaner jobs
+        const multiCleanerJob = await MultiCleanerJob.findOne({
+          where: { appointmentId: appointment.id },
+        });
+        if (multiCleanerJob && multiCleanerJob.hasEdgeCaseDecisionPending()) {
+          console.log(
+            `[Cron] Skipping payment capture for appointment ${appointment.id} - awaiting edge case homeowner decision`
+          );
+          continue;
+        }
+
         if (appointment.hasBeenAssigned) {
           // Capture payment if cleaner assigned - money is now held by the platform
           try {
@@ -3856,6 +3867,7 @@ paymentRouter.get("/:homeId", async (req, res) => {
 
 module.exports = paymentRouter;
 module.exports.recordPaymentTransaction = recordPaymentTransaction;
+module.exports.runDailyPaymentCheck = runDailyPaymentCheck;
 
 // const user = await User.findByPk(userId, {
 // 	include: [

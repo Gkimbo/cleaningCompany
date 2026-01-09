@@ -1101,8 +1101,159 @@ describe("Multi-Cleaner Router", () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe(
-        "Invalid response. Use: proceed_with_one, cancel, or reschedule"
+        "Invalid response. Use: proceed_with_one, proceed_edge_case, cancel_edge_case, cancel, or reschedule"
       );
+    });
+
+    // Edge Case Decision Response Tests
+    describe("Edge Case Responses", () => {
+      it("should handle proceed_edge_case response successfully", async () => {
+        const token = jwt.sign({ userId: 200 }, secretKey);
+        const mockMultiCleanerJob = {
+          id: 10,
+          appointmentId: 100,
+          edgeCaseDecisionRequired: true,
+          homeownerDecision: "pending",
+          update: jest.fn().mockResolvedValue(true),
+        };
+        const mockAppointment = {
+          id: 100,
+          userId: 200,
+          multiCleanerJob: mockMultiCleanerJob,
+        };
+
+        UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/homeowner-response")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ response: "proceed_edge_case" });
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.message).toContain("proceed with 1 cleaner");
+      });
+
+      it("should reject proceed_edge_case when no edge case decision required", async () => {
+        const token = jwt.sign({ userId: 200 }, secretKey);
+        const mockMultiCleanerJob = {
+          id: 10,
+          appointmentId: 100,
+          edgeCaseDecisionRequired: false,
+          homeownerDecision: null,
+        };
+        const mockAppointment = {
+          id: 100,
+          userId: 200,
+          multiCleanerJob: mockMultiCleanerJob,
+        };
+
+        UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/homeowner-response")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ response: "proceed_edge_case" });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("No edge case decision required for this appointment");
+      });
+
+      it("should reject cancel_edge_case when no edge case decision required", async () => {
+        const token = jwt.sign({ userId: 200 }, secretKey);
+        const mockMultiCleanerJob = {
+          id: 10,
+          appointmentId: 100,
+          edgeCaseDecisionRequired: false,
+          homeownerDecision: null,
+        };
+        const mockAppointment = {
+          id: 100,
+          userId: 200,
+          multiCleanerJob: mockMultiCleanerJob,
+        };
+
+        UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/homeowner-response")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ response: "cancel_edge_case" });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("No edge case decision required for this appointment");
+      });
+
+      it("should reject edge case response when decision already made (proceed)", async () => {
+        const token = jwt.sign({ userId: 200 }, secretKey);
+        const mockMultiCleanerJob = {
+          id: 10,
+          appointmentId: 100,
+          edgeCaseDecisionRequired: true,
+          homeownerDecision: "proceed", // Already decided
+        };
+        const mockAppointment = {
+          id: 100,
+          userId: 200,
+          multiCleanerJob: mockMultiCleanerJob,
+        };
+
+        UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/homeowner-response")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ response: "proceed_edge_case" });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("Decision has already been made");
+        expect(res.body.currentDecision).toBe("proceed");
+      });
+
+      it("should reject edge case response when decision already made (auto_proceeded)", async () => {
+        const token = jwt.sign({ userId: 200 }, secretKey);
+        const mockMultiCleanerJob = {
+          id: 10,
+          appointmentId: 100,
+          edgeCaseDecisionRequired: true,
+          homeownerDecision: "auto_proceeded", // Already auto-proceeded
+        };
+        const mockAppointment = {
+          id: 100,
+          userId: 200,
+          multiCleanerJob: mockMultiCleanerJob,
+        };
+
+        UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/homeowner-response")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ response: "cancel_edge_case" });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("Decision has already been made");
+        expect(res.body.currentDecision).toBe("auto_proceeded");
+      });
+
+      it("should reject proceed_edge_case when no multi-cleaner job exists", async () => {
+        const token = jwt.sign({ userId: 200 }, secretKey);
+        const mockAppointment = {
+          id: 100,
+          userId: 200,
+          multiCleanerJob: null,
+        };
+
+        UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/homeowner-response")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ response: "proceed_edge_case" });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("No edge case decision required for this appointment");
+      });
     });
   });
 

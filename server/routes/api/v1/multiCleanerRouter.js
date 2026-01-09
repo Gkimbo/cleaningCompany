@@ -23,6 +23,9 @@ const MultiCleanerService = require("../../../services/MultiCleanerService");
 const RoomAssignmentService = require("../../../services/RoomAssignmentService");
 const MultiCleanerPricingService = require("../../../services/MultiCleanerPricingService");
 const NotificationService = require("../../../services/NotificationService");
+const { cancelEdgeCaseAppointment } = require("../../../services/cron/MultiCleanerFillMonitor");
+const Email = require("../../../services/sendNotifications/EmailClass");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const multiCleanerRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -259,16 +262,83 @@ multiCleanerRouter.post("/offers/:offerId/accept", async (req, res) => {
         cleanerId: { [Op.ne]: cleanerId },
         status: { [Op.notIn]: ["dropped_out", "no_show"] },
       },
+      include: [{ model: User, as: "cleaner" }],
     });
 
+    // Get the joining cleaner's name
+    const joiningCleaner = await User.findByPk(cleanerId);
+    const joiningCleanerName = joiningCleaner ? EncryptionService.decrypt(joiningCleaner.firstName) : "Another cleaner";
+
+    // Get appointment for date formatting
+    const appointmentForNotif = await UserAppointments.findByPk(offer.appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+    const appointmentDate = appointmentForNotif ? new Date(appointmentForNotif.date) : null;
+    const formattedDate = appointmentDate
+      ? appointmentDate.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : "the scheduled date";
+
     for (const other of otherCleaners) {
-      await NotificationService.createNotification({
-        userId: other.cleanerId,
-        type: "multi_cleaner_slot_filled",
-        title: "Co-cleaner joined",
-        body: "Another cleaner has joined your upcoming job.",
-        data: { appointmentId: offer.appointmentId },
-      });
+      // Check if this is a late-joining cleaner for an edge case job
+      const isEdgeCaseJob = updatedJob.edgeCaseDecisionRequired &&
+        (updatedJob.homeownerDecision === "proceed" || updatedJob.homeownerDecision === "auto_proceeded");
+
+      if (isEdgeCaseJob) {
+        // Edge case: Original cleaner was confirmed as sole cleaner, but a 2nd cleaner joined
+        await NotificationService.createNotification({
+          userId: other.cleanerId,
+          type: "edge_case_second_cleaner_joined",
+          title: `Good news! ${joiningCleanerName} will be cleaning with you`,
+          body: `${joiningCleanerName} has joined the cleaning on ${formattedDate}. Payment will be split between both cleaners.`,
+          data: {
+            appointmentId: offer.appointmentId,
+            multiCleanerJobId: offer.multiCleanerJobId,
+            joiningCleanerName: joiningCleanerName,
+            paymentSplit: true,
+          },
+        });
+
+        // Send email to original cleaner about the split
+        if (other.cleaner) {
+          const originalCleanerEmail = EncryptionService.decrypt(other.cleaner.email);
+          const originalCleanerFirstName = EncryptionService.decrypt(other.cleaner.firstName);
+          const homeAddress = appointmentForNotif?.home ? {
+            street: EncryptionService.decrypt(appointmentForNotif.home.address),
+            city: EncryptionService.decrypt(appointmentForNotif.home.city),
+            state: EncryptionService.decrypt(appointmentForNotif.home.state),
+            zipcode: EncryptionService.decrypt(appointmentForNotif.home.zipcode),
+          } : null;
+
+          if (originalCleanerEmail) {
+            try {
+              await Email.sendEdgeCaseSecondCleanerJoined(
+                originalCleanerEmail,
+                originalCleanerFirstName,
+                joiningCleanerName,
+                formattedDate,
+                homeAddress,
+                offer.appointmentId
+              );
+            } catch (emailError) {
+              console.error("Failed to send second cleaner joined email:", emailError);
+            }
+          }
+        }
+      } else {
+        // Standard notification
+        await NotificationService.createNotification({
+          userId: other.cleanerId,
+          type: "multi_cleaner_slot_filled",
+          title: "Co-cleaner joined",
+          body: `${joiningCleanerName} has joined your upcoming cleaning on ${formattedDate}.`,
+          data: { appointmentId: offer.appointmentId },
+        });
+      }
     }
 
     return res.status(200).json({
@@ -839,6 +909,8 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
       return res.status(403).json({ error: "Not your appointment" });
     }
 
+    const multiCleanerJob = appointment.multiCleanerJob;
+
     switch (response) {
       case "proceed_with_one":
         // Proceed with single cleaner
@@ -848,11 +920,124 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
           message: "Appointment will proceed with available cleaner(s)",
         });
 
+      case "proceed_edge_case":
+        // Edge case: Homeowner chooses to proceed with 1 cleaner (payment will be captured)
+        if (!multiCleanerJob || !multiCleanerJob.edgeCaseDecisionRequired) {
+          return res.status(400).json({ error: "No edge case decision required for this appointment" });
+        }
+
+        if (multiCleanerJob.homeownerDecision !== "pending") {
+          return res.status(400).json({
+            error: "Decision has already been made",
+            currentDecision: multiCleanerJob.homeownerDecision,
+          });
+        }
+
+        // Check if decision has expired
+        if (multiCleanerJob.edgeCaseDecisionExpiresAt && new Date() > new Date(multiCleanerJob.edgeCaseDecisionExpiresAt)) {
+          return res.status(400).json({ error: "Decision window has expired" });
+        }
+
+        // Update job with proceed decision
+        await multiCleanerJob.update({
+          homeownerDecision: "proceed",
+          homeownerDecisionAt: new Date(),
+        });
+
+        // Get the confirmed cleaner to notify
+        const confirmedCompletion = await CleanerJobCompletion.findOne({
+          where: {
+            multiCleanerJobId: multiCleanerJob.id,
+            status: { [Op.notIn]: ["dropped_out", "no_show"] },
+          },
+          include: [{ model: User, as: "cleaner" }],
+        });
+
+        if (confirmedCompletion && confirmedCompletion.cleaner) {
+          const cleaner = confirmedCompletion.cleaner;
+          const appointmentDate = new Date(appointment.date);
+          const formattedDate = appointmentDate.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+          const homeAddress = {
+            street: EncryptionService.decrypt(appointment.home.address),
+            city: EncryptionService.decrypt(appointment.home.city),
+            state: EncryptionService.decrypt(appointment.home.state),
+            zipcode: EncryptionService.decrypt(appointment.home.zipcode),
+          };
+
+          // Notify cleaner they're confirmed as sole cleaner with full pay
+          await NotificationService.createNotification({
+            userId: cleaner.id,
+            type: "edge_case_cleaner_confirmed",
+            title: "You're confirmed as the sole cleaner!",
+            body: `The homeowner has confirmed your cleaning on ${formattedDate}. You'll receive the full cleaning pay. A second cleaner may still join before the appointment.`,
+            data: {
+              appointmentId: appointment.id,
+              multiCleanerJobId: multiCleanerJob.id,
+              fullPay: true,
+            },
+          });
+
+          // Send email to cleaner
+          const cleanerEmail = EncryptionService.decrypt(cleaner.email);
+          const cleanerFirstName = EncryptionService.decrypt(cleaner.firstName);
+          if (cleanerEmail) {
+            try {
+              await Email.sendEdgeCaseCleanerConfirmed(
+                cleanerEmail,
+                cleanerFirstName,
+                formattedDate,
+                homeAddress,
+                appointment.id,
+                true // fullPay
+              );
+            } catch (emailError) {
+              console.error("Failed to send cleaner confirmation email:", emailError);
+            }
+          }
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: "You've chosen to proceed with 1 cleaner. Payment will be captured and normal cancellation fees apply.",
+          decision: "proceed",
+        });
+
+      case "cancel_edge_case":
+        // Edge case: Homeowner chooses to cancel due to lack of cleaners (no fees)
+        if (!multiCleanerJob || !multiCleanerJob.edgeCaseDecisionRequired) {
+          return res.status(400).json({ error: "No edge case decision required for this appointment" });
+        }
+
+        if (multiCleanerJob.homeownerDecision !== "pending") {
+          return res.status(400).json({
+            error: "Decision has already been made",
+            currentDecision: multiCleanerJob.homeownerDecision,
+          });
+        }
+
+        // Cancel the appointment with no fees
+        const cancelResult = await cancelEdgeCaseAppointment(multiCleanerJob, "homeowner_chose_cancel");
+
+        if (!cancelResult.success) {
+          return res.status(500).json({ error: cancelResult.error || "Failed to cancel appointment" });
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: "Your appointment has been cancelled with no fees. The cleaner has been notified.",
+          decision: "cancel",
+        });
+
       case "cancel":
         // Cancel without penalty due to lack of cleaners
-        if (appointment.multiCleanerJob) {
-          appointment.multiCleanerJob.status = "cancelled";
-          await appointment.multiCleanerJob.save();
+        if (multiCleanerJob) {
+          multiCleanerJob.status = "cancelled";
+          await multiCleanerJob.save();
         }
         // Handle cancellation (no penalty - use existing cancellation logic)
         return res.status(200).json({
@@ -874,7 +1059,7 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
 
       default:
         return res.status(400).json({
-          error: "Invalid response. Use: proceed_with_one, cancel, or reschedule",
+          error: "Invalid response. Use: proceed_with_one, proceed_edge_case, cancel_edge_case, cancel, or reschedule",
         });
     }
   } catch (error) {

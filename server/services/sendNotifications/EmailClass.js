@@ -4121,6 +4121,494 @@ Kleanr Team`;
       throw error;
     }
   }
+
+  // ============================================================================
+  // EDGE CASE MULTI-CLEANER EMAILS
+  // ============================================================================
+
+  /**
+   * Send edge case decision required email to homeowner
+   */
+  static async sendEdgeCaseDecisionRequired(
+    email,
+    homeownerName,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    decisionHours,
+    appointmentId,
+    multiCleanerJobId
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "your home";
+
+      const htmlContent = createEmailTemplate({
+        title: "Action Needed",
+        subtitle: "Your Cleaning Has 1 Cleaner Confirmed",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>Your cleaning scheduled for <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong> has <strong>${cleanerName}</strong> confirmed, but we couldn't find a second cleaner.</p>
+          <p>Since your home qualifies as a larger home, we recommend 2 cleaners. However, you have options:</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Your Options",
+          items: [
+            { label: "Option 1", value: "Proceed with 1 cleaner (same price, full pay to cleaner)" },
+            { label: "Option 2", value: "Cancel with no fees (cleaner notified, no payment charged)" },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: `Please respond within <strong>${decisionHours} hours</strong>. If we don't hear from you, we'll proceed with 1 cleaner and normal cancellation fees will apply.`,
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to make your decision",
+        footerMessage: "We're here to help make your cleaning a success!",
+      });
+
+      const textContent = `Action Needed: Your Cleaning Has 1 Cleaner Confirmed
+
+Hi ${homeownerName},
+
+Your cleaning scheduled for ${appointmentDate} at ${addressStr} has ${cleanerName} confirmed, but we couldn't find a second cleaner.
+
+YOUR OPTIONS:
+━━━━━━━━━━━━━━━━━━━━━━
+1. Proceed with 1 cleaner (same price, full pay to cleaner)
+2. Cancel with no fees (cleaner notified, no payment charged)
+
+⏰ Please respond within ${decisionHours} hours. If we don't hear from you, we'll proceed with 1 cleaner and normal cancellation fees will apply.
+
+Open the Kleanr app to make your decision.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⏰ Action Needed: Your ${appointmentDate} Cleaning - 1 Cleaner Confirmed`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Edge case decision required email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case decision email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send edge case auto-proceeded email to homeowner
+   */
+  static async sendEdgeCaseAutoProceeded(
+    email,
+    homeownerName,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    appointmentId
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "your home";
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Confirmed",
+        subtitle: "Proceeding with 1 Cleaner",
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>We didn't receive a response, so we've proceeded with your cleaning as scheduled.</p>
+          <p><strong>${cleanerName}</strong> will complete your cleaning on <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong>.</p>`,
+        infoBox: {
+          icon: "📋",
+          title: "What This Means",
+          items: [
+            { label: "Cleaner", value: cleanerName },
+            { label: "Date", value: appointmentDate },
+            { label: "Payment", value: "Will be captured (normal fees apply)" },
+            { label: "Cancellation", value: "Normal cancellation fees now apply" },
+          ],
+        },
+        warningBox: {
+          icon: "ℹ️",
+          text: "If another cleaner becomes available, they may still join the job before the cleaning date.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0284c7",
+          textColor: "#075985",
+        },
+        ctaText: "Open the Kleanr app to view your appointment details",
+        footerMessage: "We're looking forward to your sparkling clean home!",
+      });
+
+      const textContent = `Cleaning Confirmed - Proceeding with 1 Cleaner
+
+Hi ${homeownerName},
+
+We didn't receive a response, so we've proceeded with your cleaning as scheduled.
+
+${cleanerName} will complete your cleaning on ${appointmentDate} at ${addressStr}.
+
+WHAT THIS MEANS:
+━━━━━━━━━━━━━━━━━━━━━━
+• Payment will be captured (normal fees apply)
+• Normal cancellation fees now apply
+• If another cleaner becomes available, they may still join
+
+Open the Kleanr app to view your appointment details.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Cleaning Confirmed: ${appointmentDate} - 1 Cleaner`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Edge case auto-proceeded email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case auto-proceeded email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send edge case cleaner confirmed email
+   */
+  static async sendEdgeCaseCleanerConfirmed(
+    email,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    appointmentId,
+    fullPay = true
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "the home";
+
+      const paymentMessage = fullPay
+        ? "You'll receive the full cleaning pay since you're the only cleaner."
+        : "Payment will be split if another cleaner joins.";
+
+      const htmlContent = createEmailTemplate({
+        title: "You're Confirmed!",
+        subtitle: "Sole Cleaner Assignment",
+        headerColor: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+        greeting: `Great news, ${cleanerName}!`,
+        content: `<p>You're confirmed as the cleaner for the appointment on <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong>.</p>
+          <p>${paymentMessage}</p>`,
+        infoBox: {
+          icon: "💰",
+          title: "Assignment Details",
+          items: [
+            { label: "Date", value: appointmentDate },
+            { label: "Location", value: addressStr },
+            { label: "Status", value: fullPay ? "Sole cleaner - full pay" : "May share with another cleaner" },
+          ],
+        },
+        warningBox: {
+          icon: "ℹ️",
+          text: "A second cleaner may still join before the appointment. If they do, payment will be split between both cleaners.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0284c7",
+          textColor: "#075985",
+        },
+        ctaText: "Open the Kleanr app to view job details",
+        footerMessage: "Thank you for being a great cleaner!",
+      });
+
+      const textContent = `You're Confirmed as Sole Cleaner!
+
+Great news, ${cleanerName}!
+
+You're confirmed for the cleaning on ${appointmentDate} at ${addressStr}.
+
+${paymentMessage}
+
+ASSIGNMENT DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${appointmentDate}
+Location: ${addressStr}
+Status: ${fullPay ? "Sole cleaner - full pay" : "May share with another cleaner"}
+
+Note: A second cleaner may still join before the appointment. If they do, payment will be split.
+
+Open the Kleanr app to view job details.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Confirmed: You're the cleaner for ${appointmentDate}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Edge case cleaner confirmed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case cleaner confirmed email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send edge case cancelled email to homeowner
+   */
+  static async sendEdgeCaseCancelled(
+    email,
+    homeownerName,
+    appointmentDate,
+    homeAddress,
+    reason
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "your home";
+
+      const reasonMessage = reason === "homeowner_chose_cancel"
+        ? "As you requested, your cleaning has been cancelled with no fees."
+        : "Your cleaning has been cancelled due to insufficient cleaners available.";
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Cancelled",
+        subtitle: "No Cancellation Fees Applied",
+        headerColor: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+        greeting: `Hi ${homeownerName}`,
+        content: `<p>${reasonMessage}</p>
+          <p>Your cleaning scheduled for <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong> has been cancelled.</p>
+          <p><strong>No payment has been charged and no cancellation fees apply.</strong></p>`,
+        infoBox: {
+          icon: "📋",
+          title: "Cancellation Details",
+          items: [
+            { label: "Original Date", value: appointmentDate },
+            { label: "Location", value: addressStr },
+            { label: "Payment Charged", value: "None" },
+            { label: "Cancellation Fee", value: "None - waived" },
+          ],
+        },
+        ctaText: "Ready to rebook? Open the Kleanr app to schedule a new cleaning.",
+        footerMessage: "We hope to clean for you again soon!",
+      });
+
+      const textContent = `Cleaning Cancelled - No Fees Applied
+
+Hi ${homeownerName},
+
+${reasonMessage}
+
+CANCELLATION DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━
+Original Date: ${appointmentDate}
+Location: ${addressStr}
+Payment Charged: None
+Cancellation Fee: None - waived
+
+Ready to rebook? Open the Kleanr app to schedule a new cleaning.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Cleaning Cancelled: ${appointmentDate} - No Fees`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Edge case cancelled email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case cancelled email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send edge case cleaner cancelled email
+   */
+  static async sendEdgeCaseCleanerCancelled(
+    email,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    reason
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "the home";
+
+      const htmlContent = createEmailTemplate({
+        title: "Job Cancelled",
+        subtitle: "No Second Cleaner Found",
+        headerColor: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+        greeting: `Hi ${cleanerName}`,
+        content: `<p>Unfortunately, the cleaning you were assigned on <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong> has been cancelled.</p>
+          <p>The homeowner chose to cancel because we couldn't find a second cleaner for this larger home.</p>`,
+        infoBox: {
+          icon: "📋",
+          title: "Cancellation Details",
+          items: [
+            { label: "Original Date", value: appointmentDate },
+            { label: "Location", value: addressStr },
+            { label: "Reason", value: "No second cleaner available" },
+          ],
+        },
+        warningBox: {
+          icon: "ℹ️",
+          text: "Don't worry - more jobs are available in the app! Check your offers to find your next cleaning opportunity.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0284c7",
+          textColor: "#075985",
+        },
+        ctaText: "Open the Kleanr app to view available jobs",
+        footerMessage: "Thank you for being part of the Kleanr team!",
+      });
+
+      const textContent = `Job Cancelled - No Second Cleaner Found
+
+Hi ${cleanerName},
+
+Unfortunately, the cleaning you were assigned on ${appointmentDate} at ${addressStr} has been cancelled.
+
+The homeowner chose to cancel because we couldn't find a second cleaner for this larger home.
+
+CANCELLATION DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━
+Original Date: ${appointmentDate}
+Location: ${addressStr}
+Reason: No second cleaner available
+
+Don't worry - more jobs are available! Check your offers in the app.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Job Cancelled: ${appointmentDate} - No Second Cleaner`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Edge case cleaner cancelled email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case cleaner cancelled email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send second cleaner joined email to original cleaner
+   */
+  static async sendEdgeCaseSecondCleanerJoined(
+    email,
+    originalCleanerName,
+    newCleanerName,
+    appointmentDate,
+    homeAddress,
+    appointmentId
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "the home";
+
+      const htmlContent = createEmailTemplate({
+        title: "Good News!",
+        subtitle: "A Second Cleaner Has Joined",
+        headerColor: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+        greeting: `Hi ${originalCleanerName}!`,
+        content: `<p>Great news! <strong>${newCleanerName}</strong> has joined you for the cleaning on <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong>.</p>
+          <p>Payment will be split between both of you.</p>`,
+        infoBox: {
+          icon: "👥",
+          title: "Team Details",
+          items: [
+            { label: "Your Partner", value: newCleanerName },
+            { label: "Date", value: appointmentDate },
+            { label: "Location", value: addressStr },
+            { label: "Payment", value: "Split between 2 cleaners" },
+          ],
+        },
+        ctaText: "Open the Kleanr app to view job details and coordinate with your partner",
+        footerMessage: "Teamwork makes the dream work! 🧹✨",
+      });
+
+      const textContent = `Good News! A Second Cleaner Has Joined
+
+Hi ${originalCleanerName}!
+
+Great news! ${newCleanerName} has joined you for the cleaning on ${appointmentDate} at ${addressStr}.
+
+Payment will be split between both of you.
+
+TEAM DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━
+Your Partner: ${newCleanerName}
+Date: ${appointmentDate}
+Location: ${addressStr}
+Payment: Split between 2 cleaners
+
+Open the Kleanr app to view job details.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `👥 ${newCleanerName} is cleaning with you on ${appointmentDate}!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Edge case second cleaner joined email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case second cleaner joined email:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Email;

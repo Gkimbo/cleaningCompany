@@ -469,6 +469,60 @@ class PushNotification {
       actionRequired: true, // Can rebook
     });
   }
+
+  // ============================================================================
+  // EDGE CASE MULTI-CLEANER PUSH NOTIFICATIONS
+  // ============================================================================
+
+  // 35. Edge case decision required (to homeowner)
+  static async sendPushEdgeCaseDecision(expoPushToken, homeownerName, cleanerName, appointmentDate, decisionHours) {
+    const title = "Action Needed: 1 Cleaner Confirmed ⏰";
+    const body = `${cleanerName} is confirmed for your ${appointmentDate} cleaning, but we need a 2nd cleaner. Tap to choose: proceed with 1 or cancel with no fees. You have ${decisionHours}h to decide.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "edge_case_decision_required",
+      appointmentDate,
+      cleanerName,
+      decisionHours,
+      actionRequired: true,
+    });
+  }
+
+  // 36. Edge case cleaner confirmed (to cleaner)
+  static async sendPushEdgeCaseCleanerConfirmed(expoPushToken, cleanerName, appointmentDate, address) {
+    const title = "You're Confirmed! ✅";
+    const body = `You're confirmed for the ${appointmentDate} cleaning at ${address}. You'll receive full pay. A 2nd cleaner may still join.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "edge_case_cleaner_confirmed",
+      appointmentDate,
+      address,
+    });
+  }
+
+  // 37. Edge case cleaner cancelled (to cleaner)
+  static async sendPushEdgeCaseCleanerCancelled(expoPushToken, cleanerName, appointmentDate, address) {
+    const title = "Job Cancelled";
+    const body = `The ${appointmentDate} cleaning at ${address} was cancelled because no 2nd cleaner was found. Check the app for more jobs!`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "edge_case_cleaner_cancelled",
+      appointmentDate,
+      address,
+    });
+  }
+
+  // 38. Edge case second cleaner joined (to original cleaner)
+  static async sendPushEdgeCaseSecondCleanerJoined(expoPushToken, originalCleanerName, newCleanerName, appointmentDate) {
+    const title = `${newCleanerName} joined your team! 👥`;
+    const body = `Good news! ${newCleanerName} will be cleaning with you on ${appointmentDate}. Payment will be split.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "edge_case_second_cleaner_joined",
+      appointmentDate,
+      newCleanerName,
+    });
+  }
 }
 
 module.exports = PushNotification;
