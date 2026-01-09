@@ -57,19 +57,22 @@ class BusinessEmployeeSerializer {
       serialized.formattedHourlyRate = `$${(data.defaultHourlyRate / 100).toFixed(2)}`;
     }
 
-    // Serialize nested user if present and requested
-    if (includeUser && data.user) {
-      serialized.user = this.serializeUser(data.user);
+    // Serialize nested user if present and requested (check both data and employee for Sequelize associations)
+    const rawUser = data.user || employee.user;
+    if (includeUser && rawUser) {
+      serialized.user = this.serializeUser(rawUser);
     }
 
-    // Serialize business owner if present and requested
-    if (includeBusinessOwner && data.businessOwner) {
-      serialized.businessOwner = this.serializeUser(data.businessOwner);
+    // Serialize business owner if present and requested (check both data and employee for Sequelize associations)
+    const rawBusinessOwner = data.businessOwner || employee.businessOwner;
+    if (includeBusinessOwner && rawBusinessOwner) {
+      serialized.businessOwner = this.serializeUser(rawBusinessOwner);
     }
 
-    // Include job assignments if present and requested
-    if (includeAssignments && data.jobAssignments) {
-      serialized.jobAssignments = data.jobAssignments.map((assignment) => ({
+    // Include job assignments if present and requested (check both data and employee for Sequelize associations)
+    const rawJobAssignments = data.jobAssignments || employee.jobAssignments;
+    if (includeAssignments && rawJobAssignments) {
+      serialized.jobAssignments = rawJobAssignments.map((assignment) => ({
         id: assignment.id,
         appointmentId: assignment.appointmentId,
         status: assignment.status,
@@ -128,6 +131,8 @@ class BusinessEmployeeSerializer {
     if (!employee) return null;
 
     const data = employee.dataValues || employee;
+    // Check both data.user and employee.user for Sequelize associations
+    const rawUser = data.user || employee.user;
 
     return {
       id: data.id,
@@ -136,10 +141,10 @@ class BusinessEmployeeSerializer {
       status: data.status,
       canMessageClients: data.canMessageClients,
       paymentMethod: data.paymentMethod,
-      user: data.user ? {
-        id: data.user.id,
-        firstName: this.decryptField(data.user.firstName),
-        lastName: this.decryptField(data.user.lastName),
+      user: rawUser ? {
+        id: rawUser.id,
+        firstName: this.decryptField(rawUser.firstName),
+        lastName: this.decryptField(rawUser.lastName),
       } : null,
     };
   }
@@ -153,8 +158,10 @@ class BusinessEmployeeSerializer {
     if (!employee) return null;
 
     const data = employee.dataValues || employee;
-    const businessOwner = data.businessOwner
-      ? this.serializeUser(data.businessOwner)
+    // Check both data.businessOwner and employee.businessOwner for Sequelize associations
+    const rawBusinessOwner = data.businessOwner || employee.businessOwner;
+    const businessOwner = rawBusinessOwner
+      ? this.serializeUser(rawBusinessOwner)
       : null;
 
     return {
@@ -177,8 +184,10 @@ class BusinessEmployeeSerializer {
     if (!employee) return null;
 
     const data = employee.dataValues || employee;
-    const businessOwner = data.businessOwner
-      ? this.serializeUser(data.businessOwner)
+    // Check both data.businessOwner and employee.businessOwner for Sequelize associations
+    const rawBusinessOwner = data.businessOwner || employee.businessOwner;
+    const businessOwner = rawBusinessOwner
+      ? this.serializeUser(rawBusinessOwner)
       : null;
 
     return {

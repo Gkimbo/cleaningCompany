@@ -2,6 +2,9 @@ const express = require("express");
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 
+// Set SESSION_SECRET before any router imports
+process.env.SESSION_SECRET = "test_secret";
+
 // Mock EncryptionService
 jest.mock("../../services/EncryptionService", () => ({
   decrypt: jest.fn((value) => {
@@ -12,18 +15,42 @@ jest.mock("../../services/EncryptionService", () => ({
   encrypt: jest.fn((value) => `encrypted_${value}`),
 }));
 
-// Mock services
-jest.mock("../../services/EmployeeJobAssignmentService", () => ({
-  getAssignmentForEmployee: jest.fn(),
-  startJob: jest.fn(),
-  completeJob: jest.fn(),
-  resolveConflict: jest.fn(),
-  getCancellationInfo: jest.fn(),
-}));
+// Mock services - use class-like structure with static methods
+jest.mock("../../services/EmployeeJobAssignmentService", () => {
+  return {
+    getAssignmentForEmployee: jest.fn(),
+    startJob: jest.fn(),
+    completeJob: jest.fn(),
+    resolveConflict: jest.fn(),
+    getCancellationInfo: jest.fn(),
+    getMyJobs: jest.fn(),
+  };
+});
 
+// Mock AppointmentService (virtual since service doesn't exist yet)
 jest.mock("../../services/AppointmentService", () => ({
   getAppointment: jest.fn(),
   cancelAppointment: jest.fn(),
+}), { virtual: true });
+
+// Mock verifyBusinessEmployee middleware to pass through
+jest.mock("../../middleware/verifyBusinessEmployee", () => (req, res, next) => {
+  // Set employee data for tests - middleware sets req.employeeRecord
+  req.employeeRecord = {
+    id: 1,
+    userId: req.user?.id || 1,
+    canViewClientDetails: true,
+    canMessageClients: true,
+    status: "active",
+  };
+  req.businessOwnerId = 1;
+  next();
+});
+
+// Mock serializers
+jest.mock("../../serializers/EmployeeJobAssignmentSerializer", () => ({
+  serializeArrayForEmployee: jest.fn((jobs) => jobs),
+  serializeForEmployee: jest.fn((job) => job),
 }));
 
 // Mock models
@@ -80,6 +107,8 @@ describe("Offline Conflict Resolution", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     User.findByPk.mockResolvedValue({ id: 1, type: "employee" });
+    // Default mock for co-workers lookup
+    EmployeeJobAssignment.findAll.mockResolvedValue([]);
   });
 
   describe("Cancellation Conflict Resolution", () => {
@@ -88,18 +117,28 @@ describe("Offline Conflict Resolution", () => {
       const cleanerStartTime = new Date("2024-01-01T10:00:00Z");
       const cancellationTime = new Date("2024-01-01T10:30:00Z");
 
-      const mockAssignment = {
+      // Router uses EmployeeJobAssignment.findOne directly
+      const assignmentData = {
         id: 1,
         status: "started",
         startedAt: cleanerStartTime,
         appointmentId: 100,
+        isMarketplacePickup: false,
         appointment: {
+          date: new Date(),
           status: "cancelled",
           cancelledAt: cancellationTime,
+          home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+          user: { id: 1, firstName: "John", lastName: "Doe" },
         },
       };
+      const mockAssignment = {
+        ...assignmentData,
+        dataValues: assignmentData,
+        get: jest.fn(function() { return this; }),
+      };
 
-      EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue(mockAssignment);
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
 
       const response = await request(app)
         .get("/api/v1/business-employee/my-jobs/1")
@@ -139,17 +178,33 @@ describe("Offline Conflict Resolution", () => {
     });
 
     it("should include cancellation reason in response", async () => {
-      EmployeeJobAssignmentService.getCancellationInfo.mockResolvedValue({
-        cancelledAt: new Date(),
-        reason: "Homeowner emergency",
-        cancelledBy: "homeowner",
-      });
+      // Router uses EmployeeJobAssignment.findOne directly
+      const mockAssignment = {
+        id: 1,
+        status: "started",
+        appointmentId: 100,
+        isMarketplacePickup: false,
+        cancellationInfo: {
+          cancelledAt: new Date(),
+          reason: "Homeowner emergency",
+          cancelledBy: "homeowner",
+        },
+        appointment: {
+          date: new Date(),
+          status: "approved",
+          home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+          user: { id: 1, firstName: "John", lastName: "Doe" },
+        },
+        get: jest.fn(function() { return this; }),
+      };
 
-      // This tests if cancellation info is available
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+
       const response = await request(app)
         .get("/api/v1/business-employee/my-jobs/1")
         .set("Authorization", `Bearer ${cleanerToken}`);
 
+      expect(response.status).toBe(200);
       if (response.body.job?.cancellationInfo) {
         expect(response.body.job.cancellationInfo.reason).toBeDefined();
       }
@@ -163,6 +218,7 @@ describe("Offline Conflict Resolution", () => {
         id: 1,
         status: "started",
         appointmentId: 100,
+        isMarketplacePickup: false,
         multiCleanerData: {
           cleaner1: {
             rooms: ["Kitchen", "Living Room"],
@@ -173,9 +229,16 @@ describe("Offline Conflict Resolution", () => {
             checklistProgress: { "item-3": true, "item-4": true },
           },
         },
+        appointment: {
+          date: new Date(),
+          status: "approved",
+          home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+          user: { id: 1, firstName: "John", lastName: "Doe" },
+        },
+        get: jest.fn(function() { return this; }),
       };
 
-      EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue(mockAssignment);
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
 
       const response = await request(app)
         .get("/api/v1/business-employee/my-jobs/1")
@@ -195,13 +258,21 @@ describe("Offline Conflict Resolution", () => {
         id: 1,
         status: "started",
         appointmentId: 100,
+        isMarketplacePickup: false,
         photos: [
           { id: 1, room: "Kitchen", uploadedBy: 1, type: "before" },
           { id: 2, room: "Kitchen", uploadedBy: 2, type: "before" }, // Same room, different cleaner
         ],
+        appointment: {
+          date: new Date(),
+          status: "approved",
+          home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+          user: { id: 1, firstName: "John", lastName: "Doe" },
+        },
+        get: jest.fn(function() { return this; }),
       };
 
-      EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue(mockAssignment);
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
 
       const response = await request(app)
         .get("/api/v1/business-employee/my-jobs/1")
@@ -222,6 +293,7 @@ describe("Offline Conflict Resolution", () => {
         id: 1,
         status: "started",
         appointmentId: 100,
+        isMarketplacePickup: false,
         checklistProgress: {
           "item-1": {
             completed: true,
@@ -229,10 +301,16 @@ describe("Offline Conflict Resolution", () => {
             completedBy: 2,
           },
         },
-        // Original completion was at 10:00 by cleaner 1
+        appointment: {
+          date: new Date(),
+          status: "approved",
+          home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+          user: { id: 1, firstName: "John", lastName: "Doe" },
+        },
+        get: jest.fn(function() { return this; }),
       };
 
-      EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue(mockAssignment);
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
 
       const response = await request(app)
         .get("/api/v1/business-employee/my-jobs/1")
@@ -250,20 +328,11 @@ describe("Offline Conflict Resolution", () => {
   describe("Data Mismatch Resolution", () => {
     it("should accept timestamp for determining winner", async () => {
       const localTimestamp = new Date("2024-01-01T10:00:00Z");
-      const serverTimestamp = new Date("2024-01-01T09:00:00Z");
-
-      // Local data is more recent, so it should win
-      const mockAssignment = {
-        id: 1,
-        status: "started",
-        startedAt: serverTimestamp, // Server has older time
-      };
-
-      EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue(mockAssignment);
 
       // When syncing with local timestamp
       EmployeeJobAssignmentService.startJob.mockResolvedValue({
-        ...mockAssignment,
+        id: 1,
+        status: "started",
         startedAt: localTimestamp, // Local time should be accepted
       });
 
@@ -326,13 +395,24 @@ describe("Offline Conflict Resolution", () => {
   describe("Offline Duration Conflict", () => {
     it("should handle jobs that changed significantly while offline", async () => {
       // Job was reassigned while cleaner was offline
-      EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue({
+      // Router filters out cancelled/no_show, but reassigned should still be visible
+      const mockAssignment = {
         id: 1,
         status: "reassigned",
         appointmentId: 100,
+        isMarketplacePickup: false,
         reassignedAt: new Date(),
         newAssigneeId: 3,
-      });
+        appointment: {
+          date: new Date(),
+          status: "approved",
+          home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+          user: { id: 1, firstName: "John", lastName: "Doe" },
+        },
+        get: jest.fn(function() { return this; }),
+      };
+
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
 
       const response = await request(app)
         .get("/api/v1/business-employee/my-jobs/1")
@@ -346,15 +426,23 @@ describe("Offline Conflict Resolution", () => {
     });
 
     it("should detect appointment reschedule conflict", async () => {
-      EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue({
+      const mockAssignment = {
         id: 1,
         status: "assigned",
         appointmentId: 100,
+        isMarketplacePickup: false,
         appointment: {
+          date: new Date("2024-01-02"),
           dateTime: new Date("2024-01-02T10:00:00Z"), // Rescheduled
           originalDateTime: new Date("2024-01-01T10:00:00Z"),
+          status: "approved",
+          home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+          user: { id: 1, firstName: "John", lastName: "Doe" },
         },
-      });
+        get: jest.fn(function() { return this; }),
+      };
+
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
 
       const response = await request(app)
         .get("/api/v1/business-employee/my-jobs/1")
@@ -372,14 +460,24 @@ describe("Offline Conflict Resolution", () => {
 
   describe("Payment Conflict", () => {
     it("should handle price change during offline period", async () => {
-      EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue({
+      const mockAssignment = {
         id: 1,
         status: "assigned",
         appointmentId: 100,
+        isMarketplacePickup: false,
         paymentAmount: 150, // Price was updated
         originalPaymentAmount: 120, // Original amount cleaner saw
         priceUpdatedAt: new Date(),
-      });
+        appointment: {
+          date: new Date(),
+          status: "approved",
+          home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+          user: { id: 1, firstName: "John", lastName: "Doe" },
+        },
+        get: jest.fn(function() { return this; }),
+      };
+
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
 
       const response = await request(app)
         .get("/api/v1/business-employee/my-jobs/1")
@@ -417,6 +515,8 @@ describe("Offline Sync - Edge Cases", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     User.findByPk.mockResolvedValue({ id: 1, type: "employee" });
+    // Default mock for co-workers lookup
+    EmployeeJobAssignment.findAll.mockResolvedValue([]);
   });
 
   it("should handle extremely long offline period (48+ hours)", async () => {
@@ -487,9 +587,23 @@ describe("Offline Sync - Edge Cases", () => {
     expect(completeResponse.status).toBe(400);
 
     // Job should still be in started state
-    EmployeeJobAssignmentService.getAssignmentForEmployee.mockResolvedValue({
+    // Router uses EmployeeJobAssignment.findOne directly, not the service
+    const assignmentData = {
       id: 1,
       status: "started",
+      appointmentId: 100,
+      isMarketplacePickup: false,
+      appointment: {
+        date: new Date(),
+        status: "approved",
+        home: { id: 1, address: "123 Main St", numBeds: 3, numBaths: 2 },
+        user: { id: 1, firstName: "John", lastName: "Doe" },
+      },
+    };
+    EmployeeJobAssignment.findOne.mockResolvedValue({
+      ...assignmentData,
+      dataValues: assignmentData,
+      get: jest.fn(function() { return this; }),
     });
 
     const statusResponse = await request(app)

@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-2950+_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-3838_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -378,7 +378,8 @@ Handle situations when guests haven't left by checkout time:
 - Time window premiums (anytime, 10-3, 11-4, 12-2)
 - Cancellation fee and window
 - Refund percentage
-- High volume fees
+- Last-minute booking fee (appointments within 48 hours)
+- Large business volume-based fees (for 50+ jobs/month)
 
 ### Reviews & Ratings
 
@@ -457,6 +458,7 @@ Handle situations when guests haven't left by checkout time:
 - Referral rewards earned
 - Appointment cancellations
 - Supply reminders
+- Last-minute urgent alerts (cleaners within radius)
 
 ### Booking Expiration
 
@@ -1207,6 +1209,28 @@ const available = await CleanerAvailabilityService.isAvailable(cleanerId, date);
 const count = await CleanerAvailabilityService.getDailyJobCount(cleanerId, date);
 ```
 
+### LastMinuteNotificationService
+
+Handles urgent notifications for last-minute bookings (within 48 hours):
+
+```javascript
+const LastMinuteNotificationService = require('./services/LastMinuteNotificationService');
+
+// Find cleaners within radius of property
+const nearbyCleaners = await LastMinuteNotificationService.findNearbyCleaners(
+  homeLat, homeLon, radiusMiles
+);
+
+// Send urgent notifications (push, email, in-app) to nearby cleaners
+await LastMinuteNotificationService.notifyNearbyCleaners(appointment, home, io);
+```
+
+**Features:**
+- Geo-distance filtering using `geoUtils.calculateDistance()`
+- Multi-channel delivery: push notifications, email, in-app, and WebSocket
+- Cleaners sorted by distance (closest first)
+- Configurable notification radius (default 25 miles)
+
 ### GuestNotLeftService
 
 Handles guest-not-left scenarios:
@@ -1300,7 +1324,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (2809 tests)
+# Run all tests (3838 tests)
 npm test
 
 # Run specific test file
@@ -1340,7 +1364,13 @@ npm test -- --watch
 | Preferred Cleaners | 34 | Assignment, client management |
 | Integration | 67 | Full payment flows, e2e |
 | Services | 156 | All service unit tests |
-| **Total** | **2809** | - |
+| Serializers | 85 | PII decryption, decimal parsing, field mapping |
+| Route Ordering | 12 | Express route order validation |
+| Last-Minute Booking | 35 | Threshold detection, notifications, fees |
+| Large Business Fees | 18 | Volume-based fee calculation |
+| Offline Sync | 28 | Offline mode, conflict resolution |
+| Preferred Cleaner Flow | 17 | End-to-end preferred cleaner integration |
+| **Total** | **3838** | - |
 
 ---
 

@@ -26,7 +26,8 @@ jest.mock("../../config/businessConfig", () => ({
 }));
 
 jest.mock("../../services/EncryptionService", () => ({
-  decrypt: jest.fn((value) => value.replace("iv:", "decrypted_")),
+  // Remove "iv:" prefix to get valid coordinate values
+  decrypt: jest.fn((value) => value.replace("iv:", "")),
 }));
 
 jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({

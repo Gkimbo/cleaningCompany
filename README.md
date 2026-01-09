@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-2950+_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-3838_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -433,7 +433,7 @@ kleanr/
 ## Testing
 
 ```bash
-# Run all server tests (2809 tests)
+# Run all server tests (3838 tests)
 cd server && npm test
 
 # Run specific test file
@@ -479,7 +479,9 @@ npm test -- --watch
 | Last-Minute Booking | 45 | Notification service, price calculation, route tests |
 | Route Ordering | 12 | Express route interception prevention |
 | Integration | 67 | Full payment flows, e2e |
-| **Total** | **2950+** | - |
+| Offline Sync | 28 | Offline mode, conflict resolution |
+| Preferred Cleaner Flow | 17 | End-to-end preferred cleaner integration |
+| **Total** | **3838** | - |
 
 ---
 

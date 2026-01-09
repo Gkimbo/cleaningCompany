@@ -2,6 +2,9 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 
+// Set SESSION_SECRET before any router imports (routers capture it at module load time)
+process.env.SESSION_SECRET = "test_secret";
+
 // Mock models
 jest.mock("../../models", () => ({
   User: {
@@ -58,6 +61,12 @@ jest.mock("../../models", () => ({
     create: jest.fn(),
     destroy: jest.fn(),
   },
+  CleanerClient: {
+    findOne: jest.fn(),
+    findAll: jest.fn(),
+    create: jest.fn(),
+    destroy: jest.fn(),
+  },
 }));
 
 // Mock services
@@ -69,9 +78,12 @@ jest.mock("../../services/UserInfoClass", () => ({
   editAppointmentLinensInDB: jest.fn(),
 }));
 
-jest.mock("../../services/CalculatePrice", () =>
-  jest.fn(() => 150)
-);
+const mockCalculatePrice = jest.fn(() => 150);
+mockCalculatePrice.checkLastMinuteBooking = jest.fn().mockResolvedValue({
+  isLastMinute: false,
+  fee: 0,
+});
+jest.mock("../../services/CalculatePrice", () => mockCalculatePrice);
 
 jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendEmailCancellation: jest.fn().mockResolvedValue(true),
@@ -127,6 +139,12 @@ jest.mock("../../services/IncentiveService", () => ({
     remainingCleanings: 0,
     feeReductionPercent: 0,
   }),
+}));
+
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => value ? value.replace("iv:", "") : ""),
+  encrypt: jest.fn((value) => `iv:${value}`),
 }));
 
 jest.mock("../../config/businessConfig", () => ({
@@ -544,8 +562,8 @@ describe("Appointment Routes", () => {
       expect(res.body.requiresAcknowledgment).toBe(true);
     });
 
-    // Edge case: 3 beds but only 2 baths (not large - both must exceed 2)
-    it("should NOT consider 3 beds and 2 baths as large home", async () => {
+    // Edge case: 3 beds but only 2 baths (large - 3+ beds OR 3+ baths triggers large home)
+    it("should consider 3 beds and 2 baths as edge large home", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         homeId: 1,
@@ -563,12 +581,14 @@ describe("Appointment Routes", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.isLargeHome).toBe(false);
-      expect(res.body.requiresAcknowledgment).toBe(false);
+      // isLargeHome uses OR logic: 3+ beds OR 3+ baths
+      expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
+      expect(res.body.soloAllowed).toBe(true);
     });
 
-    // Edge case: 2 beds but 3 baths (not large - both must exceed 2)
-    it("should NOT consider 2 beds and 3 baths as large home", async () => {
+    // Edge case: 2 beds but 3 baths (large - 3+ beds OR 3+ baths triggers large home)
+    it("should consider 2 beds and 3 baths as edge large home", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         homeId: 1,
@@ -586,8 +606,10 @@ describe("Appointment Routes", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.isLargeHome).toBe(false);
-      expect(res.body.requiresAcknowledgment).toBe(false);
+      // isLargeHome uses OR logic: 3+ beds OR 3+ baths
+      expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
+      expect(res.body.soloAllowed).toBe(true);
     });
 
     // Edge case: exactly 2 beds and 2 baths (boundary - not large)
@@ -948,8 +970,8 @@ describe("Appointment Routes", () => {
       expect(res.body.isLargeHome).toBe(true);
     });
 
-    // Edge case: 3 beds, 2 baths does NOT require acknowledgment
-    it("should NOT require acknowledgment for 3 beds, 2 baths", async () => {
+    // Edge case: 3 beds, 2 baths is edge large home (requires acknowledgment)
+    it("should succeed with acknowledgment for 3 beds, 2 baths edge large home", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         dataValues: { userId: 1, date: "2025-01-15" },
         homeId: 1,
@@ -971,14 +993,14 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/request-employee")
-        .send({ id: 2, appointmentId: 1 }); // No acknowledged field needed
+        .send({ id: 2, appointmentId: 1, acknowledged: true }); // Edge large homes require acknowledgment
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe("Request sent to the client for approval");
     });
 
-    // Edge case: 2 beds, 3 baths does NOT require acknowledgment
-    it("should NOT require acknowledgment for 2 beds, 3 baths", async () => {
+    // Edge case: 2 beds, 3 baths is edge large home (requires acknowledgment)
+    it("should succeed with acknowledgment for 2 beds, 3 baths edge large home", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         dataValues: { userId: 1, date: "2025-01-15" },
         homeId: 1,
@@ -1000,7 +1022,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/request-employee")
-        .send({ id: 2, appointmentId: 1 });
+        .send({ id: 2, appointmentId: 1, acknowledged: true }); // Edge large homes require acknowledgment
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe("Request sent to the client for approval");

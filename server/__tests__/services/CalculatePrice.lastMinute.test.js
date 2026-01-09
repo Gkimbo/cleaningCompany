@@ -22,10 +22,10 @@ describe("CalculatePrice - Last-Minute Booking", () => {
 
   describe("checkLastMinuteBooking", () => {
     it("should identify a booking within threshold as last-minute", async () => {
-      // Mock current time and set appointment 24 hours ahead
+      // Set appointment 24 hours ahead - use full ISO string to avoid timezone issues
       const now = new Date();
       const appointment = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const appointmentDate = appointment.toISOString().split("T")[0];
+      const appointmentDate = appointment.toISOString();
 
       const result = await checkLastMinuteBooking(appointmentDate);
 
@@ -37,10 +37,10 @@ describe("CalculatePrice - Last-Minute Booking", () => {
     });
 
     it("should NOT identify a booking outside threshold as last-minute", async () => {
-      // Set appointment 72 hours ahead (3 days)
+      // Set appointment 72 hours ahead (3 days) - use full ISO string to avoid timezone issues
       const now = new Date();
       const appointment = new Date(now.getTime() + 72 * 60 * 60 * 1000);
-      const appointmentDate = appointment.toISOString().split("T")[0];
+      const appointmentDate = appointment.toISOString();
 
       const result = await checkLastMinuteBooking(appointmentDate);
 
@@ -69,10 +69,10 @@ describe("CalculatePrice - Last-Minute Booking", () => {
         },
       });
 
-      // 60 hours ahead (within 72 hour threshold)
+      // 60 hours ahead (within 72 hour threshold) - use full ISO string to avoid timezone issues
       const now = new Date();
       const appointment = new Date(now.getTime() + 60 * 60 * 60 * 1000);
-      const appointmentDate = appointment.toISOString().split("T")[0];
+      const appointmentDate = appointment.toISOString();
 
       const result = await checkLastMinuteBooking(appointmentDate);
 
@@ -84,10 +84,10 @@ describe("CalculatePrice - Last-Minute Booking", () => {
     it("should use default values when pricing config is missing", async () => {
       getPricingConfig.mockResolvedValue({});
 
-      // 24 hours ahead
+      // 24 hours ahead - use full ISO string to avoid timezone issues
       const now = new Date();
       const appointment = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const appointmentDate = appointment.toISOString().split("T")[0];
+      const appointmentDate = appointment.toISOString();
 
       const result = await checkLastMinuteBooking(appointmentDate);
 
@@ -104,12 +104,12 @@ describe("CalculatePrice - Last-Minute Booking", () => {
         },
       };
 
-      // 12 hours ahead
+      // 12 hours ahead - use full datetime to avoid timezone issues
       const now = new Date();
       const appointment = new Date(now.getTime() + 12 * 60 * 60 * 1000);
-      const appointmentDate = appointment.toISOString().split("T")[0];
+      const appointmentDateTime = appointment.toISOString();
 
-      const result = await checkLastMinuteBooking(appointmentDate, customConfig);
+      const result = await checkLastMinuteBooking(appointmentDateTime, customConfig);
 
       expect(getPricingConfig).not.toHaveBeenCalled();
       expect(result.isLastMinute).toBe(true);

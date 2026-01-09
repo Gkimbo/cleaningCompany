@@ -115,12 +115,14 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Team calendar view
 - Job assignment to employees
 - Payroll tracking (hourly/flat rate)
-- Client invitation via email
-- Direct client management
-- Custom per-home pricing
-- Financial dashboard
+- **My Clients page** with full client management
+- Client invitation via email with home details
+- Book appointments for clients directly
+- Custom per-home pricing with platform alignment
+- Financial dashboard with revenue metrics
 - Team messaging
-- Recurring schedule setup
+- Recurring schedule setup (weekly/biweekly/monthly)
+- Client history and payment tracking
 
 </td>
 <td width="50%" valign="top">
@@ -182,6 +184,9 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Review System** | Multi-aspect bidirectional reviews (cleaning quality, punctuality, professionalism, communication) |
 | **Push Notifications** | Expo push notifications with preferences per notification type |
 | **Preferred Tiers** | Display cleaner tier status (Bronze/Silver/Gold/Platinum) with bonus tracking |
+| **Multi-Cleaner Jobs** | Large home support with job offers, room assignments, and split pricing |
+| **Last-Minute Booking** | Urgent booking support with 48-hour threshold and fee display |
+| **Guest-Not-Left** | GPS-verified reporting when guests haven't left by checkout |
 
 ---
 
@@ -215,6 +220,11 @@ client/
 │   │   │   └── BusinessOwnerCalendar.js
 │   │   ├── calendarSync/         # iCal integration
 │   │   ├── cleaner/              # Cleaner dashboard
+│   │   │   ├── MyClientsPage.js
+│   │   │   ├── ClientDetailPage.js
+│   │   │   ├── InviteClientModal.js
+│   │   │   ├── BookForClientModal.js
+│   │   │   └── SetupRecurringModal.js
 │   │   ├── client/               # Homeowner views
 │   │   ├── editHome/             # Home configuration
 │   │   ├── employeeAssignments/  # Job assignments & photos
@@ -230,6 +240,11 @@ client/
 │   │   ├── messaging/            # Chat system
 │   │   ├── modals/               # Modal components
 │   │   ├── multiCleaner/         # Multi-cleaner support
+│   │   │   ├── MultiCleanerJobCard.js
+│   │   │   ├── MultiCleanerOfferModal.js
+│   │   │   ├── MultiCleanerChecklist.js
+│   │   │   ├── LargeHomeWarningModal.js
+│   │   │   └── CleanerDropoutModal.js
 │   │   ├── notifications/        # Notification feed
 │   │   ├── offline/              # Offline mode UI
 │   │   │   ├── OfflineBanner.js
@@ -467,6 +482,32 @@ const form = await TaxService.get1099NECData(token, 2024);
 const report = await TaxService.getPlatformTaxReport(token, 2024);
 ```
 
+### CleanerClientService
+
+```javascript
+import CleanerClientService from './services/fetchRequests/CleanerClientService';
+
+// Get all clients (business owner)
+const clients = await CleanerClientService.getMyClients(token);
+
+// Invite new client
+await CleanerClientService.inviteClient(token, {
+  email, firstName, lastName, homeDetails, recurring
+});
+
+// Get client details with appointment history
+const clientDetails = await CleanerClientService.getClientDetails(token, clientId);
+
+// Book for client
+await CleanerClientService.bookForClient(token, clientId, appointmentData);
+
+// Update client pricing
+await CleanerClientService.updateDefaultPrice(token, clientId, price);
+
+// Get platform price for alignment
+const price = await CleanerClientService.getPlatformPrice(token, clientId);
+```
+
 ### OfflineManager
 
 ```javascript
@@ -550,6 +591,46 @@ Photo documentation with offline capability:
   offlineMode={!isOnline}
 />
 ```
+
+### MyClientsPage (Business Owner)
+
+Dashboard for business owner client management:
+
+```javascript
+<MyClientsPage
+  onSelectClient={(clientId) => navigate(`/clients/${clientId}`)}
+  onInviteClient={() => setShowInviteModal(true)}
+/>
+```
+
+**Features:**
+- Client list with search and filter
+- Invite new clients via email
+- Per-client pricing management
+- Appointment booking for clients
+- Recurring schedule setup
+- Client history view
+- Platform price alignment
+
+### MultiCleanerJobCard
+
+Display and manage multi-cleaner jobs:
+
+```javascript
+<MultiCleanerJobCard
+  job={multiCleanerJob}
+  onAcceptOffer={(offerId) => handleAccept(offerId)}
+  onDeclineOffer={(offerId) => handleDecline(offerId)}
+  showRoomAssignments={true}
+/>
+```
+
+**Features:**
+- Job offer accept/decline
+- Room assignments view
+- Co-worker information
+- Split pricing display
+- Completion tracking
 
 ### CleaningChecklist
 

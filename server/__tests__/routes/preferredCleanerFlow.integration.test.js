@@ -396,7 +396,8 @@ describe("Preferred Cleaner Flow - Integration Tests", () => {
 
         expect(res.status).toBe(200);
         expect(res.body.preferredCleaners).toHaveLength(1);
-        expect(res.body.preferredCleaners[0].cleanerName).toBe("Jane Cleaner");
+        expect(res.body.preferredCleaners[0].cleaner.firstName).toBe("Jane");
+        expect(res.body.preferredCleaners[0].cleaner.lastName).toBe("Cleaner");
         expect(res.body.preferredCleaners[0].setBy).toBe("review");
       });
     });

@@ -2,8 +2,11 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 
+// Set SESSION_SECRET before requiring the router (router captures it at module load time)
+process.env.SESSION_SECRET = "test-secret";
+
 // Mock dependencies before requiring the router
-jest.mock("../../../models", () => ({
+jest.mock("../../models", () => ({
   User: {
     findByPk: jest.fn(),
   },
@@ -15,7 +18,7 @@ jest.mock("../../../models", () => ({
   },
 }));
 
-jest.mock("../../../config/businessConfig", () => ({
+jest.mock("../../config/businessConfig", () => ({
   getPricingConfig: jest.fn(),
   businessConfig: {
     staffing: {
@@ -25,13 +28,13 @@ jest.mock("../../../config/businessConfig", () => ({
   },
 }));
 
-jest.mock("../../../services/EncryptionService", () => ({
+jest.mock("../../services/EncryptionService", () => ({
   decrypt: jest.fn((value) => `decrypted_${value}`),
 }));
 
-const { User, PricingConfig } = require("../../../models");
-const { getPricingConfig, businessConfig } = require("../../../config/businessConfig");
-const pricingRouter = require("../../../routes/api/v1/pricingRouter");
+const { User, PricingConfig } = require("../../models");
+const { getPricingConfig, businessConfig } = require("../../config/businessConfig");
+const pricingRouter = require("../../routes/api/v1/pricingRouter");
 
 describe("pricingRouter - Last-Minute Booking Configuration", () => {
   let app;
