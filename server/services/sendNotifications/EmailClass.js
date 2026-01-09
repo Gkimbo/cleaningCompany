@@ -4609,6 +4609,267 @@ Kleanr Team`;
       throw error;
     }
   }
+
+  // =========================================================================
+  // 2-Step Completion Confirmation Email Templates
+  // =========================================================================
+
+  /**
+   * Email to homeowner when cleaner submits completion (awaiting approval)
+   */
+  static async sendCompletionSubmittedHomeowner(
+    email,
+    homeownerName,
+    appointmentDate,
+    address,
+    cleanerName,
+    hoursUntilAutoApproval
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Complete! ✨",
+        subtitle: "Please review and approve",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>Great news! <strong>${cleanerName}</strong> has finished cleaning your home at <strong>${address}</strong>.</p>
+          <p>Please review the cleaning and let us know how it went by tapping "Looks Good" in the app.</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Cleaning Details",
+          items: [
+            { label: "Address", value: address },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Cleaned By", value: cleanerName },
+            { label: "Status", value: "⏳ Awaiting Your Approval" },
+          ],
+        },
+        warningBox: {
+          icon: "⏱️",
+          text: `<strong>Auto-approval in ${hoursUntilAutoApproval} hours:</strong> If you don't respond, the cleaning will be automatically approved and payment will be sent to the cleaner.`,
+          bgColor: "#e0f2fe",
+          borderColor: "#0ea5e9",
+          textColor: "#0369a1",
+        },
+        steps: {
+          title: "📱 Review in the App",
+          items: [
+            "Open the Kleanr app",
+            "Go to your Dashboard",
+            'Tap "Looks Good" to approve or leave feedback',
+            "Your cleaner will be paid after approval",
+          ],
+        },
+        ctaText: "Open the Kleanr app to review your cleaning!",
+        footerMessage: "Thank you for choosing Kleanr",
+      });
+
+      const textContent = `Hi ${homeownerName}!
+
+Great news! ${cleanerName} has finished cleaning your home at ${address}.
+
+Please review the cleaning and let us know how it went.
+
+CLEANING DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${address}
+Date: ${formatDate(appointmentDate)}
+Cleaned By: ${cleanerName}
+Status: ⏳ Awaiting Your Approval
+
+⏱️ AUTO-APPROVAL IN ${hoursUntilAutoApproval} HOURS
+If you don't respond, the cleaning will be automatically approved and payment will be sent to the cleaner.
+
+HOW TO REVIEW
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Go to your Dashboard
+3. Tap "Looks Good" to approve or leave feedback
+4. Your cleaner will be paid after approval
+
+Open the Kleanr app to review your cleaning!
+
+Thank you for choosing Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✨ ${cleanerName} finished cleaning - Please Review!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Completion submitted email sent to homeowner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending completion submitted email:", error);
+    }
+  }
+
+  /**
+   * Email to homeowner when cleaning is auto-approved
+   */
+  static async sendCompletionAutoApproved(
+    email,
+    homeownerName,
+    appointmentDate,
+    address,
+    cleanerName
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Auto-Approved",
+        subtitle: "Payment sent to cleaner",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>Your cleaning on <strong>${formatDate(appointmentDate)}</strong> at <strong>${address}</strong> has been <strong>auto-approved</strong> because the approval window has passed.</p>
+          <p>Payment has been sent to <strong>${cleanerName}</strong>.</p>`,
+        infoBox: {
+          icon: "✅",
+          title: "Approval Details",
+          items: [
+            { label: "Address", value: address },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Cleaner", value: cleanerName },
+            { label: "Status", value: "✅ Auto-Approved" },
+          ],
+        },
+        warningBox: {
+          icon: "⭐",
+          text: "<strong>We'd love your feedback!</strong> Even though the cleaning was auto-approved, you can still leave a review for your cleaner.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to leave a review!",
+        footerMessage: "Thank you for choosing Kleanr",
+      });
+
+      const textContent = `Hi ${homeownerName}!
+
+Your cleaning on ${formatDate(appointmentDate)} at ${address} has been auto-approved because the approval window has passed.
+
+Payment has been sent to ${cleanerName}.
+
+APPROVAL DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${address}
+Date: ${formatDate(appointmentDate)}
+Cleaner: ${cleanerName}
+Status: ✅ Auto-Approved
+
+⭐ LEAVE A REVIEW
+Even though the cleaning was auto-approved, you can still leave a review for your cleaner.
+
+Open the Kleanr app to leave a review!
+
+Thank you for choosing Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Cleaning Auto-Approved - ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Completion auto-approved email sent to homeowner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending completion auto-approved email:", error);
+    }
+  }
+
+  /**
+   * Email to cleaner when their work is approved
+   */
+  static async sendCompletionApprovedCleaner(
+    email,
+    cleanerName,
+    appointmentDate,
+    payoutAmount
+  ) {
+    try {
+      const transporter = createTransporter();
+      const formattedPayout = payoutAmount
+        ? `$${parseFloat(payoutAmount).toFixed(2)}`
+        : "Your share";
+
+      const htmlContent = createEmailTemplate({
+        title: "Job Approved! 🎉",
+        subtitle: "Payment is on the way",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Congratulations, ${cleanerName}!`,
+        content: `<p>Your cleaning job on <strong>${formatDate(appointmentDate)}</strong> has been approved!</p>
+          <p>Payment of <strong>${formattedPayout}</strong> is being processed and will be sent to your connected bank account.</p>`,
+        infoBox: {
+          icon: "💰",
+          title: "Payment Details",
+          items: [
+            { label: "Job Date", value: formatDate(appointmentDate) },
+            { label: "Amount", value: formattedPayout },
+            { label: "Status", value: "✅ Approved & Processing" },
+          ],
+        },
+        warningBox: {
+          icon: "🏦",
+          text: "<strong>Payment Timeline:</strong> Payouts typically arrive in your bank account within 1-2 business days.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0ea5e9",
+          textColor: "#0369a1",
+        },
+        ctaText: "Keep up the great work!",
+        footerMessage: "Thank you for being a Kleanr pro",
+      });
+
+      const textContent = `Congratulations, ${cleanerName}!
+
+Your cleaning job on ${formatDate(appointmentDate)} has been approved!
+
+Payment of ${formattedPayout} is being processed and will be sent to your connected bank account.
+
+PAYMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Job Date: ${formatDate(appointmentDate)}
+Amount: ${formattedPayout}
+Status: ✅ Approved & Processing
+
+🏦 PAYMENT TIMELINE
+Payouts typically arrive in your bank account within 1-2 business days.
+
+Keep up the great work!
+
+Thank you for being a Kleanr pro!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🎉 Job Approved - Payment on the way!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Completion approved email sent to cleaner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending completion approved email to cleaner:", error);
+    }
+  }
 }
 
 module.exports = Email;

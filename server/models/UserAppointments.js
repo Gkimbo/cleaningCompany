@@ -273,6 +273,49 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "When urgent notifications were sent to nearby cleaners",
 		},
+		// 2-Step Completion Confirmation fields
+		completionStatus: {
+			type: DataTypes.ENUM("in_progress", "submitted", "approved", "auto_approved"),
+			allowNull: false,
+			defaultValue: "in_progress",
+			comment: "2-step completion status: in_progress -> submitted -> approved/auto_approved",
+		},
+		completionSubmittedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When cleaner marked job complete and submitted checklist",
+		},
+		completionChecklistData: {
+			type: DataTypes.JSONB,
+			allowNull: true,
+			comment: "Checklist progress data submitted by cleaner",
+		},
+		completionNotes: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Optional notes from cleaner about the cleaning",
+		},
+		completionApprovedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When completion was approved (manually or auto)",
+		},
+		completionApprovedBy: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "User ID who approved, null if auto-approved by system",
+		},
+		autoApprovalExpiresAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When auto-approval will trigger if homeowner doesn't respond",
+		},
+		homeownerFeedbackRequired: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if homeowner selected 'doesn't look good' - review required",
+		},
 	});
 
 	// Define the one-to-many relationship with User
@@ -369,6 +412,56 @@ module.exports = (sequelize, DataTypes) => {
 			decryptPIIFields(result);
 		}
 	});
+
+	// =========================================================================
+	// 2-Step Completion Confirmation Helper Methods
+	// =========================================================================
+
+	/**
+	 * Check if appointment is awaiting homeowner approval
+	 */
+	UserAppointments.prototype.isAwaitingApproval = function () {
+		return this.completionStatus === "submitted";
+	};
+
+	/**
+	 * Check if auto-approval window has expired
+	 */
+	UserAppointments.prototype.isAutoApprovalExpired = function () {
+		return (
+			this.completionStatus === "submitted" &&
+			this.autoApprovalExpiresAt &&
+			new Date() > new Date(this.autoApprovalExpiresAt)
+		);
+	};
+
+	/**
+	 * Check if appointment can be approved by homeowner
+	 */
+	UserAppointments.prototype.canBeApproved = function () {
+		return this.completionStatus === "submitted" && !this.completed;
+	};
+
+	/**
+	 * Check if completion has been approved (manually or auto)
+	 */
+	UserAppointments.prototype.isCompletionApproved = function () {
+		return (
+			this.completionStatus === "approved" ||
+			this.completionStatus === "auto_approved"
+		);
+	};
+
+	/**
+	 * Get time remaining until auto-approval (in seconds)
+	 */
+	UserAppointments.prototype.getTimeUntilAutoApproval = function () {
+		if (!this.autoApprovalExpiresAt || this.completionStatus !== "submitted") {
+			return null;
+		}
+		const remaining = new Date(this.autoApprovalExpiresAt).getTime() - Date.now();
+		return Math.max(0, Math.floor(remaining / 1000));
+	};
 
 	return UserAppointments;
 };

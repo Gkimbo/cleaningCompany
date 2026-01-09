@@ -249,6 +249,19 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       comment: "Note describing why the change was made",
     },
+    // 2-Step Completion Confirmation settings
+    completionAutoApprovalHours: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 4,
+      comment: "Hours before auto-approval triggers (configurable by owners)",
+    },
+    completionRequiresPhotos: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "Whether photos are required for completion submission",
+    },
   });
 
   PricingConfig.associate = (models) => {

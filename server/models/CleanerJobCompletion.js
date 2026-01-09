@@ -67,6 +67,44 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: "assigned",
     },
+    // 2-Step Completion Confirmation fields (per-cleaner)
+    completionStatus: {
+      type: DataTypes.ENUM("in_progress", "submitted", "approved", "auto_approved"),
+      allowNull: false,
+      defaultValue: "in_progress",
+      comment: "Per-cleaner 2-step completion status",
+    },
+    completionSubmittedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When this cleaner submitted their completion",
+    },
+    completionNotes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: "Optional notes from this cleaner",
+    },
+    completionApprovedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When this cleaner's completion was approved",
+    },
+    completionApprovedBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "User ID who approved this cleaner, null if auto-approved",
+    },
+    autoApprovalExpiresAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When auto-approval will trigger for this cleaner",
+    },
+    homeownerFeedbackRequired: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "True if homeowner raised concerns about this cleaner's work",
+    },
   });
 
   CleanerJobCompletion.associate = (models) => {
@@ -151,6 +189,56 @@ module.exports = (sequelize, DataTypes) => {
    */
   CleanerJobCompletion.prototype.isActive = function () {
     return !["dropped_out", "no_show"].includes(this.status);
+  };
+
+  // =========================================================================
+  // 2-Step Completion Confirmation Helper Methods
+  // =========================================================================
+
+  /**
+   * Check if this cleaner's completion is awaiting homeowner approval
+   */
+  CleanerJobCompletion.prototype.isAwaitingApproval = function () {
+    return this.completionStatus === "submitted";
+  };
+
+  /**
+   * Check if auto-approval window has expired for this cleaner
+   */
+  CleanerJobCompletion.prototype.isAutoApprovalExpired = function () {
+    return (
+      this.completionStatus === "submitted" &&
+      this.autoApprovalExpiresAt &&
+      new Date() > new Date(this.autoApprovalExpiresAt)
+    );
+  };
+
+  /**
+   * Check if this cleaner's completion can be approved by homeowner
+   */
+  CleanerJobCompletion.prototype.canBeApproved = function () {
+    return this.completionStatus === "submitted";
+  };
+
+  /**
+   * Check if this cleaner's completion has been approved (manually or auto)
+   */
+  CleanerJobCompletion.prototype.isCompletionApproved = function () {
+    return (
+      this.completionStatus === "approved" ||
+      this.completionStatus === "auto_approved"
+    );
+  };
+
+  /**
+   * Get time remaining until auto-approval (in seconds)
+   */
+  CleanerJobCompletion.prototype.getTimeUntilAutoApproval = function () {
+    if (!this.autoApprovalExpiresAt || this.completionStatus !== "submitted") {
+      return null;
+    }
+    const remaining = new Date(this.autoApprovalExpiresAt).getTime() - Date.now();
+    return Math.max(0, Math.floor(remaining / 1000));
   };
 
   return CleanerJobCompletion;

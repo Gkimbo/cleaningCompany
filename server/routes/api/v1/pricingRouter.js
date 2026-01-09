@@ -121,6 +121,9 @@ pricingRouter.get("/config", verifyOwner, async (req, res) => {
         lastMinuteFee: activeConfig.lastMinuteFee || 50,
         lastMinuteThresholdHours: activeConfig.lastMinuteThresholdHours || 48,
         lastMinuteNotificationRadiusMiles: parseFloat(activeConfig.lastMinuteNotificationRadiusMiles || 25),
+        // Completion approval settings
+        completionAutoApprovalHours: activeConfig.completionAutoApprovalHours || 4,
+        completionRequiresPhotos: activeConfig.completionRequiresPhotos || false,
         isActive: activeConfig.isActive,
         updatedBy: activeConfig.updatedBy,
         changeNote: activeConfig.changeNote,
@@ -218,6 +221,9 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
       lastMinuteFee,
       lastMinuteThresholdHours,
       lastMinuteNotificationRadiusMiles,
+      // Completion approval settings
+      completionAutoApprovalHours,
+      completionRequiresPhotos,
       // Other
       highVolumeFee,
       changeNote,
@@ -339,6 +345,19 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
       });
     }
 
+    // Validate completion approval settings
+    if (completionAutoApprovalHours !== undefined && (typeof completionAutoApprovalHours !== "number" || completionAutoApprovalHours < 1 || completionAutoApprovalHours > 24)) {
+      return res.status(400).json({
+        error: "completionAutoApprovalHours must be between 1 and 24",
+      });
+    }
+
+    if (completionRequiresPhotos !== undefined && typeof completionRequiresPhotos !== "boolean") {
+      return res.status(400).json({
+        error: "completionRequiresPhotos must be a boolean",
+      });
+    }
+
     // Build config update object with required and optional fields
     const configData = {
       basePrice,
@@ -378,6 +397,9 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
     if (lastMinuteFee !== undefined) configData.lastMinuteFee = lastMinuteFee;
     if (lastMinuteThresholdHours !== undefined) configData.lastMinuteThresholdHours = lastMinuteThresholdHours;
     if (lastMinuteNotificationRadiusMiles !== undefined) configData.lastMinuteNotificationRadiusMiles = lastMinuteNotificationRadiusMiles;
+    // Add completion approval fields if provided
+    if (completionAutoApprovalHours !== undefined) configData.completionAutoApprovalHours = completionAutoApprovalHours;
+    if (completionRequiresPhotos !== undefined) configData.completionRequiresPhotos = completionRequiresPhotos;
 
     // Create new pricing config
     const newConfig = await PricingConfig.updatePricing(
@@ -460,6 +482,9 @@ pricingRouter.get("/history", verifyOwner, async (req, res) => {
           lastMinuteFee: config.lastMinuteFee || 50,
           lastMinuteThresholdHours: config.lastMinuteThresholdHours || 48,
           lastMinuteNotificationRadiusMiles: parseFloat(config.lastMinuteNotificationRadiusMiles || 25),
+          // Completion approval settings
+          completionAutoApprovalHours: config.completionAutoApprovalHours || 4,
+          completionRequiresPhotos: config.completionRequiresPhotos || false,
         },
       })),
     });

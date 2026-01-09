@@ -523,6 +523,58 @@ class PushNotification {
       newCleanerName,
     });
   }
+
+  // ==========================================
+  // 2-STEP COMPLETION CONFIRMATION NOTIFICATIONS
+  // ==========================================
+
+  // 39. Completion awaiting approval (to homeowner)
+  static async sendPushCompletionAwaitingApproval(expoPushToken, appointmentDate, cleanerName) {
+    const title = "Cleaning Complete! ✨";
+    const body = `${cleanerName} finished cleaning on ${appointmentDate}. Please review and approve in the app.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "completion_awaiting_approval",
+      appointmentDate,
+      cleanerName,
+      requiresAction: true,
+    });
+  }
+
+  // 40. Completion approved (to cleaner)
+  static async sendPushCompletionApproved(expoPushToken, appointmentDate, payoutAmount) {
+    const formattedPayout = payoutAmount ? `$${parseFloat(payoutAmount).toFixed(2)}` : "your payment";
+    const title = "Job Approved! 🎉";
+    const body = `Your cleaning on ${appointmentDate} was approved! ${formattedPayout} is on the way.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "completion_approved",
+      appointmentDate,
+      payoutAmount,
+    });
+  }
+
+  // 41. Completion auto-approved (to homeowner)
+  static async sendPushCompletionAutoApproved(expoPushToken, appointmentDate, recipient = "homeowner") {
+    if (recipient === "homeowner") {
+      const title = "Cleaning Auto-Approved";
+      const body = `Your cleaning on ${appointmentDate} was auto-approved. Payment sent to cleaner.`;
+
+      return this.sendPushNotification(expoPushToken, title, body, {
+        type: "completion_auto_approved",
+        appointmentDate,
+      });
+    } else {
+      // For cleaner
+      const title = "Job Auto-Approved! 🎉";
+      const body = `Your cleaning on ${appointmentDate} was auto-approved! Payment is on the way.`;
+
+      return this.sendPushNotification(expoPushToken, title, body, {
+        type: "completion_auto_approved",
+        appointmentDate,
+      });
+    }
+  }
 }
 
 module.exports = PushNotification;

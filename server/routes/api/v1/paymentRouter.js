@@ -1944,13 +1944,17 @@ paymentRouter.post("/capture-payment", async (req, res) => {
 
 /**
  * ------------------------------------------------------
- * Mark Job Complete & Process Payouts
+ * Mark Job Complete - 2-Step Completion Flow
  * Called when cleaner marks job as done (payment already captured)
+ * Now submits for homeowner approval instead of immediate payout
  * Requires before AND after photos to be uploaded first
  * ------------------------------------------------------
  */
 paymentRouter.post("/complete-job", async (req, res) => {
-  const { appointmentId, cleanerId } = req.body;
+  const { appointmentId, cleanerId, checklistData } = req.body;
+  const { calculateAutoApprovalExpiration } = require("../../../services/cron/CompletionApprovalMonitor");
+  const NotificationService = require("../../../services/NotificationService");
+  const { PricingConfig } = require("../../../models");
 
   try {
     const appointment = await UserAppointments.findByPk(appointmentId);
@@ -1959,6 +1963,15 @@ paymentRouter.post("/complete-job", async (req, res) => {
 
     if (!appointment.paid)
       return res.status(400).json({ error: "Payment not yet captured" });
+
+    // Check if already submitted or approved
+    if (appointment.completionStatus === "submitted") {
+      return res.status(400).json({ error: "Completion already submitted. Awaiting homeowner approval." });
+    }
+
+    if (appointment.completionStatus === "approved" || appointment.completionStatus === "auto_approved") {
+      return res.status(400).json({ error: "Job already approved" });
+    }
 
     if (appointment.completed)
       return res.status(400).json({ error: "Job already marked as complete" });
@@ -1991,8 +2004,12 @@ paymentRouter.post("/complete-job", async (req, res) => {
       },
     });
 
-    // Only require photos for non-business-owner cleaners
-    if (!isBusinessOwner) {
+    // Check if photos are required by platform config
+    const config = await PricingConfig.getActive();
+    const photosRequired = config?.completionRequiresPhotos || false;
+
+    // Only require photos for non-business-owner cleaners (or if platform requires)
+    if (!isBusinessOwner || photosRequired) {
       if (beforePhotos === 0) {
         return res.status(400).json({
           error: "Before photos are required to complete the job",
@@ -2008,23 +2025,21 @@ paymentRouter.post("/complete-job", async (req, res) => {
       }
     }
 
-    // Mark as completed
-    await appointment.update({ completed: true });
+    // Calculate auto-approval expiration
+    const autoApprovalExpiresAt = await calculateAutoApprovalExpiration();
 
-    // Clean up any pending requests for this completed appointment
-    await UserPendingRequests.destroy({
-      where: { appointmentId: appointment.id },
+    // Submit for approval (don't mark complete yet - that happens after approval)
+    await appointment.update({
+      completionStatus: "submitted",
+      completionSubmittedAt: new Date(),
+      completionChecklistData: checklistData || null,
+      autoApprovalExpiresAt,
     });
 
-    // Process payouts to cleaners (90% of their share)
-    const payoutResults = await processCleanerPayouts(appointment);
-
-    // Send completion notifications to homeowner
+    // Send notifications to homeowner about pending approval
     try {
       const homeowner = await User.findByPk(appointment.userId);
-      const home = await UserHomes.findByPk(appointment.homeId);
-      const cleanerIdForNotification = cleanerId || (appointment.employeesAssigned && appointment.employeesAssigned[0]);
-      const cleaner = cleanerIdForNotification ? await User.findByPk(cleanerIdForNotification) : null;
+      const cleaner = cleanerIdToCheck ? await User.findByPk(cleanerIdToCheck) : null;
 
       if (homeowner && home) {
         const address = {
@@ -2033,40 +2048,56 @@ paymentRouter.post("/complete-job", async (req, res) => {
           state: EncryptionService.decrypt(home.state),
           zipcode: EncryptionService.decrypt(home.zipcode),
         };
-        const cleanerName = cleaner?.username || "Your Cleaner";
+        const cleanerName = cleaner
+          ? EncryptionService.decrypt(cleaner.firstName)
+          : "Your Cleaner";
+        const homeAddress = `${address.street}, ${address.city}`;
+        const hoursUntilAutoApproval = Math.round((autoApprovalExpiresAt - new Date()) / 3600000);
+
+        // In-app notification
+        await NotificationService.createNotification({
+          userId: homeowner.id,
+          type: "completion_submitted",
+          title: "Cleaning Complete!",
+          body: `${cleanerName} has finished cleaning ${homeAddress}. Please review and approve.`,
+          data: { appointmentId: appointment.id },
+          actionRequired: true,
+          relatedAppointmentId: appointment.id,
+        });
 
         // Send push notification
         if (homeowner.expoPushToken) {
-          await PushNotification.sendPushCleaningCompleted(
+          await PushNotification.sendPushCompletionAwaitingApproval(
             homeowner.expoPushToken,
-            homeowner.username || homeowner.firstName,
-            appointment.date,
-            address
-          );
-        }
-
-        // Send email notification
-        if (homeowner.email) {
-          await Email.sendCleaningCompletedNotification(
-            EncryptionService.decrypt(homeowner.email),
-            homeowner.username || EncryptionService.decrypt(homeowner.firstName),
-            address,
             appointment.date,
             cleanerName
           );
         }
 
-        console.log(`[Complete Job] Notifications sent to homeowner ${homeowner.id} for appointment ${appointment.id}`);
+        // Send email notification
+        if (homeowner.email) {
+          await Email.sendCompletionSubmittedHomeowner(
+            EncryptionService.decrypt(homeowner.email),
+            EncryptionService.decrypt(homeowner.firstName),
+            appointment.date,
+            homeAddress,
+            cleanerName,
+            hoursUntilAutoApproval
+          );
+        }
+
+        console.log(`[Complete Job] Submission notifications sent to homeowner ${homeowner.id} for appointment ${appointment.id}`);
       }
     } catch (notificationError) {
-      // Don't fail the job completion if notifications fail
-      console.error("Error sending completion notifications:", notificationError);
+      // Don't fail the submission if notifications fail
+      console.error("Error sending completion submission notifications:", notificationError);
     }
 
     return res.json({
       success: true,
-      message: "Job completed and payouts processed",
-      payoutResults,
+      message: "Job submitted for homeowner approval. Payout will be processed after approval.",
+      completionStatus: "submitted",
+      autoApprovalExpiresAt,
       photosVerified: {
         before: beforePhotos,
         after: afterPhotos
@@ -2074,7 +2105,7 @@ paymentRouter.post("/complete-job", async (req, res) => {
     });
   } catch (error) {
     console.error("Complete job error:", error);
-    return res.status(400).json({ error: "Failed to complete job" });
+    return res.status(400).json({ error: "Failed to submit job completion" });
   }
 });
 
