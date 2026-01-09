@@ -44,7 +44,7 @@ class RecurringScheduleSerializer {
 			frequency: data.frequency,
 			dayOfWeek: data.dayOfWeek,
 			timeWindow: data.timeWindow,
-			price: data.price,
+			price: data.price ? parseFloat(data.price) : null,
 			startDate: data.startDate,
 			endDate: data.endDate,
 			nextScheduledDate: data.nextScheduledDate,
@@ -91,7 +91,7 @@ class RecurringScheduleSerializer {
 			dayOfWeek: data.dayOfWeek,
 			dayName: dayNames[data.dayOfWeek] || null,
 			timeWindow: data.timeWindow,
-			price: data.price,
+			price: data.price ? parseFloat(data.price) : null,
 			nextScheduledDate: data.nextScheduledDate,
 			isActive: data.isActive,
 			isPaused: data.isPaused

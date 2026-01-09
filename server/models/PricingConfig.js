@@ -165,13 +165,13 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 3,
-      comment: "Minimum beds to trigger large home (3 = 3+ beds)",
+      comment: "Minimum beds to trigger large home (3+ beds OR 3+ baths = large)",
     },
     largeHomeBathsThreshold: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 3,
-      comment: "Minimum baths to trigger large home (3 = 3+ baths)",
+      comment: "Minimum baths to trigger large home (3+ beds OR 3+ baths = large)",
     },
     multiCleanerOfferExpirationHours: {
       type: DataTypes.INTEGER,
@@ -210,6 +210,26 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 1,
       comment: "Number of months to look back for volume calculation",
+    },
+
+    // Last-minute booking settings
+    lastMinuteFee: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 50,
+      comment: "Flat fee for bookings within threshold hours (in dollars)",
+    },
+    lastMinuteThresholdHours: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 48,
+      comment: "Hours before appointment that triggers last-minute fee",
+    },
+    lastMinuteNotificationRadiusMiles: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: false,
+      defaultValue: 25.0,
+      comment: "Radius in miles to notify cleaners for last-minute bookings",
     },
 
     // Audit fields
@@ -312,6 +332,11 @@ module.exports = (sequelize, DataTypes) => {
         offerExpirationHours: config.multiCleanerOfferExpirationHours || 48,
         urgentFillDays: config.urgentFillDays || 7,
         finalWarningDays: config.finalWarningDays || 3,
+      },
+      lastMinute: {
+        fee: config.lastMinuteFee || 50,
+        thresholdHours: config.lastMinuteThresholdHours || 48,
+        notificationRadiusMiles: parseFloat(config.lastMinuteNotificationRadiusMiles || 25),
       },
     };
   };

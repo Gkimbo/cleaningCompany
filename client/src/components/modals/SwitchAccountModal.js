@@ -190,6 +190,8 @@ const SwitchAccountModal = ({
 								/>
 							}
 							autoCorrect={false}
+							autoCapitalize="none"
+							spellCheck={false}
 							textContentType="oneTimeCode"
 						/>
 

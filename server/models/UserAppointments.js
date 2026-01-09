@@ -256,6 +256,23 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		// Last-minute booking fields
+		isLastMinuteBooking: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if booked within threshold hours of appointment",
+		},
+		lastMinuteFeeApplied: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Last-minute fee amount in dollars (null if not applicable)",
+		},
+		lastMinuteNotificationsSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When urgent notifications were sent to nearby cleaners",
+		},
 	});
 
 	// Define the one-to-many relationship with User

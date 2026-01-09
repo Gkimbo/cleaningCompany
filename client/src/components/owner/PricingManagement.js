@@ -58,6 +58,9 @@ const PricingManagement = ({ state }) => {
     highVolumeFee: "",
     incentiveRefundPercent: "",
     incentiveCleanerPercent: "",
+    lastMinuteFee: "",
+    lastMinuteThresholdHours: "",
+    lastMinuteNotificationRadiusMiles: "",
     changeNote: "",
     exampleOriginalPrice: "150",
     exampleDiscountPercent: "50",
@@ -65,6 +68,18 @@ const PricingManagement = ({ state }) => {
     exampleBusinessOwnerPrice: "200",
     exampleLargeBusinessPrice: "200",
     exampleMultiCleanerPrice: "300",
+    // Base pricing calculator
+    exampleBeds: "3",
+    exampleBaths: "2.5",
+    // Linen calculator
+    exampleLinenBeds: "3",
+    exampleTowelsPerBath: "2",
+    exampleFaceClothsPerBath: "1",
+    exampleLinenBaths: "2",
+    // Cancellation calculator
+    exampleCancellationPrice: "200",
+    // Last-minute calculator
+    exampleLastMinutePrice: "175",
   });
 
   useEffect(() => {
@@ -107,6 +122,9 @@ const PricingManagement = ({ state }) => {
             highVolumeFee: result.config.highVolumeFee?.toString() || "",
             incentiveRefundPercent: (parseFloat(result.config.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: (parseFloat(result.config.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
+            lastMinuteFee: result.config.lastMinuteFee?.toString() || "50",
+            lastMinuteThresholdHours: result.config.lastMinuteThresholdHours?.toString() || "48",
+            lastMinuteNotificationRadiusMiles: result.config.lastMinuteNotificationRadiusMiles?.toString() || "25",
             changeNote: "",
           };
         } else if (result.staticDefaults) {
@@ -136,6 +154,9 @@ const PricingManagement = ({ state }) => {
             highVolumeFee: result.staticDefaults.highVolumeFee?.toString() || "",
             incentiveRefundPercent: ((result.staticDefaults.incentiveRefundPercent || 0.10) * 100).toString() || "10",
             incentiveCleanerPercent: ((result.staticDefaults.incentiveCleanerPercent || 0.40) * 100).toString() || "40",
+            lastMinuteFee: result.staticDefaults.lastMinuteFee?.toString() || "50",
+            lastMinuteThresholdHours: result.staticDefaults.lastMinuteThresholdHours?.toString() || "48",
+            lastMinuteNotificationRadiusMiles: result.staticDefaults.lastMinuteNotificationRadiusMiles?.toString() || "25",
             changeNote: "",
           };
         }
@@ -200,6 +221,9 @@ const PricingManagement = ({ state }) => {
       "highVolumeFee",
       "incentiveRefundPercent",
       "incentiveCleanerPercent",
+      "lastMinuteFee",
+      "lastMinuteThresholdHours",
+      "lastMinuteNotificationRadiusMiles",
     ];
 
     for (const field of numericFields) {
@@ -283,6 +307,9 @@ const PricingManagement = ({ state }) => {
         highVolumeFee: parseInt(formData.highVolumeFee),
         incentiveRefundPercent: parseFloat(formData.incentiveRefundPercent) / 100,
         incentiveCleanerPercent: parseFloat(formData.incentiveCleanerPercent) / 100,
+        lastMinuteFee: parseInt(formData.lastMinuteFee),
+        lastMinuteThresholdHours: parseInt(formData.lastMinuteThresholdHours),
+        lastMinuteNotificationRadiusMiles: parseFloat(formData.lastMinuteNotificationRadiusMiles),
         changeNote: formData.changeNote || null,
       };
 
@@ -395,6 +422,106 @@ const PricingManagement = ({ state }) => {
         {renderPriceInput("Base Price (1 bed/1 bath)", "basePrice", "$", "", "Starting price for a standard cleaning")}
         {renderPriceInput("Extra Bed/Bath Fee", "extraBedBathFee", "$", "", "Additional charge per extra bedroom or full bathroom")}
         {renderPriceInput("Half Bath Fee", "halfBathFee", "$", "", "Additional charge per half bathroom")}
+
+        {/* Base Pricing Calculator */}
+        {(() => {
+          const basePrice = parseFloat(formData.basePrice) || 150;
+          const extraBedBathFee = parseFloat(formData.extraBedBathFee) || 50;
+          const halfBathFee = parseFloat(formData.halfBathFee) || 25;
+          const beds = parseInt(formData.exampleBeds) || 3;
+          const baths = parseFloat(formData.exampleBaths) || 2;
+          const fullBaths = Math.floor(baths);
+          const hasHalfBath = (baths % 1) >= 0.5;
+
+          const extraBeds = Math.max(0, beds - 1);
+          const extraFullBaths = Math.max(0, fullBaths - 1);
+          const halfBathCount = hasHalfBath ? 1 : 0;
+
+          const totalPrice = basePrice + (extraBeds * extraBedBathFee) + (extraFullBaths * extraBedBathFee) + (halfBathCount * halfBathFee);
+
+          return (
+            <View style={[styles.miniCalculator, styles.miniCalculatorBlue]}>
+              <View style={styles.miniCalcHeader}>
+                <Icon name="home" size={14} color={colors.primary[500]} />
+                <Text style={styles.miniCalcTitle}>Price Calculator</Text>
+              </View>
+
+              <View style={styles.calcInputGrid}>
+                <View style={styles.calcInputItem}>
+                  <Text style={styles.calcInputLabel}>Bedrooms</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <TextInput
+                      style={[styles.miniCalcInput, styles.calcInputCentered]}
+                      value={formData.exampleBeds}
+                      onChangeText={(value) => handleInputChange("exampleBeds", value)}
+                      keyboardType="numeric"
+                      placeholder="3"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+                <View style={styles.calcInputItem}>
+                  <Text style={styles.calcInputLabel}>Bathrooms</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <TextInput
+                      style={[styles.miniCalcInput, styles.calcInputCentered]}
+                      value={formData.exampleBaths}
+                      onChangeText={(value) => handleInputChange("exampleBaths", value)}
+                      keyboardType="decimal-pad"
+                      placeholder="2.5"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.miniCalcResults}>
+                <View style={styles.miniCalcRow}>
+                  <Text style={styles.miniCalcRowLabel}>Base (1 bed/1 bath):</Text>
+                  <Text style={styles.miniCalcRowValue}>${basePrice.toFixed(2)}</Text>
+                </View>
+                {extraBeds > 0 && (
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Extra beds ({extraBeds} × ${extraBedBathFee}):</Text>
+                    <Text style={styles.miniCalcRowValue}>+${(extraBeds * extraBedBathFee).toFixed(2)}</Text>
+                  </View>
+                )}
+                {extraFullBaths > 0 && (
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Extra full baths ({extraFullBaths} × ${extraBedBathFee}):</Text>
+                    <Text style={styles.miniCalcRowValue}>+${(extraFullBaths * extraBedBathFee).toFixed(2)}</Text>
+                  </View>
+                )}
+                {hasHalfBath && (
+                  <View style={styles.miniCalcRow}>
+                    <Text style={styles.miniCalcRowLabel}>Half bath:</Text>
+                    <Text style={styles.miniCalcRowValue}>+${halfBathFee.toFixed(2)}</Text>
+                  </View>
+                )}
+                <View style={[styles.miniCalcRow, styles.miniCalcRowTotal]}>
+                  <Text style={styles.miniCalcRowLabelBold}>Cleaning Price:</Text>
+                  <Text style={[styles.miniCalcRowValueLarge, styles.miniCalcValueGreen]}>${totalPrice.toFixed(2)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.calcQuickExamples}>
+                <Text style={styles.calcQuickTitle}>Quick Examples:</Text>
+                <View style={styles.calcQuickRow}>
+                  <Text style={styles.calcQuickLabel}>1 bed / 1 bath:</Text>
+                  <Text style={styles.calcQuickValue}>${basePrice.toFixed(0)}</Text>
+                </View>
+                <View style={styles.calcQuickRow}>
+                  <Text style={styles.calcQuickLabel}>2 bed / 2 bath:</Text>
+                  <Text style={styles.calcQuickValue}>${(basePrice + extraBedBathFee + extraBedBathFee).toFixed(0)}</Text>
+                </View>
+                <View style={styles.calcQuickRow}>
+                  <Text style={styles.calcQuickLabel}>4 bed / 3.5 bath:</Text>
+                  <Text style={styles.calcQuickValue}>${(basePrice + (3 * extraBedBathFee) + (2 * extraBedBathFee) + halfBathFee).toFixed(0)}</Text>
+                </View>
+              </View>
+            </View>
+          );
+        })()}
       </View>
 
       {/* Linen Services Section */}
@@ -406,6 +533,110 @@ const PricingManagement = ({ state }) => {
         {renderPriceInput("Sheet Fee (per bed)", "sheetFeePerBed", "$", "/bed")}
         {renderPriceInput("Towel Fee (per towel)", "towelFee", "$", "/towel")}
         {renderPriceInput("Face Cloth Fee (each)", "faceClothFee", "$", "/each")}
+
+        {/* Linen Calculator */}
+        {(() => {
+          const sheetFeePerBed = parseFloat(formData.sheetFeePerBed) || 30;
+          const towelFee = parseFloat(formData.towelFee) || 5;
+          const faceClothFee = parseFloat(formData.faceClothFee) || 2;
+          const beds = parseInt(formData.exampleLinenBeds) || 3;
+          const baths = parseInt(formData.exampleLinenBaths) || 2;
+          const towelsPerBath = parseInt(formData.exampleTowelsPerBath) || 2;
+          const faceClothsPerBath = parseInt(formData.exampleFaceClothsPerBath) || 1;
+
+          const sheetsTotal = beds * sheetFeePerBed;
+          const totalTowels = baths * towelsPerBath;
+          const totalFaceCloths = baths * faceClothsPerBath;
+          const towelsTotal = totalTowels * towelFee;
+          const faceClothsTotal = totalFaceCloths * faceClothFee;
+          const linensTotal = sheetsTotal + towelsTotal + faceClothsTotal;
+
+          return (
+            <View style={[styles.miniCalculator, styles.miniCalculatorCyan]}>
+              <View style={styles.miniCalcHeader}>
+                <Icon name="bed" size={14} color="#0891b2" />
+                <Text style={styles.miniCalcTitle}>Linen Cost Calculator</Text>
+              </View>
+
+              <View style={styles.calcInputGrid}>
+                <View style={styles.calcInputItem}>
+                  <Text style={styles.calcInputLabel}>Beds</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <TextInput
+                      style={[styles.miniCalcInput, styles.calcInputCentered]}
+                      value={formData.exampleLinenBeds}
+                      onChangeText={(value) => handleInputChange("exampleLinenBeds", value)}
+                      keyboardType="numeric"
+                      placeholder="3"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+                <View style={styles.calcInputItem}>
+                  <Text style={styles.calcInputLabel}>Baths</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <TextInput
+                      style={[styles.miniCalcInput, styles.calcInputCentered]}
+                      value={formData.exampleLinenBaths}
+                      onChangeText={(value) => handleInputChange("exampleLinenBaths", value)}
+                      keyboardType="numeric"
+                      placeholder="2"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.calcInputGrid}>
+                <View style={styles.calcInputItem}>
+                  <Text style={styles.calcInputLabel}>Towels/bath</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <TextInput
+                      style={[styles.miniCalcInput, styles.calcInputCentered]}
+                      value={formData.exampleTowelsPerBath}
+                      onChangeText={(value) => handleInputChange("exampleTowelsPerBath", value)}
+                      keyboardType="numeric"
+                      placeholder="2"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+                <View style={styles.calcInputItem}>
+                  <Text style={styles.calcInputLabel}>Face cloths/bath</Text>
+                  <View style={styles.miniCalcInputWrapper}>
+                    <TextInput
+                      style={[styles.miniCalcInput, styles.calcInputCentered]}
+                      value={formData.exampleFaceClothsPerBath}
+                      onChangeText={(value) => handleInputChange("exampleFaceClothsPerBath", value)}
+                      keyboardType="numeric"
+                      placeholder="1"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.miniCalcResults}>
+                <View style={styles.miniCalcRow}>
+                  <Text style={styles.miniCalcRowLabel}>Sheets ({beds} beds × ${sheetFeePerBed}):</Text>
+                  <Text style={styles.miniCalcRowValue}>${sheetsTotal.toFixed(2)}</Text>
+                </View>
+                <View style={styles.miniCalcRow}>
+                  <Text style={styles.miniCalcRowLabel}>Towels ({totalTowels} × ${towelFee}):</Text>
+                  <Text style={styles.miniCalcRowValue}>${towelsTotal.toFixed(2)}</Text>
+                </View>
+                <View style={styles.miniCalcRow}>
+                  <Text style={styles.miniCalcRowLabel}>Face cloths ({totalFaceCloths} × ${faceClothFee}):</Text>
+                  <Text style={styles.miniCalcRowValue}>${faceClothsTotal.toFixed(2)}</Text>
+                </View>
+                <View style={[styles.miniCalcRow, styles.miniCalcRowTotal]}>
+                  <Text style={styles.miniCalcRowLabelBold}>Total Linen Add-on:</Text>
+                  <Text style={[styles.miniCalcRowValueLarge, styles.miniCalcValueCyan]}>+${linensTotal.toFixed(2)}</Text>
+                </View>
+              </View>
+            </View>
+          );
+        })()}
       </View>
 
       {/* Time Windows Section */}
@@ -418,6 +649,69 @@ const PricingManagement = ({ state }) => {
         {renderPriceInput("10am - 3pm Window", "timeWindow10To3", "$")}
         {renderPriceInput("11am - 4pm Window", "timeWindow11To4", "$")}
         {renderPriceInput("12pm - 2pm Window", "timeWindow12To2", "$", "", "Narrowest window, highest surcharge")}
+
+        {/* Time Window Visual Comparison */}
+        {(() => {
+          const anytime = parseFloat(formData.timeWindowAnytime) || 0;
+          const window10to3 = parseFloat(formData.timeWindow10To3) || 25;
+          const window11to4 = parseFloat(formData.timeWindow11To4) || 25;
+          const window12to2 = parseFloat(formData.timeWindow12To2) || 30;
+          const basePrice = parseFloat(formData.basePrice) || 150;
+          const maxSurcharge = Math.max(anytime, window10to3, window11to4, window12to2, 1);
+
+          const windows = [
+            { label: "Anytime", hours: "Flexible", surcharge: anytime, color: colors.success[500], width: 100 },
+            { label: "10am-3pm", hours: "5 hours", surcharge: window10to3, color: colors.primary[500], width: 62 },
+            { label: "11am-4pm", hours: "5 hours", surcharge: window11to4, color: colors.primary[500], width: 62 },
+            { label: "12pm-2pm", hours: "2 hours", surcharge: window12to2, color: colors.warning[500], width: 25 },
+          ];
+
+          return (
+            <View style={[styles.miniCalculator, styles.miniCalculatorGray]}>
+              <View style={styles.miniCalcHeader}>
+                <Icon name="clock-o" size={14} color={colors.text.secondary} />
+                <Text style={styles.miniCalcTitle}>Time Window Comparison</Text>
+              </View>
+
+              <View style={styles.timeWindowComparison}>
+                {windows.map((window, index) => (
+                  <View key={index} style={styles.timeWindowItem}>
+                    <View style={styles.timeWindowHeader}>
+                      <Text style={styles.timeWindowLabel}>{window.label}</Text>
+                      <Text style={styles.timeWindowHours}>{window.hours}</Text>
+                    </View>
+                    <View style={styles.timeWindowBarContainer}>
+                      <View
+                        style={[
+                          styles.timeWindowBar,
+                          {
+                            width: `${window.width}%`,
+                            backgroundColor: window.color,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <View style={styles.timeWindowPricing}>
+                      <Text style={[styles.timeWindowSurcharge, { color: window.surcharge > 0 ? colors.warning[600] : colors.success[600] }]}>
+                        {window.surcharge > 0 ? `+$${window.surcharge}` : "Free"}
+                      </Text>
+                      <Text style={styles.timeWindowTotal}>
+                        Total: ${(basePrice + window.surcharge).toFixed(0)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.timeWindowNote}>
+                <Icon name="info-circle" size={12} color={colors.text.tertiary} />
+                <Text style={styles.timeWindowNoteText}>
+                  Narrower windows = higher value to customers = higher surcharge
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
       </View>
 
       {/* Cancellation Policy Section */}
@@ -431,6 +725,95 @@ const PricingManagement = ({ state }) => {
         {renderPriceInput("Homeowner Penalty Days", "homeownerPenaltyDays", "", " days", "Days before when partial refund applies")}
         {renderPriceInput("Cleaner Penalty Days", "cleanerPenaltyDays", "", " days", "Days before when cleaner gets penalty")}
         {renderPriceInput("Client Refund %", "refundPercentage", "", "%", "Client refund when cancelling prepaid appointments within penalty window (e.g., 50% means client gets half back, cleaner gets half minus platform fee)")}
+
+        {/* Cancellation Policy Calculator */}
+        {(() => {
+          const cancellationFee = parseFloat(formData.cancellationFee) || 25;
+          const windowDays = parseInt(formData.cancellationWindowDays) || 7;
+          const homeownerPenaltyDays = parseInt(formData.homeownerPenaltyDays) || 3;
+          const cleanerPenaltyDays = parseInt(formData.cleanerPenaltyDays) || 4;
+          const refundPercent = parseFloat(formData.refundPercentage) / 100 || 0.5;
+          const examplePrice = parseFloat(formData.exampleCancellationPrice) || 200;
+          const platformFeePercent = parseFloat(formData.platformFeePercent) / 100 || 0.10;
+
+          // Scenario calculations
+          const freeCancel = examplePrice; // Full refund
+          const penaltyCancel = examplePrice * refundPercent;
+          const cleanerPenaltyPayout = examplePrice * (1 - refundPercent) * (1 - platformFeePercent);
+          const platformPenaltyFee = examplePrice * (1 - refundPercent) * platformFeePercent;
+
+          return (
+            <View style={[styles.miniCalculator, styles.miniCalculatorOrange]}>
+              <View style={styles.miniCalcHeader}>
+                <Icon name="calendar-times-o" size={14} color={colors.warning[600]} />
+                <Text style={styles.miniCalcTitle}>Cancellation Scenarios</Text>
+              </View>
+
+              <View style={styles.miniCalcInputRow}>
+                <Text style={styles.miniCalcLabel}>Example cleaning price:</Text>
+                <View style={styles.miniCalcInputWrapper}>
+                  <Text style={styles.miniCalcPrefix}>$</Text>
+                  <TextInput
+                    style={styles.miniCalcInput}
+                    value={formData.exampleCancellationPrice}
+                    onChangeText={(value) => handleInputChange("exampleCancellationPrice", value)}
+                    keyboardType="numeric"
+                    placeholder="200"
+                    placeholderTextColor={colors.text.tertiary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.cancellationTimeline}>
+                <View style={styles.timelineItem}>
+                  <View style={[styles.timelineDot, styles.timelineDotGreen]} />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.timelineLabel}>More than {windowDays} days before</Text>
+                    <Text style={styles.timelineDescription}>Free cancellation</Text>
+                    <Text style={[styles.timelineValue, styles.timelineValueGreen]}>
+                      Full refund: ${examplePrice.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.timelineItem}>
+                  <View style={[styles.timelineDot, styles.timelineDotYellow]} />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.timelineLabel}>{homeownerPenaltyDays}-{windowDays} days before</Text>
+                    <Text style={styles.timelineDescription}>Penalty window + ${cancellationFee} fee</Text>
+                    <Text style={[styles.timelineValue, styles.timelineValueOrange]}>
+                      Client gets: ${penaltyCancel.toFixed(2)} ({(refundPercent * 100).toFixed(0)}%)
+                    </Text>
+                    <Text style={styles.timelineSubValue}>
+                      Cleaner gets: ${cleanerPenaltyPayout.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.timelineItem}>
+                  <View style={[styles.timelineDot, styles.timelineDotRed]} />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.timelineLabel}>Less than {homeownerPenaltyDays} days before</Text>
+                    <Text style={styles.timelineDescription}>Late cancellation penalty</Text>
+                    <Text style={[styles.timelineValue, styles.timelineValueRed]}>
+                      Client gets: ${penaltyCancel.toFixed(2)} ({(refundPercent * 100).toFixed(0)}%)
+                    </Text>
+                    <Text style={styles.timelineSubValue}>
+                      Cleaner gets: ${cleanerPenaltyPayout.toFixed(2)} (compensation)
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.miniCalcNote}>
+                <Icon name="info-circle" size={12} color={colors.text.tertiary} />
+                <Text style={styles.miniCalcNoteText}>
+                  Cleaners who cancel within {cleanerPenaltyDays} days receive rating penalties
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
       </View>
 
       {/* Platform Fees Section */}
@@ -714,6 +1097,127 @@ const PricingManagement = ({ state }) => {
             <Text style={styles.feeTypeTitle}>High Volume Days</Text>
           </View>
           {renderPriceInput("Surcharge", "highVolumeFee", "$", "", "Additional fee for holidays and busy days")}
+        </View>
+      </View>
+
+      {/* Last-Minute Bookings Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Last-Minute Bookings</Text>
+        <Text style={styles.sectionDescription}>
+          Settings for appointments booked on short notice. When a homeowner books within the threshold,
+          an extra fee is added and nearby cleaners receive urgent notifications.
+        </Text>
+
+        {renderPriceInput("Last-Minute Fee", "lastMinuteFee", "$", "", "Extra flat fee for last-minute bookings")}
+        {renderPriceInput("Threshold", "lastMinuteThresholdHours", "", " hours", "Appointments within this many hours are considered last-minute")}
+        {renderPriceInput("Notification Radius", "lastMinuteNotificationRadiusMiles", "", " miles", "Distance from property to notify cleaners")}
+
+        {/* Last-Minute Calculator */}
+        {(() => {
+          const lastMinuteFee = parseFloat(formData.lastMinuteFee) || 50;
+          const thresholdHours = parseInt(formData.lastMinuteThresholdHours) || 48;
+          const radiusMiles = parseFloat(formData.lastMinuteNotificationRadiusMiles) || 25;
+          const basePrice = parseFloat(formData.basePrice) || 150;
+          const examplePrice = parseFloat(formData.exampleLastMinutePrice) || 175;
+          const totalWithFee = examplePrice + lastMinuteFee;
+          const platformFeePercent = parseFloat(formData.platformFeePercent) / 100 || 0.10;
+          const cleanerPayout = totalWithFee * (1 - platformFeePercent);
+          const bonusFromFee = lastMinuteFee * (1 - platformFeePercent);
+
+          return (
+            <View style={[styles.miniCalculator, styles.miniCalculatorRed]}>
+              <View style={styles.miniCalcHeader}>
+                <Icon name="bolt" size={14} color={colors.error[500]} />
+                <Text style={styles.miniCalcTitle}>Last-Minute Booking Calculator</Text>
+              </View>
+
+              <View style={styles.miniCalcInputRow}>
+                <Text style={styles.miniCalcLabel}>Base cleaning price:</Text>
+                <View style={styles.miniCalcInputWrapper}>
+                  <Text style={styles.miniCalcPrefix}>$</Text>
+                  <TextInput
+                    style={styles.miniCalcInput}
+                    value={formData.exampleLastMinutePrice}
+                    onChangeText={(value) => handleInputChange("exampleLastMinutePrice", value)}
+                    keyboardType="numeric"
+                    placeholder="175"
+                    placeholderTextColor={colors.text.tertiary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.lastMinuteComparison}>
+                <View style={styles.comparisonColumn}>
+                  <Text style={styles.comparisonHeader}>Regular Booking</Text>
+                  <Text style={styles.comparisonSubheader}>More than {thresholdHours}h notice</Text>
+                  <View style={styles.comparisonPrice}>
+                    <Text style={styles.comparisonPriceValue}>${examplePrice.toFixed(0)}</Text>
+                    <Text style={styles.comparisonPriceLabel}>Customer pays</Text>
+                  </View>
+                  <Text style={styles.comparisonPayout}>
+                    Cleaner: ${(examplePrice * (1 - platformFeePercent)).toFixed(2)}
+                  </Text>
+                </View>
+
+                <View style={styles.comparisonDivider}>
+                  <Icon name="arrow-right" size={16} color={colors.text.tertiary} />
+                </View>
+
+                <View style={[styles.comparisonColumn, styles.comparisonColumnHighlight]}>
+                  <Text style={styles.comparisonHeader}>Last-Minute</Text>
+                  <Text style={styles.comparisonSubheader}>Within {thresholdHours}h</Text>
+                  <View style={styles.comparisonPrice}>
+                    <Text style={[styles.comparisonPriceValue, styles.comparisonPriceHighlight]}>
+                      ${totalWithFee.toFixed(0)}
+                    </Text>
+                    <Text style={styles.comparisonPriceLabel}>Customer pays</Text>
+                  </View>
+                  <Text style={[styles.comparisonPayout, styles.comparisonPayoutHighlight]}>
+                    Cleaner: ${cleanerPayout.toFixed(2)}
+                  </Text>
+                  <View style={styles.comparisonBadge}>
+                    <Text style={styles.comparisonBadgeText}>+${lastMinuteFee} fee</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.miniCalcResults}>
+                <View style={styles.miniCalcRow}>
+                  <Text style={styles.miniCalcRowLabel}>Base cleaning price:</Text>
+                  <Text style={styles.miniCalcRowValue}>${examplePrice.toFixed(2)}</Text>
+                </View>
+                <View style={styles.miniCalcRow}>
+                  <Text style={styles.miniCalcRowLabel}>Last-minute fee:</Text>
+                  <Text style={[styles.miniCalcRowValue, styles.miniCalcValueOrange]}>+${lastMinuteFee.toFixed(2)}</Text>
+                </View>
+                <View style={[styles.miniCalcRow, styles.miniCalcRowTotal]}>
+                  <Text style={styles.miniCalcRowLabelBold}>Total customer pays:</Text>
+                  <Text style={[styles.miniCalcRowValueLarge, styles.miniCalcValueRed]}>${totalWithFee.toFixed(2)}</Text>
+                </View>
+                <View style={styles.miniCalcRow}>
+                  <Text style={styles.miniCalcRowLabel}>Cleaner bonus from fee:</Text>
+                  <Text style={[styles.miniCalcRowValue, styles.miniCalcValueGreen]}>+${bonusFromFee.toFixed(2)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.lastMinuteNotificationInfo}>
+                <Icon name="bell" size={12} color={colors.error[600]} />
+                <Text style={styles.lastMinuteNotificationText}>
+                  Urgent notifications sent to cleaners within {radiusMiles} miles
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
+
+        {/* Last-Minute Info Banner */}
+        <View style={styles.lastMinuteInfoBanner}>
+          <Icon name="bolt" size={16} color={colors.warning[600]} />
+          <Text style={styles.lastMinuteInfoText}>
+            When a last-minute booking is made, all cleaners within {formData.lastMinuteNotificationRadiusMiles || 25} miles
+            of the property receive an urgent push notification, email, and in-app alert.
+            The ${formData.lastMinuteFee || 50} fee helps compensate for short-notice scheduling.
+          </Text>
         </View>
       </View>
 
@@ -1560,6 +2064,313 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
     flex: 1,
+  },
+  // Additional Mini Calculator Variants
+  miniCalculatorBlue: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[100],
+  },
+  miniCalculatorCyan: {
+    backgroundColor: "#ecfeff",
+    borderColor: "#a5f3fc",
+  },
+  miniCalculatorGray: {
+    backgroundColor: colors.neutral[50],
+    borderColor: colors.neutral[200],
+  },
+  miniCalculatorOrange: {
+    backgroundColor: colors.warning[50],
+    borderColor: colors.warning[200],
+  },
+  miniCalculatorRed: {
+    backgroundColor: colors.error[50],
+    borderColor: colors.error[200],
+  },
+  miniCalcRowTotal: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  miniCalcRowLabelBold: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  miniCalcRowValueLarge: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  miniCalcValueCyan: {
+    color: "#0891b2",
+  },
+  miniCalcValueOrange: {
+    color: colors.warning[600],
+  },
+  // Calculator Input Grid Styles
+  calcInputGrid: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  calcInputItem: {
+    flex: 1,
+  },
+  calcInputLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginBottom: 4,
+  },
+  calcInputCentered: {
+    textAlign: "center",
+  },
+  // Quick Examples Styles
+  calcQuickExamples: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  calcQuickTitle: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xs,
+  },
+  calcQuickRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 2,
+  },
+  calcQuickLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  calcQuickValue: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  // Time Window Comparison Styles
+  timeWindowComparison: {
+    gap: spacing.sm,
+  },
+  timeWindowItem: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  timeWindowHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  timeWindowLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  timeWindowHours: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  timeWindowBarContainer: {
+    height: 8,
+    backgroundColor: colors.neutral[200],
+    borderRadius: radius.sm,
+    overflow: "hidden",
+    marginBottom: spacing.xs,
+  },
+  timeWindowBar: {
+    height: "100%",
+    borderRadius: radius.sm,
+  },
+  timeWindowPricing: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  timeWindowSurcharge: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
+  timeWindowTotal: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  timeWindowNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  timeWindowNoteText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    flex: 1,
+  },
+  // Cancellation Timeline Styles
+  cancellationTimeline: {
+    marginTop: spacing.sm,
+  },
+  timelineItem: {
+    flexDirection: "row",
+    marginBottom: spacing.md,
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: spacing.sm,
+    marginTop: 4,
+  },
+  timelineDotGreen: {
+    backgroundColor: colors.success[500],
+  },
+  timelineDotYellow: {
+    backgroundColor: colors.warning[500],
+  },
+  timelineDotRed: {
+    backgroundColor: colors.error[500],
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  timelineDescription: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 4,
+  },
+  timelineValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  timelineValueGreen: {
+    color: colors.success[600],
+  },
+  timelineValueOrange: {
+    color: colors.warning[600],
+  },
+  timelineValueRed: {
+    color: colors.error[600],
+  },
+  timelineSubValue: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  // Last-Minute Comparison Styles
+  lastMinuteComparison: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    marginBottom: spacing.md,
+  },
+  comparisonColumn: {
+    flex: 1,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    alignItems: "center",
+  },
+  comparisonColumnHighlight: {
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  comparisonHeader: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  comparisonSubheader: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: spacing.sm,
+  },
+  comparisonPrice: {
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  comparisonPriceValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  comparisonPriceHighlight: {
+    color: colors.error[600],
+  },
+  comparisonPriceLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  comparisonPayout: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  comparisonPayoutHighlight: {
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  comparisonDivider: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: spacing.xs,
+  },
+  comparisonBadge: {
+    backgroundColor: colors.error[500],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginTop: spacing.xs,
+  },
+  comparisonBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+  },
+  lastMinuteNotificationInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  lastMinuteNotificationText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.error[700],
+    flex: 1,
+  },
+  // Last-Minute Booking Styles
+  lastMinuteInfoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    gap: spacing.sm,
+  },
+  lastMinuteInfoText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[800],
+    lineHeight: 20,
   },
 });
 

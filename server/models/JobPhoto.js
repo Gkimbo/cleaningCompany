@@ -15,12 +15,12 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     photoType: {
-      type: DataTypes.ENUM('before', 'after'),
+      type: DataTypes.ENUM('before', 'after', 'passes'),
       allowNull: false,
     },
     photoData: {
       type: DataTypes.TEXT('long'),
-      allowNull: false,
+      allowNull: true, // Can be null if isNotApplicable is true
     },
     room: {
       type: DataTypes.STRING,
@@ -39,6 +39,12 @@ module.exports = (sequelize, DataTypes) => {
     roomAssignmentId: {
       type: DataTypes.INTEGER,
       allowNull: true,
+    },
+    // For passes: mark as N/A if no passes are available at the property
+    isNotApplicable: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
   });
 

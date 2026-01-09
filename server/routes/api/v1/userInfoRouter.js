@@ -542,4 +542,106 @@ userInfoRouter.delete("/home", async (req, res) => {
   }
 });
 
+/**
+ * PUT /service-area
+ * Update cleaner's service area location for last-minute booking notifications
+ */
+userInfoRouter.put("/service-area", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const user = await User.findByPk(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.type !== "cleaner") {
+      return res.status(403).json({ error: "Only cleaners can set service area" });
+    }
+
+    const { address, latitude, longitude, radiusMiles } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({ error: "Latitude and longitude are required" });
+    }
+
+    // Validate coordinates
+    const lat = parseFloat(latitude);
+    const lon = parseFloat(longitude);
+    if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      return res.status(400).json({ error: "Invalid coordinates" });
+    }
+
+    // Update user's service area
+    await user.update({
+      serviceAreaAddress: address || null,
+      serviceAreaLatitude: String(latitude),
+      serviceAreaLongitude: String(longitude),
+      serviceAreaRadiusMiles: radiusMiles || 30,
+    });
+
+    res.json({
+      success: true,
+      message: "Service area updated successfully",
+      serviceArea: {
+        address: address || null,
+        radiusMiles: radiusMiles || 30,
+        // Don't return exact coordinates for privacy
+        hasLocation: true,
+      },
+    });
+  } catch (error) {
+    console.error("[UserInfo] Error updating service area:", error);
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    res.status(500).json({ error: "Failed to update service area" });
+  }
+});
+
+/**
+ * GET /service-area
+ * Get cleaner's current service area settings
+ */
+userInfoRouter.get("/service-area", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const user = await User.findByPk(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.type !== "cleaner") {
+      return res.status(403).json({ error: "Only cleaners can view service area" });
+    }
+
+    res.json({
+      serviceArea: {
+        address: user.serviceAreaAddress || null,
+        radiusMiles: parseFloat(user.serviceAreaRadiusMiles) || 30,
+        hasLocation: !!(user.serviceAreaLatitude && user.serviceAreaLongitude),
+      },
+    });
+  } catch (error) {
+    console.error("[UserInfo] Error getting service area:", error);
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    res.status(500).json({ error: "Failed to get service area" });
+  }
+});
+
 module.exports = userInfoRouter;

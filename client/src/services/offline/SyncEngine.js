@@ -372,6 +372,7 @@ class SyncEngine {
           break;
         case SYNC_OPERATION_TYPES.BEFORE_PHOTO:
         case SYNC_OPERATION_TYPES.AFTER_PHOTO:
+        case SYNC_OPERATION_TYPES.PASSES_PHOTO:
           result = await this._syncPhoto(operation, job);
           break;
         case SYNC_OPERATION_TYPES.CHECKLIST:
@@ -467,26 +468,38 @@ class SyncEngine {
         return { success: true, canContinue: true }; // Already uploaded
       }
 
+      // Check if this is an N/A passes record (no photo file)
+      const isNotApplicable = photo._raw?.is_not_applicable || false;
+
       // Read photo data
       const photoUri = photo.localUri;
       const photoType = photo.photoType;
       const room = photo.room;
 
-      // For now, we'd need to read the file and convert to base64
-      // This is a simplified version - full implementation would use FileSystem
+      // Build request body
+      const requestBody = {
+        appointmentId: job.appointmentId,
+        photoType,
+        room,
+        watermarkData: photo.watermarkData,
+      };
+
+      // For N/A passes, we don't need to send photo data
+      if (isNotApplicable) {
+        requestBody.isNotApplicable = true;
+        requestBody.notes = photo.watermarkData?.notes || "No passes available at this property";
+      } else {
+        // For regular photos, include the photo URI (server handles conversion)
+        requestBody.photoUri = photoUri;
+      }
+
       const response = await fetch(`${baseURL}/api/v1/job-photos/upload`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this._authToken}`,
         },
-        body: JSON.stringify({
-          appointmentId: job.appointmentId,
-          photoType,
-          photoUri, // Server would need to handle URI or we convert to base64
-          room,
-          watermarkData: photo.watermarkData,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {

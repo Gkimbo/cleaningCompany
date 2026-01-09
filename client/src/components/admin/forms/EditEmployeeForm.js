@@ -246,6 +246,10 @@ const EditEmployeeForm = ({ setEmployeeList, employeeList }) => {
 						/>
 					}
 					style={styles.input}
+					autoCorrect={false}
+					autoCapitalize="none"
+					spellCheck={false}
+					textContentType="oneTimeCode"
 				/>
 				<Text style={styles.helperText}>
 					Leave blank to keep current password. New password must be at least 6 characters.
@@ -271,6 +275,10 @@ const EditEmployeeForm = ({ setEmployeeList, employeeList }) => {
 								/>
 							}
 							style={styles.input}
+							autoCorrect={false}
+							autoCapitalize="none"
+							spellCheck={false}
+							textContentType="oneTimeCode"
 						/>
 						<Text style={styles.helperText}>
 							Please confirm your new password.

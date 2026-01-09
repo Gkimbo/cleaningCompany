@@ -239,6 +239,8 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
     if (cleanerClient.isAlreadyAccepted) {
       return res.status(400).json({
         valid: false,
+        alreadyAccepted: true,
+        email: cleanerClient.email || cleanerClient.invitedEmail,
         error: "This invitation has already been accepted. Please log in.",
       });
     }

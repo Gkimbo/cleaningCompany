@@ -211,6 +211,10 @@ const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
             placeholder="Enter password (min 6 characters)"
             placeholderTextColor={colors.text.tertiary}
             autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            textContentType="oneTimeCode"
+            autoComplete="off"
           />
           <TouchableOpacity
             style={styles.eyeButton}
@@ -236,6 +240,10 @@ const AddEmployeeForm = ({ employeeList, setEmployeeList }) => {
             placeholder="Confirm password"
             placeholderTextColor={colors.text.tertiary}
             autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
+            textContentType="oneTimeCode"
+            autoComplete="off"
           />
           <TouchableOpacity
             style={styles.eyeButton}

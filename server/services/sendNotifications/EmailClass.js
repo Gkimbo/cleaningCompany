@@ -4044,6 +4044,83 @@ Open the Kleanr app to accept this job now!`;
       throw error;
     }
   }
+
+  /**
+   * Send last-minute urgent job notification email to cleaner
+   */
+  static async sendLastMinuteUrgentEmail(
+    email,
+    cleanerName,
+    appointmentDate,
+    price,
+    location,
+    distanceMiles
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Urgent Job Available!",
+        subtitle: "Last-Minute Cleaning Opportunity",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #f97316 100%)",
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>A homeowner in your area needs a cleaning <strong>urgently</strong>! This is a last-minute booking that needs to be filled quickly.</p>
+          <p>You're only <strong>${distanceMiles} miles</strong> away from this job!</p>`,
+        infoBox: {
+          icon: "📍",
+          title: "Job Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Your Earnings", value: price },
+            { label: "Location", value: location },
+            { label: "Distance", value: `${distanceMiles} miles from you` },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "This job is available for a <strong>limited time</strong>. Open the app now to claim it before another cleaner does!",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to view and accept this job!",
+        footerMessage: "Don't miss this opportunity!",
+      });
+
+      const textContent = `URGENT: Last-Minute Cleaning Available!
+
+Hi ${cleanerName},
+
+A homeowner near you needs a cleaning urgently. You're only ${distanceMiles} miles away!
+
+JOB DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Your Earnings: ${price}
+Location: ${location}
+Distance: ${distanceMiles} miles from you
+
+⏰ This job is available for a limited time. Open the Kleanr app now to claim it!
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🚨 URGENT: Last-Minute Cleaning - ${price} - ${distanceMiles} mi away`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Last-minute urgent email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending last-minute urgent email:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = Email;

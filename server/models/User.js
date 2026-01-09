@@ -8,6 +8,7 @@ const PII_FIELDS = [
 	"email",
 	"notificationEmail",
 	"phone",
+	"serviceAreaAddress",
 ];
 
 module.exports = (sequelize, DataTypes) => {
@@ -194,6 +195,28 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 			comment: "Timestamp when user accepted the calendar sync disclaimer",
+		},
+		// Cleaner service area fields for last-minute booking notifications
+		serviceAreaLatitude: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Cleaner service area center latitude (encrypted)",
+		},
+		serviceAreaLongitude: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Cleaner service area center longitude (encrypted)",
+		},
+		serviceAreaAddress: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Cleaner service area address for display (encrypted)",
+		},
+		serviceAreaRadiusMiles: {
+			type: DataTypes.DECIMAL(5, 2),
+			allowNull: true,
+			defaultValue: 30.0,
+			comment: "How far cleaner is willing to travel (in miles)",
 		},
 	});
 

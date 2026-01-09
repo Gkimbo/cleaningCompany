@@ -32,7 +32,7 @@ class BusinessEmployeeService {
         };
       }
       if (response.status === 409) {
-        return { valid: false, error: result.error, isAlreadyAccepted: true };
+        return { valid: false, error: result.error, isAlreadyAccepted: true, email: result.email };
       }
 
       return { valid: true, invitation: result.invitation };
@@ -65,6 +65,57 @@ class BusinessEmployeeService {
       return { success: true, employee: result.employee, message: result.message };
     } catch (error) {
       console.error("[BusinessEmployee] Error accepting invite:", error);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  /**
+   * Accept an invitation and create account in one step (for new employees)
+   * @param {string} inviteToken - Invitation token
+   * @param {Object} userData - { firstName, lastName, username, password, phone, termsId, privacyPolicyId }
+   * @returns {Object} { success, token, employee, error }
+   */
+  static async acceptInviteWithSignup(inviteToken, userData) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/invite/${inviteToken}/accept-with-signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(userData),
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: result.error || "Failed to accept invitation" };
+      }
+
+      return { success: true, token: result.token, employee: result.employee };
+    } catch (error) {
+      console.error("[BusinessEmployee] Error accepting invite with signup:", error);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  /**
+   * Decline an invitation
+   * @param {string} inviteToken - Invitation token
+   * @returns {Object} { success, error }
+   */
+  static async declineInvite(inviteToken) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/invite/${inviteToken}/decline`, {
+        method: "POST",
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: result.error || "Failed to decline invitation" };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("[BusinessEmployee] Error declining invite:", error);
       return { success: false, error: "Network error. Please try again." };
     }
   }

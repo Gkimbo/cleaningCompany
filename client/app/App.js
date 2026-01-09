@@ -72,6 +72,10 @@ import ClientRequestsList from "../src/components/client/ClientRequestsList";
 import ArchivedCleanings from "../src/components/client/ArchivedCleanings";
 import ClientReviews from "../src/components/client/ClientReviews";
 import CompleteHomeSetupWizard from "../src/components/client/CompleteHomeSetupWizard";
+import AcceptInvitationScreen from "../src/components/client/AcceptInvitationScreen";
+
+// Employee components
+import AcceptEmployeeInvitationScreen from "../src/components/employee/AcceptEmployeeInvitationScreen";
 
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
@@ -357,6 +361,16 @@ export default function App() {
               <Route
                 path="/complete-home-setup/:id"
                 element={<CompleteHomeSetupWizard state={state} dispatch={dispatch} />}
+              />
+              {/* Client Invitation Acceptance */}
+              <Route
+                path="/accept-invite/:token"
+                element={<AcceptInvitationScreen />}
+              />
+              {/* Employee Invitation Acceptance */}
+              <Route
+                path="/accept-employee-invite/:token"
+                element={<AcceptEmployeeInvitationScreen />}
               />
               <Route
                 path="/calendar-sync/:homeId"

@@ -56,14 +56,14 @@ class CleanerClientSerializer {
 			invitedPhone: this.decryptField(data.invitedPhone),
 			invitedAddress: this.parseAddress(data.invitedAddress),
 			invitedBeds: data.invitedBeds,
-			invitedBaths: data.invitedBaths,
+			invitedBaths: data.invitedBaths ? parseFloat(data.invitedBaths) : null,
 			invitedNotes: data.invitedNotes,
 			status: data.status,
 			invitedAt: data.invitedAt,
 			acceptedAt: data.acceptedAt,
 			lastInviteReminderAt: data.lastInviteReminderAt,
 			defaultFrequency: data.defaultFrequency,
-			defaultPrice: data.defaultPrice,
+			defaultPrice: data.defaultPrice ? parseFloat(data.defaultPrice) : null,
 			defaultDayOfWeek: data.defaultDayOfWeek,
 			defaultTimeWindow: data.defaultTimeWindow,
 			autoPayEnabled: data.autoPayEnabled,
@@ -96,7 +96,7 @@ class CleanerClientSerializer {
 				id: schedule.id,
 				frequency: schedule.frequency,
 				dayOfWeek: schedule.dayOfWeek,
-				price: schedule.price,
+				price: schedule.price ? parseFloat(schedule.price) : null,
 				isActive: schedule.isActive,
 				isPaused: schedule.isPaused
 			}));
@@ -118,7 +118,7 @@ class CleanerClientSerializer {
 			invitedEmail: this.decryptField(data.invitedEmail),
 			status: data.status,
 			defaultFrequency: data.defaultFrequency,
-			defaultPrice: data.defaultPrice,
+			defaultPrice: data.defaultPrice ? parseFloat(data.defaultPrice) : null,
 			invitedAt: data.invitedAt,
 			acceptedAt: data.acceptedAt
 		};
@@ -149,10 +149,10 @@ class CleanerClientSerializer {
 			invitedPhone: this.decryptField(data.invitedPhone),
 			invitedAddress: this.parseAddress(data.invitedAddress),
 			invitedBeds: data.invitedBeds,
-			invitedBaths: data.invitedBaths,
+			invitedBaths: data.invitedBaths ? parseFloat(data.invitedBaths) : null,
 			invitedNotes: data.invitedNotes,
 			defaultFrequency: data.defaultFrequency,
-			defaultPrice: data.defaultPrice,
+			defaultPrice: data.defaultPrice ? parseFloat(data.defaultPrice) : null,
 			status: data.status,
 			invitedAt: data.invitedAt
 		};

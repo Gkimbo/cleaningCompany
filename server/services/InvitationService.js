@@ -70,6 +70,8 @@ class InvitationService {
         ...cleanerClient.toJSON(),
         isExpired: cleanerClient.status === "declined",
         isAlreadyAccepted: cleanerClient.status === "active" || cleanerClient.status === "inactive",
+        // Include email for account recovery when already accepted
+        email: cleanerClient.email,
       };
     }
 

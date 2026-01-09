@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import * as Location from "expo-location";
 import FetchData from "../../services/fetchRequests/fetchData";
 import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
@@ -35,13 +36,29 @@ const AccountSettings = ({ state, dispatch }) => {
   const [emailSaveResult, setEmailSaveResult] = useState(null);
   const [loadingOwnerSettings, setLoadingOwnerSettings] = useState(false);
 
+  // Cleaner service area settings
+  const [serviceArea, setServiceArea] = useState(null);
+  const [serviceAreaAddress, setServiceAreaAddress] = useState("");
+  const [serviceAreaRadius, setServiceAreaRadius] = useState("30");
+  const [loadingServiceArea, setLoadingServiceArea] = useState(false);
+  const [savingServiceArea, setSavingServiceArea] = useState(false);
+  const [serviceAreaResult, setServiceAreaResult] = useState(null);
+  const [gettingLocation, setGettingLocation] = useState(false);
+
   const isOwner = state.account === "owner";
+  const isCleaner = state.account === "cleaner";
 
   useEffect(() => {
     if (isOwner && state.currentUser.token) {
       fetchOwnerSettings();
     }
   }, [isOwner, state.currentUser.token]);
+
+  useEffect(() => {
+    if (isCleaner && state.currentUser.token) {
+      fetchServiceArea();
+    }
+  }, [isCleaner, state.currentUser.token]);
 
   const fetchOwnerSettings = async () => {
     setLoadingOwnerSettings(true);
@@ -53,6 +70,141 @@ const AccountSettings = ({ state, dispatch }) => {
       console.error("Failed to fetch owner settings:", err);
     } finally {
       setLoadingOwnerSettings(false);
+    }
+  };
+
+  const fetchServiceArea = async () => {
+    setLoadingServiceArea(true);
+    try {
+      const result = await FetchData.getServiceArea(state.currentUser.token);
+      if (result.serviceArea) {
+        setServiceArea(result.serviceArea);
+        setServiceAreaAddress(result.serviceArea.address || "");
+        setServiceAreaRadius(String(result.serviceArea.radiusMiles || 30));
+      }
+    } catch (err) {
+      console.error("Failed to fetch service area:", err);
+    } finally {
+      setLoadingServiceArea(false);
+    }
+  };
+
+  const handleUseCurrentLocation = async () => {
+    setGettingLocation(true);
+    setServiceAreaResult(null);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setServiceAreaResult({ success: false, error: "Location permission denied" });
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      // Reverse geocode to get address
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      let addressString = "";
+      if (address) {
+        const parts = [address.city, address.region, address.postalCode].filter(Boolean);
+        addressString = parts.join(", ");
+      }
+
+      // Save to server
+      const result = await FetchData.updateServiceArea(state.currentUser.token, {
+        address: addressString,
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        radiusMiles: parseFloat(serviceAreaRadius) || 30,
+      });
+
+      if (result.error) {
+        setServiceAreaResult({ success: false, error: result.error });
+      } else {
+        setServiceArea(result.serviceArea);
+        setServiceAreaAddress(addressString);
+        setServiceAreaResult({ success: true, message: "Service area updated with your current location" });
+      }
+    } catch (err) {
+      console.error("Error getting location:", err);
+      setServiceAreaResult({ success: false, error: "Failed to get current location" });
+    } finally {
+      setGettingLocation(false);
+    }
+  };
+
+  const handleSaveServiceArea = async () => {
+    if (!serviceAreaAddress.trim()) {
+      setServiceAreaResult({ success: false, error: "Please enter an address or use current location" });
+      return;
+    }
+
+    setSavingServiceArea(true);
+    setServiceAreaResult(null);
+    try {
+      // Geocode the address to get coordinates
+      const geocoded = await Location.geocodeAsync(serviceAreaAddress);
+
+      if (!geocoded || geocoded.length === 0) {
+        setServiceAreaResult({ success: false, error: "Could not find location. Please try a different address." });
+        return;
+      }
+
+      const { latitude, longitude } = geocoded[0];
+
+      const result = await FetchData.updateServiceArea(state.currentUser.token, {
+        address: serviceAreaAddress.trim(),
+        latitude,
+        longitude,
+        radiusMiles: parseFloat(serviceAreaRadius) || 30,
+      });
+
+      if (result.error) {
+        setServiceAreaResult({ success: false, error: result.error });
+      } else {
+        setServiceArea(result.serviceArea);
+        setServiceAreaResult({ success: true, message: "Service area saved successfully" });
+      }
+    } catch (err) {
+      console.error("Error saving service area:", err);
+      setServiceAreaResult({ success: false, error: "Failed to save service area" });
+    } finally {
+      setSavingServiceArea(false);
+    }
+  };
+
+  const handleUpdateRadius = async () => {
+    if (!serviceArea?.hasLocation) {
+      setServiceAreaResult({ success: false, error: "Please set your location first" });
+      return;
+    }
+
+    setSavingServiceArea(true);
+    setServiceAreaResult(null);
+    try {
+      const result = await FetchData.updateServiceArea(state.currentUser.token, {
+        address: serviceAreaAddress,
+        latitude: null, // Server will keep existing
+        longitude: null,
+        radiusMiles: parseFloat(serviceAreaRadius) || 30,
+      });
+
+      if (result.error) {
+        setServiceAreaResult({ success: false, error: result.error });
+      } else {
+        setServiceArea(result.serviceArea);
+        setServiceAreaResult({ success: true, message: "Service radius updated" });
+      }
+    } catch (err) {
+      console.error("Error updating radius:", err);
+      setServiceAreaResult({ success: false, error: "Failed to update radius" });
+    } finally {
+      setSavingServiceArea(false);
     }
   };
 
@@ -413,6 +565,128 @@ const AccountSettings = ({ state, dispatch }) => {
           </Text>
         </Pressable>
       </View>
+
+      {/* Cleaner Service Area Section - Only visible to cleaners */}
+      {isCleaner && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Service Area</Text>
+          <Text style={styles.sectionDescription}>
+            Set your service area to receive notifications for last-minute bookings near you.
+            You'll be notified when homeowners book cleaning appointments within your radius.
+          </Text>
+
+          {loadingServiceArea ? (
+            <ActivityIndicator size="small" color={colors.primary[600]} />
+          ) : (
+            <>
+              {/* Current Status */}
+              {serviceArea?.hasLocation && (
+                <View style={styles.currentEmailBox}>
+                  <Text style={styles.currentEmailLabel}>Current service area:</Text>
+                  <Text style={styles.currentEmailValue}>
+                    {serviceArea.address || "Location set"}
+                  </Text>
+                  <Text style={[styles.currentEmailLabel, { marginTop: 4 }]}>
+                    Radius: {serviceArea.radiusMiles || 30} miles
+                  </Text>
+                </View>
+              )}
+
+              {/* Use Current Location Button */}
+              <Pressable
+                style={[
+                  styles.button,
+                  styles.locationButton,
+                  gettingLocation && styles.buttonDisabled,
+                ]}
+                onPress={handleUseCurrentLocation}
+                disabled={gettingLocation || savingServiceArea}
+              >
+                {gettingLocation ? (
+                  <ActivityIndicator size="small" color={colors.neutral[0]} />
+                ) : (
+                  <>
+                    <Feather name="navigation" size={16} color={colors.neutral[0]} style={{ marginRight: 8 }} />
+                    <Text style={styles.primaryButtonText}>Use Current Location</Text>
+                  </>
+                )}
+              </Pressable>
+
+              <Text style={styles.orDivider}>— or enter address —</Text>
+
+              {/* Address Input */}
+              <Text style={styles.label}>City, State or Address</Text>
+              <TextInput
+                style={styles.input}
+                value={serviceAreaAddress}
+                onChangeText={setServiceAreaAddress}
+                placeholder="e.g., Austin, TX or 123 Main St"
+                placeholderTextColor={colors.text.tertiary}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
+
+              {/* Radius Input */}
+              <Text style={styles.label}>Service Radius (miles)</Text>
+              <View style={styles.radiusInputRow}>
+                <TextInput
+                  style={[styles.input, styles.radiusInput]}
+                  value={serviceAreaRadius}
+                  onChangeText={setServiceAreaRadius}
+                  placeholder="30"
+                  placeholderTextColor={colors.text.tertiary}
+                  keyboardType="numeric"
+                />
+                <Text style={styles.radiusLabel}>miles</Text>
+              </View>
+
+              {/* Save Button */}
+              <Pressable
+                style={[
+                  styles.button,
+                  styles.primaryButton,
+                  savingServiceArea && styles.buttonDisabled,
+                ]}
+                onPress={handleSaveServiceArea}
+                disabled={savingServiceArea || gettingLocation}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {savingServiceArea ? "Saving..." : "Save Service Area"}
+                </Text>
+              </Pressable>
+
+              {/* Result Message */}
+              {serviceAreaResult && (
+                <View
+                  style={[
+                    styles.emailResultBox,
+                    serviceAreaResult.success ? styles.emailResultSuccess : styles.emailResultError,
+                  ]}
+                >
+                  <Text
+                    style={
+                      serviceAreaResult.success
+                        ? styles.emailResultSuccessText
+                        : styles.emailResultErrorText
+                    }
+                  >
+                    {serviceAreaResult.success ? serviceAreaResult.message : serviceAreaResult.error}
+                  </Text>
+                </View>
+              )}
+
+              {/* Info Note */}
+              <View style={styles.serviceAreaNote}>
+                <Feather name="info" size={14} color={colors.primary[500]} />
+                <Text style={styles.serviceAreaNoteText}>
+                  When a homeowner books a last-minute cleaning near you, you'll receive a push notification,
+                  email, and in-app alert so you can respond quickly.
+                </Text>
+              </View>
+            </>
+          )}
+        </View>
+      )}
 
       {/* Password Section */}
       <View style={styles.section}>
@@ -827,6 +1101,51 @@ const styles = StyleSheet.create({
   emailResultErrorText: {
     fontSize: typography.fontSize.sm,
     color: colors.error[700],
+  },
+
+  // Service Area Styles (for cleaners)
+  locationButton: {
+    backgroundColor: colors.success[600],
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orDivider: {
+    textAlign: "center",
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginVertical: spacing.md,
+  },
+  radiusInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  radiusInput: {
+    flex: 1,
+    maxWidth: 100,
+  },
+  radiusLabel: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  serviceAreaNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+  },
+  serviceAreaNoteText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+    lineHeight: 20,
   },
 });
 

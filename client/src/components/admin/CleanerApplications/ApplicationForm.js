@@ -1658,6 +1658,11 @@ const CleanerApplicationForm = () => {
         keyboardType="number-pad"
         maxLength={4}
         secureTextEntry
+        autoCorrect={false}
+        autoCapitalize="none"
+        spellCheck={false}
+        textContentType="oneTimeCode"
+        autoComplete="off"
       />
       <Text style={styles.helperText}>
         Required for background check verification. Your data is encrypted and

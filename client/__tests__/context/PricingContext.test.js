@@ -373,7 +373,15 @@ describe("PricingContext", () => {
 });
 
 // Import helper functions for testing
-import { getTimeWindowSurcharge, getTimeWindowLabel, getTimeWindowOptions } from "../../src/context/PricingContext";
+import {
+  getTimeWindowSurcharge,
+  getTimeWindowLabel,
+  getTimeWindowOptions,
+  isLastMinuteBooking,
+  getLastMinuteInfo,
+  calculateBasePrice,
+  defaultPricing,
+} from "../../src/context/PricingContext";
 
 describe("PricingContext Helper Functions", () => {
   describe("getTimeWindowSurcharge", () => {
@@ -758,5 +766,289 @@ describe("PricingContext Business Owner Fee", () => {
 
       expect(feePercent).toBe(10);
     });
+  });
+});
+
+describe("PricingContext Last-Minute Booking", () => {
+  describe("isLastMinuteBooking helper", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date("2026-01-08T12:00:00Z"));
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("should identify booking within threshold as last-minute", () => {
+      const pricing = {
+        lastMinute: { fee: 50, thresholdHours: 48 },
+      };
+
+      // 24 hours from now
+      const appointmentDate = new Date("2026-01-09T12:00:00Z");
+
+      const result = isLastMinuteBooking(appointmentDate, pricing);
+
+      expect(result.isLastMinute).toBe(true);
+      expect(result.fee).toBe(50);
+      expect(result.hoursUntil).toBe(24);
+      expect(result.thresholdHours).toBe(48);
+    });
+
+    it("should NOT identify booking outside threshold as last-minute", () => {
+      const pricing = {
+        lastMinute: { fee: 50, thresholdHours: 48 },
+      };
+
+      // 72 hours from now
+      const appointmentDate = new Date("2026-01-11T12:00:00Z");
+
+      const result = isLastMinuteBooking(appointmentDate, pricing);
+
+      expect(result.isLastMinute).toBe(false);
+      expect(result.fee).toBe(0);
+      expect(result.hoursUntil).toBe(72);
+    });
+
+    it("should NOT identify past dates as last-minute", () => {
+      const pricing = {
+        lastMinute: { fee: 50, thresholdHours: 48 },
+      };
+
+      // Yesterday
+      const appointmentDate = new Date("2026-01-07T12:00:00Z");
+
+      const result = isLastMinuteBooking(appointmentDate, pricing);
+
+      expect(result.isLastMinute).toBe(false);
+      expect(result.fee).toBe(0);
+      expect(result.hoursUntil).toBe(0);
+    });
+
+    it("should use default pricing when not provided", () => {
+      // Tomorrow (24 hours from now)
+      const appointmentDate = new Date("2026-01-09T12:00:00Z");
+
+      const result = isLastMinuteBooking(appointmentDate, null);
+
+      expect(result.isLastMinute).toBe(true);
+      expect(result.fee).toBe(50); // default
+      expect(result.thresholdHours).toBe(48); // default
+    });
+
+    it("should handle date strings", () => {
+      const pricing = {
+        lastMinute: { fee: 50, thresholdHours: 48 },
+      };
+
+      const result = isLastMinuteBooking("2026-01-09T12:00:00Z", pricing);
+
+      expect(result.isLastMinute).toBe(true);
+    });
+
+    it("should handle exactly at threshold boundary", () => {
+      const pricing = {
+        lastMinute: { fee: 50, thresholdHours: 48 },
+      };
+
+      // Exactly 48 hours from now
+      const appointmentDate = new Date("2026-01-10T12:00:00Z");
+
+      const result = isLastMinuteBooking(appointmentDate, pricing);
+
+      expect(result.isLastMinute).toBe(true);
+    });
+
+    it("should handle custom fee and threshold", () => {
+      const pricing = {
+        lastMinute: { fee: 75, thresholdHours: 72 },
+      };
+
+      // 60 hours from now (within 72 hour threshold)
+      const appointmentDate = new Date("2026-01-11T00:00:00Z");
+
+      const result = isLastMinuteBooking(appointmentDate, pricing);
+
+      expect(result.isLastMinute).toBe(true);
+      expect(result.fee).toBe(75);
+      expect(result.thresholdHours).toBe(72);
+    });
+  });
+
+  describe("getLastMinuteInfo helper", () => {
+    it("should return last-minute configuration from pricing", () => {
+      const pricing = {
+        lastMinute: {
+          fee: 75,
+          thresholdHours: 72,
+          notificationRadiusMiles: 30,
+        },
+      };
+
+      const result = getLastMinuteInfo(pricing);
+
+      expect(result.fee).toBe(75);
+      expect(result.thresholdHours).toBe(72);
+      expect(result.notificationRadiusMiles).toBe(30);
+    });
+
+    it("should use defaults when pricing is null", () => {
+      const result = getLastMinuteInfo(null);
+
+      expect(result.fee).toBe(50);
+      expect(result.thresholdHours).toBe(48);
+      expect(result.notificationRadiusMiles).toBe(25);
+    });
+
+    it("should use defaults when lastMinute is missing", () => {
+      const result = getLastMinuteInfo({});
+
+      expect(result.fee).toBe(50);
+      expect(result.thresholdHours).toBe(48);
+      expect(result.notificationRadiusMiles).toBe(25);
+    });
+
+    it("should use partial defaults for missing fields", () => {
+      const pricing = {
+        lastMinute: {
+          fee: 60, // Only fee provided
+        },
+      };
+
+      const result = getLastMinuteInfo(pricing);
+
+      expect(result.fee).toBe(60);
+      expect(result.thresholdHours).toBe(48); // default
+      expect(result.notificationRadiusMiles).toBe(25); // default
+    });
+  });
+
+  describe("defaultPricing last-minute configuration", () => {
+    it("should have lastMinute configuration in defaults", () => {
+      expect(defaultPricing.lastMinute).toBeDefined();
+      expect(defaultPricing.lastMinute.fee).toBe(50);
+      expect(defaultPricing.lastMinute.thresholdHours).toBe(48);
+      expect(defaultPricing.lastMinute.notificationRadiusMiles).toBe(25);
+    });
+  });
+
+  describe("Last-Minute Fee Calculation", () => {
+    it("should calculate total price with last-minute fee", () => {
+      const basePrice = 200;
+      const lastMinuteFee = 50;
+
+      const totalPrice = basePrice + lastMinuteFee;
+
+      expect(totalPrice).toBe(250);
+    });
+
+    it("should display fee breakdown correctly", () => {
+      const basePrice = 200;
+      const lastMinuteFee = 50;
+
+      const feeDisplay = `+$${lastMinuteFee} last-minute fee`;
+      expect(feeDisplay).toBe("+$50 last-minute fee");
+    });
+  });
+});
+
+describe("calculateBasePrice helper", () => {
+  it("should calculate base price for 1 bed 1 bath", () => {
+    const pricing = {
+      basePrice: 150,
+      extraBedBathFee: 50,
+      halfBathFee: 25,
+    };
+
+    const result = calculateBasePrice(pricing, 1, 1);
+
+    expect(result).toBe(150);
+  });
+
+  it("should add extra bed fee", () => {
+    const pricing = {
+      basePrice: 150,
+      extraBedBathFee: 50,
+      halfBathFee: 25,
+    };
+
+    const result = calculateBasePrice(pricing, 3, 1);
+
+    // 150 + (2 extra beds * 50) = 250
+    expect(result).toBe(250);
+  });
+
+  it("should add extra bath fee", () => {
+    const pricing = {
+      basePrice: 150,
+      extraBedBathFee: 50,
+      halfBathFee: 25,
+    };
+
+    const result = calculateBasePrice(pricing, 1, 3);
+
+    // 150 + (2 extra full baths * 50) = 250
+    expect(result).toBe(250);
+  });
+
+  it("should handle half baths", () => {
+    const pricing = {
+      basePrice: 150,
+      extraBedBathFee: 50,
+      halfBathFee: 25,
+    };
+
+    const result = calculateBasePrice(pricing, 2, 2.5);
+
+    // 150 + (1 extra bed * 50) + (1 extra full bath * 50) + (1 half bath * 25) = 275
+    expect(result).toBe(275);
+  });
+
+  it("should handle string bath values", () => {
+    const pricing = {
+      basePrice: 150,
+      extraBedBathFee: 50,
+      halfBathFee: 25,
+    };
+
+    const result = calculateBasePrice(pricing, 2, "2.5");
+
+    expect(result).toBe(275);
+  });
+
+  it("should use defaults when pricing is null", () => {
+    const result = calculateBasePrice(null, 2, 2);
+
+    // Default: 150 + (1 * 50) + (1 * 50) = 250
+    expect(result).toBe(250);
+  });
+
+  it("should handle only half bath (0.5 baths)", () => {
+    const pricing = {
+      basePrice: 150,
+      extraBedBathFee: 50,
+      halfBathFee: 25,
+    };
+
+    const result = calculateBasePrice(pricing, 1, 0.5);
+
+    // 150 + (0 extra full baths) + (1 half bath * 25) = 175
+    // Note: The base includes 1 bath, but 0.5 means only a half bath
+    // So: 150 + 25 = 175
+    expect(result).toBe(175);
+  });
+
+  it("should handle large homes", () => {
+    const pricing = {
+      basePrice: 150,
+      extraBedBathFee: 50,
+      halfBathFee: 25,
+    };
+
+    const result = calculateBasePrice(pricing, 5, 4);
+
+    // 150 + (4 extra beds * 50) + (3 extra baths * 50) = 150 + 200 + 150 = 500
+    expect(result).toBe(500);
   });
 });

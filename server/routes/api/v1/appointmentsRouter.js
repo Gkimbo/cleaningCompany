@@ -18,6 +18,8 @@ const {
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const calculatePrice = require("../../../services/CalculatePrice");
+const { checkLastMinuteBooking } = require("../../../services/CalculatePrice");
+const LastMinuteNotificationService = require("../../../services/LastMinuteNotificationService");
 const HomeSerializer = require("../../../serializers/homesSerializer");
 const EncryptionService = require("../../../services/EncryptionService");
 const { emit } = require("nodemon");
@@ -922,6 +924,17 @@ appointmentRouter.post("/", async (req, res) => {
         date.isPreferredCleanerPrice = false;
       }
 
+      // Check if this is a last-minute booking and add fee
+      const lastMinuteCheck = await checkLastMinuteBooking(date.date);
+      if (lastMinuteCheck.isLastMinute) {
+        date.isLastMinuteBooking = true;
+        date.lastMinuteFeeApplied = lastMinuteCheck.fee;
+        finalPrice += lastMinuteCheck.fee;
+      } else {
+        date.isLastMinuteBooking = false;
+        date.lastMinuteFeeApplied = null;
+      }
+
       date.price = finalPrice;
       date.sheetConfigurations = sheetConfigs;
       date.towelConfigurations = towelConfigs;
@@ -981,6 +994,9 @@ appointmentRouter.post("/", async (req, res) => {
           discountApplied: date.discountApplied || false,
           discountPercent: date.discountPercent || null,
           originalPrice: date.originalPrice || null,
+          // Last-minute booking fields
+          isLastMinuteBooking: date.isLastMinuteBooking || false,
+          lastMinuteFeeApplied: date.lastMinuteFeeApplied || null,
         });
         const appointmentId = newAppointment.dataValues.id;
 
@@ -1048,6 +1064,28 @@ appointmentRouter.post("/", async (req, res) => {
       }
     } catch (err) {
       console.error("Error checking large home:", err);
+    }
+
+    // Send last-minute notifications for any last-minute bookings
+    const lastMinuteAppointments = appointments.filter(
+      (apt) => apt.isLastMinuteBooking
+    );
+    if (lastMinuteAppointments.length > 0) {
+      // Send notifications asynchronously (don't block response)
+      setImmediate(async () => {
+        try {
+          for (const apt of lastMinuteAppointments) {
+            const aptRecord = await UserAppointments.findByPk(apt.id);
+            await LastMinuteNotificationService.notifyNearbyCleaners(
+              aptRecord,
+              home,
+              req.io
+            );
+          }
+        } catch (err) {
+          console.error("[LastMinuteNotification] Error sending notifications:", err);
+        }
+      });
     }
 
     return res.status(201).json({ appointments, largeHomeInfo });

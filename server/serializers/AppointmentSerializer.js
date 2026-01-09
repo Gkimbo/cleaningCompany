@@ -10,8 +10,15 @@ class AppointmentSerializer {
 		if (this.encryptedFields.includes(attribute) && value) {
 			return EncryptionService.decrypt(value);
 		}
+		// Parse DECIMAL fields to ensure they're numbers, not strings
+		if (this.decimalFields.includes(attribute) && value !== null && value !== undefined) {
+			return parseFloat(value);
+		}
 		return value;
 	}
+
+	// Fields that are DECIMAL in the database and need parseFloat
+	static decimalFields = ["discountPercent"];
 
 	static serializeArray(appointmentArray) {
 		const allowedAttributes = [
@@ -38,7 +45,11 @@ class AppointmentSerializer {
 			"hasCleanerReview",
 			"discountApplied",
 			"discountPercent",
-			"originalPrice"
+			"originalPrice",
+			// Last-minute booking fields
+			"isLastMinuteBooking",
+			"lastMinuteFeeApplied",
+			"lastMinuteNotificationsSentAt"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
@@ -77,7 +88,11 @@ class AppointmentSerializer {
 			"hasCleanerReview",
 			"discountApplied",
 			"discountPercent",
-			"originalPrice"
+			"originalPrice",
+			// Last-minute booking fields
+			"isLastMinuteBooking",
+			"lastMinuteFeeApplied",
+			"lastMinuteNotificationsSentAt"
 		];
 		const newAppointment = {};
 		// Handle both Sequelize instances and plain objects

@@ -299,24 +299,6 @@ paymentRouter.get("/payment-method-status", async (req, res) => {
 
 /**
  * ------------------------------------------------------
- * 4️⃣ Get Appointments for a Specific Home
- * ------------------------------------------------------
- */
-paymentRouter.get("/:homeId", async (req, res) => {
-  const { homeId } = req.params;
-  try {
-    const appointments = await UserAppointments.findAll({ where: { homeId } });
-    const serializedAppointments =
-      AppointmentSerializer.serializeArray(appointments);
-    return res.status(200).json({ appointments: serializedAppointments });
-  } catch (error) {
-    console.error(error);
-    return res.status(401).json({ error: "Unable to fetch appointments" });
-  }
-});
-
-/**
- * ------------------------------------------------------
  * PAYMENT METHOD SETUP FOR HOMEOWNERS
  * Ensures homeowners have a valid payment method before booking
  * ------------------------------------------------------
@@ -3851,6 +3833,24 @@ paymentRouter.get("/multi-cleaner/earnings/:multiCleanerJobId", async (req, res)
   } catch (error) {
     console.error("[Earnings Breakdown] Error:", error);
     return res.status(500).json({ error: "Failed to get earnings breakdown" });
+  }
+});
+
+/**
+ * ------------------------------------------------------
+ * Get Appointments for a Specific Home (MUST BE LAST - catch-all route)
+ * ------------------------------------------------------
+ */
+paymentRouter.get("/:homeId", async (req, res) => {
+  const { homeId } = req.params;
+  try {
+    const appointments = await UserAppointments.findAll({ where: { homeId } });
+    const serializedAppointments =
+      AppointmentSerializer.serializeArray(appointments);
+    return res.status(200).json({ appointments: serializedAppointments });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ error: "Unable to fetch appointments" });
   }
 });
 

@@ -1115,6 +1115,53 @@ class FetchData {
       return { error: "Failed to fetch adjustment history" };
     }
   }
+
+  // Service Area methods for cleaners
+  static async getServiceArea(token) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/users/service-area", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch service area" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching service area:", error);
+      return { error: "Failed to fetch service area" };
+    }
+  }
+
+  static async updateServiceArea(token, { address, latitude, longitude, radiusMiles }) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/users/service-area", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ address, latitude, longitude, radiusMiles }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to update service area" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error updating service area:", error);
+      return { error: "Failed to update service area" };
+    }
+  }
 }
 
 export default FetchData;

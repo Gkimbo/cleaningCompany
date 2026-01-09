@@ -396,6 +396,28 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontStyle: "italic",
   },
+
+  // Pass verification badges
+  naPassesBadge: {
+    backgroundColor: colors.success[50] || "#f0fdf4",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.success[600],
+  },
+
+  naPassesText: {
+    color: colors.success[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  naPassesTextPending: {
+    color: colors.warning[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
 });
 
 export default styles;

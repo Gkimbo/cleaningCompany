@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-2809_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-2950+_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -26,6 +26,8 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - Multi-cleaner job support for large homes with room assignments
 - Real-time messaging with suspicious content detection
 - Dynamic pricing with incentive and referral programs
+- Last-minute booking with urgent cleaner notifications
+- Large business volume-based fee tiers
 - Preferred cleaner tier system (Bronze/Silver/Gold/Platinum) with bonuses
 - Stripe Connect for instant cleaner payouts
 - iCal calendar sync with Airbnb, VRBO, Booking.com
@@ -49,6 +51,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Auto-Booking**: Automatic appointments from guest checkouts
 - **Flexible Scheduling**: One-time or recurring cleanings (weekly/biweekly/monthly)
 - **Time Windows**: Choose preferred cleaning times with surcharges
+- **Last-Minute Booking**: Book within 48 hours with additional fee for urgent cleanings
 - **Preferred Cleaners**: Mark favorites for priority assignment with tier tracking
 - **Multi-Cleaner Jobs**: Large homes automatically split across multiple cleaners
 - **Secure Payments**: Stripe with prepayment options and saved cards
@@ -76,6 +79,8 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Preferred Tier System**: Bronze/Silver/Gold/Platinum with bonuses (0-7%)
 - **Guest-Not-Left Reporting**: GPS-verified escalation workflow
 - **Home Size Adjustments**: Report incorrect bed/bath counts with photos
+- **Service Area Config**: Set location and radius for last-minute job notifications
+- **Last-Minute Job Alerts**: Receive urgent notifications for nearby last-minute bookings
 
 </td>
 </tr>
@@ -143,7 +148,8 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
 - **Platform Withdrawals**: Transfer earnings via Stripe
 - **Employee Management**: Create/edit HR staff and cleaners
-- **Pricing Configuration**: Base prices, per-bed/bath fees, time windows, cancellation fees
+- **Pricing Configuration**: Base prices, per-bed/bath fees, time windows, cancellation fees, last-minute fees
+- **Large Business Fees**: Configure volume thresholds and reduced fees for high-volume business owners
 - **Incentive Programs**: Configure cleaner fee reductions, homeowner discounts
 - **Referral Programs**: Create tiered referral rewards (4 program types)
 - **Preferred Perks Config**: Set tier thresholds, bonuses, payout speeds
@@ -174,6 +180,8 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Incentive Programs** | Configurable fee reductions for cleaners (up to 100%) and discounts for homeowners based on activity and eligibility requirements. |
 | **Referral Programs** | 4 program types (client-to-client, client-to-cleaner, cleaner-to-cleaner, cleaner-to-client). Progress tracking, qualification requirements, rewards for both parties. |
 | **Guest-Not-Left Tracking** | Cleaners report when guests haven't left by checkout time. GPS verification at job location. Escalation workflow with resolution tracking. |
+| **Last-Minute Booking** | Bookings within 48 hours incur a $50 fee (configurable). Triggers urgent push, email, and in-app notifications to all cleaners within 25-mile radius of the property. Cleaners can configure their service area location and radius. |
+| **Large Business Fees** | High-volume business owners (50+ jobs/month) receive reduced platform fees (7% vs 10%). Configurable threshold and lookback period. Automatic qualification tracking. |
 | **Offline Mode** | Full offline-first architecture with local database. Background sync, conflict resolution, photo queuing. Works for employees, business owners, and messaging. |
 | **Terms & Conditions** | Version-controlled legal documents with PDF/text support, user acceptance tracking, and compliance snapshots. |
 | **Push Notifications** | Expo push notifications with preferences. Supply reminder snooze. Multi-channel delivery (push, email, in-app). |
@@ -467,9 +475,11 @@ npm test -- --watch
 | Checklist | 45 | Editor, publishing, versions |
 | Applications | 56 | Submission, review, hire |
 | Services | 156 | All service unit tests |
-| Serializers | 89 | PII encryption, data formatting |
+| Serializers | 145 | PII encryption, decimal parsing, data formatting |
+| Last-Minute Booking | 45 | Notification service, price calculation, route tests |
+| Route Ordering | 12 | Express route interception prevention |
 | Integration | 67 | Full payment flows, e2e |
-| **Total** | **2809** | - |
+| **Total** | **2950+** | - |
 
 ---
 

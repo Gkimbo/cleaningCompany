@@ -1,10 +1,10 @@
 const EncryptionService = require("../services/EncryptionService");
 
 class BusinessEmployeeSerializer {
-  // Fields that are encrypted in the User model (nested user data)
-  static encryptedUserFields = ["firstName", "lastName", "email", "phone"];
+  // Fields that are encrypted in both BusinessEmployee and User models
+  static encryptedFields = ["firstName", "lastName", "email", "phone"];
 
-  static decryptUserField(value) {
+  static decryptField(value) {
     if (!value) return null;
     return EncryptionService.decrypt(value);
   }
@@ -33,10 +33,10 @@ class BusinessEmployeeSerializer {
       id: data.id,
       businessOwnerId: data.businessOwnerId,
       userId: data.userId,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      phone: data.phone,
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
+      email: this.decryptField(data.email),
+      phone: this.decryptField(data.phone),
       status: data.status,
       defaultHourlyRate: data.defaultHourlyRate,
       paymentMethod: data.paymentMethod,
@@ -110,10 +110,10 @@ class BusinessEmployeeSerializer {
 
     return {
       id: data.id,
-      firstName: this.decryptUserField(data.firstName),
-      lastName: this.decryptUserField(data.lastName),
-      email: this.decryptUserField(data.email),
-      phone: this.decryptUserField(data.phone),
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
+      email: this.decryptField(data.email),
+      phone: this.decryptField(data.phone),
       businessName: data.businessName,
       expoPushToken: data.expoPushToken,
     };
@@ -131,15 +131,15 @@ class BusinessEmployeeSerializer {
 
     return {
       id: data.id,
-      firstName: data.firstName,
-      lastName: data.lastName,
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
       status: data.status,
       canMessageClients: data.canMessageClients,
       paymentMethod: data.paymentMethod,
       user: data.user ? {
         id: data.user.id,
-        firstName: this.decryptUserField(data.user.firstName),
-        lastName: this.decryptUserField(data.user.lastName),
+        firstName: this.decryptField(data.user.firstName),
+        lastName: this.decryptField(data.user.lastName),
       } : null,
     };
   }
@@ -158,9 +158,9 @@ class BusinessEmployeeSerializer {
       : null;
 
     return {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
+      email: this.decryptField(data.email),
       businessName: businessOwner?.businessName || "Business",
       businessOwnerName: businessOwner
         ? `${businessOwner.firstName} ${businessOwner.lastName}`
@@ -183,10 +183,10 @@ class BusinessEmployeeSerializer {
 
     return {
       id: data.id,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      phone: data.phone,
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
+      email: this.decryptField(data.email),
+      phone: this.decryptField(data.phone),
       status: data.status,
       paymentMethod: data.paymentMethod,
       stripeConnectOnboarded: data.stripeConnectOnboarded,

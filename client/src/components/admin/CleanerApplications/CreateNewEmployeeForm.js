@@ -244,6 +244,10 @@ const CreateNewEmployeeForm = ({id, firstName: initialFirstName, lastName: initi
 					/>
 				}
 				style={styles.input}
+				autoCorrect={false}
+				autoCapitalize="none"
+				spellCheck={false}
+				textContentType="oneTimeCode"
 			/>
 			<View style={styles.passwordHelperRow}>
 				<Text style={styles.passwordHelperText}>

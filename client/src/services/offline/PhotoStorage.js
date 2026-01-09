@@ -228,6 +228,45 @@ class PhotoStorage {
     }
   }
 
+  // Save a N/A pass record (no photo file, just metadata)
+  async saveNARecord(jobId, notes = null) {
+    try {
+      const photo = await database.write(async () => {
+        return await offlinePhotosCollection.create((p) => {
+          p.jobId = jobId;
+          p.photoType = "passes";
+          p.room = "N/A";
+          p.localUri = "";
+          p._raw.watermark_data = JSON.stringify({
+            timestamp: new Date().toISOString(),
+            jobId,
+            photoType: "passes",
+            isNotApplicable: true,
+            notes,
+          });
+          p.uploaded = false;
+          p.uploadAttempts = 0;
+          p._raw.is_not_applicable = true;
+          p._raw.created_at = Date.now();
+        });
+      });
+
+      return {
+        id: photo.id,
+        isNotApplicable: true,
+      };
+    } catch (error) {
+      console.error("Failed to save N/A record:", error);
+      throw error;
+    }
+  }
+
+  // Check if passes have been marked as N/A for a job
+  async hasNAPassesForJob(jobId) {
+    const photos = await this.getPhotosForJob(jobId);
+    return photos.some((p) => p.photoType === "passes" && p._raw?.is_not_applicable);
+  }
+
   // Sync photo records with file system (cleanup orphans)
   async syncWithFileSystem() {
     await this.initialize();

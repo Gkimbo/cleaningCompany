@@ -227,6 +227,47 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /history/:homeId
+ * Get adjustment history for a specific home
+ * NOTE: Must be defined BEFORE /:id to avoid route interception
+ */
+homeSizeAdjustmentRouter.get("/history/:homeId", authenticateToken, async (req, res) => {
+  const { homeId } = req.params;
+  const userId = req.user.userId;
+
+  try {
+    const user = await User.findByPk(userId);
+    const home = await UserHomes.findByPk(homeId);
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Check authorization
+    if (home.userId !== userId && user.type !== "owner") {
+      return res.status(403).json({ error: "Not authorized to view this home's history" });
+    }
+
+    const requests = await HomeSizeAdjustmentRequest.findAll({
+      where: { homeId },
+      include: [
+        {
+          model: User,
+          as: "cleaner",
+          attributes: ["id", "username", "firstName", "lastName"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    return res.json({ requests });
+  } catch (error) {
+    console.error("Error fetching history:", error);
+    return res.status(500).json({ error: "Failed to fetch history" });
+  }
+});
+
+/**
  * GET /pending
  * Get pending adjustment requests for current user (homeowner or owner)
  */
@@ -741,46 +782,6 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
   } catch (error) {
     console.error("Error resolving adjustment request:", error);
     return res.status(500).json({ error: "Failed to resolve request" });
-  }
-});
-
-/**
- * GET /history/:homeId
- * Get adjustment history for a specific home
- */
-homeSizeAdjustmentRouter.get("/history/:homeId", authenticateToken, async (req, res) => {
-  const { homeId } = req.params;
-  const userId = req.user.userId;
-
-  try {
-    const user = await User.findByPk(userId);
-    const home = await UserHomes.findByPk(homeId);
-
-    if (!home) {
-      return res.status(404).json({ error: "Home not found" });
-    }
-
-    // Check authorization
-    if (home.userId !== userId && user.type !== "owner") {
-      return res.status(403).json({ error: "Not authorized to view this home's history" });
-    }
-
-    const requests = await HomeSizeAdjustmentRequest.findAll({
-      where: { homeId },
-      include: [
-        {
-          model: User,
-          as: "cleaner",
-          attributes: ["id", "username", "firstName", "lastName"],
-        },
-      ],
-      order: [["createdAt", "DESC"]],
-    });
-
-    return res.json({ requests });
-  } catch (error) {
-    console.error("Error fetching history:", error);
-    return res.status(500).json({ error: "Failed to fetch history" });
   }
 });
 
