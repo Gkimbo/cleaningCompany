@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-3838_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-3967_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -32,9 +32,13 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - Stripe Connect for instant cleaner payouts
 - iCal calendar sync with Airbnb, VRBO, Booking.com
 - Comprehensive tax reporting (1099-NEC, W-9 collection, platform reports)
+- **Unified Conflict Resolution Center** for appeals and disputes
+- **Cancellation Appeals System** with 72-hour appeal window and HR review
+- **Job Ledger** with double-entry accounting and Stripe reconciliation
 - HR dispute management and content moderation
 - Before/after job photo documentation with offline capture
 - Guest-not-left tracking with GPS verification
+- **Preview as Role** feature for admin testing
 
 ---
 
@@ -130,8 +134,12 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 
 ### HR Staff
 
+- **Conflict Resolution Center**: Unified queue for all disputes and appeals
+- **Cancellation Appeals**: Review and decide on user appeals within 48-hour SLA
 - **Dispute Management**: Review home size adjustment claims
-- **Photo Evidence Review**: Examine cleaner-submitted photos
+- **Photo Evidence Review**: Examine cleaner-submitted photos with comparison tools
+- **Financial Breakdown**: View detailed charges, refunds, and payouts per case
+- **Audit Trail**: Complete event history for every case
 - **Suspicious Activity**: Review flagged messages and reports
 - **User Warnings**: Issue warnings to policy violators
 - **Account Freezing**: Freeze repeat offenders
@@ -147,6 +155,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 
 - **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
 - **Platform Withdrawals**: Transfer earnings via Stripe
+- **Preview as Role**: Test the app as any user type (Cleaner, Homeowner, Business Owner, Employee)
 - **Employee Management**: Create/edit HR staff and cleaners
 - **Pricing Configuration**: Base prices, per-bed/bath fees, time windows, cancellation fees, last-minute fees
 - **Large Business Fees**: Configure volume thresholds and reduced fees for high-volume business owners
@@ -186,6 +195,11 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Terms & Conditions** | Version-controlled legal documents with PDF/text support, user acceptance tracking, and compliance snapshots. |
 | **Push Notifications** | Expo push notifications with preferences. Supply reminder snooze. Multi-channel delivery (push, email, in-app). |
 | **Account Security** | JWT authentication, encrypted PII (AES-256-CBC), account freezing, warning system, password strength validation. |
+| **Conflict Resolution Center** | Unified HR queue for all disputes and appeals. Photo comparison tools, evidence gallery, message threads, audit trail. Priority-based sorting with SLA tracking. |
+| **Cancellation Appeals** | 72-hour appeal window for both cleaners and homeowners. 48-hour HR review SLA. Supports penalty waiver, full/partial refunds. Financial breakdown with automatic calculations. |
+| **Job Ledger** | Double-entry accounting system tracking all job-related financial transactions. Stripe reconciliation, balance tracking, automated entry creation for fees, payouts, refunds. |
+| **Cancellation Audit Log** | Immutable event tracking for all cancellation-related actions. Captures actor, changes, timestamps for compliance and dispute resolution. |
+| **Preview as Role** | Platform owners can preview the app as any user type using demo accounts. Preserves owner state for seamless return. Full functionality with demo data. |
 
 ---
 
@@ -216,7 +230,7 @@ React Native + Expo SDK 52
 
 ```
 Node.js + Express.js
-├── PostgreSQL + Sequelize  # Database & ORM (57 models)
+├── PostgreSQL + Sequelize  # Database & ORM (60 models)
 ├── Socket.io               # WebSocket server
 ├── Passport.js + JWT       # Authentication
 ├── Stripe API              # Payment processing

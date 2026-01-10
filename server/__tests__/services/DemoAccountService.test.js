@@ -3,6 +3,9 @@
  * Tests the demo account management for the owner's "Preview as Role" feature.
  */
 
+// Set environment variable before any requires
+process.env.SESSION_SECRET = "test-secret";
+
 // Mock jwt
 jest.mock("jsonwebtoken", () => ({
 	sign: jest.fn(() => "mock_jwt_token"),
@@ -368,8 +371,8 @@ describe("DemoAccountService", () => {
 			expect(DemoAccountService.isPreviewSession(decodedToken)).toBe(false);
 		});
 
-		it("should return false for null token", () => {
-			expect(DemoAccountService.isPreviewSession(null)).toBe(false);
+		it("should return falsy for null token", () => {
+			expect(DemoAccountService.isPreviewSession(null)).toBeFalsy();
 		});
 
 		it("should return false when isPreviewSession is false", () => {

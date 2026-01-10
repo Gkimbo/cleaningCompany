@@ -4,7 +4,7 @@
  */
 
 import React from "react";
-import { render, waitFor, act } from "@testing-library/react-native";
+import { render, waitFor, act, fireEvent } from "@testing-library/react-native";
 import { Text, Pressable } from "react-native";
 
 // Mock AsyncStorage
@@ -109,7 +109,7 @@ describe("PreviewContext", () => {
 			);
 
 			await act(async () => {
-				getByTestId("enterCleaner").props.onPress();
+				fireEvent.press(getByTestId("enterCleaner"));
 			});
 
 			await waitFor(() => {
@@ -141,7 +141,7 @@ describe("PreviewContext", () => {
 			);
 
 			await act(async () => {
-				getByTestId("enterCleaner").props.onPress();
+				fireEvent.press(getByTestId("enterCleaner"));
 			});
 
 			await waitFor(() => {
@@ -163,7 +163,7 @@ describe("PreviewContext", () => {
 			);
 
 			await act(async () => {
-				getByTestId("enterCleaner").props.onPress();
+				fireEvent.press(getByTestId("enterCleaner"));
 			});
 
 			await waitFor(() => {
@@ -197,7 +197,7 @@ describe("PreviewContext", () => {
 			);
 
 			await act(async () => {
-				getByTestId("enter").props.onPress();
+				fireEvent.press(getByTestId("enter"));
 			});
 
 			expect(result.success).toBe(false);
@@ -230,7 +230,7 @@ describe("PreviewContext", () => {
 
 			// Enter preview mode first
 			await act(async () => {
-				getByTestId("enterCleaner").props.onPress();
+				fireEvent.press(getByTestId("enterCleaner"));
 			});
 
 			await waitFor(() => {
@@ -239,7 +239,7 @@ describe("PreviewContext", () => {
 
 			// Now exit
 			await act(async () => {
-				getByTestId("exit").props.onPress();
+				fireEvent.press(getByTestId("exit"));
 			});
 
 			await waitFor(() => {
@@ -291,7 +291,7 @@ describe("PreviewContext", () => {
 			);
 
 			await act(async () => {
-				getByTestId("exit").props.onPress();
+				fireEvent.press(getByTestId("exit"));
 			});
 
 			expect(exitResult.success).toBe(true);
@@ -365,7 +365,7 @@ describe("PreviewContext", () => {
 			);
 
 			await act(async () => {
-				getByTestId("check").props.onPress();
+				fireEvent.press(getByTestId("check"));
 			});
 
 			expect(checkResult.wasInPreview).toBe(true);
@@ -395,7 +395,7 @@ describe("PreviewContext", () => {
 			);
 
 			await act(async () => {
-				getByTestId("check").props.onPress();
+				fireEvent.press(getByTestId("check"));
 			});
 
 			expect(checkResult.wasInPreview).toBe(false);

@@ -88,8 +88,10 @@ describe("Demo Account Router", () => {
 		});
 
 		it("should reject requests with invalid token", async () => {
+			const jwtError = new Error("Invalid token");
+			jwtError.name = "JsonWebTokenError";
 			jwt.verify.mockImplementation(() => {
-				throw new Error("Invalid token");
+				throw jwtError;
 			});
 
 			const response = await request(app)
