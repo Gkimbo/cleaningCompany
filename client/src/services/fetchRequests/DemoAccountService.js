@@ -175,6 +175,77 @@ class DemoAccountService {
 			};
 		}
 	}
+
+	/**
+	 * Reset all demo data back to original seeder state
+	 * @param {string} token - Owner's auth token (can be demo account token during preview)
+	 * @returns {Object} { success, message, deleted, created }
+	 */
+	static async resetDemoData(token) {
+		try {
+			const response = await fetch(`${API_BASE}/demo-accounts/reset`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				return {
+					success: false,
+					error: data.error || "Failed to reset demo data",
+				};
+			}
+
+			return data;
+		} catch (error) {
+			console.error("[DemoAccountService] Error resetting demo data:", error);
+			return {
+				success: false,
+				error: "Network error. Please check your connection.",
+			};
+		}
+	}
+
+	/**
+	 * Switch to a different demo role without exiting preview mode
+	 * @param {string} token - Current session token (demo account token)
+	 * @param {string} role - Target role to switch to
+	 * @param {number} ownerId - Original owner's user ID
+	 * @returns {Object} { success, token, user, previewRole, switched }
+	 */
+	static async switchPreviewRole(token, role, ownerId) {
+		try {
+			const response = await fetch(`${API_BASE}/demo-accounts/switch/${role}`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ ownerId }),
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				return {
+					success: false,
+					error: data.error || "Failed to switch preview role",
+				};
+			}
+
+			return data;
+		} catch (error) {
+			console.error("[DemoAccountService] Error switching preview role:", error);
+			return {
+				success: false,
+				error: "Network error. Please check your connection.",
+			};
+		}
+	}
 }
 
 export default DemoAccountService;

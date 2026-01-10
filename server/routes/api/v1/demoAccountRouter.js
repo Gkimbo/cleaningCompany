@@ -16,7 +16,10 @@ const router = express.Router();
 const secretKey = process.env.SESSION_SECRET;
 
 /**
- * Middleware to verify the user is a platform owner
+ * Middleware to verify the user is a platform owner or in preview mode
+ * Allows:
+ * - Direct owner access (user.type === "owner")
+ * - Preview mode access (token contains originalOwnerId from a preview session)
  */
 const verifyOwner = async (req, res, next) => {
 	const authHeader = req.headers.authorization;
@@ -33,12 +36,26 @@ const verifyOwner = async (req, res, next) => {
 			return res.status(401).json({ error: "User not found" });
 		}
 
-		if (user.type !== "owner") {
+		// Check if this is a direct owner or a preview session
+		if (user.type === "owner") {
+			// Direct owner access
+			req.user = user;
+			req.ownerId = user.id;
+			req.isPreviewMode = false;
+		} else if (decoded.originalOwnerId) {
+			// This is a preview session token - verify the original owner exists
+			const originalOwner = await User.findByPk(decoded.originalOwnerId);
+			if (!originalOwner || originalOwner.type !== "owner") {
+				return res.status(403).json({ error: "Invalid preview session" });
+			}
+			req.user = user;
+			req.ownerId = decoded.originalOwnerId;
+			req.isPreviewMode = true;
+			req.previewRole = decoded.previewRole;
+		} else {
 			return res.status(403).json({ error: "Owner access required" });
 		}
 
-		req.user = user;
-		req.ownerId = user.id;
 		next();
 	} catch (err) {
 		if (err.name === "JsonWebTokenError" || err.name === "TokenExpiredError") {
@@ -93,7 +110,7 @@ router.get("/roles", async (req, res) => {
 router.post("/enter/:role", async (req, res) => {
 	try {
 		const { role } = req.params;
-		const validRoles = ["cleaner", "homeowner", "businessOwner", "employee"];
+		const validRoles = DemoAccountService.getAvailableRoles().map(r => r.role);
 
 		if (!validRoles.includes(role)) {
 			return res.status(400).json({
@@ -109,6 +126,58 @@ router.post("/enter/:role", async (req, res) => {
 		res.json(session);
 	} catch (error) {
 		console.error("Error entering preview mode:", error);
+		res.status(500).json({ error: error.message });
+	}
+});
+
+/**
+ * POST /demo-accounts/switch/:role
+ * Switch from current demo role to another without exiting preview mode
+ * Preserves demo data - only changes which demo account is active
+ */
+router.post("/switch/:role", async (req, res) => {
+	try {
+		const { role } = req.params;
+		const validRoles = DemoAccountService.getAvailableRoles().map(r => r.role);
+
+		if (!validRoles.includes(role)) {
+			return res.status(400).json({
+				error: `Invalid role: ${role}. Valid roles: ${validRoles.join(", ")}`,
+			});
+		}
+
+		// Get the original owner ID from the request body or token
+		let ownerId = req.body.ownerId;
+
+		if (!ownerId) {
+			const authHeader = req.headers.authorization;
+			if (authHeader) {
+				const token = authHeader.split(" ")[1];
+				const decoded = jwt.decode(token);
+				if (decoded && decoded.originalOwnerId) {
+					ownerId = decoded.originalOwnerId;
+				}
+			}
+		}
+
+		// Fallback to current owner if still not found
+		if (!ownerId) {
+			ownerId = req.ownerId;
+		}
+
+		// Create new session for the target role (same as entering preview mode)
+		const session = await DemoAccountService.createPreviewSession(
+			ownerId,
+			role
+		);
+
+		res.json({
+			...session,
+			switched: true,
+			message: `Switched to ${role} demo account`,
+		});
+	} catch (error) {
+		console.error("Error switching preview role:", error);
 		res.status(500).json({ error: error.message });
 	}
 });
@@ -171,6 +240,36 @@ router.get("/check/:role", async (req, res) => {
 		});
 	} catch (error) {
 		console.error("Error checking demo account:", error);
+		res.status(500).json({ error: error.message });
+	}
+});
+
+/**
+ * POST /demo-accounts/reset
+ * Reset all demo data back to original seeder state
+ * This allows owners to restore demo accounts after testing
+ */
+router.post("/reset", async (req, res) => {
+	try {
+		console.log(`[demoAccountRouter] Reset demo data requested by owner ${req.ownerId}`);
+
+		const result = await DemoAccountService.resetDemoData();
+
+		if (!result.success) {
+			return res.status(400).json({
+				success: false,
+				error: result.error || "Failed to reset demo data",
+			});
+		}
+
+		res.json({
+			success: true,
+			message: result.message,
+			deleted: result.deleted,
+			created: result.created,
+		});
+	} catch (error) {
+		console.error("Error resetting demo data:", error);
 		res.status(500).json({ error: error.message });
 	}
 });

@@ -41,7 +41,7 @@ describe("ExitPreviewButton", () => {
 
 			const { getByText } = render(<ExitPreviewButton />);
 
-			expect(getByText("Exit Preview")).toBeTruthy();
+			expect(getByText("Exit")).toBeTruthy();
 		});
 
 		it("should not render when isPreviewMode is false", () => {
@@ -49,7 +49,7 @@ describe("ExitPreviewButton", () => {
 
 			const { queryByText } = render(<ExitPreviewButton />);
 
-			expect(queryByText("Exit Preview")).toBeNull();
+			expect(queryByText("Exit")).toBeNull();
 		});
 
 		it("should not render when previewRole is null but isPreviewMode is false", () => {
@@ -57,7 +57,7 @@ describe("ExitPreviewButton", () => {
 
 			const { queryByText } = render(<ExitPreviewButton />);
 
-			expect(queryByText("Exit Preview")).toBeNull();
+			expect(queryByText("Exit")).toBeNull();
 		});
 	});
 
@@ -109,7 +109,7 @@ describe("ExitPreviewButton", () => {
 
 			const { getByText } = render(<ExitPreviewButton />);
 
-			fireEvent.press(getByText("Exit Preview").parent);
+			fireEvent.press(getByText("Exit").parent);
 
 			expect(mockExitPreviewMode).toHaveBeenCalled();
 		});
@@ -119,8 +119,8 @@ describe("ExitPreviewButton", () => {
 
 			const { getByText } = render(<ExitPreviewButton />);
 
-			fireEvent.press(getByText("Exit Preview").parent);
-			fireEvent.press(getByText("Exit Preview").parent);
+			fireEvent.press(getByText("Exit").parent);
+			fireEvent.press(getByText("Exit").parent);
 
 			expect(mockExitPreviewMode).toHaveBeenCalledTimes(2);
 		});
@@ -130,10 +130,10 @@ describe("ExitPreviewButton", () => {
 		it("should disable button when isLoading is true", () => {
 			setupMock({ isLoading: true });
 
-			const { getByText, queryByText } = render(<ExitPreviewButton />);
+			const { queryByText, UNSAFE_getByType } = render(<ExitPreviewButton />);
 
-			// Exit Preview text should be replaced with ActivityIndicator
-			expect(queryByText("Exit Preview")).toBeNull();
+			// Exit text should be replaced with ActivityIndicator when loading
+			expect(queryByText("Exit")).toBeNull();
 		});
 
 		it("should show role badge even when loading", () => {
@@ -165,7 +165,7 @@ describe("ExitPreviewButton", () => {
 			expect(getByText("Viewing as Cleaner")).toBeTruthy();
 
 			// Exit button should exist
-			expect(getByText("Exit Preview")).toBeTruthy();
+			expect(getByText("Exit")).toBeTruthy();
 		});
 	});
 
@@ -184,7 +184,7 @@ describe("ExitPreviewButton", () => {
 				const { getByText } = render(<ExitPreviewButton />);
 
 				expect(getByText(`Viewing as ${label}`)).toBeTruthy();
-				expect(getByText("Exit Preview")).toBeTruthy();
+				expect(getByText("Exit")).toBeTruthy();
 			});
 		});
 	});

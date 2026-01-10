@@ -4,9 +4,10 @@ import { Alert } from "react-native";
 
 // Mock react-router-native
 const mockNavigate = jest.fn();
+let mockParams = { token: "test-token-123" };
 jest.mock("react-router-native", () => ({
   useNavigate: () => mockNavigate,
-  useParams: () => ({ token: "test-token-123" }),
+  useParams: () => mockParams,
 }));
 
 // Mock CleanerClientService
@@ -48,21 +49,28 @@ jest.mock("@expo/vector-icons", () => ({
 // Mock react-native-paper
 jest.mock("react-native-paper", () => {
   const { TextInput: RNTextInput, View, Text, TouchableOpacity } = require("react-native");
+  const MockTextInput = ({ label, value, onChangeText, secureTextEntry, right, style, ...props }) => (
+    <View>
+      <Text>{label}</Text>
+      <RNTextInput
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry}
+        accessibilityLabel={label}
+        testID={label}
+        {...props}
+      />
+      {right}
+    </View>
+  );
+  // Add Icon property to TextInput
+  MockTextInput.Icon = ({ icon, onPress }) => (
+    <TouchableOpacity onPress={onPress} testID={`icon-${icon}`}>
+      <Text>{icon}</Text>
+    </TouchableOpacity>
+  );
   return {
-    TextInput: ({ label, value, onChangeText, secureTextEntry, right, style, ...props }) => (
-      <View>
-        <Text>{label}</Text>
-        <RNTextInput
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry}
-          accessibilityLabel={label}
-          testID={label}
-          {...props}
-        />
-        {right}
-      </View>
-    ),
+    TextInput: MockTextInput,
     Checkbox: ({ status, onPress }) => (
       <TouchableOpacity onPress={onPress} testID="checkbox">
         <Text>{status}</Text>
@@ -90,6 +98,28 @@ jest.mock("../../terms", () => ({
   },
 }));
 
+// Mock AlreadyAcceptedCard
+jest.mock("../../shared/AlreadyAcceptedCard", () => {
+  const { View, Text, TouchableOpacity } = require("react-native");
+  return ({ email, onSignIn, onClose, invitationType }) => (
+    <View testID="already-accepted-card">
+      <Text>Already Registered</Text>
+      <Text>
+        {invitationType === "employee"
+          ? "This invitation has already been accepted. Your employee account is ready!"
+          : "This invitation has already been accepted. Your account is ready!"}
+      </Text>
+      {email && <Text>{email}</Text>}
+      <TouchableOpacity onPress={onSignIn} testID="sign-in-button">
+        <Text>Sign In</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onClose} testID="close-button">
+        <Text>Close</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
 // Mock Alert
 jest.spyOn(Alert, "alert");
 
@@ -111,6 +141,7 @@ const renderWithProviders = (component) => {
 describe("AcceptInvitationScreen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockParams = { token: "test-token-123" }; // Reset mock params
   });
 
   const validInvitation = {
@@ -161,6 +192,9 @@ describe("AcceptInvitationScreen", () => {
 
   describe("Error States", () => {
     it("should show error when no token is provided", async () => {
+      // Override useParams to return no token
+      mockParams = { token: null };
+
       const { getByText } = renderWithProviders(
         <AcceptInvitationScreen inviteToken={null} />
       );
@@ -211,14 +245,15 @@ describe("AcceptInvitationScreen", () => {
         alreadyAccepted: true,
       });
 
-      const { getByText } = renderWithProviders(
+      const { getByText, getByTestId } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="used-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Invalid Invitation")).toBeTruthy();
+        expect(getByTestId("already-accepted-card")).toBeTruthy();
+        expect(getByText("Already Registered")).toBeTruthy();
         expect(
-          getByText("This invitation has already been accepted. Please sign in to your account.")
+          getByText("This invitation has already been accepted. Your account is ready!")
         ).toBeTruthy();
       });
     });
@@ -295,7 +330,7 @@ describe("AcceptInvitationScreen", () => {
     it("should show error for weak password", async () => {
       mockValidateInvitation.mockResolvedValue(validInvitation);
 
-      const { getByTestId, getByText } = renderWithProviders(
+      const { getByTestId, getAllByText } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="test-token" />
       );
 
@@ -305,19 +340,23 @@ describe("AcceptInvitationScreen", () => {
 
       fireEvent.changeText(getByTestId("Password *"), "weak");
       fireEvent.changeText(getByTestId("Confirm Password *"), "weak");
-      fireEvent.press(getByText("Accept Invitation"));
+      // There are multiple "Accept Invitation" elements (header and button), get all and press the last one (button)
+      const acceptButtons = getAllByText("Accept Invitation");
+      fireEvent.press(acceptButtons[acceptButtons.length - 1]);
 
       await waitFor(() => {
-        expect(
-          getByText("Password must be at least 8 characters with 2 uppercase, 2 lowercase, and 2 special characters.")
-        ).toBeTruthy();
+        // Password hint appears both as a hint and as an error message, so there should be at least 2 instances
+        const errorMessages = getAllByText(
+          "Password must be at least 8 characters with 2 uppercase, 2 lowercase, and 2 special characters."
+        );
+        expect(errorMessages.length).toBeGreaterThanOrEqual(2);
       });
     });
 
     it("should show error for mismatched passwords", async () => {
       mockValidateInvitation.mockResolvedValue(validInvitation);
 
-      const { getByTestId, getByText } = renderWithProviders(
+      const { getByTestId, getByText, getAllByText } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="test-token" />
       );
 
@@ -327,7 +366,8 @@ describe("AcceptInvitationScreen", () => {
 
       fireEvent.changeText(getByTestId("Password *"), "StrongPass@@11");
       fireEvent.changeText(getByTestId("Confirm Password *"), "DifferentPass@@11");
-      fireEvent.press(getByText("Accept Invitation"));
+      const acceptButtons = getAllByText("Accept Invitation");
+      fireEvent.press(acceptButtons[acceptButtons.length - 1]);
 
       await waitFor(() => {
         expect(getByText("Passwords do not match.")).toBeTruthy();
@@ -337,7 +377,7 @@ describe("AcceptInvitationScreen", () => {
     it("should show error when terms not accepted", async () => {
       mockValidateInvitation.mockResolvedValue(validInvitation);
 
-      const { getByTestId, getByText } = renderWithProviders(
+      const { getByTestId, getByText, getAllByText } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="test-token" />
       );
 
@@ -347,7 +387,8 @@ describe("AcceptInvitationScreen", () => {
 
       fireEvent.changeText(getByTestId("Password *"), "StrongPass@@11");
       fireEvent.changeText(getByTestId("Confirm Password *"), "StrongPass@@11");
-      fireEvent.press(getByText("Accept Invitation"));
+      const acceptButtons = getAllByText("Accept Invitation");
+      fireEvent.press(acceptButtons[acceptButtons.length - 1]);
 
       await waitFor(() => {
         expect(getByText("You must accept the Terms and Conditions.")).toBeTruthy();
@@ -364,7 +405,7 @@ describe("AcceptInvitationScreen", () => {
         homeId: 123,
       });
 
-      const { getByTestId, getByText, getAllByTestId } = renderWithProviders(
+      const { getByTestId, getAllByText, getAllByTestId } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="test-token" />
       );
 
@@ -385,7 +426,8 @@ describe("AcceptInvitationScreen", () => {
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 
-      fireEvent.press(getByText("Accept Invitation"));
+      const acceptButtons = getAllByText("Accept Invitation");
+      fireEvent.press(acceptButtons[acceptButtons.length - 1]);
 
       await waitFor(() => {
         expect(mockAcceptInvitation).toHaveBeenCalledWith("test-token", {
@@ -406,7 +448,7 @@ describe("AcceptInvitationScreen", () => {
         homeId: 123,
       });
 
-      const { getByTestId, getByText, getAllByTestId } = renderWithProviders(
+      const { getByTestId, getAllByText, getAllByTestId } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="test-token" />
       );
 
@@ -425,7 +467,8 @@ describe("AcceptInvitationScreen", () => {
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 
-      fireEvent.press(getByText("Accept Invitation"));
+      const acceptButtons = getAllByText("Accept Invitation");
+      fireEvent.press(acceptButtons[acceptButtons.length - 1]);
 
       await waitFor(() => {
         expect(mockLogin).toHaveBeenCalledWith("new-auth-token");
@@ -440,7 +483,7 @@ describe("AcceptInvitationScreen", () => {
         homeId: 123,
       });
 
-      const { getByTestId, getByText, getAllByTestId } = renderWithProviders(
+      const { getByTestId, getByText, getAllByText, getAllByTestId } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="test-token" />
       );
 
@@ -459,7 +502,8 @@ describe("AcceptInvitationScreen", () => {
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 
-      fireEvent.press(getByText("Accept Invitation"));
+      const acceptButtons = getAllByText("Accept Invitation");
+      fireEvent.press(acceptButtons[acceptButtons.length - 1]);
 
       await waitFor(() => {
         expect(getByText("Welcome!")).toBeTruthy();
@@ -474,7 +518,7 @@ describe("AcceptInvitationScreen", () => {
         error: "Email already in use",
       });
 
-      const { getByTestId, getByText, getAllByTestId } = renderWithProviders(
+      const { getByTestId, getByText, getAllByText, getAllByTestId } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="test-token" />
       );
 
@@ -493,7 +537,8 @@ describe("AcceptInvitationScreen", () => {
       await waitFor(() => getByTestId("terms-modal"));
       fireEvent.press(getByTestId("accept-terms"));
 
-      fireEvent.press(getByText("Accept Invitation"));
+      const acceptButtons = getAllByText("Accept Invitation");
+      fireEvent.press(acceptButtons[acceptButtons.length - 1]);
 
       await waitFor(() => {
         expect(getByText("Email already in use")).toBeTruthy();
@@ -571,14 +616,15 @@ describe("AcceptInvitationScreen", () => {
     it("should navigate home when close button is pressed", async () => {
       mockValidateInvitation.mockResolvedValue(validInvitation);
 
-      const { getByText } = renderWithProviders(
+      const { getByText, getAllByText } = renderWithProviders(
         <AcceptInvitationScreen inviteToken="test-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Accept Invitation")).toBeTruthy();
+        expect(getAllByText("Accept Invitation").length).toBeGreaterThan(0);
       });
 
+      // The close button renders an "x" icon (Feather mock renders the icon name as text)
       fireEvent.press(getByText("x"));
       expect(mockNavigate).toHaveBeenCalledWith("/");
     });

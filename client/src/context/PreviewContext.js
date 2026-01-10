@@ -19,6 +19,8 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 	const [previewRole, setPreviewRole] = useState(null);
 	const [originalOwnerState, setOriginalOwnerState] = useState(null);
 	const [isLoading, setIsLoading] = useState(false);
+	const [isResetting, setIsResetting] = useState(false);
+	const [isSwitching, setIsSwitching] = useState(false);
 	const [error, setError] = useState(null);
 
 	/**
@@ -136,6 +138,123 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 	}, [originalOwnerState, state, dispatch]);
 
 	/**
+	 * Reset demo data back to original seeder state
+	 * Can be called while in preview mode to restore demo accounts
+	 */
+	const resetDemoData = useCallback(async () => {
+		setIsResetting(true);
+		setError(null);
+
+		try {
+			// Get the token to use - prefer original owner token if available
+			let tokenToUse = state?.currentUser?.token;
+
+			// If we have original owner state, use that token for auth
+			// This ensures the reset call is authorized even from demo account
+			if (originalOwnerState?.token) {
+				tokenToUse = originalOwnerState.token;
+			} else {
+				// Try to get from storage
+				const stored = await AsyncStorage.getItem(OWNER_STATE_KEY);
+				if (stored) {
+					const ownerState = JSON.parse(stored);
+					if (ownerState?.token) {
+						tokenToUse = ownerState.token;
+					}
+				}
+			}
+
+			if (!tokenToUse) {
+				throw new Error("No authorization token available");
+			}
+
+			const result = await DemoAccountService.resetDemoData(tokenToUse);
+
+			if (!result.success) {
+				throw new Error(result.error || "Failed to reset demo data");
+			}
+
+			console.log("[PreviewContext] Demo data reset:", result);
+			return {
+				success: true,
+				message: result.message,
+				deleted: result.deleted,
+				created: result.created,
+			};
+		} catch (err) {
+			console.error("[PreviewContext] Error resetting demo data:", err);
+			setError(err.message);
+			return { success: false, error: err.message };
+		} finally {
+			setIsResetting(false);
+		}
+	}, [state, originalOwnerState]);
+
+	/**
+	 * Switch to a different demo role without exiting preview mode
+	 * Preserves demo data - only changes which demo account is active
+	 * @param {string} newRole - The role to switch to
+	 */
+	const switchPreviewRole = useCallback(
+		async (newRole) => {
+			if (!isPreviewMode) {
+				setError("Not in preview mode");
+				return { success: false, error: "Not in preview mode" };
+			}
+
+			if (newRole === previewRole) {
+				return { success: true, message: "Already viewing this role" };
+			}
+
+			setIsSwitching(true);
+			setError(null);
+
+			try {
+				// Get original owner ID from stored state
+				let ownerId = originalOwnerState?.currentUser?.id;
+				if (!ownerId) {
+					const stored = await AsyncStorage.getItem(OWNER_STATE_KEY);
+					if (stored) {
+						const ownerState = JSON.parse(stored);
+						ownerId = ownerState?.currentUser?.id;
+					}
+				}
+
+				if (!ownerId) {
+					throw new Error("Original owner ID not found");
+				}
+
+				// Call backend to switch to new demo account
+				const result = await DemoAccountService.switchPreviewRole(
+					state.currentUser.token,
+					newRole,
+					ownerId
+				);
+
+				if (!result.success) {
+					throw new Error(result.error || "Failed to switch preview role");
+				}
+
+				// Dispatch action to update app state with new demo account data
+				dispatch({ type: "PREVIEW_ENTER", payload: result });
+
+				// Update local preview role state
+				setPreviewRole(newRole);
+
+				console.log(`[PreviewContext] Switched from ${previewRole} to ${newRole}`);
+				return { success: true, message: result.message };
+			} catch (err) {
+				console.error("[PreviewContext] Error switching preview role:", err);
+				setError(err.message);
+				return { success: false, error: err.message };
+			} finally {
+				setIsSwitching(false);
+			}
+		},
+		[isPreviewMode, previewRole, originalOwnerState, state, dispatch]
+	);
+
+	/**
 	 * Check if we're currently in preview mode
 	 */
 	const checkPreviewMode = useCallback(async () => {
@@ -185,6 +304,24 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				icon: "user-tie",
 				color: "#F59E0B",
 			},
+			humanResources: {
+				label: "HR Manager",
+				description: "Disputes, appeals, and conflicts",
+				icon: "gavel",
+				color: "#EC4899",
+			},
+			largeBusinessOwner: {
+				label: "Large Business",
+				description: "100+ clients, 7% platform fee tier",
+				icon: "building",
+				color: "#0EA5E9",
+			},
+			preferredCleaner: {
+				label: "Preferred Cleaner",
+				description: "Platinum tier, 20 homes, 7% bonus",
+				icon: "star",
+				color: "#FBBF24",
+			},
 		};
 		return roleInfo[role] || roleInfo.cleaner;
 	}, []);
@@ -193,9 +330,13 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 		isPreviewMode,
 		previewRole,
 		isLoading,
+		isResetting,
+		isSwitching,
 		error,
 		enterPreviewMode,
 		exitPreviewMode,
+		switchPreviewRole,
+		resetDemoData,
 		checkPreviewMode,
 		getRoleDisplayInfo,
 		originalOwnerState,

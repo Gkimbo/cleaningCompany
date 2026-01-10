@@ -1,4 +1,5 @@
 const nodemailer = require("nodemailer");
+const { User } = require("../../models");
 
 // Reusable email template helper
 const createEmailTemplate = ({
@@ -110,6 +111,77 @@ const createTransporter = () => {
   });
 };
 
+/**
+ * Resolve recipient email for demo account redirection
+ * When in preview mode, demo account emails are redirected to the owner's email
+ * @param {string} email - The original recipient email
+ * @returns {Promise<{email: string, isRedirected: boolean, originalEmail: string|null}>}
+ */
+const resolveRecipientEmail = async (email) => {
+  try {
+    // Find if this email belongs to a demo account with an active preview owner
+    const demoAccount = await User.findOne({
+      where: {
+        email: email,
+        isDemoAccount: true,
+      },
+    });
+
+    if (demoAccount && demoAccount.currentPreviewOwnerId) {
+      // This is a demo account being previewed - redirect to owner's email
+      const owner = await User.findByPk(demoAccount.currentPreviewOwnerId);
+      if (owner && owner.email) {
+        console.log(`[Email] Redirecting demo account email from ${email} to owner ${owner.email}`);
+        return {
+          email: owner.email,
+          isRedirected: true,
+          originalEmail: email,
+        };
+      }
+    }
+
+    // Not a demo account or no active preview - use original email
+    return {
+      email: email,
+      isRedirected: false,
+      originalEmail: null,
+    };
+  } catch (error) {
+    console.error("[Email] Error resolving recipient email:", error);
+    // On error, fall back to original email
+    return {
+      email: email,
+      isRedirected: false,
+      originalEmail: null,
+    };
+  }
+};
+
+/**
+ * Send email with demo account redirection support
+ * Automatically redirects emails to demo accounts to the previewing owner
+ * @param {Object} transporter - Nodemailer transporter
+ * @param {Object} mailOptions - Mail options with 'to' field
+ * @returns {Promise<Object>} Nodemailer send result
+ */
+const sendMailWithResolution = async (transporter, mailOptions) => {
+  // Resolve the recipient email (handles demo account redirection)
+  const resolved = await resolveRecipientEmail(mailOptions.to);
+
+  // Update mail options with resolved email
+  const resolvedMailOptions = {
+    ...mailOptions,
+    to: resolved.email,
+  };
+
+  // If redirected, add a note to the subject line
+  if (resolved.isRedirected) {
+    resolvedMailOptions.subject = `[DEMO: ${resolved.originalEmail}] ${mailOptions.subject}`;
+  }
+
+  return transporter.sendMail(resolvedMailOptions);
+};
+
 // Format date helper
 const formatDate = (dateString) => {
   const options = {
@@ -182,7 +254,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Cancellation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -257,7 +329,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Confirmation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -451,7 +523,7 @@ This is an automated message. Please do not reply directly to this email.
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Welcome email sent successfully:", info.response);
       return info.response;
     } catch (error) {
@@ -527,7 +599,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Employee request email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -579,7 +651,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Request removal email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -627,7 +699,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Message notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -669,7 +741,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Broadcast email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -726,7 +798,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Username recovery email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -797,7 +869,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Password reset email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -940,7 +1012,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Request approved email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1086,7 +1158,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Linens configuration updated email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1148,7 +1220,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Request denied email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1213,7 +1285,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Home in service area email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1278,7 +1350,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Home outside service area email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1348,7 +1420,7 @@ Kleanr System`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ New application notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1431,7 +1503,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Unassigned warning email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1504,7 +1576,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Home size adjustment request email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1564,7 +1636,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Adjustment approved email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1639,7 +1711,7 @@ Kleanr System`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Owner review email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1713,7 +1785,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Adjustment resolved email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1782,7 +1854,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Payment failed reminder email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1839,7 +1911,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Application rejection email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1936,7 +2008,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Homeowner cancelled notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2037,7 +2109,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Auto-sync appointment notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2117,7 +2189,7 @@ Kleanr System`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ HR hiring notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2208,7 +2280,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Cleaning completed email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2297,7 +2369,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Review reminder email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2387,7 +2459,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Client invitation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2443,7 +2515,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Invitation reminder email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2521,7 +2593,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Invitation accepted email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2611,7 +2683,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Recurring schedule email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2695,7 +2767,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Cleaning invoice email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2766,7 +2838,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Payment reminder email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2859,7 +2931,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Payout notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2957,7 +3029,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ New client appointment email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3049,7 +3121,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Preferred cleaner notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3117,7 +3189,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Preferred cleaner booking notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3228,7 +3300,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Suspicious activity report email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3320,7 +3392,7 @@ Thank you for using Kleanr!`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Pending booking email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3382,7 +3454,7 @@ Happy cleaning!`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Booking accepted email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3480,7 +3552,7 @@ Open the Kleanr app to try scheduling a different date.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Booking declined email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3557,7 +3629,7 @@ Open the Kleanr app to schedule a new booking.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Booking expired email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3638,7 +3710,7 @@ Open the Kleanr app to accept or decline this offer.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Multi-cleaner offer email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3719,7 +3791,7 @@ Open the Kleanr app to choose how you'd like to proceed.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Cleaner dropout email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3795,7 +3867,7 @@ Open the Kleanr app to accept or decline.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Solo completion offer email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3877,7 +3949,7 @@ Open the Kleanr app to choose your preferred option.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Partial completion email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3960,7 +4032,7 @@ Open the Kleanr app to view your team's progress on cleaning day.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Multi-cleaner confirmation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4036,7 +4108,7 @@ Open the Kleanr app to accept this job now!`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Urgent fill email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4113,7 +4185,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Last-minute urgent email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4198,7 +4270,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Edge case decision required email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4280,7 +4352,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Edge case auto-proceeded email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4367,7 +4439,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Edge case cleaner confirmed email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4445,7 +4517,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Edge case cancelled email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4525,7 +4597,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Edge case cleaner cancelled email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4601,7 +4673,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Edge case second cleaner joined email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4703,7 +4775,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Completion submitted email sent to homeowner:", info.response);
       return info.response;
     } catch (error) {
@@ -4783,7 +4855,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Completion auto-approved email sent to homeowner:", info.response);
       return info.response;
     } catch (error) {
@@ -4863,7 +4935,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Completion approved email sent to cleaner:", info.response);
       return info.response;
     } catch (error) {
@@ -4952,7 +5024,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Appeal submitted confirmation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -5059,7 +5131,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Appeal resolved email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -5069,3 +5141,7 @@ Kleanr Support Team`;
 }
 
 module.exports = Email;
+
+// Export helper functions for testing
+module.exports.resolveRecipientEmail = resolveRecipientEmail;
+module.exports.sendMailWithResolution = sendMailWithResolution;

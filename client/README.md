@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-1217_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-1346_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -27,6 +27,9 @@ The Kleanr mobile app is a React Native application built with Expo that provide
 - iCal calendar sync for vacation rentals
 - Photo documentation with offline capture
 - Push notifications via Expo
+- Conflict Resolution Center for HR staff
+- Cancellation Appeals system with 72-hour window
+- Preview as Role for platform owners
 
 ---
 
@@ -144,9 +147,12 @@ export const API_BASE = "http://localhost:3000/api/v1";
 <td width="50%" valign="top">
 
 #### HR Staff
-- Dispute management dashboard
+- **Conflict Resolution Center** - unified queue for all disputes
+- **Cancellation Appeals** - review and decide within 48-hour SLA
+- Photo comparison tools for evidence review
+- Financial breakdown with refund/payout calculations
+- Complete audit trail for every case
 - Suspicious activity review
-- Photo evidence examination
 - User warning system
 - Account freezing
 - Support conversation handling
@@ -157,6 +163,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 
 #### Platform Owner/Admin
 - Financial dashboard & analytics
+- **Preview as Role** - test app as any user type
 - Employee management
 - Pricing configuration
 - Incentive & referral programs
@@ -187,6 +194,9 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Multi-Cleaner Jobs** | Large home support with job offers, room assignments, and split pricing |
 | **Last-Minute Booking** | Urgent booking support with 48-hour threshold and fee display |
 | **Guest-Not-Left** | GPS-verified reporting when guests haven't left by checkout |
+| **Conflict Resolution** | Unified case management for disputes with photo comparison, evidence gallery, message threads, and audit trail |
+| **Cancellation Appeals** | Submit appeals within 72 hours, HR review within 48-hour SLA, penalty waiver and refund options |
+| **Preview as Role** | Platform owners can preview app as Cleaner, Homeowner, Business Owner, or Employee using demo accounts |
 
 ---
 
@@ -236,6 +246,22 @@ client/
 │   │   │   ├── lists/
 │   │   │   └── tiles/
 │   │   ├── hr/                   # HR staff features
+│   │   ├── conflicts/            # Conflict resolution center
+│   │   │   ├── ConflictResolutionCenter.js
+│   │   │   ├── ConflictCaseView.js
+│   │   │   ├── ConflictsStatsWidget.js
+│   │   │   ├── modals/
+│   │   │   └── sections/
+│   │   ├── appeals/              # Cancellation appeals
+│   │   │   ├── AppealsQueuePage.js
+│   │   │   ├── AppealDetailPage.js
+│   │   │   ├── AppealSubmissionModal.js
+│   │   │   ├── AppealReviewModal.js
+│   │   │   ├── AppealsStatsWidget.js
+│   │   │   └── MyAppealsPage.js
+│   │   ├── preview/              # Preview as Role
+│   │   │   ├── PreviewRoleModal.js
+│   │   │   └── ExitPreviewButton.js
 │   │   ├── incentives/           # Incentive banners
 │   │   ├── messaging/            # Chat system
 │   │   ├── modals/               # Modal components
@@ -271,6 +297,7 @@ client/
 │   ├── context/
 │   │   ├── AuthContext.js        # Auth state provider
 │   │   ├── PricingContext.js     # Pricing configuration
+│   │   ├── PreviewContext.js     # Preview as Role state
 │   │   └── UserContext.js        # User state
 │   │
 │   ├── hooks/
@@ -296,7 +323,10 @@ client/
 │       │   ├── ReferralService.js
 │       │   ├── ReviewClass.js
 │       │   ├── SuspiciousReportsService.js
-│       │   └── TaxService.js
+│       │   ├── TaxService.js
+│       │   ├── ConflictService.js
+│       │   ├── AppealService.js
+│       │   └── DemoAccountService.js
 │       │
 │       ├── offline/              # Offline sync system
 │       │   ├── OfflineManager.js
@@ -752,7 +782,10 @@ npm test -- CleaningChecklist.test.js
 | OfflineComponents | 56 | Offline mode UI and sync |
 | Pricing & Staffing | 15 | Dynamic pricing, config |
 | OwnerDashboard | 45 | Owner dashboard, analytics |
-| **Total** | **1217** | - |
+| ConflictResolution | 56 | Case view, resolution center, evidence gallery |
+| CancellationAppeals | 32 | Appeal submission, review, stats |
+| PreviewAsRole | 41 | PreviewContext, modals, DemoAccountService |
+| **Total** | **1346** | - |
 
 ---
 

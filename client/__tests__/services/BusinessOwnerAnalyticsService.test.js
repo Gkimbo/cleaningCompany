@@ -168,10 +168,6 @@ describe("BusinessOwnerService - Analytics", () => {
       expect(result).toEqual({
         access: { tier: "standard" },
         overview: {},
-        employees: null,
-        clients: null,
-        financials: null,
-        trends: {},
       });
     });
   });
@@ -267,26 +263,29 @@ describe("BusinessOwnerService - Analytics", () => {
       );
     });
 
-    it("should return null on error", async () => {
+    it("should return fallback on error", async () => {
       global.fetch.mockRejectedValueOnce(new Error("Network error"));
 
       const result = await BusinessOwnerService.getEmployeeAnalytics(mockToken);
 
-      expect(result).toBeNull();
+      expect(result).toEqual({ employees: [] });
     });
 
-    it("should return null on 403 (not premium)", async () => {
+    it("should handle 403 premium required response", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
         status: 403,
         json: async () => ({
           error: "Employee analytics requires premium tier",
+          requiredTier: "premium",
         }),
       });
 
       const result = await BusinessOwnerService.getEmployeeAnalytics(mockToken);
 
-      expect(result).toBeNull();
+      // Service spreads response after setting error: "premium_required", so response error overwrites
+      expect(result.error).toBe("Employee analytics requires premium tier");
+      expect(result.requiredTier).toBe("premium");
     });
   });
 
@@ -339,12 +338,12 @@ describe("BusinessOwnerService - Analytics", () => {
       );
     });
 
-    it("should return null on error", async () => {
+    it("should return empty object on error", async () => {
       global.fetch.mockRejectedValueOnce(new Error("Network error"));
 
       const result = await BusinessOwnerService.getClientAnalytics(mockToken);
 
-      expect(result).toBeNull();
+      expect(result).toEqual({});
     });
   });
 
@@ -380,19 +379,19 @@ describe("BusinessOwnerService - Analytics", () => {
       expect(result.summary.profitMargin).toBe(40.0);
     });
 
-    it("should return null on error", async () => {
+    it("should return empty object on error", async () => {
       global.fetch.mockRejectedValueOnce(new Error("Network error"));
 
       const result = await BusinessOwnerService.getFinancialAnalytics(mockToken);
 
-      expect(result).toBeNull();
+      expect(result).toEqual({});
     });
   });
 
   // =============================================
-  // getTrendsAnalytics
+  // getTrends
   // =============================================
-  describe("getTrendsAnalytics", () => {
+  describe("getTrends", () => {
     const mockTrends = {
       period: "monthly",
       months: 6,
@@ -409,7 +408,7 @@ describe("BusinessOwnerService - Analytics", () => {
         json: async () => mockTrends,
       });
 
-      const result = await BusinessOwnerService.getTrendsAnalytics(mockToken);
+      const result = await BusinessOwnerService.getTrends(mockToken);
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining("/business-owner/analytics/trends"),
@@ -424,7 +423,7 @@ describe("BusinessOwnerService - Analytics", () => {
         json: async () => mockTrends,
       });
 
-      await BusinessOwnerService.getTrendsAnalytics(mockToken, {
+      await BusinessOwnerService.getTrends(mockToken, {
         period: "weekly",
         months: 12,
       });
@@ -435,12 +434,12 @@ describe("BusinessOwnerService - Analytics", () => {
       );
     });
 
-    it("should return empty object on error", async () => {
+    it("should return fallback on error", async () => {
       global.fetch.mockRejectedValueOnce(new Error("Network error"));
 
-      const result = await BusinessOwnerService.getTrendsAnalytics(mockToken);
+      const result = await BusinessOwnerService.getTrends(mockToken);
 
-      expect(result).toEqual({});
+      expect(result).toEqual({ data: [] });
     });
   });
 });

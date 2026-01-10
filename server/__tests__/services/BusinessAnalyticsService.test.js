@@ -1,5 +1,3 @@
-const { Op } = require("sequelize");
-
 // Mock BusinessVolumeService
 jest.mock("../../services/BusinessVolumeService", () => ({
 	qualifiesForLargeBusinessFee: jest.fn(),
@@ -7,38 +5,41 @@ jest.mock("../../services/BusinessVolumeService", () => ({
 }));
 
 // Mock models
-jest.mock("../../models", () => ({
-	EmployeeJobAssignment: {
-		findAll: jest.fn(),
-		count: jest.fn(),
-	},
-	UserAppointments: {
-		findAll: jest.fn(),
-	},
-	BusinessEmployee: {
-		findAll: jest.fn(),
-		count: jest.fn(),
-	},
-	CleanerClient: {
-		findAll: jest.fn(),
-		count: jest.fn(),
-	},
-	UserReviews: {
-		findAll: jest.fn(),
-		findOne: jest.fn(),
-	},
-	User: {
-		findByPk: jest.fn(),
-	},
-	PricingConfig: {
-		getActive: jest.fn(),
-	},
-	sequelize: {
-		fn: jest.fn(),
-		col: jest.fn(),
-		Sequelize: { Op },
-	},
-}));
+jest.mock("../../models", () => {
+	const { Op } = require("sequelize");
+	return {
+		EmployeeJobAssignment: {
+			findAll: jest.fn(),
+			count: jest.fn(),
+		},
+		UserAppointments: {
+			findAll: jest.fn(),
+		},
+		BusinessEmployee: {
+			findAll: jest.fn(),
+			count: jest.fn(),
+		},
+		CleanerClient: {
+			findAll: jest.fn(),
+			count: jest.fn(),
+		},
+		UserReviews: {
+			findAll: jest.fn(),
+			findOne: jest.fn(),
+		},
+		User: {
+			findByPk: jest.fn(),
+		},
+		PricingConfig: {
+			getActive: jest.fn(),
+		},
+		sequelize: {
+			fn: jest.fn(),
+			col: jest.fn(),
+			Sequelize: { Op },
+		},
+	};
+});
 
 const BusinessAnalyticsService = require("../../services/BusinessAnalyticsService");
 const BusinessVolumeService = require("../../services/BusinessVolumeService");
@@ -48,6 +49,7 @@ const {
 	CleanerClient,
 	UserReviews,
 	PricingConfig,
+	UserAppointments,
 } = require("../../models");
 
 describe("BusinessAnalyticsService", () => {
@@ -337,6 +339,11 @@ describe("BusinessAnalyticsService", () => {
 
 		beforeEach(() => {
 			CleanerClient.findAll.mockResolvedValue(mockClients);
+			// Mock appointments for each active client
+			UserAppointments.findAll.mockResolvedValue([
+				{ id: 1, date: new Date(), price: "100.00" },
+				{ id: 2, date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), price: "150.00" },
+			]);
 		});
 
 		it("should return client analytics data", async () => {

@@ -190,3 +190,9 @@ const { Alert } = require("react-native");
 if (Alert) {
   Alert.alert = jest.fn();
 }
+
+// Clean up any pending async operations after each test to prevent test pollution
+afterEach(() => {
+  // Clear all mocks after each test
+  jest.clearAllMocks();
+});

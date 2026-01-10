@@ -911,8 +911,7 @@ describe("CalendarSyncManager Component", () => {
   });
 
   describe("Delete Sync", () => {
-    // TODO: Alert mock doesn't work correctly with react-native imports
-    it.skip("should show confirmation dialog when remove is pressed", async () => {
+    it("should show confirmation dialog when remove is pressed", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ syncs: [mockSync] }),

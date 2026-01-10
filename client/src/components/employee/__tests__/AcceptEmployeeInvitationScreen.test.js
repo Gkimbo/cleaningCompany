@@ -68,21 +68,32 @@ jest.mock("@expo/vector-icons", () => ({
 // Mock react-native-paper
 jest.mock("react-native-paper", () => {
   const { TextInput: RNTextInput, View, Text, TouchableOpacity } = require("react-native");
+
+  // Create TextInput mock with Icon subcomponent
+  const TextInputMock = ({ label, value, onChangeText, secureTextEntry, right, style, ...props }) => (
+    <View>
+      <Text>{label}</Text>
+      <RNTextInput
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry}
+        accessibilityLabel={label}
+        testID={label}
+        {...props}
+      />
+      {right}
+    </View>
+  );
+
+  // Add Icon as a subcomponent of TextInput
+  TextInputMock.Icon = ({ icon, onPress }) => (
+    <TouchableOpacity onPress={onPress} testID={`icon-${icon}`}>
+      <Text>{icon}</Text>
+    </TouchableOpacity>
+  );
+
   return {
-    TextInput: ({ label, value, onChangeText, secureTextEntry, right, style, ...props }) => (
-      <View>
-        <Text>{label}</Text>
-        <RNTextInput
-          value={value}
-          onChangeText={onChangeText}
-          secureTextEntry={secureTextEntry}
-          accessibilityLabel={label}
-          testID={label}
-          {...props}
-        />
-        {right}
-      </View>
-    ),
+    TextInput: TextInputMock,
     Checkbox: ({ status, onPress }) => (
       <TouchableOpacity onPress={onPress} testID="checkbox">
         <Text>{status}</Text>
@@ -177,8 +188,7 @@ describe("AcceptEmployeeInvitationScreen", () => {
   // Error State Tests
   // =============================================
   describe("Error States", () => {
-    // Skipped: timing issue with synchronous error state when token is null
-    it.skip("should show error when no token is provided", async () => {
+    it("should show error when no token is provided", async () => {
       const { getByText } = renderWithProviders(
         <AcceptEmployeeInvitationScreen inviteToken={null} />
       );
@@ -302,21 +312,21 @@ describe("AcceptEmployeeInvitationScreen", () => {
 
   // =============================================
   // Details/Form State Tests
-  // NOTE: These tests are skipped due to a known issue with rendering
-  // the Details state in the test environment. The component works
-  // correctly in the real app. This is the same issue affecting
-  // AcceptInvitationScreen (client) tests.
+  // NOTE: These tests were skipped due to a known issue with rendering
+  // the Details state in the test environment. Fixed by properly awaiting
+  // async state transitions.
   // =============================================
-  describe.skip("Details State", () => {
+  describe("Details State", () => {
     it("should show invitation details when token is valid", async () => {
       mockValidateInvite.mockResolvedValue(validInvitation);
 
-      const { getByText } = renderWithProviders(
+      const { getAllByText, getByText } = renderWithProviders(
         <AcceptEmployeeInvitationScreen inviteToken="valid-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        // "Join Team" appears in header and button
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
         expect(getByText("Employer")).toBeTruthy();
       });
     });
@@ -414,12 +424,13 @@ describe("AcceptEmployeeInvitationScreen", () => {
     it("should show Join Team button", async () => {
       mockValidateInvite.mockResolvedValue(validInvitation);
 
-      const { getByText } = renderWithProviders(
+      const { getAllByText } = renderWithProviders(
         <AcceptEmployeeInvitationScreen inviteToken="valid-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        // "Join Team" appears in header and button (at least 2 instances)
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(2);
       });
     });
 
@@ -438,20 +449,19 @@ describe("AcceptEmployeeInvitationScreen", () => {
 
   // =============================================
   // Form Validation Tests
-  // Skipped due to Details state rendering issue (see note above)
   // =============================================
-  describe.skip("Form Validation", () => {
+  describe("Form Validation", () => {
     beforeEach(async () => {
       mockValidateInvite.mockResolvedValue(validInvitation);
     });
 
     it("should show error if first name is empty", async () => {
-      const { getByText, getByTestId } = renderWithProviders(
+      const { getByText, getByTestId, getAllByText } = renderWithProviders(
         <AcceptEmployeeInvitationScreen inviteToken="valid-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Clear first name
@@ -460,10 +470,10 @@ describe("AcceptEmployeeInvitationScreen", () => {
         fireEvent.changeText(firstNameInput, "");
       });
 
-      // Try to submit
-      const joinButton = getByText("Join Team");
+      // Try to submit (get the button which is the second "Join Team" text)
+      const joinButtons = getAllByText("Join Team");
       await act(async () => {
-        fireEvent.press(joinButton);
+        fireEvent.press(joinButtons[joinButtons.length - 1]);
       });
 
       await waitFor(() => {
@@ -472,12 +482,12 @@ describe("AcceptEmployeeInvitationScreen", () => {
     });
 
     it("should show error if username is too short", async () => {
-      const { getByText, getByTestId } = renderWithProviders(
+      const { getByText, getByTestId, getAllByText } = renderWithProviders(
         <AcceptEmployeeInvitationScreen inviteToken="valid-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Enter short username
@@ -487,9 +497,9 @@ describe("AcceptEmployeeInvitationScreen", () => {
       });
 
       // Try to submit
-      const joinButton = getByText("Join Team");
+      const joinButtons = getAllByText("Join Team");
       await act(async () => {
-        fireEvent.press(joinButton);
+        fireEvent.press(joinButtons[joinButtons.length - 1]);
       });
 
       await waitFor(() => {
@@ -498,12 +508,12 @@ describe("AcceptEmployeeInvitationScreen", () => {
     });
 
     it("should show error if password is too weak", async () => {
-      const { getByText, getByTestId } = renderWithProviders(
+      const { getByText, getByTestId, getAllByText } = renderWithProviders(
         <AcceptEmployeeInvitationScreen inviteToken="valid-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Fill required fields
@@ -514,9 +524,9 @@ describe("AcceptEmployeeInvitationScreen", () => {
       });
 
       // Try to submit
-      const joinButton = getByText("Join Team");
+      const joinButtons = getAllByText("Join Team");
       await act(async () => {
-        fireEvent.press(joinButton);
+        fireEvent.press(joinButtons[joinButtons.length - 1]);
       });
 
       await waitFor(() => {
@@ -525,12 +535,12 @@ describe("AcceptEmployeeInvitationScreen", () => {
     });
 
     it("should show error if passwords do not match", async () => {
-      const { getByText, getByTestId } = renderWithProviders(
+      const { getByText, getByTestId, getAllByText } = renderWithProviders(
         <AcceptEmployeeInvitationScreen inviteToken="valid-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Fill with mismatched passwords
@@ -541,9 +551,9 @@ describe("AcceptEmployeeInvitationScreen", () => {
       });
 
       // Try to submit
-      const joinButton = getByText("Join Team");
+      const joinButtons = getAllByText("Join Team");
       await act(async () => {
-        fireEvent.press(joinButton);
+        fireEvent.press(joinButtons[joinButtons.length - 1]);
       });
 
       await waitFor(() => {
@@ -552,12 +562,12 @@ describe("AcceptEmployeeInvitationScreen", () => {
     });
 
     it("should show error if terms not accepted", async () => {
-      const { getByText, getByTestId } = renderWithProviders(
+      const { getByText, getByTestId, getAllByText } = renderWithProviders(
         <AcceptEmployeeInvitationScreen inviteToken="valid-token" />
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Fill all required fields but don't accept terms
@@ -568,9 +578,9 @@ describe("AcceptEmployeeInvitationScreen", () => {
       });
 
       // Try to submit
-      const joinButton = getByText("Join Team");
+      const joinButtons = getAllByText("Join Team");
       await act(async () => {
-        fireEvent.press(joinButton);
+        fireEvent.press(joinButtons[joinButtons.length - 1]);
       });
 
       await waitFor(() => {
@@ -581,9 +591,8 @@ describe("AcceptEmployeeInvitationScreen", () => {
 
   // =============================================
   // Accept Flow Tests
-  // Skipped due to Details state rendering issue (see note above)
   // =============================================
-  describe.skip("Accept Flow", () => {
+  describe("Accept Flow", () => {
     beforeEach(async () => {
       mockValidateInvite.mockResolvedValue(validInvitation);
       mockAcceptInviteWithSignup.mockResolvedValue({
@@ -599,7 +608,7 @@ describe("AcceptEmployeeInvitationScreen", () => {
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Fill form
@@ -661,7 +670,7 @@ describe("AcceptEmployeeInvitationScreen", () => {
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Fill minimum required fields
@@ -708,7 +717,7 @@ describe("AcceptEmployeeInvitationScreen", () => {
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Fill minimum required fields and accept terms
@@ -755,7 +764,7 @@ describe("AcceptEmployeeInvitationScreen", () => {
       );
 
       await waitFor(() => {
-        expect(getByText("Join Team")).toBeTruthy();
+        expect(getAllByText("Join Team").length).toBeGreaterThanOrEqual(1);
       });
 
       // Fill form
@@ -795,9 +804,8 @@ describe("AcceptEmployeeInvitationScreen", () => {
 
   // =============================================
   // Decline Flow Tests
-  // Skipped due to Details state rendering issue (see note above)
   // =============================================
-  describe.skip("Decline Flow", () => {
+  describe("Decline Flow", () => {
     beforeEach(async () => {
       mockValidateInvite.mockResolvedValue(validInvitation);
       mockDeclineInvite.mockResolvedValue({ success: true });
@@ -881,8 +889,7 @@ describe("AcceptEmployeeInvitationScreen", () => {
   // Navigation Tests
   // =============================================
   describe("Navigation", () => {
-    // Skipped: requires Details state rendering
-    it.skip("should navigate to home on close button press", async () => {
+    it("should navigate to home on close button press", async () => {
       mockValidateInvite.mockResolvedValue(validInvitation);
 
       const { getByText } = renderWithProviders(

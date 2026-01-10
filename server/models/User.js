@@ -208,6 +208,11 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: false,
 			comment: "True for demo accounts used in owner preview mode",
 		},
+		currentPreviewOwnerId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "For demo accounts: ID of owner currently previewing as this account (for email redirection)",
+		},
 		// Business employee fields
 		employeeOfBusinessId: {
 			type: DataTypes.INTEGER,

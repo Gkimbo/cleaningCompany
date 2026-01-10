@@ -1,26 +1,27 @@
-const { Op } = require("sequelize");
-
 // Mock models
-jest.mock("../../models", () => ({
-	User: {
-		findByPk: jest.fn(),
-		findAll: jest.fn(),
-	},
-	CleanerClient: {
-		count: jest.fn(),
-	},
-	UserReviews: {
-		findOne: jest.fn(),
-	},
-	EmployeeJobAssignment: {
-		count: jest.fn(),
-	},
-	sequelize: {
-		fn: jest.fn((name) => `fn:${name}`),
-		col: jest.fn((name) => `col:${name}`),
-		Sequelize: { Op },
-	},
-}));
+jest.mock("../../models", () => {
+	const { Op } = require("sequelize");
+	return {
+		User: {
+			findByPk: jest.fn(),
+			findAll: jest.fn(),
+		},
+		CleanerClient: {
+			count: jest.fn(),
+		},
+		UserReviews: {
+			findOne: jest.fn(),
+		},
+		EmployeeJobAssignment: {
+			count: jest.fn(),
+		},
+		sequelize: {
+			fn: jest.fn((name) => `fn:${name}`),
+			col: jest.fn((name) => `col:${name}`),
+			Sequelize: { Op },
+		},
+	};
+});
 
 const BusinessVerificationService = require("../../services/BusinessVerificationService");
 const {
@@ -405,7 +406,7 @@ describe("BusinessVerificationService", () => {
 
 			const result = await BusinessVerificationService.isVerifiedBusiness(999);
 
-			expect(result).toBe(false);
+			expect(result).toBeFalsy();
 		});
 	});
 

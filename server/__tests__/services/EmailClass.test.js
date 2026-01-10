@@ -3,8 +3,20 @@ const nodemailer = require("nodemailer");
 // Mock nodemailer
 jest.mock("nodemailer");
 
-// Import the Email class
+// Mock User model for email redirection tests
+const mockUserFindOne = jest.fn();
+const mockUserFindByPk = jest.fn();
+
+jest.mock("../../models", () => ({
+  User: {
+    findOne: (...args) => mockUserFindOne(...args),
+    findByPk: (...args) => mockUserFindByPk(...args),
+  },
+}));
+
+// Import the Email class and helpers
 const Email = require("../../services/sendNotifications/EmailClass");
+const { resolveRecipientEmail, sendMailWithResolution } = require("../../services/sendNotifications/EmailClass");
 
 describe("EmailClass", () => {
   let mockTransporter;
@@ -31,6 +43,10 @@ describe("EmailClass", () => {
     // Set environment variables
     process.env.EMAIL_USER = "test@kleanr.com";
     process.env.EMAIL_PASS = "testpassword";
+
+    // Reset User model mocks (default: no demo account found)
+    mockUserFindOne.mockResolvedValue(null);
+    mockUserFindByPk.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -1694,6 +1710,213 @@ describe("EmailClass", () => {
       expect(result).toBeUndefined();
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe("Email Redirection for Demo Accounts", () => {
+    describe("resolveRecipientEmail", () => {
+      it("should return original email when recipient is not a demo account", async () => {
+        mockUserFindOne.mockResolvedValue(null);
+
+        const result = await resolveRecipientEmail("user@example.com");
+
+        expect(result.email).toBe("user@example.com");
+        expect(result.isRedirected).toBe(false);
+        expect(result.originalEmail).toBeNull();
+        expect(mockUserFindOne).toHaveBeenCalledWith({
+          where: {
+            email: "user@example.com",
+            isDemoAccount: true,
+          },
+        });
+      });
+
+      it("should return original email when demo account has no preview owner", async () => {
+        mockUserFindOne.mockResolvedValue({
+          id: 1,
+          email: "demo_cleaner@sparkle.demo",
+          isDemoAccount: true,
+          currentPreviewOwnerId: null,
+        });
+
+        const result = await resolveRecipientEmail("demo_cleaner@sparkle.demo");
+
+        expect(result.email).toBe("demo_cleaner@sparkle.demo");
+        expect(result.isRedirected).toBe(false);
+        expect(result.originalEmail).toBeNull();
+      });
+
+      it("should redirect to owner email when demo account has active preview owner", async () => {
+        const mockDemoAccount = {
+          id: 1,
+          email: "demo_cleaner@sparkle.demo",
+          isDemoAccount: true,
+          currentPreviewOwnerId: 100,
+        };
+        const mockOwner = {
+          id: 100,
+          email: "owner@company.com",
+        };
+
+        mockUserFindOne.mockResolvedValue(mockDemoAccount);
+        mockUserFindByPk.mockResolvedValue(mockOwner);
+
+        const result = await resolveRecipientEmail("demo_cleaner@sparkle.demo");
+
+        expect(result.email).toBe("owner@company.com");
+        expect(result.isRedirected).toBe(true);
+        expect(result.originalEmail).toBe("demo_cleaner@sparkle.demo");
+        expect(mockUserFindByPk).toHaveBeenCalledWith(100);
+      });
+
+      it("should return original email when owner lookup fails", async () => {
+        const mockDemoAccount = {
+          id: 1,
+          email: "demo_cleaner@sparkle.demo",
+          isDemoAccount: true,
+          currentPreviewOwnerId: 100,
+        };
+
+        mockUserFindOne.mockResolvedValue(mockDemoAccount);
+        mockUserFindByPk.mockResolvedValue(null); // Owner not found
+
+        const result = await resolveRecipientEmail("demo_cleaner@sparkle.demo");
+
+        expect(result.email).toBe("demo_cleaner@sparkle.demo");
+        expect(result.isRedirected).toBe(false);
+        expect(result.originalEmail).toBeNull();
+      });
+
+      it("should handle database errors gracefully", async () => {
+        mockUserFindOne.mockRejectedValue(new Error("Database error"));
+        const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+
+        const result = await resolveRecipientEmail("demo_cleaner@sparkle.demo");
+
+        expect(result.email).toBe("demo_cleaner@sparkle.demo");
+        expect(result.isRedirected).toBe(false);
+        expect(result.originalEmail).toBeNull();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          "[Email] Error resolving recipient email:",
+          expect.any(Error)
+        );
+
+        consoleSpy.mockRestore();
+      });
+    });
+
+    describe("sendMailWithResolution", () => {
+      it("should send email without modification when not redirected", async () => {
+        mockUserFindOne.mockResolvedValue(null);
+
+        const mailOptions = {
+          from: "test@kleanr.com",
+          to: "user@example.com",
+          subject: "Test Subject",
+          text: "Test body",
+        };
+
+        await sendMailWithResolution(mockTransporter, mailOptions);
+
+        expect(mockSendMail).toHaveBeenCalledWith({
+          from: "test@kleanr.com",
+          to: "user@example.com",
+          subject: "Test Subject",
+          text: "Test body",
+        });
+      });
+
+      it("should redirect email and modify subject when demo account is in preview", async () => {
+        const mockDemoAccount = {
+          id: 1,
+          email: "demo_cleaner@sparkle.demo",
+          isDemoAccount: true,
+          currentPreviewOwnerId: 100,
+        };
+        const mockOwner = {
+          id: 100,
+          email: "owner@company.com",
+        };
+
+        mockUserFindOne.mockResolvedValue(mockDemoAccount);
+        mockUserFindByPk.mockResolvedValue(mockOwner);
+
+        const mailOptions = {
+          from: "test@kleanr.com",
+          to: "demo_cleaner@sparkle.demo",
+          subject: "Appointment Confirmed",
+          text: "Test body",
+        };
+
+        await sendMailWithResolution(mockTransporter, mailOptions);
+
+        expect(mockSendMail).toHaveBeenCalledWith({
+          from: "test@kleanr.com",
+          to: "owner@company.com",
+          subject: "[DEMO: demo_cleaner@sparkle.demo] Appointment Confirmed",
+          text: "Test body",
+        });
+      });
+
+      it("should return transporter sendMail result", async () => {
+        mockUserFindOne.mockResolvedValue(null);
+        mockSendMail.mockResolvedValue({ response: "250 OK" });
+
+        const mailOptions = {
+          from: "test@kleanr.com",
+          to: "user@example.com",
+          subject: "Test",
+          text: "Test body",
+        };
+
+        const result = await sendMailWithResolution(mockTransporter, mailOptions);
+
+        expect(result).toEqual({ response: "250 OK" });
+      });
+    });
+
+    describe("Integration: Email methods use redirection", () => {
+      it("should redirect cancellation email when sent to demo account in preview", async () => {
+        const mockDemoAccount = {
+          id: 1,
+          email: "demo_homeowner@sparkle.demo",
+          isDemoAccount: true,
+          currentPreviewOwnerId: 100,
+        };
+        const mockOwner = {
+          id: 100,
+          email: "owner@company.com",
+        };
+
+        mockUserFindOne.mockResolvedValue(mockDemoAccount);
+        mockUserFindByPk.mockResolvedValue(mockOwner);
+
+        await Email.sendEmailCancellation(
+          "demo_homeowner@sparkle.demo",
+          { street: "123 Main St", city: "Boston", state: "MA", zipcode: "02101" },
+          "Demo",
+          "2025-01-15"
+        );
+
+        const mailOptions = mockSendMail.mock.calls[0][0];
+        expect(mailOptions.to).toBe("owner@company.com");
+        expect(mailOptions.subject).toContain("[DEMO: demo_homeowner@sparkle.demo]");
+      });
+
+      it("should not redirect when sending to regular user email", async () => {
+        mockUserFindOne.mockResolvedValue(null);
+
+        await Email.sendEmailCancellation(
+          "regular_user@example.com",
+          { street: "123 Main St", city: "Boston", state: "MA", zipcode: "02101" },
+          "John",
+          "2025-01-15"
+        );
+
+        const mailOptions = mockSendMail.mock.calls[0][0];
+        expect(mailOptions.to).toBe("regular_user@example.com");
+        expect(mailOptions.subject).not.toContain("[DEMO:");
+      });
     });
   });
 });

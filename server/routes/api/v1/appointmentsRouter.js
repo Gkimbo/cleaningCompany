@@ -53,17 +53,40 @@ appointmentRouter.get("/unassigned", async (req, res) => {
   try {
     const { preferredOnly } = req.query;
 
+    // Decode token to get cleaner info
+    const decodedToken = jwt.verify(token, secretKey);
+    const cleanerId = decodedToken.userId;
+
+    // Get the cleaner's demo status
+    const cleaner = await User.findByPk(cleanerId, {
+      attributes: ["id", "isDemoAccount"],
+    });
+
+    if (!cleaner) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    const isCleanerDemo = cleaner.isDemoAccount === true;
+
+    // Get user IDs that match the cleaner's demo status
+    // Demo cleaners only see demo homeowner appointments
+    // Real cleaners only see real homeowner appointments
+    const matchingUsers = await User.findAll({
+      where: { isDemoAccount: isCleanerDemo },
+      attributes: ["id"],
+    });
+    const matchingUserIds = matchingUsers.map((u) => u.id);
+
     // Build the where clause
+    const { Op } = require("sequelize");
     const whereClause = {
       hasBeenAssigned: false,
       assignedToBusinessEmployee: false, // Exclude business-assigned jobs from marketplace
+      userId: { [Op.in]: matchingUserIds }, // Filter by demo status match
     };
 
     // If preferredOnly filter is enabled, filter to cleaner's preferred homes
     if (preferredOnly === "true") {
-      const decodedToken = jwt.verify(token, secretKey);
-      const cleanerId = decodedToken.userId;
-
       // Get all home IDs where this cleaner is preferred
       const preferredHomeRecords = await HomePreferredCleaner.findAll({
         where: { cleanerId },
@@ -78,7 +101,6 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       }
 
       // Filter appointments to only those from preferred homes
-      const { Op } = require("sequelize");
       whereClause.homeId = { [Op.in]: preferredHomeIds };
     }
 
@@ -105,9 +127,41 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
   let employees = [];
 
   try {
+    // Decode token to get cleaner info
+    const decodedToken = jwt.verify(token, secretKey);
+    const cleanerId = decodedToken.userId;
+
+    // Get the cleaner's demo status
+    const cleaner = await User.findByPk(cleanerId, {
+      attributes: ["id", "isDemoAccount"],
+    });
+
+    if (!cleaner) {
+      return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    const isCleanerDemo = cleaner.isDemoAccount === true;
+
     const userAppointments = await UserAppointments.findOne({
       where: { id: id },
     });
+
+    if (!userAppointments) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Get the homeowner's demo status
+    const homeowner = await User.findByPk(userAppointments.userId, {
+      attributes: ["id", "isDemoAccount"],
+    });
+
+    const isHomeownerDemo = homeowner?.isDemoAccount === true;
+
+    // Prevent demo/real cross-access
+    if (isCleanerDemo !== isHomeownerDemo) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
     const employeesAssigned = await UserCleanerAppointments.findAll({
       where: {
         appointmentId: id,
@@ -1535,6 +1589,15 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     const cleaner = await User.findByPk(id);
     if (!cleaner) {
       return res.status(404).json({ error: "Cleaner not found" });
+    }
+
+    // Prevent demo/real cross-access
+    // Demo cleaners can only request demo homeowner appointments
+    // Real cleaners can only request real homeowner appointments
+    const isCleanerDemo = cleaner.isDemoAccount === true;
+    const isClientDemo = client.isDemoAccount === true;
+    if (isCleanerDemo !== isClientDemo) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
     // Check if cleaner has set up Stripe Connect account for payouts

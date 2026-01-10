@@ -205,6 +205,18 @@ describe("Appointment Routes", () => {
     it("should return unassigned appointments", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
+      // Mock cleaner lookup
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        isDemoAccount: false,
+      });
+
+      // Mock getting users with matching demo status
+      User.findAll.mockResolvedValue([
+        { id: 10 },
+        { id: 11 },
+      ]);
+
       UserAppointments.findAll.mockResolvedValue([
         {
           id: 1,
@@ -227,16 +239,110 @@ describe("Appointment Routes", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("appointments");
     });
+
+    it("should return 404 if cleaner not found", async () => {
+      const token = jwt.sign({ userId: 999 }, secretKey);
+
+      User.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Cleaner not found");
+    });
+
+    it("should filter demo appointments for demo cleaners", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // Mock demo cleaner
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        isDemoAccount: true,
+      });
+
+      // Mock getting demo users only
+      User.findAll.mockResolvedValue([
+        { id: 100 }, // demo_homeowner
+        { id: 101 }, // demo_business_client
+      ]);
+
+      UserAppointments.findAll.mockResolvedValue([
+        {
+          id: 1,
+          userId: 100,
+          date: "2025-01-15",
+          price: "150",
+          hasBeenAssigned: false,
+          dataValues: {
+            id: 1,
+            userId: 100,
+            date: "2025-01-15",
+            price: "150",
+            hasBeenAssigned: false,
+          },
+        },
+      ]);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("appointments");
+      // Verify that User.findAll was called with isDemoAccount: true
+      expect(User.findAll).toHaveBeenCalledWith({
+        where: { isDemoAccount: true },
+        attributes: ["id"],
+      });
+    });
+
+    it("should filter real appointments for real cleaners", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      // Mock real cleaner
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        isDemoAccount: false,
+      });
+
+      // Mock getting real users only
+      User.findAll.mockResolvedValue([
+        { id: 10 },
+        { id: 11 },
+      ]);
+
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      // Verify that User.findAll was called with isDemoAccount: false
+      expect(User.findAll).toHaveBeenCalledWith({
+        where: { isDemoAccount: false },
+        attributes: ["id"],
+      });
+    });
   });
 
   describe("GET /unassigned/:id", () => {
     it("should return a specific unassigned appointment", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
+      // Mock cleaner lookup (real cleaner)
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, isDemoAccount: false }) // cleaner
+        .mockResolvedValueOnce({ id: 10, isDemoAccount: false }); // homeowner
+
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
+        userId: 10,
         dataValues: {
           id: 1,
+          userId: 10,
           date: "2025-01-15",
           price: "150",
         },
@@ -253,6 +359,101 @@ describe("Appointment Routes", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("appointment");
       expect(res.body).toHaveProperty("employeesAssigned");
+    });
+
+    it("should return 404 if cleaner not found", async () => {
+      const token = jwt.sign({ userId: 999 }, secretKey);
+
+      User.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Cleaner not found");
+    });
+
+    it("should return 404 if appointment not found", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, isDemoAccount: false });
+      UserAppointments.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/999")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Appointment not found");
+    });
+
+    it("should deny access when demo cleaner tries to view real appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // Demo cleaner trying to view real homeowner's appointment
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, isDemoAccount: true }) // demo cleaner
+        .mockResolvedValueOnce({ id: 10, isDemoAccount: false }); // real homeowner
+
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        userId: 10,
+        dataValues: { id: 1, userId: 10 },
+      });
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Access denied");
+    });
+
+    it("should deny access when real cleaner tries to view demo appointment", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      // Real cleaner trying to view demo homeowner's appointment
+      User.findByPk
+        .mockResolvedValueOnce({ id: 2, isDemoAccount: false }) // real cleaner
+        .mockResolvedValueOnce({ id: 100, isDemoAccount: true }); // demo homeowner
+
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        dataValues: { id: 1, userId: 100 },
+      });
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Access denied");
+    });
+
+    it("should allow demo cleaner to view demo appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // Demo cleaner viewing demo homeowner's appointment
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, isDemoAccount: true }) // demo cleaner
+        .mockResolvedValueOnce({ id: 100, isDemoAccount: true }); // demo homeowner
+
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        dataValues: { id: 1, userId: 100, date: "2025-01-15", price: "150" },
+      });
+
+      UserCleanerAppointments.findAll.mockResolvedValue([]);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("appointment");
     });
   });
 

@@ -371,11 +371,15 @@ kleanr/
 │   │   │   ├── payments/            # Stripe payment UI
 │   │   │   ├── reviews/             # Review system
 │   │   │   ├── tax/                 # Tax document views
-│   │   │   └── terms/               # Terms & Conditions UI
+│   │   │   ├── terms/               # Terms & Conditions UI
+│   │   │   ├── conflicts/           # Conflict resolution center
+│   │   │   ├── appeals/             # Cancellation appeals
+│   │   │   └── preview/             # Preview as Role UI
 │   │   ├── context/                 # React contexts
 │   │   │   ├── AuthContext.js       # Authentication state
 │   │   │   ├── SocketContext.js     # WebSocket provider
-│   │   │   └── PricingContext.js    # Pricing state
+│   │   │   ├── PricingContext.js    # Pricing state
+│   │   │   └── PreviewContext.js    # Preview as Role state
 │   │   └── services/
 │   │       ├── fetchRequests/       # API service classes
 │   │       ├── offline/             # Offline sync engine
@@ -383,7 +387,7 @@ kleanr/
 │   └── package.json
 │
 ├── server/                          # Express.js API Server
-│   ├── routes/api/v1/               # 33 API routers
+│   ├── routes/api/v1/               # 35 API routers
 │   │   ├── appointmentsRouter.js    # Scheduling endpoints
 │   │   ├── businessEmployeeRouter.js # Employee management
 │   │   ├── businessOwnerRouter.js   # Business owner features
@@ -403,8 +407,11 @@ kleanr/
 │   │   ├── stripeConnectRouter.js   # Cleaner payouts
 │   │   ├── suspiciousActivityRouter.js  # Content moderation
 │   │   ├── taxRouter.js             # Tax documents
-│   │   └── termsRouter.js           # Terms & Conditions
-│   ├── services/                    # 33 business logic services
+│   │   ├── termsRouter.js           # Terms & Conditions
+│   │   ├── conflictRouter.js        # Conflict resolution center
+│   │   ├── cancellationAppealRouter.js  # Cancellation appeals
+│   │   └── demoAccountRouter.js     # Preview as Role
+│   ├── services/                    # 39 business logic services
 │   │   ├── BusinessEmployeeService.js # Employee management
 │   │   ├── CalculatePrice.js        # Dynamic pricing logic
 │   │   ├── calendarSyncService.js   # iCal parsing & sync
@@ -418,9 +425,14 @@ kleanr/
 │   │   ├── ReferralService.js       # Referral code management
 │   │   ├── SuspiciousContentDetector.js  # Content moderation
 │   │   ├── TaxDocumentService.js    # 1099-NEC generation
+│   │   ├── ConflictResolutionService.js  # Conflict center logic
+│   │   ├── AppealService.js         # Cancellation appeals
+│   │   ├── JobLedgerService.js      # Financial ledger
+│   │   ├── CancellationAuditService.js   # Audit logging
+│   │   ├── DemoAccountService.js    # Preview mode sessions
 │   │   ├── cron/                    # Scheduled background jobs
 │   │   └── sendNotifications/       # Email & push services
-│   ├── models/                      # 57 Sequelize models
+│   ├── models/                      # 60 Sequelize models
 │   ├── serializers/                 # 37 API serializers
 │   ├── migrations/                  # Database migrations
 │   ├── __tests__/                   # 2809 server tests
@@ -447,7 +459,7 @@ kleanr/
 ## Testing
 
 ```bash
-# Run all server tests (3838 tests)
+# Run all server tests (3967+ tests)
 cd server && npm test
 
 # Run specific test file
@@ -495,7 +507,11 @@ npm test -- --watch
 | Integration | 67 | Full payment flows, e2e |
 | Offline Sync | 28 | Offline mode, conflict resolution |
 | Preferred Cleaner Flow | 17 | End-to-end preferred cleaner integration |
-| **Total** | **3838** | - |
+| Conflict Resolution | 56 | Router, service, case management |
+| Cancellation Appeals | 67 | Appeal workflow, HR review, decisions |
+| Job Ledger | 45 | Double-entry accounting, reconciliation |
+| Preview as Role | 129 | Context, modals, demo account services |
+| **Total** | **3967+** | - |
 
 ---
 
@@ -503,7 +519,7 @@ npm test -- --watch
 
 See [Server README](./server/README.md) for complete API documentation.
 
-### Endpoint Summary (33 Routers, 180+ Endpoints)
+### Endpoint Summary (35 Routers, 200+ Endpoints)
 
 | Category | Router | Key Endpoints |
 |----------|--------|---------------|
@@ -523,6 +539,9 @@ See [Server README](./server/README.md) for complete API documentation.
 | **Referrals** | referralsRouter | Codes, rewards, validation |
 | **HR** | hrDashboardRouter | Disputes, reports, support |
 | **Owner** | ownerDashboardRouter | Financials, settings, perks config |
+| **Conflicts** | conflictRouter | Case queue, evidence, resolution, audit |
+| **Appeals** | cancellationAppealRouter | Submit, review, decide, stats |
+| **Demo Accounts** | demoAccountRouter | Preview enter/exit, role selection |
 
 ---
 
@@ -579,7 +598,7 @@ Real-time communication via Socket.io:
 
 ---
 
-## Database Models (57 Total)
+## Database Models (60 Total)
 
 ### Core Models
 - User, UserHomes, UserAppointments, UserBills
@@ -613,6 +632,9 @@ Real-time communication via Socket.io:
 
 ### Checklists & Photos
 - ChecklistVersion, ChecklistDraft, ChecklistSection, ChecklistItem, JobPhoto
+
+### Conflicts & Appeals
+- CancellationAppeal, CancellationAuditLog, JobLedger
 
 ---
 
