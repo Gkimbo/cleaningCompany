@@ -418,11 +418,12 @@ describe("CleanerApplicationForm Landing Page - Content Verification", () => {
     });
   });
 
-  it("should display 'Now Hiring' badge", async () => {
-    const { getByText } = renderCleanerApplicationForm();
+  it("should display hero section with earnings headline", async () => {
+    const { getAllByText } = renderCleanerApplicationForm();
 
     await waitFor(() => {
-      expect(getByText("Now Hiring")).toBeTruthy();
+      // The hero displays "Earn $XXX - $XXX Per House Cleaned" - may appear multiple places
+      expect(getAllByText(/Earn/).length).toBeGreaterThan(0);
     });
   });
 
@@ -435,11 +436,11 @@ describe("CleanerApplicationForm Landing Page - Content Verification", () => {
     });
   });
 
-  it("should display 'Apply Now - It's Free' button", async () => {
+  it("should display 'Apply Now - Takes 5 Minutes' button", async () => {
     const { getByText } = renderCleanerApplicationForm();
 
     await waitFor(() => {
-      expect(getByText("Apply Now - It's Free")).toBeTruthy();
+      expect(getByText("Apply Now - Takes 5 Minutes")).toBeTruthy();
     });
   });
 
@@ -472,9 +473,8 @@ describe("CleanerApplicationForm Landing Page - Content Verification", () => {
 
     await waitFor(() => {
       expect(getByText("Be Your Own Boss")).toBeTruthy();
-      expect(getByText("Set Your Own Hours")).toBeTruthy();
-      expect(getByText("Earn Great Money")).toBeTruthy();
-      expect(getByText("Grow Your Income")).toBeTruthy();
+      expect(getByText("Get Paid in 24 Hours")).toBeTruthy();
+      expect(getByText("Unlimited Earning Potential")).toBeTruthy();
     });
   });
 
@@ -482,8 +482,8 @@ describe("CleanerApplicationForm Landing Page - Content Verification", () => {
     const { getByText } = renderCleanerApplicationForm();
 
     await waitFor(() => {
-      expect(getByText("Get paid as soon as you finish each cleaning")).toBeTruthy();
-      expect(getByText("Flexible scheduling - you choose your jobs")).toBeTruthy();
+      expect(getByText("Get paid within 48 hours of each cleaning")).toBeTruthy();
+      expect(getByText("Flexible scheduling - accept only jobs you want")).toBeTruthy();
       expect(getByText("No experience necessary")).toBeTruthy();
     });
   });

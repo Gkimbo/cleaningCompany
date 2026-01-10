@@ -72,6 +72,10 @@ import ClientRequestsList from "../src/components/client/ClientRequestsList";
 import ArchivedCleanings from "../src/components/client/ArchivedCleanings";
 import ClientReviews from "../src/components/client/ClientReviews";
 import CompleteHomeSetupWizard from "../src/components/client/CompleteHomeSetupWizard";
+import AcceptInvitationScreen from "../src/components/client/AcceptInvitationScreen";
+
+// Employee components
+import AcceptEmployeeInvitationScreen from "../src/components/employee/AcceptEmployeeInvitationScreen";
 
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
@@ -103,11 +107,21 @@ import MyReferralsPage from "../src/components/referrals/MyReferralsPage";
 // HR components
 import SuspiciousReportsPage from "../src/components/hr/SuspiciousReportsPage";
 
+// Conflict Resolution components
+import {
+  ConflictResolutionCenter,
+  ConflictCaseView,
+} from "../src/components/conflicts";
+
 // Notifications
 import NotificationsScreen from "../src/components/notifications/NotificationsScreen";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
+
+// Preview Mode Context
+import { PreviewProvider } from "../src/context/PreviewContext";
+import { ExitPreviewButton } from "../src/components/preview";
 
 // Terms and Conditions
 import { TermsAcceptanceScreen } from "../src/components/terms";
@@ -115,6 +129,7 @@ import { TermsAcceptanceScreen } from "../src/components/terms";
 // Business Owner components
 import {
   BusinessOwnerDashboard,
+  BusinessAnalyticsDashboard,
   EmployeeManagement,
   JobAssignment,
   BusinessOwnerCalendar,
@@ -227,6 +242,7 @@ export default function App() {
         <PricingProvider>
         <SocketProvider token={state.currentUser.token}>
           <UserContext.Provider value={{ state, dispatch, currentUser: state.currentUser }}>
+          <PreviewProvider dispatch={dispatch} state={state}>
           <NativeRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <SafeAreaView style={appStyles.container}>
               <TopBar dispatch={dispatch} state={state} />
@@ -357,6 +373,16 @@ export default function App() {
               <Route
                 path="/complete-home-setup/:id"
                 element={<CompleteHomeSetupWizard state={state} dispatch={dispatch} />}
+              />
+              {/* Client Invitation Acceptance */}
+              <Route
+                path="/accept-invite/:token"
+                element={<AcceptInvitationScreen />}
+              />
+              {/* Employee Invitation Acceptance */}
+              <Route
+                path="/accept-employee-invite/:token"
+                element={<AcceptEmployeeInvitationScreen />}
               />
               <Route
                 path="/calendar-sync/:homeId"
@@ -554,6 +580,15 @@ export default function App() {
                 path="/suspicious-reports"
                 element={<SuspiciousReportsPage />}
               />
+              {/* HR/Owner Conflict Resolution */}
+              <Route
+                path="/conflicts"
+                element={<ConflictResolutionCenter state={state} />}
+              />
+              <Route
+                path="/conflicts/:caseType/:caseId"
+                element={<ConflictCaseView state={state} />}
+              />
               {/* Notifications */}
               <Route
                 path="/notifications"
@@ -563,6 +598,10 @@ export default function App() {
               <Route
                 path="/business-owner/dashboard"
                 element={<BusinessOwnerDashboard state={state} />}
+              />
+              <Route
+                path="/business-owner/analytics"
+                element={<BusinessAnalyticsDashboard state={state} />}
               />
               <Route
                 path="/business-owner/employees"
@@ -618,8 +657,10 @@ export default function App() {
                 element={<CoworkerMessaging state={state} />}
               />
             </Routes>
+              <ExitPreviewButton />
             </SafeAreaView>
           </NativeRouter>
+          </PreviewProvider>
           </UserContext.Provider>
         </SocketProvider>
         </PricingProvider>

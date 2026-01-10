@@ -17,12 +17,13 @@ export default class OfflinePhoto extends Model {
   };
 
   @field("job_id") jobId;
-  @field("photo_type") photoType; // 'before' or 'after'
+  @field("photo_type") photoType; // 'before', 'after', or 'passes'
   @field("room") room;
   @field("local_uri") localUri;
   @json("watermark_data", sanitizeJSON) watermarkData;
   @field("uploaded") uploaded;
   @field("upload_attempts") uploadAttempts;
+  @field("is_not_applicable") isNotApplicable; // For passes marked as N/A
   @date("created_at") createdAt;
 
   @relation("offline_jobs", "job_id") job;

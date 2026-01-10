@@ -9,6 +9,7 @@ import * as TaskManager from "expo-task-manager";
 import SyncEngine from "./SyncEngine";
 import NetworkMonitor from "./NetworkMonitor";
 import OfflineManager from "./OfflineManager";
+import AutoSyncOrchestrator from "./AutoSyncOrchestrator";
 import {
   BACKGROUND_SYNC_TASK,
   BACKGROUND_FETCH_TASK,
@@ -148,11 +149,13 @@ class BackgroundSync {
 
   /**
    * Trigger immediate sync (when app comes to foreground)
+   * Uses AutoSyncOrchestrator for consistent cooldown/retry behavior
    */
   async triggerImmediateSync() {
     if (!NetworkMonitor.isOnline) return { success: false, reason: "offline" };
 
-    return await SyncEngine.startSync();
+    // Use orchestrator for cooldown and retry logic consistency
+    return await AutoSyncOrchestrator.onConnectivityRestored();
   }
 
   /**

@@ -10,6 +10,7 @@ const { getPricingConfig } = require("../config/businessConfig");
 class MultiCleanerService {
   /**
    * Check if a home qualifies as a "large home" requiring multiple cleaners
+   * A home is large if it exceeds 2 bed/2 bath (i.e., 3+ beds OR 3+ baths)
    * @param {number} numBeds - Number of bedrooms
    * @param {number} numBaths - Number of bathrooms
    * @param {Object} pricingConfig - Optional pricing config
@@ -23,13 +24,14 @@ class MultiCleanerService {
     const beds = parseFloat(numBeds) || 0;
     const baths = parseFloat(numBaths) || 0;
 
-    // Both conditions must be met (3+ beds AND 3+ baths)
-    return beds >= bedsThreshold && baths >= bathsThreshold;
+    // Either condition triggers large home (3+ beds OR 3+ baths)
+    return beds >= bedsThreshold || baths >= bathsThreshold;
   }
 
   /**
    * Check if a home is an "edge" large home (right at the threshold)
    * Edge homes allow solo cleaning with a warning
+   * Examples: 3 bed/2 bath, 2 bed/3 bath, 3 bed/3 bath
    * @param {number} numBeds - Number of bedrooms
    * @param {number} numBaths - Number of bathrooms
    * @param {Object} pricingConfig - Optional pricing config
@@ -43,9 +45,21 @@ class MultiCleanerService {
     const beds = parseFloat(numBeds) || 0;
     const baths = parseFloat(numBaths) || 0;
 
-    // Edge case: exactly at threshold (e.g., 3 beds AND 3 baths)
-    // These homes can be cleaned solo with a warning
-    return beds === bedsThreshold && baths === bathsThreshold;
+    // Must be a large home first
+    const isLarge = beds >= bedsThreshold || baths >= bathsThreshold;
+    if (!isLarge) {
+      return false;
+    }
+
+    // Edge case: at threshold but not significantly over
+    // - Beds at threshold (3) but baths below threshold, OR
+    // - Baths at threshold (3) but beds below threshold, OR
+    // - Both exactly at threshold (3 bed/3 bath)
+    const bedsAtOrBelowThreshold = beds <= bedsThreshold;
+    const bathsAtOrBelowThreshold = baths <= bathsThreshold;
+
+    // Edge if neither dimension is significantly over threshold
+    return bedsAtOrBelowThreshold && bathsAtOrBelowThreshold;
   }
 
   /**

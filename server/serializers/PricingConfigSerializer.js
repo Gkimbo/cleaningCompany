@@ -20,17 +20,25 @@ class PricingConfigSerializer {
 			cleanerPenaltyDays: data.cleanerPenaltyDays,
 			refundPercentage: parseFloat(data.refundPercentage),
 			platformFeePercent: parseFloat(data.platformFeePercent),
-			businessOwnerFeePercent: parseFloat(data.businessOwnerFeePercent),
-			incentiveRefundPercent: parseFloat(data.incentiveRefundPercent),
-			incentiveCleanerPercent: parseFloat(data.incentiveCleanerPercent),
+			businessOwnerFeePercent: parseFloat(data.businessOwnerFeePercent || data.platformFeePercent),
+			incentiveRefundPercent: parseFloat(data.incentiveRefundPercent || 0.10),
+			incentiveCleanerPercent: parseFloat(data.incentiveCleanerPercent || 0.40),
 			highVolumeFee: data.highVolumeFee,
-			multiCleanerPlatformFeePercent: parseFloat(data.multiCleanerPlatformFeePercent),
-			soloLargeHomeBonus: data.soloLargeHomeBonus,
-			largeHomeBedsThreshold: data.largeHomeBedsThreshold,
-			largeHomeBathsThreshold: data.largeHomeBathsThreshold,
-			multiCleanerOfferExpirationHours: data.multiCleanerOfferExpirationHours,
-			urgentFillDays: data.urgentFillDays,
-			finalWarningDays: data.finalWarningDays,
+			multiCleanerPlatformFeePercent: parseFloat(data.multiCleanerPlatformFeePercent || 0.13),
+			soloLargeHomeBonus: data.soloLargeHomeBonus || 0,
+			largeHomeBedsThreshold: data.largeHomeBedsThreshold || 3,
+			largeHomeBathsThreshold: data.largeHomeBathsThreshold || 3,
+			multiCleanerOfferExpirationHours: data.multiCleanerOfferExpirationHours || 48,
+			urgentFillDays: data.urgentFillDays || 7,
+			finalWarningDays: data.finalWarningDays || 3,
+			// Large business fee fields
+			largeBusinessFeePercent: parseFloat(data.largeBusinessFeePercent || 0.07),
+			largeBusinessMonthlyThreshold: data.largeBusinessMonthlyThreshold || 50,
+			largeBusinessLookbackMonths: data.largeBusinessLookbackMonths || 1,
+			// Last-minute booking fields
+			lastMinuteFee: data.lastMinuteFee || 50,
+			lastMinuteThresholdHours: data.lastMinuteThresholdHours || 48,
+			lastMinuteNotificationRadiusMiles: parseFloat(data.lastMinuteNotificationRadiusMiles || 25),
 			isActive: data.isActive,
 			updatedBy: data.updatedBy,
 			changeNote: data.changeNote,
@@ -87,12 +95,15 @@ class PricingConfigSerializer {
 				homeownerPenaltyDays: data.homeownerPenaltyDays,
 				cleanerPenaltyDays: data.cleanerPenaltyDays,
 				refundPercentage: parseFloat(data.refundPercentage),
-				incentiveRefundPercent: parseFloat(data.incentiveRefundPercent),
-				incentiveCleanerPercent: parseFloat(data.incentiveCleanerPercent)
+				incentiveRefundPercent: parseFloat(data.incentiveRefundPercent || 0.10),
+				incentiveCleanerPercent: parseFloat(data.incentiveCleanerPercent || 0.40)
 			},
 			platform: {
 				feePercent: parseFloat(data.platformFeePercent),
-				businessOwnerFeePercent: parseFloat(data.businessOwnerFeePercent || data.platformFeePercent)
+				businessOwnerFeePercent: parseFloat(data.businessOwnerFeePercent || data.platformFeePercent),
+				largeBusinessFeePercent: parseFloat(data.largeBusinessFeePercent || 0.07),
+				largeBusinessMonthlyThreshold: data.largeBusinessMonthlyThreshold || 50,
+				largeBusinessLookbackMonths: data.largeBusinessLookbackMonths || 1
 			},
 			highVolumeFee: data.highVolumeFee,
 			multiCleaner: {
@@ -103,6 +114,11 @@ class PricingConfigSerializer {
 				offerExpirationHours: data.multiCleanerOfferExpirationHours || 48,
 				urgentFillDays: data.urgentFillDays || 7,
 				finalWarningDays: data.finalWarningDays || 3
+			},
+			lastMinute: {
+				fee: data.lastMinuteFee || 50,
+				thresholdHours: data.lastMinuteThresholdHours || 48,
+				notificationRadiusMiles: parseFloat(data.lastMinuteNotificationRadiusMiles || 25)
 			}
 		};
 	}

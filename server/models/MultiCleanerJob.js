@@ -67,6 +67,29 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // Edge case decision fields (for homes that need 2 cleaners but only have 1)
+    edgeCaseDecisionRequired: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    edgeCaseDecisionSentAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    edgeCaseDecisionExpiresAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    homeownerDecision: {
+      type: DataTypes.ENUM("pending", "proceed", "cancel", "auto_proceeded"),
+      allowNull: true,
+      defaultValue: null,
+    },
+    homeownerDecisionAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   });
 
   MultiCleanerJob.associate = (models) => {
@@ -108,6 +131,27 @@ module.exports = (sequelize, DataTypes) => {
    */
   MultiCleanerJob.prototype.getRemainingSlots = function () {
     return Math.max(0, this.totalCleanersRequired - this.cleanersConfirmed);
+  };
+
+  /**
+   * Check if this job has a pending edge case decision
+   */
+  MultiCleanerJob.prototype.hasEdgeCaseDecisionPending = function () {
+    return (
+      this.edgeCaseDecisionRequired && this.homeownerDecision === "pending"
+    );
+  };
+
+  /**
+   * Check if edge case decision has expired
+   */
+  MultiCleanerJob.prototype.isEdgeCaseDecisionExpired = function () {
+    return !!(
+      this.edgeCaseDecisionRequired &&
+      this.homeownerDecision === "pending" &&
+      this.edgeCaseDecisionExpiresAt &&
+      new Date() > new Date(this.edgeCaseDecisionExpiresAt)
+    );
   };
 
   /**

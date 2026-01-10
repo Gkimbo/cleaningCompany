@@ -110,8 +110,11 @@ describe("Preferred Cleaner Management Endpoints", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.preferredCleaners).toHaveLength(2);
-      expect(res.body.preferredCleaners[0].cleanerName).toBe("John Cleaner");
-      expect(res.body.preferredCleaners[1].cleanerName).toBe("Jane Cleaner");
+      // Serializer returns cleaner object with firstName/lastName, not cleanerName
+      expect(res.body.preferredCleaners[0].cleaner.firstName).toBe("John");
+      expect(res.body.preferredCleaners[0].cleaner.lastName).toBe("Cleaner");
+      expect(res.body.preferredCleaners[1].cleaner.firstName).toBe("Jane");
+      expect(res.body.preferredCleaners[1].cleaner.lastName).toBe("Cleaner");
       expect(res.body.usePreferredCleaners).toBe(true);
     });
 
@@ -233,7 +236,9 @@ describe("Preferred Cleaner Management Endpoints", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.preferredCleaners[0].cleanerName).toBe("cleaner123");
+      // When firstName/lastName are empty strings, decryptField returns null
+      expect(res.body.preferredCleaners[0].cleaner.firstName).toBeNull();
+      expect(res.body.preferredCleaners[0].cleaner.lastName).toBeNull();
       expect(res.body.usePreferredCleaners).toBe(false);
     });
   });

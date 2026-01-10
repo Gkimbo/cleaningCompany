@@ -1,4 +1,5 @@
 const nodemailer = require("nodemailer");
+const { User } = require("../../models");
 
 // Reusable email template helper
 const createEmailTemplate = ({
@@ -110,6 +111,77 @@ const createTransporter = () => {
   });
 };
 
+/**
+ * Resolve recipient email for demo account redirection
+ * When in preview mode, demo account emails are redirected to the owner's email
+ * @param {string} email - The original recipient email
+ * @returns {Promise<{email: string, isRedirected: boolean, originalEmail: string|null}>}
+ */
+const resolveRecipientEmail = async (email) => {
+  try {
+    // Find if this email belongs to a demo account with an active preview owner
+    const demoAccount = await User.findOne({
+      where: {
+        email: email,
+        isDemoAccount: true,
+      },
+    });
+
+    if (demoAccount && demoAccount.currentPreviewOwnerId) {
+      // This is a demo account being previewed - redirect to owner's email
+      const owner = await User.findByPk(demoAccount.currentPreviewOwnerId);
+      if (owner && owner.email) {
+        console.log(`[Email] Redirecting demo account email from ${email} to owner ${owner.email}`);
+        return {
+          email: owner.email,
+          isRedirected: true,
+          originalEmail: email,
+        };
+      }
+    }
+
+    // Not a demo account or no active preview - use original email
+    return {
+      email: email,
+      isRedirected: false,
+      originalEmail: null,
+    };
+  } catch (error) {
+    console.error("[Email] Error resolving recipient email:", error);
+    // On error, fall back to original email
+    return {
+      email: email,
+      isRedirected: false,
+      originalEmail: null,
+    };
+  }
+};
+
+/**
+ * Send email with demo account redirection support
+ * Automatically redirects emails to demo accounts to the previewing owner
+ * @param {Object} transporter - Nodemailer transporter
+ * @param {Object} mailOptions - Mail options with 'to' field
+ * @returns {Promise<Object>} Nodemailer send result
+ */
+const sendMailWithResolution = async (transporter, mailOptions) => {
+  // Resolve the recipient email (handles demo account redirection)
+  const resolved = await resolveRecipientEmail(mailOptions.to);
+
+  // Update mail options with resolved email
+  const resolvedMailOptions = {
+    ...mailOptions,
+    to: resolved.email,
+  };
+
+  // If redirected, add a note to the subject line
+  if (resolved.isRedirected) {
+    resolvedMailOptions.subject = `[DEMO: ${resolved.originalEmail}] ${mailOptions.subject}`;
+  }
+
+  return transporter.sendMail(resolvedMailOptions);
+};
+
 // Format date helper
 const formatDate = (dateString) => {
   const options = {
@@ -182,7 +254,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Cancellation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -257,7 +329,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Confirmation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -451,7 +523,7 @@ This is an automated message. Please do not reply directly to this email.
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Welcome email sent successfully:", info.response);
       return info.response;
     } catch (error) {
@@ -527,7 +599,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Employee request email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -579,7 +651,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Request removal email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -627,7 +699,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Message notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -669,7 +741,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Broadcast email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -726,7 +798,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Username recovery email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -797,7 +869,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Password reset email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -940,7 +1012,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Request approved email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1086,7 +1158,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Linens configuration updated email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1148,7 +1220,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Request denied email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1213,7 +1285,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Home in service area email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1278,7 +1350,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Home outside service area email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1348,7 +1420,7 @@ Kleanr System`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ New application notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1431,7 +1503,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Unassigned warning email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1504,7 +1576,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Home size adjustment request email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1564,7 +1636,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Adjustment approved email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1639,7 +1711,7 @@ Kleanr System`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Owner review email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1713,7 +1785,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Adjustment resolved email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1782,7 +1854,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Payment failed reminder email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1839,7 +1911,7 @@ Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Application rejection email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -1936,7 +2008,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Homeowner cancelled notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2037,7 +2109,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Auto-sync appointment notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2117,7 +2189,7 @@ Kleanr System`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ HR hiring notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2208,7 +2280,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Cleaning completed email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2297,7 +2369,7 @@ Kleanr Support Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Review reminder email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2387,7 +2459,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Client invitation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2443,7 +2515,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Invitation reminder email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2521,7 +2593,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Invitation accepted email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2611,7 +2683,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Recurring schedule email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2695,7 +2767,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Cleaning invoice email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2766,7 +2838,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Payment reminder email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2859,7 +2931,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Payout notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -2957,7 +3029,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ New client appointment email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3049,7 +3121,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Preferred cleaner notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3117,7 +3189,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Preferred cleaner booking notification email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3228,7 +3300,7 @@ The Kleanr Team`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Suspicious activity report email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3320,7 +3392,7 @@ Thank you for using Kleanr!`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Pending booking email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3382,7 +3454,7 @@ Happy cleaning!`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Booking accepted email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3480,7 +3552,7 @@ Open the Kleanr app to try scheduling a different date.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Booking declined email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3557,7 +3629,7 @@ Open the Kleanr app to schedule a new booking.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Booking expired email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3638,7 +3710,7 @@ Open the Kleanr app to accept or decline this offer.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Multi-cleaner offer email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3719,7 +3791,7 @@ Open the Kleanr app to choose how you'd like to proceed.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Cleaner dropout email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3795,7 +3867,7 @@ Open the Kleanr app to accept or decline.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Solo completion offer email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3877,7 +3949,7 @@ Open the Kleanr app to choose your preferred option.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Partial completion email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -3960,7 +4032,7 @@ Open the Kleanr app to view your team's progress on cleaning day.`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Multi-cleaner confirmation email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4036,7 +4108,7 @@ Open the Kleanr app to accept this job now!`;
         html: htmlContent,
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await sendMailWithResolution(transporter, mailOptions);
       console.log("✅ Urgent fill email sent:", info.response);
       return info.response;
     } catch (error) {
@@ -4044,6 +4116,1032 @@ Open the Kleanr app to accept this job now!`;
       throw error;
     }
   }
+
+  /**
+   * Send last-minute urgent job notification email to cleaner
+   */
+  static async sendLastMinuteUrgentEmail(
+    email,
+    cleanerName,
+    appointmentDate,
+    price,
+    location,
+    distanceMiles
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Urgent Job Available!",
+        subtitle: "Last-Minute Cleaning Opportunity",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #f97316 100%)",
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>A homeowner in your area needs a cleaning <strong>urgently</strong>! This is a last-minute booking that needs to be filled quickly.</p>
+          <p>You're only <strong>${distanceMiles} miles</strong> away from this job!</p>`,
+        infoBox: {
+          icon: "📍",
+          title: "Job Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Your Earnings", value: price },
+            { label: "Location", value: location },
+            { label: "Distance", value: `${distanceMiles} miles from you` },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "This job is available for a <strong>limited time</strong>. Open the app now to claim it before another cleaner does!",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to view and accept this job!",
+        footerMessage: "Don't miss this opportunity!",
+      });
+
+      const textContent = `URGENT: Last-Minute Cleaning Available!
+
+Hi ${cleanerName},
+
+A homeowner near you needs a cleaning urgently. You're only ${distanceMiles} miles away!
+
+JOB DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Your Earnings: ${price}
+Location: ${location}
+Distance: ${distanceMiles} miles from you
+
+⏰ This job is available for a limited time. Open the Kleanr app now to claim it!
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🚨 URGENT: Last-Minute Cleaning - ${price} - ${distanceMiles} mi away`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Last-minute urgent email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending last-minute urgent email:", error);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // EDGE CASE MULTI-CLEANER EMAILS
+  // ============================================================================
+
+  /**
+   * Send edge case decision required email to homeowner
+   */
+  static async sendEdgeCaseDecisionRequired(
+    email,
+    homeownerName,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    decisionHours,
+    appointmentId,
+    multiCleanerJobId
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "your home";
+
+      const htmlContent = createEmailTemplate({
+        title: "Action Needed",
+        subtitle: "Your Cleaning Has 1 Cleaner Confirmed",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>Your cleaning scheduled for <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong> has <strong>${cleanerName}</strong> confirmed, but we couldn't find a second cleaner.</p>
+          <p>Since your home qualifies as a larger home, we recommend 2 cleaners. However, you have options:</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Your Options",
+          items: [
+            { label: "Option 1", value: "Proceed with 1 cleaner (same price, full pay to cleaner)" },
+            { label: "Option 2", value: "Cancel with no fees (cleaner notified, no payment charged)" },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: `Please respond within <strong>${decisionHours} hours</strong>. If we don't hear from you, we'll proceed with 1 cleaner and normal cancellation fees will apply.`,
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to make your decision",
+        footerMessage: "We're here to help make your cleaning a success!",
+      });
+
+      const textContent = `Action Needed: Your Cleaning Has 1 Cleaner Confirmed
+
+Hi ${homeownerName},
+
+Your cleaning scheduled for ${appointmentDate} at ${addressStr} has ${cleanerName} confirmed, but we couldn't find a second cleaner.
+
+YOUR OPTIONS:
+━━━━━━━━━━━━━━━━━━━━━━
+1. Proceed with 1 cleaner (same price, full pay to cleaner)
+2. Cancel with no fees (cleaner notified, no payment charged)
+
+⏰ Please respond within ${decisionHours} hours. If we don't hear from you, we'll proceed with 1 cleaner and normal cancellation fees will apply.
+
+Open the Kleanr app to make your decision.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⏰ Action Needed: Your ${appointmentDate} Cleaning - 1 Cleaner Confirmed`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Edge case decision required email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case decision email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send edge case auto-proceeded email to homeowner
+   */
+  static async sendEdgeCaseAutoProceeded(
+    email,
+    homeownerName,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    appointmentId
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "your home";
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Confirmed",
+        subtitle: "Proceeding with 1 Cleaner",
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>We didn't receive a response, so we've proceeded with your cleaning as scheduled.</p>
+          <p><strong>${cleanerName}</strong> will complete your cleaning on <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong>.</p>`,
+        infoBox: {
+          icon: "📋",
+          title: "What This Means",
+          items: [
+            { label: "Cleaner", value: cleanerName },
+            { label: "Date", value: appointmentDate },
+            { label: "Payment", value: "Will be captured (normal fees apply)" },
+            { label: "Cancellation", value: "Normal cancellation fees now apply" },
+          ],
+        },
+        warningBox: {
+          icon: "ℹ️",
+          text: "If another cleaner becomes available, they may still join the job before the cleaning date.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0284c7",
+          textColor: "#075985",
+        },
+        ctaText: "Open the Kleanr app to view your appointment details",
+        footerMessage: "We're looking forward to your sparkling clean home!",
+      });
+
+      const textContent = `Cleaning Confirmed - Proceeding with 1 Cleaner
+
+Hi ${homeownerName},
+
+We didn't receive a response, so we've proceeded with your cleaning as scheduled.
+
+${cleanerName} will complete your cleaning on ${appointmentDate} at ${addressStr}.
+
+WHAT THIS MEANS:
+━━━━━━━━━━━━━━━━━━━━━━
+• Payment will be captured (normal fees apply)
+• Normal cancellation fees now apply
+• If another cleaner becomes available, they may still join
+
+Open the Kleanr app to view your appointment details.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Cleaning Confirmed: ${appointmentDate} - 1 Cleaner`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Edge case auto-proceeded email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case auto-proceeded email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send edge case cleaner confirmed email
+   */
+  static async sendEdgeCaseCleanerConfirmed(
+    email,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    appointmentId,
+    fullPay = true
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "the home";
+
+      const paymentMessage = fullPay
+        ? "You'll receive the full cleaning pay since you're the only cleaner."
+        : "Payment will be split if another cleaner joins.";
+
+      const htmlContent = createEmailTemplate({
+        title: "You're Confirmed!",
+        subtitle: "Sole Cleaner Assignment",
+        headerColor: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+        greeting: `Great news, ${cleanerName}!`,
+        content: `<p>You're confirmed as the cleaner for the appointment on <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong>.</p>
+          <p>${paymentMessage}</p>`,
+        infoBox: {
+          icon: "💰",
+          title: "Assignment Details",
+          items: [
+            { label: "Date", value: appointmentDate },
+            { label: "Location", value: addressStr },
+            { label: "Status", value: fullPay ? "Sole cleaner - full pay" : "May share with another cleaner" },
+          ],
+        },
+        warningBox: {
+          icon: "ℹ️",
+          text: "A second cleaner may still join before the appointment. If they do, payment will be split between both cleaners.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0284c7",
+          textColor: "#075985",
+        },
+        ctaText: "Open the Kleanr app to view job details",
+        footerMessage: "Thank you for being a great cleaner!",
+      });
+
+      const textContent = `You're Confirmed as Sole Cleaner!
+
+Great news, ${cleanerName}!
+
+You're confirmed for the cleaning on ${appointmentDate} at ${addressStr}.
+
+${paymentMessage}
+
+ASSIGNMENT DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${appointmentDate}
+Location: ${addressStr}
+Status: ${fullPay ? "Sole cleaner - full pay" : "May share with another cleaner"}
+
+Note: A second cleaner may still join before the appointment. If they do, payment will be split.
+
+Open the Kleanr app to view job details.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Confirmed: You're the cleaner for ${appointmentDate}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Edge case cleaner confirmed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case cleaner confirmed email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send edge case cancelled email to homeowner
+   */
+  static async sendEdgeCaseCancelled(
+    email,
+    homeownerName,
+    appointmentDate,
+    homeAddress,
+    reason
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "your home";
+
+      const reasonMessage = reason === "homeowner_chose_cancel"
+        ? "As you requested, your cleaning has been cancelled with no fees."
+        : "Your cleaning has been cancelled due to insufficient cleaners available.";
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Cancelled",
+        subtitle: "No Cancellation Fees Applied",
+        headerColor: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+        greeting: `Hi ${homeownerName}`,
+        content: `<p>${reasonMessage}</p>
+          <p>Your cleaning scheduled for <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong> has been cancelled.</p>
+          <p><strong>No payment has been charged and no cancellation fees apply.</strong></p>`,
+        infoBox: {
+          icon: "📋",
+          title: "Cancellation Details",
+          items: [
+            { label: "Original Date", value: appointmentDate },
+            { label: "Location", value: addressStr },
+            { label: "Payment Charged", value: "None" },
+            { label: "Cancellation Fee", value: "None - waived" },
+          ],
+        },
+        ctaText: "Ready to rebook? Open the Kleanr app to schedule a new cleaning.",
+        footerMessage: "We hope to clean for you again soon!",
+      });
+
+      const textContent = `Cleaning Cancelled - No Fees Applied
+
+Hi ${homeownerName},
+
+${reasonMessage}
+
+CANCELLATION DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━
+Original Date: ${appointmentDate}
+Location: ${addressStr}
+Payment Charged: None
+Cancellation Fee: None - waived
+
+Ready to rebook? Open the Kleanr app to schedule a new cleaning.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Cleaning Cancelled: ${appointmentDate} - No Fees`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Edge case cancelled email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case cancelled email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send edge case cleaner cancelled email
+   */
+  static async sendEdgeCaseCleanerCancelled(
+    email,
+    cleanerName,
+    appointmentDate,
+    homeAddress,
+    reason
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "the home";
+
+      const htmlContent = createEmailTemplate({
+        title: "Job Cancelled",
+        subtitle: "No Second Cleaner Found",
+        headerColor: "linear-gradient(135deg, #64748b 0%, #475569 100%)",
+        greeting: `Hi ${cleanerName}`,
+        content: `<p>Unfortunately, the cleaning you were assigned on <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong> has been cancelled.</p>
+          <p>The homeowner chose to cancel because we couldn't find a second cleaner for this larger home.</p>`,
+        infoBox: {
+          icon: "📋",
+          title: "Cancellation Details",
+          items: [
+            { label: "Original Date", value: appointmentDate },
+            { label: "Location", value: addressStr },
+            { label: "Reason", value: "No second cleaner available" },
+          ],
+        },
+        warningBox: {
+          icon: "ℹ️",
+          text: "Don't worry - more jobs are available in the app! Check your offers to find your next cleaning opportunity.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0284c7",
+          textColor: "#075985",
+        },
+        ctaText: "Open the Kleanr app to view available jobs",
+        footerMessage: "Thank you for being part of the Kleanr team!",
+      });
+
+      const textContent = `Job Cancelled - No Second Cleaner Found
+
+Hi ${cleanerName},
+
+Unfortunately, the cleaning you were assigned on ${appointmentDate} at ${addressStr} has been cancelled.
+
+The homeowner chose to cancel because we couldn't find a second cleaner for this larger home.
+
+CANCELLATION DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━
+Original Date: ${appointmentDate}
+Location: ${addressStr}
+Reason: No second cleaner available
+
+Don't worry - more jobs are available! Check your offers in the app.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Job Cancelled: ${appointmentDate} - No Second Cleaner`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Edge case cleaner cancelled email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case cleaner cancelled email:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send second cleaner joined email to original cleaner
+   */
+  static async sendEdgeCaseSecondCleanerJoined(
+    email,
+    originalCleanerName,
+    newCleanerName,
+    appointmentDate,
+    homeAddress,
+    appointmentId
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const addressStr = homeAddress
+        ? `${homeAddress.street}, ${homeAddress.city}`
+        : "the home";
+
+      const htmlContent = createEmailTemplate({
+        title: "Good News!",
+        subtitle: "A Second Cleaner Has Joined",
+        headerColor: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+        greeting: `Hi ${originalCleanerName}!`,
+        content: `<p>Great news! <strong>${newCleanerName}</strong> has joined you for the cleaning on <strong>${appointmentDate}</strong> at <strong>${addressStr}</strong>.</p>
+          <p>Payment will be split between both of you.</p>`,
+        infoBox: {
+          icon: "👥",
+          title: "Team Details",
+          items: [
+            { label: "Your Partner", value: newCleanerName },
+            { label: "Date", value: appointmentDate },
+            { label: "Location", value: addressStr },
+            { label: "Payment", value: "Split between 2 cleaners" },
+          ],
+        },
+        ctaText: "Open the Kleanr app to view job details and coordinate with your partner",
+        footerMessage: "Teamwork makes the dream work! 🧹✨",
+      });
+
+      const textContent = `Good News! A Second Cleaner Has Joined
+
+Hi ${originalCleanerName}!
+
+Great news! ${newCleanerName} has joined you for the cleaning on ${appointmentDate} at ${addressStr}.
+
+Payment will be split between both of you.
+
+TEAM DETAILS:
+━━━━━━━━━━━━━━━━━━━━━━
+Your Partner: ${newCleanerName}
+Date: ${appointmentDate}
+Location: ${addressStr}
+Payment: Split between 2 cleaners
+
+Open the Kleanr app to view job details.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `👥 ${newCleanerName} is cleaning with you on ${appointmentDate}!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Edge case second cleaner joined email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending edge case second cleaner joined email:", error);
+      throw error;
+    }
+  }
+
+  // =========================================================================
+  // 2-Step Completion Confirmation Email Templates
+  // =========================================================================
+
+  /**
+   * Email to homeowner when cleaner submits completion (awaiting approval)
+   */
+  static async sendCompletionSubmittedHomeowner(
+    email,
+    homeownerName,
+    appointmentDate,
+    address,
+    cleanerName,
+    hoursUntilAutoApproval
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Complete! ✨",
+        subtitle: "Please review and approve",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>Great news! <strong>${cleanerName}</strong> has finished cleaning your home at <strong>${address}</strong>.</p>
+          <p>Please review the cleaning and let us know how it went by tapping "Looks Good" in the app.</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Cleaning Details",
+          items: [
+            { label: "Address", value: address },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Cleaned By", value: cleanerName },
+            { label: "Status", value: "⏳ Awaiting Your Approval" },
+          ],
+        },
+        warningBox: {
+          icon: "⏱️",
+          text: `<strong>Auto-approval in ${hoursUntilAutoApproval} hours:</strong> If you don't respond, the cleaning will be automatically approved and payment will be sent to the cleaner.`,
+          bgColor: "#e0f2fe",
+          borderColor: "#0ea5e9",
+          textColor: "#0369a1",
+        },
+        steps: {
+          title: "📱 Review in the App",
+          items: [
+            "Open the Kleanr app",
+            "Go to your Dashboard",
+            'Tap "Looks Good" to approve or leave feedback',
+            "Your cleaner will be paid after approval",
+          ],
+        },
+        ctaText: "Open the Kleanr app to review your cleaning!",
+        footerMessage: "Thank you for choosing Kleanr",
+      });
+
+      const textContent = `Hi ${homeownerName}!
+
+Great news! ${cleanerName} has finished cleaning your home at ${address}.
+
+Please review the cleaning and let us know how it went.
+
+CLEANING DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${address}
+Date: ${formatDate(appointmentDate)}
+Cleaned By: ${cleanerName}
+Status: ⏳ Awaiting Your Approval
+
+⏱️ AUTO-APPROVAL IN ${hoursUntilAutoApproval} HOURS
+If you don't respond, the cleaning will be automatically approved and payment will be sent to the cleaner.
+
+HOW TO REVIEW
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Go to your Dashboard
+3. Tap "Looks Good" to approve or leave feedback
+4. Your cleaner will be paid after approval
+
+Open the Kleanr app to review your cleaning!
+
+Thank you for choosing Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✨ ${cleanerName} finished cleaning - Please Review!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Completion submitted email sent to homeowner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending completion submitted email:", error);
+    }
+  }
+
+  /**
+   * Email to homeowner when cleaning is auto-approved
+   */
+  static async sendCompletionAutoApproved(
+    email,
+    homeownerName,
+    appointmentDate,
+    address,
+    cleanerName
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Auto-Approved",
+        subtitle: "Payment sent to cleaner",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>Your cleaning on <strong>${formatDate(appointmentDate)}</strong> at <strong>${address}</strong> has been <strong>auto-approved</strong> because the approval window has passed.</p>
+          <p>Payment has been sent to <strong>${cleanerName}</strong>.</p>`,
+        infoBox: {
+          icon: "✅",
+          title: "Approval Details",
+          items: [
+            { label: "Address", value: address },
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Cleaner", value: cleanerName },
+            { label: "Status", value: "✅ Auto-Approved" },
+          ],
+        },
+        warningBox: {
+          icon: "⭐",
+          text: "<strong>We'd love your feedback!</strong> Even though the cleaning was auto-approved, you can still leave a review for your cleaner.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to leave a review!",
+        footerMessage: "Thank you for choosing Kleanr",
+      });
+
+      const textContent = `Hi ${homeownerName}!
+
+Your cleaning on ${formatDate(appointmentDate)} at ${address} has been auto-approved because the approval window has passed.
+
+Payment has been sent to ${cleanerName}.
+
+APPROVAL DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${address}
+Date: ${formatDate(appointmentDate)}
+Cleaner: ${cleanerName}
+Status: ✅ Auto-Approved
+
+⭐ LEAVE A REVIEW
+Even though the cleaning was auto-approved, you can still leave a review for your cleaner.
+
+Open the Kleanr app to leave a review!
+
+Thank you for choosing Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `✅ Cleaning Auto-Approved - ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Completion auto-approved email sent to homeowner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending completion auto-approved email:", error);
+    }
+  }
+
+  /**
+   * Email to cleaner when their work is approved
+   */
+  static async sendCompletionApprovedCleaner(
+    email,
+    cleanerName,
+    appointmentDate,
+    payoutAmount
+  ) {
+    try {
+      const transporter = createTransporter();
+      const formattedPayout = payoutAmount
+        ? `$${parseFloat(payoutAmount).toFixed(2)}`
+        : "Your share";
+
+      const htmlContent = createEmailTemplate({
+        title: "Job Approved! 🎉",
+        subtitle: "Payment is on the way",
+        headerColor: "linear-gradient(135deg, #10b981 0%, #34d399 100%)",
+        greeting: `Congratulations, ${cleanerName}!`,
+        content: `<p>Your cleaning job on <strong>${formatDate(appointmentDate)}</strong> has been approved!</p>
+          <p>Payment of <strong>${formattedPayout}</strong> is being processed and will be sent to your connected bank account.</p>`,
+        infoBox: {
+          icon: "💰",
+          title: "Payment Details",
+          items: [
+            { label: "Job Date", value: formatDate(appointmentDate) },
+            { label: "Amount", value: formattedPayout },
+            { label: "Status", value: "✅ Approved & Processing" },
+          ],
+        },
+        warningBox: {
+          icon: "🏦",
+          text: "<strong>Payment Timeline:</strong> Payouts typically arrive in your bank account within 1-2 business days.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0ea5e9",
+          textColor: "#0369a1",
+        },
+        ctaText: "Keep up the great work!",
+        footerMessage: "Thank you for being a Kleanr pro",
+      });
+
+      const textContent = `Congratulations, ${cleanerName}!
+
+Your cleaning job on ${formatDate(appointmentDate)} has been approved!
+
+Payment of ${formattedPayout} is being processed and will be sent to your connected bank account.
+
+PAYMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Job Date: ${formatDate(appointmentDate)}
+Amount: ${formattedPayout}
+Status: ✅ Approved & Processing
+
+🏦 PAYMENT TIMELINE
+Payouts typically arrive in your bank account within 1-2 business days.
+
+Keep up the great work!
+
+Thank you for being a Kleanr pro!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🎉 Job Approved - Payment on the way!`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Completion approved email sent to cleaner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending completion approved email to cleaner:", error);
+    }
+  }
+
+  /**
+   * Email to user when appeal is submitted
+   */
+  static async sendAppealSubmittedConfirmation(user, appeal) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Appeal Submitted",
+        subtitle: "We've received your cancellation appeal",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        greeting: `Hi ${user.firstName}!`,
+        content: `<p>Thank you for submitting your cancellation appeal. Our team will review your case carefully.</p>
+          <p>We aim to respond within <strong>48 hours</strong> of submission.</p>`,
+        infoBox: {
+          icon: "📝",
+          title: "Appeal Details",
+          items: [
+            { label: "Appeal ID", value: `#${appeal.id}` },
+            { label: "Category", value: appeal.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) },
+            { label: "Status", value: "🔍 Under Review" },
+            { label: "Priority", value: appeal.priority.charAt(0).toUpperCase() + appeal.priority.slice(1) },
+          ],
+        },
+        steps: {
+          title: "What happens next?",
+          items: [
+            "Our team will review your appeal and any supporting documents",
+            "We may reach out if we need additional information",
+            "You'll receive a notification once a decision is made",
+            "If approved, any applicable fees will be refunded automatically",
+          ],
+        },
+        warningBox: {
+          icon: "📎",
+          text: "<strong>Have documentation?</strong> Upload supporting documents (medical notes, photos, etc.) through the app to strengthen your appeal.",
+          bgColor: "#f0f9ff",
+          borderColor: "#0ea5e9",
+          textColor: "#0369a1",
+        },
+        ctaText: "You can check your appeal status anytime in the Kleanr app.",
+        footerMessage: "Thank you for your patience",
+      });
+
+      const textContent = `Hi ${user.firstName}!
+
+Thank you for submitting your cancellation appeal. Our team will review your case carefully.
+
+We aim to respond within 48 hours of submission.
+
+APPEAL DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Appeal ID: #${appeal.id}
+Category: ${appeal.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+Status: 🔍 Under Review
+Priority: ${appeal.priority.charAt(0).toUpperCase() + appeal.priority.slice(1)}
+
+WHAT HAPPENS NEXT?
+1. Our team will review your appeal and any supporting documents
+2. We may reach out if we need additional information
+3. You'll receive a notification once a decision is made
+4. If approved, any applicable fees will be refunded automatically
+
+📎 HAVE DOCUMENTATION?
+Upload supporting documents (medical notes, photos, etc.) through the app to strengthen your appeal.
+
+You can check your appeal status anytime in the Kleanr app.
+
+Thank you for your patience!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: user.email,
+        subject: `📝 Appeal Submitted - Reference #${appeal.id}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Appeal submitted confirmation email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending appeal submitted email:", error);
+    }
+  }
+
+  /**
+   * Email to user when appeal is resolved
+   */
+  static async sendAppealResolved(user, appeal, decision) {
+    try {
+      const transporter = createTransporter();
+
+      const isApproved = decision === "approve" || decision === "partial";
+      const headerColor = isApproved
+        ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
+        : "linear-gradient(135deg, #ef4444 0%, #f87171 100%)";
+
+      const statusText = decision === "approve" ? "✅ Approved"
+        : decision === "partial" ? "✅ Partially Approved"
+          : "❌ Denied";
+
+      const resolution = appeal.resolution || {};
+
+      const content = isApproved
+        ? `<p>Great news! Your cancellation appeal has been <strong>${decision === "approve" ? "approved" : "partially approved"}</strong>.</p>
+           ${resolution.penaltyWaived ? "<p>✅ Cancellation penalty has been waived.</p>" : ""}
+           ${resolution.feeRefunded ? `<p>✅ Cancellation fee of $${((resolution.refundAmount || 0) / 100).toFixed(2)} will be refunded.</p>` : ""}
+           ${resolution.accountUnfrozen ? "<p>✅ Your account has been unfrozen.</p>" : ""}
+           ${resolution.ratingRemoved ? "<p>✅ Any penalty ratings have been removed.</p>" : ""}`
+        : `<p>After careful review, we were unable to approve your cancellation appeal.</p>
+           <p>${appeal.reviewDecision || "If you have additional information that might support your case, please contact our support team."}</p>`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appeal Decision",
+        subtitle: `Your appeal has been ${decision === "approve" ? "approved" : decision === "partial" ? "partially approved" : "reviewed"}`,
+        headerColor,
+        greeting: `Hi ${user.firstName}!`,
+        content,
+        infoBox: {
+          icon: isApproved ? "🎉" : "📋",
+          title: "Decision Summary",
+          items: [
+            { label: "Appeal ID", value: `#${appeal.id}` },
+            { label: "Decision", value: statusText },
+            { label: "Reviewed On", value: new Date().toLocaleDateString() },
+          ],
+        },
+        warningBox: isApproved ? {
+          icon: "💰",
+          text: "<strong>Refund Timeline:</strong> Any approved refunds will be processed within 3-5 business days.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0ea5e9",
+          textColor: "#0369a1",
+        } : {
+          icon: "💬",
+          text: "<strong>Questions?</strong> If you believe this decision was made in error or have additional documentation, please contact our support team.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: isApproved ? "Thank you for your patience during the review process." : "We value your business and hope to serve you better in the future.",
+        footerMessage: "Thank you for using Kleanr",
+      });
+
+      const textContent = `Hi ${user.firstName}!
+
+${isApproved
+    ? `Great news! Your cancellation appeal has been ${decision === "approve" ? "approved" : "partially approved"}.
+${resolution.penaltyWaived ? "✅ Cancellation penalty has been waived.\n" : ""}${resolution.feeRefunded ? `✅ Cancellation fee of $${((resolution.refundAmount || 0) / 100).toFixed(2)} will be refunded.\n` : ""}${resolution.accountUnfrozen ? "✅ Your account has been unfrozen.\n" : ""}${resolution.ratingRemoved ? "✅ Any penalty ratings have been removed.\n" : ""}`
+    : `After careful review, we were unable to approve your cancellation appeal.
+
+${appeal.reviewDecision || "If you have additional information that might support your case, please contact our support team."}`}
+
+DECISION SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━
+Appeal ID: #${appeal.id}
+Decision: ${statusText}
+Reviewed On: ${new Date().toLocaleDateString()}
+
+${isApproved
+    ? `💰 REFUND TIMELINE
+Any approved refunds will be processed within 3-5 business days.
+
+Thank you for your patience during the review process.`
+    : `💬 QUESTIONS?
+If you believe this decision was made in error or have additional documentation, please contact our support team.
+
+We value your business and hope to serve you better in the future.`}
+
+Thank you for using Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: user.email,
+        subject: isApproved
+          ? `✅ Appeal Approved - Reference #${appeal.id}`
+          : `📋 Appeal Decision - Reference #${appeal.id}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Appeal resolved email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending appeal resolved email:", error);
+    }
+  }
 }
 
 module.exports = Email;
+
+// Export helper functions for testing
+module.exports.resolveRecipientEmail = resolveRecipientEmail;
+module.exports.sendMailWithResolution = sendMailWithResolution;

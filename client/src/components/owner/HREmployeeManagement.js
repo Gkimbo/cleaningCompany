@@ -120,6 +120,7 @@ const HREmployeeManagement = ({ state }) => {
     password: "",
   });
   const [formErrors, setFormErrors] = useState({});
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     fetchHRStaff();
@@ -159,6 +160,7 @@ const HREmployeeManagement = ({ state }) => {
       password: generatePassword(),
     });
     setFormErrors({});
+    setShowPassword(false);
   };
 
   const validateForm = (isEdit = false) => {
@@ -468,7 +470,19 @@ const HREmployeeManagement = ({ state }) => {
                       setFormData((prev) => ({ ...prev, password: text }))
                     }
                     placeholderTextColor={colors.text.tertiary}
+                    secureTextEntry={!showPassword}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    textContentType="oneTimeCode"
+                    autoComplete="off"
                   />
+                  <Pressable
+                    style={styles.eyeButton}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <Icon name={showPassword ? "eye-slash" : "eye"} size={18} color={colors.text.tertiary} />
+                  </Pressable>
                   <Pressable
                     style={styles.generateButton}
                     onPress={() =>
@@ -886,6 +900,14 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: radius.lg,
     backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  eyeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[100],
     alignItems: "center",
     justifyContent: "center",
   },

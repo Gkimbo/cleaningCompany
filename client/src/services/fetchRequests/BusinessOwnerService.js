@@ -591,6 +591,297 @@ class BusinessOwnerService {
   }
 
   // =====================
+  // ANALYTICS
+  // =====================
+
+  /**
+   * Get analytics tier access info
+   * @param {string} token - Auth token
+   * @returns {Object} { tier, features, qualification }
+   */
+  static async getAnalyticsAccess(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/analytics/access`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching analytics access:", error);
+      return { tier: "standard", features: { basicMetrics: true } };
+    }
+  }
+
+  /**
+   * Get all analytics (combined endpoint, respects tier)
+   * @param {string} token - Auth token
+   * @param {Object} options - { months, topClientsLimit, churnDays }
+   * @returns {Object} { access, overview, employees?, clients?, financials?, trends }
+   */
+  static async getAllAnalytics(token, options = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (options.months) params.append("months", options.months);
+      if (options.topClientsLimit) params.append("topClientsLimit", options.topClientsLimit);
+      if (options.churnDays) params.append("churnDays", options.churnDays);
+
+      const url = `${API_BASE}/business-owner/analytics${params.toString() ? `?${params}` : ""}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching all analytics:", error);
+      return { access: { tier: "standard" }, overview: {} };
+    }
+  }
+
+  /**
+   * Get overview analytics (available to all tiers)
+   * @param {string} token - Auth token
+   * @returns {Object} Overview metrics
+   */
+  static async getOverviewAnalytics(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/analytics/overview`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching overview analytics:", error);
+      return {};
+    }
+  }
+
+  /**
+   * Get employee performance analytics (premium)
+   * @param {string} token - Auth token
+   * @param {Object} options - { months, limit }
+   * @returns {Object} Employee performance data
+   */
+  static async getEmployeeAnalytics(token, options = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (options.months) params.append("months", options.months);
+      if (options.limit) params.append("limit", options.limit);
+
+      const url = `${API_BASE}/business-owner/analytics/employees${params.toString() ? `?${params}` : ""}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.status === 403) {
+        const result = await response.json();
+        return { error: "premium_required", ...result };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching employee analytics:", error);
+      return { employees: [] };
+    }
+  }
+
+  /**
+   * Get client insights (premium)
+   * @param {string} token - Auth token
+   * @param {Object} options - { topClientsLimit, churnDays }
+   * @returns {Object} Client analytics data
+   */
+  static async getClientAnalytics(token, options = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (options.topClientsLimit) params.append("topClientsLimit", options.topClientsLimit);
+      if (options.churnDays) params.append("churnDays", options.churnDays);
+
+      const url = `${API_BASE}/business-owner/analytics/clients${params.toString() ? `?${params}` : ""}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.status === 403) {
+        const result = await response.json();
+        return { error: "premium_required", ...result };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching client analytics:", error);
+      return {};
+    }
+  }
+
+  /**
+   * Get financial analytics (premium)
+   * @param {string} token - Auth token
+   * @param {Object} options - { months }
+   * @returns {Object} Financial breakdown data
+   */
+  static async getFinancialAnalytics(token, options = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (options.months) params.append("months", options.months);
+
+      const url = `${API_BASE}/business-owner/analytics/financials${params.toString() ? `?${params}` : ""}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.status === 403) {
+        const result = await response.json();
+        return { error: "premium_required", ...result };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching financial analytics:", error);
+      return {};
+    }
+  }
+
+  /**
+   * Get trend data for charts
+   * @param {string} token - Auth token
+   * @param {Object} options - { period, months }
+   * @returns {Object} Trend data for visualization
+   */
+  static async getTrends(token, options = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (options.period) params.append("period", options.period);
+      if (options.months) params.append("months", options.months);
+
+      const url = `${API_BASE}/business-owner/analytics/trends${params.toString() ? `?${params}` : ""}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching trends:", error);
+      return { data: [] };
+    }
+  }
+
+  // =====================
+  // VERIFICATION
+  // =====================
+
+  /**
+   * Get verification status
+   * @param {string} token - Auth token
+   * @returns {Object} Verification status
+   */
+  static async getVerificationStatus(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/verification/status`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching verification status:", error);
+      return { found: false };
+    }
+  }
+
+  /**
+   * Check eligibility for verification
+   * @param {string} token - Auth token
+   * @returns {Object} Eligibility status and criteria
+   */
+  static async checkVerificationEligibility(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/verification/eligibility`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error checking eligibility:", error);
+      return { eligible: false };
+    }
+  }
+
+  /**
+   * Request verification
+   * @param {string} token - Auth token
+   * @returns {Object} Request result
+   */
+  static async requestVerification(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/verification/request`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return { success: false, error: result.error || "Failed to request verification" };
+      }
+      return result;
+    } catch (error) {
+      console.error("[BusinessOwner] Error requesting verification:", error);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  /**
+   * Update business profile
+   * @param {string} token - Auth token
+   * @param {Object} profileData - { businessDescription, businessHighlightOptIn }
+   * @returns {Object} Update result
+   */
+  static async updateBusinessProfile(token, profileData) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/verification/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(profileData),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return { success: false, error: result.error || "Failed to update profile" };
+      }
+      return result;
+    } catch (error) {
+      console.error("[BusinessOwner] Error updating profile:", error);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  /**
+   * Get verification requirements/config
+   * @param {string} token - Auth token
+   * @returns {Object} Verification config
+   */
+  static async getVerificationConfig(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/verification/config`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching verification config:", error);
+      return {};
+    }
+  }
+
+  // =====================
   // PAY CALCULATOR (local)
   // =====================
 

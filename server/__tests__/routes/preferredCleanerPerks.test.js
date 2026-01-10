@@ -251,27 +251,27 @@ describe("Preferred Cleaner Perks Endpoints", () => {
       expect(res.status).toBe(200);
       expect(res.body.tiers).toHaveLength(4);
 
-      // Check bronze tier
-      expect(res.body.tiers[0].name).toBe("bronze");
+      // Check bronze tier (serializer returns capitalized names)
+      expect(res.body.tiers[0].name).toBe("Bronze");
       expect(res.body.tiers[0].minHomes).toBe(1);
       expect(res.body.tiers[0].maxHomes).toBe(2);
       expect(res.body.tiers[0].bonusPercent).toBe(0);
 
       // Check silver tier
-      expect(res.body.tiers[1].name).toBe("silver");
+      expect(res.body.tiers[1].name).toBe("Silver");
       expect(res.body.tiers[1].minHomes).toBe(3);
       expect(res.body.tiers[1].maxHomes).toBe(5);
       expect(res.body.tiers[1].bonusPercent).toBe(3);
 
       // Check gold tier
-      expect(res.body.tiers[2].name).toBe("gold");
+      expect(res.body.tiers[2].name).toBe("Gold");
       expect(res.body.tiers[2].minHomes).toBe(6);
       expect(res.body.tiers[2].maxHomes).toBe(10);
       expect(res.body.tiers[2].bonusPercent).toBe(5);
       expect(res.body.tiers[2].fasterPayouts).toBe(true);
 
       // Check platinum tier
-      expect(res.body.tiers[3].name).toBe("platinum");
+      expect(res.body.tiers[3].name).toBe("Platinum");
       expect(res.body.tiers[3].minHomes).toBe(11);
       expect(res.body.tiers[3].maxHomes).toBeNull();
       expect(res.body.tiers[3].bonusPercent).toBe(7);

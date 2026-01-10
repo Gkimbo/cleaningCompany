@@ -24,25 +24,32 @@ const authenticateToken = (req, res, next) => {
 };
 
 /**
- * Upload a job photo (before or after)
+ * Upload a job photo (before, after, or passes)
  * POST /api/v1/job-photos/upload
  */
 jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
-  const { appointmentId, photoType, photoData, room, notes } = req.body;
+  const { appointmentId, photoType, photoData, room, notes, isNotApplicable } = req.body;
   const cleanerId = req.user.userId;
 
   try {
     // Validate required fields
-    if (!appointmentId || !photoType || !photoData) {
+    if (!appointmentId || !photoType) {
       return res.status(400).json({
-        error: "appointmentId, photoType, and photoData are required",
+        error: "appointmentId and photoType are required",
+      });
+    }
+
+    // For passes with N/A, photoData is not required
+    if (!photoData && !isNotApplicable) {
+      return res.status(400).json({
+        error: "photoData is required unless marking as N/A",
       });
     }
 
     // Validate photoType
-    if (!["before", "after"].includes(photoType)) {
+    if (!["before", "after", "passes"].includes(photoType)) {
       return res.status(400).json({
-        error: "photoType must be 'before' or 'after'",
+        error: "photoType must be 'before', 'after', or 'passes'",
       });
     }
 
@@ -79,10 +86,11 @@ jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
       appointmentId,
       cleanerId,
       photoType,
-      photoData,
+      photoData: isNotApplicable ? null : photoData,
       room: room || null,
       notes: notes || null,
       takenAt: new Date(),
+      isNotApplicable: isNotApplicable || false,
     });
 
     return res.status(201).json({
@@ -93,6 +101,7 @@ jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
         photoType: photo.photoType,
         room: photo.room,
         takenAt: photo.takenAt,
+        isNotApplicable: photo.isNotApplicable,
       },
     });
   } catch (error) {
@@ -135,22 +144,28 @@ jobPhotosRouter.get("/:appointmentId", authenticateToken, async (req, res) => {
 
     const photos = await JobPhoto.findAll({
       where: { appointmentId },
-      attributes: ["id", "photoType", "photoData", "room", "notes", "takenAt", "cleanerId"],
+      attributes: ["id", "photoType", "photoData", "room", "notes", "takenAt", "cleanerId", "isNotApplicable"],
       order: [["takenAt", "ASC"]],
     });
 
     const beforePhotos = photos.filter((p) => p.photoType === "before");
     const afterPhotos = photos.filter((p) => p.photoType === "after");
+    const passesPhotos = photos.filter((p) => p.photoType === "passes");
 
-    console.log(`[JobPhotos] Returning ${beforePhotos.length} before and ${afterPhotos.length} after photos`);
+    console.log(`[JobPhotos] Returning ${beforePhotos.length} before, ${afterPhotos.length} after, and ${passesPhotos.length} passes photos`);
+
+    // Passes are considered complete if there's at least one passes photo (including N/A)
+    const hasPassesPhotos = passesPhotos.length > 0;
 
     return res.json({
       appointmentId: parseInt(appointmentId),
       beforePhotos,
       afterPhotos,
+      passesPhotos,
       hasBeforePhotos: beforePhotos.length > 0,
       hasAfterPhotos: afterPhotos.length > 0,
-      canComplete: beforePhotos.length > 0 && afterPhotos.length > 0,
+      hasPassesPhotos,
+      canComplete: beforePhotos.length > 0 && afterPhotos.length > 0 && hasPassesPhotos,
     });
   } catch (error) {
     console.error("Error fetching job photos:", error);
@@ -184,16 +199,23 @@ jobPhotosRouter.get("/:appointmentId/status", authenticateToken, async (req, res
       ? { appointmentId, photoType: "after" }
       : { appointmentId, cleanerId: userId, photoType: "after" };
 
+    const passesWhereClause = isHomeowner
+      ? { appointmentId, photoType: "passes" }
+      : { appointmentId, cleanerId: userId, photoType: "passes" };
+
     const beforeCount = await JobPhoto.count({ where: whereClause });
     const afterCount = await JobPhoto.count({ where: afterWhereClause });
+    const passesCount = await JobPhoto.count({ where: passesWhereClause });
 
     return res.json({
       appointmentId: parseInt(appointmentId),
       beforePhotosCount: beforeCount,
       afterPhotosCount: afterCount,
+      passesPhotosCount: passesCount,
       hasBeforePhotos: beforeCount > 0,
       hasAfterPhotos: afterCount > 0,
-      canComplete: beforeCount > 0 && afterCount > 0,
+      hasPassesPhotos: passesCount > 0,
+      canComplete: beforeCount > 0 && afterCount > 0 && passesCount > 0,
     });
   } catch (error) {
     console.error("Error fetching photo status:", error);

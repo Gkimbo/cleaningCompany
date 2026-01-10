@@ -1,10 +1,10 @@
 const EncryptionService = require("../services/EncryptionService");
 
 class BusinessEmployeeSerializer {
-  // Fields that are encrypted in the User model (nested user data)
-  static encryptedUserFields = ["firstName", "lastName", "email", "phone"];
+  // Fields that are encrypted in both BusinessEmployee and User models
+  static encryptedFields = ["firstName", "lastName", "email", "phone"];
 
-  static decryptUserField(value) {
+  static decryptField(value) {
     if (!value) return null;
     return EncryptionService.decrypt(value);
   }
@@ -33,10 +33,10 @@ class BusinessEmployeeSerializer {
       id: data.id,
       businessOwnerId: data.businessOwnerId,
       userId: data.userId,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      phone: data.phone,
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
+      email: this.decryptField(data.email),
+      phone: this.decryptField(data.phone),
       status: data.status,
       defaultHourlyRate: data.defaultHourlyRate,
       paymentMethod: data.paymentMethod,
@@ -57,19 +57,22 @@ class BusinessEmployeeSerializer {
       serialized.formattedHourlyRate = `$${(data.defaultHourlyRate / 100).toFixed(2)}`;
     }
 
-    // Serialize nested user if present and requested
-    if (includeUser && data.user) {
-      serialized.user = this.serializeUser(data.user);
+    // Serialize nested user if present and requested (check both data and employee for Sequelize associations)
+    const rawUser = data.user || employee.user;
+    if (includeUser && rawUser) {
+      serialized.user = this.serializeUser(rawUser);
     }
 
-    // Serialize business owner if present and requested
-    if (includeBusinessOwner && data.businessOwner) {
-      serialized.businessOwner = this.serializeUser(data.businessOwner);
+    // Serialize business owner if present and requested (check both data and employee for Sequelize associations)
+    const rawBusinessOwner = data.businessOwner || employee.businessOwner;
+    if (includeBusinessOwner && rawBusinessOwner) {
+      serialized.businessOwner = this.serializeUser(rawBusinessOwner);
     }
 
-    // Include job assignments if present and requested
-    if (includeAssignments && data.jobAssignments) {
-      serialized.jobAssignments = data.jobAssignments.map((assignment) => ({
+    // Include job assignments if present and requested (check both data and employee for Sequelize associations)
+    const rawJobAssignments = data.jobAssignments || employee.jobAssignments;
+    if (includeAssignments && rawJobAssignments) {
+      serialized.jobAssignments = rawJobAssignments.map((assignment) => ({
         id: assignment.id,
         appointmentId: assignment.appointmentId,
         status: assignment.status,
@@ -110,10 +113,10 @@ class BusinessEmployeeSerializer {
 
     return {
       id: data.id,
-      firstName: this.decryptUserField(data.firstName),
-      lastName: this.decryptUserField(data.lastName),
-      email: this.decryptUserField(data.email),
-      phone: this.decryptUserField(data.phone),
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
+      email: this.decryptField(data.email),
+      phone: this.decryptField(data.phone),
       businessName: data.businessName,
       expoPushToken: data.expoPushToken,
     };
@@ -128,18 +131,20 @@ class BusinessEmployeeSerializer {
     if (!employee) return null;
 
     const data = employee.dataValues || employee;
+    // Check both data.user and employee.user for Sequelize associations
+    const rawUser = data.user || employee.user;
 
     return {
       id: data.id,
-      firstName: data.firstName,
-      lastName: data.lastName,
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
       status: data.status,
       canMessageClients: data.canMessageClients,
       paymentMethod: data.paymentMethod,
-      user: data.user ? {
-        id: data.user.id,
-        firstName: this.decryptUserField(data.user.firstName),
-        lastName: this.decryptUserField(data.user.lastName),
+      user: rawUser ? {
+        id: rawUser.id,
+        firstName: this.decryptField(rawUser.firstName),
+        lastName: this.decryptField(rawUser.lastName),
       } : null,
     };
   }
@@ -153,14 +158,16 @@ class BusinessEmployeeSerializer {
     if (!employee) return null;
 
     const data = employee.dataValues || employee;
-    const businessOwner = data.businessOwner
-      ? this.serializeUser(data.businessOwner)
+    // Check both data.businessOwner and employee.businessOwner for Sequelize associations
+    const rawBusinessOwner = data.businessOwner || employee.businessOwner;
+    const businessOwner = rawBusinessOwner
+      ? this.serializeUser(rawBusinessOwner)
       : null;
 
     return {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
+      email: this.decryptField(data.email),
       businessName: businessOwner?.businessName || "Business",
       businessOwnerName: businessOwner
         ? `${businessOwner.firstName} ${businessOwner.lastName}`
@@ -177,16 +184,18 @@ class BusinessEmployeeSerializer {
     if (!employee) return null;
 
     const data = employee.dataValues || employee;
-    const businessOwner = data.businessOwner
-      ? this.serializeUser(data.businessOwner)
+    // Check both data.businessOwner and employee.businessOwner for Sequelize associations
+    const rawBusinessOwner = data.businessOwner || employee.businessOwner;
+    const businessOwner = rawBusinessOwner
+      ? this.serializeUser(rawBusinessOwner)
       : null;
 
     return {
       id: data.id,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      phone: data.phone,
+      firstName: this.decryptField(data.firstName),
+      lastName: this.decryptField(data.lastName),
+      email: this.decryptField(data.email),
+      phone: this.decryptField(data.phone),
       status: data.status,
       paymentMethod: data.paymentMethod,
       stripeConnectOnboarded: data.stripeConnectOnboarded,

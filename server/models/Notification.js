@@ -37,6 +37,7 @@ module.exports = (sequelize, DataTypes) => {
             "guest_not_left",
             "guest_not_left_escalation",
             "guest_not_left_expired",
+            "last_minute_urgent",
           ],
         ],
       },

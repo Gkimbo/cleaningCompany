@@ -16,6 +16,7 @@ export const SYNC_OPERATION_TYPES = {
   BEFORE_PHOTO: "before_photo",
   CHECKLIST: "checklist",
   AFTER_PHOTO: "after_photo",
+  PASSES_PHOTO: "passes_photo", // Beach/parking/lift pass verification
   COMPLETE: "complete",
   MESSAGE: "message", // Messages and notes sync last
 };
@@ -27,8 +28,9 @@ export const OPERATION_SEQUENCE = {
   [SYNC_OPERATION_TYPES.BEFORE_PHOTO]: 3,
   [SYNC_OPERATION_TYPES.CHECKLIST]: 4,
   [SYNC_OPERATION_TYPES.AFTER_PHOTO]: 5,
-  [SYNC_OPERATION_TYPES.COMPLETE]: 6,
-  [SYNC_OPERATION_TYPES.MESSAGE]: 7,
+  [SYNC_OPERATION_TYPES.PASSES_PHOTO]: 6,
+  [SYNC_OPERATION_TYPES.COMPLETE]: 7,
+  [SYNC_OPERATION_TYPES.MESSAGE]: 8,
 };
 
 export const SYNC_STATUS = {

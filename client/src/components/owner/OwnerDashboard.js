@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useNavigate } from "react-router-native";
+import Icon from "react-native-vector-icons/FontAwesome";
 import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
 import {
   colors,
@@ -20,6 +21,9 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import TaxFormsSection from "../tax/TaxFormsSection";
+import { ConflictsStatsWidget } from "../conflicts";
+import { PreviewRoleModal } from "../preview";
+import { usePreview } from "../../context/PreviewContext";
 
 const { width } = Dimensions.get("window");
 
@@ -120,6 +124,7 @@ const PeriodSelector = ({ selected, onSelect, options }) => (
 
 const OwnerDashboard = ({ state }) => {
   const navigate = useNavigate();
+  const { enterPreviewMode, isLoading: previewLoading, error: previewError } = usePreview();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [financialData, setFinancialData] = useState(null);
@@ -133,6 +138,14 @@ const OwnerDashboard = ({ state }) => {
   const [businessMetrics, setBusinessMetrics] = useState(null);
   const [recheckLoading, setRecheckLoading] = useState(false);
   const [recheckResult, setRecheckResult] = useState(null);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+
+  const handleSelectPreviewRole = async (role) => {
+    const success = await enterPreviewMode(role);
+    if (success) {
+      setPreviewModalVisible(false);
+    }
+  };
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -287,6 +300,26 @@ const OwnerDashboard = ({ state }) => {
         </Text>
       </View>
 
+      {/* Preview as Role Section */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.previewAsRoleCard,
+          pressed && styles.previewAsRoleCardPressed,
+        ]}
+        onPress={() => setPreviewModalVisible(true)}
+      >
+        <View style={styles.previewAsRoleIcon}>
+          <Icon name="eye" size={20} color={colors.primary[600]} />
+        </View>
+        <View style={styles.previewAsRoleContent}>
+          <Text style={styles.previewAsRoleTitle}>Preview as Role</Text>
+          <Text style={styles.previewAsRoleDescription}>
+            Experience the app as a cleaner, homeowner, or employee
+          </Text>
+        </View>
+        <Icon name="chevron-right" size={16} color={colors.text.tertiary} />
+      </Pressable>
+
       {/* Quick Stats Row */}
       <View style={styles.quickStatsRow}>
         <StatCard
@@ -419,6 +452,11 @@ const OwnerDashboard = ({ state }) => {
             </Pressable>
           )}
         </View>
+      </View>
+
+      {/* Conflict Resolution Widget */}
+      <View style={styles.section}>
+        <ConflictsStatsWidget onNavigateToConflicts={() => navigate("/conflicts")} />
       </View>
 
       {/* User Analytics Section */}
@@ -1108,6 +1146,15 @@ const OwnerDashboard = ({ state }) => {
 
       {/* Footer Spacer */}
       <View style={{ height: 40 }} />
+
+      {/* Preview Role Modal */}
+      <PreviewRoleModal
+        visible={previewModalVisible}
+        onClose={() => setPreviewModalVisible(false)}
+        onSelectRole={handleSelectPreviewRole}
+        isLoading={previewLoading}
+        error={previewError}
+      />
     </ScrollView>
   );
 };
@@ -1159,7 +1206,7 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   headerTitle: {
     fontSize: typography.fontSize["2xl"],
@@ -1170,6 +1217,45 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     marginTop: spacing.xs,
+  },
+
+  // Preview as Role Card
+  previewAsRoleCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+  },
+  previewAsRoleCardPressed: {
+    backgroundColor: colors.primary[50],
+    transform: [{ scale: 0.99 }],
+  },
+  previewAsRoleIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  previewAsRoleContent: {
+    flex: 1,
+  },
+  previewAsRoleTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  previewAsRoleDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
   },
 
   // Platform Overview

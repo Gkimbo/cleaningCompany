@@ -428,7 +428,7 @@ describe("PricingManagement", () => {
 
       await waitFor(() => {
         // 0.5 should display as 50%
-        expect(getByText(/Client Refund/)).toBeTruthy();
+        expect(getAllByText(/Client Refund/).length).toBeGreaterThan(0);
         // Verify the 50% display value exists (may appear multiple times)
         expect(getAllByDisplayValue("50").length).toBeGreaterThan(0);
         // 0.1 should display as 10%

@@ -146,7 +146,9 @@ describe("Date Formatting - Timezone Handling", () => {
         return apptDate.getTime() === today.getTime();
       };
 
-      const todayString = new Date().toISOString().split("T")[0];
+      // Use local date components to avoid UTC timezone shift
+      const today = new Date();
+      const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
       const todayAppointment = { date: todayString };
       const tomorrowAppointment = { date: "2099-12-31" };
 

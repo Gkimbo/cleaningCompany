@@ -388,7 +388,8 @@ describe("StorageManager", () => {
 
       const uploadedRec = recommendations.find((r) => r.type === "uploaded_photos");
       expect(uploadedRec).toBeDefined();
-      expect(uploadedRec.message).toContain("2 uploaded photos");
+      // uploadedPhotoCount = photoCount (10) - pendingPhotos (0, none are !uploaded) = 10
+      expect(uploadedRec.message).toContain("10 uploaded photos");
     });
 
     it("should recommend syncing pending operations", async () => {

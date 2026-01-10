@@ -31,6 +31,10 @@ const notificationsRouter = require("./api/v1/notificationsRouter");
 const multiCleanerRouter = require("./api/v1/multiCleanerRouter");
 const businessOwnerRouter = require("./api/v1/businessOwnerRouter");
 const businessEmployeeRouter = require("./api/v1/businessEmployeeRouter");
+const completionRouter = require("./api/v1/completionRouter");
+const cancellationAppealRouter = require("./api/v1/cancellationAppealRouter");
+const conflictRouter = require("./api/v1/conflictRouter");
+const demoAccountRouter = require("./api/v1/demoAccountRouter");
 
 const rootRouter = new express.Router();
 
@@ -65,6 +69,10 @@ rootRouter.use("/api/v1/notifications", notificationsRouter);
 rootRouter.use("/api/v1/multi-cleaner", multiCleanerRouter);
 rootRouter.use("/api/v1/business-owner", businessOwnerRouter);
 rootRouter.use("/api/v1/business-employee", businessEmployeeRouter);
+rootRouter.use("/api/v1/completion", completionRouter);
+rootRouter.use("/api/v1/appeals", cancellationAppealRouter);
+rootRouter.use("/api/v1/conflicts", conflictRouter);
+rootRouter.use("/api/v1/demo-accounts", demoAccountRouter);
 
 rootRouter.use("/", clientRouter);
 

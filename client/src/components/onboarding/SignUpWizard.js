@@ -9,9 +9,11 @@ import {
   Platform,
 } from "react-native";
 import { useNavigate } from "react-router-native";
+import { Feather } from "@expo/vector-icons";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
 import styles from "./OnboardingStyles";
+import { colors } from "../../services/styles/theme";
 
 const SignUpWizard = ({ dispatch }) => {
   const navigate = useNavigate();
@@ -28,6 +30,8 @@ const SignUpWizard = ({ dispatch }) => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -279,22 +283,41 @@ const SignUpWizard = ({ dispatch }) => {
               <Text style={styles.inputLabel}>
                 Password <Text style={styles.inputRequired}>*</Text>
               </Text>
-              <TextInput
+              <View
                 style={[
-                  styles.input,
-                  focusedField === "password" && styles.inputFocused,
-                  errors.password && styles.inputError,
+                  styles.passwordContainer,
+                  focusedField === "password" && styles.passwordContainerFocused,
+                  errors.password && styles.passwordContainerError,
                 ]}
-                placeholder="Create a strong password"
-                placeholderTextColor="#94a3b8"
-                value={formData.password}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, password: text })
-                }
-                onFocus={() => setFocusedField("password")}
-                onBlur={() => setFocusedField(null)}
-                secureTextEntry
-              />
+              >
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Create a strong password"
+                  placeholderTextColor="#94a3b8"
+                  value={formData.password}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, password: text })
+                  }
+                  onFocus={() => setFocusedField("password")}
+                  onBlur={() => setFocusedField(null)}
+                  secureTextEntry={!showPassword}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  textContentType="oneTimeCode"
+                  autoComplete="off"
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Feather
+                    name={showPassword ? "eye-off" : "eye"}
+                    size={20}
+                    color={colors.text.tertiary}
+                  />
+                </TouchableOpacity>
+              </View>
               {formData.password && (
                 <View style={styles.passwordStrength}>
                   <View style={styles.strengthBar}>
@@ -316,22 +339,41 @@ const SignUpWizard = ({ dispatch }) => {
               <Text style={styles.inputLabel}>
                 Confirm Password <Text style={styles.inputRequired}>*</Text>
               </Text>
-              <TextInput
+              <View
                 style={[
-                  styles.input,
-                  focusedField === "confirmPassword" && styles.inputFocused,
-                  errors.confirmPassword && styles.inputError,
+                  styles.passwordContainer,
+                  focusedField === "confirmPassword" && styles.passwordContainerFocused,
+                  errors.confirmPassword && styles.passwordContainerError,
                 ]}
-                placeholder="Confirm your password"
-                placeholderTextColor="#94a3b8"
-                value={formData.confirmPassword}
-                onChangeText={(text) =>
-                  setFormData({ ...formData, confirmPassword: text })
-                }
-                onFocus={() => setFocusedField("confirmPassword")}
-                onBlur={() => setFocusedField(null)}
-                secureTextEntry
-              />
+              >
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Confirm your password"
+                  placeholderTextColor="#94a3b8"
+                  value={formData.confirmPassword}
+                  onChangeText={(text) =>
+                    setFormData({ ...formData, confirmPassword: text })
+                  }
+                  onFocus={() => setFocusedField("confirmPassword")}
+                  onBlur={() => setFocusedField(null)}
+                  secureTextEntry={!showConfirmPassword}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  textContentType="oneTimeCode"
+                  autoComplete="off"
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  <Feather
+                    name={showConfirmPassword ? "eye-off" : "eye"}
+                    size={20}
+                    color={colors.text.tertiary}
+                  />
+                </TouchableOpacity>
+              </View>
               {errors.confirmPassword && (
                 <Text style={[styles.inputHelper, { color: "#e11d48" }]}>
                   {errors.confirmPassword}

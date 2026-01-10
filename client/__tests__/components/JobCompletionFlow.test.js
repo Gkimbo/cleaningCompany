@@ -215,21 +215,35 @@ describe("JobCompletionFlow Component", () => {
       });
     });
 
-    it("should auto-advance to review step when both before and after photos exist", async () => {
+    it("should auto-advance to review step when all photos exist", async () => {
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          // Component requires hasPassesPhotos to auto-advance to review
+          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [] }),
+          json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [], passesPhotos: [] }),
         });
 
       const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
       await waitFor(() => {
         expect(getByText("Review & Complete")).toBeTruthy();
+      });
+    });
+
+    it("should auto-advance to passes step when before and after photos exist", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: false }),
+      });
+
+      const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(getByText("Pass Verification")).toBeTruthy();
       });
     });
   });
@@ -288,7 +302,7 @@ describe("JobCompletionFlow Component", () => {
       });
     });
 
-    it("should advance from after photos to review when after photos completed", async () => {
+    it("should advance from after photos to passes when after photos completed", async () => {
       // Start at cleaning step
       global.fetch.mockResolvedValueOnce({
         ok: true,
@@ -308,27 +322,19 @@ describe("JobCompletionFlow Component", () => {
         fireEvent.press(getByTestId("complete-checklist"));
       });
 
-      // Mock the photo status check and load photos for review
-      global.fetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
-              afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
-            }),
-        });
+      // Mock the photo status check
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
+      });
 
       await act(async () => {
         fireEvent.press(getByTestId("complete-after-photos"));
       });
 
+      // Should advance to passes step, not review
       await waitFor(() => {
-        expect(getByText("Review & Complete")).toBeTruthy();
+        expect(getByText("Pass Verification")).toBeTruthy();
       });
     });
   });
@@ -338,7 +344,8 @@ describe("JobCompletionFlow Component", () => {
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          // Include hasPassesPhotos to auto-advance to review step
+          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -346,6 +353,7 @@ describe("JobCompletionFlow Component", () => {
             Promise.resolve({
               beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
               afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
+              passesPhotos: [],
             }),
         });
     });
@@ -364,7 +372,8 @@ describe("JobCompletionFlow Component", () => {
 
       await waitFor(() => {
         expect(getByText("Review & Complete")).toBeTruthy();
-        expect(getByText("Review your before and after photos, then complete the job.")).toBeTruthy();
+        // Subtitle updated to include pass verification
+        expect(getByText("Review your photos and pass verification, then complete the job.")).toBeTruthy();
       });
     });
 
@@ -399,7 +408,7 @@ describe("JobCompletionFlow Component", () => {
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -417,7 +426,7 @@ describe("JobCompletionFlow Component", () => {
         if (url.includes("/status")) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
           });
         }
         if (url.includes("/job-photos/") && !url.includes("/status")) {
@@ -478,7 +487,7 @@ describe("JobCompletionFlow Component", () => {
         if (url.includes("/status")) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
           });
         }
         if (url.includes("/job-photos/") && !url.includes("/status")) {
@@ -530,7 +539,7 @@ describe("JobCompletionFlow Component", () => {
         if (typeof url === 'string' && url.includes("/status")) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
           });
         }
         if (typeof url === 'string' && url.includes("/job-photos/") && !url.includes("/status")) {
@@ -582,7 +591,7 @@ describe("JobCompletionFlow Component", () => {
         if (typeof url === 'string' && url.includes("/status")) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
           });
         }
         if (typeof url === 'string' && url.includes("/job-photos/") && !url.includes("/status")) {
@@ -643,7 +652,7 @@ describe("JobCompletionFlow Component", () => {
         if (typeof url === 'string' && url.includes("/status")) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
           });
         }
         if (typeof url === 'string' && url.includes("/job-photos/") && !url.includes("/status")) {
@@ -686,7 +695,7 @@ describe("JobCompletionFlow Component", () => {
         if (typeof url === 'string' && url.includes("/status")) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
           });
         }
         if (typeof url === 'string' && url.includes("/job-photos/") && !url.includes("/status")) {
@@ -741,7 +750,7 @@ describe("JobCompletionFlow Component", () => {
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -771,7 +780,7 @@ describe("JobCompletionFlow Component", () => {
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true }),
+          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -992,6 +1001,15 @@ describe("JobCompletionFlow Component", () => {
           fireEvent.press(getByText("Skip After Photos"));
         });
 
+        // Should be at pass verification step, skip it too
+        await waitFor(() => {
+          expect(getByText("Skip Pass Verification")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Pass Verification"));
+        });
+
         // Should be at review step
         await waitFor(() => {
           expect(getByText("Review & Complete")).toBeTruthy();
@@ -1039,6 +1057,15 @@ describe("JobCompletionFlow Component", () => {
 
         await act(async () => {
           fireEvent.press(getByText("Skip After Photos"));
+        });
+
+        // Skip pass verification step
+        await waitFor(() => {
+          expect(getByText("Skip Pass Verification")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Pass Verification"));
         });
 
         await waitFor(() => {
@@ -1090,41 +1117,49 @@ describe("JobCompletionFlow Component", () => {
           fireEvent.press(getByText("Skip After Photos"));
         });
 
+        // Skip pass verification step
+        await waitFor(() => {
+          expect(getByText("Skip Pass Verification")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Pass Verification"));
+        });
+
         await waitFor(() => {
           expect(getByText("Complete Job & Get Paid")).toBeTruthy();
         });
       });
 
       it("should show only before photos when skipping after photos", async () => {
-        global.fetch
-          .mockResolvedValueOnce({
-            ok: true,
-            json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-          })
-          .mockResolvedValueOnce({
-            ok: true,
-            json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
-          })
-          .mockResolvedValueOnce({
-            ok: true,
-            json: () =>
-              Promise.resolve({
+        // Setup mock to handle all expected API calls
+        global.fetch = jest.fn().mockImplementation((url) => {
+          if (typeof url === "string" && url.includes("/status")) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false, hasPassesPhotos: false }),
+            });
+          }
+          if (typeof url === "string" && url.includes("/job-photos/")) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({
                 beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
                 afterPhotos: [],
+                passesPhotos: [],
               }),
-          });
+            });
+          }
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+        });
 
         const { getByText, queryByText, getByTestId } = renderWithContext(
           <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
         );
 
-        // Take before photos (use the mocked complete)
+        // Should start at cleaning step (since hasBeforePhotos: true)
         await waitFor(() => {
-          expect(getByTestId("photo-capture-before")).toBeTruthy();
-        });
-
-        await act(async () => {
-          fireEvent.press(getByTestId("complete-before-photos"));
+          expect(getByTestId("cleaning-checklist")).toBeTruthy();
         });
 
         // Skip checklist
@@ -1143,6 +1178,15 @@ describe("JobCompletionFlow Component", () => {
 
         await act(async () => {
           fireEvent.press(getByText("Skip After Photos"));
+        });
+
+        // Skip pass verification step
+        await waitFor(() => {
+          expect(getByText("Skip Pass Verification")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Pass Verification"));
         });
 
         await waitFor(() => {
@@ -1209,6 +1253,15 @@ describe("JobCompletionFlow Component", () => {
 
         await act(async () => {
           fireEvent.press(getByText("Skip After Photos"));
+        });
+
+        // Skip pass verification step
+        await waitFor(() => {
+          expect(getByText("Skip Pass Verification")).toBeTruthy();
+        });
+
+        await act(async () => {
+          fireEvent.press(getByText("Skip Pass Verification"));
         });
 
         // Complete the job

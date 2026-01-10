@@ -2,6 +2,9 @@ const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 
+// Set SESSION_SECRET before any router imports (routers capture it at module load time)
+process.env.SESSION_SECRET = "test_secret";
+
 // Mock models
 jest.mock("../../models", () => ({
   User: {
@@ -58,6 +61,12 @@ jest.mock("../../models", () => ({
     create: jest.fn(),
     destroy: jest.fn(),
   },
+  CleanerClient: {
+    findOne: jest.fn(),
+    findAll: jest.fn(),
+    create: jest.fn(),
+    destroy: jest.fn(),
+  },
 }));
 
 // Mock services
@@ -69,9 +78,12 @@ jest.mock("../../services/UserInfoClass", () => ({
   editAppointmentLinensInDB: jest.fn(),
 }));
 
-jest.mock("../../services/CalculatePrice", () =>
-  jest.fn(() => 150)
-);
+const mockCalculatePrice = jest.fn(() => 150);
+mockCalculatePrice.checkLastMinuteBooking = jest.fn().mockResolvedValue({
+  isLastMinute: false,
+  fee: 0,
+});
+jest.mock("../../services/CalculatePrice", () => mockCalculatePrice);
 
 jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendEmailCancellation: jest.fn().mockResolvedValue(true),
@@ -127,6 +139,12 @@ jest.mock("../../services/IncentiveService", () => ({
     remainingCleanings: 0,
     feeReductionPercent: 0,
   }),
+}));
+
+// Mock EncryptionService
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((value) => value ? value.replace("iv:", "") : ""),
+  encrypt: jest.fn((value) => `iv:${value}`),
 }));
 
 jest.mock("../../config/businessConfig", () => ({
@@ -187,6 +205,18 @@ describe("Appointment Routes", () => {
     it("should return unassigned appointments", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
+      // Mock cleaner lookup
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        isDemoAccount: false,
+      });
+
+      // Mock getting users with matching demo status
+      User.findAll.mockResolvedValue([
+        { id: 10 },
+        { id: 11 },
+      ]);
+
       UserAppointments.findAll.mockResolvedValue([
         {
           id: 1,
@@ -209,16 +239,110 @@ describe("Appointment Routes", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("appointments");
     });
+
+    it("should return 404 if cleaner not found", async () => {
+      const token = jwt.sign({ userId: 999 }, secretKey);
+
+      User.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Cleaner not found");
+    });
+
+    it("should filter demo appointments for demo cleaners", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // Mock demo cleaner
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        isDemoAccount: true,
+      });
+
+      // Mock getting demo users only
+      User.findAll.mockResolvedValue([
+        { id: 100 }, // demo_homeowner
+        { id: 101 }, // demo_business_client
+      ]);
+
+      UserAppointments.findAll.mockResolvedValue([
+        {
+          id: 1,
+          userId: 100,
+          date: "2025-01-15",
+          price: "150",
+          hasBeenAssigned: false,
+          dataValues: {
+            id: 1,
+            userId: 100,
+            date: "2025-01-15",
+            price: "150",
+            hasBeenAssigned: false,
+          },
+        },
+      ]);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("appointments");
+      // Verify that User.findAll was called with isDemoAccount: true
+      expect(User.findAll).toHaveBeenCalledWith({
+        where: { isDemoAccount: true },
+        attributes: ["id"],
+      });
+    });
+
+    it("should filter real appointments for real cleaners", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      // Mock real cleaner
+      User.findByPk.mockResolvedValue({
+        id: 2,
+        isDemoAccount: false,
+      });
+
+      // Mock getting real users only
+      User.findAll.mockResolvedValue([
+        { id: 10 },
+        { id: 11 },
+      ]);
+
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      // Verify that User.findAll was called with isDemoAccount: false
+      expect(User.findAll).toHaveBeenCalledWith({
+        where: { isDemoAccount: false },
+        attributes: ["id"],
+      });
+    });
   });
 
   describe("GET /unassigned/:id", () => {
     it("should return a specific unassigned appointment", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
+      // Mock cleaner lookup (real cleaner)
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, isDemoAccount: false }) // cleaner
+        .mockResolvedValueOnce({ id: 10, isDemoAccount: false }); // homeowner
+
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
+        userId: 10,
         dataValues: {
           id: 1,
+          userId: 10,
           date: "2025-01-15",
           price: "150",
         },
@@ -235,6 +359,101 @@ describe("Appointment Routes", () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("appointment");
       expect(res.body).toHaveProperty("employeesAssigned");
+    });
+
+    it("should return 404 if cleaner not found", async () => {
+      const token = jwt.sign({ userId: 999 }, secretKey);
+
+      User.findByPk.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Cleaner not found");
+    });
+
+    it("should return 404 if appointment not found", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({ id: 1, isDemoAccount: false });
+      UserAppointments.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/999")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Appointment not found");
+    });
+
+    it("should deny access when demo cleaner tries to view real appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // Demo cleaner trying to view real homeowner's appointment
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, isDemoAccount: true }) // demo cleaner
+        .mockResolvedValueOnce({ id: 10, isDemoAccount: false }); // real homeowner
+
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        userId: 10,
+        dataValues: { id: 1, userId: 10 },
+      });
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Access denied");
+    });
+
+    it("should deny access when real cleaner tries to view demo appointment", async () => {
+      const token = jwt.sign({ userId: 2 }, secretKey);
+
+      // Real cleaner trying to view demo homeowner's appointment
+      User.findByPk
+        .mockResolvedValueOnce({ id: 2, isDemoAccount: false }) // real cleaner
+        .mockResolvedValueOnce({ id: 100, isDemoAccount: true }); // demo homeowner
+
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        dataValues: { id: 1, userId: 100 },
+      });
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Access denied");
+    });
+
+    it("should allow demo cleaner to view demo appointment", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      // Demo cleaner viewing demo homeowner's appointment
+      User.findByPk
+        .mockResolvedValueOnce({ id: 1, isDemoAccount: true }) // demo cleaner
+        .mockResolvedValueOnce({ id: 100, isDemoAccount: true }); // demo homeowner
+
+      UserAppointments.findOne.mockResolvedValue({
+        id: 1,
+        userId: 100,
+        dataValues: { id: 1, userId: 100, date: "2025-01-15", price: "150" },
+      });
+
+      UserCleanerAppointments.findAll.mockResolvedValue([]);
+
+      const res = await request(app)
+        .get("/api/v1/appointments/unassigned/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty("appointment");
     });
   });
 
@@ -544,8 +763,8 @@ describe("Appointment Routes", () => {
       expect(res.body.requiresAcknowledgment).toBe(true);
     });
 
-    // Edge case: 3 beds but only 2 baths (not large - both must exceed 2)
-    it("should NOT consider 3 beds and 2 baths as large home", async () => {
+    // Edge case: 3 beds but only 2 baths (large - 3+ beds OR 3+ baths triggers large home)
+    it("should consider 3 beds and 2 baths as edge large home", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         homeId: 1,
@@ -563,12 +782,14 @@ describe("Appointment Routes", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.isLargeHome).toBe(false);
-      expect(res.body.requiresAcknowledgment).toBe(false);
+      // isLargeHome uses OR logic: 3+ beds OR 3+ baths
+      expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
+      expect(res.body.soloAllowed).toBe(true);
     });
 
-    // Edge case: 2 beds but 3 baths (not large - both must exceed 2)
-    it("should NOT consider 2 beds and 3 baths as large home", async () => {
+    // Edge case: 2 beds but 3 baths (large - 3+ beds OR 3+ baths triggers large home)
+    it("should consider 2 beds and 3 baths as edge large home", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         homeId: 1,
@@ -586,8 +807,10 @@ describe("Appointment Routes", () => {
         .set("Authorization", `Bearer ${token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.isLargeHome).toBe(false);
-      expect(res.body.requiresAcknowledgment).toBe(false);
+      // isLargeHome uses OR logic: 3+ beds OR 3+ baths
+      expect(res.body.isLargeHome).toBe(true);
+      expect(res.body.isEdgeLargeHome).toBe(true);
+      expect(res.body.soloAllowed).toBe(true);
     });
 
     // Edge case: exactly 2 beds and 2 baths (boundary - not large)
@@ -948,8 +1171,8 @@ describe("Appointment Routes", () => {
       expect(res.body.isLargeHome).toBe(true);
     });
 
-    // Edge case: 3 beds, 2 baths does NOT require acknowledgment
-    it("should NOT require acknowledgment for 3 beds, 2 baths", async () => {
+    // Edge case: 3 beds, 2 baths is edge large home (requires acknowledgment)
+    it("should succeed with acknowledgment for 3 beds, 2 baths edge large home", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         dataValues: { userId: 1, date: "2025-01-15" },
         homeId: 1,
@@ -971,14 +1194,14 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/request-employee")
-        .send({ id: 2, appointmentId: 1 }); // No acknowledged field needed
+        .send({ id: 2, appointmentId: 1, acknowledged: true }); // Edge large homes require acknowledgment
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe("Request sent to the client for approval");
     });
 
-    // Edge case: 2 beds, 3 baths does NOT require acknowledgment
-    it("should NOT require acknowledgment for 2 beds, 3 baths", async () => {
+    // Edge case: 2 beds, 3 baths is edge large home (requires acknowledgment)
+    it("should succeed with acknowledgment for 2 beds, 3 baths edge large home", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         dataValues: { userId: 1, date: "2025-01-15" },
         homeId: 1,
@@ -1000,7 +1223,7 @@ describe("Appointment Routes", () => {
 
       const res = await request(app)
         .patch("/api/v1/appointments/request-employee")
-        .send({ id: 2, appointmentId: 1 });
+        .send({ id: 2, appointmentId: 1, acknowledged: true }); // Edge large homes require acknowledgment
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe("Request sent to the client for approval");

@@ -165,13 +165,13 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 3,
-      comment: "Minimum beds to trigger large home (3 = 3+ beds)",
+      comment: "Minimum beds to trigger large home (3+ beds OR 3+ baths = large)",
     },
     largeHomeBathsThreshold: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 3,
-      comment: "Minimum baths to trigger large home (3 = 3+ baths)",
+      comment: "Minimum baths to trigger large home (3+ beds OR 3+ baths = large)",
     },
     multiCleanerOfferExpirationHours: {
       type: DataTypes.INTEGER,
@@ -212,6 +212,26 @@ module.exports = (sequelize, DataTypes) => {
       comment: "Number of months to look back for volume calculation",
     },
 
+    // Last-minute booking settings
+    lastMinuteFee: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 50,
+      comment: "Flat fee for bookings within threshold hours (in dollars)",
+    },
+    lastMinuteThresholdHours: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 48,
+      comment: "Hours before appointment that triggers last-minute fee",
+    },
+    lastMinuteNotificationRadiusMiles: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: false,
+      defaultValue: 25.0,
+      comment: "Radius in miles to notify cleaners for last-minute bookings",
+    },
+
     // Audit fields
     isActive: {
       type: DataTypes.BOOLEAN,
@@ -228,6 +248,19 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.TEXT,
       allowNull: true,
       comment: "Note describing why the change was made",
+    },
+    // 2-Step Completion Confirmation settings
+    completionAutoApprovalHours: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 4,
+      comment: "Hours before auto-approval triggers (configurable by owners)",
+    },
+    completionRequiresPhotos: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "Whether photos are required for completion submission",
     },
   });
 
@@ -312,6 +345,11 @@ module.exports = (sequelize, DataTypes) => {
         offerExpirationHours: config.multiCleanerOfferExpirationHours || 48,
         urgentFillDays: config.urgentFillDays || 7,
         finalWarningDays: config.finalWarningDays || 3,
+      },
+      lastMinute: {
+        fee: config.lastMinuteFee || 50,
+        thresholdHours: config.lastMinuteThresholdHours || 48,
+        notificationRadiusMiles: parseFloat(config.lastMinuteNotificationRadiusMiles || 25),
       },
     };
   };

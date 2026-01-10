@@ -1,4 +1,4 @@
-import { schemaMigrations, createTable } from "@nozbe/watermelondb/Schema/migrations";
+import { schemaMigrations, createTable, addColumns } from "@nozbe/watermelondb/Schema/migrations";
 
 // Define migrations for schema updates
 export default schemaMigrations({
@@ -59,6 +59,18 @@ export default schemaMigrations({
             { name: "status", type: "string", isIndexed: true },
             { name: "created_at", type: "number" },
             { name: "synced_at", type: "number", isOptional: true },
+          ],
+        }),
+      ],
+    },
+    // Version 4: Add is_not_applicable column to offline_photos for pass verification
+    {
+      toVersion: 4,
+      steps: [
+        addColumns({
+          table: "offline_photos",
+          columns: [
+            { name: "is_not_applicable", type: "boolean", isOptional: true },
           ],
         }),
       ],

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -36,9 +36,16 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
   const [activePhotoTab, setActivePhotoTab] = useState("before");
   const [photoSize, setPhotoSize] = useState(1); // 0.5 to 1.5 scale
   const [expandedRooms, setExpandedRooms] = useState({});
+  const alertTimerRef = useRef(null);
 
   useEffect(() => {
     fetchCleaningStatus();
+    // Cleanup timer on unmount
+    return () => {
+      if (alertTimerRef.current) {
+        clearTimeout(alertTimerRef.current);
+      }
+    };
   }, [appointment.id]);
 
   const fetchCleaningStatus = async () => {
@@ -149,7 +156,7 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
     }
 
     // Use setTimeout to ensure the modal is fully closed before showing the alert
-    setTimeout(() => {
+    alertTimerRef.current = setTimeout(() => {
       const bothReviewed = data?.status?.bothReviewed;
       Alert.alert(
         "Thank you!",

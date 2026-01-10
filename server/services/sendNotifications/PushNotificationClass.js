@@ -469,6 +469,217 @@ class PushNotification {
       actionRequired: true, // Can rebook
     });
   }
+
+  // ============================================================================
+  // EDGE CASE MULTI-CLEANER PUSH NOTIFICATIONS
+  // ============================================================================
+
+  // 35. Edge case decision required (to homeowner)
+  static async sendPushEdgeCaseDecision(expoPushToken, homeownerName, cleanerName, appointmentDate, decisionHours) {
+    const title = "Action Needed: 1 Cleaner Confirmed ⏰";
+    const body = `${cleanerName} is confirmed for your ${appointmentDate} cleaning, but we need a 2nd cleaner. Tap to choose: proceed with 1 or cancel with no fees. You have ${decisionHours}h to decide.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "edge_case_decision_required",
+      appointmentDate,
+      cleanerName,
+      decisionHours,
+      actionRequired: true,
+    });
+  }
+
+  // 36. Edge case cleaner confirmed (to cleaner)
+  static async sendPushEdgeCaseCleanerConfirmed(expoPushToken, cleanerName, appointmentDate, address) {
+    const title = "You're Confirmed! ✅";
+    const body = `You're confirmed for the ${appointmentDate} cleaning at ${address}. You'll receive full pay. A 2nd cleaner may still join.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "edge_case_cleaner_confirmed",
+      appointmentDate,
+      address,
+    });
+  }
+
+  // 37. Edge case cleaner cancelled (to cleaner)
+  static async sendPushEdgeCaseCleanerCancelled(expoPushToken, cleanerName, appointmentDate, address) {
+    const title = "Job Cancelled";
+    const body = `The ${appointmentDate} cleaning at ${address} was cancelled because no 2nd cleaner was found. Check the app for more jobs!`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "edge_case_cleaner_cancelled",
+      appointmentDate,
+      address,
+    });
+  }
+
+  // 38. Edge case second cleaner joined (to original cleaner)
+  static async sendPushEdgeCaseSecondCleanerJoined(expoPushToken, originalCleanerName, newCleanerName, appointmentDate) {
+    const title = `${newCleanerName} joined your team! 👥`;
+    const body = `Good news! ${newCleanerName} will be cleaning with you on ${appointmentDate}. Payment will be split.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "edge_case_second_cleaner_joined",
+      appointmentDate,
+      newCleanerName,
+    });
+  }
+
+  // ==========================================
+  // 2-STEP COMPLETION CONFIRMATION NOTIFICATIONS
+  // ==========================================
+
+  // 39. Completion awaiting approval (to homeowner)
+  static async sendPushCompletionAwaitingApproval(expoPushToken, appointmentDate, cleanerName) {
+    const title = "Cleaning Complete! ✨";
+    const body = `${cleanerName} finished cleaning on ${appointmentDate}. Please review and approve in the app.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "completion_awaiting_approval",
+      appointmentDate,
+      cleanerName,
+      requiresAction: true,
+    });
+  }
+
+  // 40. Completion approved (to cleaner)
+  static async sendPushCompletionApproved(expoPushToken, appointmentDate, payoutAmount) {
+    const formattedPayout = payoutAmount ? `$${parseFloat(payoutAmount).toFixed(2)}` : "your payment";
+    const title = "Job Approved! 🎉";
+    const body = `Your cleaning on ${appointmentDate} was approved! ${formattedPayout} is on the way.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "completion_approved",
+      appointmentDate,
+      payoutAmount,
+    });
+  }
+
+  // 41. Completion auto-approved (to homeowner)
+  static async sendPushCompletionAutoApproved(expoPushToken, appointmentDate, recipient = "homeowner") {
+    if (recipient === "homeowner") {
+      const title = "Cleaning Auto-Approved";
+      const body = `Your cleaning on ${appointmentDate} was auto-approved. Payment sent to cleaner.`;
+
+      return this.sendPushNotification(expoPushToken, title, body, {
+        type: "completion_auto_approved",
+        appointmentDate,
+      });
+    } else {
+      // For cleaner
+      const title = "Job Auto-Approved! 🎉";
+      const body = `Your cleaning on ${appointmentDate} was auto-approved! Payment is on the way.`;
+
+      return this.sendPushNotification(expoPushToken, title, body, {
+        type: "completion_auto_approved",
+        appointmentDate,
+      });
+    }
+  }
+
+  // ==========================================
+  // CANCELLATION APPEAL NOTIFICATIONS
+  // ==========================================
+
+  // 42. Appeal submitted confirmation (to user)
+  static async sendPushAppealSubmitted(expoPushToken, userName, appointmentDate, confirmationId) {
+    const title = "Appeal Received 📋";
+    const body = `Your appeal for the ${appointmentDate} cancellation has been received. We'll review it within 48 hours. Reference: ${confirmationId}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_submitted",
+      appointmentDate,
+      confirmationId,
+    });
+  }
+
+  // 43. Appeal assigned (to HR/reviewer)
+  static async sendPushAppealAssigned(expoPushToken, reviewerName, appealId, priority, category) {
+    const priorityLabel = priority === "urgent" ? "🔴 URGENT" : priority === "high" ? "🟠 HIGH PRIORITY" : "";
+    const title = `New Appeal Assigned ${priorityLabel}`;
+    const body = `You've been assigned appeal #${appealId} (${category}). Please review within SLA deadline.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_assigned",
+      appealId,
+      priority,
+      category,
+      actionRequired: true,
+    });
+  }
+
+  // 44. Appeal approved (to user)
+  static async sendPushAppealApproved(expoPushToken, userName, appointmentDate, refundAmount) {
+    const refundText = refundAmount ? ` A refund of $${(refundAmount / 100).toFixed(2)} has been processed.` : "";
+    const title = "Appeal Approved! ✅";
+    const body = `Good news! Your appeal for the ${appointmentDate} cancellation was approved.${refundText}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_approved",
+      appointmentDate,
+      refundAmount,
+    });
+  }
+
+  // 45. Appeal partially approved (to user)
+  static async sendPushAppealPartiallyApproved(expoPushToken, userName, appointmentDate, resolutionSummary) {
+    const title = "Appeal Partially Approved";
+    const body = `Your appeal for the ${appointmentDate} cancellation has been reviewed. ${resolutionSummary || "Some relief has been granted."}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_partially_approved",
+      appointmentDate,
+      resolutionSummary,
+    });
+  }
+
+  // 46. Appeal denied (to user)
+  static async sendPushAppealDenied(expoPushToken, userName, appointmentDate) {
+    const title = "Appeal Decision";
+    const body = `Your appeal for the ${appointmentDate} cancellation was reviewed. Unfortunately, we couldn't grant relief. Check the app for details.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_denied",
+      appointmentDate,
+    });
+  }
+
+  // 47. Appeal documents requested (to user)
+  static async sendPushAppealDocumentsRequested(expoPushToken, userName, appointmentDate) {
+    const title = "Documents Needed 📄";
+    const body = `To complete your appeal for the ${appointmentDate} cancellation, we need supporting documents. Please upload them in the app.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_documents_requested",
+      appointmentDate,
+      actionRequired: true,
+    });
+  }
+
+  // 48. Appeal SLA warning (to HR/reviewer)
+  static async sendPushAppealSLAWarning(expoPushToken, reviewerName, appealId, hoursRemaining) {
+    const title = "⚠️ SLA Warning";
+    const body = `Appeal #${appealId} needs response within ${hoursRemaining} hours to meet SLA.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_sla_warning",
+      appealId,
+      hoursRemaining,
+      actionRequired: true,
+    });
+  }
+
+  // 49. Appeal SLA breached (to HR manager/owner)
+  static async sendPushAppealSLABreached(expoPushToken, staffName, appealId, assignedTo) {
+    const title = "🔴 SLA Breach Alert";
+    const body = `Appeal #${appealId} has exceeded SLA deadline. ${assignedTo ? `Assigned to reviewer #${assignedTo}` : "Unassigned"}. Immediate attention required.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_sla_breached",
+      appealId,
+      assignedTo,
+      actionRequired: true,
+    });
+  }
 }
 
 module.exports = PushNotification;

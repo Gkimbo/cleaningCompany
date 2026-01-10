@@ -49,6 +49,24 @@ jest.mock("../../src/services/fetchRequests/ClientDashboardService", () => ({
   },
 }));
 
+// Mock SocketContext
+jest.mock("../../src/services/SocketContext", () => ({
+  useSocket: () => ({
+    socket: {
+      on: jest.fn(),
+      off: jest.fn(),
+      emit: jest.fn(),
+    },
+    isConnected: false,
+    emit: jest.fn(),
+    on: jest.fn(),
+    off: jest.fn(),
+    onNotification: jest.fn(() => jest.fn()), // Returns unsubscribe function
+    onNotificationCountUpdate: jest.fn(() => jest.fn()), // Returns unsubscribe function
+  }),
+  SocketProvider: ({ children }) => children,
+}));
+
 import TopBar from "../../src/components/navBar/TopBar";
 import Application from "../../src/services/fetchRequests/ApplicationClass";
 

@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-2809_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-3967+-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -26,6 +26,8 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - Multi-cleaner job support for large homes with room assignments
 - Real-time messaging with suspicious content detection
 - Dynamic pricing with incentive and referral programs
+- Last-minute booking with urgent cleaner notifications (within radius)
+- Large business volume-based fee tiers for high-volume owners
 - Preferred cleaner tier system (Bronze/Silver/Gold/Platinum) with bonuses
 - Stripe Connect for instant cleaner payouts
 - iCal calendar synchronization with vacation rental platforms
@@ -34,6 +36,11 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - HR dispute management and content moderation
 - Before/after job photo documentation with offline capture
 - Home size dispute resolution with photo evidence
+- **Unified Conflict Resolution Center** for appeals and disputes
+- **Cancellation Appeals System** with 72-hour appeal window and HR review
+- **Job Ledger** with double-entry accounting and Stripe reconciliation
+- **Cancellation Audit Logging** for compliance tracking
+- **Preview as Role** for platform owners to test any user experience
 
 ---
 
@@ -302,6 +309,11 @@ Handle situations when guests haven't left by checkout time:
 
 ### HR Staff Features
 
+- **Conflict Resolution Center**: Unified queue for all disputes and appeals
+- **Cancellation Appeals Review**: Review appeals within 48-hour SLA
+- **Photo Comparison Tools**: Side-by-side evidence examination
+- **Financial Breakdown**: View detailed charges, refunds, payouts per case
+- **Audit Trail**: Complete event history for compliance
 - **Dispute Management**: Review and decide on home size adjustment requests
 - **Photo Evidence Review**: Examine cleaner-submitted photos for disputes
 - **Suspicious Activity Reports**: Review flagged messages with contact info
@@ -317,6 +329,7 @@ Handle situations when guests haven't left by checkout time:
 - **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
 - **Platform Withdrawals**: Transfer earnings to bank via Stripe
 - **Stripe Balance**: View pending and available platform balance
+- **Preview as Role**: Test the app as any user type via demo accounts
 - **Employee Management**: Create/edit/delete HR staff and cleaner employees
 - **Pricing Configuration**: Set base prices, per-bed/bath fees, cancellation fees
 - **Advanced Pricing**: Half bath fees, sheet/towel fees, time window premiums
@@ -376,7 +389,8 @@ Handle situations when guests haven't left by checkout time:
 - Time window premiums (anytime, 10-3, 11-4, 12-2)
 - Cancellation fee and window
 - Refund percentage
-- High volume fees
+- Last-minute booking fee (appointments within 48 hours)
+- Large business volume-based fees (for 50+ jobs/month)
 
 ### Reviews & Ratings
 
@@ -455,6 +469,7 @@ Handle situations when guests haven't left by checkout time:
 - Referral rewards earned
 - Appointment cancellations
 - Supply reminders
+- Last-minute urgent alerts (cleaners within radius)
 
 ### Booking Expiration
 
@@ -847,11 +862,46 @@ Handle situations when guests haven't left by checkout time:
 | `POST` | `/api/v1/applications/:id/hire` | Hire applicant | Owner/HR |
 | `PATCH` | `/api/v1/applications/:id/notes` | Update application notes | Owner/HR |
 
+### Conflict Resolution Center
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/conflicts/queue` | Get all conflicts and appeals queue | Owner/HR |
+| `GET` | `/api/v1/conflicts/case/:id` | Get full case details | Owner/HR |
+| `GET` | `/api/v1/conflicts/case/:id/evidence` | Get evidence gallery | Owner/HR |
+| `GET` | `/api/v1/conflicts/case/:id/messages` | Get message thread | Owner/HR |
+| `GET` | `/api/v1/conflicts/case/:id/audit-trail` | Get audit trail | Owner/HR |
+| `GET` | `/api/v1/conflicts/case/:id/financial-breakdown` | Get financial summary | Owner/HR |
+| `POST` | `/api/v1/conflicts/case/:id/note` | Add internal note | Owner/HR |
+| `POST` | `/api/v1/conflicts/case/:id/resolve` | Resolve case | Owner/HR |
+| `GET` | `/api/v1/conflicts/stats` | Get conflict statistics | Owner/HR |
+
+### Cancellation Appeals
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/cancellation-appeals` | Submit appeal | Yes |
+| `GET` | `/api/v1/cancellation-appeals/my-appeals` | Get user's appeals | Yes |
+| `GET` | `/api/v1/cancellation-appeals/:id` | Get appeal details | Yes |
+| `GET` | `/api/v1/cancellation-appeals/queue` | Get appeals queue | Owner/HR |
+| `POST` | `/api/v1/cancellation-appeals/:id/review` | Submit HR decision | Owner/HR |
+| `GET` | `/api/v1/cancellation-appeals/stats` | Get appeal statistics | Owner/HR |
+
+### Demo Accounts (Preview as Role)
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/demo-accounts` | Get demo accounts | Owner |
+| `GET` | `/api/v1/demo-accounts/roles` | Get available roles | Owner |
+| `POST` | `/api/v1/demo-accounts/enter/:role` | Enter preview mode | Owner |
+| `POST` | `/api/v1/demo-accounts/exit` | Exit preview mode | Owner |
+| `GET` | `/api/v1/demo-accounts/check/:role` | Check demo account exists | Owner |
+
 ---
 
 ## Database
 
-### Models (57 Total)
+### Models (60 Total)
 
 #### Core Models
 
@@ -966,6 +1016,14 @@ Handle situations when guests haven't left by checkout time:
 | `CustomJobFlow` | Custom job flow templates |
 | `CustomJobFlowChecklist` | Checklist associations for custom flows |
 | `ClientJobFlowAssignment` | Client-specific job flow assignments |
+
+#### Conflict & Appeals Models
+
+| Model | Description |
+|-------|-------------|
+| `CancellationAppeal` | Cancellation appeal requests with HR review workflow |
+| `CancellationAuditLog` | Immutable audit log for cancellation-related actions |
+| `JobLedger` | Double-entry accounting for job-related financial transactions |
 
 ### Migrations
 
@@ -1205,6 +1263,28 @@ const available = await CleanerAvailabilityService.isAvailable(cleanerId, date);
 const count = await CleanerAvailabilityService.getDailyJobCount(cleanerId, date);
 ```
 
+### LastMinuteNotificationService
+
+Handles urgent notifications for last-minute bookings (within 48 hours):
+
+```javascript
+const LastMinuteNotificationService = require('./services/LastMinuteNotificationService');
+
+// Find cleaners within radius of property
+const nearbyCleaners = await LastMinuteNotificationService.findNearbyCleaners(
+  homeLat, homeLon, radiusMiles
+);
+
+// Send urgent notifications (push, email, in-app) to nearby cleaners
+await LastMinuteNotificationService.notifyNearbyCleaners(appointment, home, io);
+```
+
+**Features:**
+- Geo-distance filtering using `geoUtils.calculateDistance()`
+- Multi-channel delivery: push notifications, email, in-app, and WebSocket
+- Cleaners sorted by distance (closest first)
+- Configurable notification radius (default 25 miles)
+
 ### GuestNotLeftService
 
 Handles guest-not-left scenarios:
@@ -1232,6 +1312,113 @@ await Email.sendAppointmentConfirmation(user, appointment);
 
 // Send push notification
 await PushNotification.sendPushNewMessage(token, userName, senderName, preview);
+```
+
+### ConflictResolutionService
+
+Unified conflict and appeal case management:
+
+```javascript
+const ConflictResolutionService = require('./services/ConflictResolutionService');
+
+// Get all cases for HR queue
+const cases = await ConflictResolutionService.getAllCases({ status: 'pending' });
+
+// Get full case details
+const caseDetail = await ConflictResolutionService.getCaseDetails(caseId);
+
+// Resolve a case
+await ConflictResolutionService.resolveCase(caseId, {
+  resolution: 'approved',
+  refundAmount: 50.00,
+  payoutAmount: 35.00,
+  notes: 'Valid appeal, partial refund granted'
+});
+```
+
+### AppealService
+
+Handles cancellation appeal workflow:
+
+```javascript
+const AppealService = require('./services/AppealService');
+
+// Submit an appeal
+const appeal = await AppealService.submitAppeal({
+  appointmentId,
+  userId,
+  reason: 'Emergency situation',
+  evidence: ['photo1.jpg'],
+  requestedOutcome: 'penalty_waiver'
+});
+
+// Review and decide on appeal (HR)
+await AppealService.reviewAppeal(appealId, {
+  decision: 'approved',
+  hrNotes: 'Emergency verified',
+  refundPercentage: 100
+});
+```
+
+### JobLedgerService
+
+Double-entry accounting for job finances:
+
+```javascript
+const JobLedgerService = require('./services/JobLedgerService');
+
+// Create ledger entry
+await JobLedgerService.createEntry({
+  appointmentId,
+  entryType: 'platform_fee',
+  debitAccount: 'platform_receivable',
+  creditAccount: 'platform_revenue',
+  amount: 15.00
+});
+
+// Get job financial summary
+const summary = await JobLedgerService.getJobFinancialSummary(appointmentId);
+
+// Reconcile with Stripe
+await JobLedgerService.reconcileWithStripe(appointmentId, stripePaymentId);
+```
+
+### CancellationAuditService
+
+Immutable audit logging for cancellations:
+
+```javascript
+const CancellationAuditService = require('./services/CancellationAuditService');
+
+// Log an event
+await CancellationAuditService.logEvent({
+  appointmentId,
+  eventType: 'cancellation_initiated',
+  actorId: userId,
+  actorType: 'homeowner',
+  changes: { status: 'cancelled', reason: 'emergency' }
+});
+
+// Get audit trail
+const trail = await CancellationAuditService.getAuditTrail(appointmentId);
+```
+
+### DemoAccountService
+
+Preview mode session management for platform owners:
+
+```javascript
+const DemoAccountService = require('./services/DemoAccountService');
+
+// Get available demo accounts
+const accounts = await DemoAccountService.getDemoAccounts();
+
+// Create preview session
+const session = await DemoAccountService.createPreviewSession(ownerId, 'cleaner');
+// Returns: { success, token, user, previewRole, originalOwnerId }
+
+// End preview session
+const restored = await DemoAccountService.endPreviewSession(ownerId);
 ```
 
 ---
@@ -1298,7 +1485,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (2809 tests)
+# Run all tests (3967+ tests)
 npm test
 
 # Run specific test file
@@ -1338,7 +1525,17 @@ npm test -- --watch
 | Preferred Cleaners | 34 | Assignment, client management |
 | Integration | 67 | Full payment flows, e2e |
 | Services | 156 | All service unit tests |
-| **Total** | **2809** | - |
+| Serializers | 85 | PII decryption, decimal parsing, field mapping |
+| Route Ordering | 12 | Express route order validation |
+| Last-Minute Booking | 35 | Threshold detection, notifications, fees |
+| Large Business Fees | 18 | Volume-based fee calculation |
+| Offline Sync | 28 | Offline mode, conflict resolution |
+| Preferred Cleaner Flow | 17 | End-to-end preferred cleaner integration |
+| Conflict Resolution | 56 | Router, service, case management |
+| Cancellation Appeals | 67 | Appeal workflow, HR review, decisions |
+| Job Ledger | 45 | Double-entry accounting, reconciliation |
+| Demo Accounts | 88 | Router, service, preview sessions |
+| **Total** | **3967+** | - |
 
 ---
 

@@ -419,7 +419,7 @@ describe("ChecklistEditor Component", () => {
         expect(queryByText("Loading checklist...")).toBeNull();
       });
 
-      fireEvent.press(getByText("History"));
+      fireEvent.press(getByText("🕐 History"));
 
       await waitFor(() => {
         expect(getByText("Version History")).toBeTruthy();
@@ -594,7 +594,7 @@ describe("ChecklistEditor Component", () => {
         expect(queryByText("Loading checklist...")).toBeNull();
       });
 
-      fireEvent.press(getByText("History"));
+      fireEvent.press(getByText("🕐 History"));
 
       await waitFor(() => {
         expect(ChecklistService.getVersionHistory).toHaveBeenCalledWith(

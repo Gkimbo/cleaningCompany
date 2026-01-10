@@ -73,17 +73,42 @@ jest.mock("../../models", () => ({
   UserCleanerAppointments: {
     findAll: jest.fn().mockResolvedValue([]),
   },
+  PricingConfig: {
+    getActive: jest.fn().mockResolvedValue({
+      completionAutoApprovalHours: 4,
+      completionRequiresPhotos: false,
+    }),
+  },
 }));
 
-// Mock Email service
+// Mock Email service (including new 2-step completion methods)
 jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendEmailCancellation: jest.fn().mockResolvedValue(true),
   sendCleaningCompletedNotification: jest.fn().mockResolvedValue(true),
+  sendCompletionSubmittedHomeowner: jest.fn().mockResolvedValue(true),
 }));
 
-// Mock Push Notification service
+// Mock Push Notification service (including new 2-step completion methods)
 jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
   sendPushCleaningCompleted: jest.fn().mockResolvedValue(true),
+  sendPushCompletionAwaitingApproval: jest.fn().mockResolvedValue(true),
+}));
+
+// Mock Encryption service
+jest.mock("../../services/EncryptionService", () => ({
+  decrypt: jest.fn((val) => `decrypted_${val}`),
+}));
+
+// Mock NotificationService
+jest.mock("../../services/NotificationService", () => ({
+  createNotification: jest.fn().mockResolvedValue({ id: 1 }),
+}));
+
+// Mock CompletionApprovalMonitor
+jest.mock("../../services/cron/CompletionApprovalMonitor", () => ({
+  calculateAutoApprovalExpiration: jest.fn().mockResolvedValue(
+    new Date(Date.now() + 4 * 60 * 60 * 1000)
+  ),
 }));
 
 // Mock AppointmentSerializer
@@ -133,6 +158,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       homeId: homeId,
       paid: true,
       completed: false,
+      completionStatus: "in_progress",
       price: "150",
       employeesAssigned: [businessOwnerId.toString()],
       update: mockAppointmentUpdate,
@@ -158,6 +184,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       JobPhoto.count.mockResolvedValue(0); // No photos
       User.findByPk.mockResolvedValue({
         id: businessOwnerId,
+        firstName: "Test",
         email: "owner@test.com",
         expoPushToken: null,
         stripeAccountId: "acct_test",
@@ -173,7 +200,12 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(mockAppointmentUpdate).toHaveBeenCalledWith({ completed: true });
+      // 2-step flow: submission for approval instead of immediate completion
+      expect(mockAppointmentUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          completionStatus: "submitted",
+        })
+      );
     });
 
     it("should allow business owner to complete job WITH photos (optional)", async () => {
@@ -190,6 +222,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       User.findByPk.mockResolvedValue({
         id: businessOwnerId,
+        firstName: "Test",
         email: "owner@test.com",
         expoPushToken: null,
         stripeAccountId: "acct_test",
@@ -220,6 +253,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       User.findByPk.mockResolvedValue({
         id: businessOwnerId,
+        firstName: "Test",
         email: "owner@test.com",
         stripeAccountId: "acct_test",
         stripeAccountStatus: "complete",
@@ -249,6 +283,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       User.findByPk.mockResolvedValue({
         id: businessOwnerId,
+        firstName: "Test",
         email: "owner@test.com",
         stripeAccountId: "acct_test",
         stripeAccountStatus: "complete",
@@ -278,6 +313,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       homeId: homeId,
       paid: true,
       completed: false,
+      completionStatus: "in_progress",
       price: "150",
       employeesAssigned: [regularCleanerId.toString()],
       update: mockAppointmentUpdate,
@@ -377,6 +413,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
 
       User.findByPk.mockResolvedValue({
         id: regularCleanerId,
+        firstName: "Test",
         email: "cleaner@test.com",
         stripeAccountId: "acct_test",
         stripeAccountStatus: "complete",
@@ -498,6 +535,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         homeId: 300,
         paid: true,
         completed: false,
+        completionStatus: "in_progress",
         price: "150",
         employeesAssigned: [assignedCleanerId.toString()],
         update: mockAppointmentUpdate,
@@ -512,6 +550,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       JobPhoto.count.mockResolvedValue(0); // No photos - should be allowed
       User.findByPk.mockResolvedValue({
         id: assignedCleanerId,
+        firstName: "Test",
         email: "cleaner@test.com",
         stripeAccountId: "acct_test",
         stripeAccountStatus: "complete",
@@ -536,6 +575,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         homeId: 300,
         paid: true,
         completed: false,
+        completionStatus: "in_progress",
         price: "150",
         employeesAssigned: [businessOwnerId.toString()],
         update: mockAppointmentUpdate,
@@ -550,6 +590,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       JobPhoto.count.mockResolvedValue(0);
       User.findByPk.mockResolvedValue({
         id: businessOwnerId,
+        firstName: "Test",
         email: "owner@test.com",
         stripeAccountId: "acct_test",
         stripeAccountStatus: "complete",
@@ -574,6 +615,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         homeId: 300,
         paid: true,
         completed: false,
+        completionStatus: "in_progress",
         price: "150",
         employeesAssigned: [cleanerId.toString()],
         update: mockAppointmentUpdate,
@@ -621,7 +663,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       expect(res.body.error).toBe("Job already marked as complete");
     });
 
-    it("should set completed to true after successful completion", async () => {
+    it("should submit completion for approval after successful completion (2-step flow)", async () => {
       const businessOwnerId = 100;
       const mockAppointment = {
         id: 1,
@@ -629,6 +671,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         homeId: 300,
         paid: true,
         completed: false,
+        completionStatus: "in_progress",
         price: "150",
         employeesAssigned: [businessOwnerId.toString()],
         update: mockAppointmentUpdate,
@@ -636,6 +679,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       const mockHome = {
         id: 300,
         preferredCleanerId: businessOwnerId,
+        address: "123 Main St",
+        city: "Springfield",
+        state: "IL",
+        zipcode: "62701",
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
@@ -643,6 +690,7 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       JobPhoto.count.mockResolvedValue(0);
       User.findByPk.mockResolvedValue({
         id: businessOwnerId,
+        firstName: "Test",
         email: "owner@test.com",
         stripeAccountId: "acct_test",
         stripeAccountStatus: "complete",
@@ -655,7 +703,12 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
           cleanerId: businessOwnerId,
         });
 
-      expect(mockAppointmentUpdate).toHaveBeenCalledWith({ completed: true });
+      // With 2-step flow, completion is submitted for approval instead of immediately marked complete
+      expect(mockAppointmentUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          completionStatus: "submitted",
+        })
+      );
     });
   });
 });

@@ -413,6 +413,38 @@ const OnboardingStyles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  // Password container and toggle
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.lg,
+  },
+
+  passwordContainerFocused: {
+    borderColor: colors.primary[500],
+    borderWidth: 2,
+  },
+
+  passwordContainerError: {
+    borderColor: colors.error[500],
+    borderWidth: 2,
+  },
+
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+  },
+
+  eyeButton: {
+    padding: spacing.md,
+  },
+
   // Password strength
   passwordStrength: {
     marginTop: spacing.sm,

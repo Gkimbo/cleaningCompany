@@ -113,5 +113,38 @@ const calculatePrice = async (
   return price;
 };
 
+/**
+ * Check if an appointment date qualifies as last-minute booking
+ * @param {string} appointmentDate - The appointment date (YYYY-MM-DD format)
+ * @param {Object} pricingConfig - Optional pricing config
+ * @returns {Promise<{isLastMinute: boolean, fee: number, hoursUntil: number, thresholdHours: number}>}
+ */
+const checkLastMinuteBooking = async (appointmentDate, pricingConfig = null) => {
+  const pricing = pricingConfig || (await getPricingConfig());
+  const thresholdHours = pricing?.lastMinute?.thresholdHours ?? 48;
+  const fee = pricing?.lastMinute?.fee ?? 50;
+
+  const now = new Date();
+  const appointmentDateTime = new Date(appointmentDate);
+
+  // If date is just YYYY-MM-DD, set to 9am (typical start time)
+  if (appointmentDate.length === 10) {
+    appointmentDateTime.setHours(9, 0, 0, 0);
+  }
+
+  const hoursUntil = (appointmentDateTime - now) / (1000 * 60 * 60);
+
+  // Last-minute if: future date AND within threshold hours
+  const isLastMinute = hoursUntil > 0 && hoursUntil <= thresholdHours;
+
+  return {
+    isLastMinute,
+    fee: isLastMinute ? fee : 0,
+    hoursUntil: Math.round(hoursUntil),
+    thresholdHours,
+  };
+};
+
 module.exports = calculatePrice;
 module.exports.calculateLinenPrice = calculateLinenPrice;
+module.exports.checkLastMinuteBooking = checkLastMinuteBooking;

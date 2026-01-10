@@ -86,11 +86,11 @@ describe("SignUpForm", () => {
     });
 
     it("should render Terms and Conditions section", () => {
-      const { getByText } = renderWithProviders(
+      const { getAllByText, getByText } = renderWithProviders(
         <SignUpForm state={defaultState} dispatch={mockDispatch} />
       );
 
-      expect(getByText(/I agree to the/)).toBeTruthy();
+      expect(getAllByText(/I agree to the/).length).toBeGreaterThan(0);
       expect(getByText("Terms and Conditions")).toBeTruthy();
     });
 
@@ -307,8 +307,9 @@ describe("SignUpForm", () => {
   });
 
   describe("Form Submission", () => {
-    // Helper function to accept terms in the modal
-    const acceptTermsInModal = async (getByText, UNSAFE_getByType) => {
+    // Helper function to accept terms and privacy policy in modals
+    const acceptTermsAndPrivacy = async (getByText, UNSAFE_getByType, getAllByText) => {
+      // Accept Terms and Conditions
       const termsLink = getByText("Terms and Conditions");
       fireEvent.press(termsLink);
 
@@ -317,7 +318,7 @@ describe("SignUpForm", () => {
       });
 
       // Find ScrollView and simulate scroll to bottom
-      const scrollView = UNSAFE_getByType("RCTScrollView");
+      let scrollView = UNSAFE_getByType("RCTScrollView");
       fireEvent.scroll(scrollView, {
         nativeEvent: {
           contentOffset: { y: 100 },
@@ -326,11 +327,35 @@ describe("SignUpForm", () => {
         },
       });
 
-      const acceptButton = getByText("I Accept");
+      let acceptButton = getByText("I Accept");
       fireEvent.press(acceptButton);
 
       await waitFor(() => {
-        expect(getByText("Terms accepted")).toBeTruthy();
+        expect(getByText(/Terms accepted/)).toBeTruthy();
+      });
+
+      // Accept Privacy Policy
+      const privacyLink = getByText("Privacy Policy");
+      fireEvent.press(privacyLink);
+
+      await waitFor(() => {
+        expect(getAllByText("Privacy Policy").length).toBeGreaterThan(1); // Modal title + link
+      });
+
+      scrollView = UNSAFE_getByType("RCTScrollView");
+      fireEvent.scroll(scrollView, {
+        nativeEvent: {
+          contentOffset: { y: 100 },
+          contentSize: { height: 100 },
+          layoutMeasurement: { height: 50 },
+        },
+      });
+
+      acceptButton = getByText("I Accept");
+      fireEvent.press(acceptButton);
+
+      await waitFor(() => {
+        expect(getByText(/Privacy Policy accepted/)).toBeTruthy();
       });
     };
 
@@ -339,7 +364,7 @@ describe("SignUpForm", () => {
         "An account already has this email"
       );
 
-      const { getByText, getByPlaceholderText, UNSAFE_getByType } = renderWithProviders(
+      const { getByText, getByPlaceholderText, UNSAFE_getByType, getAllByText } = renderWithProviders(
         <SignUpForm state={defaultState} dispatch={mockDispatch} />
       );
 
@@ -361,7 +386,7 @@ describe("SignUpForm", () => {
       );
 
       // Open and accept terms
-      await acceptTermsInModal(getByText, UNSAFE_getByType);
+      await acceptTermsAndPrivacy(getByText, UNSAFE_getByType, getAllByText);
 
       const submitButton = getByText("Create Account");
       fireEvent.press(submitButton);
@@ -374,7 +399,7 @@ describe("SignUpForm", () => {
     it("should show error when username already exists", async () => {
       FetchData.makeNewUser.mockResolvedValueOnce("Username already exists");
 
-      const { getByText, getByPlaceholderText, UNSAFE_getByType } = renderWithProviders(
+      const { getByText, getByPlaceholderText, UNSAFE_getByType, getAllByText } = renderWithProviders(
         <SignUpForm state={defaultState} dispatch={mockDispatch} />
       );
 
@@ -396,7 +421,7 @@ describe("SignUpForm", () => {
       );
 
       // Open and accept terms
-      await acceptTermsInModal(getByText, UNSAFE_getByType);
+      await acceptTermsAndPrivacy(getByText, UNSAFE_getByType, getAllByText);
 
       const submitButton = getByText("Create Account");
       fireEvent.press(submitButton);
@@ -411,7 +436,7 @@ describe("SignUpForm", () => {
         token: "test-token-123",
       });
 
-      const { getByText, getByPlaceholderText, UNSAFE_getByType } = renderWithProviders(
+      const { getByText, getByPlaceholderText, UNSAFE_getByType, getAllByText } = renderWithProviders(
         <SignUpForm state={defaultState} dispatch={mockDispatch} />
       );
 
@@ -433,7 +458,7 @@ describe("SignUpForm", () => {
       );
 
       // Open and accept terms
-      await acceptTermsInModal(getByText, UNSAFE_getByType);
+      await acceptTermsAndPrivacy(getByText, UNSAFE_getByType, getAllByText);
 
       const submitButton = getByText("Create Account");
       fireEvent.press(submitButton);
@@ -446,6 +471,8 @@ describe("SignUpForm", () => {
           password: "PAssword!!11",
           email: "john@example.com",
           termsId: 1,
+          privacyPolicyId: 1,
+          referralCode: null,
         });
       });
     });
@@ -455,7 +482,7 @@ describe("SignUpForm", () => {
         token: "new-user-token",
       });
 
-      const { getByText, getByPlaceholderText, UNSAFE_getByType } = renderWithProviders(
+      const { getByText, getByPlaceholderText, UNSAFE_getByType, getAllByText } = renderWithProviders(
         <SignUpForm state={defaultState} dispatch={mockDispatch} />
       );
 
@@ -477,7 +504,7 @@ describe("SignUpForm", () => {
       );
 
       // Open and accept terms
-      await acceptTermsInModal(getByText, UNSAFE_getByType);
+      await acceptTermsAndPrivacy(getByText, UNSAFE_getByType, getAllByText);
 
       const submitButton = getByText("Create Account");
       fireEvent.press(submitButton);
@@ -496,7 +523,7 @@ describe("SignUpForm", () => {
         token: "new-user-token",
       });
 
-      const { getByText, getByPlaceholderText, UNSAFE_getByType } = renderWithProviders(
+      const { getByText, getByPlaceholderText, UNSAFE_getByType, getAllByText } = renderWithProviders(
         <SignUpForm state={defaultState} dispatch={mockDispatch} />
       );
 
@@ -518,7 +545,7 @@ describe("SignUpForm", () => {
       );
 
       // Open and accept terms
-      await acceptTermsInModal(getByText, UNSAFE_getByType);
+      await acceptTermsAndPrivacy(getByText, UNSAFE_getByType, getAllByText);
 
       const submitButton = getByText("Create Account");
       fireEvent.press(submitButton);

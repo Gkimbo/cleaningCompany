@@ -66,6 +66,13 @@ const defaultPricing = {
   // High volume
   highVolumeFee: 50,
   highVolumeDays: ["holiday", "holiday weekend"],
+
+  // Last-minute booking
+  lastMinute: {
+    fee: 50,
+    thresholdHours: 48,
+    notificationRadiusMiles: 25,
+  },
 };
 
 const PricingContext = createContext({
@@ -241,6 +248,49 @@ export const getTimeWindowLabel = (pricing, timeWindow) => {
   const shortLabel = timeWindow;
 
   return { label, surcharge, shortLabel };
+};
+
+/**
+ * Helper to check if a date qualifies as a last-minute booking
+ * @param {string|Date} appointmentDate - The appointment date
+ * @param {object} pricing - Pricing object from usePricing()
+ * @returns {object} { isLastMinute, fee, hoursUntil, thresholdHours }
+ */
+export const isLastMinuteBooking = (appointmentDate, pricing) => {
+  const lastMinute = pricing?.lastMinute || defaultPricing.lastMinute;
+  const thresholdHours = lastMinute?.thresholdHours ?? 48;
+  const fee = lastMinute?.fee ?? 50;
+
+  const now = new Date();
+  const appointmentTime = new Date(appointmentDate);
+
+  // If appointment is in the past, not valid
+  if (appointmentTime <= now) {
+    return { isLastMinute: false, fee: 0, hoursUntil: 0, thresholdHours };
+  }
+
+  const hoursUntil = (appointmentTime - now) / (1000 * 60 * 60);
+
+  return {
+    isLastMinute: hoursUntil <= thresholdHours,
+    fee: hoursUntil <= thresholdHours ? fee : 0,
+    hoursUntil: Math.round(hoursUntil),
+    thresholdHours,
+  };
+};
+
+/**
+ * Helper to get last-minute booking configuration
+ * @param {object} pricing - Pricing object from usePricing()
+ * @returns {object} { fee, thresholdHours, notificationRadiusMiles }
+ */
+export const getLastMinuteInfo = (pricing) => {
+  const lastMinute = pricing?.lastMinute || defaultPricing.lastMinute;
+  return {
+    fee: lastMinute?.fee ?? 50,
+    thresholdHours: lastMinute?.thresholdHours ?? 48,
+    notificationRadiusMiles: lastMinute?.notificationRadiusMiles ?? 25,
+  };
 };
 
 /**

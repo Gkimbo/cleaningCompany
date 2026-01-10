@@ -9,7 +9,13 @@ import {
   Dimensions,
 } from "react-native";
 import { Checkbox } from "react-native-paper";
-import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import {
+  colors,
+  spacing,
+  radius,
+  shadows,
+  typography,
+} from "../../services/styles/theme";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -68,7 +74,8 @@ const CalendarSyncDisclaimerModal = ({ visible, onAccept, onCancel }) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const paddingToBottom = 40;
     const isAtBottom =
-      layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+      layoutMeasurement.height + contentOffset.y >=
+      contentSize.height - paddingToBottom;
 
     if (isAtBottom && !hasScrolledToBottom) {
       setHasScrolledToBottom(true);
@@ -93,7 +100,12 @@ const CalendarSyncDisclaimerModal = ({ visible, onAccept, onCancel }) => {
   const canAccept = hasScrolledToBottom && isChecked;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={handleClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={handleClose}
+    >
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
           <View style={styles.header}>
@@ -109,7 +121,8 @@ const CalendarSyncDisclaimerModal = ({ visible, onAccept, onCancel }) => {
             showsVerticalScrollIndicator={true}
           >
             <Text style={styles.introText}>
-              Please read the following disclaimer carefully before enabling calendar sync.
+              Please read the following disclaimer carefully before enabling
+              calendar sync.
             </Text>
 
             {DISCLAIMER_SECTIONS.map((section, index) => (
@@ -121,7 +134,9 @@ const CalendarSyncDisclaimerModal = ({ visible, onAccept, onCancel }) => {
 
             {!hasScrolledToBottom && (
               <View style={styles.scrollPrompt}>
-                <Text style={styles.scrollPromptText}>Scroll down to continue reading</Text>
+                <Text style={styles.scrollPromptText}>
+                  Scroll down to continue reading
+                </Text>
               </View>
             )}
           </ScrollView>
@@ -149,16 +164,25 @@ const CalendarSyncDisclaimerModal = ({ visible, onAccept, onCancel }) => {
             </TouchableOpacity>
 
             <View style={styles.buttonRow}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleClose}
+              >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.acceptButton, !canAccept && styles.acceptButtonDisabled]}
+                style={[
+                  styles.acceptButton,
+                  !canAccept && styles.acceptButtonDisabled,
+                ]}
                 onPress={handleAccept}
                 disabled={!canAccept}
               >
                 <Text
-                  style={[styles.acceptButtonText, !canAccept && styles.acceptButtonTextDisabled]}
+                  style={[
+                    styles.acceptButtonText,
+                    !canAccept && styles.acceptButtonTextDisabled,
+                  ]}
                 >
                   Accept & Continue
                 </Text>

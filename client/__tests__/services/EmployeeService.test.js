@@ -344,12 +344,12 @@ describe("FetchData - Employee Service Methods", () => {
 
       const result = await FetchData.deleteEmployee(1);
 
-      expect(result).toBe(true);
+      expect(result).toEqual({ success: true });
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/api/v1/users/employee"),
         expect.objectContaining({
           method: "DELETE",
-          headers: { "Content-Type": "application/json" },
+          headers: expect.objectContaining({ "Content-Type": "application/json" }),
           body: JSON.stringify({ id: 1 }),
         })
       );
@@ -359,12 +359,13 @@ describe("FetchData - Employee Service Methods", () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
+        json: () => Promise.resolve({ error: "Failed to delete" }),
       });
 
       const result = await FetchData.deleteEmployee(1);
 
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("Failed to delete");
+      expect(result).toHaveProperty("error");
+      expect(result.error).toContain("delete");
     });
 
     it("should handle network error", async () => {
@@ -372,8 +373,8 @@ describe("FetchData - Employee Service Methods", () => {
 
       const result = await FetchData.deleteEmployee(1);
 
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("Network error");
+      expect(result).toHaveProperty("error");
+      expect(result.error).toBe("Failed to delete employee");
     });
 
     it("should send employee ID in request body", async () => {
@@ -591,7 +592,7 @@ describe("FetchData - Employee Service Methods", () => {
       expect(global.fetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          headers: { "Content-Type": "application/json" },
+          headers: expect.objectContaining({ "Content-Type": "application/json" }),
         })
       );
     });

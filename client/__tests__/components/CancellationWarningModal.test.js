@@ -64,6 +64,7 @@ describe("CancellationWarningModal", () => {
       "Cancelling within 3 days of the cleaning means the assigned cleaner will receive $90.00 (50% of the price minus 10% platform fee). You will be refunded $100.00.",
     daysUntilAppointment: 2,
     hasCleanerAssigned: true,
+    refundPercent: 50,
   };
 
   describe("Modal Visibility", () => {
@@ -188,7 +189,7 @@ describe("CancellationWarningModal", () => {
       );
 
       expect(getByText("Financial Breakdown")).toBeTruthy();
-      expect(getByText("Original Price")).toBeTruthy();
+      expect(getByText("Amount Paid")).toBeTruthy();
       expect(getByText("$200.00")).toBeTruthy();
       expect(getByText("Your Refund (50%)")).toBeTruthy();
       expect(getByText("$100.00")).toBeTruthy();
@@ -407,6 +408,7 @@ describe("CancellationWarningModal", () => {
       willChargeCancellationFee: true,
       cancellationFee: 25,
       hasPaymentMethod: true,
+      refundPercent: 50,
     };
 
     const noCancellationFeeInfo = {

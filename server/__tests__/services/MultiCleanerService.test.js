@@ -117,16 +117,16 @@ describe("MultiCleanerService", () => {
         expect(await MultiCleanerService.isLargeHome(10, 8)).toBe(true);
       });
 
-      it("should return false when beds below threshold", async () => {
-        expect(await MultiCleanerService.isLargeHome(2, 3)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(2, 4)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(1, 5)).toBe(false);
+      it("should return true when only beds at/above threshold (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome(3, 2)).toBe(true);
+        expect(await MultiCleanerService.isLargeHome(4, 2)).toBe(true);
+        expect(await MultiCleanerService.isLargeHome(5, 1)).toBe(true);
       });
 
-      it("should return false when baths below threshold", async () => {
-        expect(await MultiCleanerService.isLargeHome(3, 2)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(4, 2)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(5, 1)).toBe(false);
+      it("should return true when only baths at/above threshold (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome(2, 3)).toBe(true);
+        expect(await MultiCleanerService.isLargeHome(2, 4)).toBe(true);
+        expect(await MultiCleanerService.isLargeHome(1, 5)).toBe(true);
       });
 
       it("should return false when both below threshold", async () => {
@@ -137,63 +137,73 @@ describe("MultiCleanerService", () => {
     });
 
     describe("decimal values", () => {
-      it("should handle half bathrooms correctly", async () => {
-        expect(await MultiCleanerService.isLargeHome(3, 2.5)).toBe(false);
+      it("should handle half bathrooms correctly (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome(3, 2.5)).toBe(true); // 3 beds triggers
         expect(await MultiCleanerService.isLargeHome(3, 3.5)).toBe(true);
         expect(await MultiCleanerService.isLargeHome(4, 3.5)).toBe(true);
+        expect(await MultiCleanerService.isLargeHome(2, 2.5)).toBe(false); // neither triggers
       });
 
-      it("should handle decimal bedrooms", async () => {
-        expect(await MultiCleanerService.isLargeHome(2.9, 3)).toBe(false);
+      it("should handle decimal bedrooms (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome(2.9, 3)).toBe(true); // 3 baths triggers
         expect(await MultiCleanerService.isLargeHome(3.0, 3)).toBe(true);
         expect(await MultiCleanerService.isLargeHome(3.5, 3.5)).toBe(true);
+        expect(await MultiCleanerService.isLargeHome(2.9, 2.9)).toBe(false); // neither triggers
       });
     });
 
     describe("string inputs", () => {
-      it("should parse string inputs correctly", async () => {
+      it("should parse string inputs correctly (OR logic)", async () => {
         expect(await MultiCleanerService.isLargeHome("3", "3")).toBe(true);
-        expect(await MultiCleanerService.isLargeHome("2", "3")).toBe(false);
+        expect(await MultiCleanerService.isLargeHome("2", "3")).toBe(true); // 3 baths triggers
+        expect(await MultiCleanerService.isLargeHome("3", "2")).toBe(true); // 3 beds triggers
         expect(await MultiCleanerService.isLargeHome("4", "4")).toBe(true);
+        expect(await MultiCleanerService.isLargeHome("2", "2")).toBe(false);
       });
 
-      it("should handle decimal strings", async () => {
-        expect(await MultiCleanerService.isLargeHome("2.5", "3")).toBe(false);
+      it("should handle decimal strings (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome("2.5", "3")).toBe(true); // 3 baths triggers
+        expect(await MultiCleanerService.isLargeHome("3", "2.5")).toBe(true); // 3 beds triggers
         expect(await MultiCleanerService.isLargeHome("3.5", "3.5")).toBe(true);
+        expect(await MultiCleanerService.isLargeHome("2.5", "2.5")).toBe(false);
       });
     });
 
     describe("edge cases", () => {
-      it("should handle null values", async () => {
-        expect(await MultiCleanerService.isLargeHome(null, 3)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(3, null)).toBe(false);
+      it("should handle null values (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome(null, 3)).toBe(true); // 3 baths triggers
+        expect(await MultiCleanerService.isLargeHome(3, null)).toBe(true); // 3 beds triggers
         expect(await MultiCleanerService.isLargeHome(null, null)).toBe(false);
+        expect(await MultiCleanerService.isLargeHome(null, 2)).toBe(false);
       });
 
-      it("should handle undefined values", async () => {
-        expect(await MultiCleanerService.isLargeHome(undefined, 3)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(3, undefined)).toBe(false);
+      it("should handle undefined values (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome(undefined, 3)).toBe(true); // 3 baths triggers
+        expect(await MultiCleanerService.isLargeHome(3, undefined)).toBe(true); // 3 beds triggers
+        expect(await MultiCleanerService.isLargeHome(undefined, 2)).toBe(false);
       });
 
-      it("should handle negative values", async () => {
-        expect(await MultiCleanerService.isLargeHome(-1, 3)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(3, -1)).toBe(false);
+      it("should handle negative values (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome(-1, 3)).toBe(true); // 3 baths triggers
+        expect(await MultiCleanerService.isLargeHome(3, -1)).toBe(true); // 3 beds triggers
         expect(await MultiCleanerService.isLargeHome(-5, -5)).toBe(false);
       });
 
-      it("should handle NaN", async () => {
-        expect(await MultiCleanerService.isLargeHome(NaN, 3)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(3, NaN)).toBe(false);
+      it("should handle NaN (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome(NaN, 3)).toBe(true); // 3 baths triggers
+        expect(await MultiCleanerService.isLargeHome(3, NaN)).toBe(true); // 3 beds triggers
+        expect(await MultiCleanerService.isLargeHome(NaN, NaN)).toBe(false);
       });
 
-      it("should handle empty string", async () => {
-        expect(await MultiCleanerService.isLargeHome("", 3)).toBe(false);
-        expect(await MultiCleanerService.isLargeHome(3, "")).toBe(false);
+      it("should handle empty string (OR logic)", async () => {
+        expect(await MultiCleanerService.isLargeHome("", 3)).toBe(true); // 3 baths triggers
+        expect(await MultiCleanerService.isLargeHome(3, "")).toBe(true); // 3 beds triggers
+        expect(await MultiCleanerService.isLargeHome("", "")).toBe(false);
       });
     });
 
     describe("custom thresholds", () => {
-      it("should use custom thresholds from config parameter", async () => {
+      it("should use custom thresholds from config parameter (OR logic)", async () => {
         const customConfig = {
           multiCleaner: {
             largeHomeBedsThreshold: 4,
@@ -202,11 +212,13 @@ describe("MultiCleanerService", () => {
         };
 
         expect(await MultiCleanerService.isLargeHome(3, 3, customConfig)).toBe(false);
+        expect(await MultiCleanerService.isLargeHome(4, 3, customConfig)).toBe(true); // 4 beds triggers
+        expect(await MultiCleanerService.isLargeHome(3, 4, customConfig)).toBe(true); // 4 baths triggers
         expect(await MultiCleanerService.isLargeHome(4, 4, customConfig)).toBe(true);
         expect(await MultiCleanerService.isLargeHome(5, 5, customConfig)).toBe(true);
       });
 
-      it("should use higher custom threshold", async () => {
+      it("should use higher custom threshold (OR logic)", async () => {
         const customConfig = {
           multiCleaner: {
             largeHomeBedsThreshold: 5,
@@ -214,11 +226,13 @@ describe("MultiCleanerService", () => {
           },
         };
 
-        expect(await MultiCleanerService.isLargeHome(4, 4, customConfig)).toBe(false);
+        expect(await MultiCleanerService.isLargeHome(4, 3, customConfig)).toBe(false);
+        expect(await MultiCleanerService.isLargeHome(4, 4, customConfig)).toBe(true); // 4 baths triggers
+        expect(await MultiCleanerService.isLargeHome(5, 3, customConfig)).toBe(true); // 5 beds triggers
         expect(await MultiCleanerService.isLargeHome(5, 4, customConfig)).toBe(true);
       });
 
-      it("should use lower custom threshold", async () => {
+      it("should use lower custom threshold (OR logic)", async () => {
         const customConfig = {
           multiCleaner: {
             largeHomeBedsThreshold: 2,
@@ -226,8 +240,11 @@ describe("MultiCleanerService", () => {
           },
         };
 
+        expect(await MultiCleanerService.isLargeHome(2, 1, customConfig)).toBe(true); // 2 beds triggers
+        expect(await MultiCleanerService.isLargeHome(1, 2, customConfig)).toBe(true); // 2 baths triggers
         expect(await MultiCleanerService.isLargeHome(2, 2, customConfig)).toBe(true);
         expect(await MultiCleanerService.isLargeHome(3, 3, customConfig)).toBe(true);
+        expect(await MultiCleanerService.isLargeHome(1, 1, customConfig)).toBe(false);
       });
     });
   });
@@ -236,22 +253,36 @@ describe("MultiCleanerService", () => {
   // isEdgeLargeHome Tests
   // ============================================
   describe("isEdgeLargeHome", () => {
-    describe("edge detection", () => {
-      it("should return true only for homes exactly at threshold (3 beds, 3 baths)", async () => {
+    describe("edge detection (OR logic)", () => {
+      it("should return true for homes at threshold on one or both dimensions", async () => {
+        // Both at threshold
         expect(await MultiCleanerService.isEdgeLargeHome(3, 3)).toBe(true);
+        // Beds at threshold, baths below
+        expect(await MultiCleanerService.isEdgeLargeHome(3, 2)).toBe(true);
+        expect(await MultiCleanerService.isEdgeLargeHome(3, 1)).toBe(true);
+        // Baths at threshold, beds below
+        expect(await MultiCleanerService.isEdgeLargeHome(2, 3)).toBe(true);
+        expect(await MultiCleanerService.isEdgeLargeHome(1, 3)).toBe(true);
       });
 
-      it("should return false for homes above threshold", async () => {
+      it("should return false for homes significantly over threshold", async () => {
+        // Beds over threshold
         expect(await MultiCleanerService.isEdgeLargeHome(4, 3)).toBe(false);
+        expect(await MultiCleanerService.isEdgeLargeHome(4, 2)).toBe(false);
+        expect(await MultiCleanerService.isEdgeLargeHome(5, 3)).toBe(false);
+        // Baths over threshold
         expect(await MultiCleanerService.isEdgeLargeHome(3, 4)).toBe(false);
+        expect(await MultiCleanerService.isEdgeLargeHome(2, 4)).toBe(false);
+        expect(await MultiCleanerService.isEdgeLargeHome(3, 5)).toBe(false);
+        // Both over threshold
         expect(await MultiCleanerService.isEdgeLargeHome(4, 4)).toBe(false);
         expect(await MultiCleanerService.isEdgeLargeHome(5, 5)).toBe(false);
       });
 
-      it("should return false for homes below threshold", async () => {
+      it("should return false for homes below threshold (not large)", async () => {
         expect(await MultiCleanerService.isEdgeLargeHome(2, 2)).toBe(false);
-        expect(await MultiCleanerService.isEdgeLargeHome(2, 3)).toBe(false);
-        expect(await MultiCleanerService.isEdgeLargeHome(3, 2)).toBe(false);
+        expect(await MultiCleanerService.isEdgeLargeHome(1, 1)).toBe(false);
+        expect(await MultiCleanerService.isEdgeLargeHome(2, 1)).toBe(false);
       });
     });
 
@@ -264,9 +295,12 @@ describe("MultiCleanerService", () => {
           },
         };
 
-        expect(await MultiCleanerService.isEdgeLargeHome(3, 3, customConfig)).toBe(false);
-        expect(await MultiCleanerService.isEdgeLargeHome(4, 4, customConfig)).toBe(true);
-        expect(await MultiCleanerService.isEdgeLargeHome(5, 5, customConfig)).toBe(false);
+        expect(await MultiCleanerService.isEdgeLargeHome(3, 3, customConfig)).toBe(false); // Not large
+        expect(await MultiCleanerService.isEdgeLargeHome(4, 3, customConfig)).toBe(true); // Edge
+        expect(await MultiCleanerService.isEdgeLargeHome(3, 4, customConfig)).toBe(true); // Edge
+        expect(await MultiCleanerService.isEdgeLargeHome(4, 4, customConfig)).toBe(true); // Edge
+        expect(await MultiCleanerService.isEdgeLargeHome(5, 4, customConfig)).toBe(false); // Over
+        expect(await MultiCleanerService.isEdgeLargeHome(5, 5, customConfig)).toBe(false); // Over
       });
     });
   });
@@ -278,24 +312,32 @@ describe("MultiCleanerService", () => {
     describe("non-large homes", () => {
       it("should return true for small homes (solo is default)", async () => {
         expect(await MultiCleanerService.isSoloAllowed(2, 2)).toBe(true);
-        expect(await MultiCleanerService.isSoloAllowed(2, 3)).toBe(true);
-        expect(await MultiCleanerService.isSoloAllowed(3, 2)).toBe(true);
         expect(await MultiCleanerService.isSoloAllowed(1, 1)).toBe(true);
+        expect(await MultiCleanerService.isSoloAllowed(2, 1)).toBe(true);
       });
     });
 
-    describe("edge large homes", () => {
-      it("should return true for edge large homes (exactly at threshold)", async () => {
+    describe("edge large homes (OR logic)", () => {
+      it("should return true for edge large homes (at threshold, not over)", async () => {
+        // Both at threshold
         expect(await MultiCleanerService.isSoloAllowed(3, 3)).toBe(true);
+        // Beds at threshold, baths below
+        expect(await MultiCleanerService.isSoloAllowed(3, 2)).toBe(true);
+        expect(await MultiCleanerService.isSoloAllowed(3, 1)).toBe(true);
+        // Baths at threshold, beds below
+        expect(await MultiCleanerService.isSoloAllowed(2, 3)).toBe(true);
+        expect(await MultiCleanerService.isSoloAllowed(1, 3)).toBe(true);
       });
     });
 
     describe("clearly large homes", () => {
-      it("should return false for homes above edge threshold", async () => {
+      it("should return false for homes significantly over threshold", async () => {
         expect(await MultiCleanerService.isSoloAllowed(4, 3)).toBe(false);
         expect(await MultiCleanerService.isSoloAllowed(3, 4)).toBe(false);
         expect(await MultiCleanerService.isSoloAllowed(4, 4)).toBe(false);
         expect(await MultiCleanerService.isSoloAllowed(5, 5)).toBe(false);
+        expect(await MultiCleanerService.isSoloAllowed(4, 2)).toBe(false);
+        expect(await MultiCleanerService.isSoloAllowed(2, 4)).toBe(false);
       });
     });
   });
@@ -307,23 +349,32 @@ describe("MultiCleanerService", () => {
     describe("non-large homes", () => {
       it("should return false for small homes", async () => {
         expect(await MultiCleanerService.isMultiCleanerRequired(2, 2)).toBe(false);
-        expect(await MultiCleanerService.isMultiCleanerRequired(2, 3)).toBe(false);
-        expect(await MultiCleanerService.isMultiCleanerRequired(3, 2)).toBe(false);
+        expect(await MultiCleanerService.isMultiCleanerRequired(1, 1)).toBe(false);
+        expect(await MultiCleanerService.isMultiCleanerRequired(2, 1)).toBe(false);
       });
     });
 
-    describe("edge large homes", () => {
+    describe("edge large homes (OR logic)", () => {
       it("should return false for edge large homes (solo option available)", async () => {
+        // Both at threshold
         expect(await MultiCleanerService.isMultiCleanerRequired(3, 3)).toBe(false);
+        // Beds at threshold, baths below
+        expect(await MultiCleanerService.isMultiCleanerRequired(3, 2)).toBe(false);
+        expect(await MultiCleanerService.isMultiCleanerRequired(3, 1)).toBe(false);
+        // Baths at threshold, beds below
+        expect(await MultiCleanerService.isMultiCleanerRequired(2, 3)).toBe(false);
+        expect(await MultiCleanerService.isMultiCleanerRequired(1, 3)).toBe(false);
       });
     });
 
     describe("clearly large homes", () => {
-      it("should return true for homes above edge threshold", async () => {
+      it("should return true for homes significantly over threshold", async () => {
         expect(await MultiCleanerService.isMultiCleanerRequired(4, 3)).toBe(true);
         expect(await MultiCleanerService.isMultiCleanerRequired(3, 4)).toBe(true);
         expect(await MultiCleanerService.isMultiCleanerRequired(4, 4)).toBe(true);
         expect(await MultiCleanerService.isMultiCleanerRequired(5, 5)).toBe(true);
+        expect(await MultiCleanerService.isMultiCleanerRequired(4, 2)).toBe(true);
+        expect(await MultiCleanerService.isMultiCleanerRequired(2, 4)).toBe(true);
         expect(await MultiCleanerService.isMultiCleanerRequired(10, 8)).toBe(true);
       });
     });

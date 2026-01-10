@@ -13,6 +13,7 @@ import {
 import { UserContext } from "../../../context/UserContext";
 import { usePricing } from "../../../context/PricingContext";
 import JobPhotoCapture from "./JobPhotoCapture";
+import PassVerificationCapture from "./PassVerificationCapture";
 import CleaningChecklist, { clearChecklistProgress } from "./CleaningChecklist";
 import styles from "./JobCompletionFlowStyles";
 import { API_BASE } from "../../../services/config";
@@ -23,6 +24,7 @@ const STEPS = {
   BEFORE_PHOTOS: "before_photos",
   CLEANING: "cleaning",
   AFTER_PHOTOS: "after_photos",
+  PASSES: "passes",
   REVIEW: "review",
 };
 
@@ -34,10 +36,12 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   const [photoStatus, setPhotoStatus] = useState({
     hasBeforePhotos: false,
     hasAfterPhotos: false,
+    hasPassesPhotos: false,
     beforePhotosCount: 0,
     afterPhotosCount: 0,
+    passesPhotosCount: 0,
   });
-  const [allPhotos, setAllPhotos] = useState({ before: [], after: [] });
+  const [allPhotos, setAllPhotos] = useState({ before: [], after: [], passes: [] });
   const [completing, setCompleting] = useState(false);
   const [checklistProgress, setChecklistProgress] = useState({
     percent: 0,
@@ -70,10 +74,12 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         // Only auto-advance on initial load (when autoAdvance is true)
         // This prevents advancing when user is still adding photos
         if (autoAdvance) {
-          if (data.hasBeforePhotos && data.hasAfterPhotos) {
+          if (data.hasBeforePhotos && data.hasAfterPhotos && data.hasPassesPhotos) {
             setCurrentStep(STEPS.REVIEW);
             // Load photos for the review screen
             loadAllPhotos();
+          } else if (data.hasBeforePhotos && data.hasAfterPhotos) {
+            setCurrentStep(STEPS.PASSES);
           } else if (data.hasBeforePhotos) {
             setCurrentStep(STEPS.CLEANING);
           }
@@ -100,6 +106,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         setAllPhotos({
           before: data.beforePhotos || [],
           after: data.afterPhotos || [],
+          passes: data.passesPhotos || [],
         });
       }
     } catch (error) {
@@ -125,6 +132,11 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   };
 
   const handleAfterPhotosComplete = () => {
+    checkPhotoStatus();
+    setCurrentStep(STEPS.PASSES);
+  };
+
+  const handlePassesComplete = () => {
     checkPhotoStatus();
     loadAllPhotos();
     setCurrentStep(STEPS.REVIEW);
@@ -197,6 +209,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
       { key: STEPS.BEFORE_PHOTOS, label: "Before" },
       { key: STEPS.CLEANING, label: "Clean" },
       { key: STEPS.AFTER_PHOTOS, label: "After" },
+      { key: STEPS.PASSES, label: "Passes" },
       { key: STEPS.REVIEW, label: "Complete" },
     ];
 
@@ -265,7 +278,9 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   );
 
   const renderReviewStep = () => {
-    const hasAnyPhotos = allPhotos.before.length > 0 || allPhotos.after.length > 0;
+    const hasAnyPhotos = allPhotos.before.length > 0 || allPhotos.after.length > 0 || allPhotos.passes.length > 0;
+    const passesPhotosOnly = allPhotos.passes.filter((p) => !p.isNotApplicable);
+    const hasNAPasses = allPhotos.passes.some((p) => p.isNotApplicable);
 
     return (
     <ScrollView style={styles.reviewContainer}>
@@ -273,7 +288,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         <Text style={styles.reviewTitle}>Review & Complete</Text>
         <Text style={styles.reviewSubtitle}>
           {hasAnyPhotos
-            ? "Review your before and after photos, then complete the job."
+            ? "Review your photos and pass verification, then complete the job."
             : isBusinessOwner
             ? "Complete the job for your client."
             : "Review and complete the job."}
@@ -327,6 +342,39 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
           </ScrollView>
         </View>
       )}
+
+      {/* Pass Verification Section */}
+      <View style={styles.photosReviewSection}>
+        <Text style={styles.photosReviewTitle}>Pass Verification</Text>
+        {hasNAPasses ? (
+          <View style={styles.naPassesBadge}>
+            <Text style={styles.naPassesText}>✓ No passes at this property (N/A)</Text>
+          </View>
+        ) : passesPhotosOnly.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.photosReviewScroll}
+          >
+            {passesPhotosOnly.map((photo) => (
+              <View key={photo.id} style={styles.reviewPhotoCard}>
+                <Image
+                  source={{ uri: photo.photoData }}
+                  style={styles.reviewPhotoImage}
+                  resizeMode="cover"
+                />
+                {photo.room && (
+                  <Text style={styles.reviewPhotoRoom}>{photo.room}</Text>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.naPassesBadge}>
+            <Text style={styles.naPassesTextPending}>⚠ Pass verification pending</Text>
+          </View>
+        )}
+      </View>
 
       {isBusinessOwner && !hasAnyPhotos && (
         <View style={styles.noPhotosPlaceholder}>
@@ -411,12 +459,30 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
           {isBusinessOwner && (
             <TouchableOpacity
               style={styles.skipButton}
+              onPress={() => setCurrentStep(STEPS.PASSES)}
+            >
+              <Text style={styles.skipButtonText}>Skip After Photos</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {currentStep === STEPS.PASSES && (
+        <View style={{ flex: 1 }}>
+          <PassVerificationCapture
+            appointmentId={appointment.id}
+            onPhotosUpdated={checkPhotoStatus}
+            onComplete={handlePassesComplete}
+          />
+          {isBusinessOwner && (
+            <TouchableOpacity
+              style={styles.skipButton}
               onPress={() => {
                 loadAllPhotos();
                 setCurrentStep(STEPS.REVIEW);
               }}
             >
-              <Text style={styles.skipButtonText}>Skip After Photos</Text>
+              <Text style={styles.skipButtonText}>Skip Pass Verification</Text>
             </TouchableOpacity>
           )}
         </View>

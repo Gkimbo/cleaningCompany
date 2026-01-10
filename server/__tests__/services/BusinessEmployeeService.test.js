@@ -9,6 +9,7 @@ jest.mock("../../models", () => ({
   User: {
     findByPk: jest.fn(),
     findOne: jest.fn(),
+    create: jest.fn(),
   },
   BusinessEmployee: {
     findOne: jest.fn(),
@@ -429,6 +430,492 @@ describe("BusinessEmployeeService", () => {
           terminationReason: null,
         }),
         expect.objectContaining({ transaction: expect.anything() })
+      );
+    });
+  });
+
+  // =============================================
+  // validateInviteToken
+  // =============================================
+  describe("validateInviteToken", () => {
+    it("should return employee for valid token", async () => {
+      const mockEmployee = {
+        id: 1,
+        inviteToken: "abc123def456abc123def456abc12345",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        status: "pending_invite",
+        businessOwner: {
+          id: 100,
+          firstName: "Jane",
+          lastName: "Owner",
+          businessName: "CleanCo",
+        },
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const result = await BusinessEmployeeService.validateInviteToken(
+        "abc123def456abc123def456abc12345"
+      );
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe(1);
+      expect(BusinessEmployee.findOne).toHaveBeenCalledWith({
+        where: { inviteToken: "abc123def456abc123def456abc12345" },
+        include: expect.any(Array),
+      });
+    });
+
+    it("should return null for invalid token format (too short)", async () => {
+      const result = await BusinessEmployeeService.validateInviteToken("short");
+
+      expect(result).toBeNull();
+      expect(BusinessEmployee.findOne).not.toHaveBeenCalled();
+    });
+
+    it("should return null for null token", async () => {
+      const result = await BusinessEmployeeService.validateInviteToken(null);
+
+      expect(result).toBeNull();
+    });
+
+    it("should return null for non-existent token", async () => {
+      BusinessEmployee.findOne.mockResolvedValue(null);
+
+      const result = await BusinessEmployeeService.validateInviteToken(
+        "abc123def456abc123def456abc12345"
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it("should return isExpired flag for expired invitation", async () => {
+      const mockEmployee = {
+        id: 1,
+        inviteExpiresAt: new Date(Date.now() - 1000), // Expired
+        status: "pending_invite",
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const result = await BusinessEmployeeService.validateInviteToken(
+        "abc123def456abc123def456abc12345"
+      );
+
+      expect(result.isExpired).toBe(true);
+    });
+
+    it("should return isAlreadyAccepted flag for active employee", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "active",
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const result = await BusinessEmployeeService.validateInviteToken(
+        "abc123def456abc123def456abc12345"
+      );
+
+      expect(result.isAlreadyAccepted).toBe(true);
+    });
+
+    it("should return isTerminated flag for terminated employee", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "terminated",
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const result = await BusinessEmployeeService.validateInviteToken(
+        "abc123def456abc123def456abc12345"
+      );
+
+      expect(result.isTerminated).toBe(true);
+    });
+  });
+
+  // =============================================
+  // acceptInvite (for existing users)
+  // =============================================
+  describe("acceptInvite", () => {
+    it("should accept invitation and link user to employee", async () => {
+      const mockEmployee = {
+        id: 1,
+        businessOwnerId: 100,
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        update: jest.fn().mockResolvedValue(true),
+        reload: jest.fn().mockImplementation(function () {
+          return Promise.resolve(this);
+        }),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      const mockUser = {
+        id: 200,
+        employeeOfBusinessId: null,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      // First call is for validateInviteToken, second for finding the user
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+      User.findByPk.mockResolvedValue(mockUser);
+
+      const result = await BusinessEmployeeService.acceptInvite(
+        "abc123def456abc123def456abc12345",
+        200
+      );
+
+      expect(result).toBeDefined();
+      expect(mockEmployee.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 200,
+          status: "active",
+          inviteToken: null,
+        }),
+        expect.any(Object)
+      );
+      expect(mockUser.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "employee",
+          employeeOfBusinessId: 100,
+          isMarketplaceCleaner: false,
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it("should throw error for invalid token", async () => {
+      BusinessEmployee.findOne.mockResolvedValue(null);
+
+      await expect(
+        BusinessEmployeeService.acceptInvite("invalidtoken12345678901234567890", 200)
+      ).rejects.toThrow("Invalid invitation token");
+    });
+
+    it("should throw error for expired invitation", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() - 1000),
+        toJSON: function () {
+          return { ...this, toJSON: undefined, isExpired: true };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      await expect(
+        BusinessEmployeeService.acceptInvite("abc123def456abc123def456abc12345", 200)
+      ).rejects.toThrow("Invitation has expired");
+    });
+
+    it("should throw error if user not found", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+      User.findByPk.mockResolvedValue(null);
+
+      await expect(
+        BusinessEmployeeService.acceptInvite("abc123def456abc123def456abc12345", 999)
+      ).rejects.toThrow("User not found");
+    });
+
+    it("should throw error if user already employee of another business", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      const mockUser = {
+        id: 200,
+        employeeOfBusinessId: 999, // Already employed
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+      User.findByPk.mockResolvedValue(mockUser);
+
+      await expect(
+        BusinessEmployeeService.acceptInvite("abc123def456abc123def456abc12345", 200)
+      ).rejects.toThrow("User is already an employee of another business");
+    });
+  });
+
+  // =============================================
+  // acceptInviteWithSignup (create new user)
+  // =============================================
+  describe("acceptInviteWithSignup", () => {
+    const validUserData = {
+      firstName: "John",
+      lastName: "Employee",
+      username: "johnemp",
+      password: "AAbb@@33cc",
+      phone: "5551234567",
+      termsId: 1,
+      privacyPolicyId: 1,
+    };
+
+    it("should create user and accept invitation", async () => {
+      const mockEmployee = {
+        id: 1,
+        businessOwnerId: 100,
+        email: "employee@example.com",
+        phone: null,
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        update: jest.fn().mockResolvedValue(true),
+        reload: jest.fn().mockImplementation(function () {
+          return Promise.resolve(this);
+        }),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      const mockNewUser = {
+        id: 200,
+        firstName: "John",
+        lastName: "Employee",
+        type: "employee",
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+      User.findOne.mockResolvedValue(null); // No existing username or email
+      User.create.mockResolvedValue(mockNewUser);
+
+      const result = await BusinessEmployeeService.acceptInviteWithSignup(
+        "abc123def456abc123def456abc12345",
+        validUserData
+      );
+
+      expect(result).toBeDefined();
+      expect(result.user).toBeDefined();
+      expect(result.employee).toBeDefined();
+      expect(User.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          firstName: "John",
+          lastName: "Employee",
+          username: "johnemp",
+          email: "employee@example.com",
+          type: "employee",
+          employeeOfBusinessId: 100,
+        }),
+        expect.any(Object)
+      );
+    });
+
+    it("should throw error if required fields missing", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      await expect(
+        BusinessEmployeeService.acceptInviteWithSignup("abc123def456abc123def456abc12345", {
+          firstName: "John",
+        })
+      ).rejects.toThrow("First name, last name, username, and password are required");
+    });
+
+    it("should throw error if username too short", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      await expect(
+        BusinessEmployeeService.acceptInviteWithSignup("abc123def456abc123def456abc12345", {
+          ...validUserData,
+          username: "abc",
+        })
+      ).rejects.toThrow("Username must be between 4 and 12 characters");
+    });
+
+    it("should throw error if username too long", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      await expect(
+        BusinessEmployeeService.acceptInviteWithSignup("abc123def456abc123def456abc12345", {
+          ...validUserData,
+          username: "waytoolongusername",
+        })
+      ).rejects.toThrow("Username must be between 4 and 12 characters");
+    });
+
+    it("should throw error if username already exists", async () => {
+      const mockEmployee = {
+        id: 1,
+        email: "employee@example.com",
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+      User.findOne.mockResolvedValue({ id: 999 }); // Username exists
+
+      await expect(
+        BusinessEmployeeService.acceptInviteWithSignup("abc123def456abc123def456abc12345", validUserData)
+      ).rejects.toThrow("Username already exists");
+    });
+
+    it("should throw error if email already has account", async () => {
+      const mockEmployee = {
+        id: 1,
+        email: "employee@example.com",
+        status: "pending_invite",
+        inviteExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+      User.findOne
+        .mockResolvedValueOnce(null) // Username check passes
+        .mockResolvedValueOnce({ id: 999 }); // Email exists
+
+      await expect(
+        BusinessEmployeeService.acceptInviteWithSignup("abc123def456abc123def456abc12345", validUserData)
+      ).rejects.toThrow("An account with this email already exists");
+    });
+  });
+
+  // =============================================
+  // declineInvite
+  // =============================================
+  describe("declineInvite", () => {
+    it("should decline invitation successfully", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "pending_invite",
+        update: jest.fn().mockResolvedValue(true),
+        toJSON: function () {
+          return { ...this, toJSON: undefined };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      await BusinessEmployeeService.declineInvite("abc123def456abc123def456abc12345");
+
+      expect(mockEmployee.update).toHaveBeenCalledWith({
+        inviteToken: null,
+        inviteExpiresAt: null,
+        status: "declined",
+      });
+    });
+
+    it("should throw error for invalid token", async () => {
+      BusinessEmployee.findOne.mockResolvedValue(null);
+
+      await expect(
+        BusinessEmployeeService.declineInvite("invalidtoken12345678901234567890")
+      ).rejects.toThrow("Invalid invitation token");
+    });
+
+    it("should throw error if invitation already accepted", async () => {
+      const mockEmployee = {
+        id: 1,
+        status: "active",
+        isAlreadyAccepted: true,
+        toJSON: function () {
+          return { ...this, toJSON: undefined, isAlreadyAccepted: true };
+        },
+      };
+
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      await expect(
+        BusinessEmployeeService.declineInvite("abc123def456abc123def456abc12345")
+      ).rejects.toThrow("Invitation has already been accepted");
+    });
+  });
+
+  // =============================================
+  // resendInvite
+  // =============================================
+  describe("resendInvite", () => {
+    it("should generate new token and update expiration", async () => {
+      const mockEmployee = {
+        id: 1,
+        businessOwnerId: 100,
+        status: "pending_invite",
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      // First call for finding the employee, subsequent calls for token uniqueness check
+      BusinessEmployee.findOne
+        .mockResolvedValueOnce(mockEmployee) // Find employee
+        .mockResolvedValue(null); // Token uniqueness checks
+
+      const result = await BusinessEmployeeService.resendInvite(1, 100);
+
+      expect(result).toBeDefined();
+      expect(mockEmployee.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inviteToken: expect.any(String),
+          inviteExpiresAt: expect.any(Date),
+          invitedAt: expect.any(Date),
+        })
+      );
+    });
+
+    it("should throw error if employee not found", async () => {
+      BusinessEmployee.findOne.mockResolvedValue(null);
+
+      await expect(BusinessEmployeeService.resendInvite(999, 100)).rejects.toThrow(
+        "Employee not found or invite already accepted"
       );
     });
   });

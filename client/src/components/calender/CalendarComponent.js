@@ -4,7 +4,7 @@ import { Calendar } from "react-native-calendars";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { useNavigate } from "react-router-native";
-import { usePricing, getTimeWindowSurcharge, getTimeWindowLabel } from "../../context/PricingContext";
+import { usePricing, getTimeWindowSurcharge, getTimeWindowLabel, isLastMinuteBooking } from "../../context/PricingContext";
 
 const CalendarComponent = ({
   onDatesSelected,
@@ -27,6 +27,8 @@ const CalendarComponent = ({
   const [redirectToBill, setRedirectToBill] = useState(false);
   const [cancellationFee, setCancellationFee] = useState(0);
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+  const [lastMinuteModalVisible, setLastMinuteModalVisible] = useState(false);
+  const [pendingLastMinuteDate, setPendingLastMinuteDate] = useState(null);
   const navigate = useNavigate();
 
   // Get pricing from database
@@ -36,7 +38,7 @@ const CalendarComponent = ({
   const timeWindowInfo = getTimeWindowLabel(pricing, timeToBeCompleted);
   const hasTimeWindowSurcharge = timeWindowInfo.surcharge > 0;
 
-  const calculatePrice = () => {
+  const calculatePrice = (dateString = null) => {
     // Fallbacks match database defaults in case pricing is unavailable
     const basePrice = pricing?.basePrice ?? 150;
     const extraBedBathFee = pricing?.extraBedBathFee ?? 50;
@@ -85,34 +87,90 @@ const CalendarComponent = ({
     return price;
   };
 
+  // Check if a date is a last-minute booking and get fee info
+  const getLastMinuteInfo = (dateString) => {
+    if (!dateString) return { isLastMinute: false, fee: 0 };
+    // Create date at noon to avoid timezone issues
+    const appointmentDate = new Date(dateString + "T12:00:00");
+    return isLastMinuteBooking(appointmentDate, pricing);
+  };
+
+  // Calculate price with last-minute fee if applicable
+  const calculatePriceWithLastMinute = (dateString) => {
+    const basePrice = calculatePrice(dateString);
+    const lastMinuteInfo = getLastMinuteInfo(dateString);
+    return {
+      price: basePrice + lastMinuteInfo.fee,
+      lastMinuteFee: lastMinuteInfo.fee,
+      isLastMinute: lastMinuteInfo.isLastMinute,
+    };
+  };
+
   const handleDateSelect = (date) => {
     const currentDate = new Date();
     const selectedDate = new Date(date.dateString);
 
-    const isWithinWeek =
-      selectedDate.getTime() - currentDate.getTime() <= 7 * 24 * 60 * 60 * 1000;
+    // Check if date is in the past
+    if (selectedDate < currentDate) {
+      setError("Cannot book appointments in the past.");
+      return;
+    }
 
-    if (isWithinWeek) {
-      setError("Cannot book appointments within a week of today's date.");
+    setError(null);
+    const updatedDates = { ...selectedDates };
+
+    // If already selected, just remove it
+    if (updatedDates[date.dateString]) {
+      delete updatedDates[date.dateString];
+      setSelectedDates(updatedDates);
+      return;
+    }
+
+    // Check if this is a last-minute booking
+    const lastMinuteInfo = getLastMinuteInfo(date.dateString);
+
+    if (lastMinuteInfo.isLastMinute) {
+      // Show confirmation modal for last-minute bookings
+      setPendingLastMinuteDate(date);
+      setLastMinuteModalVisible(true);
     } else {
-      setError(null);
-      const updatedDates = { ...selectedDates };
-      if (updatedDates[date.dateString]) {
-        delete updatedDates[date.dateString];
-      } else {
-        updatedDates[date.dateString] = {
-          selected: true,
-          price: calculatePrice(),
-        };
-      }
-
+      // Regular booking - add directly
+      updatedDates[date.dateString] = {
+        selected: true,
+        price: calculatePrice(),
+        isLastMinuteBooking: false,
+        lastMinuteFeeApplied: 0,
+      };
       setSelectedDates(updatedDates);
     }
   };
 
+  const confirmLastMinuteBooking = () => {
+    if (!pendingLastMinuteDate) return;
+
+    const { price, lastMinuteFee, isLastMinute } = calculatePriceWithLastMinute(pendingLastMinuteDate.dateString);
+
+    const updatedDates = { ...selectedDates };
+    updatedDates[pendingLastMinuteDate.dateString] = {
+      selected: true,
+      price: price,
+      isLastMinuteBooking: isLastMinute,
+      lastMinuteFeeApplied: lastMinuteFee,
+    };
+
+    setSelectedDates(updatedDates);
+    setLastMinuteModalVisible(false);
+    setPendingLastMinuteDate(null);
+  };
+
+  const cancelLastMinuteBooking = () => {
+    setLastMinuteModalVisible(false);
+    setPendingLastMinuteDate(null);
+  };
+
   const handleSubmit = () => {
     const selectedDateArray = Object.keys(selectedDates).map((dateString) => {
-      const { price } = selectedDates[dateString];
+      const { price, isLastMinuteBooking: isLastMinute, lastMinuteFeeApplied } = selectedDates[dateString];
       return {
         date: dateString,
         price,
@@ -121,6 +179,8 @@ const CalendarComponent = ({
         bringSheets: sheets,
         sheetConfigurations: sheets === "yes" ? bedConfigurations : null,
         towelConfigurations: towels === "yes" ? bathroomConfigurations : null,
+        isLastMinuteBooking: isLastMinute || false,
+        lastMinuteFeeApplied: lastMinuteFeeApplied || 0,
       };
     });
 
@@ -227,12 +287,23 @@ const CalendarComponent = ({
     const isBooked = isDateBooked(date);
     const isSelected = selectedDates[date.dateString];
     const isPastUnpaid = isDatePastAndNotPaid(date);
-    const price = isBooked ? priceOfBooking(date) : calculatePrice();
+
+    // Check if this date would be a last-minute booking
+    const lastMinuteInfo = !isPast && !isBooked ? getLastMinuteInfo(date.dateString) : { isLastMinute: false, fee: 0 };
+
+    // Calculate price - include last-minute fee for applicable dates
+    const basePrice = calculatePrice();
+    const price = isBooked
+      ? priceOfBooking(date)
+      : isSelected
+      ? selectedDates[date.dateString].price
+      : basePrice + lastMinuteInfo.fee;
 
     // Get appointment details for time window display
     const appointment = isBooked ? getAppointmentDetails(date) : null;
     const appointmentTimeWindow = appointment?.timeToBeCompleted;
     const hasAppointmentTimeConstraint = appointmentTimeWindow && appointmentTimeWindow !== "anytime";
+    const isLastMinuteDate = lastMinuteInfo.isLastMinute;
 
     // Determine the style based on state
     let containerStyle = [styles.dayContainer];
@@ -255,6 +326,8 @@ const CalendarComponent = ({
       containerStyle.push(styles.daySelected);
       textStyle.push(styles.dayTextLight);
       priceTextStyle.push(styles.priceTextLight);
+    } else if (isLastMinuteDate) {
+      containerStyle.push(styles.dayLastMinute);
     } else {
       containerStyle.push(styles.dayAvailable);
     }
@@ -293,6 +366,11 @@ const CalendarComponent = ({
         {isSelected && (
           <View style={styles.selectedBadge}>
             <Icon name="plus" size={8} color="#fff" />
+          </View>
+        )}
+        {!isPast && !isBooked && !isSelected && isLastMinuteDate && (
+          <View style={styles.lastMinuteBadge}>
+            <Icon name="bolt" size={7} color="#fff" />
           </View>
         )}
       </Pressable>
@@ -366,6 +444,10 @@ const CalendarComponent = ({
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, styles.legendDotTimeWindow]} />
             <Text style={styles.legendText}>Time Window</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, styles.legendDotLastMinute]} />
+            <Text style={styles.legendText}>Last Minute</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, styles.legendDotUnpaid]} />
@@ -567,6 +649,101 @@ const CalendarComponent = ({
           </View>
         </View>
       </Modal>
+
+      {/* Last-Minute Booking Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={lastMinuteModalVisible}
+        onRequestClose={cancelLastMinuteBooking}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={[styles.modalIconContainer, styles.modalIconLastMinute]}>
+              <Icon name="bolt" size={28} color="#f59e0b" />
+            </View>
+
+            <Text style={styles.modalTitle}>Last-Minute Booking</Text>
+
+            {/* Date and Fee Info */}
+            {pendingLastMinuteDate && (
+              <View style={styles.modalAppointmentCard}>
+                <View style={styles.modalAppointmentRow}>
+                  <Icon name="calendar" size={14} color="#64748b" />
+                  <Text style={styles.modalAppointmentDate}>
+                    {formatDate(pendingLastMinuteDate.dateString)}
+                  </Text>
+                </View>
+                <View style={styles.modalAppointmentRow}>
+                  <Icon name="clock-o" size={14} color="#64748b" />
+                  <Text style={styles.modalAppointmentPrice}>
+                    Within {pricing?.lastMinute?.thresholdHours || 48} hours
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.lastMinuteFeeInfo}>
+              <Icon name="info-circle" size={14} color="#d97706" />
+              <Text style={styles.lastMinuteFeeText}>
+                This is a last-minute booking. An additional{" "}
+                <Text style={styles.lastMinuteFeeAmount}>
+                  ${pricing?.lastMinute?.fee || 50} fee
+                </Text>{" "}
+                will be added to help ensure a cleaner is available on short notice.
+              </Text>
+            </View>
+
+            {/* Price Breakdown */}
+            {pendingLastMinuteDate && (
+              <View style={styles.lastMinutePriceBreakdown}>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Base cleaning</Text>
+                  <Text style={styles.priceValue}>${calculatePrice()}</Text>
+                </View>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Last-minute fee</Text>
+                  <Text style={[styles.priceValue, styles.lastMinuteFeeValue]}>
+                    +${pricing?.lastMinute?.fee || 50}
+                  </Text>
+                </View>
+                <View style={[styles.priceRow, styles.priceTotalRow]}>
+                  <Text style={styles.priceTotalLabel}>Total</Text>
+                  <Text style={styles.priceTotalValue}>
+                    ${calculatePrice() + (pricing?.lastMinute?.fee || 50)}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButtonConfirmLastMinute,
+                  pressed && styles.modalButtonPressed,
+                ]}
+                onPress={confirmLastMinuteBooking}
+              >
+                <Icon name="check" size={14} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.modalButtonKeepText}>Book with Fee</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButtonCancel,
+                  pressed && styles.modalButtonCancelPressed,
+                ]}
+                onPress={cancelLastMinuteBooking}
+              >
+                <Icon name="times" size={14} color="#64748b" style={{ marginRight: 8 }} />
+                <Text style={styles.modalButtonCancelTextGray}>Choose Different Date</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -682,6 +859,9 @@ const styles = StyleSheet.create({
   legendDotTimeWindow: {
     backgroundColor: "#d97706",
   },
+  legendDotLastMinute: {
+    backgroundColor: "#f59e0b",
+  },
   legendDotUnpaid: {
     backgroundColor: "#ef4444",
   },
@@ -729,6 +909,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
+  },
+  dayLastMinute: {
+    backgroundColor: "#fef3c7",
+    borderWidth: 1,
+    borderColor: "#f59e0b",
   },
   dayDisabled: {
     backgroundColor: "transparent",
@@ -790,6 +975,17 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     backgroundColor: "rgba(255,255,255,0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  lastMinuteBadge: {
+    position: "absolute",
+    top: 3,
+    right: 3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#f59e0b",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1063,6 +1259,87 @@ const styles = StyleSheet.create({
   },
   modalButtonCancelText: {
     color: "#dc2626",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  // Last-Minute Modal Styles
+  modalIconLastMinute: {
+    backgroundColor: "#fef3c7",
+  },
+  lastMinuteFeeInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: "#fffbeb",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    gap: 10,
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#fde68a",
+  },
+  lastMinuteFeeText: {
+    fontSize: 14,
+    color: "#92400e",
+    flex: 1,
+    lineHeight: 20,
+  },
+  lastMinuteFeeAmount: {
+    fontWeight: "700",
+    color: "#d97706",
+  },
+  lastMinutePriceBreakdown: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    padding: 14,
+    width: "100%",
+    marginBottom: 20,
+  },
+  priceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 6,
+  },
+  priceLabel: {
+    fontSize: 14,
+    color: "#64748b",
+  },
+  priceValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#1e293b",
+  },
+  lastMinuteFeeValue: {
+    color: "#d97706",
+  },
+  priceTotalRow: {
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    marginTop: 8,
+    paddingTop: 12,
+  },
+  priceTotalLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  priceTotalValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#6366f1",
+  },
+  modalButtonConfirmLastMinute: {
+    backgroundColor: "#f59e0b",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    borderRadius: 14,
+  },
+  modalButtonCancelTextGray: {
+    color: "#64748b",
     fontSize: 16,
     fontWeight: "600",
   },

@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import PushNotificationService from "./PushNotificationService";
-import { OfflineManager } from "./offline";
+import { OfflineManager, AutoSyncOrchestrator } from "./offline";
 
 const AuthContext = createContext({
 	user: null,
@@ -26,6 +26,8 @@ const AuthProvider = ({ children }) => {
 				setUser({ token });
 				// Initialize offline manager with token
 				OfflineManager.initialize(token).catch(console.error);
+				// Set auth token on auto-sync orchestrator
+				AutoSyncOrchestrator.setAuthToken(token);
 			}
 		} catch (error) {
 			console.log("Error checking token:", error);
@@ -40,6 +42,8 @@ const AuthProvider = ({ children }) => {
 			setUser({ token });
 			// Initialize offline manager with token
 			OfflineManager.initialize(token).catch(console.error);
+			// Set auth token on auto-sync orchestrator
+			AutoSyncOrchestrator.setAuthToken(token);
 		} catch (error) {
 			console.log("Error saving token:", error);
 		}
@@ -57,6 +61,9 @@ const AuthProvider = ({ children }) => {
 			await AsyncStorage.removeItem("token");
 			// Reset offline manager (keeps data encrypted locally)
 			OfflineManager.reset().catch(console.error);
+			// Clear auth token and cancel pending sync retries
+			AutoSyncOrchestrator.setAuthToken(null);
+			AutoSyncOrchestrator.cancelPendingRetry();
 			// Set the user as logged out
 			setUser(null);
 		} catch (error) {

@@ -256,6 +256,124 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
+		// Last-minute booking fields
+		isLastMinuteBooking: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if booked within threshold hours of appointment",
+		},
+		lastMinuteFeeApplied: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Last-minute fee amount in dollars (null if not applicable)",
+		},
+		lastMinuteNotificationsSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When urgent notifications were sent to nearby cleaners",
+		},
+		// 2-Step Completion Confirmation fields
+		completionStatus: {
+			type: DataTypes.ENUM("in_progress", "submitted", "approved", "auto_approved"),
+			allowNull: false,
+			defaultValue: "in_progress",
+			comment: "2-step completion status: in_progress -> submitted -> approved/auto_approved",
+		},
+		completionSubmittedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When cleaner marked job complete and submitted checklist",
+		},
+		completionChecklistData: {
+			type: DataTypes.JSONB,
+			allowNull: true,
+			comment: "Checklist progress data submitted by cleaner",
+		},
+		completionNotes: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Optional notes from cleaner about the cleaning",
+		},
+		completionApprovedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When completion was approved (manually or auto)",
+		},
+		completionApprovedBy: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "User ID who approved, null if auto-approved by system",
+		},
+		autoApprovalExpiresAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When auto-approval will trigger if homeowner doesn't respond",
+		},
+		homeownerFeedbackRequired: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if homeowner selected 'doesn't look good' - review required",
+		},
+		// Cancellation tracking fields
+		cancellationInitiatedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When cancellation was initiated",
+		},
+		cancellationInitiatedBy: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "User ID who initiated the cancellation",
+		},
+		cancellationConfirmedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When cancellation was confirmed/processed",
+		},
+		cancellationReason: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Reason provided for cancellation",
+		},
+		cancellationMethod: {
+			type: DataTypes.ENUM("app", "web", "support", "system"),
+			allowNull: true,
+			comment: "How the cancellation was submitted",
+		},
+		wasCancelled: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "Whether this appointment was cancelled",
+		},
+		cancellationType: {
+			type: DataTypes.ENUM("homeowner", "cleaner", "system", "weather"),
+			allowNull: true,
+			comment: "Who/what initiated the cancellation",
+		},
+		hasActiveAppeal: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "Whether there is an active appeal for this cancellation",
+		},
+		appealId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Reference to the active appeal if any",
+		},
+		cancellationConfirmationId: {
+			type: DataTypes.STRING,
+			allowNull: true,
+			comment: "Human-readable confirmation ID (e.g., CXL-2026-0109-A7B3C9)",
+		},
+		appealWindowExpiresAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Deadline for submitting an appeal (72 hours from cancellation)",
+		},
 	});
 
 	// Define the one-to-many relationship with User
@@ -352,6 +470,56 @@ module.exports = (sequelize, DataTypes) => {
 			decryptPIIFields(result);
 		}
 	});
+
+	// =========================================================================
+	// 2-Step Completion Confirmation Helper Methods
+	// =========================================================================
+
+	/**
+	 * Check if appointment is awaiting homeowner approval
+	 */
+	UserAppointments.prototype.isAwaitingApproval = function () {
+		return this.completionStatus === "submitted";
+	};
+
+	/**
+	 * Check if auto-approval window has expired
+	 */
+	UserAppointments.prototype.isAutoApprovalExpired = function () {
+		return (
+			this.completionStatus === "submitted" &&
+			this.autoApprovalExpiresAt &&
+			new Date() > new Date(this.autoApprovalExpiresAt)
+		);
+	};
+
+	/**
+	 * Check if appointment can be approved by homeowner
+	 */
+	UserAppointments.prototype.canBeApproved = function () {
+		return this.completionStatus === "submitted" && !this.completed;
+	};
+
+	/**
+	 * Check if completion has been approved (manually or auto)
+	 */
+	UserAppointments.prototype.isCompletionApproved = function () {
+		return (
+			this.completionStatus === "approved" ||
+			this.completionStatus === "auto_approved"
+		);
+	};
+
+	/**
+	 * Get time remaining until auto-approval (in seconds)
+	 */
+	UserAppointments.prototype.getTimeUntilAutoApproval = function () {
+		if (!this.autoApprovalExpiresAt || this.completionStatus !== "submitted") {
+			return null;
+		}
+		const remaining = new Date(this.autoApprovalExpiresAt).getTime() - Date.now();
+		return Math.max(0, Math.floor(remaining / 1000));
+	};
 
 	return UserAppointments;
 };

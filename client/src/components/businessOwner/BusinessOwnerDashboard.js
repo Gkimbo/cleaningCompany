@@ -333,6 +333,23 @@ const BusinessOwnerDashboard = ({ state }) => {
         />
       </View>
 
+      {/* Analytics Banner */}
+      <Pressable
+        style={styles.analyticsBanner}
+        onPress={() => navigate("/business-owner/analytics")}
+      >
+        <View style={styles.analyticsBannerIcon}>
+          <Icon name="line-chart" size={20} color={colors.primary[600]} />
+        </View>
+        <View style={styles.analyticsBannerContent}>
+          <Text style={styles.analyticsBannerTitle}>Business Analytics</Text>
+          <Text style={styles.analyticsBannerText}>
+            View performance, trends & insights
+          </Text>
+        </View>
+        <Icon name="chevron-right" size={16} color={colors.primary[600]} />
+      </Pressable>
+
       {/* Quick Actions */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -572,6 +589,39 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     paddingHorizontal: spacing.md,
     gap: spacing.md,
+  },
+  analyticsBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  analyticsBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    backgroundColor: colors.background.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  analyticsBannerContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  analyticsBannerTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[800],
+  },
+  analyticsBannerText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    marginTop: 2,
   },
   statsCard: {
     flex: 1,

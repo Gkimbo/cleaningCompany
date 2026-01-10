@@ -84,9 +84,56 @@ pricingRouter.get("/config", verifyOwner, async (req, res) => {
     const activeConfig = await PricingConfig.getActive();
 
     if (activeConfig) {
+      // Serialize config with proper decimal parsing
+      const serializedConfig = {
+        id: activeConfig.id,
+        basePrice: activeConfig.basePrice,
+        extraBedBathFee: activeConfig.extraBedBathFee,
+        halfBathFee: activeConfig.halfBathFee,
+        sheetFeePerBed: activeConfig.sheetFeePerBed,
+        towelFee: activeConfig.towelFee,
+        faceClothFee: activeConfig.faceClothFee,
+        timeWindowAnytime: activeConfig.timeWindowAnytime,
+        timeWindow10To3: activeConfig.timeWindow10To3,
+        timeWindow11To4: activeConfig.timeWindow11To4,
+        timeWindow12To2: activeConfig.timeWindow12To2,
+        cancellationFee: activeConfig.cancellationFee,
+        cancellationWindowDays: activeConfig.cancellationWindowDays,
+        homeownerPenaltyDays: activeConfig.homeownerPenaltyDays,
+        cleanerPenaltyDays: activeConfig.cleanerPenaltyDays,
+        // Parse decimal fields to ensure they're numbers, not strings
+        refundPercentage: parseFloat(activeConfig.refundPercentage),
+        platformFeePercent: parseFloat(activeConfig.platformFeePercent),
+        businessOwnerFeePercent: parseFloat(activeConfig.businessOwnerFeePercent || activeConfig.platformFeePercent),
+        multiCleanerPlatformFeePercent: parseFloat(activeConfig.multiCleanerPlatformFeePercent || 0.13),
+        incentiveRefundPercent: parseFloat(activeConfig.incentiveRefundPercent || 0.10),
+        incentiveCleanerPercent: parseFloat(activeConfig.incentiveCleanerPercent || 0.40),
+        largeBusinessFeePercent: parseFloat(activeConfig.largeBusinessFeePercent || 0.07),
+        largeBusinessMonthlyThreshold: activeConfig.largeBusinessMonthlyThreshold || 50,
+        largeBusinessLookbackMonths: activeConfig.largeBusinessLookbackMonths || 1,
+        soloLargeHomeBonus: activeConfig.soloLargeHomeBonus || 0,
+        largeHomeBedsThreshold: activeConfig.largeHomeBedsThreshold || 3,
+        largeHomeBathsThreshold: activeConfig.largeHomeBathsThreshold || 3,
+        multiCleanerOfferExpirationHours: activeConfig.multiCleanerOfferExpirationHours || 48,
+        urgentFillDays: activeConfig.urgentFillDays || 7,
+        finalWarningDays: activeConfig.finalWarningDays || 3,
+        highVolumeFee: activeConfig.highVolumeFee,
+        lastMinuteFee: activeConfig.lastMinuteFee || 50,
+        lastMinuteThresholdHours: activeConfig.lastMinuteThresholdHours || 48,
+        lastMinuteNotificationRadiusMiles: parseFloat(activeConfig.lastMinuteNotificationRadiusMiles || 25),
+        // Completion approval settings
+        completionAutoApprovalHours: activeConfig.completionAutoApprovalHours || 4,
+        completionRequiresPhotos: activeConfig.completionRequiresPhotos || false,
+        isActive: activeConfig.isActive,
+        updatedBy: activeConfig.updatedBy,
+        changeNote: activeConfig.changeNote,
+        createdAt: activeConfig.createdAt,
+        updatedAt: activeConfig.updatedAt,
+      };
+
       return res.json({
         source: "database",
-        config: activeConfig,
+        config: serializedConfig,
         formattedPricing: await PricingConfig.getFormattedPricing(),
       });
     }
@@ -170,6 +217,13 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
       largeBusinessFeePercent,
       largeBusinessMonthlyThreshold,
       largeBusinessLookbackMonths,
+      // Last-minute booking settings
+      lastMinuteFee,
+      lastMinuteThresholdHours,
+      lastMinuteNotificationRadiusMiles,
+      // Completion approval settings
+      completionAutoApprovalHours,
+      completionRequiresPhotos,
       // Other
       highVolumeFee,
       changeNote,
@@ -291,6 +345,19 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
       });
     }
 
+    // Validate completion approval settings
+    if (completionAutoApprovalHours !== undefined && (typeof completionAutoApprovalHours !== "number" || completionAutoApprovalHours < 1 || completionAutoApprovalHours > 24)) {
+      return res.status(400).json({
+        error: "completionAutoApprovalHours must be between 1 and 24",
+      });
+    }
+
+    if (completionRequiresPhotos !== undefined && typeof completionRequiresPhotos !== "boolean") {
+      return res.status(400).json({
+        error: "completionRequiresPhotos must be a boolean",
+      });
+    }
+
     // Build config update object with required and optional fields
     const configData = {
       basePrice,
@@ -326,6 +393,13 @@ pricingRouter.put("/config", verifyOwner, async (req, res) => {
     if (largeBusinessFeePercent !== undefined) configData.largeBusinessFeePercent = largeBusinessFeePercent;
     if (largeBusinessMonthlyThreshold !== undefined) configData.largeBusinessMonthlyThreshold = largeBusinessMonthlyThreshold;
     if (largeBusinessLookbackMonths !== undefined) configData.largeBusinessLookbackMonths = largeBusinessLookbackMonths;
+    // Add last-minute booking fields if provided
+    if (lastMinuteFee !== undefined) configData.lastMinuteFee = lastMinuteFee;
+    if (lastMinuteThresholdHours !== undefined) configData.lastMinuteThresholdHours = lastMinuteThresholdHours;
+    if (lastMinuteNotificationRadiusMiles !== undefined) configData.lastMinuteNotificationRadiusMiles = lastMinuteNotificationRadiusMiles;
+    // Add completion approval fields if provided
+    if (completionAutoApprovalHours !== undefined) configData.completionAutoApprovalHours = completionAutoApprovalHours;
+    if (completionRequiresPhotos !== undefined) configData.completionRequiresPhotos = completionRequiresPhotos;
 
     // Create new pricing config
     const newConfig = await PricingConfig.updatePricing(
@@ -404,6 +478,13 @@ pricingRouter.get("/history", verifyOwner, async (req, res) => {
           largeBusinessMonthlyThreshold: config.largeBusinessMonthlyThreshold || 50,
           largeBusinessLookbackMonths: config.largeBusinessLookbackMonths || 1,
           highVolumeFee: config.highVolumeFee,
+          // Last-minute booking fields
+          lastMinuteFee: config.lastMinuteFee || 50,
+          lastMinuteThresholdHours: config.lastMinuteThresholdHours || 48,
+          lastMinuteNotificationRadiusMiles: parseFloat(config.lastMinuteNotificationRadiusMiles || 25),
+          // Completion approval settings
+          completionAutoApprovalHours: config.completionAutoApprovalHours || 4,
+          completionRequiresPhotos: config.completionRequiresPhotos || false,
         },
       })),
     });

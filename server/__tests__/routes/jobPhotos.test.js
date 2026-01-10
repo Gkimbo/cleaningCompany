@@ -160,10 +160,109 @@ describe("Job Photos Router", () => {
 
       expect(response.status).toBe(201);
     });
+
+    it("should upload a passes photo successfully", async () => {
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        employeesAssigned: ["2"],
+      });
+      JobPhoto.create.mockResolvedValue({
+        id: 3,
+        appointmentId: 100,
+        photoType: "passes",
+        photoData: "base64passphoto",
+        room: "Beach Pass",
+        cleanerId: 2,
+        takenAt: new Date(),
+        isNotApplicable: false,
+      });
+
+      const response = await request(app)
+        .post("/api/v1/job-photos/upload")
+        .set("Authorization", `Bearer ${cleanerToken}`)
+        .send({
+          appointmentId: 100,
+          photoType: "passes",
+          photoData: "base64passphoto",
+          room: "Beach Pass",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.photo.photoType).toBe("passes");
+    });
+
+    it("should upload passes as N/A without photoData", async () => {
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        employeesAssigned: ["2"],
+      });
+      JobPhoto.create.mockResolvedValue({
+        id: 4,
+        appointmentId: 100,
+        photoType: "passes",
+        photoData: null,
+        cleanerId: 2,
+        takenAt: new Date(),
+        isNotApplicable: true,
+      });
+
+      const response = await request(app)
+        .post("/api/v1/job-photos/upload")
+        .set("Authorization", `Bearer ${cleanerToken}`)
+        .send({
+          appointmentId: 100,
+          photoType: "passes",
+          isNotApplicable: true,
+          notes: "No passes at this property",
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.photo.isNotApplicable).toBe(true);
+    });
+
+    it("should return 400 for passes without photoData and without isNotApplicable", async () => {
+      const response = await request(app)
+        .post("/api/v1/job-photos/upload")
+        .set("Authorization", `Bearer ${cleanerToken}`)
+        .send({
+          appointmentId: 100,
+          photoType: "passes",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain("photoData is required");
+    });
   });
 
   describe("GET /:appointmentId", () => {
-    it("should return photos for assigned cleaner", async () => {
+    it("should return photos for assigned cleaner including passes", async () => {
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        employeesAssigned: ["2"],
+        userId: 1,
+      });
+      User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
+      JobPhoto.findAll.mockResolvedValue([
+        { id: 1, photoType: "before", photoData: "data1" },
+        { id: 2, photoType: "after", photoData: "data2" },
+        { id: 3, photoType: "passes", photoData: "passdata", room: "Beach Pass", isNotApplicable: false },
+      ]);
+
+      const response = await request(app)
+        .get("/api/v1/job-photos/100")
+        .set("Authorization", `Bearer ${cleanerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.beforePhotos).toHaveLength(1);
+      expect(response.body.afterPhotos).toHaveLength(1);
+      expect(response.body.passesPhotos).toHaveLength(1);
+      expect(response.body.hasPassesPhotos).toBe(true);
+      expect(response.body.canComplete).toBe(true);
+    });
+
+    it("should return canComplete false without passes photos", async () => {
       UserAppointments.findByPk.mockResolvedValue({
         id: 100,
         employeesAssigned: ["2"],
@@ -180,8 +279,32 @@ describe("Job Photos Router", () => {
         .set("Authorization", `Bearer ${cleanerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.beforePhotos).toHaveLength(1);
-      expect(response.body.afterPhotos).toHaveLength(1);
+      expect(response.body.passesPhotos).toHaveLength(0);
+      expect(response.body.hasPassesPhotos).toBe(false);
+      expect(response.body.canComplete).toBe(false);
+    });
+
+    it("should show N/A passes photo in passes list", async () => {
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        employeesAssigned: ["2"],
+        userId: 1,
+      });
+      User.findByPk.mockResolvedValue({ id: 2, type: "cleaner" });
+      JobPhoto.findAll.mockResolvedValue([
+        { id: 1, photoType: "before", photoData: "data1" },
+        { id: 2, photoType: "after", photoData: "data2" },
+        { id: 3, photoType: "passes", photoData: null, isNotApplicable: true, notes: "No passes" },
+      ]);
+
+      const response = await request(app)
+        .get("/api/v1/job-photos/100")
+        .set("Authorization", `Bearer ${cleanerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.passesPhotos).toHaveLength(1);
+      expect(response.body.passesPhotos[0].isNotApplicable).toBe(true);
+      expect(response.body.hasPassesPhotos).toBe(true);
       expect(response.body.canComplete).toBe(true);
     });
 
@@ -246,10 +369,11 @@ describe("Job Photos Router", () => {
   });
 
   describe("GET /:appointmentId/status", () => {
-    it("should return photo status counts", async () => {
+    it("should return photo status counts including passes", async () => {
       JobPhoto.count
         .mockResolvedValueOnce(3) // before count
-        .mockResolvedValueOnce(2); // after count
+        .mockResolvedValueOnce(2) // after count
+        .mockResolvedValueOnce(1); // passes count
 
       const response = await request(app)
         .get("/api/v1/job-photos/100/status")
@@ -258,15 +382,32 @@ describe("Job Photos Router", () => {
       expect(response.status).toBe(200);
       expect(response.body.beforePhotosCount).toBe(3);
       expect(response.body.afterPhotosCount).toBe(2);
+      expect(response.body.passesPhotosCount).toBe(1);
       expect(response.body.hasBeforePhotos).toBe(true);
       expect(response.body.hasAfterPhotos).toBe(true);
+      expect(response.body.hasPassesPhotos).toBe(true);
       expect(response.body.canComplete).toBe(true);
+    });
+
+    it("should show canComplete false without passes photos", async () => {
+      JobPhoto.count
+        .mockResolvedValueOnce(2) // before count
+        .mockResolvedValueOnce(2) // after count
+        .mockResolvedValueOnce(0); // passes count
+
+      const response = await request(app)
+        .get("/api/v1/job-photos/100/status")
+        .set("Authorization", `Bearer ${cleanerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.canComplete).toBe(false);
     });
 
     it("should show canComplete false without both photo types", async () => {
       JobPhoto.count
         .mockResolvedValueOnce(2) // before count
-        .mockResolvedValueOnce(0); // after count
+        .mockResolvedValueOnce(0) // after count
+        .mockResolvedValueOnce(0); // passes count
 
       const response = await request(app)
         .get("/api/v1/job-photos/100/status")

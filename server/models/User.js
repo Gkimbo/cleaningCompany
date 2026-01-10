@@ -8,6 +8,7 @@ const PII_FIELDS = [
 	"email",
 	"notificationEmail",
 	"phone",
+	"serviceAreaAddress",
 ];
 
 module.exports = (sequelize, DataTypes) => {
@@ -178,6 +179,40 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "Years the business owner has been in business",
 		},
+		businessVerificationStatus: {
+			type: DataTypes.ENUM("none", "pending", "verified"),
+			allowNull: false,
+			defaultValue: "none",
+			comment: "Verification status for marketplace highlighting",
+		},
+		businessVerifiedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the business was verified",
+		},
+		businessDescription: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Business description/specialties for marketplace profile",
+		},
+		businessHighlightOptIn: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: true,
+			comment: "Whether business owner opts in to marketplace highlighting",
+		},
+		// Demo account field for owner preview mode
+		isDemoAccount: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True for demo accounts used in owner preview mode",
+		},
+		currentPreviewOwnerId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "For demo accounts: ID of owner currently previewing as this account (for email redirection)",
+		},
 		// Business employee fields
 		employeeOfBusinessId: {
 			type: DataTypes.INTEGER,
@@ -194,6 +229,71 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 			comment: "Timestamp when user accepted the calendar sync disclaimer",
+		},
+		// Cleaner service area fields for last-minute booking notifications
+		serviceAreaLatitude: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Cleaner service area center latitude (encrypted)",
+		},
+		serviceAreaLongitude: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Cleaner service area center longitude (encrypted)",
+		},
+		serviceAreaAddress: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Cleaner service area address for display (encrypted)",
+		},
+		serviceAreaRadiusMiles: {
+			type: DataTypes.DECIMAL(5, 2),
+			allowNull: true,
+			defaultValue: 30.0,
+			comment: "How far cleaner is willing to travel (in miles)",
+		},
+		// Cancellation Appeal tracking fields
+		appealStats: {
+			type: DataTypes.JSONB,
+			allowNull: true,
+			defaultValue: {
+				total: 0,
+				approved: 0,
+				denied: 0,
+				pending: 0,
+			},
+			comment: "Statistics about user appeal history",
+		},
+		lastAppealDate: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the user last submitted an appeal",
+		},
+		appealScrutinyLevel: {
+			type: DataTypes.ENUM("none", "watch", "high_risk"),
+			allowNull: false,
+			defaultValue: "none",
+			comment: "Level of scrutiny for this user based on appeal patterns",
+		},
+		appealScrutinyReason: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Explanation for current scrutiny level",
+		},
+		appealScrutinySetAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When scrutiny level was last updated",
+		},
+		appealPatterns: {
+			type: DataTypes.JSONB,
+			allowNull: true,
+			defaultValue: {
+				categoryCounts: {},
+				approvalRate: null,
+				avgDaysBetweenAppeals: null,
+			},
+			comment: "Pattern detection data for appeal abuse monitoring",
 		},
 	});
 

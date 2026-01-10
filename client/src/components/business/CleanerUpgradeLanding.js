@@ -77,7 +77,7 @@ const CleanerUpgradeLanding = ({ state }) => {
     {
       icon: "credit-card",
       title: "Automatic Payments",
-      description: "Get paid instantly when jobs are completed",
+      description: "Payment is automatically released after job completion",
     },
   ];
 

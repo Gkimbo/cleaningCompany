@@ -36,6 +36,8 @@ const BusinessSignupWizard = ({ dispatch }) => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -428,22 +430,41 @@ const BusinessSignupWizard = ({ dispatch }) => {
         <Text style={styles.inputLabel}>
           Password <Text style={styles.inputRequired}>*</Text>
         </Text>
-        <TextInput
+        <View
           style={[
-            styles.input,
-            focusedField === "password" && styles.inputFocused,
-            errors.password && styles.inputError,
+            styles.passwordContainer,
+            focusedField === "password" && styles.passwordContainerFocused,
+            errors.password && styles.passwordContainerError,
           ]}
-          placeholder="Create a strong password"
-          placeholderTextColor="#94a3b8"
-          value={formData.password}
-          onChangeText={(text) =>
-            setFormData({ ...formData, password: text })
-          }
-          onFocus={() => setFocusedField("password")}
-          onBlur={() => setFocusedField(null)}
-          secureTextEntry
-        />
+        >
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Create a strong password"
+            placeholderTextColor="#94a3b8"
+            value={formData.password}
+            onChangeText={(text) =>
+              setFormData({ ...formData, password: text })
+            }
+            onFocus={() => setFocusedField("password")}
+            onBlur={() => setFocusedField(null)}
+            secureTextEntry={!showPassword}
+            autoCorrect={false}
+            autoCapitalize="none"
+            spellCheck={false}
+            textContentType="oneTimeCode"
+            autoComplete="off"
+          />
+          <TouchableOpacity
+            style={styles.eyeButton}
+            onPress={() => setShowPassword(!showPassword)}
+          >
+            <Feather
+              name={showPassword ? "eye-off" : "eye"}
+              size={20}
+              color={colors.text.tertiary}
+            />
+          </TouchableOpacity>
+        </View>
         {formData.password && (
           <View style={styles.passwordStrength}>
             <View style={styles.strengthBar}>
@@ -463,22 +484,41 @@ const BusinessSignupWizard = ({ dispatch }) => {
         <Text style={styles.inputLabel}>
           Confirm Password <Text style={styles.inputRequired}>*</Text>
         </Text>
-        <TextInput
+        <View
           style={[
-            styles.input,
-            focusedField === "confirmPassword" && styles.inputFocused,
-            errors.confirmPassword && styles.inputError,
+            styles.passwordContainer,
+            focusedField === "confirmPassword" && styles.passwordContainerFocused,
+            errors.confirmPassword && styles.passwordContainerError,
           ]}
-          placeholder="Confirm your password"
-          placeholderTextColor="#94a3b8"
-          value={formData.confirmPassword}
-          onChangeText={(text) =>
-            setFormData({ ...formData, confirmPassword: text })
-          }
-          onFocus={() => setFocusedField("confirmPassword")}
-          onBlur={() => setFocusedField(null)}
-          secureTextEntry
-        />
+        >
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Confirm your password"
+            placeholderTextColor="#94a3b8"
+            value={formData.confirmPassword}
+            onChangeText={(text) =>
+              setFormData({ ...formData, confirmPassword: text })
+            }
+            onFocus={() => setFocusedField("confirmPassword")}
+            onBlur={() => setFocusedField(null)}
+            secureTextEntry={!showConfirmPassword}
+            autoCorrect={false}
+            autoCapitalize="none"
+            spellCheck={false}
+            textContentType="oneTimeCode"
+            autoComplete="off"
+          />
+          <TouchableOpacity
+            style={styles.eyeButton}
+            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+          >
+            <Feather
+              name={showConfirmPassword ? "eye-off" : "eye"}
+              size={20}
+              color={colors.text.tertiary}
+            />
+          </TouchableOpacity>
+        </View>
         {errors.confirmPassword && (
           <Text style={styles.errorText}>{errors.confirmPassword}</Text>
         )}
@@ -695,6 +735,34 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.error[600],
     marginTop: spacing.xs,
+  },
+
+  // Password container and toggle
+  passwordContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[50],
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.lg,
+  },
+  passwordContainerFocused: {
+    borderColor: colors.primary[500],
+    borderWidth: 2,
+  },
+  passwordContainerError: {
+    borderColor: colors.error[500],
+    borderWidth: 2,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+  },
+  eyeButton: {
+    padding: spacing.md,
   },
 
   // Password Strength

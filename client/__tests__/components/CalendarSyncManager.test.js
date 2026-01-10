@@ -77,6 +77,29 @@ describe("CalendarSyncManager Component", () => {
     autoCreateAppointments: true,
   };
 
+  // Helper to mock both disclaimer and syncs API calls
+  const mockFetchForSyncs = (syncs = [], disclaimerAccepted = true) => {
+    global.fetch.mockImplementation((url) => {
+      if (url.includes('/disclaimer/status')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ accepted: disclaimerAccepted, acceptedAt: disclaimerAccepted ? "2025-01-01T00:00:00Z" : null }),
+        });
+      }
+      if (url.includes('/disclaimer/accept')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true, acceptedAt: "2025-01-01T00:00:00Z" }),
+        });
+      }
+      // Default: syncs endpoint
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ syncs }),
+      });
+    });
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     global.fetch.mockReset();
@@ -411,10 +434,7 @@ describe("CalendarSyncManager Component", () => {
 
   describe("Add Calendar Form", () => {
     it("should show add form when connect button is pressed", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -435,10 +455,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should show instructions in add form", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -459,10 +476,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should show iCal URL input", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -483,10 +497,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should show schedule cleaning options", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -508,10 +519,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should show auto-create toggle", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -532,10 +540,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should show cancel and connect buttons", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -556,10 +561,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should hide form when cancel is pressed", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText, queryByText } = render(
         <MockAuthProvider>
@@ -586,10 +588,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should detect airbnb platform from URL", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -618,10 +617,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should detect vrbo platform from URL", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -652,10 +648,7 @@ describe("CalendarSyncManager Component", () => {
 
   describe("Adding a Calendar", () => {
     it("should show error when URL is empty", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -681,19 +674,25 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should submit form with correct data", async () => {
-      global.fetch
-        .mockResolvedValueOnce({
+      global.fetch.mockImplementation((url) => {
+        if (url.includes('/disclaimer/status')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ accepted: true, acceptedAt: "2025-01-01T00:00:00Z" }),
+          });
+        }
+        if (url.includes('/calendar-sync') && !url.includes('/disclaimer')) {
+          // POST to add calendar or GET to list syncs
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ syncs: [], sync: mockSync, message: "Calendar connected successfully!" }),
+          });
+        }
+        return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ syncs: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              sync: mockSync,
-              message: "Calendar connected successfully!",
-            }),
         });
+      });
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -733,19 +732,24 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should show success message after adding calendar", async () => {
-      global.fetch
-        .mockResolvedValueOnce({
+      global.fetch.mockImplementation((url) => {
+        if (url.includes('/disclaimer/status')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ accepted: true, acceptedAt: "2025-01-01T00:00:00Z" }),
+          });
+        }
+        if (url.includes('/calendar-sync') && !url.includes('/disclaimer')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ syncs: [], sync: mockSync, message: "Calendar connected successfully!" }),
+          });
+        }
+        return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ syncs: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () =>
-            Promise.resolve({
-              sync: mockSync,
-              message: "Calendar connected successfully!",
-            }),
         });
+      });
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -776,15 +780,26 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should show error message when add fails", async () => {
-      global.fetch
-        .mockResolvedValueOnce({
+      let addAttempted = false;
+      global.fetch.mockImplementation((url, options) => {
+        if (url.includes('/disclaimer/status')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ accepted: true, acceptedAt: "2025-01-01T00:00:00Z" }),
+          });
+        }
+        if (url.includes('/calendar-sync') && options?.method === 'POST') {
+          addAttempted = true;
+          return Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ error: "Invalid calendar URL" }),
+          });
+        }
+        return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ syncs: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          json: () => Promise.resolve({ error: "Invalid calendar URL" }),
         });
+      });
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -844,23 +859,29 @@ describe("CalendarSyncManager Component", () => {
 
   describe("Manual Sync", () => {
     it("should trigger manual sync", async () => {
-      global.fetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ syncs: [mockSync] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () =>
-            Promise.resolve({
+      let syncCalled = false;
+      global.fetch.mockImplementation((url, options) => {
+        if (url.includes('/disclaimer/status')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ accepted: true, acceptedAt: "2025-01-01T00:00:00Z" }),
+          });
+        }
+        if (url.includes('/sync') && options?.method === 'POST') {
+          syncCalled = true;
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
               checkoutsFound: 3,
               appointmentsCreated: 2,
             }),
-        })
-        .mockResolvedValueOnce({
+          });
+        }
+        return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ syncs: [mockSync] }),
         });
+      });
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -890,8 +911,7 @@ describe("CalendarSyncManager Component", () => {
   });
 
   describe("Delete Sync", () => {
-    // TODO: Alert mock doesn't work correctly with react-native imports
-    it.skip("should show confirmation dialog when remove is pressed", async () => {
+    it("should show confirmation dialog when remove is pressed", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ syncs: [mockSync] }),
@@ -1067,15 +1087,27 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should remove sync from list after deletion", async () => {
-      global.fetch
-        .mockResolvedValueOnce({
+      let syncDeleted = false;
+      global.fetch.mockImplementation((url, options) => {
+        if (url.includes('/disclaimer/status')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ accepted: true, acceptedAt: "2025-01-01T00:00:00Z" }),
+          });
+        }
+        if (options?.method === 'DELETE') {
+          syncDeleted = true;
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ success: true }),
+          });
+        }
+        // Return syncs based on whether we deleted
+        return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({ syncs: [mockSync] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ success: true }),
+          json: () => Promise.resolve({ syncs: syncDeleted ? [] : [mockSync] }),
         });
+      });
 
       const { getByText, queryByText } = render(
         <MockAuthProvider>
@@ -1159,12 +1191,21 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should handle network error when adding sync", async () => {
-      global.fetch
-        .mockResolvedValueOnce({
+      global.fetch.mockImplementation((url, options) => {
+        if (url.includes('/disclaimer/status')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ accepted: true, acceptedAt: "2025-01-01T00:00:00Z" }),
+          });
+        }
+        if (url.includes('/calendar-sync') && options?.method === 'POST') {
+          return Promise.reject(new Error("Connection refused"));
+        }
+        return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ syncs: [] }),
-        })
-        .mockRejectedValueOnce(new Error("Connection refused"));
+        });
+      });
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -1197,10 +1238,7 @@ describe("CalendarSyncManager Component", () => {
 
   describe("Platform Detection from URL", () => {
     it("should detect homeaway as vrbo", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -1229,10 +1267,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should detect booking.com from URL", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -1261,10 +1296,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should detect other for unknown URLs", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText, getByPlaceholderText } = render(
         <MockAuthProvider>
@@ -1295,10 +1327,7 @@ describe("CalendarSyncManager Component", () => {
 
   describe("Schedule Selection", () => {
     it("should select day after checkout option", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -1323,10 +1352,7 @@ describe("CalendarSyncManager Component", () => {
     });
 
     it("should toggle auto-create off", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ syncs: [] }),
-      });
+      mockFetchForSyncs([], true);
 
       const { getByText } = render(
         <MockAuthProvider>
@@ -1353,15 +1379,24 @@ describe("CalendarSyncManager Component", () => {
 
   describe("Manual Sync Error Handling", () => {
     it("should show alert on sync failure", async () => {
-      global.fetch
-        .mockResolvedValueOnce({
+      global.fetch.mockImplementation((url, options) => {
+        if (url.includes('/disclaimer/status')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ accepted: true, acceptedAt: "2025-01-01T00:00:00Z" }),
+          });
+        }
+        if (url.includes('/sync') && options?.method === 'POST') {
+          return Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ error: "Calendar URL is invalid" }),
+          });
+        }
+        return Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ syncs: [mockSync] }),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          json: () => Promise.resolve({ error: "Calendar URL is invalid" }),
         });
+      });
 
       const { getByText } = render(
         <MockAuthProvider>

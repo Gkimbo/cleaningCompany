@@ -31,7 +31,11 @@ router.get("/invite/:token", async (req, res) => {
     }
 
     if (result.isAlreadyAccepted) {
-      return res.status(409).json({ error: "Invitation already accepted", isAlreadyAccepted: true });
+      return res.status(409).json({
+        error: "Invitation already accepted",
+        isAlreadyAccepted: true,
+        email: result.email,
+      });
     }
 
     if (result.isTerminated) {
@@ -56,7 +60,7 @@ router.post("/invite/:token/accept", authenticateToken, async (req, res) => {
   try {
     const employee = await BusinessEmployeeService.acceptInvite(
       req.params.token,
-      req.user.id
+      req.userId
     );
 
     res.json({
@@ -70,6 +74,95 @@ router.post("/invite/:token/accept", authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error("Error accepting invite:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /invite/:token/accept-with-signup - Accept invitation and create account
+ * Public endpoint - creates user account and accepts invitation in one step
+ */
+router.post("/invite/:token/accept-with-signup", async (req, res) => {
+  try {
+    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId } = req.body;
+
+    // Validate password strength
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+
+    const uppercaseCount = (password.match(/[A-Z]/g) || []).length;
+    const lowercaseCount = (password.match(/[a-z]/g) || []).length;
+    const specialCharCount = (password.match(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/g) || []).length;
+
+    if (uppercaseCount < 2 || lowercaseCount < 2 || specialCharCount < 2) {
+      return res.status(400).json({
+        error: "Password must contain at least 2 uppercase letters, 2 lowercase letters, and 2 special characters",
+      });
+    }
+
+    const result = await BusinessEmployeeService.acceptInviteWithSignup(
+      req.params.token,
+      { firstName, lastName, username, password, phone, termsId, privacyPolicyId }
+    );
+
+    // Generate JWT token for the new user
+    const jwt = require("jsonwebtoken");
+    const secretKey = process.env.SESSION_SECRET || "kleanr-secret-key";
+    const token = jwt.sign(
+      { userId: result.user.id },
+      secretKey,
+      { expiresIn: "30d" }
+    );
+
+    // Get the business owner name for the response
+    const businessOwner = await User.findByPk(result.employee.businessOwnerId, {
+      attributes: ["id", "firstName", "lastName", "businessName"],
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Welcome to the team! Your account has been created.",
+      token,
+      user: {
+        id: result.user.id,
+        firstName: result.user.firstName,
+        lastName: result.user.lastName,
+        type: result.user.type,
+      },
+      employee: {
+        id: result.employee.id,
+        firstName: result.employee.firstName,
+        lastName: result.employee.lastName,
+        status: result.employee.status,
+      },
+      employer: businessOwner
+        ? {
+            id: businessOwner.id,
+            name: businessOwner.businessName || `${businessOwner.firstName} ${businessOwner.lastName}`,
+          }
+        : null,
+    });
+  } catch (error) {
+    console.error("Error accepting invite with signup:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /invite/:token/decline - Decline invitation
+ * Public endpoint
+ */
+router.post("/invite/:token/decline", async (req, res) => {
+  try {
+    await BusinessEmployeeService.declineInvite(req.params.token);
+
+    res.json({
+      success: true,
+      message: "Invitation declined",
+    });
+  } catch (error) {
+    console.error("Error declining invite:", error);
     res.status(400).json({ error: error.message });
   }
 });

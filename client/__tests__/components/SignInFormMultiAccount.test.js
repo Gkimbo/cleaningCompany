@@ -506,6 +506,7 @@ describe("SignInForm - Username vs Email Login", () => {
 				expect(FetchData.login).toHaveBeenCalledWith({
 					userName: "uniqueusername",
 					password: "SecurePass1!",
+					accountType: null,
 				});
 			},
 			{ timeout: 2000 }

@@ -12,7 +12,13 @@ import {
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
-import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import {
+  colors,
+  spacing,
+  radius,
+  shadows,
+  typography,
+} from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
 import CalendarSyncDisclaimerModal from "./CalendarSyncDisclaimerModal";
 import CalendarSyncDisclaimerView from "./CalendarSyncDisclaimerView";
@@ -24,25 +30,48 @@ const PLATFORM_INFO = {
     name: "Airbnb",
     color: "#FF5A5F",
     icon: "A",
-    instructions: "Go to your Airbnb listing > Calendar > Availability settings > Sync calendars > Export calendar",
+    instructions:
+      "Host Dashboard > Listings > Select listing > Calendar > Availability > Sync calendars > Export calendar",
   },
+
   vrbo: {
     name: "VRBO",
     color: "#3B5998",
     icon: "V",
-    instructions: "Go to your VRBO listing > Calendar > Import/Export > Export calendar",
+    instructions:
+      "Dashboard > Calendar > Import & Export > Export calendar (copy iCal URL)",
   },
+
   booking: {
     name: "Booking.com",
     color: "#003580",
     icon: "B",
-    instructions: "Go to your property > Calendar > Sync calendars > Export calendar",
+    instructions:
+      "Extranet > Rates & Availability > Calendar > Sync calendars > Export calendar",
   },
+
+  tripAdvisor: {
+    name: "Tripadvisor Rentals",
+    color: "#00AF87",
+    icon: "T",
+    instructions:
+      "Owner Dashboard > Calendar > Calendar Sync or Export calendar (iCal URL)",
+  },
+
+  nineFlats: {
+    name: "9flats",
+    color: "#FF5A5F",
+    icon: "9",
+    instructions:
+      "Host Dashboard > Calendar > iCal / Synchronization > Export calendar",
+  },
+
   other: {
     name: "Other",
     color: colors.neutral[500],
     icon: "?",
-    instructions: "Export your calendar as an iCal (.ics) URL from your rental platform",
+    instructions:
+      "Find your platform’s calendar or availability settings and copy the iCal (.ics) export URL",
   },
 };
 
@@ -82,11 +111,14 @@ const CalendarSyncManager = ({ state, dispatch }) => {
 
   const fetchDisclaimerStatus = async () => {
     try {
-      const response = await fetch(`${baseURL}/api/v1/calendar-sync/disclaimer/status`, {
-        headers: {
-          Authorization: `Bearer ${user?.token}`,
-        },
-      });
+      const response = await fetch(
+        `${baseURL}/api/v1/calendar-sync/disclaimer/status`,
+        {
+          headers: {
+            Authorization: `Bearer ${user?.token}`,
+          },
+        }
+      );
       const data = await response.json();
       if (response.ok) {
         setDisclaimerAccepted(data.accepted);
@@ -100,13 +132,16 @@ const CalendarSyncManager = ({ state, dispatch }) => {
 
   const acceptDisclaimer = async () => {
     try {
-      const response = await fetch(`${baseURL}/api/v1/calendar-sync/disclaimer/accept`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.token}`,
-        },
-      });
+      const response = await fetch(
+        `${baseURL}/api/v1/calendar-sync/disclaimer/accept`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user?.token}`,
+          },
+        }
+      );
       const data = await response.json();
       if (response.ok) {
         setDisclaimerAccepted(true);
@@ -134,11 +169,14 @@ const CalendarSyncManager = ({ state, dispatch }) => {
 
   const fetchSyncs = async () => {
     try {
-      const response = await fetch(`${baseURL}/api/v1/calendar-sync/home/${homeId}`, {
-        headers: {
-          Authorization: `Bearer ${user?.token}`,
-        },
-      });
+      const response = await fetch(
+        `${baseURL}/api/v1/calendar-sync/home/${homeId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${user?.token}`,
+          },
+        }
+      );
       const data = await response.json();
       if (response.ok) {
         setSyncs(data.syncs || []);
@@ -195,17 +233,24 @@ const CalendarSyncManager = ({ state, dispatch }) => {
 
   const handleToggleSync = async (syncId, isActive) => {
     try {
-      const response = await fetch(`${baseURL}/api/v1/calendar-sync/${syncId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.token}`,
-        },
-        body: JSON.stringify({ isActive: !isActive }),
-      });
+      const response = await fetch(
+        `${baseURL}/api/v1/calendar-sync/${syncId}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user?.token}`,
+          },
+          body: JSON.stringify({ isActive: !isActive }),
+        }
+      );
 
       if (response.ok) {
-        setSyncs(syncs.map((s) => (s.id === syncId ? { ...s, isActive: !isActive } : s)));
+        setSyncs(
+          syncs.map((s) =>
+            s.id === syncId ? { ...s, isActive: !isActive } : s
+          )
+        );
       }
     } catch (err) {
       Alert.alert("Error", "Failed to update sync");
@@ -223,12 +268,15 @@ const CalendarSyncManager = ({ state, dispatch }) => {
           style: "destructive",
           onPress: async () => {
             try {
-              const response = await fetch(`${baseURL}/api/v1/calendar-sync/${syncId}`, {
-                method: "DELETE",
-                headers: {
-                  Authorization: `Bearer ${user?.token}`,
-                },
-              });
+              const response = await fetch(
+                `${baseURL}/api/v1/calendar-sync/${syncId}`,
+                {
+                  method: "DELETE",
+                  headers: {
+                    Authorization: `Bearer ${user?.token}`,
+                  },
+                }
+              );
 
               if (response.ok) {
                 setSyncs(syncs.filter((s) => s.id !== syncId));
@@ -246,12 +294,15 @@ const CalendarSyncManager = ({ state, dispatch }) => {
     setSyncingId(syncId);
 
     try {
-      const response = await fetch(`${baseURL}/api/v1/calendar-sync/${syncId}/sync`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${user?.token}`,
-        },
-      });
+      const response = await fetch(
+        `${baseURL}/api/v1/calendar-sync/${syncId}/sync`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${user?.token}`,
+          },
+        }
+      );
 
       const data = await response.json();
 
@@ -274,14 +325,19 @@ const CalendarSyncManager = ({ state, dispatch }) => {
   const formatDate = (dateStr) => {
     if (!dateStr) return "Never";
     const date = new Date(dateStr);
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return (
+      date.toLocaleDateString() +
+      " " +
+      date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    );
   };
 
   const detectPlatformFromUrl = (url) => {
     if (!url) return "other";
     const lowerUrl = url.toLowerCase();
     if (lowerUrl.includes("airbnb")) return "airbnb";
-    if (lowerUrl.includes("vrbo") || lowerUrl.includes("homeaway")) return "vrbo";
+    if (lowerUrl.includes("vrbo") || lowerUrl.includes("homeaway"))
+      return "vrbo";
     if (lowerUrl.includes("booking.com")) return "booking";
     return "other";
   };
@@ -295,9 +351,15 @@ const CalendarSyncManager = ({ state, dispatch }) => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+    >
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigate(`/details/${homeId}`)}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigate(`/details/${homeId}`)}
+        >
           <Text style={styles.backButtonText}>{"<"} Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Calendar Sync</Text>
@@ -314,7 +376,8 @@ const CalendarSyncManager = ({ state, dispatch }) => {
       )}
 
       <Text style={styles.subtitle}>
-        Connect your Airbnb, VRBO, or other rental calendar to automatically create cleaning appointments after each checkout.
+        Connect your Airbnb, VRBO, or other rental calendar to automatically
+        create cleaning appointments after each checkout.
       </Text>
 
       {error && (
@@ -334,39 +397,62 @@ const CalendarSyncManager = ({ state, dispatch }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Connected Calendars</Text>
           {syncs.map((sync) => {
-            const platformInfo = PLATFORM_INFO[sync.platform] || PLATFORM_INFO.other;
+            const platformInfo =
+              PLATFORM_INFO[sync.platform] || PLATFORM_INFO.other;
             return (
               <View key={sync.id} style={styles.syncCard}>
                 <View style={styles.syncHeader}>
-                  <View style={[styles.platformIcon, { backgroundColor: platformInfo.color }]}>
-                    <Text style={styles.platformIconText}>{platformInfo.icon}</Text>
+                  <View
+                    style={[
+                      styles.platformIcon,
+                      { backgroundColor: platformInfo.color },
+                    ]}
+                  >
+                    <Text style={styles.platformIconText}>
+                      {platformInfo.icon}
+                    </Text>
                   </View>
                   <View style={styles.syncInfo}>
                     <Text style={styles.syncPlatform}>{platformInfo.name}</Text>
                     <Text style={styles.syncStatus}>
-                      {sync.isActive ? "Active" : "Paused"} • Last sync: {formatDate(sync.lastSyncAt)}
+                      {sync.isActive ? "Active" : "Paused"} • Last sync:{" "}
+                      {formatDate(sync.lastSyncAt)}
                     </Text>
                   </View>
                   <TouchableOpacity
-                    style={[styles.toggleButton, sync.isActive && styles.toggleButtonActive]}
+                    style={[
+                      styles.toggleButton,
+                      sync.isActive && styles.toggleButtonActive,
+                    ]}
                     onPress={() => handleToggleSync(sync.id, sync.isActive)}
                   >
-                    <View style={[styles.toggleKnob, sync.isActive && styles.toggleKnobActive]} />
+                    <View
+                      style={[
+                        styles.toggleKnob,
+                        sync.isActive && styles.toggleKnobActive,
+                      ]}
+                    />
                   </TouchableOpacity>
                 </View>
 
                 {sync.lastSyncStatus === "error" && (
                   <View style={styles.syncError}>
-                    <Text style={styles.syncErrorText}>{sync.lastSyncError || "Sync error"}</Text>
+                    <Text style={styles.syncErrorText}>
+                      {sync.lastSyncError || "Sync error"}
+                    </Text>
                   </View>
                 )}
 
                 <View style={styles.syncDetails}>
                   <Text style={styles.syncDetailText}>
-                    Cleaning: {sync.daysAfterCheckout === 0 ? "Same day as checkout" : `${sync.daysAfterCheckout} day(s) after checkout`}
+                    Cleaning:{" "}
+                    {sync.daysAfterCheckout === 0
+                      ? "Same day as checkout"
+                      : `${sync.daysAfterCheckout} day(s) after checkout`}
                   </Text>
                   <Text style={styles.syncDetailText}>
-                    Auto-create appointments: {sync.autoCreateAppointments ? "Yes" : "No"}
+                    Auto-create appointments:{" "}
+                    {sync.autoCreateAppointments ? "Yes" : "No"}
                   </Text>
                   <Text style={styles.syncDetailText}>
                     Auto-sync every hour: {sync.autoSync ? "Yes" : "No"}
@@ -380,7 +466,10 @@ const CalendarSyncManager = ({ state, dispatch }) => {
                     disabled={syncingId === sync.id}
                   >
                     {syncingId === sync.id ? (
-                      <ActivityIndicator size="small" color={colors.primary[600]} />
+                      <ActivityIndicator
+                        size="small"
+                        color={colors.primary[600]}
+                      />
                     ) : (
                       <Text style={styles.syncButtonText}>Sync Now</Text>
                     )}
@@ -411,7 +500,9 @@ const CalendarSyncManager = ({ state, dispatch }) => {
           <Text style={styles.sectionTitle}>Connect New Calendar</Text>
 
           <View style={styles.instructionsBox}>
-            <Text style={styles.instructionsTitle}>How to get your calendar URL:</Text>
+            <Text style={styles.instructionsTitle}>
+              How to get your calendar URL:
+            </Text>
             <Text style={styles.instructionsText}>
               1. Log into your rental platform (Airbnb, VRBO, etc.){"\n"}
               2. Go to your listing's calendar settings{"\n"}
@@ -434,7 +525,9 @@ const CalendarSyncManager = ({ state, dispatch }) => {
             {newUrl && (
               <View style={styles.detectedPlatform}>
                 <Text style={styles.detectedPlatformText}>
-                  Detected: {PLATFORM_INFO[detectPlatformFromUrl(newUrl)]?.name || "Unknown"}
+                  Detected:{" "}
+                  {PLATFORM_INFO[detectPlatformFromUrl(newUrl)]?.name ||
+                    "Unknown"}
                 </Text>
               </View>
             )}
@@ -455,7 +548,8 @@ const CalendarSyncManager = ({ state, dispatch }) => {
                   <Text
                     style={[
                       styles.choiceButtonText,
-                      daysAfterCheckout === value && styles.choiceButtonTextSelected,
+                      daysAfterCheckout === value &&
+                        styles.choiceButtonTextSelected,
                     ]}
                   >
                     {value === "0" ? "Checkout day" : "Day after"}
@@ -470,13 +564,26 @@ const CalendarSyncManager = ({ state, dispatch }) => {
             onPress={() => setAutoCreate(!autoCreate)}
           >
             <View style={styles.toggleCardContent}>
-              <Text style={styles.toggleCardTitle}>Auto-create appointments</Text>
+              <Text style={styles.toggleCardTitle}>
+                Auto-create appointments
+              </Text>
               <Text style={styles.toggleCardDescription}>
-                Automatically add cleaning appointments when new bookings are detected
+                Automatically add cleaning appointments when new bookings are
+                detected
               </Text>
             </View>
-            <View style={[styles.toggleSwitch, autoCreate && styles.toggleSwitchActive]}>
-              <View style={[styles.toggleSwitchKnob, autoCreate && styles.toggleSwitchKnobActive]} />
+            <View
+              style={[
+                styles.toggleSwitch,
+                autoCreate && styles.toggleSwitchActive,
+              ]}
+            >
+              <View
+                style={[
+                  styles.toggleSwitchKnob,
+                  autoCreate && styles.toggleSwitchKnobActive,
+                ]}
+              />
             </View>
           </TouchableOpacity>
 
@@ -487,11 +594,22 @@ const CalendarSyncManager = ({ state, dispatch }) => {
             <View style={styles.toggleCardContent}>
               <Text style={styles.toggleCardTitle}>Auto-sync every hour</Text>
               <Text style={styles.toggleCardDescription}>
-                Automatically check for new bookings and update appointments every hour
+                Automatically check for new bookings and update appointments
+                every hour
               </Text>
             </View>
-            <View style={[styles.toggleSwitch, autoSync && styles.toggleSwitchActive]}>
-              <View style={[styles.toggleSwitchKnob, autoSync && styles.toggleSwitchKnobActive]} />
+            <View
+              style={[
+                styles.toggleSwitch,
+                autoSync && styles.toggleSwitchActive,
+              ]}
+            >
+              <View
+                style={[
+                  styles.toggleSwitchKnob,
+                  autoSync && styles.toggleSwitchKnobActive,
+                ]}
+              />
             </View>
           </TouchableOpacity>
 
@@ -529,7 +647,8 @@ const CalendarSyncManager = ({ state, dispatch }) => {
           </View>
           <Text style={styles.emptyTitle}>No Calendars Connected</Text>
           <Text style={styles.emptyDescription}>
-            Connect your Airbnb or VRBO calendar to automatically schedule cleanings after guest checkouts.
+            Connect your Airbnb or VRBO calendar to automatically schedule
+            cleanings after guest checkouts.
           </Text>
         </View>
       )}

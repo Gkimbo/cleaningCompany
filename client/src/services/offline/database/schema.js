@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from "@nozbe/watermelondb";
 
 export const offlineSchema = appSchema({
-  version: 3,
+  version: 4,
   tables: [
     tableSchema({
       name: "offline_jobs",
@@ -25,12 +25,13 @@ export const offlineSchema = appSchema({
       name: "offline_photos",
       columns: [
         { name: "job_id", type: "string", isIndexed: true },
-        { name: "photo_type", type: "string" }, // before, after
+        { name: "photo_type", type: "string" }, // before, after, passes
         { name: "room", type: "string" },
         { name: "local_uri", type: "string" },
         { name: "watermark_data", type: "string", isOptional: true }, // JSON stringified
         { name: "uploaded", type: "boolean" },
         { name: "upload_attempts", type: "number" },
+        { name: "is_not_applicable", type: "boolean", isOptional: true }, // For passes marked as N/A
         { name: "created_at", type: "number" },
       ],
     }),

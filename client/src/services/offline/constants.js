@@ -22,6 +22,10 @@ export const PRELOAD_DAYS_AHEAD = 2; // Today + tomorrow
 // Network debounce (to avoid rapid online/offline toggling)
 export const NETWORK_DEBOUNCE_MS = 2000; // 2 seconds
 
+// Auto-sync configuration
+export const AUTO_SYNC_COOLDOWN_MS = 30000; // 30 seconds cooldown between auto-syncs
+export const MAX_AUTO_RETRY_ATTEMPTS = 3; // Max retries before giving up
+
 // Storage paths
 export const OFFLINE_PHOTOS_DIRECTORY = "offline_photos";
 

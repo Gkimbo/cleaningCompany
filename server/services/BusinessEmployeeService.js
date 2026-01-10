@@ -180,6 +180,8 @@ class BusinessEmployeeService {
         ...employee.toJSON(),
         isAlreadyAccepted: employee.status === "active" || employee.status === "inactive",
         isTerminated: employee.status === "terminated",
+        // Include email for account recovery when already accepted
+        email: employee.email,
       };
     }
 
@@ -250,6 +252,136 @@ class BusinessEmployeeService {
     });
 
     return result;
+  }
+
+  /**
+   * Accept an employee invitation with signup (create new user account)
+   * @param {string} inviteToken - Invitation token
+   * @param {Object} userData - User signup data
+   * @param {string} userData.firstName
+   * @param {string} userData.lastName
+   * @param {string} userData.username
+   * @param {string} userData.password - Plain text password (will be hashed)
+   * @param {string} [userData.phone]
+   * @param {number} [userData.termsId]
+   * @param {number} [userData.privacyPolicyId]
+   * @returns {Promise<Object>} { user, employee }
+   */
+  static async acceptInviteWithSignup(inviteToken, userData) {
+    const employee = await this.validateInviteToken(inviteToken);
+
+    if (!employee) {
+      throw new Error("Invalid invitation token");
+    }
+
+    if (employee.isExpired) {
+      throw new Error("Invitation has expired");
+    }
+
+    if (employee.isAlreadyAccepted) {
+      throw new Error("Invitation has already been accepted");
+    }
+
+    if (employee.isTerminated) {
+      throw new Error("This employee record has been terminated");
+    }
+
+    const { firstName, lastName, username, password, phone, termsId, privacyPolicyId } = userData;
+
+    // Validate required fields
+    if (!firstName || !lastName || !username || !password) {
+      throw new Error("First name, last name, username, and password are required");
+    }
+
+    // Validate username length
+    if (username.length < 4 || username.length > 12) {
+      throw new Error("Username must be between 4 and 12 characters");
+    }
+
+    // Check for existing username
+    const existingUsername = await User.findOne({
+      where: { username: username.toLowerCase() },
+    });
+    if (existingUsername) {
+      throw new Error("Username already exists");
+    }
+
+    // Check for existing email (using the employee's invited email)
+    const emailToUse = employee.email;
+    const emailHash = EncryptionService.hash(emailToUse.toLowerCase());
+    const existingEmail = await User.findOne({
+      where: { emailHash },
+    });
+    if (existingEmail) {
+      throw new Error("An account with this email already exists");
+    }
+
+    // Transaction to create user and update employee
+    const result = await sequelize.transaction(async (t) => {
+      // Create the user account
+      const newUser = await User.create(
+        {
+          firstName,
+          lastName,
+          username: username.toLowerCase(),
+          password, // Will be hashed by User model's beforeCreate hook
+          email: emailToUse,
+          phone: phone || employee.phone || null,
+          type: "employee",
+          employeeOfBusinessId: employee.businessOwnerId,
+          isMarketplaceCleaner: false,
+          termsId: termsId || null,
+          privacyPolicyId: privacyPolicyId || null,
+        },
+        { transaction: t }
+      );
+
+      // Update the employee record
+      await employee.update(
+        {
+          userId: newUser.id,
+          status: "active",
+          acceptedAt: new Date(),
+          inviteToken: null,
+          inviteExpiresAt: null,
+          // Update names if provided differently
+          firstName: firstName || employee.firstName,
+          lastName: lastName || employee.lastName,
+          phone: phone || employee.phone,
+        },
+        { transaction: t }
+      );
+
+      await employee.reload({ transaction: t });
+
+      return { user: newUser, employee };
+    });
+
+    return result;
+  }
+
+  /**
+   * Decline an employee invitation
+   * @param {string} inviteToken - Invitation token
+   * @returns {Promise<void>}
+   */
+  static async declineInvite(inviteToken) {
+    const employee = await this.validateInviteToken(inviteToken);
+
+    if (!employee) {
+      throw new Error("Invalid invitation token");
+    }
+
+    if (employee.isAlreadyAccepted) {
+      throw new Error("Invitation has already been accepted");
+    }
+
+    // Mark invitation as declined by clearing the token
+    await employee.update({
+      inviteToken: null,
+      inviteExpiresAt: null,
+      status: "declined",
+    });
   }
 
   /**
