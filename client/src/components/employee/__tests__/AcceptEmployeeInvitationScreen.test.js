@@ -232,7 +232,7 @@ describe("AcceptEmployeeInvitationScreen", () => {
       );
 
       await waitFor(() => {
-        expect(getByText("This invitation has already been accepted. Please sign in to your account.")).toBeTruthy();
+        expect(getByText("This invitation has already been accepted. Your employee account is ready!")).toBeTruthy();
       });
     });
 

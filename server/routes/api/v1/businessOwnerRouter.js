@@ -3,6 +3,8 @@ const router = express.Router();
 const verifyBusinessOwner = require("../../../middleware/verifyBusinessOwner");
 const BusinessEmployeeService = require("../../../services/BusinessEmployeeService");
 const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssignmentService");
+const BusinessAnalyticsService = require("../../../services/BusinessAnalyticsService");
+const BusinessVerificationService = require("../../../services/BusinessVerificationService");
 const PayCalculatorService = require("../../../services/PayCalculatorService");
 const CustomJobFlowService = require("../../../services/CustomJobFlowService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
@@ -577,6 +579,263 @@ router.get("/payroll-summary", async (req, res) => {
     res.json({ payroll, period: { startDate: start, endDate: end } });
   } catch (error) {
     console.error("Error fetching payroll summary:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Analytics Routes
+// Premium analytics available to business owners with 50+ monthly cleanings
+// =====================================
+
+/**
+ * GET /analytics - Get all analytics (respects tier access)
+ */
+router.get("/analytics", async (req, res) => {
+  try {
+    const analytics = await BusinessAnalyticsService.getAllAnalytics(
+      req.businessOwnerId,
+      {
+        months: parseInt(req.query.months) || undefined,
+        topClientsLimit: parseInt(req.query.topClientsLimit) || undefined,
+        churnDays: parseInt(req.query.churnDays) || undefined,
+      }
+    );
+
+    res.json(analytics);
+  } catch (error) {
+    console.error("Error fetching analytics:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /analytics/access - Check analytics tier access
+ */
+router.get("/analytics/access", async (req, res) => {
+  try {
+    const access = await BusinessAnalyticsService.getAnalyticsAccess(req.businessOwnerId);
+    res.json(access);
+  } catch (error) {
+    console.error("Error checking analytics access:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /analytics/overview - Get overview metrics (available to all tiers)
+ */
+router.get("/analytics/overview", async (req, res) => {
+  try {
+    const overview = await BusinessAnalyticsService.getOverviewAnalytics(req.businessOwnerId);
+    res.json(overview);
+  } catch (error) {
+    console.error("Error fetching overview analytics:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /analytics/employees - Get employee performance analytics (premium)
+ */
+router.get("/analytics/employees", async (req, res) => {
+  try {
+    // Check access
+    const access = await BusinessAnalyticsService.getAnalyticsAccess(req.businessOwnerId);
+    if (!access.features.employeeAnalytics) {
+      return res.status(403).json({
+        error: "Employee analytics requires premium tier",
+        tier: access.tier,
+        qualification: access.qualification,
+      });
+    }
+
+    const employees = await BusinessAnalyticsService.getEmployeeAnalytics(
+      req.businessOwnerId,
+      {
+        months: parseInt(req.query.months) || undefined,
+        limit: parseInt(req.query.limit) || undefined,
+      }
+    );
+
+    res.json(employees);
+  } catch (error) {
+    console.error("Error fetching employee analytics:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /analytics/clients - Get client insights (premium)
+ */
+router.get("/analytics/clients", async (req, res) => {
+  try {
+    // Check access
+    const access = await BusinessAnalyticsService.getAnalyticsAccess(req.businessOwnerId);
+    if (!access.features.clientInsights) {
+      return res.status(403).json({
+        error: "Client insights requires premium tier",
+        tier: access.tier,
+        qualification: access.qualification,
+      });
+    }
+
+    const clients = await BusinessAnalyticsService.getClientAnalytics(
+      req.businessOwnerId,
+      {
+        topClientsLimit: parseInt(req.query.topClientsLimit) || undefined,
+        churnDays: parseInt(req.query.churnDays) || undefined,
+      }
+    );
+
+    res.json(clients);
+  } catch (error) {
+    console.error("Error fetching client analytics:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /analytics/financials - Get financial breakdown (premium)
+ */
+router.get("/analytics/financials", async (req, res) => {
+  try {
+    // Check access
+    const access = await BusinessAnalyticsService.getAnalyticsAccess(req.businessOwnerId);
+    if (!access.features.advancedFinancials) {
+      return res.status(403).json({
+        error: "Advanced financials requires premium tier",
+        tier: access.tier,
+        qualification: access.qualification,
+      });
+    }
+
+    const financials = await BusinessAnalyticsService.getFinancialAnalytics(
+      req.businessOwnerId,
+      {
+        months: parseInt(req.query.months) || undefined,
+      }
+    );
+
+    res.json(financials);
+  } catch (error) {
+    console.error("Error fetching financial analytics:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /analytics/trends - Get trend data for charts
+ */
+router.get("/analytics/trends", async (req, res) => {
+  try {
+    const { period = "monthly", months = 12 } = req.query;
+
+    // Check if premium tier for extended history
+    const access = await BusinessAnalyticsService.getAnalyticsAccess(req.businessOwnerId);
+    const maxMonths = access.tier === "premium" ? 24 : 6;
+    const requestedMonths = Math.min(parseInt(months), maxMonths);
+
+    const trends = await BusinessAnalyticsService.getTrends(
+      req.businessOwnerId,
+      {
+        period,
+        months: requestedMonths,
+      }
+    );
+
+    res.json({
+      ...trends,
+      access: {
+        tier: access.tier,
+        maxMonthsAllowed: maxMonths,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching trends:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Business Verification Routes
+// Verified businesses get marketplace highlighting
+// =====================================
+
+/**
+ * GET /verification/status - Get current verification status
+ */
+router.get("/verification/status", async (req, res) => {
+  try {
+    const status = await BusinessVerificationService.getVerificationStatus(req.businessOwnerId);
+    res.json(status);
+  } catch (error) {
+    console.error("Error fetching verification status:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /verification/eligibility - Check if eligible for verification
+ */
+router.get("/verification/eligibility", async (req, res) => {
+  try {
+    const eligibility = await BusinessVerificationService.checkVerificationEligibility(
+      req.businessOwnerId
+    );
+    res.json(eligibility);
+  } catch (error) {
+    console.error("Error checking verification eligibility:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /verification/request - Request verification
+ */
+router.post("/verification/request", async (req, res) => {
+  try {
+    const result = await BusinessVerificationService.requestVerification(req.businessOwnerId);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error requesting verification:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /verification/profile - Update business profile for verification
+ */
+router.put("/verification/profile", async (req, res) => {
+  try {
+    const { businessDescription, businessHighlightOptIn } = req.body;
+
+    const result = await BusinessVerificationService.updateBusinessProfile(
+      req.businessOwnerId,
+      { businessDescription, businessHighlightOptIn }
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error updating business profile:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /verification/config - Get verification requirements
+ */
+router.get("/verification/config", async (req, res) => {
+  try {
+    const config = BusinessVerificationService.getVerificationConfig();
+    res.json(config);
+  } catch (error) {
+    console.error("Error fetching verification config:", error);
     res.status(500).json({ error: error.message });
   }
 });

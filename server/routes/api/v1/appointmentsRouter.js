@@ -32,6 +32,9 @@ const IncentiveService = require("../../../services/IncentiveService");
 const NotificationService = require("../../../services/NotificationService");
 const MultiCleanerService = require("../../../services/MultiCleanerService");
 const { Notification } = require("../../../models");
+const CancellationAuditService = require("../../../services/CancellationAuditService");
+const CancellationFinancialService = require("../../../services/CancellationFinancialService");
+const JobLedgerService = require("../../../services/JobLedgerService");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -2580,6 +2583,31 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     let cleanerPayoutResult = null;
     let cancellationFeeResult = null;
 
+    // Generate confirmation ID for tracking
+    const confirmationId = CancellationFinancialService.generateConfirmationId();
+
+    // Capture previous state for audit
+    const previousState = {
+      completed: appointment.completed,
+      paid: appointment.paid,
+      paymentStatus: appointment.paymentStatus,
+      hasBeenAssigned: appointment.hasBeenAssigned,
+    };
+
+    // Log cancellation initiated
+    await CancellationAuditService.logCancellationInitiated(
+      parseInt(id),
+      userId,
+      "homeowner",
+      {
+        reason: req.body.reason,
+        daysUntilAppointment,
+        withinPenaltyWindow: isWithinPenaltyWindow,
+        withinFeeWindow: isWithinCancellationFeeWindow,
+      },
+      req
+    );
+
     const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
     // Debug logging for cancellation fee
@@ -2603,6 +2631,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         console.log(`[Cancellation] Default payment method: ${defaultPaymentMethod}`);
 
         if (defaultPaymentMethod) {
+          // Log fee charge attempt
+          await CancellationAuditService.logFeeChargeAttempted(parseInt(id), cancellationFeeAmountCents, defaultPaymentMethod, req);
+
           // Create and confirm a PaymentIntent for the cancellation fee
           console.log(`[Cancellation] Creating PaymentIntent for $${cancellationConfig.fee} (${cancellationFeeAmountCents} cents)`);
           const cancellationPaymentIntent = await stripe.paymentIntents.create({
@@ -2621,6 +2652,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           });
 
           console.log(`[Cancellation] PaymentIntent created: ${cancellationPaymentIntent.id}, Status: ${cancellationPaymentIntent.status}`);
+
+          // Log fee charge success
+          await CancellationAuditService.logFeeChargeSucceeded(parseInt(id), cancellationFeeAmountCents, cancellationPaymentIntent.id, req);
 
           cancellationFeeResult = {
             charged: true,
@@ -2648,6 +2682,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         }
       } catch (stripeError) {
         console.error(`[Cancellation] Error charging cancellation fee, adding to bill:`, stripeError);
+        // Log fee charge failure
+        await CancellationAuditService.logFeeChargeFailed(parseInt(id), Math.round(cancellationConfig.fee * 100), stripeError, req);
+
         // Add fee to user's bill since charge failed
         const existingBillForFee = await UserBills.findOne({ where: { userId } });
         if (existingBillForFee) {
@@ -2658,6 +2695,10 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             totalDue: currentTotal + cancellationConfig.fee,
           });
         }
+
+        // Log fee added to bill
+        await CancellationAuditService.logFeeAddedToBill(parseInt(id), Math.round(cancellationConfig.fee * 100), req);
+
         cancellationFeeResult = {
           charged: false,
           addedToBill: true,
@@ -2739,6 +2780,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             amount: clientRefundAmount,
           });
 
+          // Log refund completed
+          await CancellationAuditService.logRefundCompleted(parseInt(id), clientRefundAmount, refundResult.id, req);
+
           // Create payout records for cleaners (their portion minus platform fee)
           const cleanerIds = appointment.employeesAssigned || [];
           const perCleanerAmount = Math.round(cleanerAmount / cleanerIds.length);
@@ -2749,7 +2793,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           await Payout.destroy({ where: { appointmentId: appointment.id, status: "pending" } });
 
           for (const cleanerId of cleanerIds) {
-            await Payout.create({
+            const payout = await Payout.create({
               appointmentId: appointment.id,
               cleanerId,
               grossAmount: perCleanerGross,
@@ -2758,6 +2802,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
               status: "pending",
               paymentCapturedAt: new Date(),
             });
+
+            // Log payout created
+            await CancellationAuditService.logPayoutCreated(parseInt(id), cleanerId, perCleanerAmount, req);
           }
 
           cleanerPayoutResult = {
@@ -2765,6 +2812,11 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
             perCleaner: perCleanerAmount / 100,
             cleanerCount: cleanerIds.length,
             platformFeeTotal: platformFee / 100,
+            cleanerPayouts: cleanerIds.map(cid => ({
+              cleanerId: cid,
+              netAmount: perCleanerAmount,
+              platformFee: perCleanerPlatformFee,
+            })),
           };
 
           await appointment.update({ paymentStatus: "partially_refunded" });
@@ -2781,6 +2833,10 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           refundResult = await stripe.refunds.create({
             payment_intent: paymentIntent.id,
           });
+
+          // Log full refund completed
+          await CancellationAuditService.logRefundCompleted(parseInt(id), priceInCents, refundResult.id, req);
+
           await appointment.update({ paymentStatus: "refunded" });
         } else if (paymentIntent && paymentIntent.status === "requires_capture") {
           await stripe.paymentIntents.cancel(paymentIntent.id);
@@ -2909,8 +2965,93 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       await Payout.destroy({ where: { appointmentId: id, status: "pending" } });
     }
 
-    // Delete the appointment
-    await appointment.destroy();
+    // Calculate refund percentage for ledger
+    const refundPercentage = refundResult
+      ? Math.round((refundResult.amount / priceInCents) * 100)
+      : (isWithinPenaltyWindow ? Math.round(cancellationConfig.refundPercentage * 100) : 100);
+
+    // Create ledger entries for the cancellation
+    try {
+      await JobLedgerService.recordCancellation(parseInt(id), {
+        homeownerId: userId,
+        refundAmount: refundResult?.amount || 0,
+        refundPercentage,
+        cancellationFee: cancellationFeeResult?.charged ? Math.round(cancellationFeeResult.amount * 100) : 0,
+        cleanerPayouts: cleanerPayoutResult?.cleanerPayouts || [],
+        stripeDetails: {
+          refundId: refundResult?.id,
+          feeChargeId: cancellationFeeResult?.paymentIntentId,
+          feeAddedToBill: cancellationFeeResult?.addedToBill,
+        },
+        originalAmount: priceInCents,
+      });
+    } catch (ledgerError) {
+      console.error("[Cancellation] Error recording ledger entries:", ledgerError);
+      // Don't fail the cancellation if ledger fails
+    }
+
+    // Update the appointment with cancellation tracking fields instead of deleting
+    const now = new Date();
+    const appealWindowExpiresAt = new Date(now.getTime() + 72 * 60 * 60 * 1000); // 72 hours
+
+    await appointment.update({
+      wasCancelled: true,
+      cancellationInitiatedAt: now,
+      cancellationInitiatedBy: userId,
+      cancellationConfirmedAt: now,
+      cancellationReason: req.body.reason || null,
+      cancellationMethod: req.headers["x-platform"] || "web",
+      cancellationType: "homeowner",
+      cancellationConfirmationId: confirmationId,
+      appealWindowExpiresAt: (isWithinPenaltyWindow || isWithinCancellationFeeWindow) ? appealWindowExpiresAt : null,
+    });
+
+    // Log cancellation confirmed
+    const newState = {
+      wasCancelled: true,
+      paymentStatus: appointment.paymentStatus,
+      cancellationConfirmationId: confirmationId,
+    };
+
+    await CancellationAuditService.logCancellationConfirmed(
+      parseInt(id),
+      userId,
+      "homeowner",
+      {
+        confirmationId,
+        refundAmount: refundResult?.amount || 0,
+        cancellationFee: cancellationFeeResult?.amount || 0,
+        cleanerPayout: cleanerPayoutResult?.totalAmount || 0,
+        previousState,
+        newState,
+      },
+      req
+    );
+
+    // Build enhanced financial breakdown
+    const home = await UserHomes.findByPk(appointment.homeId);
+    const breakdown = await CancellationFinancialService.buildFullBreakdown(
+      { ...appointment.dataValues, home: home?.dataValues },
+      {
+        daysUntilAppointment,
+        isWithinPenaltyWindow,
+        isWithinFeeWindow: isWithinCancellationFeeWindow,
+        refundAmount: refundResult?.amount || 0,
+        refundPercentage,
+        cancellationFee: cancellationFeeResult?.amount ? Math.round(cancellationFeeResult.amount * 100) : 0,
+        cleanerPayout: cleanerPayoutResult ? {
+          netAmount: Math.round(cleanerPayoutResult.totalAmount * 100),
+          grossAmount: Math.round((cleanerPayoutResult.totalAmount + cleanerPayoutResult.platformFeeTotal) * 100),
+          platformFee: Math.round(cleanerPayoutResult.platformFeeTotal * 100),
+        } : null,
+        stripeDetails: {
+          refundId: refundResult?.id,
+          feeChargeId: cancellationFeeResult?.paymentIntentId,
+          feeAddedToBill: cancellationFeeResult?.addedToBill,
+        },
+        cancelledBy: "homeowner",
+      }
+    );
 
     // Build response message
     let message = "Appointment cancelled successfully.";
@@ -2926,10 +3067,13 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     return res.json({
       success: true,
       message,
-      refund: refundResult ? { amount: refundResult.amount / 100 } : null,
+      confirmationId,
+      refund: refundResult ? { amount: refundResult.amount / 100, stripeRefundId: refundResult.id } : null,
       cleanerPayout: cleanerPayoutResult,
       wasWithinPenaltyWindow: isWithinPenaltyWindow,
       cancellationFee: cancellationFeeResult,
+      financialBreakdown: breakdown.financialBreakdown,
+      appeal: breakdown.appeal,
     });
   } catch (error) {
     console.error("Error cancelling appointment as homeowner:", error);

@@ -4,6 +4,9 @@
  * Tests for the main offline orchestration service.
  */
 
+// Unmock OfflineManager so we can test the real implementation
+jest.unmock("../../../src/services/offline/OfflineManager");
+
 import { OFFLINE_JOB_STATUS, MAX_OFFLINE_DURATION_MS } from "../../../src/services/offline/constants";
 
 // Mock dependencies

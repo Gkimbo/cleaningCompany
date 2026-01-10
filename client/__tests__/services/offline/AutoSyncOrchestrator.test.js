@@ -5,6 +5,9 @@
  * when connectivity is restored.
  */
 
+// Unmock AutoSyncOrchestrator so we can test the real implementation
+jest.unmock("../../../src/services/offline/AutoSyncOrchestrator");
+
 import { AUTO_SYNC_COOLDOWN_MS, MAX_AUTO_RETRY_ATTEMPTS, getRetryDelay } from "../../../src/services/offline/constants";
 
 // Mock dependencies

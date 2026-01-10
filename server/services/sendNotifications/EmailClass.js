@@ -4870,6 +4870,202 @@ Kleanr Support Team`;
       console.error("❌ Error sending completion approved email to cleaner:", error);
     }
   }
+
+  /**
+   * Email to user when appeal is submitted
+   */
+  static async sendAppealSubmittedConfirmation(user, appeal) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Appeal Submitted",
+        subtitle: "We've received your cancellation appeal",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        greeting: `Hi ${user.firstName}!`,
+        content: `<p>Thank you for submitting your cancellation appeal. Our team will review your case carefully.</p>
+          <p>We aim to respond within <strong>48 hours</strong> of submission.</p>`,
+        infoBox: {
+          icon: "📝",
+          title: "Appeal Details",
+          items: [
+            { label: "Appeal ID", value: `#${appeal.id}` },
+            { label: "Category", value: appeal.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) },
+            { label: "Status", value: "🔍 Under Review" },
+            { label: "Priority", value: appeal.priority.charAt(0).toUpperCase() + appeal.priority.slice(1) },
+          ],
+        },
+        steps: {
+          title: "What happens next?",
+          items: [
+            "Our team will review your appeal and any supporting documents",
+            "We may reach out if we need additional information",
+            "You'll receive a notification once a decision is made",
+            "If approved, any applicable fees will be refunded automatically",
+          ],
+        },
+        warningBox: {
+          icon: "📎",
+          text: "<strong>Have documentation?</strong> Upload supporting documents (medical notes, photos, etc.) through the app to strengthen your appeal.",
+          bgColor: "#f0f9ff",
+          borderColor: "#0ea5e9",
+          textColor: "#0369a1",
+        },
+        ctaText: "You can check your appeal status anytime in the Kleanr app.",
+        footerMessage: "Thank you for your patience",
+      });
+
+      const textContent = `Hi ${user.firstName}!
+
+Thank you for submitting your cancellation appeal. Our team will review your case carefully.
+
+We aim to respond within 48 hours of submission.
+
+APPEAL DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Appeal ID: #${appeal.id}
+Category: ${appeal.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+Status: 🔍 Under Review
+Priority: ${appeal.priority.charAt(0).toUpperCase() + appeal.priority.slice(1)}
+
+WHAT HAPPENS NEXT?
+1. Our team will review your appeal and any supporting documents
+2. We may reach out if we need additional information
+3. You'll receive a notification once a decision is made
+4. If approved, any applicable fees will be refunded automatically
+
+📎 HAVE DOCUMENTATION?
+Upload supporting documents (medical notes, photos, etc.) through the app to strengthen your appeal.
+
+You can check your appeal status anytime in the Kleanr app.
+
+Thank you for your patience!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: user.email,
+        subject: `📝 Appeal Submitted - Reference #${appeal.id}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Appeal submitted confirmation email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending appeal submitted email:", error);
+    }
+  }
+
+  /**
+   * Email to user when appeal is resolved
+   */
+  static async sendAppealResolved(user, appeal, decision) {
+    try {
+      const transporter = createTransporter();
+
+      const isApproved = decision === "approve" || decision === "partial";
+      const headerColor = isApproved
+        ? "linear-gradient(135deg, #10b981 0%, #34d399 100%)"
+        : "linear-gradient(135deg, #ef4444 0%, #f87171 100%)";
+
+      const statusText = decision === "approve" ? "✅ Approved"
+        : decision === "partial" ? "✅ Partially Approved"
+          : "❌ Denied";
+
+      const resolution = appeal.resolution || {};
+
+      const content = isApproved
+        ? `<p>Great news! Your cancellation appeal has been <strong>${decision === "approve" ? "approved" : "partially approved"}</strong>.</p>
+           ${resolution.penaltyWaived ? "<p>✅ Cancellation penalty has been waived.</p>" : ""}
+           ${resolution.feeRefunded ? `<p>✅ Cancellation fee of $${((resolution.refundAmount || 0) / 100).toFixed(2)} will be refunded.</p>` : ""}
+           ${resolution.accountUnfrozen ? "<p>✅ Your account has been unfrozen.</p>" : ""}
+           ${resolution.ratingRemoved ? "<p>✅ Any penalty ratings have been removed.</p>" : ""}`
+        : `<p>After careful review, we were unable to approve your cancellation appeal.</p>
+           <p>${appeal.reviewDecision || "If you have additional information that might support your case, please contact our support team."}</p>`;
+
+      const htmlContent = createEmailTemplate({
+        title: "Appeal Decision",
+        subtitle: `Your appeal has been ${decision === "approve" ? "approved" : decision === "partial" ? "partially approved" : "reviewed"}`,
+        headerColor,
+        greeting: `Hi ${user.firstName}!`,
+        content,
+        infoBox: {
+          icon: isApproved ? "🎉" : "📋",
+          title: "Decision Summary",
+          items: [
+            { label: "Appeal ID", value: `#${appeal.id}` },
+            { label: "Decision", value: statusText },
+            { label: "Reviewed On", value: new Date().toLocaleDateString() },
+          ],
+        },
+        warningBox: isApproved ? {
+          icon: "💰",
+          text: "<strong>Refund Timeline:</strong> Any approved refunds will be processed within 3-5 business days.",
+          bgColor: "#e0f2fe",
+          borderColor: "#0ea5e9",
+          textColor: "#0369a1",
+        } : {
+          icon: "💬",
+          text: "<strong>Questions?</strong> If you believe this decision was made in error or have additional documentation, please contact our support team.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: isApproved ? "Thank you for your patience during the review process." : "We value your business and hope to serve you better in the future.",
+        footerMessage: "Thank you for using Kleanr",
+      });
+
+      const textContent = `Hi ${user.firstName}!
+
+${isApproved
+    ? `Great news! Your cancellation appeal has been ${decision === "approve" ? "approved" : "partially approved"}.
+${resolution.penaltyWaived ? "✅ Cancellation penalty has been waived.\n" : ""}${resolution.feeRefunded ? `✅ Cancellation fee of $${((resolution.refundAmount || 0) / 100).toFixed(2)} will be refunded.\n` : ""}${resolution.accountUnfrozen ? "✅ Your account has been unfrozen.\n" : ""}${resolution.ratingRemoved ? "✅ Any penalty ratings have been removed.\n" : ""}`
+    : `After careful review, we were unable to approve your cancellation appeal.
+
+${appeal.reviewDecision || "If you have additional information that might support your case, please contact our support team."}`}
+
+DECISION SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━
+Appeal ID: #${appeal.id}
+Decision: ${statusText}
+Reviewed On: ${new Date().toLocaleDateString()}
+
+${isApproved
+    ? `💰 REFUND TIMELINE
+Any approved refunds will be processed within 3-5 business days.
+
+Thank you for your patience during the review process.`
+    : `💬 QUESTIONS?
+If you believe this decision was made in error or have additional documentation, please contact our support team.
+
+We value your business and hope to serve you better in the future.`}
+
+Thank you for using Kleanr!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: user.email,
+        subject: isApproved
+          ? `✅ Appeal Approved - Reference #${appeal.id}`
+          : `📋 Appeal Decision - Reference #${appeal.id}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("✅ Appeal resolved email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending appeal resolved email:", error);
+    }
+  }
 }
 
 module.exports = Email;

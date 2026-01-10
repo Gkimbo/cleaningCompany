@@ -316,6 +316,64 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: false,
 			comment: "True if homeowner selected 'doesn't look good' - review required",
 		},
+		// Cancellation tracking fields
+		cancellationInitiatedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When cancellation was initiated",
+		},
+		cancellationInitiatedBy: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "User ID who initiated the cancellation",
+		},
+		cancellationConfirmedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When cancellation was confirmed/processed",
+		},
+		cancellationReason: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Reason provided for cancellation",
+		},
+		cancellationMethod: {
+			type: DataTypes.ENUM("app", "web", "support", "system"),
+			allowNull: true,
+			comment: "How the cancellation was submitted",
+		},
+		wasCancelled: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "Whether this appointment was cancelled",
+		},
+		cancellationType: {
+			type: DataTypes.ENUM("homeowner", "cleaner", "system", "weather"),
+			allowNull: true,
+			comment: "Who/what initiated the cancellation",
+		},
+		hasActiveAppeal: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "Whether there is an active appeal for this cancellation",
+		},
+		appealId: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Reference to the active appeal if any",
+		},
+		cancellationConfirmationId: {
+			type: DataTypes.STRING,
+			allowNull: true,
+			comment: "Human-readable confirmation ID (e.g., CXL-2026-0109-A7B3C9)",
+		},
+		appealWindowExpiresAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Deadline for submitting an appeal (72 hours from cancellation)",
+		},
 	});
 
 	// Define the one-to-many relationship with User

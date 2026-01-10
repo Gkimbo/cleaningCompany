@@ -13,6 +13,7 @@ jest.mock("../../src/services/fetchRequests/ReferralService", () => ({
   getMyReferrals: jest.fn(),
   getCurrentPrograms: jest.fn(),
   logShare: jest.fn(),
+  getMyCode: jest.fn(),
 }));
 
 // Mock react-native-vector-icons
@@ -91,9 +92,15 @@ describe("MyReferralsPage", () => {
     ReferralService.getMyReferrals.mockResolvedValue({
       stats: mockStats,
       referrals: mockReferrals,
+      availableCredits: mockStats.availableCredits,
     });
     ReferralService.getCurrentPrograms.mockResolvedValue(mockPrograms);
     ReferralService.logShare.mockResolvedValue({ success: true });
+    ReferralService.getMyCode.mockResolvedValue({
+      referralCode: "JOHN1234",
+      shareMessage: "Use my referral code JOHN1234 to sign up for Kleanr!",
+      programs: mockPrograms.programs,
+    });
   });
 
   describe("Rendering", () => {
@@ -121,19 +128,19 @@ describe("MyReferralsPage", () => {
     });
 
     it("should display available credits", async () => {
-      const { getByText } = render(<MyReferralsPage {...defaultProps} />);
+      const { getAllByText } = render(<MyReferralsPage {...defaultProps} />);
 
       await waitFor(() => {
-        expect(getByText("$50.00")).toBeTruthy();
+        expect(getAllByText("$50.00").length).toBeGreaterThan(0);
       });
     });
 
     it("should display referral stats", async () => {
-      const { getByText } = render(<MyReferralsPage {...defaultProps} />);
+      const { getAllByText } = render(<MyReferralsPage {...defaultProps} />);
 
       await waitFor(() => {
-        expect(getByText("5")).toBeTruthy(); // total referrals
-        expect(getByText("2")).toBeTruthy(); // pending
+        expect(getAllByText("5").length).toBeGreaterThan(0); // total referrals
+        expect(getAllByText("2").length).toBeGreaterThan(0); // pending
       });
     });
   });
@@ -149,11 +156,11 @@ describe("MyReferralsPage", () => {
     });
 
     it("should show status badges", async () => {
-      const { getByText } = render(<MyReferralsPage {...defaultProps} />);
+      const { getAllByText } = render(<MyReferralsPage {...defaultProps} />);
 
       await waitFor(() => {
-        expect(getByText(/rewarded/i)).toBeTruthy();
-        expect(getByText(/pending/i)).toBeTruthy();
+        expect(getAllByText(/rewarded/i).length).toBeGreaterThan(0);
+        expect(getAllByText(/pending/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -173,10 +180,10 @@ describe("MyReferralsPage", () => {
 
   describe("Share Functionality", () => {
     it("should have share buttons", async () => {
-      const { getByText } = render(<MyReferralsPage {...defaultProps} />);
+      const { getAllByText } = render(<MyReferralsPage {...defaultProps} />);
 
       await waitFor(() => {
-        expect(getByText(/Share/i)).toBeTruthy();
+        expect(getAllByText(/Share/i).length).toBeGreaterThan(0);
       });
     });
 
@@ -193,11 +200,11 @@ describe("MyReferralsPage", () => {
     });
 
     it("should log share action", async () => {
-      const { getByText } = render(<MyReferralsPage {...defaultProps} />);
+      const { getAllByText } = render(<MyReferralsPage {...defaultProps} />);
 
       await waitFor(() => {
-        const shareButton = getByText(/Share/i);
-        fireEvent.press(shareButton);
+        const shareButtons = getAllByText(/Share/i);
+        fireEvent.press(shareButtons[0]);
       });
 
       await waitFor(() => {
@@ -217,8 +224,10 @@ describe("MyReferralsPage", () => {
     });
 
     it("should show no programs message when inactive", async () => {
-      ReferralService.getCurrentPrograms.mockResolvedValue({
-        active: false,
+      // Override getMyCode to return no programs
+      ReferralService.getMyCode.mockResolvedValue({
+        referralCode: "JOHN1234",
+        shareMessage: "Use my referral code JOHN1234!",
         programs: [],
       });
 
@@ -233,12 +242,13 @@ describe("MyReferralsPage", () => {
   describe("Error Handling", () => {
     it("should handle API error gracefully", async () => {
       ReferralService.getMyReferrals.mockRejectedValue(new Error("Network error"));
+      ReferralService.getMyCode.mockRejectedValue(new Error("Network error"));
 
       const { getByText } = render(<MyReferralsPage {...defaultProps} />);
 
       await waitFor(() => {
-        // Should show error message or empty state
-        expect(getByText(/error/i) || getByText(/No referrals/i)).toBeTruthy();
+        // Should show error message
+        expect(getByText(/Failed to load referral data/i)).toBeTruthy();
       });
     });
 

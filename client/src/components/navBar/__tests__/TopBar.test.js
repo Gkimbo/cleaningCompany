@@ -86,6 +86,25 @@ jest.mock("../HRManagementButton", () => () => null);
 jest.mock("../TermsEditorButton", () => () => null);
 jest.mock("../WithdrawalsButton", () => () => null);
 jest.mock("../MyClientsButton", () => () => null);
+jest.mock("../SuspiciousReportsButton", () => () => null);
+
+// Mock SocketContext
+jest.mock("../../../services/SocketContext", () => ({
+  useSocket: () => ({
+    socket: {
+      on: jest.fn(),
+      off: jest.fn(),
+      emit: jest.fn(),
+    },
+    isConnected: false,
+    emit: jest.fn(),
+    on: jest.fn(),
+    off: jest.fn(),
+    onNotification: jest.fn(() => jest.fn()), // Returns unsubscribe function
+    onNotificationCountUpdate: jest.fn(() => jest.fn()), // Returns unsubscribe function
+  }),
+  SocketProvider: ({ children }) => children,
+}));
 
 import TopBar from "../TopBar";
 

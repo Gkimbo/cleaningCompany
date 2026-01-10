@@ -19,12 +19,17 @@ const MILES_TO_METERS = 1609.34;
 class LastMinuteNotificationService {
   /**
    * Find all cleaners within radius of a property
+   * Verified businesses are prioritized and returned first
    * @param {number} homeLat - Property latitude (decrypted)
    * @param {number} homeLon - Property longitude (decrypted)
    * @param {number} radiusMiles - Search radius in miles
+   * @param {Object} options - Additional options
+   * @param {boolean} options.prioritizeVerified - Whether to sort verified businesses first (default: true)
    * @returns {Promise<Array>} Array of nearby cleaners with distance info
    */
-  static async findNearbyCleaners(homeLat, homeLon, radiusMiles) {
+  static async findNearbyCleaners(homeLat, homeLon, radiusMiles, options = {}) {
+    const { prioritizeVerified = true } = options;
+
     // Get all active cleaners with location data
     const cleaners = await User.findAll({
       where: {
@@ -43,6 +48,11 @@ class LastMinuteNotificationService {
         "serviceAreaLongitude",
         "serviceAreaRadiusMiles",
         "notifications",
+        // Business verification fields
+        "isBusinessOwner",
+        "businessVerificationStatus",
+        "businessName",
+        "businessHighlightOptIn",
       ],
     });
 
@@ -90,6 +100,12 @@ class LastMinuteNotificationService {
 
       // Only include if within both radiuses
       if (isWithinCleanerServiceArea && isWithinNotificationRadius) {
+        // Check if this is a verified business
+        const isVerifiedBusiness =
+          cleaner.isBusinessOwner &&
+          cleaner.businessVerificationStatus === "verified" &&
+          cleaner.businessHighlightOptIn !== false;
+
         nearbyCleaners.push({
           id: cleaner.id,
           firstName: cleaner.firstName,
@@ -99,15 +115,31 @@ class LastMinuteNotificationService {
           notifications: cleaner.notifications,
           distanceMeters,
           distanceMiles: (distanceMeters / MILES_TO_METERS).toFixed(1),
+          // Verification info
+          isBusinessOwner: cleaner.isBusinessOwner || false,
+          isVerifiedBusiness,
+          businessName: cleaner.businessName,
         });
       }
     }
 
-    // Sort by distance (closest first)
-    nearbyCleaners.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    // Sort: verified businesses first, then by distance
+    if (prioritizeVerified) {
+      nearbyCleaners.sort((a, b) => {
+        // Verified businesses come first
+        if (a.isVerifiedBusiness && !b.isVerifiedBusiness) return -1;
+        if (!a.isVerifiedBusiness && b.isVerifiedBusiness) return 1;
+        // Then sort by distance
+        return a.distanceMeters - b.distanceMeters;
+      });
+    } else {
+      // Just sort by distance
+      nearbyCleaners.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    }
 
+    const verifiedCount = nearbyCleaners.filter(c => c.isVerifiedBusiness).length;
     console.log(
-      `[LastMinuteNotification] Found ${nearbyCleaners.length} cleaners within ${radiusMiles} miles`
+      `[LastMinuteNotification] Found ${nearbyCleaners.length} cleaners within ${radiusMiles} miles (${verifiedCount} verified businesses)`
     );
 
     return nearbyCleaners;

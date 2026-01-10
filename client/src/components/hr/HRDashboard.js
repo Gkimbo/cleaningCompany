@@ -443,10 +443,11 @@ const HRDashboard = ({ state, dispatch }) => {
             onPress={() => navigate("/employees")}
           />
           <QuickActionButton
-            icon="bullhorn"
-            label="Broadcast"
-            color={colors.warning[500]}
-            onPress={() => navigate("/messages/broadcast")}
+            icon="balance-scale"
+            label="Conflicts"
+            color={colors.error[500]}
+            onPress={() => navigate("/conflicts")}
+            badge={quickStats?.pendingConflicts}
           />
           <QuickActionButton
             icon="comments"

@@ -355,7 +355,7 @@ describe("HomePage Landing Page - Content Verification", () => {
     const { getByText } = renderHomePage();
 
     await waitFor(() => {
-      expect(getByText(/Sparkling Clean/)).toBeTruthy();
+      expect(getByText(/5-Star Cleanings/)).toBeTruthy();
     });
   });
 

@@ -256,6 +256,49 @@ const reducer = (state, action) => {
         syncStatus: action.payload.status,
         pendingSyncCount: action.payload.pendingCount ?? state.pendingSyncCount,
       };
+    // Preview mode actions for owner "Preview as Role" feature
+    case "PREVIEW_ENTER":
+      return {
+        ...state,
+        currentUser: {
+          ...state.currentUser,
+          token: action.payload.token,
+          id: action.payload.user.id,
+        },
+        account: action.payload.user.type,
+        isBusinessOwner: action.payload.user.isBusinessOwner || false,
+        businessName: action.payload.user.businessName || null,
+        isPreviewMode: true,
+        previewRole: action.payload.previewRole,
+        previewOriginalOwnerId: action.payload.originalOwnerId,
+        // Reset data that will be fetched fresh
+        homes: [],
+        appointments: [],
+        requests: [],
+        conversations: [],
+        currentMessages: [],
+      };
+    case "PREVIEW_EXIT":
+      return {
+        ...state,
+        currentUser: {
+          ...state.currentUser,
+          token: action.payload.token || action.payload.currentUser?.token,
+          id: action.payload.user?.id || action.payload.currentUser?.id,
+        },
+        account: action.payload.user?.type || action.payload.account || "owner",
+        isBusinessOwner: false,
+        businessName: null,
+        isPreviewMode: false,
+        previewRole: null,
+        previewOriginalOwnerId: null,
+        // Reset data that will be fetched fresh
+        homes: [],
+        appointments: [],
+        requests: [],
+        conversations: [],
+        currentMessages: [],
+      };
     default:
       throw new Error();
   }

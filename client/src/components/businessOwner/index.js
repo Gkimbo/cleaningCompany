@@ -1,4 +1,5 @@
 export { default as BusinessOwnerDashboard } from "./BusinessOwnerDashboard";
+export { default as BusinessAnalyticsDashboard } from "./BusinessAnalyticsDashboard";
 export { default as EmployeeManagement } from "./EmployeeManagement";
 export { default as JobAssignment } from "./JobAssignment";
 export { default as BusinessOwnerCalendar } from "./BusinessOwnerCalendar";

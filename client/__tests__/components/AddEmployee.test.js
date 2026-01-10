@@ -14,6 +14,9 @@ jest.mock("../../src/services/fetchRequests/fetchData", () => ({
   deleteEmployee: jest.fn(),
 }));
 
+// Mock alert (used by the component)
+global.alert = jest.fn();
+
 // Mock AddEmployeeForm to simplify testing
 jest.mock("../../src/components/admin/forms/AddNewEmployeeForm", () => {
   const { View, Text } = require("react-native");
@@ -421,7 +424,7 @@ describe("AddEmployee", () => {
       });
 
       await waitFor(() => {
-        expect(FetchData.deleteEmployee).toHaveBeenCalledWith(1);
+        expect(FetchData.deleteEmployee).toHaveBeenCalledWith(1, "test-token");
         expect(mockSetEmployeeList).toHaveBeenCalled();
       });
     });

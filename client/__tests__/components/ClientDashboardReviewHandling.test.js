@@ -6,6 +6,8 @@ jest.mock("../../src/services/fetchRequests/ClientDashboardService", () => ({
   default: {
     getDashboardSummary: jest.fn(),
     getPendingRequestsForClient: jest.fn(),
+    getMyCleanerRelationship: jest.fn(),
+    getMyRecurringSchedules: jest.fn(),
   },
 }));
 
@@ -28,6 +30,18 @@ jest.mock("react-router-native", () => ({
 }));
 
 jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
+
+// Mock SocketContext
+jest.mock("../../src/services/SocketContext", () => ({
+  useSocket: () => ({
+    isConnected: true,
+    registerForUser: jest.fn(),
+    unregisterForUser: jest.fn(),
+    addListener: jest.fn(() => () => {}),
+    emit: jest.fn(),
+    onBookingRequest: jest.fn(() => () => {}),
+  }),
+}));
 
 jest.mock("../../src/services/styles/theme", () => ({
   colors: {
@@ -148,6 +162,8 @@ describe("ClientDashboard Review Handling", () => {
 
     ClientDashboardService.getDashboardSummary.mockResolvedValue(mockDashboardData);
     ClientDashboardService.getPendingRequestsForClient.mockResolvedValue({ totalCount: 0 });
+    ClientDashboardService.getMyCleanerRelationship.mockResolvedValue({ cleaner: null });
+    ClientDashboardService.getMyRecurringSchedules.mockResolvedValue({ schedules: [] });
     FetchData.getPendingAdjustments.mockResolvedValue({ adjustments: [] });
   });
 

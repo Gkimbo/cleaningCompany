@@ -369,6 +369,7 @@ const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, on
       >
         {/* Checkbox for complete */}
         <TouchableOpacity
+          testID={`checkbox-${item.id}`}
           onPress={() => setItemStatus(item.id, "completed")}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

@@ -575,6 +575,111 @@ class PushNotification {
       });
     }
   }
+
+  // ==========================================
+  // CANCELLATION APPEAL NOTIFICATIONS
+  // ==========================================
+
+  // 42. Appeal submitted confirmation (to user)
+  static async sendPushAppealSubmitted(expoPushToken, userName, appointmentDate, confirmationId) {
+    const title = "Appeal Received 📋";
+    const body = `Your appeal for the ${appointmentDate} cancellation has been received. We'll review it within 48 hours. Reference: ${confirmationId}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_submitted",
+      appointmentDate,
+      confirmationId,
+    });
+  }
+
+  // 43. Appeal assigned (to HR/reviewer)
+  static async sendPushAppealAssigned(expoPushToken, reviewerName, appealId, priority, category) {
+    const priorityLabel = priority === "urgent" ? "🔴 URGENT" : priority === "high" ? "🟠 HIGH PRIORITY" : "";
+    const title = `New Appeal Assigned ${priorityLabel}`;
+    const body = `You've been assigned appeal #${appealId} (${category}). Please review within SLA deadline.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_assigned",
+      appealId,
+      priority,
+      category,
+      actionRequired: true,
+    });
+  }
+
+  // 44. Appeal approved (to user)
+  static async sendPushAppealApproved(expoPushToken, userName, appointmentDate, refundAmount) {
+    const refundText = refundAmount ? ` A refund of $${(refundAmount / 100).toFixed(2)} has been processed.` : "";
+    const title = "Appeal Approved! ✅";
+    const body = `Good news! Your appeal for the ${appointmentDate} cancellation was approved.${refundText}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_approved",
+      appointmentDate,
+      refundAmount,
+    });
+  }
+
+  // 45. Appeal partially approved (to user)
+  static async sendPushAppealPartiallyApproved(expoPushToken, userName, appointmentDate, resolutionSummary) {
+    const title = "Appeal Partially Approved";
+    const body = `Your appeal for the ${appointmentDate} cancellation has been reviewed. ${resolutionSummary || "Some relief has been granted."}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_partially_approved",
+      appointmentDate,
+      resolutionSummary,
+    });
+  }
+
+  // 46. Appeal denied (to user)
+  static async sendPushAppealDenied(expoPushToken, userName, appointmentDate) {
+    const title = "Appeal Decision";
+    const body = `Your appeal for the ${appointmentDate} cancellation was reviewed. Unfortunately, we couldn't grant relief. Check the app for details.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_denied",
+      appointmentDate,
+    });
+  }
+
+  // 47. Appeal documents requested (to user)
+  static async sendPushAppealDocumentsRequested(expoPushToken, userName, appointmentDate) {
+    const title = "Documents Needed 📄";
+    const body = `To complete your appeal for the ${appointmentDate} cancellation, we need supporting documents. Please upload them in the app.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_documents_requested",
+      appointmentDate,
+      actionRequired: true,
+    });
+  }
+
+  // 48. Appeal SLA warning (to HR/reviewer)
+  static async sendPushAppealSLAWarning(expoPushToken, reviewerName, appealId, hoursRemaining) {
+    const title = "⚠️ SLA Warning";
+    const body = `Appeal #${appealId} needs response within ${hoursRemaining} hours to meet SLA.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_sla_warning",
+      appealId,
+      hoursRemaining,
+      actionRequired: true,
+    });
+  }
+
+  // 49. Appeal SLA breached (to HR manager/owner)
+  static async sendPushAppealSLABreached(expoPushToken, staffName, appealId, assignedTo) {
+    const title = "🔴 SLA Breach Alert";
+    const body = `Appeal #${appealId} has exceeded SLA deadline. ${assignedTo ? `Assigned to reviewer #${assignedTo}` : "Unassigned"}. Immediate attention required.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "appeal_sla_breached",
+      appealId,
+      assignedTo,
+      actionRequired: true,
+    });
+  }
 }
 
 module.exports = PushNotification;

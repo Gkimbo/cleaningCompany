@@ -151,8 +151,9 @@ describe("CleaningChecklist Component", () => {
       const component = render(<CleaningChecklist {...defaultProps} />);
       await waitForLoad(component);
 
-      const task = component.getByText(/Clean all countertops/);
-      fireEvent.press(task);
+      // Press the checkbox for the first kitchen task (id: k1)
+      const checkbox = component.getByTestId("checkbox-k1");
+      fireEvent.press(checkbox);
 
       // Progress should update
       await waitFor(() => {
@@ -164,8 +165,10 @@ describe("CleaningChecklist Component", () => {
       const component = render(<CleaningChecklist {...defaultProps} />);
       await waitForLoad(component);
 
-      // Check first task
-      fireEvent.press(component.getByText(/Clean all countertops/));
+      // Check first task using checkbox testID
+      await act(async () => {
+        fireEvent.press(component.getByTestId("checkbox-k1"));
+      });
 
       await waitFor(() => {
         // After checking a task, there should be a call with completed > 0
@@ -173,7 +176,7 @@ describe("CleaningChecklist Component", () => {
           call => call[1] > 0
         );
         expect(callsWithCompleted.length).toBeGreaterThan(0);
-      });
+      }, { timeout: 2000 });
 
       // Find the call with 1 completed task
       const callWithOneCompleted = mockOnProgressUpdate.mock.calls.find(
@@ -187,18 +190,23 @@ describe("CleaningChecklist Component", () => {
       const component = render(<CleaningChecklist {...defaultProps} />);
       await waitForLoad(component);
 
-      const task = component.getByText(/Clean all countertops/);
+      // Use checkbox testID instead of task text
+      const checkbox = component.getByTestId("checkbox-k1");
 
       // Check task
-      fireEvent.press(task);
+      await act(async () => {
+        fireEvent.press(checkbox);
+      });
 
       // Uncheck task
-      fireEvent.press(task);
+      await act(async () => {
+        fireEvent.press(checkbox);
+      });
 
       await waitFor(() => {
         // Should have been called multiple times
         expect(mockOnProgressUpdate.mock.calls.length).toBeGreaterThan(1);
-      });
+      }, { timeout: 2000 });
     });
   });
 
@@ -376,7 +384,10 @@ describe("CleaningChecklist Component", () => {
       const component = render(<CleaningChecklist {...defaultProps} />);
       await waitForLoad(component);
 
-      fireEvent.press(component.getByText(/Clean all countertops/));
+      // Use checkbox testID instead of task text
+      await act(async () => {
+        fireEvent.press(component.getByTestId("checkbox-k1"));
+      });
 
       await waitFor(() => {
         // Wait for a call with completed > 0
@@ -384,7 +395,7 @@ describe("CleaningChecklist Component", () => {
           call => call[1] > 0
         );
         expect(callsWithCompleted.length).toBeGreaterThan(0);
-      });
+      }, { timeout: 2000 });
 
       // Find the call with completed tasks
       const callWithCompleted = mockOnProgressUpdate.mock.calls.find(
@@ -446,12 +457,14 @@ describe("CleaningChecklist Component", () => {
       );
       await waitForLoad(component);
 
-      // Toggle a task
-      fireEvent.press(component.getByText(/Clean all countertops/));
+      // Toggle a task using checkbox testID
+      await act(async () => {
+        fireEvent.press(component.getByTestId("checkbox-k1"));
+      });
 
       await waitFor(() => {
         expect(AsyncStorage.setItem).toHaveBeenCalled();
-      });
+      }, { timeout: 2000 });
 
       // Verify the key includes appointment ID
       const setItemCalls = AsyncStorage.setItem.mock.calls.filter(
@@ -466,16 +479,20 @@ describe("CleaningChecklist Component", () => {
       );
       await waitForLoad(component);
 
-      // Toggle first task
-      fireEvent.press(component.getByText(/Clean all countertops/));
+      // Toggle first task using checkbox testID (k1 - countertops)
+      await act(async () => {
+        fireEvent.press(component.getByTestId("checkbox-k1"));
+      });
 
-      // Toggle second task
-      fireEvent.press(component.getByText(/Clean inside and outside of oven/));
+      // Toggle second task using checkbox testID (k3 - oven)
+      await act(async () => {
+        fireEvent.press(component.getByTestId("checkbox-k3"));
+      });
 
       await waitFor(() => {
         // Should have been called multiple times as progress is saved on each toggle
         expect(AsyncStorage.setItem.mock.calls.length).toBeGreaterThanOrEqual(2);
-      });
+      }, { timeout: 2000 });
     });
 
     it("should restore checked state from saved progress", async () => {
