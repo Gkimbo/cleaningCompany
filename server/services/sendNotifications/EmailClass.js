@@ -4194,6 +4194,83 @@ Kleanr Team`;
     }
   }
 
+  /**
+   * Send urgent replacement email when a cleaner cancels last-minute
+   */
+  static async sendUrgentReplacementEmail(
+    email,
+    cleanerName,
+    appointmentDate,
+    price,
+    location,
+    distanceMiles
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Urgent: Replacement Needed!",
+        subtitle: "A Cleaner Had to Cancel",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>A homeowner in your area needs a <strong>replacement cleaner</strong> urgently! The originally assigned cleaner had to cancel, and this job needs to be filled quickly.</p>
+          <p>You're only <strong>${distanceMiles} miles</strong> away from this job!</p>`,
+        infoBox: {
+          icon: "🆘",
+          title: "Job Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Your Earnings", value: price },
+            { label: "Location", value: location },
+            { label: "Distance", value: `${distanceMiles} miles from you` },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "The homeowner is counting on finding a replacement quickly. Open the app now to claim this job before another cleaner does!",
+          bgColor: "#fee2e2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        },
+        ctaText: "Open the Kleanr app to view and accept this job!",
+        footerMessage: "Help save the day!",
+      });
+
+      const textContent = `URGENT: Replacement Cleaner Needed!
+
+Hi ${cleanerName},
+
+A homeowner near you needs a replacement cleaner urgently - the original cleaner had to cancel. You're only ${distanceMiles} miles away!
+
+JOB DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Your Earnings: ${price}
+Location: ${location}
+Distance: ${distanceMiles} miles from you
+
+⏰ The homeowner is counting on finding a replacement quickly. Open the Kleanr app now to claim it!
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🆘 URGENT: Replacement Needed - ${price} - ${distanceMiles} mi away`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Urgent replacement email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending urgent replacement email:", error);
+      throw error;
+    }
+  }
+
   // ============================================================================
   // EDGE CASE MULTI-CLEANER EMAILS
   // ============================================================================

@@ -35,6 +35,7 @@ const completionRouter = require("./api/v1/completionRouter");
 const cancellationAppealRouter = require("./api/v1/cancellationAppealRouter");
 const conflictRouter = require("./api/v1/conflictRouter");
 const demoAccountRouter = require("./api/v1/demoAccountRouter");
+const analyticsRouter = require("./api/v1/analyticsRouter");
 
 const rootRouter = new express.Router();
 
@@ -73,6 +74,7 @@ rootRouter.use("/api/v1/completion", completionRouter);
 rootRouter.use("/api/v1/appeals", cancellationAppealRouter);
 rootRouter.use("/api/v1/conflicts", conflictRouter);
 rootRouter.use("/api/v1/demo-accounts", demoAccountRouter);
+rootRouter.use("/api/v1/analytics", analyticsRouter);
 
 rootRouter.use("/", clientRouter);
 

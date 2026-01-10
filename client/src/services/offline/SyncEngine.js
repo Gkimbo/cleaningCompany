@@ -22,6 +22,7 @@ import {
 import { SYNC_OPERATION_TYPES, OPERATION_SEQUENCE } from "./database/models/SyncQueue";
 import { CONFLICT_TYPES } from "./database/models/SyncConflict";
 import { API_BASE } from "../config";
+import AnalyticsService from "../AnalyticsService";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
@@ -168,6 +169,9 @@ class SyncEngine {
     this._syncing = true;
     this._updateProgress({ status: SYNC_STATUS.SYNCING, errors: [] });
 
+    // Track sync start time for analytics
+    const syncStartTime = Date.now();
+
     try {
       // Get all pending operations
       const allOperations = await syncQueueCollection.query().fetch();
@@ -242,6 +246,12 @@ class SyncEngine {
 
       // Mark synced jobs as no longer requiring sync
       await this._updateJobSyncStatus();
+
+      // Track sync completion for analytics
+      if (syncedCount > 0) {
+        const syncDurationMs = Date.now() - syncStartTime;
+        AnalyticsService.trackOfflineSync(syncDurationMs, syncedCount);
+      }
 
       return { success: errors.length === 0, synced: syncedCount, errors };
     } catch (error) {

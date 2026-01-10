@@ -742,6 +742,21 @@ class PushNotification {
       actionRequired: true,
     });
   }
+
+  // 53. Urgent replacement notification (cleaner cancelled last-minute)
+  static async sendPushUrgentReplacement(expoPushToken, date, price, city, distanceMiles) {
+    const title = "🆘 Urgent: Replacement Needed!";
+    const body = `$${price} in ${city} - ${distanceMiles} mi away. Cleaner cancelled!`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "urgent_replacement",
+      date,
+      price,
+      city,
+      distanceMiles,
+      screen: "JobDetails",
+    });
+  }
 }
 
 module.exports = PushNotification;

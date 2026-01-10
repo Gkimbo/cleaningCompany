@@ -5,7 +5,7 @@
  * when a homeowner books a last-minute appointment.
  */
 
-const { User, Notification } = require("../models");
+const { User, Notification, UserPendingRequests } = require("../models");
 const { calculateDistance } = require("../utils/geoUtils");
 const { getPricingConfig } = require("../config/businessConfig");
 const EncryptionService = require("./EncryptionService");
@@ -281,6 +281,175 @@ class LastMinuteNotificationService {
 
     console.log(
       `[LastMinuteNotification] Notified ${notifiedCleanerIds.length} cleaners for appointment ${appointment.id}`
+    );
+
+    return {
+      notifiedCount: notifiedCleanerIds.length,
+      cleanerIds: notifiedCleanerIds,
+    };
+  }
+
+  /**
+   * Send urgent replacement notifications when a cleaner cancels last-minute
+   * @param {Object} appointment - The UserAppointments record
+   * @param {Object} home - The UserHomes record with lat/long
+   * @param {Object} io - Socket.io instance for real-time updates
+   * @param {Array<number>} excludeCleanerIds - Cleaner IDs to exclude (e.g., the cancelling cleaner)
+   * @returns {Promise<{notifiedCount: number, cleanerIds: Array}>}
+   */
+  static async notifyCleanersForReplacement(appointment, home, io = null, excludeCleanerIds = []) {
+    const pricing = await getPricingConfig();
+    const radiusMiles = pricing?.lastMinute?.notificationRadiusMiles ?? 25;
+
+    // Get home coordinates (they're encrypted, need to decrypt)
+    let homeLat, homeLon;
+
+    try {
+      homeLat = parseFloat(EncryptionService.decrypt(home.latitude));
+      homeLon = parseFloat(EncryptionService.decrypt(home.longitude));
+    } catch (e) {
+      console.error(
+        "[ReplacementNotification] Could not decrypt home coordinates:",
+        home.id
+      );
+      return { notifiedCount: 0, cleanerIds: [] };
+    }
+
+    if (isNaN(homeLat) || isNaN(homeLon)) {
+      console.error(
+        "[ReplacementNotification] Home has invalid coordinates:",
+        home.id
+      );
+      return { notifiedCount: 0, cleanerIds: [] };
+    }
+
+    // Find nearby cleaners
+    const nearbyCleaners = await this.findNearbyCleaners(
+      homeLat,
+      homeLon,
+      radiusMiles
+    );
+
+    if (nearbyCleaners.length === 0) {
+      console.log(
+        "[ReplacementNotification] No cleaners found within radius for appointment",
+        appointment.id
+      );
+      return { notifiedCount: 0, cleanerIds: [] };
+    }
+
+    // Get cleaners who have already declined this job
+    const declinedRequests = await UserPendingRequests.findAll({
+      where: {
+        appointmentId: appointment.id,
+        status: "declined",
+      },
+      attributes: ["cleanerId"],
+    });
+    const declinedCleanerIds = declinedRequests.map(r => r.cleanerId);
+
+    // Combine exclusion lists
+    const allExcludedIds = [
+      ...excludeCleanerIds.map(id => parseInt(id, 10)),
+      ...declinedCleanerIds.map(id => parseInt(id, 10)),
+    ];
+
+    // Filter out excluded cleaners
+    const eligibleCleaners = nearbyCleaners.filter(
+      cleaner => !allExcludedIds.includes(cleaner.id)
+    );
+
+    if (eligibleCleaners.length === 0) {
+      console.log(
+        "[ReplacementNotification] All nearby cleaners are excluded for appointment",
+        appointment.id
+      );
+      return { notifiedCount: 0, cleanerIds: [] };
+    }
+
+    // Prepare notification content
+    const priceDisplay = `$${parseFloat(appointment.price).toFixed(2)}`;
+    const cityDisplay = home.city ? EncryptionService.decrypt(home.city) : "your area";
+    const appointmentDate = appointment.date;
+
+    const notifiedCleanerIds = [];
+
+    for (const cleaner of eligibleCleaners) {
+      try {
+        // 1. Create in-app notification
+        await Notification.create({
+          userId: cleaner.id,
+          type: "urgent_replacement",
+          title: "Urgent: Replacement Needed!",
+          body: `${priceDisplay} cleaning in ${cityDisplay} (${cleaner.distanceMiles} mi away). Original cleaner cancelled - can you help?`,
+          data: {
+            appointmentId: appointment.id,
+            homeId: home.id,
+            price: appointment.price,
+            distanceMiles: cleaner.distanceMiles,
+            isReplacement: true,
+          },
+          actionRequired: true,
+          relatedAppointmentId: appointment.id,
+          expiresAt: new Date(appointmentDate + "T23:59:59"),
+        });
+
+        // 2. Send push notification
+        if (cleaner.expoPushToken) {
+          await PushNotification.sendPushUrgentReplacement(
+            cleaner.expoPushToken,
+            appointmentDate,
+            parseFloat(appointment.price).toFixed(0),
+            cityDisplay,
+            cleaner.distanceMiles
+          );
+        }
+
+        // 3. Send email if user has email notifications enabled
+        if (cleaner.notifications?.includes("email") && cleaner.email) {
+          await Email.sendUrgentReplacementEmail(
+            cleaner.email,
+            cleaner.firstName,
+            appointmentDate,
+            priceDisplay,
+            cityDisplay,
+            cleaner.distanceMiles
+          );
+        }
+
+        // 4. Emit socket event for real-time update
+        if (io) {
+          io.to(`user_${cleaner.id}`).emit("urgent_replacement_job", {
+            appointmentId: appointment.id,
+            price: appointment.price,
+            city: cityDisplay,
+            distanceMiles: cleaner.distanceMiles,
+          });
+
+          // Also emit notification count update
+          const unreadCount = await Notification.getUnreadCount(cleaner.id);
+          io.to(`user_${cleaner.id}`).emit("notification_count_update", {
+            unreadCount,
+          });
+        }
+
+        notifiedCleanerIds.push(cleaner.id);
+      } catch (error) {
+        console.error(
+          `[ReplacementNotification] Error notifying cleaner ${cleaner.id}:`,
+          error
+        );
+        // Continue with other cleaners
+      }
+    }
+
+    // Update appointment to mark replacement notifications sent
+    await appointment.update({
+      replacementNotificationsSentAt: new Date(),
+    });
+
+    console.log(
+      `[ReplacementNotification] Notified ${notifiedCleanerIds.length} cleaners for replacement on appointment ${appointment.id}`
     );
 
     return {

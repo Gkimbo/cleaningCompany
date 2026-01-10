@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-3967_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-4315_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -155,6 +155,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 
 - **Financial Dashboard**: Revenue metrics (today, week, month, year, all-time)
 - **Platform Withdrawals**: Transfer earnings via Stripe
+- **Internal Analytics**: Track flow abandonment, job duration, offline usage, disputes, pay overrides
 - **Preview as Role**: Test the app as any user type (Cleaner, Homeowner, Business Owner, Employee)
 - **Employee Management**: Create/edit HR staff and cleaners
 - **Pricing Configuration**: Base prices, per-bed/bath fees, time windows, cancellation fees, last-minute fees
@@ -200,6 +201,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Job Ledger** | Double-entry accounting system tracking all job-related financial transactions. Stripe reconciliation, balance tracking, automated entry creation for fees, payouts, refunds. |
 | **Cancellation Audit Log** | Immutable event tracking for all cancellation-related actions. Captures actor, changes, timestamps for compliance and dispute resolution. |
 | **Preview as Role** | Platform owners can preview the app as any user type using demo accounts. Preserves owner state for seamless return. Full functionality with demo data. |
+| **Internal Analytics** | Platform-level metrics dashboard for owners. Flow abandonment tracking with step-by-step funnel analysis. Job duration statistics (avg/min/max/percentiles). Offline usage monitoring (sync success rate, duration). Dispute and pay override frequency with breakdowns by type/reason. Date range filtering (7/30/90 days). |
 
 ---
 
@@ -410,7 +412,8 @@ kleanr/
 │   │   ├── termsRouter.js           # Terms & Conditions
 │   │   ├── conflictRouter.js        # Conflict resolution center
 │   │   ├── cancellationAppealRouter.js  # Cancellation appeals
-│   │   └── demoAccountRouter.js     # Preview as Role
+│   │   ├── demoAccountRouter.js     # Preview as Role
+│   │   └── analyticsRouter.js       # Internal analytics
 │   ├── services/                    # 39 business logic services
 │   │   ├── BusinessEmployeeService.js # Employee management
 │   │   ├── CalculatePrice.js        # Dynamic pricing logic
@@ -430,6 +433,7 @@ kleanr/
 │   │   ├── JobLedgerService.js      # Financial ledger
 │   │   ├── CancellationAuditService.js   # Audit logging
 │   │   ├── DemoAccountService.js    # Preview mode sessions
+│   │   ├── AnalyticsService.js      # Event tracking & aggregation
 │   │   ├── cron/                    # Scheduled background jobs
 │   │   └── sendNotifications/       # Email & push services
 │   ├── models/                      # 60 Sequelize models
@@ -459,7 +463,7 @@ kleanr/
 ## Testing
 
 ```bash
-# Run all server tests (3967+ tests)
+# Run all server tests (4315+ tests)
 cd server && npm test
 
 # Run specific test file
@@ -511,7 +515,8 @@ npm test -- --watch
 | Cancellation Appeals | 67 | Appeal workflow, HR review, decisions |
 | Job Ledger | 45 | Double-entry accounting, reconciliation |
 | Preview as Role | 129 | Context, modals, demo account services |
-| **Total** | **3967+** | - |
+| Internal Analytics | 89 | Event tracking, dashboard stats, aggregations |
+| **Total** | **4315+** | - |
 
 ---
 
@@ -542,6 +547,7 @@ See [Server README](./server/README.md) for complete API documentation.
 | **Conflicts** | conflictRouter | Case queue, evidence, resolution, audit |
 | **Appeals** | cancellationAppealRouter | Submit, review, decide, stats |
 | **Demo Accounts** | demoAccountRouter | Preview enter/exit, role selection |
+| **Analytics** | analyticsRouter | Flow abandonment, job duration, offline usage, disputes, pay overrides |
 
 ---
 
@@ -635,6 +641,9 @@ Real-time communication via Socket.io:
 
 ### Conflicts & Appeals
 - CancellationAppeal, CancellationAuditLog, JobLedger
+
+### Analytics
+- AnalyticsEvent
 
 ---
 

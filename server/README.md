@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-3967+-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-4315+-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -41,6 +41,7 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - **Job Ledger** with double-entry accounting and Stripe reconciliation
 - **Cancellation Audit Logging** for compliance tracking
 - **Preview as Role** for platform owners to test any user experience
+- **Internal Analytics** for tracking flow abandonment, job duration, offline usage, disputes, and pay overrides
 
 ---
 
@@ -344,6 +345,7 @@ Handle situations when guests haven't left by checkout time:
 - **Suspicious Activity**: Review all flagged messages and take action
 - **Tax Reporting**: Generate platform tax reports and contractor 1099s
 - **Service Area Management**: Configure geographic service restrictions
+- **Internal Analytics Dashboard**: Track flow abandonment, job duration, offline usage, disputes, pay overrides
 
 ### Messaging System
 
@@ -897,6 +899,18 @@ Handle situations when guests haven't left by checkout time:
 | `POST` | `/api/v1/demo-accounts/exit` | Exit preview mode | Owner |
 | `GET` | `/api/v1/demo-accounts/check/:role` | Check demo account exists | Owner |
 
+### Internal Analytics
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/api/v1/analytics/track` | Record analytics event | Yes |
+| `GET` | `/api/v1/analytics/dashboard` | Get combined dashboard stats | Owner |
+| `GET` | `/api/v1/analytics/flow-abandonment` | Get flow abandonment by step | Owner |
+| `GET` | `/api/v1/analytics/job-duration` | Get job duration metrics | Owner |
+| `GET` | `/api/v1/analytics/offline-usage` | Get offline mode statistics | Owner |
+| `GET` | `/api/v1/analytics/disputes` | Get dispute frequency | Owner |
+| `GET` | `/api/v1/analytics/pay-overrides` | Get pay override statistics | Owner |
+
 ---
 
 ## Database
@@ -1024,6 +1038,12 @@ Handle situations when guests haven't left by checkout time:
 | `CancellationAppeal` | Cancellation appeal requests with HR review workflow |
 | `CancellationAuditLog` | Immutable audit log for cancellation-related actions |
 | `JobLedger` | Double-entry accounting for job-related financial transactions |
+
+#### Analytics Models
+
+| Model | Description |
+|-------|-------------|
+| `AnalyticsEvent` | Event tracking for flows, job duration, offline usage, disputes, pay overrides |
 
 ### Migrations
 
@@ -1421,6 +1441,41 @@ const session = await DemoAccountService.createPreviewSession(ownerId, 'cleaner'
 const restored = await DemoAccountService.endPreviewSession(ownerId);
 ```
 
+### AnalyticsService
+
+Platform analytics tracking and aggregation:
+
+```javascript
+const AnalyticsService = require('./services/AnalyticsService');
+
+// Track an event
+await AnalyticsService.trackEvent({
+  eventType: 'flow_step_completed',
+  eventCategory: 'flow_abandonment',
+  userId,
+  sessionId,
+  metadata: { flowName: 'job_completion', stepName: 'before_photos', stepNumber: 1, totalSteps: 5 }
+});
+
+// Get dashboard stats (owner only)
+const stats = await AnalyticsService.getDashboardStats(startDate, endDate);
+
+// Get flow abandonment by step
+const flowStats = await AnalyticsService.getFlowAbandonmentStats('job_completion', startDate, endDate);
+
+// Get job duration statistics
+const durationStats = await AnalyticsService.getJobDurationStats(startDate, endDate);
+
+// Get offline usage metrics
+const offlineStats = await AnalyticsService.getOfflineUsageStats(startDate, endDate);
+
+// Get dispute frequency
+const disputeStats = await AnalyticsService.getDisputeStats(startDate, endDate);
+
+// Get pay override statistics
+const overrideStats = await AnalyticsService.getPayOverrideStats(startDate, endDate);
+```
+
 ---
 
 ## Cron Jobs
@@ -1485,7 +1540,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (3967+ tests)
+# Run all tests (4315+ tests)
 npm test
 
 # Run specific test file
@@ -1535,7 +1590,8 @@ npm test -- --watch
 | Cancellation Appeals | 67 | Appeal workflow, HR review, decisions |
 | Job Ledger | 45 | Double-entry accounting, reconciliation |
 | Demo Accounts | 88 | Router, service, preview sessions |
-| **Total** | **3967+** | - |
+| Internal Analytics | 89 | Event tracking, dashboard stats, aggregations |
+| **Total** | **4315+** | - |
 
 ---
 

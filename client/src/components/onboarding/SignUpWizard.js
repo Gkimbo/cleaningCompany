@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
+import AnalyticsService from "../../services/AnalyticsService";
 import styles from "./OnboardingStyles";
 import { colors } from "../../services/styles/theme";
 
@@ -32,6 +33,17 @@ const SignUpWizard = ({ dispatch }) => {
   const [focusedField, setFocusedField] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const isCompletedRef = useRef(false);
+
+  // Track signup flow start and abandonment
+  useEffect(() => {
+    AnalyticsService.trackFlowStart("user_signup");
+    return () => {
+      if (!isCompletedRef.current) {
+        AnalyticsService.trackFlowAbandon("user_signup", "signup_form", 1, 1);
+      }
+    };
+  }, []);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -124,6 +136,10 @@ const SignUpWizard = ({ dispatch }) => {
       ) {
         setErrors({ submit: response });
       } else {
+        // Track signup completion
+        isCompletedRef.current = true;
+        AnalyticsService.trackFlowComplete("user_signup");
+
         dispatch({ type: "CURRENT_USER", payload: response.token });
         login(response.token);
         navigate("/setup-home");

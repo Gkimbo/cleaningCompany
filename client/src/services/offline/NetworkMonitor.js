@@ -1,5 +1,6 @@
 import NetInfo from "@react-native-community/netinfo";
 import { NETWORK_DEBOUNCE_MS, NETWORK_STATUS } from "./constants";
+import AnalyticsService from "../AnalyticsService";
 
 class NetworkMonitor {
   constructor() {
@@ -62,6 +63,11 @@ class NetworkMonitor {
     // Only notify if status actually changed
     if (this._lastStatus !== newStatus || immediate) {
       this._lastStatus = newStatus;
+
+      // Track offline session start for analytics
+      if (wasOnline && !this._isOnline) {
+        AnalyticsService.trackOfflineStart();
+      }
 
       // Notify all listeners
       this._listeners.forEach((listener) => {

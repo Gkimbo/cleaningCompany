@@ -3445,6 +3445,23 @@ appointmentRouter.post("/:id/cancel-cleaner", async (req, res) => {
       }
     }
 
+    // Send urgent replacement notifications if within penalty window (last-minute cancellation)
+    if (isWithinPenaltyWindow && home) {
+      // Use setImmediate to not block response
+      setImmediate(async () => {
+        try {
+          await LastMinuteNotificationService.notifyCleanersForReplacement(
+            appointment,
+            home,
+            req.io,
+            [userId] // Exclude the cancelling cleaner
+          );
+        } catch (err) {
+          console.error("[CleanerCancel] Error sending replacement notifications:", err);
+        }
+      });
+    }
+
     return res.json({
       success: true,
       message: isWithinPenaltyWindow

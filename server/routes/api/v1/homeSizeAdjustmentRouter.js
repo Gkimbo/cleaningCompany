@@ -12,6 +12,7 @@ const calculatePrice = require("../../../services/CalculatePrice");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const EncryptionService = require("../../../services/EncryptionService");
+const AnalyticsService = require("../../../services/AnalyticsService");
 
 const homeSizeAdjustmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -171,6 +172,13 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
     await Promise.all(photoPromises);
 
     console.log(`📸 Saved ${photos.length} proof photos for adjustment request ${adjustmentRequest.id}`);
+
+    // Track dispute created analytics
+    await AnalyticsService.trackDisputeCreated(
+      "adjustment",
+      appointmentId,
+      cleanerId
+    );
 
     // Get user details for notifications
     const homeowner = await User.findByPk(appointment.userId);

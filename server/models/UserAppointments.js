@@ -273,6 +273,11 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "When urgent notifications were sent to nearby cleaners",
 		},
+		replacementNotificationsSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When replacement notifications were sent after cleaner cancellation",
+		},
 		// 2-Step Completion Confirmation fields
 		completionStatus: {
 			type: DataTypes.ENUM("in_progress", "submitted", "approved", "auto_approved"),

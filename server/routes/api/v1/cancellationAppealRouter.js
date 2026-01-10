@@ -6,10 +6,12 @@
 
 const express = require("express");
 const router = express.Router();
-const { requireAuth, requireHrOrOwner } = require("../../../middleware/authMiddleware");
+const authenticateToken = require("../../../middleware/authenticatedToken");
+const verifyHROrOwner = require("../../../middleware/verifyHROrOwner");
 const AppealService = require("../../../services/AppealService");
 const CancellationAuditService = require("../../../services/CancellationAuditService");
 const NotificationService = require("../../../services/NotificationService");
+const AnalyticsService = require("../../../services/AnalyticsService");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 
@@ -24,7 +26,7 @@ const PushNotification = require("../../../services/sendNotifications/PushNotifi
  * Get user's appeal history
  * GET /api/v1/appeals/my-appeals
  */
-router.get("/my-appeals", requireAuth, async (req, res) => {
+router.get("/my-appeals", authenticateToken, async (req, res) => {
 	try {
 		const { CancellationAppeal, UserAppointments } = require("../../../models");
 
@@ -69,7 +71,7 @@ router.get("/my-appeals", requireAuth, async (req, res) => {
  * Submit a new appeal
  * POST /api/v1/appeals
  */
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", authenticateToken, async (req, res) => {
 	try {
 		const {
 			appointmentId,
@@ -116,6 +118,13 @@ router.post("/", requireAuth, async (req, res) => {
 			req,
 		});
 
+		// Track dispute created analytics
+		await AnalyticsService.trackDisputeCreated(
+			"appeal",
+			appointmentId,
+			req.user.id
+		);
+
 		// Send confirmation notification
 		await NotificationService.createNotification(
 			req.user.id,
@@ -158,7 +167,7 @@ router.post("/", requireAuth, async (req, res) => {
  * Get appeals queue
  * GET /api/v1/appeals/queue
  */
-router.get("/queue", requireHrOrOwner, async (req, res) => {
+router.get("/queue", verifyHROrOwner, async (req, res) => {
 	try {
 		const { status, priority, assignedTo, limit, offset } = req.query;
 
@@ -212,7 +221,7 @@ router.get("/queue", requireHrOrOwner, async (req, res) => {
  * Get dashboard stats
  * GET /api/v1/appeals/stats
  */
-router.get("/stats", requireHrOrOwner, async (req, res) => {
+router.get("/stats", verifyHROrOwner, async (req, res) => {
 	try {
 		const stats = await AppealService.getStats();
 
@@ -234,7 +243,7 @@ router.get("/stats", requireHrOrOwner, async (req, res) => {
  * Get SLA breaches
  * GET /api/v1/appeals/sla-breaches
  */
-router.get("/sla-breaches", requireHrOrOwner, async (req, res) => {
+router.get("/sla-breaches", verifyHROrOwner, async (req, res) => {
 	try {
 		const breaches = await AppealService.getSLABreaches();
 
@@ -275,7 +284,7 @@ router.get("/sla-breaches", requireHrOrOwner, async (req, res) => {
  * Get user's complete appeal history (for HR/Owner view)
  * GET /api/v1/appeals/user/:userId
  */
-router.get("/user/:userId", requireHrOrOwner, async (req, res) => {
+router.get("/user/:userId", verifyHROrOwner, async (req, res) => {
 	try {
 		const history = await AppealService.getUserAppealHistory(parseInt(req.params.userId));
 
@@ -301,7 +310,7 @@ router.get("/user/:userId", requireHrOrOwner, async (req, res) => {
  * Get appeal details
  * GET /api/v1/appeals/:id
  */
-router.get("/:id", requireAuth, async (req, res) => {
+router.get("/:id", authenticateToken, async (req, res) => {
 	try {
 		const { CancellationAppeal, UserAppointments, User } = require("../../../models");
 
@@ -377,7 +386,7 @@ router.get("/:id", requireAuth, async (req, res) => {
  * Upload supporting documents
  * POST /api/v1/appeals/:id/documents
  */
-router.post("/:id/documents", requireAuth, async (req, res) => {
+router.post("/:id/documents", authenticateToken, async (req, res) => {
 	try {
 		const { CancellationAppeal } = require("../../../models");
 
@@ -455,7 +464,7 @@ router.post("/:id/documents", requireAuth, async (req, res) => {
  * Withdraw appeal
  * DELETE /api/v1/appeals/:id
  */
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", authenticateToken, async (req, res) => {
 	try {
 		const { CancellationAppeal, UserAppointments } = require("../../../models");
 
@@ -513,7 +522,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
  * Assign appeal to reviewer
  * PUT /api/v1/appeals/:id/assign
  */
-router.put("/:id/assign", requireHrOrOwner, async (req, res) => {
+router.put("/:id/assign", verifyHROrOwner, async (req, res) => {
 	try {
 		const { assigneeId } = req.body;
 
@@ -554,7 +563,7 @@ router.put("/:id/assign", requireHrOrOwner, async (req, res) => {
  * Update appeal status
  * PUT /api/v1/appeals/:id/status
  */
-router.put("/:id/status", requireHrOrOwner, async (req, res) => {
+router.put("/:id/status", verifyHROrOwner, async (req, res) => {
 	try {
 		const { status, notes } = req.body;
 
@@ -611,7 +620,7 @@ router.put("/:id/status", requireHrOrOwner, async (req, res) => {
  * Resolve appeal with decision
  * PUT /api/v1/appeals/:id/resolve
  */
-router.put("/:id/resolve", requireHrOrOwner, async (req, res) => {
+router.put("/:id/resolve", verifyHROrOwner, async (req, res) => {
 	try {
 		const { decision, resolution } = req.body;
 
@@ -686,7 +695,7 @@ router.put("/:id/resolve", requireHrOrOwner, async (req, res) => {
  * Get audit trail for an appeal/appointment
  * GET /api/v1/appeals/:id/audit
  */
-router.get("/:id/audit", requireHrOrOwner, async (req, res) => {
+router.get("/:id/audit", verifyHROrOwner, async (req, res) => {
 	try {
 		const { CancellationAppeal } = require("../../../models");
 

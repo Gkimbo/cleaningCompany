@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import PassVerificationCapture from "./PassVerificationCapture";
 import CleaningChecklist, { clearChecklistProgress } from "./CleaningChecklist";
 import styles from "./JobCompletionFlowStyles";
 import { API_BASE } from "../../../services/config";
+import AnalyticsService from "../../../services/AnalyticsService";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
@@ -27,6 +28,10 @@ const STEPS = {
   PASSES: "passes",
   REVIEW: "review",
 };
+
+// Step names and total for analytics
+const STEP_NAMES = ["before_photos", "cleaning", "after_photos", "passes", "review"];
+const TOTAL_STEPS = 5;
 
 const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   const { currentUser } = useContext(UserContext);
@@ -48,9 +53,27 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
     completed: 0,
     total: 0,
   });
+  const isCompletedRef = useRef(false);
 
   // Check if current user is the business owner (preferred cleaner) for this home
   const isBusinessOwner = home?.preferredCleanerId === currentUser?.id;
+
+  // Track job completion flow start and abandonment
+  useEffect(() => {
+    AnalyticsService.trackFlowStart("job_completion");
+    return () => {
+      if (!isCompletedRef.current) {
+        const stepIndex = STEP_NAMES.indexOf(currentStep);
+        AnalyticsService.trackFlowAbandon("job_completion", currentStep, stepIndex + 1, TOTAL_STEPS);
+      }
+    };
+  }, []);
+
+  // Track step changes
+  useEffect(() => {
+    const stepIndex = STEP_NAMES.indexOf(currentStep);
+    AnalyticsService.trackFlowStep("job_completion", currentStep, stepIndex + 1, TOTAL_STEPS);
+  }, [currentStep]);
 
   useEffect(() => {
     // Auto-advance on initial load only (e.g., resuming a job)
@@ -183,6 +206,10 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         } else {
           message = "Job completed successfully!";
         }
+
+        // Track flow completion
+        isCompletedRef.current = true;
+        AnalyticsService.trackFlowComplete("job_completion");
 
         // Clear the saved checklist progress since job is complete
         await clearChecklistProgress(appointment.id);

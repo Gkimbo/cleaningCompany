@@ -29,6 +29,7 @@ const {
   parseTimeWindow,
   getAutoCompleteConfig,
 } = require("../../../services/cron/AutoCompleteMonitor");
+const AnalyticsService = require("../../../services/AnalyticsService");
 
 const completionRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -482,6 +483,18 @@ completionRouter.post("/approve/:appointmentId", verifyToken, async (req, res) =
     }
 
     console.log(`[Completion] Approved by homeowner for appointment ${appointmentId}`);
+
+    // Track job completion analytics
+    if (appointment.jobStartedAt) {
+      const durationMinutes = Math.round((now - new Date(appointment.jobStartedAt)) / (1000 * 60));
+      const assignedCleaner = (appointment.employeesAssigned || [])[0];
+      await AnalyticsService.trackJobCompleted(
+        appointmentId,
+        assignedCleaner,
+        durationMinutes,
+        appointment.home?.homeType || null
+      );
+    }
 
     return res.json({
       success: true,

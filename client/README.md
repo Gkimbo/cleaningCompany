@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-1346_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-1374_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -163,6 +163,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 
 #### Platform Owner/Admin
 - Financial dashboard & analytics
+- **Internal Analytics** - flow abandonment, job duration, offline usage, disputes, pay overrides
 - **Preview as Role** - test app as any user type
 - Employee management
 - Pricing configuration
@@ -197,6 +198,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Conflict Resolution** | Unified case management for disputes with photo comparison, evidence gallery, message threads, and audit trail |
 | **Cancellation Appeals** | Submit appeals within 72 hours, HR review within 48-hour SLA, penalty waiver and refund options |
 | **Preview as Role** | Platform owners can preview app as Cleaner, Homeowner, Business Owner, or Employee using demo accounts |
+| **Internal Analytics** | Platform metrics dashboard: flow abandonment funnels, job duration stats, offline usage monitoring, dispute/pay override frequency |
 
 ---
 
@@ -280,6 +282,7 @@ client/
 │   │   ├── onboarding/           # User onboarding
 │   │   ├── owner/                # Owner dashboard
 │   │   │   ├── OwnerDashboard.js
+│   │   │   ├── InternalAnalytics.js
 │   │   │   ├── TermsEditor.js
 │   │   │   ├── PricingManagement.js
 │   │   │   ├── IncentivesManagement.js
@@ -326,7 +329,8 @@ client/
 │       │   ├── TaxService.js
 │       │   ├── ConflictService.js
 │       │   ├── AppealService.js
-│       │   └── DemoAccountService.js
+│       │   ├── DemoAccountService.js
+│       │   └── AnalyticsService.js
 │       │
 │       ├── offline/              # Offline sync system
 │       │   ├── OfflineManager.js
@@ -536,6 +540,30 @@ await CleanerClientService.updateDefaultPrice(token, clientId, price);
 
 // Get platform price for alignment
 const price = await CleanerClientService.getPlatformPrice(token, clientId);
+```
+
+### AnalyticsService
+
+```javascript
+import AnalyticsService from './services/AnalyticsService';
+
+// Track flow start (called on mount)
+AnalyticsService.trackFlowStart('job_completion');
+
+// Track step progress
+AnalyticsService.trackFlowStep('job_completion', 'before_photos', 1, 5);
+
+// Track abandonment (called on unmount if not completed)
+AnalyticsService.trackFlowAbandon('job_completion', 'cleaning', 2, 5);
+
+// Track successful completion
+AnalyticsService.trackFlowComplete('job_completion');
+
+// Track offline session start
+AnalyticsService.trackOfflineStart();
+
+// Fetch dashboard stats (owner only)
+const stats = await AnalyticsService.fetchDashboardStats(token, startDate, endDate);
 ```
 
 ### OfflineManager
@@ -785,7 +813,8 @@ npm test -- CleaningChecklist.test.js
 | ConflictResolution | 56 | Case view, resolution center, evidence gallery |
 | CancellationAppeals | 32 | Appeal submission, review, stats |
 | PreviewAsRole | 41 | PreviewContext, modals, DemoAccountService |
-| **Total** | **1346** | - |
+| InternalAnalytics | 28 | Dashboard, flow tracking, stats display |
+| **Total** | **1374** | - |
 
 ---
 

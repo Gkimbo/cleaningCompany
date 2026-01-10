@@ -19,6 +19,7 @@ const MarketplaceJobRequirementsService = require("./MarketplaceJobRequirementsS
 const CustomJobFlowService = require("./CustomJobFlowService");
 const AppointmentJobFlowService = require("./AppointmentJobFlowService");
 const GuestNotLeftService = require("./GuestNotLeftService");
+const AnalyticsService = require("./AnalyticsService");
 const { calculateDistance } = require("../utils/geoUtils");
 const EncryptionService = require("./EncryptionService");
 
@@ -388,6 +389,16 @@ class EmployeeJobAssignmentService {
         { transaction: t }
       );
     });
+
+    // Track pay override analytics
+    await AnalyticsService.trackPayOverride(
+      assignment.appointmentId,
+      assignment.employeeId,
+      previousPayAmount,
+      newPayAmount,
+      reason || "unspecified",
+      businessOwnerId
+    );
 
     return assignment.reload();
   }
