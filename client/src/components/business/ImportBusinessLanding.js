@@ -122,9 +122,9 @@ const ImportBusinessLanding = () => {
     },
     {
       icon: "dollar-sign",
-      title: "Get Paid Instantly",
+      title: "Get Paid Automatically",
       description:
-        "Clients are charged for the appointment 3 days before. The moment a job is marked complete you get paid",
+        "Clients are charged 3 days before the appointment. Once a job is completed, payment is automatically released to the cleaner after a short review window.",
       gradient: ["#f59e0b", "#d97706"],
     },
     {
