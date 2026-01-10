@@ -1,6 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
-const { JobPhoto, UserAppointments, User } = require("../../../models");
+const { JobPhoto, UserAppointments, User, CleanerJobCompletion } = require("../../../models");
 
 const jobPhotosRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -92,6 +92,33 @@ jobPhotosRouter.post("/upload", authenticateToken, async (req, res) => {
       takenAt: new Date(),
       isNotApplicable: isNotApplicable || false,
     });
+
+    // Track job start time on first before photo upload
+    if (photoType === "before") {
+      // Check if this is the first before photo for this cleaner
+      const beforePhotoCount = await JobPhoto.count({
+        where: { appointmentId, cleanerId, photoType: "before" },
+      });
+
+      // If this is the first before photo (count is 1 after creating above)
+      if (beforePhotoCount === 1) {
+        const now = new Date();
+
+        if (appointment.isMultiCleanerJob && appointment.multiCleanerJobId) {
+          // For multi-cleaner jobs, update CleanerJobCompletion
+          await CleanerJobCompletion.update(
+            { jobStartedAt: now },
+            { where: { appointmentId, cleanerId, jobStartedAt: null } }
+          );
+        } else {
+          // For single-cleaner jobs, update the appointment
+          if (!appointment.jobStartedAt) {
+            await appointment.update({ jobStartedAt: now });
+          }
+        }
+        console.log(`[JobPhotos] Set jobStartedAt for appointment ${appointmentId}, cleaner ${cleanerId}`);
+      }
+    }
 
     return res.status(201).json({
       success: true,

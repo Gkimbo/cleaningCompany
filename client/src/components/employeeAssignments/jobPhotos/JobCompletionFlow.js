@@ -194,7 +194,16 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
           },
         ]);
       } else {
-        Alert.alert("Error", data.error || "Failed to complete job");
+        // Handle early completion blocked error
+        if (data.reason === "early_completion_blocked") {
+          Alert.alert(
+            "Cannot Complete Yet",
+            data.error || "Please wait until the time window starts or be on-site for at least 30 minutes.",
+            [{ text: "OK" }]
+          );
+        } else {
+          Alert.alert("Error", data.error || "Failed to complete job");
+        }
       }
     } catch (error) {
       console.error("Error completing job:", error);

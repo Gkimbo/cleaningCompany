@@ -35,6 +35,10 @@ const { Notification } = require("../../../models");
 const CancellationAuditService = require("../../../services/CancellationAuditService");
 const CancellationFinancialService = require("../../../services/CancellationFinancialService");
 const JobLedgerService = require("../../../services/JobLedgerService");
+const {
+  calculateScheduledEndTime,
+  getAutoCompleteConfig,
+} = require("../../../services/cron/AutoCompleteMonitor");
 
 const appointmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -1679,9 +1683,22 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
 
       // Update appointment as assigned
       const employees = [String(id)];
+
+      // Calculate auto-complete timing
+      const autoCompleteConfig = await getAutoCompleteConfig();
+      const scheduledEndTime = calculateScheduledEndTime(
+        appointment.dataValues.date,
+        appointment.dataValues.timeToBeCompleted
+      );
+      const autoCompleteAt = new Date(
+        scheduledEndTime.getTime() + autoCompleteConfig.hoursAfterEnd * 60 * 60 * 1000
+      );
+
       await appointment.update({
         employeesAssigned: employees,
         hasBeenAssigned: true,
+        scheduledEndTime,
+        autoCompleteAt,
       });
 
       // Create payment intent if one doesn't exist
@@ -1933,9 +1950,21 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       // Only 1 cleaner can be assigned, so employeesAssigned will have just this cleaner
       const employees = [String(request.dataValues.employeeId)];
 
+      // Calculate auto-complete timing
+      const autoCompleteConfig = await getAutoCompleteConfig();
+      const scheduledEndTime = calculateScheduledEndTime(
+        appointment.dataValues.date,
+        appointment.dataValues.timeToBeCompleted
+      );
+      const autoCompleteAt = new Date(
+        scheduledEndTime.getTime() + autoCompleteConfig.hoursAfterEnd * 60 * 60 * 1000
+      );
+
       await appointment.update({
         employeesAssigned: employees,
         hasBeenAssigned: true,
+        scheduledEndTime,
+        autoCompleteAt,
       });
 
       // Create payment intent if one doesn't exist (for appointments booked without upfront payment)

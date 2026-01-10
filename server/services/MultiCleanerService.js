@@ -6,6 +6,10 @@
  */
 const { Op } = require("sequelize");
 const { getPricingConfig } = require("../config/businessConfig");
+const {
+  calculateScheduledEndTime,
+  getAutoCompleteConfig,
+} = require("./cron/AutoCompleteMonitor");
 
 class MultiCleanerService {
   /**
@@ -253,12 +257,24 @@ class MultiCleanerService {
       );
     }
 
+    // Get appointment data for auto-complete timing
+    const appointment = await UserAppointments.findByPk(job.appointmentId);
+    const autoCompleteConfig = await getAutoCompleteConfig();
+    const scheduledEndTime = calculateScheduledEndTime(
+      appointment.date,
+      appointment.timeToBeCompleted
+    );
+    const autoCompleteAt = new Date(
+      scheduledEndTime.getTime() + autoCompleteConfig.hoursAfterEnd * 60 * 60 * 1000
+    );
+
     // Create completion record for this cleaner
     await CleanerJobCompletion.create({
       appointmentId: job.appointmentId,
       cleanerId,
       multiCleanerJobId,
       status: "assigned",
+      autoCompleteAt,
     });
 
     // Increment confirmed cleaners

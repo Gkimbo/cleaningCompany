@@ -25,9 +25,69 @@ const EncryptionService = require("../../../services/EncryptionService");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { calculateAutoApprovalExpiration } = require("../../../services/cron/CompletionApprovalMonitor");
+const {
+  parseTimeWindow,
+  getAutoCompleteConfig,
+} = require("../../../services/cron/AutoCompleteMonitor");
 
 const completionRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+/**
+ * Validate if completion timing is allowed
+ * Rules:
+ * - Allowed if time window has started (appointment date + window start time)
+ * - OR allowed if cleaner has been on-site for minimum duration (30 min by default)
+ *
+ * @param {Object} appointment - UserAppointments record
+ * @param {number} cleanerId - Cleaner ID (for multi-cleaner jobs)
+ * @returns {{ allowed: boolean, reason?: string, message?: string }}
+ */
+async function validateCompletionTiming(appointment, cleanerId = null) {
+  const now = new Date();
+  const config = await getAutoCompleteConfig();
+  const minOnSiteMinutes = config.minOnSiteMinutes || 30;
+
+  // Parse appointment date and time window
+  const [year, month, day] = appointment.date.split("-").map(Number);
+  const timeWindow = parseTimeWindow(appointment.timeToBeCompleted);
+  const windowStartTime = new Date(year, month - 1, day, timeWindow.start, 0, 0);
+
+  // Check 1: Has time window started?
+  const timeWindowStarted = now >= windowStartTime;
+
+  // Check 2: Has cleaner been on-site long enough?
+  // For multi-cleaner jobs, check CleanerJobCompletion.jobStartedAt
+  // For single-cleaner jobs, check appointment.jobStartedAt
+  let jobStartedAt = appointment.jobStartedAt;
+
+  if (appointment.isMultiCleanerJob && cleanerId) {
+    const completion = await CleanerJobCompletion.findOne({
+      where: { appointmentId: appointment.id, cleanerId },
+    });
+    if (completion) {
+      jobStartedAt = completion.jobStartedAt;
+    }
+  }
+
+  const onSiteLongEnough = jobStartedAt &&
+    (now.getTime() - new Date(jobStartedAt).getTime()) >= minOnSiteMinutes * 60 * 1000;
+
+  if (!timeWindowStarted && !onSiteLongEnough) {
+    const windowLabel = timeWindow.start === 8 ? "anytime (8 AM)" : `${timeWindow.start}:00`;
+    return {
+      allowed: false,
+      reason: "early_completion_blocked",
+      message: `Cannot complete yet. Either wait until the time window starts (${windowLabel}) or be on-site for at least ${minOnSiteMinutes} minutes.`,
+      timeWindowStarted,
+      onSiteLongEnough,
+      jobStartedAt: jobStartedAt ? new Date(jobStartedAt).toISOString() : null,
+      windowStartTime: windowStartTime.toISOString(),
+    };
+  }
+
+  return { allowed: true };
+}
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -76,6 +136,22 @@ completionRouter.post("/submit/:appointmentId", verifyToken, async (req, res) =>
     const assignedCleaners = (appointment.employeesAssigned || []).map(String);
     if (!assignedCleaners.includes(userIdStr)) {
       return res.status(403).json({ error: "You are not assigned to this job" });
+    }
+
+    // Validate early completion timing
+    const timingValidation = await validateCompletionTiming(
+      appointment,
+      cleanerId || req.userId
+    );
+    if (!timingValidation.allowed) {
+      return res.status(400).json({
+        error: timingValidation.message,
+        reason: timingValidation.reason,
+        timeWindowStarted: timingValidation.timeWindowStarted,
+        onSiteLongEnough: timingValidation.onSiteLongEnough,
+        jobStartedAt: timingValidation.jobStartedAt,
+        windowStartTime: timingValidation.windowStartTime,
+      });
     }
 
     // Check if payment has been captured
