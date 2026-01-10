@@ -93,7 +93,10 @@ class PayoutSerializer {
 			preferredBonusPercent: data.preferredBonusPercent ? parseFloat(data.preferredBonusPercent) : null,
 			preferredBonusAmount: data.preferredBonusAmount,
 			cleanerTierAtPayout: data.cleanerTierAtPayout,
-			createdAt: data.createdAt
+			createdAt: data.createdAt,
+			// Payment timeline fields
+			paymentCapturedAt: data.paymentCapturedAt,
+			transferInitiatedAt: data.transferInitiatedAt
 		};
 
 		// Add bonus amount in dollars if applicable

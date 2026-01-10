@@ -873,14 +873,22 @@ stripeConnectRouter.get("/payouts/:userId", async (req, res) => {
     // Get current platform fee from config
     const feePercent = await getPlatformFeePercent();
 
-    // Fetch payouts with appointment details
+    // Fetch payouts with appointment details (including completion timestamps for timeline)
     const payouts = await Payout.findAll({
       where: { cleanerId: userId },
       include: [
         {
           model: UserAppointments,
           as: "appointment",
-          attributes: ["id", "date", "price", "homeId", "completed"],
+          attributes: [
+            "id",
+            "date",
+            "price",
+            "homeId",
+            "completed",
+            "completionSubmittedAt",
+            "completionApprovedAt",
+          ],
         },
       ],
       order: [["createdAt", "DESC"]],
@@ -904,10 +912,14 @@ stripeConnectRouter.get("/payouts/:userId", async (req, res) => {
       { totalPaid: 0, pendingAmount: 0, completedCount: 0, pendingCount: 0 }
     );
 
-    // Serialize payouts with preferred cleaner perk fields
+    // Serialize payouts with preferred cleaner perk fields and timeline data
     const serializedPayouts = PayoutSerializer.serializeArrayForCleanerView(payouts).map((p, index) => ({
       ...p,
       appointmentDate: payouts[index].appointment?.date,
+      // Job completion timestamp for timeline display
+      jobCompletedAt:
+        payouts[index].appointment?.completionApprovedAt ||
+        payouts[index].appointment?.completionSubmittedAt,
     }));
 
     return res.json({
