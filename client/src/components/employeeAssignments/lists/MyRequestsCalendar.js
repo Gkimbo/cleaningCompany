@@ -67,7 +67,7 @@ const MyRequestsCalendar = ({ state }) => {
     try {
       const [res, user] = await Promise.all([
         FetchData.get("/api/v1/users/appointments/employee", state.currentUser.token),
-        getCurrentUser(),
+        getCurrentUser(state.currentUser.token),
       ]);
 
       const now = new Date();

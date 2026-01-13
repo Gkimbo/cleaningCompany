@@ -58,8 +58,11 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
 
-  // Calculate cleaner's share after platform fee (default 10%)
-  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+  // Get platform fees for regular and multi-cleaner jobs
+  const regularFeePercent = pricing?.platform?.feePercent || 0.1;
+  const multiCleanerFeePercent = pricing?.platform?.multiCleanerPlatformFeePercent || 0.13;
+  // Default cleanerSharePercent for backwards compatibility with child components
+  const cleanerSharePercent = 1 - regularFeePercent;
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -67,7 +70,7 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
     try {
       const [appointmentResponse, userResponse] = await Promise.all([
         FetchData.get("/api/v1/employee-info", state.currentUser.token),
-        getCurrentUser(),
+        getCurrentUser(state.currentUser.token),
       ]);
 
       const appointments = appointmentResponse.employee?.cleanerAppointments || [];
@@ -167,10 +170,13 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   };
 
   // Filter to only show assigned appointments
+  // For multi-cleaner jobs, the cleaner is linked via UserCleanerAppointments (already filtered by API)
+  // so we include them even if not in employeesAssigned array yet
   const assignedAppointments = useMemo(() => {
     if (!userId) return [];
     return allAppointments.filter((appointment) =>
-      appointment.employeesAssigned?.includes(String(userId))
+      appointment.employeesAssigned?.includes(String(userId)) ||
+      appointment.isMultiCleanerJob
     );
   }, [allAppointments, userId]);
 
@@ -213,10 +219,16 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
   );
   const completedJobs = sortedAppointments.filter((a) => a.completed);
 
-  const totalEarnings = sortedAppointments.reduce(
-    (sum, a) => sum + (Number(a.price) || 0) * cleanerSharePercent,
-    0
-  );
+  const totalEarnings = sortedAppointments.reduce((sum, a) => {
+    const price = Number(a.price) || 0;
+    // For multi-cleaner jobs, split by number of cleaners and use multi-cleaner fee
+    const numCleaners = a.isMultiCleanerJob
+      ? (a.multiCleanerJob?.totalCleanersRequired || a.employeesAssigned?.length || 1)
+      : 1;
+    const feePercent = a.isMultiCleanerJob ? multiCleanerFeePercent : regularFeePercent;
+    const sharePercent = 1 - feePercent;
+    return sum + (price / numCleaners) * sharePercent;
+  }, 0);
 
   const currentSortLabel = sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
 
@@ -294,15 +306,19 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
             </View>
             <Text style={styles.emptyTitle}>No Jobs Yet</Text>
             <Text style={styles.emptyText}>
-              You haven't been assigned to any cleaning jobs yet. Browse available jobs to get started!
+              {state.account === "employee"
+                ? "You haven't been assigned to any cleaning jobs yet. Your manager will assign jobs to you."
+                : "You haven't been assigned to any cleaning jobs yet. Browse available jobs to get started!"}
             </Text>
-            <Pressable
-              style={styles.findJobsButton}
-              onPress={() => navigate("/new-job-choice")}
-            >
-              <Icon name="search" size={14} color={colors.neutral[0]} />
-              <Text style={styles.findJobsButtonText}>Find Jobs</Text>
-            </Pressable>
+            {state.account !== "employee" && (
+              <Pressable
+                style={styles.findJobsButton}
+                onPress={() => navigate("/new-job-choice")}
+              >
+                <Icon name="search" size={14} color={colors.neutral[0]} />
+                <Text style={styles.findJobsButtonText}>Find Jobs</Text>
+              </Pressable>
+            )}
           </View>
         ) : (
           <>
@@ -338,6 +354,12 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                       distance={appointment.distance}
                       timeToBeCompleted={appointment.timeToBeCompleted}
                       token={state.currentUser.token}
+                      isMultiCleanerJob={appointment.isMultiCleanerJob}
+                      multiCleanerJob={appointment.multiCleanerJob}
+                      employeesAssigned={appointment.employeesAssigned}
+                      sheetConfigurations={appointment.sheetConfigurations}
+                      towelConfigurations={appointment.towelConfigurations}
+                      cleanerRoomAssignments={appointment.cleanerRoomAssignments}
                     />
                   </View>
                 ))}
@@ -376,28 +398,36 @@ const EmployeeAssignmentsList = ({ state, dispatch }) => {
                       distance={appointment.distance}
                       timeToBeCompleted={appointment.timeToBeCompleted}
                       token={state.currentUser.token}
+                      isMultiCleanerJob={appointment.isMultiCleanerJob}
+                      multiCleanerJob={appointment.multiCleanerJob}
+                      employeesAssigned={appointment.employeesAssigned}
+                      sheetConfigurations={appointment.sheetConfigurations}
+                      towelConfigurations={appointment.towelConfigurations}
+                      cleanerRoomAssignments={appointment.cleanerRoomAssignments}
                     />
                   </View>
                 ))}
               </View>
             )}
 
-            {/* Find More Jobs Card */}
-            <Pressable
-              style={styles.findMoreCard}
-              onPress={() => navigate("/new-job-choice")}
-            >
-              <View style={styles.findMoreContent}>
-                <Icon name="plus-circle" size={24} color={colors.primary[600]} />
-                <View style={styles.findMoreTextContainer}>
-                  <Text style={styles.findMoreTitle}>Find More Jobs</Text>
-                  <Text style={styles.findMoreSubtitle}>
-                    Browse available cleaning opportunities
-                  </Text>
+            {/* Find More Jobs Card - hidden for employees */}
+            {state.account !== "employee" && (
+              <Pressable
+                style={styles.findMoreCard}
+                onPress={() => navigate("/new-job-choice")}
+              >
+                <View style={styles.findMoreContent}>
+                  <Icon name="plus-circle" size={24} color={colors.primary[600]} />
+                  <View style={styles.findMoreTextContainer}>
+                    <Text style={styles.findMoreTitle}>Find More Jobs</Text>
+                    <Text style={styles.findMoreSubtitle}>
+                      Browse available cleaning opportunities
+                    </Text>
+                  </View>
                 </View>
-              </View>
-              <Icon name="chevron-right" size={16} color={colors.primary[600]} />
-            </Pressable>
+                <Icon name="chevron-right" size={16} color={colors.primary[600]} />
+              </Pressable>
+            )}
           </>
         )}
 

@@ -680,6 +680,83 @@ class PushNotification {
       actionRequired: true,
     });
   }
+
+  // =========================================================================
+  // Auto-Complete Reminder Notifications
+  // =========================================================================
+
+  // 50. Auto-complete reminder to cleaner
+  static async sendPushAutoCompleteReminder(expoPushToken, date, address, reminderNum, minutesLeft) {
+    const hoursLeft = Math.floor(minutesLeft / 60);
+    const timeRemaining = hoursLeft > 0 ? `${hoursLeft} hours` : `${minutesLeft} minutes`;
+
+    const titles = {
+      1: "Don't Forget! 📋",
+      2: "Reminder: Complete Job 📋",
+      3: "Important: Job Completion ⚠️",
+      4: "URGENT: Complete Now! ⚠️",
+      5: "FINAL: Auto-Complete Soon! 🚨",
+    };
+
+    const bodies = {
+      1: `Please mark your job on ${date} complete.`,
+      2: `${timeRemaining} left to mark your ${date} job complete.`,
+      3: `${timeRemaining} remaining! Complete your ${date} job now.`,
+      4: `Only ~1 hour left! Mark your ${date} job complete now.`,
+      5: `Job will auto-complete in ${minutesLeft} min. Act now!`,
+    };
+
+    const title = titles[reminderNum] || titles[1];
+    const body = bodies[reminderNum] || bodies[1];
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "auto_complete_reminder",
+      date,
+      address,
+      reminderNum,
+      minutesLeft,
+      actionRequired: true,
+    });
+  }
+
+  // 51. Job auto-completed notification to cleaner
+  static async sendPushJobAutoCompleted(expoPushToken, date) {
+    const title = "Job Auto-Completed 🤖";
+    const body = `Your job on ${date} was automatically marked complete. Homeowner has 24 hours to review.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "job_auto_completed",
+      date,
+    });
+  }
+
+  // 52. Job auto-completed notification to homeowner
+  static async sendPushJobAutoCompletedHomeowner(expoPushToken, date, cleanerName) {
+    const title = "Cleaning Complete! 🏠";
+    const body = `${cleanerName}'s cleaning on ${date} is done. Please review within 24 hours.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "job_auto_completed_homeowner",
+      date,
+      cleanerName,
+      actionRequired: true,
+    });
+  }
+
+  // 53. Urgent replacement notification (cleaner cancelled last-minute)
+  static async sendPushUrgentReplacement(expoPushToken, date, price, city, distanceMiles) {
+    const title = "🆘 Urgent: Replacement Needed!";
+    const body = `$${price} in ${city} - ${distanceMiles} mi away. Cleaner cancelled!`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "urgent_replacement",
+      date,
+      price,
+      city,
+      distanceMiles,
+      screen: "JobDetails",
+    });
+  }
 }
 
 module.exports = PushNotification;

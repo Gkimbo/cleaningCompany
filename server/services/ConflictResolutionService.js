@@ -9,6 +9,7 @@
 const moment = require("moment");
 const CancellationAuditService = require("./CancellationAuditService");
 const JobLedgerService = require("./JobLedgerService");
+const AnalyticsService = require("./AnalyticsService");
 const Stripe = require("stripe");
 
 class ConflictResolutionService {

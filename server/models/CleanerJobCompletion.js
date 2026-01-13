@@ -105,6 +105,34 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: false,
       comment: "True if homeowner raised concerns about this cleaner's work",
     },
+    // Auto-complete tracking fields (per-cleaner for multi-cleaner jobs)
+    autoCompleteAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When auto-complete triggers for this cleaner",
+    },
+    autoCompleteRemindersSent: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: "Number of auto-complete reminders sent to this cleaner",
+    },
+    lastReminderSentAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When the last reminder was sent to this cleaner",
+    },
+    autoCompletedBySystem: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "True if this cleaner's job was auto-completed",
+    },
+    jobStartedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When this cleaner uploaded their first before photo",
+    },
   });
 
   CleanerJobCompletion.associate = (models) => {

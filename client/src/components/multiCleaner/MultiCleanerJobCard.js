@@ -25,6 +25,7 @@ const MultiCleanerJobCard = ({
   onViewDetails,
   onAccept,
   onDecline,
+  onJoinTeam,
   loading = false,
   showActions = true,
   isOffer = false,
@@ -217,6 +218,21 @@ const MultiCleanerJobCard = ({
                 )}
               </Pressable>
             </>
+          ) : onJoinTeam ? (
+            <Pressable
+              style={[styles.actionButton, styles.joinButton]}
+              onPress={onJoinTeam}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <>
+                  <Feather name="user-plus" size={18} color={colors.white} />
+                  <Text style={styles.joinButtonText}>Join Team</Text>
+                </>
+              )}
+            </Pressable>
           ) : (
             <Pressable
               style={[styles.actionButton, styles.viewButton]}
@@ -431,6 +447,14 @@ const styles = StyleSheet.create({
     ...typography.base,
     fontWeight: "600",
     color: colors.neutral[700],
+  },
+  joinButton: {
+    backgroundColor: colors.primary[600],
+  },
+  joinButtonText: {
+    ...typography.base,
+    fontWeight: "600",
+    color: colors.white,
   },
 });
 

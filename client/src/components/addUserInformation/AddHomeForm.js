@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect, useRef } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
@@ -14,6 +14,7 @@ import { colors, spacing, radius, typography } from "../../services/styles/theme
 import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
+import AnalyticsService from "../../services/AnalyticsService";
 import styles from "../onboarding/OnboardingStyles";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
 
@@ -54,6 +55,37 @@ const AddHomeForm = ({ state, dispatch }) => {
   const [serviceAreaMessage, setServiceAreaMessage] = useState("");
   const [showBedroomPicker, setShowBedroomPicker] = useState(false);
   const [showBathroomPicker, setShowBathroomPicker] = useState(false);
+  const isCompletedRef = useRef(false);
+
+  const STEP_NAMES = ["basics", "access", "services", "review"];
+  const TOTAL_STEPS = 4;
+
+  // Track flow start and abandonment
+  useEffect(() => {
+    AnalyticsService.trackFlowStart("add_home");
+    return () => {
+      if (!isCompletedRef.current) {
+        AnalyticsService.trackFlowAbandon(
+          "add_home",
+          STEP_NAMES[currentStep],
+          currentStep + 1,
+          TOTAL_STEPS
+        );
+      }
+    };
+  }, []);
+
+  // Track step changes
+  useEffect(() => {
+    if (currentStep > 0) {
+      AnalyticsService.trackFlowStep(
+        "add_home",
+        STEP_NAMES[currentStep],
+        currentStep + 1,
+        TOTAL_STEPS
+      );
+    }
+  }, [currentStep]);
 
   const [homeData, setHomeData] = useState({
     nickName: "",
@@ -283,6 +315,10 @@ const AddHomeForm = ({ state, dispatch }) => {
       } else if (response.error) {
         setErrors({ submit: response.error });
       } else {
+        // Track flow completion
+        isCompletedRef.current = true;
+        AnalyticsService.trackFlowComplete("add_home");
+
         if (dispatch) {
           dispatch({ type: "ADD_HOME", payload: response.home || homeData });
         }

@@ -17,6 +17,7 @@ const rootRouter = require("./routes/rootRouter");
 const { startPeriodicSync } = require("./services/calendarSyncService");
 const { startBillingScheduler } = require("./services/billingService");
 const { startCompletionApprovalMonitor } = require("./services/cron/CompletionApprovalMonitor");
+const { startAutoCompleteMonitor } = require("./services/cron/AutoCompleteMonitor");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -192,5 +193,6 @@ server.listen(port, () => {
 		startPeriodicSync(60 * 60 * 1000); // 1 hour
 		startBillingScheduler(); // Monthly interest on unpaid fees
 		startCompletionApprovalMonitor(io, 15 * 60 * 1000); // 2-step completion auto-approval (every 15 min)
+		startAutoCompleteMonitor(io, 5 * 60 * 1000); // Auto-complete reminders and fallback (every 5 min)
 	}
 });

@@ -11,6 +11,8 @@ const {
   UserTermsAcceptance,
   Conversation,
   ConversationParticipant,
+  UserHomes,
+  MultiCleanerJob,
 } = models;
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -1038,7 +1040,32 @@ usersRouter.get("/appointments/employee", async (req, res) => {
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
 
-    const userAppointments = await UserAppointments.findAll();
+    // Get the cleaner to check if they're a demo account
+    const cleaner = await User.findByPk(userId);
+    if (!cleaner) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const isCleanerDemo = cleaner.isDemoAccount === true;
+
+    // Get all appointments with home data (needed for edge large home detection)
+    const userAppointments = await UserAppointments.findAll({
+      include: [{ model: UserHomes, as: "home" }],
+    });
+
+    // Filter appointments to only show those from homeowners with matching demo status
+    // Demo cleaners should only see demo homeowner appointments
+    // Real cleaners should only see real homeowner appointments
+    const homeownerIds = [...new Set(userAppointments.map(a => a.userId))];
+    const homeowners = await User.findAll({
+      where: { id: homeownerIds },
+      attributes: ['id', 'isDemoAccount'],
+    });
+    const homeownerDemoStatus = new Map(homeowners.map(h => [h.id, h.isDemoAccount === true]));
+
+    const filteredByDemoStatus = userAppointments.filter(appointment => {
+      const isHomeownerDemo = homeownerDemoStatus.get(appointment.userId) || false;
+      return isCleanerDemo === isHomeownerDemo;
+    });
 
     const requestsForCleaning = await UserPendingRequests.findAll({
       where: { employeeId: userId },
@@ -1048,14 +1075,31 @@ usersRouter.get("/appointments/employee", async (req, res) => {
       requestsForCleaning.map((req) => req.dataValues.appointmentId)
     );
 
-    const filteredAppointments = userAppointments.filter((appointment) => {
+    // Get all partially filled or filled multi-cleaner jobs
+    // These should be excluded from available jobs list for edge large homes
+    const partiallyFilledJobs = await MultiCleanerJob.findAll({
+      where: {
+        status: { [Op.in]: ["partially_filled", "filled"] },
+      },
+      attributes: ["appointmentId"],
+    });
+    const partiallyFilledAppointmentIds = new Set(
+      partiallyFilledJobs.map((j) => j.appointmentId)
+    );
+
+    const filteredAppointments = filteredByDemoStatus.filter((appointment) => {
       const assignedEmployees = appointment.dataValues.employeesAssigned;
-      return (
-        !requestedAppointmentIds.has(appointment.dataValues.id) &&
-        (assignedEmployees === null ||
-          assignedEmployees.length === 0 ||
-          assignedEmployees.includes(String(userId)))
-      );
+      const isNotRequested = !requestedAppointmentIds.has(appointment.dataValues.id);
+      const isAvailable =
+        assignedEmployees === null ||
+        assignedEmployees.length === 0 ||
+        assignedEmployees.includes(String(userId));
+
+      // Exclude appointments that are partially filled in multi-cleaner (already have cleaners joined)
+      // These will only show in the multi-cleaner section
+      const isNotPartiallyFilled = !partiallyFilledAppointmentIds.has(appointment.dataValues.id);
+
+      return isNotRequested && isAvailable && isNotPartiallyFilled;
     });
 
     // Get appointments for pending requests only (not approved/denied)
@@ -1067,12 +1111,14 @@ usersRouter.get("/appointments/employee", async (req, res) => {
       where: {
         id: pendingRequestIds,
       },
+      include: [{ model: UserHomes, as: "home" }],
     });
 
+    // Use async serializer with edge large home info
     const serializedAppointments =
-      AppointmentSerializer.serializeArray(filteredAppointments);
+      await AppointmentSerializer.serializeArrayWithEdgeInfo(filteredAppointments);
 
-    const serializedRequests = AppointmentSerializer.serializeArray(
+    const serializedRequests = await AppointmentSerializer.serializeArrayWithEdgeInfo(
       requestedAppointments
     );
 

@@ -19,6 +19,7 @@ const {
 } = require("../../../models");
 const verifyHROrOwner = require("../../../middleware/verifyHROrOwner");
 const EncryptionService = require("../../../services/EncryptionService");
+const HomeSizeAdjustmentSerializer = require("../../../serializers/HomeSizeAdjustmentSerializer");
 
 const hrDashboardRouter = express.Router();
 
@@ -64,7 +65,10 @@ hrDashboardRouter.get("/disputes/pending", verifyHROrOwner, async (req, res) => 
       order: [["createdAt", "DESC"]],
     });
 
-    return res.json({ disputes: requests });
+    // Serialize with decryption
+    const disputes = HomeSizeAdjustmentSerializer.serializeArray(requests);
+
+    return res.json({ disputes });
   } catch (error) {
     console.error("Error fetching pending disputes:", error);
     return res.status(500).json({ error: "Failed to fetch pending disputes" });
@@ -113,7 +117,10 @@ hrDashboardRouter.get("/disputes/:id", verifyHROrOwner, async (req, res) => {
       return res.status(404).json({ error: "Dispute not found" });
     }
 
-    return res.json({ dispute: request });
+    // Serialize with decryption
+    const dispute = HomeSizeAdjustmentSerializer.serializeOne(request);
+
+    return res.json({ dispute });
   } catch (error) {
     console.error("Error fetching dispute:", error);
     return res.status(500).json({ error: "Failed to fetch dispute" });

@@ -21,6 +21,10 @@ import RequestedTile from "../tiles/RequestedTile";
 import LargeHomeWarningModal from "../../modals/LargeHomeWarningModal";
 import JobFilterModal, { defaultFilters } from "./JobFilterModal";
 import {
+  MultiCleanerJobCard,
+  MultiCleanerOfferModal,
+} from "../../multiCleaner";
+import {
   colors,
   spacing,
   radius,
@@ -83,6 +87,13 @@ const SelectNewJobList = ({ state }) => {
   // Preferred homes state
   const [preferredHomeIds, setPreferredHomeIds] = useState([]);
 
+  // Multi-cleaner jobs state
+  const [multiCleanerOffers, setMultiCleanerOffers] = useState([]);
+  const [availableMultiCleanerJobs, setAvailableMultiCleanerJobs] = useState([]);
+  const [selectedMultiCleanerJob, setSelectedMultiCleanerJob] = useState(null);
+  const [showMultiCleanerModal, setShowMultiCleanerModal] = useState(false);
+  const [multiCleanerLoading, setMultiCleanerLoading] = useState(false);
+
   const requestsAndAppointments = useMemo(() => {
     const requestsWithFlag = allRequests.map((item) => ({
       ...item,
@@ -101,7 +112,7 @@ const SelectNewJobList = ({ state }) => {
     try {
       const [appointmentResponse, userResponse] = await Promise.all([
         FetchData.get("/api/v1/users/appointments/employee", state.currentUser.token),
-        getCurrentUser(),
+        getCurrentUser(state.currentUser.token),
       ]);
 
       const now = new Date();
@@ -145,6 +156,25 @@ const SelectNewJobList = ({ state }) => {
       fetchPreferredHomes();
     }
   }, [state.currentUser.token]);
+
+  // Fetch multi-cleaner job offers
+  const fetchMultiCleanerJobs = useCallback(async () => {
+    try {
+      const response = await FetchData.getMultiCleanerOffers(state.currentUser.token);
+      if (!response.error) {
+        setMultiCleanerOffers(response.personalOffers || []);
+        setAvailableMultiCleanerJobs(response.availableJobs || []);
+      }
+    } catch (error) {
+      console.log("Error fetching multi-cleaner jobs:", error.message);
+    }
+  }, [state.currentUser.token]);
+
+  useEffect(() => {
+    if (state.currentUser.token) {
+      fetchMultiCleanerJobs();
+    }
+  }, [fetchMultiCleanerJobs]);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -261,7 +291,8 @@ const SelectNewJobList = ({ state }) => {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData(true);
-  }, [fetchData]);
+    fetchMultiCleanerJobs();
+  }, [fetchData, fetchMultiCleanerJobs]);
 
   // Handle booking request with large home check
   const handleBookingRequest = useCallback(async (employeeId, appointmentId) => {
@@ -379,6 +410,157 @@ const SelectNewJobList = ({ state }) => {
     setShowLargeHomeModal(false);
     setBookingInfo(null);
     setPendingBooking(null);
+  }, []);
+
+  // Multi-cleaner helper functions
+  const formatAddress = (home) => {
+    if (!home) return "";
+    return `${home.city || ""}, ${home.state || ""}`.replace(/^, |, $/g, "");
+  };
+
+  const transformOfferToJobData = (offer) => ({
+    id: offer.multiCleanerJob?.id,
+    appointmentDate: offer.multiCleanerJob?.appointment?.date,
+    address: formatAddress(offer.multiCleanerJob?.appointment?.home),
+    totalCleanersRequired: offer.multiCleanerJob?.totalCleanersRequired || 2,
+    cleanersConfirmed: offer.multiCleanerJob?.cleanersConfirmed || 0,
+    status: offer.multiCleanerJob?.status,
+    earningsOffered: offer.earningsOffered,
+    perCleanerEarnings: offer.earningsOffered,
+  });
+
+  const transformJobData = (job) => ({
+    id: job.id,
+    appointmentDate: job.appointment?.date,
+    address: formatAddress(job.appointment?.home),
+    totalCleanersRequired: job.totalCleanersRequired || 2,
+    cleanersConfirmed: job.cleanersConfirmed || 0,
+    status: job.status,
+  });
+
+  const transformJobToOfferFormat = (job) => ({
+    id: job.id,
+    totalCleanersRequired: job.totalCleanersRequired || 2,
+    appointmentDate: job.appointment?.date,
+    address: formatAddress(job.appointment?.home),
+    estimatedMinutes: null,
+    earningsOffered: null,
+    totalJobPrice: null,
+    platformFee: null,
+    percentOfWork: null,
+    roomAssignments: [],
+    expiresAt: null,
+  });
+
+  // Handle accepting a multi-cleaner offer
+  const handleAcceptOffer = useCallback(async (offer) => {
+    setMultiCleanerLoading(true);
+    try {
+      const result = await FetchData.acceptMultiCleanerOffer(offer.id, state.currentUser.token);
+      if (result.error) {
+        Alert.alert("Error", result.error);
+      } else {
+        Alert.alert(
+          "Success!",
+          "You've joined this team cleaning job. Check your schedule for details.",
+          [{ text: "OK" }]
+        );
+        fetchMultiCleanerJobs();
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to accept offer. Please try again.");
+    } finally {
+      setMultiCleanerLoading(false);
+    }
+  }, [state.currentUser.token, fetchMultiCleanerJobs]);
+
+  // Handle declining a multi-cleaner offer
+  const handleDeclineOffer = useCallback(async (offer) => {
+    Alert.alert(
+      "Decline Offer",
+      "Are you sure you want to decline this team cleaning job?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const result = await FetchData.declineMultiCleanerOffer(offer.id, "", state.currentUser.token);
+              if (result.error) {
+                Alert.alert("Error", result.error);
+              } else {
+                fetchMultiCleanerJobs();
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to decline offer. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  }, [state.currentUser.token, fetchMultiCleanerJobs]);
+
+  // Handle viewing an open multi-cleaner job
+  const handleViewMultiCleanerJob = useCallback((job) => {
+    setSelectedMultiCleanerJob(job);
+    setShowMultiCleanerModal(true);
+  }, []);
+
+  // Handle directly joining a multi-cleaner job (no modal, for edge large homes in team section)
+  const handleDirectJoinMultiCleanerJob = useCallback(async (job) => {
+    setMultiCleanerLoading(true);
+    try {
+      const result = await FetchData.joinMultiCleanerJob(job.id, state.currentUser.token);
+      if (result.error) {
+        Alert.alert("Error", result.error);
+      } else {
+        Alert.alert(
+          "Joined Team!",
+          "You've joined this cleaning team. We'll notify you when the team is complete.",
+          [{ text: "OK" }]
+        );
+        // Refresh both lists
+        fetchData(true);
+        fetchMultiCleanerJobs();
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to join job. Please try again.");
+    } finally {
+      setMultiCleanerLoading(false);
+    }
+  }, [state.currentUser.token, fetchData, fetchMultiCleanerJobs]);
+
+  // Handle joining an open multi-cleaner job
+  const handleJoinMultiCleanerJob = useCallback(async () => {
+    if (!selectedMultiCleanerJob) return;
+
+    setMultiCleanerLoading(true);
+    try {
+      const result = await FetchData.joinMultiCleanerJob(selectedMultiCleanerJob.id, state.currentUser.token);
+      if (result.error) {
+        Alert.alert("Error", result.error);
+      } else {
+        Alert.alert(
+          "Success!",
+          "You've joined this team cleaning job. Check your schedule for details.",
+          [{ text: "OK" }]
+        );
+        setShowMultiCleanerModal(false);
+        setSelectedMultiCleanerJob(null);
+        fetchMultiCleanerJobs();
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to join job. Please try again.");
+    } finally {
+      setMultiCleanerLoading(false);
+    }
+  }, [selectedMultiCleanerJob, state.currentUser.token, fetchMultiCleanerJobs]);
+
+  // Close multi-cleaner modal
+  const handleCloseMultiCleanerModal = useCallback(() => {
+    setShowMultiCleanerModal(false);
+    setSelectedMultiCleanerJob(null);
   }, []);
 
   const sortedData = useMemo(() => {
@@ -506,7 +688,22 @@ const SelectNewJobList = ({ state }) => {
     return count;
   }, [filters]);
 
-  const availableJobs = filteredData.filter((item) => !item.isRequest);
+  // Get appointment IDs that are in the multi-cleaner section to exclude from available jobs
+  const multiCleanerAppointmentIds = useMemo(() => {
+    const offerApptIds = multiCleanerOffers.map((o) => o.appointmentId);
+    const jobApptIds = availableMultiCleanerJobs.map((j) => j.appointment?.id).filter(Boolean);
+    return new Set([...offerApptIds, ...jobApptIds]);
+  }, [multiCleanerOffers, availableMultiCleanerJobs]);
+
+  const availableJobs = filteredData.filter((item) => {
+    // Exclude requests
+    if (item.isRequest) return false;
+    // Exclude multi-cleaner jobs (they're shown in the Team Cleaning section)
+    if (item.isMultiCleanerJob) return false;
+    // Exclude appointments already in the multi-cleaner offers/jobs lists
+    if (multiCleanerAppointmentIds.has(item.id)) return false;
+    return true;
+  });
   const requestedJobs = filteredData.filter((item) => item.isRequest);
 
   const currentSortLabel = sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
@@ -540,6 +737,14 @@ const SelectNewJobList = ({ state }) => {
           <Text style={styles.statValue}>{availableJobs.length}</Text>
           <Text style={styles.statLabel}>Available</Text>
         </View>
+        {(multiCleanerOffers.length + availableMultiCleanerJobs.length) > 0 && (
+          <View style={[styles.statCard, styles.statCardTeam]}>
+            <Text style={[styles.statValue, styles.statValueTeam]}>
+              {multiCleanerOffers.length + availableMultiCleanerJobs.length}
+            </Text>
+            <Text style={[styles.statLabel, styles.statLabelTeam]}>Team</Text>
+          </View>
+        )}
         <View style={[styles.statCard, styles.statCardHighlight]}>
           <Text style={[styles.statValue, styles.statValueHighlight]}>{requestedJobs.length}</Text>
           <Text style={[styles.statLabel, styles.statLabelHighlight]}>Requested</Text>
@@ -621,6 +826,49 @@ const SelectNewJobList = ({ state }) => {
           </View>
         ) : (
           <>
+            {/* Team Cleaning Jobs Section */}
+            {(multiCleanerOffers.length > 0 || availableMultiCleanerJobs.length > 0) && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleRow}>
+                    <View style={[styles.sectionBadge, styles.sectionBadgeTeam]}>
+                      <Icon name="users" size={12} color={colors.primary[600]} />
+                    </View>
+                    <Text style={styles.sectionTitle}>Team Cleaning Jobs</Text>
+                  </View>
+                  <Text style={styles.sectionCount}>
+                    {multiCleanerOffers.length + availableMultiCleanerJobs.length}
+                  </Text>
+                </View>
+
+                {/* Personal Offers (direct invitations) */}
+                {multiCleanerOffers.map((offer) => (
+                  <View key={`offer-${offer.id}`} style={styles.tileWrapper}>
+                    <MultiCleanerJobCard
+                      job={transformOfferToJobData(offer)}
+                      isOffer={true}
+                      expiresAt={offer.expiresAt}
+                      onAccept={() => handleAcceptOffer(offer)}
+                      onDecline={() => handleDeclineOffer(offer)}
+                      loading={multiCleanerLoading}
+                    />
+                  </View>
+                ))}
+
+                {/* Available Open Jobs - Join directly without modal */}
+                {availableMultiCleanerJobs.map((job) => (
+                  <View key={`job-${job.id}`} style={styles.tileWrapper}>
+                    <MultiCleanerJobCard
+                      job={transformJobData(job)}
+                      isOffer={false}
+                      onJoinTeam={() => handleDirectJoinMultiCleanerJob(job)}
+                      loading={multiCleanerLoading}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+
             {/* Requested Jobs Section */}
             {requestedJobs.length > 0 && (
               <View style={styles.section}>
@@ -811,6 +1059,16 @@ const SelectNewJobList = ({ state }) => {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Multi-Cleaner Job Modal */}
+      <MultiCleanerOfferModal
+        visible={showMultiCleanerModal}
+        offer={selectedMultiCleanerJob ? transformJobToOfferFormat(selectedMultiCleanerJob) : null}
+        onAccept={handleJoinMultiCleanerJob}
+        onDecline={handleCloseMultiCleanerModal}
+        onClose={handleCloseMultiCleanerModal}
+        loading={multiCleanerLoading}
+      />
     </View>
   );
 };
@@ -883,6 +1141,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.warning[200],
   },
+  statCardTeam: {
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
   statValue: {
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
@@ -891,6 +1154,9 @@ const styles = StyleSheet.create({
   statValueHighlight: {
     color: colors.warning[700],
   },
+  statValueTeam: {
+    color: colors.primary[700],
+  },
   statLabel: {
     fontSize: typography.fontSize.xs,
     color: colors.text.secondary,
@@ -898,6 +1164,9 @@ const styles = StyleSheet.create({
   },
   statLabelHighlight: {
     color: colors.warning[600],
+  },
+  statLabelTeam: {
+    color: colors.primary[600],
   },
 
   // Controls Row
@@ -996,6 +1265,9 @@ const styles = StyleSheet.create({
   },
   sectionBadgeAvailable: {
     backgroundColor: colors.success[100],
+  },
+  sectionBadgeTeam: {
+    backgroundColor: colors.primary[100],
   },
   sectionTitle: {
     fontSize: typography.fontSize.lg,

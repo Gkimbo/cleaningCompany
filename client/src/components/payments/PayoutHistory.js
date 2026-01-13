@@ -10,6 +10,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { API_BASE } from "../../services/config";
 import { usePricing } from "../../context/PricingContext";
+import PaymentTimelineDisplay from "./PaymentTimelineDisplay";
 import {
   colors,
   spacing,
@@ -256,32 +257,17 @@ const PayoutHistory = ({ state, dispatch }) => {
                   </View>
                 </View>
 
-                {payout.completedAt && (
-                  <View style={styles.paidDateRow}>
-                    <Feather
-                      name="check"
-                      size={12}
-                      color={colors.success[600]}
-                      style={styles.paidDateIcon}
-                    />
-                    <Text style={styles.paidDateText}>
-                      Paid on {formatDate(payout.completedAt)}
-                    </Text>
-                  </View>
-                )}
-
-                {payout.status === "held" && (
-                  <View style={styles.heldNoteRow}>
-                    <Feather
-                      name="clock"
-                      size={12}
-                      color={colors.primary[600]}
-                      style={styles.heldNoteIcon}
-                    />
-                    <Text style={styles.heldNoteText}>
-                      Funds held until job completion
-                    </Text>
-                  </View>
+                {/* Payment Timeline */}
+                {payout.paymentCapturedAt && (
+                  <PaymentTimelineDisplay
+                    viewType="cleaner"
+                    paymentCapturedAt={payout.paymentCapturedAt}
+                    jobCompletedAt={payout.jobCompletedAt}
+                    transferInitiatedAt={payout.transferInitiatedAt}
+                    payoutCompletedAt={payout.completedAt}
+                    payoutStatus={payout.status}
+                    compact={false}
+                  />
                 )}
               </View>
             );

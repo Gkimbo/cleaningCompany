@@ -8,6 +8,7 @@
 const express = require("express");
 const router = express.Router();
 const ConflictResolutionService = require("../../../services/ConflictResolutionService");
+const AnalyticsService = require("../../../services/AnalyticsService");
 const verifyHROrOwner = require("../../../middleware/verifyHROrOwner");
 
 // All routes require authentication and HR/Owner role
@@ -408,6 +409,14 @@ router.post("/:type/:id/resolve", async (req, res) => {
 			reviewerId: req.user.id,
 			req,
 		});
+
+		// Track dispute resolution analytics
+		await AnalyticsService.trackDisputeResolved(
+			type, // disputeType: appeal or adjustment
+			result.appointmentId || null,
+			decision, // resolution: approve, deny, partial
+			req.user.id
+		);
 
 		res.json({
 			success: true,

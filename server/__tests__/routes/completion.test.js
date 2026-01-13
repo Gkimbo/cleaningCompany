@@ -48,6 +48,17 @@ jest.mock("../../services/cron/CompletionApprovalMonitor", () => ({
   ),
 }));
 
+// Mock the AutoCompleteMonitor (for early completion validation)
+jest.mock("../../services/cron/AutoCompleteMonitor", () => ({
+  parseTimeWindow: jest.fn().mockReturnValue({ start: 8, end: 18 }), // anytime window
+  getAutoCompleteConfig: jest.fn().mockResolvedValue({
+    hoursAfterEnd: 4,
+    reminderIntervals: [30, 60, 120, 180, 210],
+    autoApprovalHours: 24,
+    minOnSiteMinutes: 30,
+  }),
+}));
+
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -144,6 +155,9 @@ describe("Completion Router", () => {
       completionStatus: "in_progress",
       isMultiCleanerJob: false,
       employeesAssigned: ["200"],
+      timeToBeCompleted: "anytime",
+      // Job started 2 hours ago, so 30-min on-site check passes
+      jobStartedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
       user: {
         id: 100,
         firstName: "John",
@@ -552,6 +566,9 @@ describe("Completion Router", () => {
       isMultiCleanerJob: true,
       multiCleanerJobId: 10,
       employeesAssigned: ["200", "201"],
+      timeToBeCompleted: "anytime",
+      // Job started 2 hours ago, so 30-min on-site check passes
+      jobStartedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
       user: {
         id: 100,
         firstName: "John",
@@ -573,6 +590,8 @@ describe("Completion Router", () => {
         id: 1,
         cleanerId: 200,
         completionStatus: "in_progress",
+        // Job started 2 hours ago for this cleaner
+        jobStartedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
         update: mockCompletionUpdate,
         cleaner: { id: 200, firstName: "Jane" },
       };

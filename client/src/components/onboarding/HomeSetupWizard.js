@@ -1,4 +1,4 @@
-import React, { useContext, useState, useMemo } from "react";
+import React, { useContext, useState, useMemo, useEffect, useRef } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
+import AnalyticsService from "../../services/AnalyticsService";
 import styles from "./OnboardingStyles";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
 
@@ -56,6 +57,37 @@ const HomeSetupWizard = ({ state, dispatch }) => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
+  const isCompletedRef = useRef(false);
+
+  const STEP_NAMES = ["basics", "access", "services", "review"];
+  const TOTAL_STEPS = 4;
+
+  // Track flow start and abandonment
+  useEffect(() => {
+    AnalyticsService.trackFlowStart("home_setup");
+    return () => {
+      if (!isCompletedRef.current) {
+        AnalyticsService.trackFlowAbandon(
+          "home_setup",
+          STEP_NAMES[currentStep],
+          currentStep + 1,
+          TOTAL_STEPS
+        );
+      }
+    };
+  }, []);
+
+  // Track step changes
+  useEffect(() => {
+    if (currentStep > 0) {
+      AnalyticsService.trackFlowStep(
+        "home_setup",
+        STEP_NAMES[currentStep],
+        currentStep + 1,
+        TOTAL_STEPS
+      );
+    }
+  }, [currentStep]);
 
   const [homeData, setHomeData] = useState({
     nickName: "",
@@ -256,6 +288,10 @@ const HomeSetupWizard = ({ state, dispatch }) => {
       } else if (response.error) {
         setErrors({ submit: response.error });
       } else {
+        // Track flow completion
+        isCompletedRef.current = true;
+        AnalyticsService.trackFlowComplete("home_setup");
+
         // Update state with the new home so it shows immediately
         if (dispatch && response.home) {
           dispatch({ type: "ADD_HOME", payload: response.home });

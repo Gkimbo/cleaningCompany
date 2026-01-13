@@ -253,14 +253,33 @@ module.exports = (sequelize, DataTypes) => {
     completionAutoApprovalHours: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 4,
-      comment: "Hours before auto-approval triggers (configurable by owners)",
+      defaultValue: 24,
+      comment: "Hours before auto-approval triggers (24-hour dispute window)",
     },
     completionRequiresPhotos: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
       comment: "Whether photos are required for completion submission",
+    },
+    // Auto-complete settings (when cleaner forgets to mark complete)
+    autoCompleteHoursAfterEnd: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 4,
+      comment: "Hours after scheduled end to trigger auto-complete",
+    },
+    autoCompleteReminderIntervals: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [30, 60, 120, 180, 210],
+      comment: "Minutes after scheduled end to send reminders",
+    },
+    minOnSiteMinutes: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 30,
+      comment: "Minimum minutes on-site before early completion allowed",
     },
   });
 
@@ -350,6 +369,13 @@ module.exports = (sequelize, DataTypes) => {
         fee: config.lastMinuteFee || 50,
         thresholdHours: config.lastMinuteThresholdHours || 48,
         notificationRadiusMiles: parseFloat(config.lastMinuteNotificationRadiusMiles || 25),
+      },
+      completion: {
+        autoApprovalHours: config.completionAutoApprovalHours || 24,
+        requiresPhotos: config.completionRequiresPhotos || false,
+        autoCompleteHoursAfterEnd: config.autoCompleteHoursAfterEnd || 4,
+        autoCompleteReminderIntervals: config.autoCompleteReminderIntervals || [30, 60, 120, 180, 210],
+        minOnSiteMinutes: config.minOnSiteMinutes || 30,
       },
     };
   };

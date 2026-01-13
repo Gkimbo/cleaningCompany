@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useNavigate, useParams } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
+import AnalyticsService from "../../services/AnalyticsService";
 import styles from "../onboarding/OnboardingStyles";
 import {
   colors,
@@ -49,6 +50,37 @@ const CompleteHomeSetupWizard = ({ state, dispatch }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [home, setHome] = useState(null);
+  const isCompletedRef = useRef(false);
+
+  const STEP_NAMES = ["access", "linens", "review"];
+  const TOTAL_STEPS = 3;
+
+  // Track flow start and abandonment
+  useEffect(() => {
+    AnalyticsService.trackFlowStart("complete_home_setup");
+    return () => {
+      if (!isCompletedRef.current) {
+        AnalyticsService.trackFlowAbandon(
+          "complete_home_setup",
+          STEP_NAMES[currentStep],
+          currentStep + 1,
+          TOTAL_STEPS
+        );
+      }
+    };
+  }, []);
+
+  // Track step changes
+  useEffect(() => {
+    if (currentStep > 0) {
+      AnalyticsService.trackFlowStep(
+        "complete_home_setup",
+        STEP_NAMES[currentStep],
+        currentStep + 1,
+        TOTAL_STEPS
+      );
+    }
+  }, [currentStep]);
 
   const [formData, setFormData] = useState({
     accessType: "code",
@@ -264,6 +296,10 @@ const CompleteHomeSetupWizard = ({ state, dispatch }) => {
           dispatch({ type: "SET_HOMES", payload: refreshed.user.homes });
         }
       }
+
+      // Track flow completion
+      isCompletedRef.current = true;
+      AnalyticsService.trackFlowComplete("complete_home_setup");
 
       Alert.alert(
         "Setup Complete!",

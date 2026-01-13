@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
 import FetchData from "../../services/fetchRequests/fetchData";
 import CancellationWarningModal from "../modals/CancellationWarningModal";
+import PaymentTimelineDisplay from "../payments/PaymentTimelineDisplay";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
 import { usePricing, getTimeWindowOptions } from "../../context/PricingContext";
@@ -506,6 +507,13 @@ const EachAppointment = ({
   }
 
   if (completed && paid) {
+    // Calculate approximate charge date (3 days before appointment)
+    const getChargeDate = () => {
+      const appointmentDate = parseLocalDate(date);
+      appointmentDate.setDate(appointmentDate.getDate() - 3);
+      return appointmentDate;
+    };
+
     return (
       <View style={[styles.card, styles.cardComplete]}>
         <View style={styles.header}>
@@ -534,6 +542,12 @@ const EachAppointment = ({
             <Text style={styles.cleanerName}>Cleaned by {cleanerName}</Text>
           </View>
         )}
+        {/* Payment Timeline for homeowner transparency */}
+        <PaymentTimelineDisplay
+          viewType="homeowner"
+          paymentCapturedAt={getChargeDate()}
+          compact={true}
+        />
       </View>
     );
   }

@@ -1,5 +1,5 @@
 const LastMinuteNotificationService = require("../../services/LastMinuteNotificationService");
-const { User, Notification } = require("../../models");
+const { User, Notification, UserPendingRequests } = require("../../models");
 const { calculateDistance } = require("../../utils/geoUtils");
 const { getPricingConfig } = require("../../config/businessConfig");
 const EncryptionService = require("../../services/EncryptionService");
@@ -14,6 +14,9 @@ jest.mock("../../models", () => ({
   Notification: {
     create: jest.fn(),
     getUnreadCount: jest.fn(),
+  },
+  UserPendingRequests: {
+    findAll: jest.fn(),
   },
 }));
 
@@ -32,10 +35,12 @@ jest.mock("../../services/EncryptionService", () => ({
 
 jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
   sendPushNotification: jest.fn(),
+  sendPushUrgentReplacement: jest.fn(),
 }));
 
 jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendLastMinuteUrgentEmail: jest.fn(),
+  sendUrgentReplacementEmail: jest.fn(),
 }));
 
 describe("LastMinuteNotificationService", () => {
@@ -563,6 +568,238 @@ describe("LastMinuteNotificationService", () => {
 
       expect(result.notifiedCount).toBe(0);
       expect(result.cleanerIds).toEqual([]);
+    });
+  });
+
+  describe("notifyCleanersForReplacement", () => {
+    const mockAppointment = {
+      id: 100,
+      price: "250.00",
+      date: "2026-01-15",
+      update: jest.fn(),
+    };
+
+    const mockHome = {
+      id: 50,
+      latitude: "iv:42.3601",
+      longitude: "iv:-71.0589",
+      city: "iv:Boston",
+    };
+
+    beforeEach(() => {
+      getPricingConfig.mockResolvedValue({
+        lastMinute: {
+          notificationRadiusMiles: 25,
+        },
+      });
+      EncryptionService.decrypt.mockImplementation((value) =>
+        value.replace("iv:", "")
+      );
+    });
+
+    it("should notify nearby cleaners for replacement", async () => {
+      const mockCleaners = [
+        {
+          id: 1,
+          firstName: "John",
+          lastName: "Doe",
+          email: "john@test.com",
+          expoPushToken: "ExponentPushToken[xxx]",
+          serviceAreaLatitude: "42.3601",
+          serviceAreaLongitude: "-71.0589",
+          serviceAreaRadiusMiles: 30,
+          notifications: ["email", "phone"],
+        },
+        {
+          id: 2,
+          firstName: "Jane",
+          lastName: "Smith",
+          email: "jane@test.com",
+          expoPushToken: "ExponentPushToken[yyy]",
+          serviceAreaLatitude: "42.3602",
+          serviceAreaLongitude: "-71.0590",
+          serviceAreaRadiusMiles: 30,
+          notifications: ["email"],
+        },
+      ];
+
+      User.findAll.mockResolvedValue(mockCleaners);
+      UserPendingRequests.findAll.mockResolvedValue([]);
+      calculateDistance.mockReturnValue(8046.7); // 5 miles
+      Notification.create.mockResolvedValue({});
+      PushNotification.sendPushUrgentReplacement.mockResolvedValue({});
+      Email.sendUrgentReplacementEmail.mockResolvedValue({});
+      Notification.getUnreadCount.mockResolvedValue(5);
+
+      const result = await LastMinuteNotificationService.notifyCleanersForReplacement(
+        mockAppointment,
+        mockHome
+      );
+
+      expect(result.notifiedCount).toBe(2);
+      expect(result.cleanerIds).toContain(1);
+      expect(result.cleanerIds).toContain(2);
+
+      // Check in-app notification
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "urgent_replacement",
+          actionRequired: true,
+        })
+      );
+
+      // Check push notification
+      expect(PushNotification.sendPushUrgentReplacement).toHaveBeenCalled();
+
+      // Check email
+      expect(Email.sendUrgentReplacementEmail).toHaveBeenCalled();
+
+      // Check appointment update
+      expect(mockAppointment.update).toHaveBeenCalledWith({
+        replacementNotificationsSentAt: expect.any(Date),
+      });
+    });
+
+    it("should exclude the cancelling cleaner", async () => {
+      const mockCleaners = [
+        {
+          id: 1,
+          firstName: "Canceller",
+          lastName: "Cleaner",
+          serviceAreaLatitude: "42.3601",
+          serviceAreaLongitude: "-71.0589",
+          serviceAreaRadiusMiles: 30,
+          notifications: [],
+        },
+        {
+          id: 2,
+          firstName: "Available",
+          lastName: "Cleaner",
+          serviceAreaLatitude: "42.3602",
+          serviceAreaLongitude: "-71.0590",
+          serviceAreaRadiusMiles: 30,
+          notifications: [],
+        },
+      ];
+
+      User.findAll.mockResolvedValue(mockCleaners);
+      UserPendingRequests.findAll.mockResolvedValue([]);
+      calculateDistance.mockReturnValue(8046.7);
+
+      const result = await LastMinuteNotificationService.notifyCleanersForReplacement(
+        mockAppointment,
+        mockHome,
+        null,
+        [1] // Exclude cleaner 1
+      );
+
+      expect(result.notifiedCount).toBe(1);
+      expect(result.cleanerIds).not.toContain(1);
+      expect(result.cleanerIds).toContain(2);
+    });
+
+    it("should exclude cleaners who already declined the job", async () => {
+      const mockCleaners = [
+        {
+          id: 1,
+          firstName: "Declined",
+          lastName: "Cleaner",
+          serviceAreaLatitude: "42.3601",
+          serviceAreaLongitude: "-71.0589",
+          serviceAreaRadiusMiles: 30,
+          notifications: [],
+        },
+        {
+          id: 2,
+          firstName: "Available",
+          lastName: "Cleaner",
+          serviceAreaLatitude: "42.3602",
+          serviceAreaLongitude: "-71.0590",
+          serviceAreaRadiusMiles: 30,
+          notifications: [],
+        },
+      ];
+
+      User.findAll.mockResolvedValue(mockCleaners);
+      UserPendingRequests.findAll.mockResolvedValue([
+        { cleanerId: 1 }, // Cleaner 1 already declined
+      ]);
+      calculateDistance.mockReturnValue(8046.7);
+
+      const result = await LastMinuteNotificationService.notifyCleanersForReplacement(
+        mockAppointment,
+        mockHome
+      );
+
+      expect(result.notifiedCount).toBe(1);
+      expect(result.cleanerIds).not.toContain(1);
+      expect(result.cleanerIds).toContain(2);
+    });
+
+    it("should return zero count when all cleaners are excluded", async () => {
+      const mockCleaners = [
+        {
+          id: 1,
+          firstName: "Canceller",
+          lastName: "Cleaner",
+          serviceAreaLatitude: "42.3601",
+          serviceAreaLongitude: "-71.0589",
+          serviceAreaRadiusMiles: 30,
+          notifications: [],
+        },
+      ];
+
+      User.findAll.mockResolvedValue(mockCleaners);
+      UserPendingRequests.findAll.mockResolvedValue([]);
+      calculateDistance.mockReturnValue(8046.7);
+
+      const result = await LastMinuteNotificationService.notifyCleanersForReplacement(
+        mockAppointment,
+        mockHome,
+        null,
+        [1] // Exclude the only available cleaner
+      );
+
+      expect(result.notifiedCount).toBe(0);
+      expect(result.cleanerIds).toEqual([]);
+    });
+
+    it("should emit socket events for replacement notifications", async () => {
+      const mockCleaners = [
+        {
+          id: 1,
+          firstName: "John",
+          lastName: "Doe",
+          serviceAreaLatitude: "42.3601",
+          serviceAreaLongitude: "-71.0589",
+          serviceAreaRadiusMiles: 30,
+          notifications: [],
+        },
+      ];
+
+      const mockIo = {
+        to: jest.fn().mockReturnThis(),
+        emit: jest.fn(),
+      };
+
+      User.findAll.mockResolvedValue(mockCleaners);
+      UserPendingRequests.findAll.mockResolvedValue([]);
+      calculateDistance.mockReturnValue(8046.7);
+      Notification.getUnreadCount.mockResolvedValue(3);
+
+      await LastMinuteNotificationService.notifyCleanersForReplacement(
+        mockAppointment,
+        mockHome,
+        mockIo
+      );
+
+      expect(mockIo.to).toHaveBeenCalledWith("user_1");
+      expect(mockIo.emit).toHaveBeenCalledWith(
+        "urgent_replacement_job",
+        expect.objectContaining({
+          appointmentId: 100,
+        })
+      );
     });
   });
 });

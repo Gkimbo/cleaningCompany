@@ -273,6 +273,11 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "When urgent notifications were sent to nearby cleaners",
 		},
+		replacementNotificationsSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When replacement notifications were sent after cleaner cancellation",
+		},
 		// 2-Step Completion Confirmation fields
 		completionStatus: {
 			type: DataTypes.ENUM("in_progress", "submitted", "approved", "auto_approved"),
@@ -373,6 +378,39 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 			comment: "Deadline for submitting an appeal (72 hours from cancellation)",
+		},
+		// Auto-complete tracking fields
+		scheduledEndTime: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Calculated end time based on date + timeToBeCompleted",
+		},
+		autoCompleteAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When auto-complete triggers (scheduledEndTime + 4 hours)",
+		},
+		autoCompleteRemindersSent: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of auto-complete reminders sent (0-5)",
+		},
+		lastReminderSentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the last reminder was sent",
+		},
+		autoCompletedBySystem: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if job was auto-completed by system",
+		},
+		jobStartedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When first before photo was uploaded (job start time)",
 		},
 	});
 

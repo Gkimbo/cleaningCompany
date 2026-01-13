@@ -3,6 +3,24 @@ const EncryptionService = require("../services/EncryptionService");
 class MultiCleanerJobSerializer {
 	static userEncryptedFields = ["firstName", "lastName", "email", "phone"];
 
+	// Home fields that are encrypted
+	static homeEncryptedFields = [
+		"address",
+		"city",
+		"state",
+		"zipcode",
+		"keyPadCode",
+		"keyLocation",
+		"contact",
+		"gateCode",
+		"accessNotes",
+	];
+
+	static decryptField(value) {
+		if (!value) return null;
+		return EncryptionService.decrypt(value);
+	}
+
 	static decryptUserField(value) {
 		if (!value) return null;
 		return EncryptionService.decrypt(value);
@@ -16,6 +34,49 @@ class MultiCleanerJobSerializer {
 			firstName: this.decryptUserField(data.firstName),
 			lastName: this.decryptUserField(data.lastName),
 			type: data.type
+		};
+	}
+
+	static serializeHome(home) {
+		if (!home) return null;
+		const data = home.dataValues || home;
+		return {
+			id: data.id,
+			nickName: data.nickName,
+			address: this.decryptField(data.address),
+			city: this.decryptField(data.city),
+			state: this.decryptField(data.state),
+			zipcode: this.decryptField(data.zipcode),
+			numBeds: data.numBeds,
+			numBaths: data.numBaths,
+			numHalfBaths: data.numHalfBaths,
+			sqft: data.sqft,
+			hasGate: data.hasGate,
+			gateCode: this.decryptField(data.gateCode),
+			hasDog: data.hasDog,
+			dogName: data.dogName,
+			hasCat: data.hasCat,
+			catName: data.catName,
+			accessNotes: this.decryptField(data.accessNotes),
+			contact: this.decryptField(data.contact),
+			timeToBeCompleted: data.timeToBeCompleted,
+			cleanersNeeded: data.cleanersNeeded,
+		};
+	}
+
+	static serializeAppointment(appointment) {
+		if (!appointment) return null;
+		const data = appointment.dataValues || appointment;
+		return {
+			id: data.id,
+			date: data.date,
+			price: data.price,
+			bringTowels: data.bringTowels,
+			bringSheets: data.bringSheets,
+			timeToBeCompleted: data.timeToBeCompleted,
+			completed: data.completed,
+			isMultiCleanerJob: data.isMultiCleanerJob,
+			home: appointment.home ? this.serializeHome(appointment.home) : null,
 		};
 	}
 
@@ -69,6 +130,11 @@ class MultiCleanerJobSerializer {
 			);
 		}
 
+		// Serialize appointment if included
+		if (job.appointment) {
+			serialized.appointment = this.serializeAppointment(job.appointment);
+		}
+
 		return serialized;
 	}
 
@@ -102,16 +168,27 @@ class MultiCleanerJobSerializer {
 	static serializeOffer(offer) {
 		const data = offer.dataValues || offer;
 
-		return {
+		const serialized = {
 			id: data.id,
 			multiCleanerJobId: data.multiCleanerJobId,
 			cleanerId: data.cleanerId,
+			appointmentId: data.appointmentId,
+			offerType: data.offerType,
 			status: data.status,
+			earningsOffered: data.earningsOffered,
+			roomsOffered: data.roomsOffered,
 			offeredAt: data.offeredAt,
 			respondedAt: data.respondedAt,
 			expiresAt: data.expiresAt,
 			createdAt: data.createdAt
 		};
+
+		// Serialize multiCleanerJob if included (with nested appointment/home)
+		if (offer.multiCleanerJob) {
+			serialized.multiCleanerJob = this.serializeOne(offer.multiCleanerJob);
+		}
+
+		return serialized;
 	}
 
 	static serializeCompletion(completion) {
@@ -143,6 +220,21 @@ class MultiCleanerJobSerializer {
 
 	static serializeArrayForList(jobs) {
 		return jobs.map((job) => this.serializeForList(job));
+	}
+
+	static serializeOfferArray(offers) {
+		return offers.map((offer) => this.serializeOffer(offer));
+	}
+
+	/**
+	 * Serialize offers response for the /offers endpoint
+	 * Includes both personal offers and available jobs with decrypted home data
+	 */
+	static serializeOffersResponse(personalOffers, availableJobs) {
+		return {
+			personalOffers: this.serializeOfferArray(personalOffers),
+			availableJobs: this.serializeArray(availableJobs),
+		};
 	}
 }
 

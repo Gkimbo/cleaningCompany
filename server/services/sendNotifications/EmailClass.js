@@ -4194,6 +4194,83 @@ Kleanr Team`;
     }
   }
 
+  /**
+   * Send urgent replacement email when a cleaner cancels last-minute
+   */
+  static async sendUrgentReplacementEmail(
+    email,
+    cleanerName,
+    appointmentDate,
+    price,
+    location,
+    distanceMiles
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "Urgent: Replacement Needed!",
+        subtitle: "A Cleaner Had to Cancel",
+        headerColor: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>A homeowner in your area needs a <strong>replacement cleaner</strong> urgently! The originally assigned cleaner had to cancel, and this job needs to be filled quickly.</p>
+          <p>You're only <strong>${distanceMiles} miles</strong> away from this job!</p>`,
+        infoBox: {
+          icon: "🆘",
+          title: "Job Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Your Earnings", value: price },
+            { label: "Location", value: location },
+            { label: "Distance", value: `${distanceMiles} miles from you` },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "The homeowner is counting on finding a replacement quickly. Open the app now to claim this job before another cleaner does!",
+          bgColor: "#fee2e2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        },
+        ctaText: "Open the Kleanr app to view and accept this job!",
+        footerMessage: "Help save the day!",
+      });
+
+      const textContent = `URGENT: Replacement Cleaner Needed!
+
+Hi ${cleanerName},
+
+A homeowner near you needs a replacement cleaner urgently - the original cleaner had to cancel. You're only ${distanceMiles} miles away!
+
+JOB DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Your Earnings: ${price}
+Location: ${location}
+Distance: ${distanceMiles} miles from you
+
+⏰ The homeowner is counting on finding a replacement quickly. Open the Kleanr app now to claim it!
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🆘 URGENT: Replacement Needed - ${price} - ${distanceMiles} mi away`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Urgent replacement email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending urgent replacement email:", error);
+      throw error;
+    }
+  }
+
   // ============================================================================
   // EDGE CASE MULTI-CLEANER EMAILS
   // ============================================================================
@@ -5136,6 +5213,175 @@ Kleanr Support Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending appeal resolved email:", error);
+    }
+  }
+
+  // =========================================================================
+  // Auto-Complete Reminder Notifications
+  // =========================================================================
+
+  /**
+   * Send auto-complete reminder to cleaner
+   * @param {string} email - Cleaner's email
+   * @param {string} cleanerName - Cleaner's first name
+   * @param {string} date - Appointment date
+   * @param {string} address - Home address
+   * @param {number} reminderNum - Reminder number (1-5)
+   * @param {number} minutesLeft - Minutes until auto-complete
+   */
+  static async sendAutoCompleteReminder(email, cleanerName, date, address, reminderNum, minutesLeft) {
+    try {
+      const urgencyLevel = reminderNum >= 4 ? "URGENT" : reminderNum >= 3 ? "Important" : "";
+      const hoursLeft = Math.floor(minutesLeft / 60);
+      const timeRemaining = hoursLeft > 0 ? `${hoursLeft} hours` : `${minutesLeft} minutes`;
+
+      const reminderMessages = {
+        1: "This is a friendly reminder to mark your job complete in the app.",
+        2: `Your job will automatically be marked complete in ${timeRemaining}. Please submit your completion now to ensure everything is recorded correctly.`,
+        3: `You have ${timeRemaining} remaining to mark this job complete yourself. After that, the system will auto-complete it.`,
+        4: "URGENT: Please mark your job complete now! Only about 1 hour remaining.",
+        5: `FINAL REMINDER: Your job will be auto-completed in ${minutesLeft} minutes. Mark it complete now to avoid automatic submission.`,
+      };
+
+      const html = createEmailTemplate({
+        title: urgencyLevel ? `${urgencyLevel}: Complete Your Job` : "Reminder: Complete Your Job",
+        subtitle: `Job on ${date}`,
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>${reminderMessages[reminderNum] || reminderMessages[1]}</p>`,
+        infoBox: {
+          icon: "📍",
+          title: "Job Details",
+          items: [
+            { label: "Date", value: date },
+            { label: "Address", value: address },
+            { label: "Time Remaining", value: timeRemaining },
+          ],
+        },
+        warningBox: reminderNum >= 4 ? {
+          icon: "⚠️",
+          text: "If you don't mark the job complete, the system will auto-submit it and the homeowner will have 24 hours to review.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        } : null,
+        ctaText: "Open the Kleanr app to mark your job complete.",
+        headerColor: reminderNum >= 4
+          ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+          : reminderNum >= 3
+          ? "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+          : "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `${urgencyLevel ? `[${urgencyLevel}] ` : ""}Reminder: Mark Your Job on ${date} Complete`,
+        html,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Auto-complete reminder email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending auto-complete reminder email:", error);
+    }
+  }
+
+  /**
+   * Notify cleaner that their job was auto-completed by the system
+   * @param {string} email - Cleaner's email
+   * @param {string} cleanerName - Cleaner's first name
+   * @param {string} date - Appointment date
+   * @param {string} address - Home address
+   */
+  static async sendJobAutoCompleted(email, cleanerName, date, address) {
+    try {
+      const html = createEmailTemplate({
+        title: "Job Auto-Completed",
+        subtitle: `Job on ${date}`,
+        greeting: `Hi ${cleanerName}!`,
+        content: `<p>Your job was automatically marked as complete by our system because it wasn't submitted within the required timeframe after the scheduled end.</p>`,
+        infoBox: {
+          icon: "📍",
+          title: "Job Details",
+          items: [
+            { label: "Date", value: date },
+            { label: "Address", value: address },
+            { label: "Status", value: "Submitted for Review" },
+          ],
+        },
+        warningBox: {
+          icon: "ℹ️",
+          text: "The homeowner now has 24 hours to review the job. If they don't respond, payment will be automatically released.",
+          bgColor: "#dbeafe",
+          borderColor: "#3b82f6",
+          textColor: "#1e40af",
+        },
+        ctaText: "In the future, please remember to mark your jobs complete in the app right after finishing.",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Your Job on ${date} Was Auto-Completed`,
+        html,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Job auto-completed email sent to cleaner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending job auto-completed email:", error);
+    }
+  }
+
+  /**
+   * Notify homeowner that a job was auto-completed and needs review
+   * @param {string} email - Homeowner's email
+   * @param {string} homeownerName - Homeowner's first name
+   * @param {string} date - Appointment date
+   * @param {string} cleanerName - Cleaner's first name
+   */
+  static async sendJobAutoCompletedHomeowner(email, homeownerName, date, cleanerName) {
+    try {
+      const html = createEmailTemplate({
+        title: "Your Cleaning is Complete!",
+        subtitle: `Please Review Within 24 Hours`,
+        greeting: `Hi ${homeownerName}!`,
+        content: `<p>Good news! ${cleanerName} has finished cleaning your home on ${date}. The job has been submitted for your review.</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Cleaning Details",
+          items: [
+            { label: "Date", value: date },
+            { label: "Cleaner", value: cleanerName },
+            { label: "Status", value: "Awaiting Your Review" },
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "You have 24 hours to review the cleaning. If you don't respond, payment will be automatically released to the cleaner.",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the Kleanr app to review the cleaning and approve or report any issues.",
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Action Required: Review Your Cleaning on ${date}`,
+        html,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Job auto-completed email sent to homeowner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending job auto-completed homeowner email:", error);
     }
   }
 }

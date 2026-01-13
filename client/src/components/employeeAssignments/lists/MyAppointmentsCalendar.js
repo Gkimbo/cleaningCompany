@@ -64,15 +64,17 @@ const MyAppointmentsCalendar = ({ state }) => {
     try {
       const [appointmentData, userData] = await Promise.all([
         FetchData.get("/api/v1/employee-info", state.currentUser.token),
-        getCurrentUser(),
+        getCurrentUser(state.currentUser.token),
       ]);
 
       const cleanerAppointments = appointmentData.employee?.cleanerAppointments || [];
       setUserId(userData.user.id);
 
       // Filter to only show appointments assigned to this user
+      // For multi-cleaner jobs, include them even if not in employeesAssigned (linked via UserCleanerAppointments)
       const assignedAppointments = cleanerAppointments.filter((appt) =>
-        appt.employeesAssigned?.includes(String(userData.user.id))
+        appt.employeesAssigned?.includes(String(userData.user.id)) ||
+        appt.isMultiCleanerJob
       );
       setAppointments(assignedAppointments);
     } catch (error) {
@@ -223,10 +225,12 @@ const MyAppointmentsCalendar = ({ state }) => {
 
   // Calculate stats
   const now = new Date();
-  const upcomingCount = appointments.filter(
+  const upcomingAppointments = appointments.filter(
     (a) => new Date(a.date) >= new Date(now.toDateString()) && !a.completed
-  ).length;
+  );
+  const upcomingCount = upcomingAppointments.length;
   const completedCount = appointments.filter((a) => a.completed).length;
+  const teamJobCount = upcomingAppointments.filter((a) => a.isMultiCleanerJob).length;
 
   const currentSortLabel = sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
 
@@ -237,9 +241,15 @@ const MyAppointmentsCalendar = ({ state }) => {
       const dayDate = new Date(date.dateString);
       const isPast = dayDate < new Date(today.toDateString());
 
-      const appointmentCount = appointments.filter((a) => a.date === date.dateString).length;
+      const dayAppointments = appointments.filter((a) => a.date === date.dateString);
+      const appointmentCount = dayAppointments.length;
       const hasData = appointmentCount > 0;
       const isSelected = selectedDate === date.dateString;
+
+      // Check if any appointment on this day is a multi-cleaner job
+      const hasTeamJob = dayAppointments.some((a) => a.isMultiCleanerJob);
+      const teamJobCount = dayAppointments.filter((a) => a.isMultiCleanerJob).length;
+      const soloJobCount = appointmentCount - teamJobCount;
 
       return (
         <Pressable
@@ -247,7 +257,7 @@ const MyAppointmentsCalendar = ({ state }) => {
           style={[
             styles.dayContainer,
             isSelected && styles.dayContainerSelected,
-            hasData && !isPast && !isSelected && styles.dayContainerHasData,
+            hasData && !isPast && !isSelected && (hasTeamJob ? styles.dayContainerHasTeamJob : styles.dayContainerHasData),
             isPast && styles.dayContainerPast,
           ]}
           onPress={() => hasData && handleDateSelect(date)}
@@ -262,10 +272,19 @@ const MyAppointmentsCalendar = ({ state }) => {
             {date.day}
           </Text>
           {hasData && (
-            <View style={[styles.dayBadge, isSelected && styles.dayBadgeSelected]}>
-              <Text style={[styles.dayBadgeText, isSelected && styles.dayBadgeTextSelected]}>
-                {appointmentCount}
-              </Text>
+            <View style={styles.dayBadgeRow}>
+              {teamJobCount > 0 && (
+                <View style={[styles.dayBadge, styles.dayBadgeTeam, isSelected && styles.dayBadgeSelected]}>
+                  <Icon name="users" size={8} color={isSelected ? colors.primary[600] : colors.neutral[0]} />
+                </View>
+              )}
+              {soloJobCount > 0 && (
+                <View style={[styles.dayBadge, isSelected && styles.dayBadgeSelected]}>
+                  <Text style={[styles.dayBadgeText, isSelected && styles.dayBadgeTextSelected]}>
+                    {soloJobCount}
+                  </Text>
+                </View>
+              )}
             </View>
           )}
         </Pressable>
@@ -314,10 +333,15 @@ const MyAppointmentsCalendar = ({ state }) => {
             <Text style={styles.statValue}>{upcomingCount}</Text>
             <Text style={styles.statLabel}>Upcoming</Text>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{appointments.length}</Text>
-            <Text style={styles.statLabel}>Total Jobs</Text>
-          </View>
+          {teamJobCount > 0 && (
+            <View style={[styles.statCard, styles.statCardTeam]}>
+              <View style={styles.statValueRow}>
+                <Icon name="users" size={14} color={colors.primary[600]} />
+                <Text style={[styles.statValue, styles.statValueTeam]}>{teamJobCount}</Text>
+              </View>
+              <Text style={[styles.statLabel, styles.statLabelTeam]}>Team Jobs</Text>
+            </View>
+          )}
           <View style={[styles.statCard, styles.statCardHighlight]}>
             <Text style={[styles.statValue, styles.statValueHighlight]}>{completedCount}</Text>
             <Text style={[styles.statLabel, styles.statLabelHighlight]}>Completed</Text>
@@ -362,7 +386,13 @@ const MyAppointmentsCalendar = ({ state }) => {
         <View style={styles.legend}>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: colors.primary[100] }]} />
-            <Text style={styles.legendText}>Has Jobs</Text>
+            <Text style={styles.legendText}>Solo Jobs</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={styles.legendTeamIcon}>
+              <Icon name="users" size={8} color={colors.neutral[0]} />
+            </View>
+            <Text style={styles.legendText}>Team Jobs</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: colors.primary[500] }]} />
@@ -423,6 +453,12 @@ const MyAppointmentsCalendar = ({ state }) => {
                       distance={appt.distance}
                       timeToBeCompleted={appt.timeToBeCompleted}
                       token={state.currentUser?.token}
+                      isMultiCleanerJob={appt.isMultiCleanerJob}
+                      multiCleanerJob={appt.multiCleanerJob}
+                      employeesAssigned={appt.employeesAssigned}
+                      sheetConfigurations={appt.sheetConfigurations}
+                      towelConfigurations={appt.towelConfigurations}
+                      cleanerRoomAssignments={appt.cleanerRoomAssignments}
                       addEmployee={async () => {}}
                       removeEmployee={async (employeeId, appointmentId) => {
                         try {
@@ -620,6 +656,22 @@ const styles = StyleSheet.create({
   statLabelHighlight: {
     color: colors.success[600],
   },
+  statCardTeam: {
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  statValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  statValueTeam: {
+    color: colors.primary[700],
+  },
+  statLabelTeam: {
+    color: colors.primary[600],
+  },
 
   // Instruction Card
   instructionCard: {
@@ -666,6 +718,11 @@ const styles = StyleSheet.create({
   dayContainerHasData: {
     backgroundColor: colors.primary[50],
   },
+  dayContainerHasTeamJob: {
+    backgroundColor: colors.primary[100],
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
   dayContainerPast: {
     opacity: 0.4,
   },
@@ -681,14 +738,25 @@ const styles = StyleSheet.create({
   dayTextPast: {
     color: colors.text.tertiary,
   },
-  dayBadge: {
+  dayBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
     marginTop: 2,
+  },
+  dayBadge: {
     backgroundColor: colors.primary[500],
     borderRadius: radius.full,
     paddingHorizontal: 5,
     paddingVertical: 1,
     minWidth: 16,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  dayBadgeTeam: {
+    backgroundColor: colors.primary[600],
+    minWidth: 16,
+    height: 16,
   },
   dayBadgeSelected: {
     backgroundColor: colors.neutral[0],
@@ -719,6 +787,14 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
+  },
+  legendTeamIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.primary[600],
+    alignItems: "center",
+    justifyContent: "center",
   },
   legendText: {
     fontSize: typography.fontSize.xs,

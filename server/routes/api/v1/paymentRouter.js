@@ -27,9 +27,60 @@ const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const { getPricingConfig } = require("../../../config/businessConfig");
 const EncryptionService = require("../../../services/EncryptionService");
+const {
+  parseTimeWindow,
+  getAutoCompleteConfig,
+} = require("../../../services/cron/AutoCompleteMonitor");
 
 const paymentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
+
+// ============================================================================
+// HELPER: Validate early completion timing
+// ============================================================================
+async function validateCompletionTimingForPayment(appointment, cleanerId = null) {
+  const now = new Date();
+  const config = await getAutoCompleteConfig();
+  const minOnSiteMinutes = config.minOnSiteMinutes || 30;
+
+  // Parse appointment date and time window
+  const [year, month, day] = appointment.date.split("-").map(Number);
+  const timeWindow = parseTimeWindow(appointment.timeToBeCompleted);
+  const windowStartTime = new Date(year, month - 1, day, timeWindow.start, 0, 0);
+
+  // Check 1: Has time window started?
+  const timeWindowStarted = now >= windowStartTime;
+
+  // Check 2: Has cleaner been on-site long enough?
+  let jobStartedAt = appointment.jobStartedAt;
+
+  if (appointment.isMultiCleanerJob && cleanerId) {
+    const completion = await CleanerJobCompletion.findOne({
+      where: { appointmentId: appointment.id, cleanerId },
+    });
+    if (completion) {
+      jobStartedAt = completion.jobStartedAt;
+    }
+  }
+
+  const onSiteLongEnough = jobStartedAt &&
+    (now.getTime() - new Date(jobStartedAt).getTime()) >= minOnSiteMinutes * 60 * 1000;
+
+  if (!timeWindowStarted && !onSiteLongEnough) {
+    const windowLabel = timeWindow.start === 8 ? "anytime (8 AM)" : `${timeWindow.start}:00`;
+    return {
+      allowed: false,
+      reason: "early_completion_blocked",
+      message: `Cannot complete yet. Either wait until the time window starts (${windowLabel}) or be on-site for at least ${minOnSiteMinutes} minutes.`,
+      timeWindowStarted,
+      onSiteLongEnough,
+      jobStartedAt: jobStartedAt ? new Date(jobStartedAt).toISOString() : null,
+      windowStartTime: windowStartTime.toISOString(),
+    };
+  }
+
+  return { allowed: true };
+}
 
 // ============================================================================
 // HELPER: Record payment transaction in database
@@ -1963,6 +2014,20 @@ paymentRouter.post("/complete-job", async (req, res) => {
 
     if (!appointment.paid)
       return res.status(400).json({ error: "Payment not yet captured" });
+
+    // Validate early completion timing
+    const cleanerIdForValidation = cleanerId || (appointment.employeesAssigned && appointment.employeesAssigned[0]);
+    const timingValidation = await validateCompletionTimingForPayment(appointment, cleanerIdForValidation);
+    if (!timingValidation.allowed) {
+      return res.status(400).json({
+        error: timingValidation.message,
+        reason: timingValidation.reason,
+        timeWindowStarted: timingValidation.timeWindowStarted,
+        onSiteLongEnough: timingValidation.onSiteLongEnough,
+        jobStartedAt: timingValidation.jobStartedAt,
+        windowStartTime: timingValidation.windowStartTime,
+      });
+    }
 
     // Check if already submitted or approved
     if (appointment.completionStatus === "submitted") {

@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
 import { AuthContext } from "../../services/AuthContext";
 import { API_BASE } from "../../services/config";
+import AnalyticsService from "../../services/AnalyticsService";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
 
 const baseURL = API_BASE.replace("/api/v1", "");
@@ -38,6 +39,37 @@ const BusinessSignupWizard = ({ dispatch }) => {
   const [focusedField, setFocusedField] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const isCompletedRef = useRef(false);
+
+  const STEP_NAMES = ["account_info", "business_info"];
+  const TOTAL_STEPS = 2;
+
+  // Track flow start and abandonment
+  useEffect(() => {
+    AnalyticsService.trackFlowStart("business_signup");
+    return () => {
+      if (!isCompletedRef.current) {
+        AnalyticsService.trackFlowAbandon(
+          "business_signup",
+          STEP_NAMES[step - 1],
+          step,
+          TOTAL_STEPS
+        );
+      }
+    };
+  }, []);
+
+  // Track step changes
+  useEffect(() => {
+    if (step > 1) {
+      AnalyticsService.trackFlowStep(
+        "business_signup",
+        STEP_NAMES[step - 1],
+        step,
+        TOTAL_STEPS
+      );
+    }
+  }, [step]);
 
   const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -191,6 +223,10 @@ const BusinessSignupWizard = ({ dispatch }) => {
         }
         return;
       }
+
+      // Track signup completion
+      isCompletedRef.current = true;
+      AnalyticsService.trackFlowComplete("business_signup");
 
       // Login and set user state
       dispatch({ type: "CURRENT_USER", payload: responseData.token });

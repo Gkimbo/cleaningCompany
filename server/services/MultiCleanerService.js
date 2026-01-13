@@ -6,6 +6,10 @@
  */
 const { Op } = require("sequelize");
 const { getPricingConfig } = require("../config/businessConfig");
+const {
+  calculateScheduledEndTime,
+  getAutoCompleteConfig,
+} = require("./cron/AutoCompleteMonitor");
 
 class MultiCleanerService {
   /**
@@ -253,23 +257,40 @@ class MultiCleanerService {
       );
     }
 
+    // Get appointment data for auto-complete timing
+    const appointment = await UserAppointments.findByPk(job.appointmentId);
+    const autoCompleteConfig = await getAutoCompleteConfig();
+    const scheduledEndTime = calculateScheduledEndTime(
+      appointment.date,
+      appointment.timeToBeCompleted
+    );
+    const autoCompleteAt = new Date(
+      scheduledEndTime.getTime() + autoCompleteConfig.hoursAfterEnd * 60 * 60 * 1000
+    );
+
     // Create completion record for this cleaner
     await CleanerJobCompletion.create({
       appointmentId: job.appointmentId,
       cleanerId,
       multiCleanerJobId,
       status: "assigned",
+      autoCompleteAt,
     });
 
     // Increment confirmed cleaners
     job.cleanersConfirmed += 1;
     await job.updateStatus();
 
-    // Update appointment slots remaining
-    await UserAppointments.update(
-      { cleanerSlotsRemaining: job.getRemainingSlots() },
-      { where: { id: job.appointmentId } }
-    );
+    // Update appointment: add cleaner to employeesAssigned and update slots
+    const currentEmployees = appointment.employeesAssigned || [];
+    const cleanerIdStr = String(cleanerId);
+    if (!currentEmployees.includes(cleanerIdStr)) {
+      currentEmployees.push(cleanerIdStr);
+    }
+    appointment.cleanerSlotsRemaining = job.getRemainingSlots();
+    appointment.employeesAssigned = currentEmployees;
+    appointment.hasBeenAssigned = currentEmployees.length > 0;
+    await appointment.save();
 
     return job;
   }
@@ -309,11 +330,19 @@ class MultiCleanerService {
     job.cleanersConfirmed = Math.max(0, job.cleanersConfirmed - 1);
     await job.updateStatus();
 
-    // Update appointment slots remaining
-    await UserAppointments.update(
-      { cleanerSlotsRemaining: job.getRemainingSlots() },
-      { where: { id: job.appointmentId } }
-    );
+    // Get appointment and remove cleaner from employeesAssigned
+    const appointment = await UserAppointments.findByPk(job.appointmentId);
+    if (appointment) {
+      const currentEmployees = appointment.employeesAssigned || [];
+      const cleanerIdStr = String(cleanerId);
+      const updatedEmployees = currentEmployees.filter(id => id !== cleanerIdStr);
+
+      // Update appointment: remove cleaner from employeesAssigned and update slots
+      appointment.cleanerSlotsRemaining = job.getRemainingSlots();
+      appointment.employeesAssigned = updatedEmployees;
+      appointment.hasBeenAssigned = updatedEmployees.length > 0;
+      await appointment.save();
+    }
 
     return job;
   }
