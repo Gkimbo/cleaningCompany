@@ -384,12 +384,20 @@ const TopBar = ({ dispatch, state }) => {
                             <TermsEditorButton closeModal={closeModal} />
                             <WithdrawalsButton closeModal={closeModal} />
                           </>
+                        ) : state.account === "employee" ? (
+                          <>
+                            {/* Employees only see their assigned jobs - no marketplace access */}
+                            <EmployeeAssignmentsButton closeModal={closeModal} />
+                            <EarningsButton closeModal={closeModal} />
+                          </>
                         ) : state.account === "cleaner" ? (
                           <>
+                            {/* Search Jobs always at the top for all cleaners */}
                             <ChooseNewJobButton closeModal={closeModal} />
                             <EmployeeAssignmentsButton closeModal={closeModal} />
                             <MyRequestsButton closeModal={closeModal} />
-                            <MyClientsButton closeModal={closeModal} />
+                            {/* My Clients only for business owner cleaners */}
+                            {state.isBusinessOwner && <MyClientsButton closeModal={closeModal} />}
                             {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                             <EarningsButton closeModal={closeModal} />
                             {state.isBusinessOwner && <CalculatorButton closeModal={closeModal} />}

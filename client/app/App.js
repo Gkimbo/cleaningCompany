@@ -167,6 +167,8 @@ export default function App() {
     conversations: [],
     currentMessages: [],
     unreadCount: 0,
+    // Cleaner type flags
+    isMarketplaceCleaner: false,
   });
 
   const fetchStripeConfig = async () => {
@@ -195,8 +197,15 @@ export default function App() {
       if (user.user.type === "cleaner") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
       }
+      if (user.user.type === "employee") {
+        dispatch({ type: "USER_ACCOUNT", payload: "employee" });
+      }
       if (user.user.type === "humanResources") {
         dispatch({ type: "USER_ACCOUNT", payload: user.user.type });
+      }
+      // Set marketplace cleaner flag
+      if (user.user.isMarketplaceCleaner !== undefined) {
+        dispatch({ type: "SET_MARKETPLACE_CLEANER", payload: user.user.isMarketplaceCleaner });
       }
       if (user.user.daysWorking !== null) {
         setEmployeeDays(user.user.daysWorking);

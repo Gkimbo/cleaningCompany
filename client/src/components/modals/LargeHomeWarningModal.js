@@ -40,6 +40,9 @@ const LargeHomeWarningModal = ({
     multiCleanerRequired = false,
     recommendedCleaners = 2,
     hasTimeConstraint,
+    timeConstraintMessage,
+    estimatedHoursSolo,
+    estimatedHoursTeam,
     acknowledgmentMessage,
   } = bookingInfo;
 
@@ -84,12 +87,23 @@ const LargeHomeWarningModal = ({
               </Text>
             </View>
 
-            {/* Time constraint */}
-            {hasTimeConstraint && (
+            {/* Estimated cleaning time */}
+            {estimatedHoursSolo && (
               <View style={styles.infoRow}>
-                <Icon name="clock-o" size={16} color={colors.warning[500]} />
+                <Icon name="clock-o" size={16} color={colors.text.secondary} />
+                <Text style={styles.infoText}>
+                  Estimated time: {estimatedHoursSolo} hrs solo
+                  {recommendedCleaners > 1 && estimatedHoursTeam && ` / ${estimatedHoursTeam} hrs with ${recommendedCleaners} cleaners`}
+                </Text>
+              </View>
+            )}
+
+            {/* Time constraint */}
+            {hasTimeConstraint && timeConstraintMessage && (
+              <View style={styles.infoRow}>
+                <Icon name="exclamation-circle" size={16} color={colors.warning[500]} />
                 <Text style={[styles.infoText, styles.timeWarning]}>
-                  Must be completed between {timeToBeCompleted}
+                  {timeConstraintMessage}
                 </Text>
               </View>
             )}
@@ -99,13 +113,14 @@ const LargeHomeWarningModal = ({
               <Text style={styles.messageTitle}>Clean Solo?</Text>
               <Text style={styles.messageText}>
                 This is a larger home that we recommend having {recommendedCleaners} cleaners for.
+                {estimatedHoursSolo && ` Estimated solo cleaning time is ${estimatedHoursSolo} hours.`}
               </Text>
               <Text style={styles.messageText}>
                 You can still choose to clean this home by yourself, but it may take longer than usual.
               </Text>
-              {hasTimeConstraint && (
+              {hasTimeConstraint && timeConstraintMessage && (
                 <Text style={[styles.messageText, styles.timeConstraintText]}>
-                  Note: With the time constraint ({timeToBeCompleted}), completing this job alone may be challenging.
+                  Note: {timeConstraintMessage}. Completing this job alone may be challenging.
                 </Text>
               )}
             </View>

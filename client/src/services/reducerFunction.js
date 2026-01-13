@@ -13,6 +13,7 @@ const reducer = (state, action) => {
         currentMessages: [],
         unreadCount: 0,
         isBusinessOwner: false,
+        isMarketplaceCleaner: false,
         businessName: null,
         yearsInBusiness: null,
         linkedAccounts: [],
@@ -51,6 +52,11 @@ const reducer = (state, action) => {
       return {
         ...state,
         account: action.payload,
+      };
+    case "SET_MARKETPLACE_CLEANER":
+      return {
+        ...state,
+        isMarketplaceCleaner: action.payload,
       };
     case "USER_HOME":
       return {

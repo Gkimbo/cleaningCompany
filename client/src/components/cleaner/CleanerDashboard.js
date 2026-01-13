@@ -202,13 +202,15 @@ const QuickActionButton = ({ title, subtitle, onPress, icon, iconColor, bgColor,
 );
 
 // Upcoming Appointment Card Component
-const UpcomingAppointmentCard = ({ appointment, home, onPress, cleanerSharePercent }) => {
+const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
   const appointmentDate = parseLocalDate(appointment.date);
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const isToday = appointmentDate.toDateString() === today.toDateString();
   const isTomorrow = appointmentDate.toDateString() === tomorrow.toDateString();
+  const isMultiCleaner = appointment.isMultiCleanerJob;
+  const multiCleanerJob = appointment.multiCleanerJob;
 
   const formatDate = (date) => {
     if (isToday) return "Today";
@@ -217,8 +219,16 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, cleanerSharePerce
     return date.toLocaleDateString("en-US", options);
   };
 
+  // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
+  const platformFeePercent = isMultiCleaner
+    ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
+    : (pricing?.platform?.feePercent || 0.1);
+  const cleanerSharePercent = 1 - platformFeePercent;
+
   const totalPrice = Number(appointment.price);
-  const payout = totalPrice * cleanerSharePercent;
+  // For multi-cleaner jobs, calculate payout based on number of cleaners
+  const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.employeesAssigned?.length || 1;
+  const payout = (totalPrice / numCleaners) * cleanerSharePercent;
 
   return (
     <Pressable
@@ -226,13 +236,22 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, cleanerSharePerce
       style={({ pressed }) => [
         styles.appointmentCard,
         isToday && styles.appointmentCardToday,
+        isMultiCleaner && styles.appointmentCardMultiCleaner,
         pressed && styles.cardPressed,
       ]}
     >
-      <View style={styles.appointmentDateBadge}>
-        <Text style={[styles.appointmentDateText, isToday && styles.todayText]}>
-          {formatDate(appointmentDate)}
-        </Text>
+      <View style={styles.appointmentCardHeader}>
+        <View style={styles.appointmentDateBadge}>
+          <Text style={[styles.appointmentDateText, isToday && styles.todayText]}>
+            {formatDate(appointmentDate)}
+          </Text>
+        </View>
+        {isMultiCleaner && (
+          <View style={styles.teamBadge}>
+            <Icon name="users" size={10} color={colors.primary[700]} />
+            <Text style={styles.teamBadgeText}>Team</Text>
+          </View>
+        )}
       </View>
       <View style={styles.appointmentDetails}>
         <Text style={styles.appointmentHome} numberOfLines={1}>
@@ -241,6 +260,20 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, cleanerSharePerce
         <Text style={styles.appointmentInfo}>
           {home?.numBeds || "?"} bed | {home?.numBaths || "?"} bath
         </Text>
+        {isMultiCleaner && multiCleanerJob && (
+          <View style={styles.multiCleanerInfo}>
+            <Icon name="user" size={10} color={colors.primary[600]} />
+            <Text style={styles.multiCleanerText}>
+              {multiCleanerJob.cleanersConfirmed}/{multiCleanerJob.totalCleanersRequired} cleaners confirmed
+            </Text>
+            {multiCleanerJob.cleanersConfirmed < multiCleanerJob.totalCleanersRequired && (
+              <View style={styles.multiCleanerWarning}>
+                <Icon name="clock-o" size={10} color={colors.warning[600]} />
+                <Text style={styles.multiCleanerWarningText}>Filling</Text>
+              </View>
+            )}
+          </View>
+        )}
       </View>
       <Text style={styles.appointmentPayout}>${payout.toFixed(2)}</Text>
     </Pressable>
@@ -586,8 +619,15 @@ const CleanerDashboard = ({ state, dispatch }) => {
   const expectedPayout = sortedAppointments
     .filter((apt) => !apt.completed && parseLocalDate(apt.date) >= today)
     .reduce((sum, apt) => {
-      const numCleaners = apt.employeesAssigned?.length || 1;
-      const perCleanerShare = (Number(apt.price) / numCleaners) * cleanerSharePercent;
+      // For multi-cleaner jobs, use totalCleanersRequired from multiCleanerJob
+      // Otherwise fall back to employeesAssigned length
+      const numCleaners = apt.multiCleanerJob?.totalCleanersRequired || apt.employeesAssigned?.length || 1;
+      // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
+      const feePercent = apt.isMultiCleanerJob
+        ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
+        : (pricing?.platform?.feePercent || 0.1);
+      const sharePercent = 1 - feePercent;
+      const perCleanerShare = (Number(apt.price) / numCleaners) * sharePercent;
       return sum + perCleanerShare;
     }, 0);
 
@@ -770,7 +810,6 @@ const CleanerDashboard = ({ state, dispatch }) => {
             <NextAppointmentPreview
               appointment={nextAppointment}
               home={homeDetails[nextAppointment.homeId]}
-              cleanerSharePercent={cleanerSharePercent}
             />
           </View>
         )}
@@ -791,12 +830,6 @@ const CleanerDashboard = ({ state, dispatch }) => {
                   </Text>
                 </View>
               )}
-              <Pressable
-                style={styles.findJobsButton}
-                onPress={() => navigate("/new-job-choice")}
-              >
-                <Text style={styles.findJobsButtonText}>Find Available Jobs</Text>
-              </Pressable>
             </View>
           </View>
         )}
@@ -816,7 +849,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
                   appointment={apt}
                   home={homeDetails[apt.homeId]}
                   onPress={() => navigate("/employee-assignments")}
-                  cleanerSharePercent={cleanerSharePercent}
+                  pricing={pricing}
                 />
               ))}
             </View>
@@ -1090,17 +1123,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
   },
-  findJobsButton: {
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.full,
-  },
-  findJobsButtonText: {
-    color: colors.neutral[0],
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
 
   // Appointments
   appointmentsList: {
@@ -1117,6 +1139,58 @@ const styles = StyleSheet.create({
   appointmentCardToday: {
     borderWidth: 2,
     borderColor: colors.primary[400],
+  },
+  appointmentCardMultiCleaner: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+    backgroundColor: colors.primary[25] || colors.primary[50],
+  },
+  appointmentCardHeader: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    marginRight: spacing.md,
+  },
+  teamBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[100],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    marginTop: spacing.xs,
+    gap: 4,
+  },
+  teamBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  multiCleanerInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.xs,
+    gap: spacing.xs,
+    flexWrap: "wrap",
+  },
+  multiCleanerText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  multiCleanerWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[100],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
+    marginLeft: spacing.xs,
+    gap: 2,
+  },
+  multiCleanerWarningText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    fontWeight: typography.fontWeight.medium,
   },
   cardPressed: {
     opacity: 0.9,

@@ -1,4 +1,5 @@
 const EncryptionService = require("../services/EncryptionService");
+const MultiCleanerService = require("../services/MultiCleanerService");
 
 class AppointmentSerializer {
 	// Fields that are encrypted in the database
@@ -49,7 +50,12 @@ class AppointmentSerializer {
 			// Last-minute booking fields
 			"isLastMinuteBooking",
 			"lastMinuteFeeApplied",
-			"lastMinuteNotificationsSentAt"
+			"lastMinuteNotificationsSentAt",
+			// Multi-cleaner fields
+			"isMultiCleanerJob",
+			"multiCleanerJobId",
+			"multiCleanerJob",
+			"cleanerRoomAssignments"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
@@ -92,7 +98,12 @@ class AppointmentSerializer {
 			// Last-minute booking fields
 			"isLastMinuteBooking",
 			"lastMinuteFeeApplied",
-			"lastMinuteNotificationsSentAt"
+			"lastMinuteNotificationsSentAt",
+			// Multi-cleaner fields
+			"isMultiCleanerJob",
+			"multiCleanerJobId",
+			"multiCleanerJob",
+			"cleanerRoomAssignments"
 		];
 		const newAppointment = {};
 		// Handle both Sequelize instances and plain objects
@@ -101,6 +112,45 @@ class AppointmentSerializer {
 			newAppointment[attribute] = this.getValue(data, attribute);
 		}
 		return newAppointment;
+	}
+
+	/**
+	 * Serialize appointments with edge large home info for cleaner job listings
+	 * This async method checks if each appointment is an edge large home
+	 * @param {Array} appointmentArray - Array of appointments with home data
+	 * @returns {Promise<Array>} Serialized appointments with isEdgeLargeHome flag
+	 */
+	static async serializeArrayWithEdgeInfo(appointmentArray) {
+		const serialized = this.serializeArray(appointmentArray);
+
+		// Add edge large home info to each appointment
+		const enriched = await Promise.all(
+			serialized.map(async (appt, index) => {
+				const original = appointmentArray[index];
+				const home = original.home || original.dataValues?.home;
+
+				if (home) {
+					const numBeds = parseInt(home.numBeds) || 0;
+					const numBaths = parseInt(home.numBaths) || 0;
+					const isLargeHome = await MultiCleanerService.isLargeHome(numBeds, numBaths);
+					const isEdgeLargeHome = await MultiCleanerService.isEdgeLargeHome(numBeds, numBaths);
+					const soloAllowed = await MultiCleanerService.isSoloAllowed(numBeds, numBaths);
+
+					return {
+						...appt,
+						isLargeHome,
+						isEdgeLargeHome,
+						soloAllowed,
+						numBeds,
+						numBaths,
+					};
+				}
+
+				return appt;
+			})
+		);
+
+		return enriched;
 	}
 }
 

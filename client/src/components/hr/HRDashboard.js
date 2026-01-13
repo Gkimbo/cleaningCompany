@@ -271,9 +271,9 @@ const HRDashboard = ({ state, dispatch }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  const bedOptions = ["1", "2", "3", "4", "5", "6", "7", "8+"];
-  const bathOptions = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5+"];
-  const halfBathOptions = ["0", "1", "2", "3"];
+  const bedOptions = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12+"];
+  const bathOptions = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5", "5.5", "6", "6.5", "7", "7.5", "8+"];
+  const halfBathOptions = ["0", "1", "2", "3", "4", "5+"];
 
   useEffect(() => {
     if (state.currentUser.token) {
@@ -555,7 +555,9 @@ const HRDashboard = ({ state, dispatch }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Fixed Header */}
+            <View style={styles.modalHeaderFixed}>
+              <View style={styles.modalHandle} />
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>Dispute Details</Text>
@@ -565,9 +567,18 @@ const HRDashboard = ({ state, dispatch }) => {
                   style={styles.closeButton}
                   onPress={() => setShowDetailModal(false)}
                 >
-                  <Icon name="times" size={20} color={colors.text.secondary} />
+                  <Icon name="times" size={18} color={colors.text.primary} />
                 </Pressable>
               </View>
+            </View>
+
+            {/* Scrollable Content */}
+            <ScrollView
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+              bounces={true}
+            >
 
               {selectedDispute && (
                 <>
@@ -591,9 +602,9 @@ const HRDashboard = ({ state, dispatch }) => {
 
                   {/* Parties Info */}
                   <View style={styles.partiesRow}>
-                    <View style={styles.partyCard}>
+                    <View style={[styles.partyCard, styles.partyCardCleaner]}>
                       <View style={styles.partyHeader}>
-                        <Icon name="user" size={14} color={colors.secondary[500]} />
+                        <Icon name="user" size={18} color={colors.secondary[600]} />
                         <Text style={styles.partyLabel}>Cleaner</Text>
                       </View>
                       <Text style={styles.partyName}>
@@ -601,16 +612,16 @@ const HRDashboard = ({ state, dispatch }) => {
                       </Text>
                       {selectedDispute.cleaner?.falseClaimCount > 0 && (
                         <View style={styles.warningBadge}>
-                          <Icon name="warning" size={10} color={colors.warning[600]} />
+                          <Icon name="warning" size={12} color={colors.warning[600]} />
                           <Text style={styles.warningBadgeText}>
                             {selectedDispute.cleaner.falseClaimCount} prior false claims
                           </Text>
                         </View>
                       )}
                     </View>
-                    <View style={styles.partyCard}>
+                    <View style={[styles.partyCard, styles.partyCardHomeowner]}>
                       <View style={styles.partyHeader}>
-                        <Icon name="user-o" size={14} color={colors.primary[500]} />
+                        <Icon name="home" size={18} color={colors.primary[600]} />
                         <Text style={styles.partyLabel}>Homeowner</Text>
                       </View>
                       <Text style={styles.partyName}>
@@ -618,7 +629,7 @@ const HRDashboard = ({ state, dispatch }) => {
                       </Text>
                       {selectedDispute.homeowner?.falseHomeSizeCount > 0 && (
                         <View style={styles.warningBadge}>
-                          <Icon name="warning" size={10} color={colors.warning[600]} />
+                          <Icon name="warning" size={12} color={colors.warning[600]} />
                           <Text style={styles.warningBadgeText}>
                             {selectedDispute.homeowner.falseHomeSizeCount} prior size issues
                           </Text>
@@ -707,59 +718,99 @@ const HRDashboard = ({ state, dispatch }) => {
                     selectedDispute.status === "denied" ||
                     selectedDispute.status === "expired") && (
                     <View style={styles.resolutionForm}>
-                      <Text style={styles.formTitle}>Make Your Decision</Text>
+                      <View style={styles.formTitleRow}>
+                        <Icon name="gavel" size={20} color={colors.primary[600]} />
+                        <Text style={styles.formTitle}>Make Your Decision</Text>
+                      </View>
                       <Text style={styles.formDescription}>
                         Set the final room counts for this property. This will update the home's listing and affect future pricing.
                       </Text>
 
-                      <View style={styles.formRow}>
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Bedrooms</Text>
-                          <View style={styles.pickerContainer}>
-                            <Picker
-                              selectedValue={finalBeds}
-                              onValueChange={setFinalBeds}
-                              style={styles.picker}
+                      {/* Bedrooms */}
+                      <View style={styles.selectorSection}>
+                        <Text style={styles.selectorLabel}>
+                          <Icon name="bed" size={14} color={colors.text.primary} /> Bedrooms
+                        </Text>
+                        <View style={styles.selectorRow}>
+                          {bedOptions.map((option) => (
+                            <Pressable
+                              key={option}
+                              style={[
+                                styles.selectorButton,
+                                finalBeds === option && styles.selectorButtonActive,
+                              ]}
+                              onPress={() => setFinalBeds(option)}
                             >
-                              <Picker.Item label="Select..." value="" />
-                              {bedOptions.map((option) => (
-                                <Picker.Item key={option} label={option} value={option} />
-                              ))}
-                            </Picker>
-                          </View>
-                        </View>
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Full Baths</Text>
-                          <View style={styles.pickerContainer}>
-                            <Picker
-                              selectedValue={finalBaths}
-                              onValueChange={setFinalBaths}
-                              style={styles.picker}
-                            >
-                              <Picker.Item label="Select..." value="" />
-                              {bathOptions.map((option) => (
-                                <Picker.Item key={option} label={option} value={option} />
-                              ))}
-                            </Picker>
-                          </View>
-                        </View>
-                        <View style={styles.formField}>
-                          <Text style={styles.formLabel}>Half Baths</Text>
-                          <View style={styles.pickerContainer}>
-                            <Picker
-                              selectedValue={finalHalfBaths}
-                              onValueChange={setFinalHalfBaths}
-                              style={styles.picker}
-                            >
-                              {halfBathOptions.map((option) => (
-                                <Picker.Item key={option} label={option} value={option} />
-                              ))}
-                            </Picker>
-                          </View>
+                              <Text
+                                style={[
+                                  styles.selectorButtonText,
+                                  finalBeds === option && styles.selectorButtonTextActive,
+                                ]}
+                              >
+                                {option}
+                              </Text>
+                            </Pressable>
+                          ))}
                         </View>
                       </View>
 
-                      <Text style={styles.formLabel}>Resolution Notes (Optional)</Text>
+                      {/* Full Baths */}
+                      <View style={styles.selectorSection}>
+                        <Text style={styles.selectorLabel}>
+                          <Icon name="bath" size={14} color={colors.text.primary} /> Full Baths
+                        </Text>
+                        <View style={styles.selectorRow}>
+                          {bathOptions.map((option) => (
+                            <Pressable
+                              key={option}
+                              style={[
+                                styles.selectorButton,
+                                finalBaths === option && styles.selectorButtonActive,
+                              ]}
+                              onPress={() => setFinalBaths(option)}
+                            >
+                              <Text
+                                style={[
+                                  styles.selectorButtonText,
+                                  finalBaths === option && styles.selectorButtonTextActive,
+                                ]}
+                              >
+                                {option}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* Half Baths */}
+                      <View style={styles.selectorSection}>
+                        <Text style={styles.selectorLabel}>
+                          <Icon name="tint" size={14} color={colors.text.primary} /> Half Baths
+                        </Text>
+                        <View style={styles.selectorRow}>
+                          {halfBathOptions.map((option) => (
+                            <Pressable
+                              key={option}
+                              style={[
+                                styles.selectorButton,
+                                finalHalfBaths === option && styles.selectorButtonActive,
+                              ]}
+                              onPress={() => setFinalHalfBaths(option)}
+                            >
+                              <Text
+                                style={[
+                                  styles.selectorButtonText,
+                                  finalHalfBaths === option && styles.selectorButtonTextActive,
+                                ]}
+                              >
+                                {option}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+
+                      <Text style={styles.notesLabel}>Resolution Notes (Optional)</Text>
                       <TextInput
                         style={styles.textArea}
                         value={ownerNote}
@@ -1234,46 +1285,80 @@ const styles = StyleSheet.create({
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: colors.white,
-    borderTopLeftRadius: radius["2xl"],
-    borderTopRightRadius: radius["2xl"],
-    maxHeight: "92%",
-    padding: spacing.lg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: "85%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 25,
+  },
+  modalHeaderFixed: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  modalHandle: {
+    width: 48,
+    height: 5,
+    backgroundColor: colors.neutral[400],
+    borderRadius: 3,
+    alignSelf: "center",
+    marginBottom: spacing.lg,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: spacing.lg,
+    alignItems: "center",
+    paddingBottom: spacing.lg,
   },
   modalTitle: {
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize["2xl"],
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
   modalSubtitle: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    marginTop: 2,
+    color: colors.primary[500],
+    marginTop: 4,
+    fontWeight: "500",
   },
   closeButton: {
-    padding: spacing.sm,
-    marginRight: -spacing.sm,
-    marginTop: -spacing.sm,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.neutral[200],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalScrollView: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    padding: spacing.xl,
+    paddingBottom: spacing["3xl"],
   },
   modalStatusRow: {
     marginBottom: spacing.lg,
   },
   // Info Card
   infoCard: {
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.xl,
     padding: spacing.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
   },
   infoCardHeader: {
     flexDirection: "row",
@@ -1282,46 +1367,59 @@ const styles = StyleSheet.create({
   },
   infoCardTitle: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
+    color: colors.primary[600],
     marginLeft: spacing.sm,
-    fontWeight: "500",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   infoCardValue: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.lg,
     color: colors.text.primary,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   infoCardSubvalue: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     color: colors.text.secondary,
-    marginTop: 2,
+    marginTop: 4,
   },
   // Parties
   partiesRow: {
     flexDirection: "row",
     gap: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   partyCard: {
     flex: 1,
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 2,
+  },
+  partyCardCleaner: {
+    backgroundColor: colors.secondary[50],
+    borderColor: colors.secondary[300],
+  },
+  partyCardHomeowner: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[300],
   },
   partyHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   partyLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-    marginLeft: spacing.xs,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginLeft: spacing.sm,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   partyName: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.lg,
     color: colors.text.primary,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   warningBadge: {
     flexDirection: "row",
@@ -1335,16 +1433,20 @@ const styles = StyleSheet.create({
   },
   // Comparison Card
   comparisonCard: {
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    borderWidth: 2,
+    borderColor: colors.warning[200],
   },
   comparisonTitle: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    fontWeight: "500",
-    marginBottom: spacing.md,
+    color: colors.warning[700],
+    fontWeight: "700",
+    marginBottom: spacing.lg,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   comparisonBoxes: {
     flexDirection: "row",
@@ -1446,54 +1548,86 @@ const styles = StyleSheet.create({
   },
   // Resolution Form
   resolutionForm: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[200],
+    marginTop: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary[200],
+  },
+  formTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   formTitle: {
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
   },
   formDescription: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     color: colors.text.secondary,
-    marginBottom: spacing.lg,
-    lineHeight: 20,
+    marginBottom: spacing.xl,
+    lineHeight: 22,
   },
-  formRow: {
-    flexDirection: "row",
-    gap: spacing.md,
+  selectorSection: {
+    marginBottom: spacing.lg,
+  },
+  selectorLabel: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    fontWeight: "700",
     marginBottom: spacing.md,
   },
-  formField: {
-    flex: 1,
+  selectorRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
   },
-  formLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
-    fontWeight: "500",
-  },
-  pickerContainer: {
-    backgroundColor: colors.neutral[100],
+  selectorButton: {
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.neutral[300],
     borderRadius: radius.lg,
-    overflow: "hidden",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    minWidth: 50,
+    alignItems: "center",
   },
-  picker: {
-    height: 50,
+  selectorButtonActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
+  },
+  selectorButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.text.primary,
+  },
+  selectorButtonTextActive: {
+    color: colors.white,
+  },
+  notesLabel: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    fontWeight: "700",
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
   },
   textArea: {
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.white,
     borderRadius: radius.lg,
-    padding: spacing.md,
-    minHeight: 80,
+    padding: spacing.lg,
+    minHeight: 100,
     textAlignVertical: "top",
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
     marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[300],
   },
   errorBanner: {
     flexDirection: "row",
@@ -1512,8 +1646,7 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: "row",
     gap: spacing.md,
-    marginTop: spacing.lg,
-    paddingBottom: spacing.lg,
+    marginTop: spacing.xl,
   },
   actionButton: {
     flex: 1,
@@ -1522,18 +1655,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.sm,
     paddingVertical: spacing.lg,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
+    ...shadows.md,
   },
   approveButton: {
-    backgroundColor: colors.success[500],
+    backgroundColor: colors.success[600],
   },
   denyButton: {
-    backgroundColor: colors.error[500],
+    backgroundColor: colors.error[600],
   },
   buttonText: {
     fontSize: typography.fontSize.base,
     color: colors.white,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 });
 

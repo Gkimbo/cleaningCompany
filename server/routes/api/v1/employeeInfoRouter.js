@@ -9,6 +9,8 @@ const {
   UserCleanerAppointments,
   UserBills,
   UserReviews,
+  MultiCleanerJob,
+  CleanerRoomAssignment,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
@@ -42,6 +44,13 @@ employeeInfoRouter.get("/", async (req, res) => {
       where: {
         id: appointmentIds,
       },
+      include: [
+        {
+          model: MultiCleanerJob,
+          as: "multiCleanerJob",
+          required: false,
+        },
+      ],
     });
 
     // Get all cleaner reviews for these appointments
@@ -55,11 +64,47 @@ employeeInfoRouter.get("/", async (req, res) => {
     });
     const reviewedAppointmentIds = new Set(cleanerReviews.map((r) => r.appointmentId));
 
-    // Add hasCleanerReview to each appointment and filter out completed+reviewed
+    // Get room assignments for multi-cleaner jobs
+    const multiCleanerAppointmentIds = appointments
+      .filter((apt) => apt.isMultiCleanerJob)
+      .map((apt) => apt.id);
+
+    let roomAssignmentsByAppointment = {};
+    if (multiCleanerAppointmentIds.length > 0) {
+      const roomAssignments = await CleanerRoomAssignment.findAll({
+        where: {
+          appointmentId: { [Op.in]: multiCleanerAppointmentIds },
+          cleanerId: userId,
+        },
+      });
+      // Group by appointmentId
+      roomAssignments.forEach((ra) => {
+        if (!roomAssignmentsByAppointment[ra.appointmentId]) {
+          roomAssignmentsByAppointment[ra.appointmentId] = [];
+        }
+        roomAssignmentsByAppointment[ra.appointmentId].push({
+          roomType: ra.roomType,
+          roomNumber: ra.roomNumber,
+          roomLabel: ra.roomLabel,
+        });
+      });
+    }
+
+    // Add hasCleanerReview to each appointment and include multiCleanerJob data
     const appointmentsWithReviewStatus = appointments
       .map((apt) => ({
         ...apt.dataValues,
         hasCleanerReview: reviewedAppointmentIds.has(apt.id),
+        // Include multiCleanerJob data for display
+        multiCleanerJob: apt.multiCleanerJob ? {
+          id: apt.multiCleanerJob.id,
+          totalCleanersRequired: apt.multiCleanerJob.totalCleanersRequired,
+          cleanersConfirmed: apt.multiCleanerJob.cleanersConfirmed,
+          status: apt.multiCleanerJob.status,
+          primaryCleanerId: apt.multiCleanerJob.primaryCleanerId,
+        } : null,
+        // Include room assignments for multi-cleaner jobs
+        cleanerRoomAssignments: roomAssignmentsByAppointment[apt.id] || null,
       }))
       // Filter out completed appointments that have been reviewed by cleaner
       .filter((apt) => !(apt.completed && apt.hasCleanerReview));

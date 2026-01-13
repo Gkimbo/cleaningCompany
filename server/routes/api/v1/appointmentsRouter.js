@@ -1537,17 +1537,57 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
     const multiCleanerRequired = await MultiCleanerService.isMultiCleanerRequired(numBeds, numBaths);
     const recommendedCleaners = await MultiCleanerService.calculateRecommendedCleaners(home);
 
-    // Time constraint only matters for large homes
-    const hasTimeConstraint = isLargeHome && timeToBeCompleted !== "anytime";
+    // Calculate estimated cleaning time
+    // Base: 30 min + 30 min per bedroom + 20 min per bathroom
+    const estimatedMinutesSolo = 30 + (numBeds * 30) + (numBaths * 20);
+    const estimatedMinutesTeam = Math.ceil((estimatedMinutesSolo / recommendedCleaners) / 0.85); // 15% overlap overhead
+    const estimatedHoursSolo = (estimatedMinutesSolo / 60).toFixed(1);
+    const estimatedHoursTeam = (estimatedMinutesTeam / 60).toFixed(1);
+
+    // Time constraint - check if it's a specific window or hours limit
+    // timeToBeCompleted can be: "anytime", a time window like "9am-5pm", or hours like "3" or "4"
+    const isTimeWindow = timeToBeCompleted && timeToBeCompleted.includes("-");
+    const isHoursLimit = timeToBeCompleted && !isNaN(parseFloat(timeToBeCompleted)) && timeToBeCompleted !== "anytime";
+    const hasTimeConstraint = isLargeHome && timeToBeCompleted !== "anytime" && (isTimeWindow || isHoursLimit);
+
+    // Helper to format hour to time string (e.g., 10 -> "10am", 13 -> "1pm")
+    const formatHourToTime = (hour) => {
+      const h = Math.floor(hour);
+      const minutes = Math.round((hour - h) * 60);
+      const period = h >= 12 ? "pm" : "am";
+      const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+      if (minutes > 0) {
+        return `${displayHour}:${minutes.toString().padStart(2, '0')}${period}`;
+      }
+      return `${displayHour}${period}`;
+    };
+
+    // Format time constraint message as a time window
+    let timeConstraintMessage = null;
+    if (hasTimeConstraint) {
+      if (isTimeWindow) {
+        timeConstraintMessage = `Must be completed between ${timeToBeCompleted}`;
+      } else if (isHoursLimit) {
+        // Convert hours to a time window assuming 10am start
+        const hours = parseFloat(timeToBeCompleted);
+        const startHour = 10; // 10am default start
+        const endHour = startHour + hours;
+        const startTime = formatHourToTime(startHour);
+        const endTime = formatHourToTime(endHour);
+        timeConstraintMessage = `Must be completed between ${startTime} - ${endTime}`;
+      }
+    }
 
     // Build acknowledgment message based on conditions
     let acknowledgmentMessage = null;
     if (isLargeHome && soloAllowed) {
       // Edge large home - solo is allowed with warning
-      if (hasTimeConstraint) {
-        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may require additional time. The cleaning must be completed between ${timeToBeCompleted}, which may be difficult solo. I choose to clean this home by myself.`;
+      if (hasTimeConstraint && timeConstraintMessage) {
+        // Extract just the time window part from the message (e.g., "10am - 1pm")
+        const timeWindowPart = timeConstraintMessage.replace("Must be completed between ", "");
+        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) with an estimated solo cleaning time of ${estimatedHoursSolo} hours. The cleaning must be completed between ${timeWindowPart}, which may be difficult solo. I choose to clean this home by myself.`;
       } else {
-        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) that may take longer to clean. I choose to clean this home by myself.`;
+        acknowledgmentMessage = `I understand this is a larger home (${numBeds} beds, ${numBaths} baths) with an estimated solo cleaning time of ${estimatedHoursSolo} hours. I choose to clean this home by myself.`;
       }
     }
 
@@ -1565,6 +1605,11 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
       multiCleanerRequired,
       recommendedCleaners,
       hasTimeConstraint,
+      timeConstraintMessage,
+      estimatedMinutesSolo,
+      estimatedMinutesTeam,
+      estimatedHoursSolo,
+      estimatedHoursTeam,
       // Only require acknowledgment for edge large homes (solo allowed with warning)
       // Clearly large homes require multi-cleaner, no solo option
       requiresAcknowledgment: isLargeHome && soloAllowed,
@@ -1572,6 +1617,11 @@ appointmentRouter.get("/booking-info/:appointmentId", async (req, res) => {
     });
   } catch (error) {
     console.error("Error getting booking info:", error);
+
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+
     return res.status(500).json({ error: "Failed to get booking info" });
   }
 });
@@ -1605,25 +1655,28 @@ appointmentRouter.patch("/request-employee", async (req, res) => {
     }
 
     // Check if cleaner has set up Stripe Connect account for payouts
-    const stripeAccount = await StripeConnectAccount.findOne({
-      where: { userId: id },
-    });
-
-    if (!stripeAccount || !stripeAccount.onboardingComplete) {
-      return res.status(400).json({
-        error: "Stripe account required",
-        message: "You need to set up your Stripe account to receive payments before you can request appointments.",
-        requiresStripeSetup: true,
+    // Skip this check for demo accounts - they don't need real Stripe setup
+    if (!isCleanerDemo) {
+      const stripeAccount = await StripeConnectAccount.findOne({
+        where: { userId: id },
       });
-    }
 
-    if (!stripeAccount.payoutsEnabled) {
-      return res.status(400).json({
-        error: "Stripe account incomplete",
-        message: "Your Stripe account setup is incomplete. Please complete your account verification to receive payments.",
-        requiresStripeSetup: true,
-        stripeAccountStatus: stripeAccount.accountStatus,
-      });
+      if (!stripeAccount || !stripeAccount.onboardingComplete) {
+        return res.status(400).json({
+          error: "Stripe account required",
+          message: "You need to set up your Stripe account to receive payments before you can request appointments.",
+          requiresStripeSetup: true,
+        });
+      }
+
+      if (!stripeAccount.payoutsEnabled) {
+        return res.status(400).json({
+          error: "Stripe account incomplete",
+          message: "Your Stripe account setup is incomplete. Please complete your account verification to receive payments.",
+          requiresStripeSetup: true,
+          stripeAccountStatus: stripeAccount.accountStatus,
+        });
+      }
     }
 
     // Check if home is large and requires acknowledgment

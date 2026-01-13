@@ -20,6 +20,12 @@ import { colors, spacing, radius, shadows, typography } from "../../../services/
 import { usePricing } from "../../../context/PricingContext";
 import { UserContext } from "../../../context/UserContext";
 import Icon from "react-native-vector-icons/FontAwesome";
+import {
+  formatBedSizes,
+  getEffectiveSheetConfigs,
+  getEffectiveTowelConfigs,
+  getTowelTotals,
+} from "../../../utils/linensUtils";
 
 const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token }) => {
   const { state } = useContext(UserContext);
@@ -58,9 +64,18 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
     return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
   };
 
-  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+  // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
+  const isMultiCleanerJob = appointment.isMultiCleanerJob;
+  const platformFeePercent = isMultiCleanerJob
+    ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
+    : (pricing?.platform?.feePercent || 0.1);
+  const cleanerSharePercent = 1 - platformFeePercent;
   const totalPrice = Number(appointment.price);
-  const correctedAmount = totalPrice * cleanerSharePercent;
+  // For multi-cleaner jobs, divide by number of cleaners
+  const numCleaners = isMultiCleanerJob
+    ? (appointment.multiCleanerJob?.totalCleanersRequired || appointment.employeesAssigned?.length || 1)
+    : 1;
+  const correctedAmount = (totalPrice / numCleaners) * cleanerSharePercent;
 
   useEffect(() => {
     FetchData.getHome(appointment.homeId).then((response) => {
@@ -237,14 +252,70 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
     );
   };
 
+  const isMultiCleaner = appointment.isMultiCleanerJob;
+  const multiCleanerJob = appointment.multiCleanerJob;
+  const cleanerRoomAssignments = appointment.cleanerRoomAssignments;
+
+  // Get effective sheet/towel configs (filtered for multi-cleaner jobs)
+  const effectiveSheetConfigs = getEffectiveSheetConfigs(
+    appointment.sheetConfigurations,
+    cleanerRoomAssignments,
+    isMultiCleaner
+  );
+  const effectiveTowelConfigs = getEffectiveTowelConfigs(
+    appointment.towelConfigurations,
+    cleanerRoomAssignments,
+    isMultiCleaner
+  );
+  const towelTotals = getTowelTotals(effectiveTowelConfigs || []);
+
   return (
     <>
-      <View style={styles.tileContainer}>
-        <View style={styles.statusBadge}>
-          <Text style={styles.statusText}>
-            {appointment.completed ? "Completed" : "In Progress"}
-          </Text>
+      <View style={[styles.tileContainer, isMultiCleaner && styles.tileContainerMultiCleaner]}>
+        <View style={styles.headerRow}>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusText}>
+              {appointment.completed ? "Completed" : "In Progress"}
+            </Text>
+          </View>
+          {isMultiCleaner && (
+            <View style={styles.teamBadge}>
+              <Icon name="users" size={12} color={colors.primary[700]} />
+              <Text style={styles.teamBadgeText}>Team Clean</Text>
+            </View>
+          )}
         </View>
+
+        {/* Multi-Cleaner Status Banner */}
+        {isMultiCleaner && multiCleanerJob && (
+          <View style={styles.multiCleanerBanner}>
+            <View style={styles.multiCleanerHeader}>
+              <Icon name="users" size={14} color={colors.primary[600]} />
+              <Text style={styles.multiCleanerTitle}>Team Cleaning Job</Text>
+            </View>
+            <View style={styles.multiCleanerStats}>
+              <View style={styles.multiCleanerStat}>
+                <Text style={styles.multiCleanerStatValue}>
+                  {multiCleanerJob.cleanersConfirmed}/{multiCleanerJob.totalCleanersRequired}
+                </Text>
+                <Text style={styles.multiCleanerStatLabel}>Cleaners</Text>
+              </View>
+              {multiCleanerJob.cleanersConfirmed >= multiCleanerJob.totalCleanersRequired ? (
+                <View style={[styles.multiCleanerStatusBadge, styles.multiCleanerStatusFilled]}>
+                  <Icon name="check-circle" size={12} color={colors.success[600]} />
+                  <Text style={styles.multiCleanerStatusFilledText}>Team Complete</Text>
+                </View>
+              ) : (
+                <View style={[styles.multiCleanerStatusBadge, styles.multiCleanerStatusFilling]}>
+                  <Icon name="clock-o" size={12} color={colors.warning[600]} />
+                  <Text style={styles.multiCleanerStatusFillingText}>
+                    Waiting for {multiCleanerJob.totalCleanersRequired - multiCleanerJob.cleanersConfirmed} more
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         <Text style={styles.date}>{formatDate(appointment.date)}</Text>
 
@@ -343,16 +414,19 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
               {(appointment.bringSheets === "Yes" || appointment.bringSheets === "yes") && (
                 <View style={styles.linensSection}>
                   <Text style={styles.linensSectionTitle}>Sheets</Text>
-                  {appointment.sheetConfigurations && appointment.sheetConfigurations.length > 0 ? (
+                  {effectiveSheetConfigs && effectiveSheetConfigs.length > 0 ? (
                     <View style={styles.linensItemsRow}>
-                      {appointment.sheetConfigurations.filter(bed => bed.needsSheets !== false).map((bed, index) => (
-                        <View key={index} style={styles.linensDetailItem}>
-                          <Icon name="check" size={10} color={colors.warning[600]} />
-                          <Text style={styles.linensDetailText}>
-                            Bed {bed.bedNumber}: {bed.size ? bed.size.charAt(0).toUpperCase() + bed.size.slice(1) : "Standard"} sheets
-                          </Text>
-                        </View>
-                      ))}
+                      <View style={styles.linensDetailItem}>
+                        <Icon name="check" size={10} color={colors.warning[600]} />
+                        <Text style={styles.linensDetailText}>
+                          {formatBedSizes(effectiveSheetConfigs)}
+                        </Text>
+                      </View>
+                      {isMultiCleaner && cleanerRoomAssignments?.length > 0 && (
+                        <Text style={styles.linensAssignedNote}>
+                          (Your assigned bedrooms)
+                        </Text>
+                      )}
                     </View>
                   ) : (
                     <View style={styles.linensItemsRow}>
@@ -371,9 +445,9 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
               {(appointment.bringTowels === "Yes" || appointment.bringTowels === "yes") && (
                 <View style={styles.linensSection}>
                   <Text style={styles.linensSectionTitle}>Towels</Text>
-                  {appointment.towelConfigurations && appointment.towelConfigurations.length > 0 ? (
+                  {effectiveTowelConfigs && effectiveTowelConfigs.length > 0 ? (
                     <View style={styles.linensItemsRow}>
-                      {appointment.towelConfigurations.map((bath, index) => (
+                      {effectiveTowelConfigs.map((bath, index) => (
                         <View key={index} style={styles.linensDetailItem}>
                           <Icon name="check" size={10} color={colors.warning[600]} />
                           <Text style={styles.linensDetailText}>
@@ -383,9 +457,14 @@ const TodaysAppointment = ({ appointment, onJobCompleted, onJobUnstarted, token 
                       ))}
                       <View style={styles.linensTotalRow}>
                         <Text style={styles.linensTotalText}>
-                          Total: {appointment.towelConfigurations.reduce((sum, b) => sum + (b.towels || 0), 0)} towels, {appointment.towelConfigurations.reduce((sum, b) => sum + (b.faceCloths || 0), 0)} washcloths
+                          Total: {towelTotals.towels} towels, {towelTotals.faceCloths} washcloths
                         </Text>
                       </View>
+                      {isMultiCleaner && cleanerRoomAssignments?.length > 0 && (
+                        <Text style={styles.linensAssignedNote}>
+                          (Your assigned bathrooms)
+                        </Text>
+                      )}
                     </View>
                   ) : (
                     <View style={styles.linensItemsRow}>
@@ -565,13 +644,96 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     ...shadows.md,
   },
+  tileContainerMultiCleaner: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
   statusBadge: {
     alignSelf: "flex-start",
     backgroundColor: colors.primary[100],
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
+  },
+  teamBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  teamBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  multiCleanerBanner: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  multiCleanerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  multiCleanerTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  multiCleanerStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  multiCleanerStat: {
+    alignItems: "center",
+  },
+  multiCleanerStatValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  multiCleanerStatLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+  },
+  multiCleanerStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  multiCleanerStatusFilled: {
+    backgroundColor: colors.success[100],
+  },
+  multiCleanerStatusFilledText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.success[700],
+  },
+  multiCleanerStatusFilling: {
+    backgroundColor: colors.warning[100],
+  },
+  multiCleanerStatusFillingText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
   },
   statusText: {
     fontSize: typography.fontSize.xs,
@@ -827,6 +989,12 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.warning[700],
+  },
+  linensAssignedNote: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    fontStyle: "italic",
+    marginTop: spacing.xs,
   },
   linensProvidedContent: {
     gap: spacing.sm,

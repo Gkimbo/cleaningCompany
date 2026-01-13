@@ -1162,6 +1162,107 @@ class FetchData {
       return { error: "Failed to update service area" };
     }
   }
+
+  // Multi-Cleaner Job methods
+  static async getMultiCleanerOffers(token) {
+    try {
+      const response = await fetch(baseURL + "/api/v1/multi-cleaner/offers", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch multi-cleaner offers" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching multi-cleaner offers:", error);
+      return { personalOffers: [], availableJobs: [] };
+    }
+  }
+
+  static async acceptMultiCleanerOffer(offerId, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/multi-cleaner/offers/${offerId}/accept`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to accept offer" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error accepting multi-cleaner offer:", error);
+      return { error: "Failed to accept offer" };
+    }
+  }
+
+  static async declineMultiCleanerOffer(offerId, reason, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/multi-cleaner/offers/${offerId}/decline`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ reason }),
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to decline offer" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error declining multi-cleaner offer:", error);
+      return { error: "Failed to decline offer" };
+    }
+  }
+
+  static async joinMultiCleanerJob(jobId, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/multi-cleaner/join/${jobId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to join job" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error joining multi-cleaner job:", error);
+      return { error: "Failed to join job" };
+    }
+  }
 }
 
 export default FetchData;

@@ -13,7 +13,9 @@ class HomeSizeAdjustmentSerializer {
 			id: data.id,
 			firstName: this.decryptUserField(data.firstName),
 			lastName: this.decryptUserField(data.lastName),
-			email: this.decryptUserField(data.email)
+			email: this.decryptUserField(data.email),
+			falseClaimCount: data.falseClaimCount || 0,
+			falseHomeSizeCount: data.falseHomeSizeCount || 0,
 		};
 	}
 
@@ -25,6 +27,7 @@ class HomeSizeAdjustmentSerializer {
 			address: this.decryptUserField(data.address),
 			city: this.decryptUserField(data.city),
 			state: this.decryptUserField(data.state),
+			zipcode: this.decryptUserField(data.zipcode),
 			numBeds: data.numBeds,
 			numBaths: data.numBaths
 		};

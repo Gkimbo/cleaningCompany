@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import {
   StyleSheet,
   Text,
@@ -11,8 +11,10 @@ import {
 import FetchData from "../../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../../services/styles/theme";
 import Icon from "react-native-vector-icons/FontAwesome";
+import { PricingContext } from "../../../context/PricingContext";
 
-const NextAppointmentPreview = ({ appointment, home: initialHome, cleanerSharePercent }) => {
+const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
+  const { pricing } = useContext(PricingContext);
   const [home, setHome] = useState(initialHome || {
     address: "",
     city: "",
@@ -28,15 +30,37 @@ const NextAppointmentPreview = ({ appointment, home: initialHome, cleanerSharePe
     return new Date(dateString + "T00:00:00").toLocaleDateString(undefined, options);
   };
 
-  const formatTimeWindow = (timeToBeCompleted) => {
-    if (!timeToBeCompleted || timeToBeCompleted === "anytime") {
-      return "Anytime today";
+  // Calculate estimated cleaning time based on home size and number of cleaners
+  const calculateCleaningTime = () => {
+    const beds = parseFloat(home.numBeds) || 2;
+    const baths = parseFloat(home.numBaths) || 1;
+    const numCleaners = multiCleanerJob?.totalCleanersRequired || 1;
+
+    // Base time: 1 hour for 2 bed 1 bath
+    const baseMinutes = 60;
+    const baseBeds = 2;
+    const baseBaths = 1;
+
+    // Extra time: ~20 minutes per extra bed, ~25 minutes per extra bath
+    const extraBeds = Math.max(0, beds - baseBeds);
+    const extraBaths = Math.max(0, baths - baseBaths);
+    const extraMinutes = (extraBeds * 20) + (extraBaths * 25);
+
+    // Total time split by number of cleaners
+    const totalMinutes = baseMinutes + extraMinutes;
+    const perCleanerMinutes = Math.round(totalMinutes / numCleaners);
+
+    // Format the time
+    if (perCleanerMinutes < 60) {
+      return `Est. ${perCleanerMinutes} min`;
+    } else {
+      const hours = Math.floor(perCleanerMinutes / 60);
+      const mins = perCleanerMinutes % 60;
+      if (mins === 0) {
+        return `Est. ${hours} hr${hours !== 1 ? "s" : ""}`;
+      }
+      return `Est. ${hours} hr ${mins} min`;
     }
-    // timeToBeCompleted format is "10-3", "11-4", "12-2"
-    const endHour = parseInt(timeToBeCompleted.split("-")[1], 10);
-    const period = endHour >= 12 ? "PM" : "AM";
-    const displayHour = endHour > 12 ? endHour : endHour;
-    return `Must complete by ${displayHour}${period}`;
   };
 
   // Check if appointment is within 2 days
@@ -51,8 +75,19 @@ const NextAppointmentPreview = ({ appointment, home: initialHome, cleanerSharePe
 
   const showFullAddress = isWithinTwoDays();
 
+  const isMultiCleaner = appointment.isMultiCleanerJob;
+  const multiCleanerJob = appointment.multiCleanerJob;
+
+  // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
+  const platformFeePercent = isMultiCleaner
+    ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
+    : (pricing?.platform?.feePercent || 0.1);
+  const cleanerSharePercent = 1 - platformFeePercent;
+
   const totalPrice = Number(appointment.price);
-  const payout = totalPrice * cleanerSharePercent;
+  // For multi-cleaner jobs, calculate payout based on number of cleaners
+  const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.employeesAssigned?.length || 1;
+  const payout = (totalPrice / numCleaners) * cleanerSharePercent;
 
   useEffect(() => {
     // Fetch home if not provided or incomplete
@@ -137,14 +172,52 @@ const NextAppointmentPreview = ({ appointment, home: initialHome, cleanerSharePe
   };
 
   return (
-    <View style={styles.tileContainer}>
-      <Text style={styles.date}>{formatDate(appointment.date)}</Text>
+    <View style={[styles.tileContainer, isMultiCleaner && styles.tileContainerMultiCleaner]}>
+      {/* Header with Team badge */}
+      <View style={styles.headerRow}>
+        <Text style={styles.date}>{formatDate(appointment.date)}</Text>
+        {isMultiCleaner && (
+          <View style={styles.teamBadge}>
+            <Icon name="users" size={12} color={colors.primary[700]} />
+            <Text style={styles.teamBadgeText}>Team Clean</Text>
+          </View>
+        )}
+      </View>
 
-      {appointment.timeToBeCompleted && (
+      {/* Multi-Cleaner Status Banner */}
+      {isMultiCleaner && multiCleanerJob && (
+        <View style={styles.multiCleanerBanner}>
+          <View style={styles.multiCleanerStats}>
+            <View style={styles.multiCleanerStat}>
+              <Icon name="users" size={14} color={colors.primary[600]} />
+              <Text style={styles.multiCleanerStatValue}>
+                {multiCleanerJob.cleanersConfirmed}/{multiCleanerJob.totalCleanersRequired}
+              </Text>
+              <Text style={styles.multiCleanerStatLabel}>cleaners</Text>
+            </View>
+            {multiCleanerJob.cleanersConfirmed >= multiCleanerJob.totalCleanersRequired ? (
+              <View style={[styles.multiCleanerStatusBadge, styles.multiCleanerStatusFilled]}>
+                <Icon name="check-circle" size={12} color={colors.success[600]} />
+                <Text style={styles.multiCleanerStatusFilledText}>Team Ready</Text>
+              </View>
+            ) : (
+              <View style={[styles.multiCleanerStatusBadge, styles.multiCleanerStatusFilling]}>
+                <Icon name="clock-o" size={12} color={colors.warning[600]} />
+                <Text style={styles.multiCleanerStatusFillingText}>
+                  Waiting for {multiCleanerJob.totalCleanersRequired - multiCleanerJob.cleanersConfirmed} more
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
+      {home.numBeds && (
         <View style={styles.timeWindowBadge}>
           <Icon name="clock-o" size={12} color={colors.primary[600]} />
           <Text style={styles.timeWindowText}>
-            {formatTimeWindow(appointment.timeToBeCompleted)}
+            {calculateCleaningTime()}
+            {isMultiCleaner && " per cleaner"}
           </Text>
         </View>
       )}
@@ -234,12 +307,85 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     ...shadows.sm,
   },
+  tileContainerMultiCleaner: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  teamBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  teamBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  multiCleanerBanner: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  multiCleanerStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  multiCleanerStat: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  multiCleanerStatValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  multiCleanerStatLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+  },
+  multiCleanerStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  multiCleanerStatusFilled: {
+    backgroundColor: colors.success[100],
+  },
+  multiCleanerStatusFilledText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.success[700],
+  },
+  multiCleanerStatusFilling: {
+    backgroundColor: colors.warning[100],
+  },
+  multiCleanerStatusFillingText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
+  },
   date: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
-    textAlign: "center",
   },
   timeWindowBadge: {
     flexDirection: "row",
