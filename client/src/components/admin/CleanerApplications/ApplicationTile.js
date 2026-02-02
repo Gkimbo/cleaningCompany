@@ -316,6 +316,42 @@ const ApplicationTile = ({
             </View>
           )}
 
+          {/* Professional References */}
+          {application.references && application.references.length > 0 && (
+            <View style={styles.detailsSection}>
+              <Text style={styles.sectionTitle}>Professional References</Text>
+              {application.references.map((ref, index) => (
+                <View key={index} style={styles.referenceCard}>
+                  <Text style={styles.referenceHeader}>Reference {index + 1}</Text>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Name</Text>
+                    <Text style={styles.detailValue}>{ref.name || "Not provided"}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Phone</Text>
+                    <Text style={styles.detailValue}>{ref.phone || "Not provided"}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Relationship</Text>
+                    <Text style={styles.detailValue}>{ref.relationship || "Not provided"}</Text>
+                  </View>
+                  {ref.company && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Company</Text>
+                      <Text style={styles.detailValue}>{ref.company}</Text>
+                    </View>
+                  )}
+                  {ref.yearsKnown && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Years Known</Text>
+                      <Text style={styles.detailValue}>{ref.yearsKnown}</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Consents */}
           <View style={styles.consentsSection}>
             <Text style={styles.sectionTitle}>Consents</Text>
@@ -692,6 +728,25 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     flex: 1,
     textAlign: "right",
+  },
+
+  // Reference Card
+  referenceCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  referenceHeader: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[600],
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
   },
 
   // Consents Section

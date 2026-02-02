@@ -212,6 +212,28 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: false,
     },
 
+    // Terms and Privacy Policy acceptance
+    termsAccepted: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+    },
+    termsId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "ID of the terms document that was accepted",
+    },
+    privacyPolicyAccepted: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+    },
+    privacyPolicyId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "ID of the privacy policy document that was accepted",
+    },
+
     // Application Status (for admin)
     status: {
       type: DataTypes.ENUM('pending', 'under_review', 'background_check', 'approved', 'rejected', 'hired'),

@@ -39,6 +39,8 @@ class PricingConfigSerializer {
 			lastMinuteFee: data.lastMinuteFee || 50,
 			lastMinuteThresholdHours: data.lastMinuteThresholdHours || 48,
 			lastMinuteNotificationRadiusMiles: parseFloat(data.lastMinuteNotificationRadiusMiles || 25),
+			// Application settings
+			idVerificationEnabled: data.idVerificationEnabled || false,
 			isActive: data.isActive,
 			updatedBy: data.updatedBy,
 			changeNote: data.changeNote,
@@ -119,6 +121,9 @@ class PricingConfigSerializer {
 				fee: data.lastMinuteFee || 50,
 				thresholdHours: data.lastMinuteThresholdHours || 48,
 				notificationRadiusMiles: parseFloat(data.lastMinuteNotificationRadiusMiles || 25)
+			},
+			applications: {
+				idVerificationEnabled: data.idVerificationEnabled || false
 			}
 		};
 	}

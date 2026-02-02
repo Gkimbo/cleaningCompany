@@ -281,6 +281,14 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 30,
       comment: "Minimum minutes on-site before early completion allowed",
     },
+
+    // ID Verification settings
+    idVerificationEnabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "Whether to enable OCR-based ID name verification for applications",
+    },
   });
 
   PricingConfig.associate = (models) => {
@@ -376,6 +384,9 @@ module.exports = (sequelize, DataTypes) => {
         autoCompleteHoursAfterEnd: config.autoCompleteHoursAfterEnd || 4,
         autoCompleteReminderIntervals: config.autoCompleteReminderIntervals || [30, 60, 120, 180, 210],
         minOnSiteMinutes: config.minOnSiteMinutes || 30,
+      },
+      applications: {
+        idVerificationEnabled: config.idVerificationEnabled || false,
       },
     };
   };

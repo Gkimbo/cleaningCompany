@@ -18,7 +18,10 @@ module.exports = {
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.removeIndex("JobPhotos", ["roomAssignmentId"]);
-    await queryInterface.removeColumn("JobPhotos", "roomAssignmentId");
+    const tableDescription = await queryInterface.describeTable("JobPhotos");
+    if (tableDescription.roomAssignmentId) {
+      await queryInterface.removeIndex("JobPhotos", ["roomAssignmentId"]).catch(() => {});
+      await queryInterface.removeColumn("JobPhotos", "roomAssignmentId");
+    }
   },
 };

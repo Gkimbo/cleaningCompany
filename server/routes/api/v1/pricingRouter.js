@@ -494,4 +494,41 @@ pricingRouter.get("/history", verifyOwner, async (req, res) => {
   }
 });
 
+/**
+ * PATCH /id-verification
+ * Toggle ID verification setting (owner only)
+ */
+pricingRouter.patch("/id-verification", verifyOwner, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ error: "enabled must be a boolean" });
+    }
+
+    const currentConfig = await PricingConfig.getActive();
+    if (!currentConfig) {
+      return res.status(404).json({ error: "No active pricing configuration found" });
+    }
+
+    // Update the current config directly instead of creating a new one
+    await currentConfig.update({
+      idVerificationEnabled: enabled,
+      updatedBy: req.user.id,
+    });
+
+    console.log(
+      `[Pricing API] ID verification ${enabled ? "enabled" : "disabled"} by owner ${req.user.id}`
+    );
+
+    res.json({
+      message: `ID verification ${enabled ? "enabled" : "disabled"} successfully`,
+      idVerificationEnabled: enabled,
+    });
+  } catch (error) {
+    console.error("[Pricing API] Error updating ID verification:", error);
+    res.status(500).json({ error: "Failed to update ID verification setting" });
+  }
+});
+
 module.exports = pricingRouter;
