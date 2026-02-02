@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, LayoutAnimation, Pressable, StyleSheet, Text, View } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import FetchData from "../../../services/fetchRequests/fetchData";
@@ -94,6 +94,29 @@ const RequestedTile = ({
   const timeWindowText = formatTimeWindow(timeToBeCompleted);
   const isAnytimeToday = timeToBeCompleted?.toLowerCase() === "anytime" && isToday();
   const dateStatus = getDateStatus();
+
+  // Handle cancel request with confirmation
+  const handleCancelRequest = () => {
+    const dateStr = formatDate(date);
+    const timeStr = timeToBeCompleted;
+    const isAnytime = !timeStr || timeStr.toLowerCase() === "anytime";
+    const scheduleText = isAnytime ? `anytime on ${dateStr}` : `on ${dateStr} (${timeStr})`;
+
+    Alert.alert(
+      "Cancel Request?",
+      `Are you sure you want to cancel your request to clean this home ${scheduleText}?`,
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: () => {
+            removeRequest(cleanerId, id);
+          },
+        },
+      ]
+    );
+  };
 
   // Get accent color based on urgency (pending requests use warning-based colors)
   const getAccentColor = () => {
@@ -302,7 +325,7 @@ const RequestedTile = ({
         </View>
         <Pressable
           style={styles.cancelButton}
-          onPress={() => removeRequest(cleanerId, id)}
+          onPress={handleCancelRequest}
         >
           <Icon name="times" size={12} color={colors.error[600]} />
           <Text style={styles.cancelButtonText}>Cancel</Text>

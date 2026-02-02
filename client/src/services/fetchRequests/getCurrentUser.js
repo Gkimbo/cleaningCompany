@@ -8,9 +8,10 @@ const getCurrentUser = async (providedToken = null) => {
   // This is important for preview mode where the token is in state but not AsyncStorage
   const token = providedToken || await AsyncStorage.getItem("token");
 
-  // If no token, user is not logged in
+  // If no token, user is not logged in - return null instead of throwing
+  // This prevents error messages from showing during logout
   if (!token) {
-    throw new Error("No token found");
+    return null;
   }
 
   const response = await fetch(`${baseURL}/api/v1/user-sessions/current`, {

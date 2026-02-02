@@ -186,6 +186,11 @@ export default function App() {
   const fetchCurrentUser = async () => {
     try {
       const user = await getCurrentUser();
+      // Handle case where no token exists (user not logged in or logged out)
+      if (!user) {
+        dispatch({ type: "CURRENT_USER", payload: null });
+        return;
+      }
       dispatch({ type: "CURRENT_USER", payload: user.token });
       dispatch({ type: "SET_USER_ID", payload: user.user.id });
       if (user.user.email) {

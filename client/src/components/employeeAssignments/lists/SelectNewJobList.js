@@ -94,6 +94,9 @@ const SelectNewJobList = ({ state }) => {
   const [showMultiCleanerModal, setShowMultiCleanerModal] = useState(false);
   const [multiCleanerLoading, setMultiCleanerLoading] = useState(false);
 
+  // Job request loading state
+  const [requestingJobId, setRequestingJobId] = useState(null);
+
   const requestsAndAppointments = useMemo(() => {
     const requestsWithFlag = allRequests.map((item) => ({
       ...item,
@@ -296,6 +299,7 @@ const SelectNewJobList = ({ state }) => {
 
   // Handle booking request with large home check
   const handleBookingRequest = useCallback(async (employeeId, appointmentId) => {
+    setRequestingJobId(appointmentId);
     try {
       // First, check if this is a large home that requires acknowledgment
       const info = await FetchData.getBookingInfo(appointmentId, state.currentUser.token);
@@ -310,6 +314,12 @@ const SelectNewJobList = ({ state }) => {
             if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
             return prev.filter((a) => a.id !== appointmentId);
           });
+          // Show success message for regular requests
+          Alert.alert(
+            "Request Sent!",
+            "Your request has been sent to the homeowner. You can view it in Pending Requests above.",
+            [{ text: "OK" }]
+          );
         }
         return;
       }
@@ -347,6 +357,12 @@ const SelectNewJobList = ({ state }) => {
               "As a preferred cleaner, this job has been confirmed automatically. The homeowner has been notified.",
               [{ text: "OK" }]
             );
+          } else {
+            Alert.alert(
+              "Request Sent!",
+              "Your request has been sent to the homeowner. You can view it in Pending Requests above.",
+              [{ text: "OK" }]
+            );
           }
         } else if (result.requiresStripeSetup) {
           // Show Stripe setup modal
@@ -358,6 +374,8 @@ const SelectNewJobList = ({ state }) => {
       }
     } catch (err) {
       console.error("Error handling booking request:", err);
+    } finally {
+      setRequestingJobId(null);
     }
   }, [state.currentUser.token]);
 
@@ -381,11 +399,17 @@ const SelectNewJobList = ({ state }) => {
         setShowLargeHomeModal(false);
         setBookingInfo(null);
         setPendingBooking(null);
-        // Show success message for direct bookings
+        // Show success message
         if (result.directBooking) {
           Alert.alert(
             "Job Booked!",
             "As a preferred cleaner, this job has been confirmed automatically. The homeowner has been notified.",
+            [{ text: "OK" }]
+          );
+        } else {
+          Alert.alert(
+            "Request Sent!",
+            "Your request has been sent to the homeowner. You can view it in Pending Requests above.",
             [{ text: "OK" }]
           );
         }
@@ -621,13 +645,15 @@ const SelectNewJobList = ({ state }) => {
         if (distMiles > maxDistMiles) return false;
       }
 
-      // Sheets filter
-      if (filters.sheets === "needed" && appt.bringSheets !== "yes") return false;
-      if (filters.sheets === "not_needed" && appt.bringSheets === "yes") return false;
+      // Sheets filter (case-insensitive check for "yes")
+      const needsSheets = appt.bringSheets?.toLowerCase() === "yes";
+      if (filters.sheets === "needed" && !needsSheets) return false;
+      if (filters.sheets === "not_needed" && needsSheets) return false;
 
-      // Towels filter
-      if (filters.towels === "needed" && appt.bringTowels !== "yes") return false;
-      if (filters.towels === "not_needed" && appt.bringTowels === "yes") return false;
+      // Towels filter (case-insensitive check for "yes")
+      const needsTowels = appt.bringTowels?.toLowerCase() === "yes";
+      if (filters.towels === "needed" && !needsTowels) return false;
+      if (filters.towels === "not_needed" && needsTowels) return false;
 
       // Skip home-based filters if home data not loaded
       if (home) {
@@ -923,6 +949,7 @@ const SelectNewJobList = ({ state }) => {
                       cleanerId={userId}
                       assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
                       isPreferred={preferredHomeIds.includes(appointment.homeId)}
+                      isRequesting={requestingJobId === appointment.id}
                       addEmployee={handleBookingRequest}
                       removeEmployee={async (employeeId, appointmentId) => {
                         try {

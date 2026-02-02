@@ -40,6 +40,7 @@ const EmployeeAssignmentTile = ({
   token,
   onCancelComplete,
   isPreferred = false,
+  isRequesting = false,
   isMultiCleanerJob = false,
   multiCleanerJob = null,
   employeesAssigned = [],
@@ -48,6 +49,10 @@ const EmployeeAssignmentTile = ({
   const navigate = useNavigate();
   const { pricing } = usePricing();
   const [expandWindow, setExpandWindow] = useState(false);
+
+  // Normalize linen values to handle case-insensitivity ("yes", "Yes", "YES")
+  const needsSheets = bringSheets?.toLowerCase() === "yes";
+  const needsTowels = bringTowels?.toLowerCase() === "yes";
   const [home, setHome] = useState({
     address: "",
     city: "",
@@ -341,13 +346,13 @@ const EmployeeAssignmentTile = ({
             <Icon name="bath" size={14} color={colors.text.secondary} />
             <Text style={styles.propertyText}>{home.numBaths || "?"} Baths</Text>
           </View>
-          {bringSheets === "yes" && (
+          {needsSheets && (
             <View style={styles.propertyItem}>
               <Icon name="th-large" size={12} color={colors.primary[500]} />
               <Text style={styles.propertyText}>Sheets</Text>
             </View>
           )}
-          {bringTowels === "yes" && (
+          {needsTowels && (
             <View style={styles.propertyItem}>
               <Icon name="square" size={12} color={colors.primary[500]} />
               <Text style={styles.propertyText}>Towels</Text>
@@ -364,7 +369,7 @@ const EmployeeAssignmentTile = ({
                 <Icon name="th-large" size={14} color={colors.primary[600]} />
                 <Text style={styles.linensTitle}>Linens</Text>
               </View>
-              {bringSheets === "yes" || bringTowels === "yes" ? (
+              {needsSheets || needsTowels ? (
                 <View style={styles.linensContent}>
                   <View style={styles.bringLinensAlert}>
                     <Icon name="exclamation-circle" size={14} color={colors.warning[600]} />
@@ -372,7 +377,7 @@ const EmployeeAssignmentTile = ({
                   </View>
 
                   {/* Sheet Details */}
-                  {bringSheets === "yes" && (() => {
+                  {needsSheets && (() => {
                     const effectiveSheets = getEffectiveSheetConfigs(sheetConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
                     return (
                       <View style={styles.linensSection}>
@@ -406,7 +411,7 @@ const EmployeeAssignmentTile = ({
                   })()}
 
                   {/* Towel Details */}
-                  {bringTowels === "yes" && (() => {
+                  {needsTowels && (() => {
                     const effectiveTowels = getEffectiveTowelConfigs(towelConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
                     const totals = getTowelTotals(effectiveTowels);
                     return (
@@ -569,12 +574,17 @@ const EmployeeAssignmentTile = ({
             </Pressable>
           ) : (
             <Pressable
-              style={[styles.actionButton, styles.acceptButton, isPreferred && styles.preferredAcceptButton]}
+              style={[styles.actionButton, styles.acceptButton, isPreferred && styles.preferredAcceptButton, isRequesting && styles.buttonDisabled]}
               onPress={() => addEmployee(cleanerId, id)}
+              disabled={isRequesting}
             >
-              <Icon name={isPreferred ? "star" : "check"} size={14} color={colors.neutral[0]} />
+              {isRequesting ? (
+                <ActivityIndicator size="small" color={colors.neutral[0]} />
+              ) : (
+                <Icon name={isPreferred ? "star" : "check"} size={14} color={colors.neutral[0]} />
+              )}
               <Text style={styles.acceptButtonText}>
-                {isPreferred ? "Book Directly" : "Request This Job"}
+                {isRequesting ? "Requesting..." : isPreferred ? "Book Directly" : "Request This Job"}
               </Text>
             </Pressable>
           )}

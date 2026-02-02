@@ -21,8 +21,11 @@ const GetHelpButton = ({ token, style }) => {
 
       if (response.error) {
         Alert.alert("Error", response.error);
-      } else if (response.conversation) {
+      } else if (response.conversation && response.conversation.id) {
         navigate(`/messages/${response.conversation.id}`);
+      } else {
+        console.error("Unexpected response:", response);
+        Alert.alert("Error", "Unable to start support conversation. Please try again.");
       }
     } catch (error) {
       console.error("Error starting support conversation:", error);
