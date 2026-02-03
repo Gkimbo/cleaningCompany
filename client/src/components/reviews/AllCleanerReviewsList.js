@@ -156,8 +156,8 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
 
   const handleBack = () => {
     if (fromRequests) {
-      // Go back to homes list where they can view requests
-      navigate("/list-of-homes");
+      // Go back to cleaner requests list
+      navigate("/client-requests");
     } else {
       navigate(-1);
     }
@@ -173,7 +173,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
         dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
       }
       Alert.alert("Success", "Cleaner has been approved for this appointment!", [
-        { text: "OK", onPress: () => navigate("/list-of-homes") }
+        { text: "OK", onPress: () => navigate("/client-requests") }
       ]);
     } catch (error) {
       console.error("Error approving request:", error);
@@ -202,7 +202,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
         dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
       }
       Alert.alert("Request Denied", "The cleaner's request has been denied.", [
-        { text: "OK", onPress: () => navigate("/list-of-homes") }
+        { text: "OK", onPress: () => navigate("/client-requests") }
       ]);
     } catch (error) {
       console.error("Error denying request:", error);
@@ -396,9 +396,9 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
               </Text>
               <TouchableOpacity
                 style={styles.backToHomesButton}
-                onPress={() => navigate("/list-of-homes")}
+                onPress={() => navigate("/client-requests")}
               >
-                <Text style={styles.backToHomesButtonText}>Back to My Homes</Text>
+                <Text style={styles.backToHomesButtonText}>Back to Requests</Text>
               </TouchableOpacity>
             </>
           ) : (

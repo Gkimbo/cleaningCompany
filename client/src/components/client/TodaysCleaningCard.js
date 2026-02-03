@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
+import { useNavigate } from "react-router-native";
 import MultiAspectReviewForm from "../reviews/MultiAspectReviewForm";
 import {
   colors,
@@ -26,6 +27,7 @@ import { API_BASE } from "../../services/config";
 const { width: screenWidth } = Dimensions.get("window");
 
 const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => {
+  const navigate = useNavigate();
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [showPhotosModal, setShowPhotosModal] = useState(false);
   const [cleaningStatus, setCleaningStatus] = useState("not_started");
@@ -301,7 +303,7 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
             )}
           </View>
 
-          {assignedCleaners.length > 0 && (
+          {assignedCleaners.length > 0 ? (
             <View style={styles.cleanerInfo}>
               <Text style={styles.cleanerLabel}>Your Cleaner:</Text>
               {assignedCleaners.map((cleaner, index) => (
@@ -310,6 +312,32 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
                 </Text>
               ))}
             </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.noCleanerInfo}
+              onPress={appointment.pendingRequestCount > 0 ? () => navigate("/client-requests") : undefined}
+              activeOpacity={appointment.pendingRequestCount > 0 ? 0.7 : 1}
+            >
+              <Icon name="user-times" size={16} color={colors.warning[600]} />
+              <View style={styles.noCleanerTextContainer}>
+                <Text style={styles.noCleanerLabel}>No Cleaner Assigned</Text>
+                {appointment.pendingRequestCount > 0 ? (
+                  <View style={styles.requestsRow}>
+                    <Text style={styles.noCleanerTextWithRequests}>
+                      {appointment.pendingRequestCount} cleaner{appointment.pendingRequestCount > 1 ? "s" : ""} requesting to clean
+                    </Text>
+                    <View style={styles.reviewRequestsBadge}>
+                      <Text style={styles.reviewRequestsLink}>Review</Text>
+                      <Icon name="chevron-right" size={10} color={colors.secondary[600]} />
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.noCleanerText}>
+                    Waiting for a cleaner to accept this appointment
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
           )}
 
           <View style={styles.statusDescription}>
@@ -699,6 +727,54 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
+  },
+  noCleanerInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    gap: spacing.md,
+  },
+  noCleanerTextContainer: {
+    flex: 1,
+  },
+  noCleanerLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  noCleanerText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[600],
+    marginTop: 2,
+  },
+  noCleanerTextWithRequests: {
+    fontSize: typography.fontSize.xs,
+    color: colors.secondary[700],
+  },
+  requestsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 2,
+  },
+  reviewRequestsBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.secondary[100],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  reviewRequestsLink: {
+    color: colors.secondary[600],
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
   },
   statusDescription: {
     marginBottom: spacing.lg,

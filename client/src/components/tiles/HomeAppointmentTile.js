@@ -7,6 +7,26 @@ import EachAppointment from "./EachAppointment";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
 
+// Helper functions to generate default configurations
+const initializeBedConfigurations = (beds) => {
+  const numBedsInt = parseInt(beds) || 0;
+  const configs = [];
+  for (let i = 1; i <= numBedsInt; i++) {
+    configs.push({ bedNumber: i, size: "queen", needsSheets: true });
+  }
+  return configs;
+};
+
+const initializeBathroomConfigurations = (baths) => {
+  const numBathsFloat = parseFloat(baths) || 0;
+  const fullBaths = Math.floor(numBathsFloat);
+  const configs = [];
+  for (let i = 1; i <= fullBaths; i++) {
+    configs.push({ bathroomNumber: i, towels: 2, faceCloths: 1 });
+  }
+  return configs;
+};
+
 const HomeAppointmentTile = ({
   id,
   nickName,
@@ -37,9 +57,20 @@ const HomeAppointmentTile = ({
   const handleSheetsToggle = async (value, appointmentId) => {
     try {
       const appointmentToUpdate = appointments.find((a) => a.id === appointmentId);
-      if (value === appointmentToUpdate.bringSheets) {
+      const currentValue = (appointmentToUpdate.bringSheets || "no").toLowerCase();
+      console.log('[SheetsToggle] value:', value, 'currentValue:', currentValue, 'appointmentId:', appointmentId);
+      if (value === currentValue) {
+        console.log('[SheetsToggle] Values match, skipping API call');
         setChangeNotification({ message: "", appointment: "" });
         return;
+      }
+      console.log('[SheetsToggle] Making API call...');
+
+      // Generate default sheet configurations if toggling to "yes" and none exist
+      let sheetConfigs = appointmentToUpdate.sheetConfigurations;
+      if (value === "yes" && (!sheetConfigs || sheetConfigs.length === 0)) {
+        sheetConfigs = initializeBedConfigurations(numBeds);
+        console.log('[SheetsToggle] Generated default sheet configs:', sheetConfigs);
       }
 
       // Use the linens endpoint which recalculates price correctly
@@ -52,13 +83,14 @@ const HomeAppointmentTile = ({
         body: JSON.stringify({
           bringSheets: value,
           bringTowels: appointmentToUpdate.bringTowels,
-          sheetConfigurations: appointmentToUpdate.sheetConfigurations,
+          sheetConfigurations: sheetConfigs,
           towelConfigurations: appointmentToUpdate.towelConfigurations,
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log('[SheetsToggle] API response:', data.appointment?.price, data.appointment?.bringSheets);
         const updatedAppointments = appointments.map((appointment) => {
           if (appointment.id === appointmentId) {
             return { ...appointment, ...data.appointment };
@@ -71,6 +103,8 @@ const HomeAppointmentTile = ({
           message: "Sheets updated. Price adjusted.",
           appointment: appointmentId,
         });
+      } else {
+        console.log('[SheetsToggle] API response not ok:', response.status);
       }
     } catch (error) {
       console.error("Error updating sheetsProvided:", error);
@@ -80,9 +114,17 @@ const HomeAppointmentTile = ({
   const handleTowelToggle = async (value, appointmentId) => {
     try {
       const appointmentToUpdate = appointments.find((a) => a.id === appointmentId);
-      if (value === appointmentToUpdate.bringTowels) {
+      const currentValue = (appointmentToUpdate.bringTowels || "no").toLowerCase();
+      if (value === currentValue) {
         setChangeNotification({ message: "", appointment: "" });
         return;
+      }
+
+      // Generate default towel configurations if toggling to "yes" and none exist
+      let towelConfigs = appointmentToUpdate.towelConfigurations;
+      if (value === "yes" && (!towelConfigs || towelConfigs.length === 0)) {
+        towelConfigs = initializeBathroomConfigurations(numBaths);
+        console.log('[TowelToggle] Generated default towel configs:', towelConfigs);
       }
 
       // Use the linens endpoint which recalculates price correctly
@@ -96,7 +138,7 @@ const HomeAppointmentTile = ({
           bringSheets: appointmentToUpdate.bringSheets,
           bringTowels: value,
           sheetConfigurations: appointmentToUpdate.sheetConfigurations,
-          towelConfigurations: appointmentToUpdate.towelConfigurations,
+          towelConfigurations: towelConfigs,
         }),
       });
 
@@ -209,6 +251,8 @@ const HomeAppointmentTile = ({
         onPaymentRetried={handlePaymentRetried}
         originalPrice={appointment.originalPrice}
         discountApplied={appointment.discountApplied}
+        employeesAssigned={appointment.employeesAssigned}
+        pendingRequestCount={appointment.pendingRequestCount}
       />
     );
   };

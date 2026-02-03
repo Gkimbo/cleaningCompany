@@ -408,6 +408,14 @@ const StripeConnectOnboarding = ({ state, dispatch }) => {
             <Text style={styles.infoTitle}>Bank Account</Text>
           </View>
 
+          {/* Security Notice */}
+          <View style={styles.bankSecurityNotice}>
+            <Feather name="shield" size={16} color={colors.success[600]} />
+            <Text style={styles.bankSecurityText}>
+              Your banking information is sent directly to Stripe and is never stored on our servers.
+            </Text>
+          </View>
+
           {!showUpdateBank ? (
             <Pressable
               style={({ pressed }) => [
@@ -1386,6 +1394,25 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     lineHeight: typography.fontSize.base * typography.lineHeight.normal,
     fontSize: typography.fontSize.sm,
+  },
+
+  // Bank Security Notice
+  bankSecurityNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: colors.success[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  bankSecurityText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    lineHeight: typography.fontSize.sm * 1.4,
   },
 
   // Update Bank Account

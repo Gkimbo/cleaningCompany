@@ -4,7 +4,7 @@ import { Feather } from "@expo/vector-icons";
 import { useNavigate } from "react-router-native";
 import ButtonStyles from "../../services/styles/ButtonStyles";
 
-const ScheduleCleaningButton = ({ closeModal }) => {
+const MyHomesButton = ({ closeModal }) => {
   const [redirect, setRedirect] = useState(false);
   const navigate = useNavigate();
 
@@ -28,10 +28,10 @@ const ScheduleCleaningButton = ({ closeModal }) => {
       ]}
       onPress={handlePress}
     >
-      <Feather name="plus-circle" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
-      <Text style={ButtonStyles.buttonText}>Schedule Cleaning</Text>
+      <Feather name="home" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
+      <Text style={ButtonStyles.buttonText}>My Homes</Text>
     </Pressable>
   );
 };
 
-export default ScheduleCleaningButton;
+export default MyHomesButton;

@@ -28,6 +28,51 @@ const ClientRequestsList = ({ state, dispatch }) => {
   const [requestsByHome, setRequestsByHome] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [processingRequest, setProcessingRequest] = useState(null);
+  const [expandedHomes, setExpandedHomes] = useState({});
+
+  const toggleHomeExpanded = (homeId) => {
+    setExpandedHomes((prev) => ({
+      ...prev,
+      [homeId]: !prev[homeId],
+    }));
+  };
+
+  const expandAll = () => {
+    const allExpanded = {};
+    requestsByHome.forEach((homeGroup) => {
+      allExpanded[homeGroup.home.id] = true;
+    });
+    setExpandedHomes(allExpanded);
+  };
+
+  const collapseAll = () => {
+    const allCollapsed = {};
+    requestsByHome.forEach((homeGroup) => {
+      allCollapsed[homeGroup.home.id] = false;
+    });
+    setExpandedHomes(allCollapsed);
+  };
+
+  const allExpanded = requestsByHome.length > 0 &&
+    requestsByHome.every((homeGroup) => expandedHomes[homeGroup.home.id] !== false);
+  const allCollapsed = requestsByHome.length > 0 &&
+    requestsByHome.every((homeGroup) => expandedHomes[homeGroup.home.id] === false);
+
+  // Initialize all homes as expanded when data loads
+  useEffect(() => {
+    if (requestsByHome.length > 0) {
+      const initialExpanded = {};
+      requestsByHome.forEach((homeGroup) => {
+        // Only set if not already defined (preserve user's preference)
+        if (expandedHomes[homeGroup.home.id] === undefined) {
+          initialExpanded[homeGroup.home.id] = true;
+        }
+      });
+      if (Object.keys(initialExpanded).length > 0) {
+        setExpandedHomes((prev) => ({ ...prev, ...initialExpanded }));
+      }
+    }
+  }, [requestsByHome]);
 
   const fetchRequests = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -234,11 +279,72 @@ const ClientRequestsList = ({ state, dispatch }) => {
         </View>
       )}
 
+      {/* Expand/Collapse All Buttons */}
+      {requestsByHome.length > 1 && (
+        <View style={styles.expandCollapseRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.expandCollapseButton,
+              allExpanded && styles.expandCollapseButtonDisabled,
+              pressed && !allExpanded && styles.expandCollapseButtonPressed,
+            ]}
+            onPress={expandAll}
+            disabled={allExpanded}
+          >
+            <Icon
+              name="expand"
+              size={12}
+              color={allExpanded ? colors.text.tertiary : colors.primary[600]}
+            />
+            <Text
+              style={[
+                styles.expandCollapseButtonText,
+                allExpanded && styles.expandCollapseButtonTextDisabled,
+              ]}
+            >
+              Expand All
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.expandCollapseButton,
+              allCollapsed && styles.expandCollapseButtonDisabled,
+              pressed && !allCollapsed && styles.expandCollapseButtonPressed,
+            ]}
+            onPress={collapseAll}
+            disabled={allCollapsed}
+          >
+            <Icon
+              name="compress"
+              size={12}
+              color={allCollapsed ? colors.text.tertiary : colors.primary[600]}
+            />
+            <Text
+              style={[
+                styles.expandCollapseButtonText,
+                allCollapsed && styles.expandCollapseButtonTextDisabled,
+              ]}
+            >
+              Collapse All
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
       {/* Requests by Home */}
       {requestsByHome.length > 0 ? (
-        requestsByHome.map((homeGroup) => (
+        requestsByHome.map((homeGroup) => {
+          const isExpanded = expandedHomes[homeGroup.home.id] !== false;
+          return (
           <View key={homeGroup.home.id} style={styles.homeSection}>
-            <View style={styles.homeHeader}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.homeHeader,
+                styles.homeHeaderClickable,
+                pressed && styles.homeHeaderPressed,
+              ]}
+              onPress={() => toggleHomeExpanded(homeGroup.home.id)}
+            >
               <Icon name="home" size={16} color={colors.primary[600]} />
               <Text style={styles.homeName}>
                 {homeGroup.home.nickName || homeGroup.home.address}
@@ -248,9 +354,15 @@ const ClientRequestsList = ({ state, dispatch }) => {
                   {homeGroup.requests.length}
                 </Text>
               </View>
-            </View>
+              <Icon
+                name={isExpanded ? "chevron-up" : "chevron-down"}
+                size={14}
+                color={colors.text.tertiary}
+                style={styles.expandIcon}
+              />
+            </Pressable>
 
-            {homeGroup.requests.map((req) => {
+            {isExpanded && homeGroup.requests.map((req) => {
               const cleaner = req.cleaner;
               const request = req.request;
               const appointment = req.appointment;
@@ -362,7 +474,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
               );
             })}
           </View>
-        ))
+        );})
       ) : (
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
@@ -449,6 +561,40 @@ const styles = StyleSheet.create({
     color: colors.primary[700],
   },
 
+  // Expand/Collapse Buttons
+  expandCollapseRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  expandCollapseButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[0],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  expandCollapseButtonPressed: {
+    backgroundColor: colors.primary[50],
+  },
+  expandCollapseButtonDisabled: {
+    borderColor: colors.neutral[200],
+    backgroundColor: colors.neutral[50],
+  },
+  expandCollapseButtonText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[600],
+  },
+  expandCollapseButtonTextDisabled: {
+    color: colors.text.tertiary,
+  },
+
   // Home Section
   homeSection: {
     marginBottom: spacing.xl,
@@ -458,6 +604,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: spacing.md,
     gap: spacing.sm,
+  },
+  homeHeaderClickable: {
+    backgroundColor: colors.neutral[0],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    ...shadows.sm,
+  },
+  homeHeaderPressed: {
+    backgroundColor: colors.neutral[100],
+  },
+  expandIcon: {
+    marginLeft: spacing.xs,
   },
   homeName: {
     flex: 1,

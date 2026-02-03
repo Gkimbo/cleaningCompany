@@ -1119,14 +1119,27 @@ class FetchData {
   // Service Area methods for cleaners
   static async getServiceArea(token) {
     try {
-      const response = await fetch(baseURL + "/api/v1/users/service-area", {
+      const url = baseURL + "/api/v1/user-info/service-area";
+      console.log("[getServiceArea] Fetching:", url);
+
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      const responseData = await response.json();
+      const responseText = await response.text();
+      console.log("[getServiceArea] Response status:", response.status);
+      console.log("[getServiceArea] Response body:", responseText.substring(0, 200));
+
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("[getServiceArea] JSON parse error. Response was:", responseText.substring(0, 500));
+        return { error: "Invalid response from server" };
+      }
 
       if (!response.ok) {
         return { error: responseData.error || "Failed to fetch service area" };
@@ -1141,7 +1154,7 @@ class FetchData {
 
   static async updateServiceArea(token, { address, latitude, longitude, radiusMiles }) {
     try {
-      const response = await fetch(baseURL + "/api/v1/users/service-area", {
+      const response = await fetch(baseURL + "/api/v1/user-info/service-area", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

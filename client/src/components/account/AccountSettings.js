@@ -13,6 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import FetchData from "../../services/fetchRequests/fetchData";
 import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
+import getCurrentUser from "../../services/fetchRequests/getCurrentUser";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const AccountSettings = ({ state, dispatch }) => {
@@ -47,6 +48,57 @@ const AccountSettings = ({ state, dispatch }) => {
 
   const isOwner = state.account === "owner";
   const isCleaner = state.account === "cleaner";
+
+  // Format phone number as 555-555-5555
+  const formatPhoneNumber = (value) => {
+    if (!value) return "";
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, "");
+    // Format as 555-555-5555
+    if (digits.length <= 3) {
+      return digits;
+    } else if (digits.length <= 6) {
+      return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    } else {
+      return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+    }
+  };
+
+  // Handle phone input with formatting
+  const handlePhoneChange = (value) => {
+    const formatted = formatPhoneNumber(value);
+    setPhone(formatted);
+  };
+
+  // Fetch user data if not available in state (for users who logged in before SET_FULL_USER was added)
+  useEffect(() => {
+    const fetchUserData = async () => {
+      // Fetch if user object is missing or doesn't have essential fields
+      const needsFetch = !state.currentUser.user ||
+        (!state.currentUser.user.username && !state.currentUser.user.email && !state.currentUser.user.phone);
+
+      if (needsFetch && state.currentUser.token) {
+        try {
+          const userData = await getCurrentUser(state.currentUser.token);
+          if (userData) {
+            dispatch({ type: "SET_FULL_USER", payload: userData });
+            // Update local form state with fetched data (check both username and userName)
+            setUsername(userData.username || userData.userName || "");
+            setEmail(userData.email || "");
+            setPhone(formatPhoneNumber(userData.phone) || "");
+          }
+        } catch (err) {
+          console.error("Failed to fetch user data:", err);
+        }
+      } else if (state.currentUser.user) {
+        // If user data exists in state, populate local form state
+        setUsername(state.currentUser.user.username || state.currentUser.user.userName || "");
+        setEmail(state.currentUser.user.email || "");
+        setPhone(formatPhoneNumber(state.currentUser.user.phone) || "");
+      }
+    };
+    fetchUserData();
+  }, [state.currentUser.token, dispatch]);
 
   useEffect(() => {
     if (isOwner && state.currentUser.token) {
@@ -482,6 +534,13 @@ const AccountSettings = ({ state, dispatch }) => {
             Your username is used to log into your account.
           </Text>
 
+          <View style={styles.currentValueBox}>
+            <Text style={styles.currentValueLabel}>Current username:</Text>
+            <Text style={styles.currentValueText}>
+              {state.currentUser.user?.username || state.currentUser.user?.userName || username || "Not set"}
+            </Text>
+          </View>
+
           <Text style={styles.label}>New Username</Text>
           <TextInput
             style={styles.input}
@@ -512,6 +571,13 @@ const AccountSettings = ({ state, dispatch }) => {
           <Text style={styles.sectionDescription}>
             Update the email address associated with your account.
           </Text>
+
+          <View style={styles.currentValueBox}>
+            <Text style={styles.currentValueLabel}>Current email:</Text>
+            <Text style={styles.currentValueText}>
+              {state.currentUser.user?.email || state.currentUser.email || email || "Not set"}
+            </Text>
+          </View>
 
           <Text style={styles.label}>New Email Address</Text>
           <TextInput
@@ -544,15 +610,23 @@ const AccountSettings = ({ state, dispatch }) => {
           Update your phone number for account contact purposes.
         </Text>
 
+        <View style={styles.currentValueBox}>
+          <Text style={styles.currentValueLabel}>Current phone:</Text>
+          <Text style={styles.currentValueText}>
+            {formatPhoneNumber(state.currentUser.user?.phone || phone) || "Not set"}
+          </Text>
+        </View>
+
         <Text style={styles.label}>Phone Number</Text>
         <TextInput
           style={styles.input}
           value={phone}
-          onChangeText={setPhone}
-          placeholder="Enter phone number (optional)"
+          onChangeText={handlePhoneChange}
+          placeholder="555-555-5555"
           placeholderTextColor={colors.text.tertiary}
           keyboardType="phone-pad"
           autoCorrect={false}
+          maxLength={12}
         />
 
         <Pressable
@@ -1022,6 +1096,24 @@ const styles = StyleSheet.create({
   },
   tipText: {
     fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+  },
+
+  // Current Value Display
+  currentValueBox: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  currentValueLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 4,
+  },
+  currentValueText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
   },
 

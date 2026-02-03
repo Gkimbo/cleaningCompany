@@ -1200,10 +1200,19 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
       where: { id: appointment.dataValues.homeId },
     });
 
+    // Normalize bringSheets/bringTowels to lowercase for consistent comparison
+    const normalizedBringSheets = (bringSheets || "no").toLowerCase();
+    const normalizedBringTowels = (bringTowels || "no").toLowerCase();
+
+    console.log('[Linens Update] Appointment:', id);
+    console.log('[Linens Update] Home:', home.dataValues.id, 'numBeds:', home.dataValues.numBeds, 'numBaths:', home.dataValues.numBaths);
+    console.log('[Linens Update] Sheets:', normalizedBringSheets, 'Towels:', normalizedBringTowels);
+    console.log('[Linens Update] Old price:', appointment.dataValues.price);
+
     // Calculate new price
     const newPrice = await calculatePrice(
-      bringSheets,
-      bringTowels,
+      normalizedBringSheets,
+      normalizedBringTowels,
       home.dataValues.numBeds,
       home.dataValues.numBaths,
       appointment.dataValues.timeToBeCompleted,
@@ -1211,13 +1220,15 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
       towelConfigurations
     );
 
+    console.log('[Linens Update] New price:', newPrice);
+
     // Update appointment and bill using the service method
     const updatedAppointment = await UserInfo.editAppointmentLinensInDB({
       id,
       sheetConfigurations,
       towelConfigurations,
-      bringSheets,
-      bringTowels,
+      bringSheets: normalizedBringSheets,
+      bringTowels: normalizedBringTowels,
       newPrice,
     });
 
@@ -1299,6 +1310,7 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
     }
 
     const serializedAppointment = AppointmentSerializer.serializeOne(updatedAppointment);
+    console.log('[Linens Update] Returning price:', serializedAppointment.price, 'bringSheets:', serializedAppointment.bringSheets);
     return res.status(200).json({ appointment: serializedAppointment });
   } catch (error) {
     console.error(error);
