@@ -3031,7 +3031,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       });
     }
 
-    // Send notifications to cleaners (in-app and email)
+    // Send notifications to cleaners (push, in-app, and email)
     if (hasCleanerAssigned) {
       const cleanerIds = appointment.employeesAssigned || [];
       const home = await UserHomes.findByPk(appointment.homeId);
@@ -3054,34 +3054,70 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       // Only show payment amount if appointment was paid and cleaner is getting compensated
       const showPayment = isWithinPenaltyWindow && cleanerPayoutResult;
 
+      // Format date and time for notifications
+      const formattedDate = new Date(appointment.date).toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+      });
+      const appointmentTime = appointment.arrivalTime || null;
+      // Home fields are already decrypted by afterFind hook
+      const homeAddress = home
+        ? `${home.city}, ${home.state}`
+        : "the scheduled location";
+
       for (const cleanerId of cleanerIds) {
         const cleaner = await User.findByPk(cleanerId);
         if (cleaner) {
-          // Add in-app notification
-          const notifications = cleaner.notifications || [];
-          const formattedDate = new Date(appointment.date).toLocaleDateString(undefined, {
-            weekday: "long",
-            month: "short",
-            day: "numeric",
-          });
+          // User fields are already decrypted by afterFind hook
+          const cleanerName = cleaner.firstName || cleaner.username;
 
-          notifications.unshift(
-            showPayment
+          // 1. Create in-app notification using NotificationService
+          try {
+            const notificationTitle = "Appointment Cancelled";
+            const notificationBody = showPayment
               ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${cleanerPayment}.`
-              : `The homeowner cancelled the ${formattedDate} cleaning at ${home ? EncryptionService.decrypt(home.address) : "their property"}.`
-          );
-          await cleaner.update({ notifications: notifications.slice(0, 50) });
+              : `The homeowner cancelled the ${formattedDate} cleaning at ${homeAddress}.`;
 
-          // Send email notification to cleaner
+            await NotificationService.createNotification({
+              userId: cleanerId,
+              type: "homeowner_cancelled_appointment",
+              title: notificationTitle,
+              body: notificationBody,
+              data: {
+                appointmentId: appointment.id,
+                appointmentDate: appointment.date,
+                partialPayment: showPayment ? cleanerPayment : null,
+              },
+              actionRequired: false,
+              relatedAppointmentId: appointment.id,
+            });
+          } catch (notifError) {
+            console.error(`Error creating in-app notification for cleaner ${cleanerId}:`, notifError);
+          }
+
+          // 2. Send push notification
+          if (cleaner.expoPushToken) {
+            try {
+              await PushNotification.sendPushHomeownerCancelledAppointment(
+                cleaner.expoPushToken,
+                cleanerName,
+                appointment.date,
+                appointmentTime,
+                homeAddress,
+                showPayment ? cleanerPayment : null
+              );
+            } catch (pushError) {
+              console.error(`Error sending push notification to cleaner ${cleanerId}:`, pushError);
+            }
+          }
+
+          // 3. Send email notification (email already decrypted by afterFind hook)
           if (cleaner.email) {
-            const homeAddress = home
-              ? `${EncryptionService.decrypt(home.city)}, ${EncryptionService.decrypt(home.state)}`
-              : "the scheduled location";
-
             try {
               await Email.sendHomeownerCancelledNotification(
-                EncryptionService.decrypt(cleaner.email),
-                cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : cleaner.username,
+                cleaner.email,
+                cleanerName,
                 appointment.date,
                 homeAddress,
                 showPayment,
@@ -3089,7 +3125,6 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
               );
             } catch (emailError) {
               console.error(`Error sending cancellation email to cleaner ${cleanerId}:`, emailError);
-              // Don't fail the cancellation if email fails
             }
           }
         }

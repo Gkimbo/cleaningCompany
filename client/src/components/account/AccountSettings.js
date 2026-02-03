@@ -49,25 +49,56 @@ const AccountSettings = ({ state, dispatch }) => {
   const isOwner = state.account === "owner";
   const isCleaner = state.account === "cleaner";
 
-  // Format phone number as 555-555-5555
+  // Format phone number for display
+  // US numbers: 555-555-5555
+  // International: +XX XXX XXX XXXX
   const formatPhoneNumber = (value) => {
     if (!value) return "";
-    // Remove all non-digits
-    const digits = value.replace(/\D/g, "");
-    // Format as 555-555-5555
-    if (digits.length <= 3) {
-      return digits;
-    } else if (digits.length <= 6) {
-      return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-    } else {
-      return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+
+    const trimmed = value.trim();
+    const isInternational = trimmed.startsWith("+");
+    const digits = trimmed.replace(/\D/g, "");
+
+    if (digits.length === 0) return "";
+
+    // US number without country code (10 digits)
+    if (!isInternational && digits.length <= 10) {
+      if (digits.length <= 3) {
+        return digits;
+      } else if (digits.length <= 6) {
+        return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+      } else {
+        return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+      }
     }
+
+    // US number with +1 country code
+    if (isInternational && digits.length <= 11 && digits.startsWith("1")) {
+      const usDigits = digits.slice(1);
+      if (usDigits.length <= 3) {
+        return `+1 ${usDigits}`;
+      } else if (usDigits.length <= 6) {
+        return `+1 ${usDigits.slice(0, 3)}-${usDigits.slice(3)}`;
+      } else {
+        return `+1 ${usDigits.slice(0, 3)}-${usDigits.slice(3, 6)}-${usDigits.slice(6, 10)}`;
+      }
+    }
+
+    // Other international numbers
+    if (isInternational) {
+      return "+" + digits;
+    }
+
+    // Fallback for numbers > 10 digits without +
+    return digits;
   };
 
   // Handle phone input with formatting
   const handlePhoneChange = (value) => {
+    // Allow + at the start for international numbers
+    const hasPlus = value.startsWith("+");
     const formatted = formatPhoneNumber(value);
-    setPhone(formatted);
+    setPhone(hasPlus && !formatted.startsWith("+") ? "+" + formatted : formatted);
   };
 
   // Fetch user data if not available in state (for users who logged in before SET_FULL_USER was added)
@@ -622,11 +653,11 @@ const AccountSettings = ({ state, dispatch }) => {
           style={styles.input}
           value={phone}
           onChangeText={handlePhoneChange}
-          placeholder="555-555-5555"
+          placeholder="555-555-5555 or +1 555-555-5555"
           placeholderTextColor={colors.text.tertiary}
           keyboardType="phone-pad"
           autoCorrect={false}
-          maxLength={12}
+          maxLength={20}
         />
 
         <Pressable
