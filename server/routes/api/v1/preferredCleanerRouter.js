@@ -455,6 +455,42 @@ preferredCleanerRouter.get("/homes/:homeId/cleaners/:cleanerId/is-preferred", ve
   }
 });
 
+/**
+ * GET /homes/:homeId/cleaners/:cleanerId/preferred-eligibility
+ * Check if a cleaner is eligible for preferred status at a home
+ * Returns false for business cleaners (their own clients)
+ */
+preferredCleanerRouter.get("/homes/:homeId/cleaners/:cleanerId/preferred-eligibility", verifyHomeowner, async (req, res) => {
+  try {
+    const { homeId, cleanerId } = req.params;
+    const { UserHomes } = models;
+
+    // Verify homeowner owns this home
+    const home = await UserHomes.findOne({
+      where: { id: homeId, userId: req.user.id },
+    });
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Check if the cleaner is the business owner/employee for this client
+    const isBusinessCleaner = await PreferredCleanerService.isBusinessCleanerForHome(
+      parseInt(cleanerId),
+      parseInt(homeId),
+      models
+    );
+
+    res.json({
+      canSetAsPreferred: !isBusinessCleaner,
+      reason: isBusinessCleaner ? "business_relationship" : null,
+    });
+  } catch (err) {
+    console.error("Error checking preferred eligibility:", err);
+    res.status(500).json({ error: "Failed to check eligibility" });
+  }
+});
+
 // =====================
 // CLEANER PREFERRED HOMES ENDPOINTS
 // =====================

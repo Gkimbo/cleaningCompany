@@ -93,6 +93,9 @@ class PayoutSerializer {
 			preferredBonusPercent: data.preferredBonusPercent ? parseFloat(data.preferredBonusPercent) : null,
 			preferredBonusAmount: data.preferredBonusAmount,
 			cleanerTierAtPayout: data.cleanerTierAtPayout,
+			// Payout priority fields (for faster payouts perk)
+			payoutPriority: data.payoutPriority,
+			expectedPayoutHours: data.expectedPayoutHours,
 			createdAt: data.createdAt,
 			// Payment timeline fields
 			paymentCapturedAt: data.paymentCapturedAt,
@@ -127,6 +130,15 @@ class PayoutSerializer {
 			status: data.status,
 			completedAt: data.completedAt,
 			payoutType: data.payoutType,
+			// Preferred cleaner perk fields (for owner visibility)
+			isPreferredHomeJob: data.isPreferredHomeJob,
+			preferredBonusApplied: data.preferredBonusApplied,
+			preferredBonusPercent: data.preferredBonusPercent ? parseFloat(data.preferredBonusPercent) : null,
+			preferredBonusAmount: data.preferredBonusAmount,
+			cleanerTierAtPayout: data.cleanerTierAtPayout,
+			// Payout priority fields
+			payoutPriority: data.payoutPriority,
+			expectedPayoutHours: data.expectedPayoutHours,
 			createdAt: data.createdAt
 		};
 

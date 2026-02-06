@@ -127,6 +127,18 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: false,
       comment: "Whether this job was at a home where cleaner is preferred",
     },
+    // Payout priority for faster payouts perk
+    payoutPriority: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      defaultValue: "normal",
+      comment: "Payout priority: 'high' for Gold/Platinum tiers, 'normal' for Bronze/Silver",
+    },
+    expectedPayoutHours: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Expected hours until payout based on cleaner tier (e.g., 24 for Gold, 48 for normal)",
+    },
   });
 
   Payout.associate = (models) => {

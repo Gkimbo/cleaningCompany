@@ -96,6 +96,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: true,
       },
+      earlyAccessMinutes: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 30,
+        comment: "Minutes of early access for platinum cleaners to new jobs",
+      },
 
       // Backup cleaner notification settings
       backupCleanerTimeoutHours: {
@@ -147,6 +153,7 @@ module.exports = (sequelize, DataTypes) => {
         fasterPayouts: this.platinumFasterPayouts,
         payoutHours: this.platinumPayoutHours,
         earlyAccess: this.platinumEarlyAccess,
+        earlyAccessMinutes: this.earlyAccessMinutes,
       };
     }
     if (homeCount >= this.goldMinHomes && homeCount <= this.goldMaxHomes) {
@@ -156,6 +163,7 @@ module.exports = (sequelize, DataTypes) => {
         fasterPayouts: this.goldFasterPayouts,
         payoutHours: this.goldPayoutHours,
         earlyAccess: false,
+        earlyAccessMinutes: 0,
       };
     }
     if (homeCount >= this.silverMinHomes && homeCount <= this.silverMaxHomes) {
@@ -165,6 +173,7 @@ module.exports = (sequelize, DataTypes) => {
         fasterPayouts: false,
         payoutHours: 48,
         earlyAccess: false,
+        earlyAccessMinutes: 0,
       };
     }
     return {
@@ -173,6 +182,7 @@ module.exports = (sequelize, DataTypes) => {
       fasterPayouts: false,
       payoutHours: 48,
       earlyAccess: false,
+      earlyAccessMinutes: 0,
     };
   };
 
@@ -217,7 +227,7 @@ module.exports = (sequelize, DataTypes) => {
       'silverMinHomes', 'silverMaxHomes', 'silverBonusPercent',
       'goldMinHomes', 'goldMaxHomes', 'goldBonusPercent', 'goldFasterPayouts', 'goldPayoutHours',
       'platinumMinHomes', 'platinumBonusPercent', 'platinumFasterPayouts', 'platinumPayoutHours', 'platinumEarlyAccess',
-      'backupCleanerTimeoutHours', 'platformMaxDailyJobs', 'platformMaxConcurrentJobs',
+      'earlyAccessMinutes', 'backupCleanerTimeoutHours', 'platformMaxDailyJobs', 'platformMaxConcurrentJobs',
     ];
 
     for (const field of updatableFields) {

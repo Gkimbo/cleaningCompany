@@ -15,6 +15,57 @@ const decryptHomeField = (value) => {
 
 class PreferredCleanerService {
   /**
+   * Check if a cleaner is the business owner or employee for a home's owner
+   * Used to prevent business cleaners from getting "preferred" status at their own clients' homes
+   * @param {number} cleanerId - The cleaner's user ID
+   * @param {number} homeId - The home ID
+   * @param {Object} models - Sequelize models
+   * @returns {boolean} True if cleaner is associated with home owner via business relationship
+   */
+  static async isBusinessCleanerForHome(cleanerId, homeId, models) {
+    const { UserHomes, CleanerClient, BusinessEmployee } = models;
+
+    // Get the home and its owner
+    const home = await UserHomes.findByPk(homeId);
+    if (!home) return false;
+
+    const homeOwnerId = home.userId;
+
+    // Check 1: Is cleaner the business owner who has this client?
+    const directRelationship = await CleanerClient.findOne({
+      where: {
+        cleanerId: cleanerId,
+        clientId: homeOwnerId,
+        status: "active",
+      },
+    });
+
+    if (directRelationship) return true;
+
+    // Check 2: Is cleaner an employee whose business owner has this client?
+    const employeeRecord = await BusinessEmployee.findOne({
+      where: {
+        userId: cleanerId,
+        status: "active",
+      },
+    });
+
+    if (employeeRecord) {
+      const ownerRelationship = await CleanerClient.findOne({
+        where: {
+          cleanerId: employeeRecord.businessOwnerId,
+          clientId: homeOwnerId,
+          status: "active",
+        },
+      });
+
+      if (ownerRelationship) return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Business owner declines an appointment from their client
    * @param {number} appointmentId - The appointment ID
    * @param {number} cleanerId - The cleaner (business owner) ID

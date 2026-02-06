@@ -172,6 +172,25 @@ class PreferredCleanerPerksService {
   }
 
   /**
+   * Get cleaner's current perks (recalculates from config to ensure current values)
+   * @param {number} cleanerId - The cleaner's user ID
+   * @param {Object} models - Sequelize models
+   * @returns {Object} Cleaner's current perks including fasterPayouts and earlyAccess
+   */
+  static async getCleanerPerks(cleanerId, models) {
+    // Recalculate to ensure values match current owner configuration
+    const perks = await this.recalculateTier(cleanerId, models);
+    return {
+      tierLevel: perks.tierLevel,
+      preferredHomeCount: perks.preferredHomeCount,
+      bonusPercent: parseFloat(perks.bonusPercent) || 0,
+      fasterPayouts: perks.fasterPayouts,
+      payoutHours: perks.payoutHours,
+      earlyAccess: perks.earlyAccess,
+    };
+  }
+
+  /**
    * Calculate bonus for a payout on a preferred home job
    * Bonus is applied by reducing the platform fee (giving more to cleaner)
    * @param {number} cleanerId - The cleaner's user ID
@@ -186,16 +205,19 @@ class PreferredCleanerPerksService {
     const isPreferredJob = await this.isPreferredAtHome(cleanerId, homeId, models);
 
     if (!isPreferredJob) {
-      // Not a preferred job, no bonus
+      // Not a preferred job, no bonus - still get cleaner's perks for fasterPayouts
+      const perks = await this.recalculateTier(cleanerId, models);
       const platformFee = Math.round(grossAmountCents * (platformFeePercent / 100));
       return {
         isPreferredJob: false,
         bonusApplied: false,
         bonusPercent: 0,
         bonusAmountCents: 0,
-        tierLevel: null,
+        tierLevel: perks.tierLevel,
         adjustedPlatformFee: platformFee,
         adjustedNetAmount: grossAmountCents - platformFee,
+        fasterPayouts: perks.fasterPayouts,
+        payoutHours: perks.payoutHours,
       };
     }
 
@@ -215,6 +237,8 @@ class PreferredCleanerPerksService {
         tierLevel: perks.tierLevel,
         adjustedPlatformFee: platformFee,
         adjustedNetAmount: grossAmountCents - platformFee,
+        fasterPayouts: perks.fasterPayouts,
+        payoutHours: perks.payoutHours,
       };
     }
 
@@ -234,6 +258,8 @@ class PreferredCleanerPerksService {
       originalPlatformFee,
       adjustedPlatformFee,
       adjustedNetAmount,
+      fasterPayouts: perks.fasterPayouts,
+      payoutHours: perks.payoutHours,
     };
   }
 

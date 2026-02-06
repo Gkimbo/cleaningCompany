@@ -338,6 +338,16 @@ const PayoutHistory = ({ state, dispatch }) => {
                     compact={false}
                   />
                 )}
+
+                {/* Priority Payout Indicator */}
+                {payout.payoutPriority === "high" && payout.status !== "completed" && (
+                  <View style={styles.priorityPayoutBanner}>
+                    <Feather name="zap" size={14} color={colors.warning[600]} style={{ marginRight: 6 }} />
+                    <Text style={styles.priorityPayoutText}>
+                      Priority Payout • Expected within {payout.expectedPayoutHours || 24}h
+                    </Text>
+                  </View>
+                )}
               </View>
             );
           })
@@ -673,6 +683,23 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Priority Payout Banner
+  priorityPayoutBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  priorityPayoutText: {
+    color: colors.warning[700],
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
   },
 
   // Paid Date

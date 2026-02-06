@@ -56,6 +56,7 @@ appointmentRouter.get("/unassigned", async (req, res) => {
   }
   try {
     const { preferredOnly } = req.query;
+    const PreferredCleanerPerksService = require("../../../services/PreferredCleanerPerksService");
 
     // Decode token to get cleaner info
     const decodedToken = jwt.verify(token, secretKey);
@@ -71,6 +72,10 @@ appointmentRouter.get("/unassigned", async (req, res) => {
     }
 
     const isCleanerDemo = cleaner.isDemoAccount === true;
+
+    // Get cleaner's tier perks to check for early access
+    const cleanerPerks = await PreferredCleanerPerksService.getCleanerPerks(cleanerId, models);
+    const hasEarlyAccess = cleanerPerks.earlyAccess === true;
 
     // Get user IDs that match the cleaner's demo status
     // Demo cleaners only see demo homeowner appointments
@@ -89,6 +94,14 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       userId: { [Op.in]: matchingUserIds }, // Filter by demo status match
       wasCancelled: false, // Exclude cancelled appointments
     };
+
+    // If cleaner doesn't have early access, filter out jobs in early access period
+    if (!hasEarlyAccess) {
+      whereClause[Op.or] = [
+        { earlyAccessUntil: null },
+        { earlyAccessUntil: { [Op.lte]: new Date() } },
+      ];
+    }
 
     // If preferredOnly filter is enabled, filter to cleaner's preferred homes
     if (preferredOnly === "true") {
@@ -113,8 +126,12 @@ appointmentRouter.get("/unassigned", async (req, res) => {
     const userAppointments = await UserAppointments.findAll({
       where: whereClause,
     });
-    const serializedAppointments =
-      AppointmentSerializer.serializeArray(userAppointments);
+
+    // Add early access indicator to serialized appointments
+    const serializedAppointments = AppointmentSerializer.serializeArray(userAppointments).map(appt => ({
+      ...appt,
+      isEarlyAccess: appt.earlyAccessUntil && new Date(appt.earlyAccessUntil) > new Date(),
+    }));
 
     return res.status(200).json({ appointments: serializedAppointments });
   } catch (error) {
@@ -1018,6 +1035,13 @@ appointmentRouter.post("/", async (req, res) => {
       totalDue: total + appointmentTotal,
     });
 
+    // Calculate early access window for platinum cleaners
+    const perksConfig = await PreferredPerksConfig.getActive();
+    const earlyAccessMinutes = perksConfig.earlyAccessMinutes || 30;
+    const earlyAccessUntil = perksConfig.platinumEarlyAccess
+      ? new Date(Date.now() + earlyAccessMinutes * 60 * 1000)
+      : null;
+
     const appointments = await Promise.all(
       dateArray.map(async (date) => {
         const homeBeingScheduled = await UserHomes.findOne({
@@ -1060,6 +1084,8 @@ appointmentRouter.post("/", async (req, res) => {
           // Last-minute booking fields
           isLastMinuteBooking: date.isLastMinuteBooking || false,
           lastMinuteFeeApplied: date.lastMinuteFeeApplied || null,
+          // Early access for platinum cleaners
+          earlyAccessUntil,
         });
         const appointmentId = newAppointment.dataValues.id;
 

@@ -45,6 +45,7 @@ const EmployeeAssignmentTile = ({
   multiCleanerJob = null,
   employeesAssigned = [],
   cleanerRoomAssignments = null,
+  isEarlyAccess = false,
 }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
@@ -259,6 +260,12 @@ const EmployeeAssignmentTile = ({
               <View style={styles.teamBadge}>
                 <Icon name="users" size={10} color={colors.primary[700]} />
                 <Text style={styles.teamBadgeText}>Team</Text>
+              </View>
+            )}
+            {isEarlyAccess && !completed && (
+              <View style={styles.earlyAccessBadge}>
+                <Icon name="bolt" size={10} color={colors.primary[600]} />
+                <Text style={styles.earlyAccessText}>Early Access</Text>
               </View>
             )}
             {isPreferred && !completed && (
@@ -820,6 +827,22 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.semibold,
     color: colors.success[700],
+  },
+  earlyAccessBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
+  earlyAccessText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
   },
   assignedBadge: {
     flexDirection: "row",
