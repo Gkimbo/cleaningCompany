@@ -22,6 +22,7 @@ const Bill = ({ state, dispatch }) => {
   const [prePayingId, setPrePayingId] = useState(null);
   const [payingCancellationFee, setPayingCancellationFee] = useState(false);
   const [allAppointments, setAllAppointments] = useState([]);
+  const [homes, setHomes] = useState([]);
   const navigate = useNavigate();
 
   const cancellationFee = Math.max(0, state?.bill?.cancellationFee || 0);
@@ -40,6 +41,9 @@ const Bill = ({ state, dispatch }) => {
           const data = await response.json();
           if (data.user?.appointments && dispatch) {
             dispatch({ type: "USER_APPOINTMENTS", payload: data.user.appointments });
+          }
+          if (data.user?.homes) {
+            setHomes(data.user.homes);
           }
           if (data.user?.bill && dispatch) {
             dispatch({ type: "DB_BILL", payload: data.user.bill });
@@ -173,6 +177,9 @@ const Bill = ({ state, dispatch }) => {
         if (data.user?.appointments && dispatch) {
           dispatch({ type: "USER_APPOINTMENTS", payload: data.user.appointments });
         }
+        if (data.user?.homes) {
+          setHomes(data.user.homes);
+        }
         if (data.user?.bill && dispatch) {
           dispatch({ type: "DB_BILL", payload: data.user.bill });
         }
@@ -188,6 +195,11 @@ const Bill = ({ state, dispatch }) => {
       month: "short",
       day: "numeric",
     });
+  };
+
+  const getHomeNickname = (appt) => {
+    const home = homes.find(h => h.id === appt.homeId);
+    return home?.nickName || home?.address || appt.home?.nickName || "Home";
   };
 
   // Get unpaid future appointments (not failed, not assigned yet)
@@ -300,7 +312,7 @@ const Bill = ({ state, dispatch }) => {
                 <View style={styles.appointmentInfo}>
                   <Text style={styles.appointmentDate}>{formatDate(appt.date)}</Text>
                   <Text style={styles.appointmentHome}>
-                    {appt.home?.nickName || appt.nickName || "Home"}
+                    {getHomeNickname(appt)}
                   </Text>
                 </View>
                 <Text style={styles.appointmentPriceError}>${Number(appt.price).toFixed(2)}</Text>
@@ -334,7 +346,7 @@ const Bill = ({ state, dispatch }) => {
                 <View style={styles.appointmentInfo}>
                   <Text style={styles.appointmentDate}>{formatDate(appt.date)}</Text>
                   <Text style={styles.appointmentHome}>
-                    {appt.home?.nickName || appt.nickName || "Home"}
+                    {getHomeNickname(appt)}
                   </Text>
                 </View>
                 <Text style={styles.appointmentPrice}>${Number(appt.price).toFixed(2)}</Text>
@@ -371,7 +383,7 @@ const Bill = ({ state, dispatch }) => {
                 <View style={styles.appointmentInfo}>
                   <Text style={styles.appointmentDate}>{formatDate(appt.date)}</Text>
                   <Text style={styles.appointmentHome}>
-                    {appt.home?.nickName || appt.nickName || "Home"}
+                    {getHomeNickname(appt)}
                   </Text>
                 </View>
                 <View style={styles.pendingBadge}>
@@ -394,7 +406,7 @@ const Bill = ({ state, dispatch }) => {
                 <View style={styles.appointmentInfo}>
                   <Text style={styles.appointmentDatePaid}>{formatDate(appt.date)}</Text>
                   <Text style={styles.appointmentHomePaid}>
-                    {appt.home?.nickName || appt.nickName || "Home"}
+                    {getHomeNickname(appt)}
                   </Text>
                 </View>
                 <View style={styles.paidBadge}>
@@ -422,7 +434,7 @@ const Bill = ({ state, dispatch }) => {
                 <View style={styles.historyInfo}>
                   <Text style={styles.historyDate}>{formatDate(appt.date)}</Text>
                   <Text style={styles.historyHome}>
-                    {appt.home?.nickName || appt.nickName || "Home"}
+                    {getHomeNickname(appt)}
                   </Text>
                 </View>
                 <View style={styles.historyRight}>

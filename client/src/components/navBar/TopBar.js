@@ -29,6 +29,7 @@ import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
 import HomeButton from "./HomeButton";
 import ManageEmployees from "./ManageEmployeeButton";
 import ManagePricingButton from "./ManagePricingButton";
+import ManageTiersButton from "./ManageTiersButton";
 import IncentivesButton from "./IncentivesButton";
 import MyRequestsButton from "./MyRequestsButton";
 import ScheduleCleaningButton from "./ScheduleCleaningButton";
@@ -389,6 +390,7 @@ const TopBar = ({ dispatch, state }) => {
                           <>
                             <ManageEmployees closeModal={closeModal} />
                             <ManagePricingButton closeModal={closeModal} />
+                            <ManageTiersButton closeModal={closeModal} />
                             <CalculatorButton closeModal={closeModal} />
                             <ReferralsButton closeModal={closeModal} />
                             <SeeAllAppointments closeModal={closeModal} />

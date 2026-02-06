@@ -373,6 +373,20 @@ async function createDemoAccounts() {
 					});
 				}
 				cleanerReviewAppointmentIds.push(appt.id);
+
+				// Always ensure UserCleanerAppointments record exists so cleaner can see the job
+				const existingCleanerAppt = await UserCleanerAppointments.findOne({
+					where: {
+						employeeId: createdAccounts.cleaner.id,
+						appointmentId: appt.id,
+					},
+				});
+				if (!existingCleanerAppt) {
+					await UserCleanerAppointments.create({
+						employeeId: createdAccounts.cleaner.id,
+						appointmentId: appt.id,
+					});
+				}
 			}
 		}
 
@@ -394,6 +408,8 @@ async function createDemoAccounts() {
 						review: reviewRatings[i],
 						reviewComment: reviewComments[i],
 						reviewType: "homeowner_to_cleaner",
+						isPublished: true,
+						reviewerName: `${createdAccounts.homeowner.firstName} ${createdAccounts.homeowner.lastName.charAt(0)}.`,
 						createdAt: new Date(Date.now() - (i * 7 * 24 * 60 * 60 * 1000)), // Spread over weeks
 					});
 				}
@@ -744,12 +760,12 @@ async function createDemoAccounts() {
 			for (let i = 1; i <= 5; i++) {
 				try {
 					const pastDate = getPastDate(i * 14); // Every 2 weeks in the past
-					const existingAppt = await UserAppointments.findOne({
+					let appt = await UserAppointments.findOne({
 						where: { userId: createdAccounts.homeowner.id, date: pastDate },
 					});
 
-					if (!existingAppt) {
-						await UserAppointments.create({
+					if (!appt) {
+						appt = await UserAppointments.create({
 							userId: createdAccounts.homeowner.id,
 							homeId: createdHomes[0].id,
 							date: pastDate,
@@ -767,6 +783,22 @@ async function createDemoAccounts() {
 							completionStatus: "approved",
 						});
 					}
+
+					// Always ensure UserCleanerAppointments record exists
+					if (appt) {
+						const existingCleanerAppt = await UserCleanerAppointments.findOne({
+							where: {
+								employeeId: createdAccounts.cleaner.id,
+								appointmentId: appt.id,
+							},
+						});
+						if (!existingCleanerAppt) {
+							await UserCleanerAppointments.create({
+								employeeId: createdAccounts.cleaner.id,
+								appointmentId: appt.id,
+							});
+						}
+					}
 				} catch (error) {
 					// Ignore duplicates
 				}
@@ -780,11 +812,11 @@ async function createDemoAccounts() {
 			for (let i = 1; i <= 3; i++) {
 				try {
 					const futureDate = getFutureDate(i * 7); // Weekly upcoming
-					const existingAppt = await UserAppointments.findOne({
+					let appt = await UserAppointments.findOne({
 						where: { userId: createdAccounts.homeowner.id, date: futureDate },
 					});
 
-					if (!existingAppt) {
+					if (!appt) {
 						const home = createdHomes[i % createdHomes.length];
 						const numBeds = parseInt(home.numBeds) || 3;
 						const numBaths = parseInt(home.numBaths) || 2;
@@ -802,7 +834,7 @@ async function createDemoAccounts() {
 							towelConfigs,
 						});
 
-						await UserAppointments.create({
+						appt = await UserAppointments.create({
 							userId: createdAccounts.homeowner.id,
 							homeId: home.id,
 							date: futureDate,
@@ -822,11 +854,27 @@ async function createDemoAccounts() {
 							towelConfigurations: JSON.stringify(towelConfigs),
 						});
 					}
+
+					// Always ensure UserCleanerAppointments record exists so cleaner can see the job
+					if (i <= 2 && createdAccounts.cleaner && appt) {
+						const existingCleanerAppt = await UserCleanerAppointments.findOne({
+							where: {
+								employeeId: createdAccounts.cleaner.id,
+								appointmentId: appt.id,
+							},
+						});
+						if (!existingCleanerAppt) {
+							await UserCleanerAppointments.create({
+								employeeId: createdAccounts.cleaner.id,
+								appointmentId: appt.id,
+							});
+						}
+					}
 				} catch (error) {
 					// Ignore duplicates
 				}
 			}
-			console.log("  - Created 3 upcoming appointments");
+			console.log("  - Created 3 upcoming appointments with cleaner assignments");
 		}
 
 		// Create bill balance ($150)
@@ -1453,6 +1501,8 @@ async function createDemoAccounts() {
 						review: clientReviews[i].review,
 						reviewComment: clientReviews[i].reviewComment,
 						reviewType: "homeowner_to_cleaner",
+						isPublished: true,
+						reviewerName: `${createdAccounts.businessClient.firstName} ${createdAccounts.businessClient.lastName.charAt(0)}.`,
 						createdAt: new Date(Date.now() - ((i + 1) * 7 * 24 * 60 * 60 * 1000)),
 					});
 				}
@@ -2128,6 +2178,8 @@ async function createDemoAccounts() {
 						review: i < 9 ? 5 : 4, // 9 five-star reviews, 1 four-star
 						reviewComment: reviewComments[i],
 						reviewType: "homeowner_to_cleaner",
+						isPublished: true,
+						reviewerName: `${createdClients[i].firstName} ${createdClients[i].lastName.charAt(0)}.`,
 						createdAt: new Date(Date.now() - (i * 7 * 24 * 60 * 60 * 1000)),
 					});
 				}
@@ -2284,6 +2336,8 @@ async function createDemoAccounts() {
 						review: reviewRatings[i],
 						reviewComment: reviewComments[i],
 						reviewType: "homeowner_to_cleaner",
+						isPublished: true,
+						reviewerName: `${homeowner.firstName} ${homeowner.lastName.charAt(0)}.`,
 						createdAt: new Date(Date.now() - ((i + 1) * 14 * 24 * 60 * 60 * 1000)), // Spread over time
 					});
 				} else {

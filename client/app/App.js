@@ -22,6 +22,7 @@ import EditEmployeeForm from "../src/components/admin/forms/EditEmployeeForm";
 import EmployeeShiftForm from "../src/components/admin/forms/employee/EmployeeShiftForm";
 import UnassignedAppointments from "../src/components/admin/UnassignedAppointments";
 import AllRequestsCalendar from "../src/components/appointments/AllRequestsCalendar";
+import ClientAppointmentsCalendar from "../src/components/appointments/ClientAppointmentsCalendar";
 import AppointmentList from "../src/components/appointments/AppointmentList";
 import CleaningRequestList from "../src/components/appointments/CleaningRequestList";
 import DetailsComponent from "../src/components/appointments/DetailsComponent";
@@ -80,6 +81,7 @@ import AcceptEmployeeInvitationScreen from "../src/components/employee/AcceptEmp
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
 import PricingManagement from "../src/components/owner/PricingManagement";
+import TierManagement from "../src/components/owner/TierManagement";
 import IncentivesManagement from "../src/components/owner/IncentivesManagement";
 import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
 import HREmployeeManagement from "../src/components/owner/HREmployeeManagement";
@@ -89,6 +91,7 @@ import ChecklistEditor from "../src/components/owner/ChecklistEditor";
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
 import MyClientsPage from "../src/components/cleaner/MyClientsPage";
 import ClientDetailPage from "../src/components/cleaner/ClientDetailPage";
+import PreferredStatusPage from "../src/components/cleaner/PreferredStatusPage";
 
 // Business components
 import {
@@ -407,6 +410,12 @@ export default function App() {
                 element={<AppointmentList state={state} dispatch={dispatch} />}
               />
               <Route
+                path="/appointments-calendar"
+                element={
+                  <ClientAppointmentsCalendar state={state} dispatch={dispatch} />
+                }
+              />
+              <Route
                 path="/my-requests"
                 element={<MyRequests state={state} dispatch={dispatch} />}
               />
@@ -484,6 +493,11 @@ export default function App() {
                 path="/client-detail/:clientId"
                 element={<ClientDetailPage state={state} dispatch={dispatch} />}
               />
+              {/* Cleaner Preferred Status */}
+              <Route
+                path="/preferred-perks"
+                element={<PreferredStatusPage state={state} />}
+              />
               <Route
                 path="/employees"
                 element={
@@ -558,6 +572,11 @@ export default function App() {
               <Route
                 path="/owner/pricing"
                 element={<PricingManagement state={state} />}
+              />
+              {/* Owner Tier Management */}
+              <Route
+                path="/owner/tiers"
+                element={<TierManagement state={state} />}
               />
               {/* Owner Incentives */}
               <Route

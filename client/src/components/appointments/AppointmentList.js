@@ -130,6 +130,14 @@ const AppointmentList = ({ state, dispatch }) => {
     const aptDate = new Date(apt.date);
     return aptDate >= today && !apt.hasBeenAssigned && !apt.completed;
   }).length;
+  const withRequestsAppointments = allAppointments.filter((apt) => {
+    const aptDate = new Date(apt.date);
+    return aptDate >= today && !apt.completed && (apt.pendingRequestCount > 0);
+  }).length;
+  const noRequestsAppointments = allAppointments.filter((apt) => {
+    const aptDate = new Date(apt.date);
+    return aptDate >= today && !apt.completed && !apt.hasBeenAssigned && (!apt.pendingRequestCount || apt.pendingRequestCount === 0);
+  }).length;
 
   // Filter appointments based on active filter
   const getFilteredAppointments = () => {
@@ -145,6 +153,16 @@ const AppointmentList = ({ state, dispatch }) => {
         return allAppointments.filter((apt) => {
           const aptDate = new Date(apt.date);
           return aptDate >= today && !apt.hasBeenAssigned && !apt.completed;
+        });
+      case "withRequests":
+        return allAppointments.filter((apt) => {
+          const aptDate = new Date(apt.date);
+          return aptDate >= today && !apt.completed && (apt.pendingRequestCount > 0);
+        });
+      case "noRequests":
+        return allAppointments.filter((apt) => {
+          const aptDate = new Date(apt.date);
+          return aptDate >= today && !apt.completed && !apt.hasBeenAssigned && (!apt.pendingRequestCount || apt.pendingRequestCount === 0);
         });
       case "all":
       default:
@@ -172,6 +190,10 @@ const AppointmentList = ({ state, dispatch }) => {
         return "Assigned";
       case "unassigned":
         return "Unassigned";
+      case "withRequests":
+        return "With Requests";
+      case "noRequests":
+        return "No Requests";
       default:
         return null;
     }
@@ -235,159 +257,159 @@ const AppointmentList = ({ state, dispatch }) => {
 
   return (
     <View style={{ ...homePageStyles.container, flex: 1, marginTop: 10 }}>
-      {/* Page Title */}
+      {/* Fixed Header - Back Button & Title */}
       <View style={styles.pageTitleRow}>
         <Pressable style={styles.backButton} onPress={handleBackPress}>
           <Icon name="angle-left" size={iconSize} color={colors.text.primary} />
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
         <Text style={styles.pageTitle}>My Appointments</Text>
-        <View style={styles.headerSpacer} />
+        <Pressable style={styles.calendarButton} onPress={() => navigate("/appointments-calendar")}>
+          <Icon name="calendar" size={iconSize} color={colors.primary[600]} />
+        </Pressable>
       </View>
 
-      {/* Header with Stats */}
-      <View style={styles.headerRow}>
-        {/* Stats Summary */}
-        <View style={styles.statsRow}>
+      {/* Scrollable Content */}
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Compact Filter Chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterChipsContainer}
+        >
           <Pressable
-            style={[styles.statItem, activeFilter === "all" && styles.statItemActive]}
+            style={[styles.filterChip, activeFilter === "all" && styles.filterChipActive]}
             onPress={() => handleStatClick("all")}
           >
-            <Text style={[styles.statValue, activeFilter === "all" && styles.statValueActive]}>
-              {totalAppointments}
-            </Text>
-            <Text style={[styles.statLabel, activeFilter === "all" && styles.statLabelActive]}>
-              Total
+            <Text style={[styles.filterChipText, activeFilter === "all" && styles.filterChipTextActive]}>
+              All ({totalAppointments})
             </Text>
           </Pressable>
-          <View style={styles.statDivider} />
+
           <Pressable
-            style={[styles.statItem, activeFilter === "next7days" && styles.statItemActive]}
+            style={[styles.filterChip, activeFilter === "next7days" && styles.filterChipActive]}
             onPress={() => handleStatClick("next7days")}
           >
-            <Text style={[
-              styles.statValue,
-              { color: colors.primary[600] },
-              activeFilter === "next7days" && styles.statValueActive,
-            ]}>
-              {upcomingAppointments}
-            </Text>
-            <Text style={[styles.statLabel, activeFilter === "next7days" && styles.statLabelActive]}>
-              Next 7 Days
+            <Text style={[styles.filterChipText, activeFilter === "next7days" && styles.filterChipTextActive]}>
+              Next 7 Days ({upcomingAppointments})
             </Text>
           </Pressable>
-          <View style={styles.statDivider} />
+
           <Pressable
-            style={[styles.statItem, activeFilter === "assigned" && styles.statItemActive]}
+            style={[styles.filterChip, activeFilter === "assigned" && styles.filterChipActive]}
             onPress={() => handleStatClick("assigned")}
           >
-            <Text style={[
-              styles.statValue,
-              { color: colors.success[600] },
-              activeFilter === "assigned" && styles.statValueActive,
-            ]}>
-              {assignedAppointments}
-            </Text>
-            <Text style={[styles.statLabel, activeFilter === "assigned" && styles.statLabelActive]}>
-              Assigned
+            <Text style={[styles.filterChipText, activeFilter === "assigned" && styles.filterChipTextActive]}>
+              Assigned ({assignedAppointments})
             </Text>
           </Pressable>
+
           {unassignedAppointments > 0 && (
-            <>
-              <View style={styles.statDivider} />
-              <Pressable
-                style={[styles.statItem, activeFilter === "unassigned" && styles.statItemActive]}
-                onPress={() => handleStatClick("unassigned")}
-              >
-                <Text style={[
-                  styles.statValue,
-                  { color: colors.warning[600] },
-                  activeFilter === "unassigned" && styles.statValueActive,
-                ]}>
-                  {unassignedAppointments}
-                </Text>
-                <Text style={[styles.statLabel, activeFilter === "unassigned" && styles.statLabelActive]}>
-                  Unassigned
-                </Text>
-              </Pressable>
-            </>
+            <Pressable
+              style={[styles.filterChip, activeFilter === "unassigned" && styles.filterChipActive]}
+              onPress={() => handleStatClick("unassigned")}
+            >
+              <Text style={[styles.filterChipText, activeFilter === "unassigned" && styles.filterChipTextActive]}>
+                Unassigned ({unassignedAppointments})
+              </Text>
+            </Pressable>
           )}
-        </View>
-      </View>
 
-      {/* Expand/Collapse All Buttons */}
-      {state.homes.length > 1 && (
-        <View style={styles.expandCollapseRow}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.expandCollapseButton,
-              allExpandedCheck && styles.expandCollapseButtonDisabled,
-              pressed && !allExpandedCheck && styles.expandCollapseButtonPressed,
-            ]}
-            onPress={expandAll}
-            disabled={allExpandedCheck}
-          >
-            <Icon
-              name="expand"
-              size={12}
-              color={allExpandedCheck ? colors.text.disabled : colors.primary[600]}
-            />
-            <Text
-              style={[
-                styles.expandCollapseText,
-                allExpandedCheck && styles.expandCollapseTextDisabled,
-              ]}
+          {withRequestsAppointments > 0 && (
+            <Pressable
+              style={[styles.filterChip, activeFilter === "withRequests" && styles.filterChipActive]}
+              onPress={() => handleStatClick("withRequests")}
             >
-              Expand All Homes
-            </Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.expandCollapseButton,
-              allCollapsedCheck && styles.expandCollapseButtonDisabled,
-              pressed && !allCollapsedCheck && styles.expandCollapseButtonPressed,
-            ]}
-            onPress={collapseAll}
-            disabled={allCollapsedCheck}
-          >
-            <Icon
-              name="compress"
-              size={12}
-              color={allCollapsedCheck ? colors.text.disabled : colors.primary[600]}
-            />
-            <Text
-              style={[
-                styles.expandCollapseText,
-                allCollapsedCheck && styles.expandCollapseTextDisabled,
-              ]}
-            >
-              Collapse All Homes
-            </Text>
-          </Pressable>
-        </View>
-      )}
+              <Text style={[styles.filterChipText, activeFilter === "withRequests" && styles.filterChipTextActive]}>
+                With Requests ({withRequestsAppointments})
+              </Text>
+            </Pressable>
+          )}
 
-      {/* Active Filter Indicator */}
-      {activeFilter !== "all" && (
-        <View style={styles.filterIndicator}>
-          <View style={styles.filterIndicatorContent}>
-            <Icon name="filter" size={12} color={colors.primary[600]} />
-            <Text style={styles.filterIndicatorText}>
-              Showing: {getFilterLabel()} ({filteredAppointmentsForDisplay.length})
-            </Text>
+          {noRequestsAppointments > 0 && (
+            <Pressable
+              style={[styles.filterChip, activeFilter === "noRequests" && styles.filterChipActive]}
+              onPress={() => handleStatClick("noRequests")}
+            >
+              <Text style={[styles.filterChipText, activeFilter === "noRequests" && styles.filterChipTextActive]}>
+                No Requests ({noRequestsAppointments})
+              </Text>
+            </Pressable>
+          )}
+        </ScrollView>
+
+        {/* Expand/Collapse & Filter Info Row */}
+        {(state.homes.length > 1 || activeFilter !== "all") && (
+          <View style={styles.controlsRow}>
+            {state.homes.length > 1 && (
+              <View style={styles.expandCollapseRow}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.expandCollapseButton,
+                    allExpandedCheck && styles.expandCollapseButtonDisabled,
+                    pressed && !allExpandedCheck && styles.expandCollapseButtonPressed,
+                  ]}
+                  onPress={expandAll}
+                  disabled={allExpandedCheck}
+                >
+                  <Icon
+                    name="expand"
+                    size={10}
+                    color={allExpandedCheck ? colors.text.disabled : colors.primary[600]}
+                  />
+                  <Text
+                    style={[
+                      styles.expandCollapseText,
+                      allExpandedCheck && styles.expandCollapseTextDisabled,
+                    ]}
+                  >
+                    Expand
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.expandCollapseButton,
+                    allCollapsedCheck && styles.expandCollapseButtonDisabled,
+                    pressed && !allCollapsedCheck && styles.expandCollapseButtonPressed,
+                  ]}
+                  onPress={collapseAll}
+                  disabled={allCollapsedCheck}
+                >
+                  <Icon
+                    name="compress"
+                    size={10}
+                    color={allCollapsedCheck ? colors.text.disabled : colors.primary[600]}
+                  />
+                  <Text
+                    style={[
+                      styles.expandCollapseText,
+                      allCollapsedCheck && styles.expandCollapseTextDisabled,
+                    ]}
+                  >
+                    Collapse
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+            {activeFilter !== "all" && (
+              <Pressable
+                style={styles.clearFilterButton}
+                onPress={() => setActiveFilter("all")}
+              >
+                <Text style={styles.clearFilterText}>
+                  {getFilterLabel()} ({filteredAppointmentsForDisplay.length})
+                </Text>
+                <Icon name="times-circle" size={14} color={colors.primary[600]} />
+              </Pressable>
+            )}
           </View>
-          <Pressable
-            style={styles.clearFilterButton}
-            onPress={() => setActiveFilter("all")}
-          >
-            <Icon name="times" size={12} color={colors.text.tertiary} />
-            <Text style={styles.clearFilterText}>Clear</Text>
-          </Pressable>
-        </View>
-      )}
+        )}
 
-      {/* Scrollable List of Homes */}
-      <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+        {/* Homes List */}
         {state.homes.length > 0 ? (
           <>
             {usersHomes}
@@ -445,16 +467,10 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
-  headerSpacer: {
+  calendarButton: {
     width: 60,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.sm,
+    alignItems: "flex-end",
+    paddingVertical: spacing.xs,
   },
   backButton: {
     flexDirection: "row",
@@ -468,90 +484,51 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontWeight: typography.fontWeight.medium,
   },
-  statsRow: {
+  // Scroll container
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: spacing.xl,
+  },
+  // Filter Chips
+  filterChipsContainer: {
     flexDirection: "row",
-    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
     backgroundColor: colors.background.secondary,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border.light,
   },
-  statItem: {
-    alignItems: "center",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
+  filterChipActive: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
   },
-  statItemActive: {
-    backgroundColor: colors.primary[100],
-  },
-  statValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  statValueActive: {
-    color: colors.primary[700],
-  },
-  statLabel: {
-    fontSize: typography.fontSize.xs,
+  filterChipText: {
+    fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-    marginTop: -2,
+    fontWeight: typography.fontWeight.medium,
   },
-  statLabelActive: {
-    color: colors.primary[700],
-    fontWeight: typography.fontWeight.semibold,
+  filterChipTextActive: {
+    color: colors.neutral[0],
   },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: colors.border.light,
-  },
-  filterIndicator: {
+  // Controls Row (expand/collapse + clear filter)
+  controlsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-  },
-  filterIndicatorContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  filterIndicatorText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[700],
-    fontWeight: typography.fontWeight.medium,
-  },
-  clearFilterButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.neutral[0],
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  clearFilterText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    fontWeight: typography.fontWeight.medium,
   },
   expandCollapseRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+    gap: spacing.xs,
   },
   expandCollapseButton: {
     flexDirection: "row",
@@ -576,8 +553,23 @@ const styles = StyleSheet.create({
   expandCollapseTextDisabled: {
     color: colors.text.disabled,
   },
+  clearFilterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.full,
+  },
+  clearFilterText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[700],
+    fontWeight: typography.fontWeight.medium,
+  },
   homeSection: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    marginHorizontal: spacing.md,
     backgroundColor: colors.background.primary,
     borderRadius: radius.md,
     overflow: "hidden",

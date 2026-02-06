@@ -26,6 +26,7 @@ const PayoutHistory = ({ state, dispatch }) => {
   const [totals, setTotals] = useState({
     totalPaidDollars: "0.00",
     pendingAmountDollars: "0.00",
+    totalBonusDollars: "0.00",
     completedCount: 0,
     pendingCount: 0,
   });
@@ -93,12 +94,17 @@ const PayoutHistory = ({ state, dispatch }) => {
           (sum, p) => sum + (p.netAmount || 0),
           0
         );
+        const totalBonusCents = completedPayouts.reduce(
+          (sum, p) => sum + (p.preferredBonusApplied ? (p.preferredBonusAmount || 0) : 0),
+          0
+        );
         const potentialEarnings = calculatePotentialEarnings();
 
         setPayouts(pastPayouts);
         setTotals({
           totalPaidDollars: (totalPaidCents / 100).toFixed(2),
           pendingAmountDollars: potentialEarnings.amount,
+          totalBonusDollars: (totalBonusCents / 100).toFixed(2),
           completedCount: completedPayouts.length,
           pendingCount: potentialEarnings.count,
         });
@@ -129,6 +135,16 @@ const PayoutHistory = ({ state, dispatch }) => {
       failed: { text: "Failed", type: "error" },
     };
     return statusConfig[status] || { text: status, type: "neutral" };
+  };
+
+  const getTierStyle = (tier) => {
+    const tierConfig = {
+      bronze: { label: "Bronze", color: "#CD7F32", bgColor: "#FDF5E6" },
+      silver: { label: "Silver", color: "#757575", bgColor: "#F5F5F5" },
+      gold: { label: "Gold", color: "#D4AF37", bgColor: "#FFFACD" },
+      platinum: { label: "Platinum", color: "#6B7280", bgColor: "#E5E7EB" },
+    };
+    return tierConfig[tier] || null;
   };
 
   const formatDate = (dateString) => {
@@ -190,6 +206,22 @@ const PayoutHistory = ({ state, dispatch }) => {
         </View>
       </View>
 
+      {/* Tier Bonus Banner */}
+      {parseFloat(totals.totalBonusDollars) > 0 && (
+        <View style={styles.bonusBanner}>
+          <View style={styles.bonusBannerIconContainer}>
+            <Feather name="award" size={20} color={colors.success[600]} />
+          </View>
+          <View style={styles.bonusBannerContent}>
+            <Text style={styles.bonusBannerTitle}>Tier Bonuses Earned</Text>
+            <Text style={styles.bonusBannerAmount}>${totals.totalBonusDollars}</Text>
+            <Text style={styles.bonusBannerSubtext}>
+              Extra earnings from your preferred tier status
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* Info Banner */}
       <View style={styles.infoBanner}>
         <Feather
@@ -227,6 +259,9 @@ const PayoutHistory = ({ state, dispatch }) => {
         ) : (
           payouts.map((payout) => {
             const status = getStatusStyle(payout.status);
+            const tierStyle = payout.cleanerTierAtPayout ? getTierStyle(payout.cleanerTierAtPayout) : null;
+            const hasBonus = payout.preferredBonusApplied && payout.preferredBonusAmount > 0;
+            const baseAmount = hasBonus ? payout.netAmount - payout.preferredBonusAmount : payout.netAmount;
             return (
               <View key={payout.id} style={styles.payoutItem}>
                 <View style={styles.payoutHeader}>
@@ -241,20 +276,54 @@ const PayoutHistory = ({ state, dispatch }) => {
                       {formatDate(payout.appointmentDate)}
                     </Text>
                   </View>
-                  <View style={[styles.statusBadge, styles[`statusBadge_${status.type}`]]}>
-                    <Text style={[styles.statusText, styles[`statusText_${status.type}`]]}>
-                      {status.text}
-                    </Text>
+                  <View style={styles.badgeRow}>
+                    {tierStyle && (
+                      <View style={[styles.tierBadge, { backgroundColor: tierStyle.bgColor }]}>
+                        <Feather name="award" size={10} color={tierStyle.color} style={{ marginRight: 4 }} />
+                        <Text style={[styles.tierBadgeText, { color: tierStyle.color }]}>
+                          {tierStyle.label}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={[styles.statusBadge, styles[`statusBadge_${status.type}`]]}>
+                      <Text style={[styles.statusText, styles[`statusText_${status.type}`]]}>
+                        {status.text}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
                 <View style={styles.payoutDetails}>
-                  <View style={styles.earningsRow}>
-                    <Text style={styles.earningsLabel}>Your Earnings</Text>
-                    <Text style={styles.earningsValue}>
-                      {formatCurrency(payout.netAmount)}
-                    </Text>
-                  </View>
+                  {hasBonus ? (
+                    <>
+                      <View style={styles.earningsBreakdown}>
+                        <View style={styles.breakdownRow}>
+                          <Text style={styles.breakdownLabel}>Base Pay</Text>
+                          <Text style={styles.breakdownValue}>{formatCurrency(baseAmount)}</Text>
+                        </View>
+                        <View style={styles.breakdownRow}>
+                          <View style={styles.bonusLabelRow}>
+                            <Feather name="trending-up" size={12} color={colors.success[600]} style={{ marginRight: 4 }} />
+                            <Text style={styles.bonusLabel}>
+                              Tier Bonus ({payout.preferredBonusPercent}%)
+                            </Text>
+                          </View>
+                          <Text style={styles.bonusValue}>+{formatCurrency(payout.preferredBonusAmount)}</Text>
+                        </View>
+                        <View style={styles.totalRow}>
+                          <Text style={styles.totalLabel}>Total</Text>
+                          <Text style={styles.earningsValue}>{formatCurrency(payout.netAmount)}</Text>
+                        </View>
+                      </View>
+                    </>
+                  ) : (
+                    <View style={styles.earningsRow}>
+                      <Text style={styles.earningsLabel}>Your Earnings</Text>
+                      <Text style={styles.earningsValue}>
+                        {formatCurrency(payout.netAmount)}
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Payment Timeline */}
@@ -333,6 +402,44 @@ const styles = StyleSheet.create({
   },
   statSubtext: {
     color: "rgba(255,255,255,0.8)",
+    fontSize: typography.fontSize.xs,
+  },
+
+  // Bonus Banner
+  bonusBanner: {
+    backgroundColor: colors.success[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  bonusBannerIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: colors.success[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+  },
+  bonusBannerContent: {
+    flex: 1,
+  },
+  bonusBannerTitle: {
+    color: colors.success[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  bonusBannerAmount: {
+    color: colors.success[700],
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  bonusBannerSubtext: {
+    color: colors.success[600],
     fontSize: typography.fontSize.xs,
   },
 
@@ -441,6 +548,24 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 
+  // Badge Row
+  badgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  tierBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  tierBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
   // Status Badges
   statusBadge: {
     paddingHorizontal: spacing.sm,
@@ -502,6 +627,52 @@ const styles = StyleSheet.create({
     color: colors.success[600],
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
+  },
+
+  // Earnings Breakdown (with bonus)
+  earningsBreakdown: {
+    gap: spacing.sm,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  breakdownLabel: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+  },
+  breakdownValue: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+  },
+  bonusLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  bonusLabel: {
+    color: colors.success[600],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  bonusValue: {
+    color: colors.success[600],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    marginTop: spacing.xs,
+  },
+  totalLabel: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
 
   // Paid Date
