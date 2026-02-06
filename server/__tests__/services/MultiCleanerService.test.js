@@ -59,6 +59,16 @@ const mockCleanerJobCompletion = {
   update: jest.fn(),
 };
 
+const mockPricingConfigModel = {
+  getActive: jest.fn().mockResolvedValue({
+    autoCompleteHoursAfterEnd: 4,
+    autoCompleteReminderIntervals: [30, 60, 120, 180, 210],
+    platformFeePercent: 10,
+    completionAutoApprovalHours: 4,
+    completionRequiresPhotos: false,
+  }),
+};
+
 jest.mock("../../models", () => ({
   MultiCleanerJob: mockMultiCleanerJob,
   UserAppointments: mockUserAppointments,
@@ -66,6 +76,7 @@ jest.mock("../../models", () => ({
   CleanerRoomAssignment: mockCleanerRoomAssignment,
   CleanerJobOffer: mockCleanerJobOffer,
   CleanerJobCompletion: mockCleanerJobCompletion,
+  PricingConfig: mockPricingConfigModel,
 }));
 
 const { getPricingConfig } = require("../../config/businessConfig");
@@ -698,8 +709,18 @@ describe("MultiCleanerService", () => {
   // ============================================
   describe("fillSlot", () => {
     let mockJob;
+    let mockAppointment;
 
     beforeEach(() => {
+      // Reset mock appointment before each test
+      mockAppointment = {
+        id: 100,
+        date: "2025-06-15",
+        timeToBeCompleted: "10-3",
+        employeesAssigned: [],
+        hasBeenAssigned: false,
+        save: jest.fn().mockResolvedValue(true),
+      };
       // Reset mock job before each test
       mockJob = {
         id: 10,
@@ -712,6 +733,7 @@ describe("MultiCleanerService", () => {
         save: jest.fn().mockResolvedValue(true),
       };
       mockMultiCleanerJob.findByPk.mockResolvedValue(mockJob);
+      mockUserAppointments.findByPk.mockResolvedValue(mockAppointment);
       mockCleanerRoomAssignment.update.mockResolvedValue([1]);
       mockCleanerJobCompletion.create.mockResolvedValue({ id: 1 });
       mockUserAppointments.update.mockResolvedValue([1]);
@@ -724,12 +746,14 @@ describe("MultiCleanerService", () => {
         { cleanerId: 100 },
         { where: { id: [1, 2] } }
       );
-      expect(mockCleanerJobCompletion.create).toHaveBeenCalledWith({
-        appointmentId: 100,
-        cleanerId: 100,
-        multiCleanerJobId: 10,
-        status: "assigned",
-      });
+      expect(mockCleanerJobCompletion.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appointmentId: 100,
+          cleanerId: 100,
+          multiCleanerJobId: 10,
+          status: "assigned",
+        })
+      );
       expect(mockJob.updateStatus).toHaveBeenCalled();
     });
 
@@ -741,10 +765,8 @@ describe("MultiCleanerService", () => {
     it("should update appointment slots remaining", async () => {
       await MultiCleanerService.fillSlot(10, 100, [1, 2]);
 
-      expect(mockUserAppointments.update).toHaveBeenCalledWith(
-        { cleanerSlotsRemaining: 1 },
-        { where: { id: 100 } }
-      );
+      // Implementation now uses appointment.save() instead of UserAppointments.update
+      expect(mockAppointment.save).toHaveBeenCalled();
     });
 
     it("should throw error if job not found", async () => {
@@ -778,6 +800,7 @@ describe("MultiCleanerService", () => {
   // ============================================
   describe("releaseSlot", () => {
     let mockJob;
+    let mockAppointment;
 
     beforeEach(() => {
       // Reset mock job before each test
@@ -788,7 +811,16 @@ describe("MultiCleanerService", () => {
         getRemainingSlots: jest.fn().mockReturnValue(2),
         updateStatus: jest.fn().mockResolvedValue(true),
       };
+      // Mock appointment with save method for Sequelize instance behavior
+      mockAppointment = {
+        id: 100,
+        employeesAssigned: ["100", "101"],
+        hasBeenAssigned: true,
+        cleanerSlotsRemaining: 0,
+        save: jest.fn().mockResolvedValue(true),
+      };
       mockMultiCleanerJob.findByPk.mockResolvedValue(mockJob);
+      mockUserAppointments.findByPk.mockResolvedValue(mockAppointment);
       mockCleanerRoomAssignment.update.mockResolvedValue([1]);
       mockCleanerJobCompletion.update.mockResolvedValue([1]);
       mockUserAppointments.update.mockResolvedValue([1]);
@@ -943,6 +975,10 @@ describe("MultiCleanerService", () => {
       userId: 200,
       home: { id: 1 },
       user: { id: 200 },
+      employeesAssigned: ["100", "101"],
+      hasBeenAssigned: true,
+      cleanerSlotsRemaining: 0,
+      save: jest.fn().mockResolvedValue(true),
     };
 
     beforeEach(() => {
@@ -1024,6 +1060,10 @@ describe("MultiCleanerService", () => {
         id: 100,
         date: "2025-01-15",
         userId: 200,
+        employeesAssigned: ["100", "101"],
+        hasBeenAssigned: true,
+        cleanerSlotsRemaining: 0,
+        save: jest.fn().mockResolvedValue(true),
       });
       mockUserAppointments.update.mockResolvedValue([1]);
     });

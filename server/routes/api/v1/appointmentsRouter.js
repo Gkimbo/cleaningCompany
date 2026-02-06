@@ -87,6 +87,7 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       hasBeenAssigned: false,
       assignedToBusinessEmployee: false, // Exclude business-assigned jobs from marketplace
       userId: { [Op.in]: matchingUserIds }, // Filter by demo status match
+      wasCancelled: false, // Exclude cancelled appointments
     };
 
     // If preferredOnly filter is enabled, filter to cleaner's preferred homes
@@ -205,7 +206,7 @@ appointmentRouter.get("/my-requests", async (req, res) => {
     const userId = decodedToken.userId;
 
     const existingAppointments = await UserAppointments.findAll({
-      where: { userId },
+      where: { userId, wasCancelled: false },
     });
 
     if (!existingAppointments.length) {
@@ -276,7 +277,7 @@ appointmentRouter.get("/requests-by-home", async (req, res) => {
 
     // Get all appointments for this homeowner
     const existingAppointments = await UserAppointments.findAll({
-      where: { userId },
+      where: { userId, wasCancelled: false },
     });
 
     if (!existingAppointments.length) {
@@ -335,7 +336,7 @@ appointmentRouter.get("/client-pending-requests", async (req, res) => {
 
     // Get all appointments for this user
     const existingAppointments = await UserAppointments.findAll({
-      where: { userId },
+      where: { userId, wasCancelled: false },
     });
 
     if (!existingAppointments.length) {
@@ -427,7 +428,7 @@ appointmentRouter.get("/requests-for-home/:homeId", async (req, res) => {
 
     // Get all appointments for this home
     const appointments = await UserAppointments.findAll({
-      where: { homeId, userId },
+      where: { homeId, userId, wasCancelled: false },
     });
 
     if (!appointments.length) {
@@ -542,7 +543,8 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
       const cancellationFeeAmount = cancellationConfig.fee;
       const cancellationWindowDays = cancellationConfig.windowDays;
       const isWithinPenaltyWindow = daysUntilAppointment <= penaltyDays && hasCleanerAssigned;
-      const willChargeCancellationFee = daysUntilAppointment <= cancellationWindowDays;
+      // Only charge cancellation fee if cleaner is assigned - homeowners can cancel freely without fee if no cleaner
+      const willChargeCancellationFee = daysUntilAppointment <= cancellationWindowDays && hasCleanerAssigned;
 
       // Check if discount was applied (incentive appointment)
       const discountApplied = appointment.discountApplied === true;
@@ -2726,8 +2728,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     // Get user for Stripe customer info
     const user = await User.findByPk(userId);
 
-    // Block cancellation if within 7 days and no payment method (can't pay cancellation fee)
-    if (isWithinCancellationFeeWindow && (!user.stripeCustomerId || !user.hasPaymentMethod)) {
+    // Block cancellation if within 7 days, cleaner assigned, and no payment method (can't pay cancellation fee)
+    // If no cleaner assigned, allow cancellation without fee or payment method
+    if (isWithinCancellationFeeWindow && hasCleanerAssigned && (!user.stripeCustomerId || !user.hasPaymentMethod)) {
       return res.status(400).json({
         error: "Cannot cancel without a payment method",
         message: "You cannot cancel within 7 days of the appointment without a payment method on file to pay the cancellation fee. Please add a payment method first.",
@@ -2776,8 +2779,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     console.log(`[Cancellation] User hasPaymentMethod: ${user.hasPaymentMethod}`);
     console.log(`[Cancellation] Cancellation fee: $${cancellationConfig.fee}`);
 
-    // Charge cancellation fee if within the window and user has payment method
-    if (isWithinCancellationFeeWindow && user.stripeCustomerId && user.hasPaymentMethod) {
+    // Charge cancellation fee if within the window, cleaner is assigned, and user has payment method
+    // No fee charged if no cleaner assigned - homeowner can cancel freely
+    if (isWithinCancellationFeeWindow && hasCleanerAssigned && user.stripeCustomerId && user.hasPaymentMethod) {
       const cancellationFeeAmountCents = Math.round(cancellationConfig.fee * 100);
 
       try {
@@ -2863,8 +2867,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           reason: `Charge failed: ${stripeError.message} - added to bill`,
         };
       }
-    } else if (isWithinCancellationFeeWindow) {
-      // User doesn't have payment method set up, add fee to bill
+    } else if (isWithinCancellationFeeWindow && hasCleanerAssigned) {
+      // User doesn't have payment method set up, add fee to bill (only if cleaner assigned)
       console.log(`[Cancellation] User ${userId} has no payment method configured, adding fee to bill`);
       const existingBillForFee = await UserBills.findOne({ where: { userId } });
       if (existingBillForFee) {
@@ -2881,8 +2885,13 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         amount: cancellationConfig.fee,
         reason: "No payment method configured - added to bill",
       };
-    } else if (!isWithinCancellationFeeWindow) {
-      console.log(`[Cancellation] Not within cancellation fee window (${daysUntilAppointment} days > ${cancellationConfig.windowDays} days) - no fee charged`);
+    } else {
+      // No fee charged - either outside window or no cleaner assigned
+      if (!hasCleanerAssigned) {
+        console.log(`[Cancellation] No cleaner assigned - no cancellation fee charged`);
+      } else {
+        console.log(`[Cancellation] Not within cancellation fee window (${daysUntilAppointment} days > ${cancellationConfig.windowDays} days) - no fee charged`);
+      }
     }
 
     // Handle payment cancellation/refund for prepaid appointments
@@ -3186,17 +3195,23 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     const now = new Date();
     const appealWindowExpiresAt = new Date(now.getTime() + 72 * 60 * 60 * 1000); // 72 hours
 
-    await appointment.update({
-      wasCancelled: true,
-      cancellationInitiatedAt: now,
-      cancellationInitiatedBy: userId,
-      cancellationConfirmedAt: now,
-      cancellationReason: req.body.reason || null,
-      cancellationMethod: req.headers["x-platform"] || "web",
-      cancellationType: "homeowner",
-      cancellationConfirmationId: confirmationId,
-      appealWindowExpiresAt: (isWithinPenaltyWindow || isWithinCancellationFeeWindow) ? appealWindowExpiresAt : null,
-    });
+    // Use direct update to ensure all fields are set (Sequelize change tracking has issues with encrypted fields)
+    await UserAppointments.update(
+      {
+        wasCancelled: true,
+        cancellationInitiatedAt: now,
+        cancellationInitiatedBy: userId,
+        cancellationConfirmedAt: now,
+        cancellationReason: req.body.reason || null,
+        cancellationMethod: req.headers["x-platform"] || "web",
+        cancellationType: "homeowner",
+        cancellationConfirmationId: confirmationId,
+        appealWindowExpiresAt: (isWithinPenaltyWindow || isWithinCancellationFeeWindow) ? appealWindowExpiresAt : null,
+      },
+      {
+        where: { id: appointment.id },
+      }
+    );
 
     // Log cancellation confirmed
     const newState = {
@@ -3934,6 +3949,7 @@ appointmentRouter.get("/:homeId", async (req, res) => {
     const appointments = await UserAppointments.findAll({
       where: {
         homeId: homeId,
+        wasCancelled: false,
       },
     });
     const serializedAppointments =

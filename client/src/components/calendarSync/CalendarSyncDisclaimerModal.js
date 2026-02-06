@@ -142,6 +142,7 @@ const CalendarSyncDisclaimerModal = ({ visible, onAccept, onCancel }) => {
 
           <View style={styles.footer}>
             <TouchableOpacity
+              testID="checkbox"
               style={[
                 styles.checkboxRow,
                 isChecked && styles.checkboxRowChecked,

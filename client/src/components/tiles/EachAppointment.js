@@ -370,19 +370,26 @@ const EachAppointment = ({
 
   // Handle confirming cancellation
   const handleConfirmCancel = async () => {
+    console.log("[EachAppointment] handleConfirmCancel called for appointment:", id);
     setCancelLoading(true);
     try {
+      console.log("[EachAppointment] Calling cancelAsHomeowner API...");
       const result = await FetchData.cancelAsHomeowner(id, token);
+      console.log("[EachAppointment] cancelAsHomeowner result:", result);
       if (result.error) {
+        console.log("[EachAppointment] Error from API:", result.error);
         setError(result.error);
         setCancelLoading(false);
         return;
       }
+      console.log("[EachAppointment] Cancellation successful, closing modal");
       setShowCancelModal(false);
       if (onCancel) {
+        console.log("[EachAppointment] Calling onCancel callback");
         onCancel(id, result);
       }
     } catch (err) {
+      console.error("[EachAppointment] Exception during cancellation:", err);
       setError("Failed to cancel appointment");
     } finally {
       setCancelLoading(false);

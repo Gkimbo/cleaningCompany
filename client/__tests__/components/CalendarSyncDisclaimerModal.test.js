@@ -1,23 +1,7 @@
 import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 
-// Mock react-native-paper Checkbox
-jest.mock("react-native-paper", () => ({
-  Checkbox: ({ status, onPress, disabled }) => {
-    const { TouchableOpacity, Text } = require("react-native");
-    return (
-      <TouchableOpacity
-        testID="checkbox"
-        onPress={disabled ? undefined : onPress}
-        disabled={disabled}
-      >
-        <Text>{status === "checked" ? "checked" : "unchecked"}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
-
-// Import after mocks
+// Import component directly - it uses a custom checkbox, not react-native-paper
 import CalendarSyncDisclaimerModal from "../../src/components/calendarSync/CalendarSyncDisclaimerModal";
 
 describe("CalendarSyncDisclaimerModal", () => {
@@ -130,7 +114,7 @@ describe("CalendarSyncDisclaimerModal", () => {
 
   describe("checkbox interaction", () => {
     it("should toggle checkbox when pressed after scrolling", async () => {
-      const { getByTestId, getByText, UNSAFE_getByType } = render(
+      const { getByTestId, queryByText, UNSAFE_getByType } = render(
         <CalendarSyncDisclaimerModal {...defaultProps} />
       );
 
@@ -146,15 +130,17 @@ describe("CalendarSyncDisclaimerModal", () => {
         },
       });
 
-      await waitFor(() => {
-        expect(getByText("unchecked")).toBeTruthy();
-      });
+      // Initially unchecked - no checkmark visible
+      expect(queryByText("✓")).toBeNull();
 
       // Press checkbox
-      fireEvent.press(getByTestId("checkbox"));
-
       await waitFor(() => {
-        expect(getByText("checked")).toBeTruthy();
+        fireEvent.press(getByTestId("checkbox"));
+      });
+
+      // After pressing, checkmark should be visible
+      await waitFor(() => {
+        expect(queryByText("✓")).toBeTruthy();
       });
     });
   });

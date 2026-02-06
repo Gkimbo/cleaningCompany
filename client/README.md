@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-1374_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-4647_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -814,7 +814,8 @@ npm test -- CleaningChecklist.test.js
 | CancellationAppeals | 32 | Appeal submission, review, stats |
 | PreviewAsRole | 41 | PreviewContext, modals, DemoAccountService |
 | InternalAnalytics | 28 | Dashboard, flow tracking, stats display |
-| **Total** | **1374** | - |
+| MultiCleaner | 76 | Multi-cleaner job management, offers, room assignments |
+| **Total** | **4647** | 167 test suites |
 
 ---
 

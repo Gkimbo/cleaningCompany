@@ -79,6 +79,9 @@ jest.mock("../../models", () => ({
       completionRequiresPhotos: false,
     }),
   },
+  CleanerJobCompletion: {
+    findOne: jest.fn().mockResolvedValue(null),
+  },
 }));
 
 // Mock Email service (including new 2-step completion methods)
@@ -109,6 +112,18 @@ jest.mock("../../services/cron/CompletionApprovalMonitor", () => ({
   calculateAutoApprovalExpiration: jest.fn().mockResolvedValue(
     new Date(Date.now() + 4 * 60 * 60 * 1000)
   ),
+}));
+
+// Mock AutoCompleteMonitor - getAutoCompleteConfig and parseTimeWindow are used for timing validation
+jest.mock("../../services/cron/AutoCompleteMonitor", () => ({
+  getAutoCompleteConfig: jest.fn().mockResolvedValue({
+    minOnSiteMinutes: 0, // Disable timing check for tests
+    autoCompleteEnabled: false,
+  }),
+  parseTimeWindow: jest.fn().mockReturnValue({
+    start: 8, // 8 AM (anytime)
+    end: 18,
+  }),
 }));
 
 // Mock AppointmentSerializer
@@ -161,6 +176,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       completionStatus: "in_progress",
       price: "150",
       employeesAssigned: [businessOwnerId.toString()],
+      date: "2025-01-01", // Past date for timing validation
+      timeToBeCompleted: "anytime",
+      isMultiCleanerJob: false,
+      jobStartedAt: new Date(Date.now() - 60 * 60 * 1000), // Started 1 hour ago
       update: mockAppointmentUpdate,
       ...overrides,
     });
@@ -316,6 +335,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
       completionStatus: "in_progress",
       price: "150",
       employeesAssigned: [regularCleanerId.toString()],
+      date: "2025-01-01", // Past date for timing validation
+      timeToBeCompleted: "anytime",
+      isMultiCleanerJob: false,
+      jobStartedAt: new Date(Date.now() - 60 * 60 * 1000), // Started 1 hour ago
       update: mockAppointmentUpdate,
       ...overrides,
     });
@@ -495,6 +518,11 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         id: 1,
         paid: true,
         completed: true, // Already completed
+        date: "2025-01-01",
+        timeToBeCompleted: "anytime",
+        isMultiCleanerJob: false,
+        jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
+        employeesAssigned: ["1"],
       });
 
       const res = await request(app)
@@ -514,6 +542,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         paid: true,
         completed: false,
         employeesAssigned: [],
+        date: "2025-01-01",
+        timeToBeCompleted: "anytime",
+        isMultiCleanerJob: false,
+        jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
       });
 
       const res = await request(app)
@@ -538,6 +570,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         completionStatus: "in_progress",
         price: "150",
         employeesAssigned: [assignedCleanerId.toString()],
+        date: "2025-01-01",
+        timeToBeCompleted: "anytime",
+        isMultiCleanerJob: false,
+        jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
         update: mockAppointmentUpdate,
       };
       const mockHome = {
@@ -578,6 +614,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         completionStatus: "in_progress",
         price: "150",
         employeesAssigned: [businessOwnerId.toString()],
+        date: "2025-01-01",
+        timeToBeCompleted: "anytime",
+        isMultiCleanerJob: false,
+        jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
         update: mockAppointmentUpdate,
       };
       const mockHome = {
@@ -618,6 +658,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         completionStatus: "in_progress",
         price: "150",
         employeesAssigned: [cleanerId.toString()],
+        date: "2025-01-01",
+        timeToBeCompleted: "anytime",
+        isMultiCleanerJob: false,
+        jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
         update: mockAppointmentUpdate,
       };
       const mockHome = {
@@ -650,6 +694,11 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         id: 1,
         paid: true,
         completed: true, // Already completed
+        date: "2025-01-01",
+        timeToBeCompleted: "anytime",
+        isMultiCleanerJob: false,
+        jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
+        employeesAssigned: ["1"],
       });
 
       const res = await request(app)
@@ -674,6 +723,10 @@ describe("Business Owner Complete Job - Photo Requirements", () => {
         completionStatus: "in_progress",
         price: "150",
         employeesAssigned: [businessOwnerId.toString()],
+        date: "2025-01-01",
+        timeToBeCompleted: "anytime",
+        isMultiCleanerJob: false,
+        jobStartedAt: new Date(Date.now() - 60 * 60 * 1000),
         update: mockAppointmentUpdate,
       };
       const mockHome = {

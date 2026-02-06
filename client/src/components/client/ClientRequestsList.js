@@ -302,7 +302,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
                 allExpanded && styles.expandCollapseButtonTextDisabled,
               ]}
             >
-              Expand All
+              Expand All Homes
             </Text>
           </Pressable>
           <Pressable
@@ -325,7 +325,7 @@ const ClientRequestsList = ({ state, dispatch }) => {
                 allCollapsed && styles.expandCollapseButtonTextDisabled,
               ]}
             >
-              Collapse All
+              Collapse All Homes
             </Text>
           </Pressable>
         </View>

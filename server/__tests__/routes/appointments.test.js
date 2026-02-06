@@ -67,6 +67,13 @@ jest.mock("../../models", () => ({
     create: jest.fn(),
     destroy: jest.fn(),
   },
+  PricingConfig: {
+    getActive: jest.fn().mockResolvedValue({
+      platformFeePercent: 10,
+      completionAutoApprovalHours: 4,
+      completionRequiresPhotos: false,
+    }),
+  },
 }));
 
 // Mock services
@@ -640,7 +647,7 @@ describe("Appointment Routes", () => {
       expect(res.body.requiresAcknowledgment).toBe(true);
       expect(res.body.acknowledgmentMessage).toContain("larger home");
       expect(res.body.acknowledgmentMessage).toContain("3 beds, 3 baths");
-      expect(res.body.acknowledgmentMessage).toContain("may take longer to clean");
+      expect(res.body.acknowledgmentMessage).toContain("estimated solo cleaning time");
     });
 
     it("should require multi-cleaner for clearly large home (4x3+)", async () => {

@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import { Checkbox } from "react-native-paper";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const CleanerCancellationWarningModal = ({
@@ -175,21 +174,37 @@ const CleanerCancellationWarningModal = ({
             )}
 
             {/* Agreement checkbox */}
+            {!agreed && (
+              <View style={styles.consentHeader}>
+                <Icon name="hand-pointer-o" size={16} color={willResultInFreeze ? colors.error[600] : colors.warning[600]} />
+                <Text style={[styles.consentHeaderText, willResultInFreeze && styles.consentHeaderTextDanger]}>
+                  Tap below to confirm cancellation
+                </Text>
+              </View>
+            )}
             <TouchableOpacity
               style={[
                 styles.checkboxContainer,
-                willResultInFreeze && styles.checkboxContainerDanger
+                agreed && styles.checkboxContainerChecked,
+                willResultInFreeze && styles.checkboxContainerDanger,
+                willResultInFreeze && agreed && styles.checkboxContainerDangerChecked
               ]}
               onPress={() => setAgreed(!agreed)}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
             >
-              <Checkbox
-                status={agreed ? "checked" : "unchecked"}
-                onPress={() => setAgreed(!agreed)}
-                color={willResultInFreeze ? colors.error[600] : colors.primary[600]}
-              />
+              <View style={[
+                styles.customCheckbox,
+                agreed && styles.customCheckboxChecked,
+                willResultInFreeze && styles.customCheckboxDanger,
+                willResultInFreeze && agreed && styles.customCheckboxDangerChecked
+              ]}>
+                {agreed && (
+                  <Icon name="check" size={18} color={colors.neutral[0]} />
+                )}
+              </View>
               <Text style={[
                 styles.checkboxLabel,
+                agreed && styles.checkboxLabelChecked,
                 willResultInFreeze && styles.checkboxLabelDanger
               ]}>
                 {acknowledgmentMessage
@@ -383,27 +398,77 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: typography.fontWeight.medium,
   },
+  consentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  consentHeaderText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[600],
+  },
+  consentHeaderTextDanger: {
+    color: colors.error[600],
+  },
   checkboxContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.neutral[50],
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    gap: spacing.xs,
+    backgroundColor: colors.neutral[0],
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+    gap: spacing.md,
+    ...shadows.md,
+  },
+  checkboxContainerChecked: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[600],
   },
   checkboxContainerDanger: {
+    borderColor: colors.error[400],
+  },
+  checkboxContainerDangerChecked: {
     backgroundColor: colors.error[50],
-    borderWidth: 1,
-    borderColor: colors.error[200],
+    borderColor: colors.error[600],
+  },
+  customCheckbox: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+    backgroundColor: colors.neutral[0],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customCheckboxChecked: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
+  },
+  customCheckboxDanger: {
+    borderColor: colors.error[400],
+  },
+  customCheckboxDangerChecked: {
+    backgroundColor: colors.error[600],
+    borderColor: colors.error[600],
   },
   checkboxLabel: {
     flex: 1,
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
+    lineHeight: 22,
+  },
+  checkboxLabelChecked: {
+    fontWeight: typography.fontWeight.semibold,
   },
   checkboxLabelDanger: {
     color: colors.error[800],
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
   },
   actions: {
     flexDirection: "row",

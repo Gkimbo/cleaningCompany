@@ -43,6 +43,7 @@ employeeInfoRouter.get("/", async (req, res) => {
     const appointments = await UserAppointments.findAll({
       where: {
         id: appointmentIds,
+        wasCancelled: false, // Exclude cancelled appointments
       },
       include: [
         {

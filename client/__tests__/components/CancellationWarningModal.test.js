@@ -2,37 +2,47 @@ import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 
 // Mock dependencies
-jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
-jest.mock("react-native-paper", () => ({
-  Checkbox: ({ status, onPress }) => {
-    const { TouchableOpacity, Text } = require("react-native");
-    return (
-      <TouchableOpacity onPress={onPress} testID="checkbox">
-        <Text>{status}</Text>
-      </TouchableOpacity>
-    );
-  },
+jest.mock("react-native-vector-icons/FontAwesome", () => {
+  const { Text } = require("react-native");
+  return (props) => <Text testID={`icon-${props.name}`}>{props.name}</Text>;
+});
+
+// Mock PricingContext
+jest.mock("../../src/context/PricingContext", () => ({
+  usePricing: () => ({
+    pricing: {
+      cancellation: {
+        fee: 25,
+        windowDays: 7,
+        homeownerPenaltyDays: 3,
+        refundPercentage: 0.5,
+      },
+      platform: {
+        feePercent: 0.1,
+      },
+    },
+  }),
 }));
 
 // Mock theme
 jest.mock("../../src/services/styles/theme", () => ({
   colors: {
     neutral: { 0: "#fff", 50: "#f9f9f9", 100: "#f0f0f0" },
-    primary: { 50: "#e3f2fd", 200: "#90caf9", 600: "#1976d2", 800: "#1565c0" },
-    warning: { 50: "#fff3e0", 200: "#ffcc80", 500: "#ff9800", 600: "#fb8c00", 800: "#ef6c00" },
-    error: { 50: "#ffebee", 200: "#ef9a9a", 500: "#f44336", 600: "#e53935" },
+    primary: { 50: "#e3f2fd", 100: "#bbdefb", 200: "#90caf9", 400: "#42a5f5", 600: "#1976d2", 700: "#1565c0", 800: "#0d47a1" },
+    warning: { 50: "#fff3e0", 100: "#ffe0b2", 200: "#ffcc80", 500: "#ff9800", 600: "#fb8c00", 700: "#f57c00", 800: "#ef6c00" },
+    error: { 50: "#ffebee", 200: "#ef9a9a", 300: "#e57373", 500: "#f44336", 600: "#e53935", 700: "#d32f2f" },
     success: { 600: "#43a047" },
     text: { primary: "#000", secondary: "#666", tertiary: "#999" },
     border: { light: "#e0e0e0" },
     glass: { overlay: "rgba(0,0,0,0.5)" },
   },
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20 },
-  radius: { lg: 12, "2xl": 20 },
+  radius: { md: 8, lg: 12, xl: 16, "2xl": 20 },
   typography: {
     fontSize: { xs: 10, sm: 12, base: 14, xl: 20 },
     fontWeight: { medium: "500", semibold: "600", bold: "700" },
   },
-  shadows: { sm: {}, xl: {} },
+  shadows: { md: {}, xl: {} },
 }));
 
 import CancellationWarningModal from "../../src/components/modals/CancellationWarningModal";
@@ -226,7 +236,7 @@ describe("CancellationWarningModal", () => {
     });
   });
 
-  describe("Agreement Checkbox", () => {
+  describe("Agreement Checkbox and Consent Header", () => {
     it("should show correct checkbox label outside penalty window", () => {
       const { getByText } = render(
         <CancellationWarningModal
@@ -253,8 +263,8 @@ describe("CancellationWarningModal", () => {
       expect(getByText("I understand and agree to the cancellation terms")).toBeTruthy();
     });
 
-    it("should toggle checkbox when pressed", () => {
-      const { getByTestId, getByText } = render(
+    it("should show consent header when checkbox is not checked", () => {
+      const { getByText } = render(
         <CancellationWarningModal
           visible={true}
           onClose={mockOnClose}
@@ -263,11 +273,74 @@ describe("CancellationWarningModal", () => {
         />
       );
 
-      const checkbox = getByTestId("checkbox");
-      expect(getByText("unchecked")).toBeTruthy();
+      expect(getByText("Tap below to confirm cancellation")).toBeTruthy();
+    });
 
-      fireEvent.press(checkbox);
-      expect(getByText("checked")).toBeTruthy();
+    it("should toggle checkbox when checkbox container is pressed", () => {
+      const { getByText, queryByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={defaultCancellationInfo}
+        />
+      );
+
+      // Initially consent header is visible
+      expect(getByText("Tap below to confirm cancellation")).toBeTruthy();
+
+      // Press the checkbox label to toggle
+      fireEvent.press(getByText("I want to cancel this appointment"));
+
+      // After pressing, consent header should be hidden (checkbox is now checked)
+      expect(queryByText("Tap below to confirm cancellation")).toBeNull();
+    });
+
+    it("should hide consent header when checkbox is checked", () => {
+      const { getByText, queryByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={defaultCancellationInfo}
+        />
+      );
+
+      // Check the checkbox
+      fireEvent.press(getByText("I want to cancel this appointment"));
+
+      // Consent header should be hidden
+      expect(queryByText("Tap below to confirm cancellation")).toBeNull();
+    });
+
+    it("should show check icon when checkbox is checked", () => {
+      const { getByText, getByTestId } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={defaultCancellationInfo}
+        />
+      );
+
+      // Check the checkbox
+      fireEvent.press(getByText("I want to cancel this appointment"));
+
+      // Check icon should be visible
+      expect(getByTestId("icon-check")).toBeTruthy();
+    });
+
+    it("should show pointing hand icon in consent header", () => {
+      const { getByTestId } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={defaultCancellationInfo}
+        />
+      );
+
+      expect(getByTestId("icon-hand-pointer-o")).toBeTruthy();
     });
   });
 
@@ -305,7 +378,7 @@ describe("CancellationWarningModal", () => {
     });
 
     it("should call onConfirm when checkbox is checked and confirm button is pressed", () => {
-      const { getByTestId, getAllByText } = render(
+      const { getByText, getAllByText } = render(
         <CancellationWarningModal
           visible={true}
           onClose={mockOnClose}
@@ -314,8 +387,8 @@ describe("CancellationWarningModal", () => {
         />
       );
 
-      // Check the checkbox first
-      fireEvent.press(getByTestId("checkbox"));
+      // Check the checkbox first by pressing the checkbox label
+      fireEvent.press(getByText("I want to cancel this appointment"));
 
       // Get all elements with "Cancel Appointment" text, the last one should be the button
       const elements = getAllByText("Cancel Appointment");
@@ -573,6 +646,118 @@ describe("CancellationWarningModal", () => {
 
       expect(getByText("$35")).toBeTruthy();
       expect(getByText("I agree to pay the $35 cancellation fee")).toBeTruthy();
+    });
+  });
+
+  describe("No Cancellation Fee When No Cleaner Assigned", () => {
+    const noCleanerAssignedInfo = {
+      isWithinPenaltyWindow: false,
+      price: 200,
+      estimatedRefund: "200.00",
+      cleanerPayout: "0.00",
+      warningMessage: "You can cancel this appointment for a full refund. No cancellation fee applies since no cleaner has been assigned.",
+      daysUntilAppointment: 3, // Within 7-day window
+      hasCleanerAssigned: false,
+      willChargeCancellationFee: false, // Key: no fee because no cleaner
+      cancellationFee: 25,
+      hasPaymentMethod: true,
+    };
+
+    const cleanerAssignedWithinWindowInfo = {
+      isWithinPenaltyWindow: false,
+      price: 200,
+      estimatedRefund: "200.00",
+      cleanerPayout: "0.00",
+      warningMessage: "A $25 cancellation fee will be charged.",
+      daysUntilAppointment: 3, // Within 7-day window
+      hasCleanerAssigned: true,
+      willChargeCancellationFee: true, // Fee charged because cleaner assigned
+      cancellationFee: 25,
+      hasPaymentMethod: true,
+    };
+
+    it("should NOT show cancellation fee warning when no cleaner assigned (even within window)", () => {
+      const { queryByText, getAllByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={noCleanerAssignedInfo}
+        />
+      );
+
+      // Should not show fee-related UI
+      expect(queryByText("Card Will Be Charged")).toBeNull();
+      expect(queryByText("Cancellation Fee Required")).toBeNull();
+      expect(queryByText("$25")).toBeNull();
+
+      // Should show normal cancel title
+      expect(getAllByText("Cancel Appointment").length).toBeGreaterThan(0);
+    });
+
+    it("should show cancellation fee warning when cleaner IS assigned (within window)", () => {
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={cleanerAssignedWithinWindowInfo}
+        />
+      );
+
+      // Should show fee-related UI
+      expect(getByText("Card Will Be Charged")).toBeTruthy();
+      expect(getByText("Cancellation Fee Required")).toBeTruthy();
+      expect(getByText("$25")).toBeTruthy();
+    });
+
+    it("should show simple checkbox label when no cleaner assigned", () => {
+      const { getByText, queryByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={noCleanerAssignedInfo}
+        />
+      );
+
+      // Should show simple cancellation checkbox, not fee agreement
+      expect(getByText("I want to cancel this appointment")).toBeTruthy();
+      expect(queryByText(/I agree to pay/)).toBeNull();
+    });
+
+    it("should show fee agreement checkbox when cleaner IS assigned", () => {
+      const { getByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={cleanerAssignedWithinWindowInfo}
+        />
+      );
+
+      // Should show fee agreement checkbox
+      expect(getByText("I agree to pay the $25 cancellation fee")).toBeTruthy();
+    });
+
+    it("should indicate no payment method required when no cleaner assigned", () => {
+      const noPaymentMethodNoCleanerInfo = {
+        ...noCleanerAssignedInfo,
+        hasPaymentMethod: false,
+      };
+
+      const { queryByText, getAllByText } = render(
+        <CancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={noPaymentMethodNoCleanerInfo}
+        />
+      );
+
+      // Should still be able to cancel without showing card warning
+      expect(queryByText("Card Will Be Charged")).toBeNull();
+      expect(getAllByText("Cancel Appointment").length).toBeGreaterThan(0);
     });
   });
 });

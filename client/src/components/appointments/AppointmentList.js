@@ -338,7 +338,7 @@ const AppointmentList = ({ state, dispatch }) => {
                 allExpandedCheck && styles.expandCollapseTextDisabled,
               ]}
             >
-              Expand All
+              Expand All Homes
             </Text>
           </Pressable>
           <Pressable
@@ -361,7 +361,7 @@ const AppointmentList = ({ state, dispatch }) => {
                 allCollapsedCheck && styles.expandCollapseTextDisabled,
               ]}
             >
-              Collapse All
+              Collapse All Homes
             </Text>
           </Pressable>
         </View>
@@ -391,13 +391,40 @@ const AppointmentList = ({ state, dispatch }) => {
         {state.homes.length > 0 ? (
           <>
             {usersHomes}
-            <Pressable style={homePageStyles.AddHomeButton} onPress={handlePress}>
-              <Text style={homePageStyles.AddHomeButtonText}>Add another Home</Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.addHomeButton,
+                pressed && styles.addHomeButtonPressed
+              ]}
+              onPress={handlePress}
+            >
+              <View style={styles.addHomeIconContainer}>
+                <Icon name="plus" size={16} color={colors.primary[600]} />
+              </View>
+              <View style={styles.addHomeTextContainer}>
+                <Text style={styles.addHomeTitle}>Add Another Home</Text>
+                <Text style={styles.addHomeSubtitle}>Manage multiple properties</Text>
+              </View>
+              <Icon name="chevron-right" size={14} color={colors.text.tertiary} />
             </Pressable>
           </>
         ) : (
-          <Pressable style={homePageStyles.AddHomeButton} onPress={handlePress}>
-            <Text style={homePageStyles.AddHomeButtonText}>Add a Home</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.addHomeButtonEmpty,
+              pressed && styles.addHomeButtonPressed
+            ]}
+            onPress={handlePress}
+          >
+            <View style={styles.addHomeIconContainerEmpty}>
+              <Icon name="home" size={24} color={colors.primary[600]} />
+            </View>
+            <Text style={styles.addHomeTitleEmpty}>Add Your First Home</Text>
+            <Text style={styles.addHomeSubtitleEmpty}>Get started by adding a property</Text>
+            <View style={styles.addHomeButtonAction}>
+              <Icon name="plus" size={12} color={colors.neutral[0]} />
+              <Text style={styles.addHomeButtonActionText}>Add Home</Text>
+            </View>
           </Pressable>
         )}
       </ScrollView>
@@ -592,6 +619,93 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
+  },
+  // Add Home Button Styles
+  addHomeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    marginHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.primary[200],
+    borderStyle: "dashed",
+    gap: spacing.md,
+  },
+  addHomeButtonPressed: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[400],
+  },
+  addHomeIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addHomeTextContainer: {
+    flex: 1,
+  },
+  addHomeTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  addHomeSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  // Empty state button (when no homes)
+  addHomeButtonEmpty: {
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    marginHorizontal: spacing.md,
+    marginTop: spacing["2xl"],
+    padding: spacing.xl,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary[200],
+    borderStyle: "dashed",
+  },
+  addHomeIconContainerEmpty: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  addHomeTitleEmpty: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  addHomeSubtitleEmpty: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginBottom: spacing.lg,
+    textAlign: "center",
+  },
+  addHomeButtonAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+  },
+  addHomeButtonActionText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
   },
 });
 

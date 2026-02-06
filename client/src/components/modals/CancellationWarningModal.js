@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
 } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
-import { Checkbox } from "react-native-paper";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 import { usePricing } from "../../context/PricingContext";
 
@@ -28,7 +27,9 @@ const CancellationWarningModal = ({
   };
 
   const handleConfirm = () => {
+    console.log("[CancellationWarningModal] handleConfirm called, agreed:", agreed);
     if (agreed) {
+      console.log("[CancellationWarningModal] Calling onConfirm...");
       onConfirm();
     }
   };
@@ -183,17 +184,35 @@ const CancellationWarningModal = ({
             )}
 
             {/* Agreement checkbox */}
+            {!agreed && (
+              <View style={styles.consentHeader}>
+                <Icon name="hand-pointer-o" size={16} color={colors.warning[600]} />
+                <Text style={styles.consentHeaderText}>Tap below to confirm cancellation</Text>
+              </View>
+            )}
             <TouchableOpacity
-              style={styles.checkboxContainer}
-              onPress={() => setAgreed(!agreed)}
-              activeOpacity={0.7}
+              style={[
+                styles.checkboxContainer,
+                agreed && styles.checkboxContainerChecked
+              ]}
+              onPress={() => {
+                console.log("[CancellationWarningModal] Checkbox pressed, toggling agreed from", agreed, "to", !agreed);
+                setAgreed(!agreed);
+              }}
+              activeOpacity={0.8}
             >
-              <Checkbox
-                status={agreed ? "checked" : "unchecked"}
-                onPress={() => setAgreed(!agreed)}
-                color={colors.primary[600]}
-              />
-              <Text style={styles.checkboxLabel}>
+              <View style={[
+                styles.customCheckbox,
+                agreed && styles.customCheckboxChecked
+              ]}>
+                {agreed && (
+                  <Icon name="check" size={18} color={colors.neutral[0]} />
+                )}
+              </View>
+              <Text style={[
+                styles.checkboxLabel,
+                agreed && styles.checkboxLabelChecked
+              ]}>
                 {showCancellationFeeWarning
                   ? `I agree to pay the $${cancellationFee} cancellation fee`
                   : isWithinPenaltyWindow && discountApplied
@@ -425,18 +444,57 @@ const styles = StyleSheet.create({
     color: colors.error[600],
     fontStyle: "italic",
   },
+  consentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  consentHeaderText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[600],
+  },
   checkboxContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.neutral[50],
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    gap: spacing.xs,
+    backgroundColor: colors.neutral[0],
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+    gap: spacing.md,
+    ...shadows.md,
+  },
+  checkboxContainerChecked: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[600],
+  },
+  customCheckbox: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+    backgroundColor: colors.neutral[0],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customCheckboxChecked: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
   },
   checkboxLabel: {
     flex: 1,
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
+    lineHeight: 22,
+  },
+  checkboxLabelChecked: {
+    color: colors.primary[700],
+    fontWeight: typography.fontWeight.semibold,
   },
   actions: {
     flexDirection: "row",

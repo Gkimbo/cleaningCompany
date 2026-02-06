@@ -40,6 +40,8 @@ userInfoRouter.get("/", async (req, res) => {
         {
           model: UserAppointments,
           as: "appointments",
+          where: { wasCancelled: false },
+          required: false, // Still include users with no appointments
         },
         {
           model: UserBills,

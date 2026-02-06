@@ -5,14 +5,17 @@
  */
 
 // Mock dependencies
-jest.mock("expo-file-system", () => ({
+const mockFileSystem = {
   documentDirectory: "/mock/documents/",
   getInfoAsync: jest.fn(),
   makeDirectoryAsync: jest.fn(),
   copyAsync: jest.fn(),
   deleteAsync: jest.fn(),
   readDirectoryAsync: jest.fn(),
-}));
+};
+
+jest.mock("expo-file-system", () => mockFileSystem);
+jest.mock("expo-file-system/legacy", () => mockFileSystem);
 
 jest.mock("expo-crypto", () => ({
   randomUUID: jest.fn(),

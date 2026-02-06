@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-4315+-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-4504_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -1540,7 +1540,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (4315+ tests)
+# Run all tests (4504 tests across 172 test suites)
 npm test
 
 # Run specific test file
@@ -1591,7 +1591,8 @@ npm test -- --watch
 | Job Ledger | 45 | Double-entry accounting, reconciliation |
 | Demo Accounts | 88 | Router, service, preview sessions |
 | Internal Analytics | 89 | Event tracking, dashboard stats, aggregations |
-| **Total** | **4315+** | - |
+| Multi-Cleaner Router | 76 | Job creation, offers, room assignments, completions |
+| **Total** | **4504** | 172 test suites |
 
 ---
 

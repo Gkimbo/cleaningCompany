@@ -2,37 +2,30 @@ import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
 
 // Mock dependencies
-jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
-jest.mock("react-native-paper", () => ({
-  Checkbox: ({ status, onPress }) => {
-    const { TouchableOpacity, Text } = require("react-native");
-    return (
-      <TouchableOpacity onPress={onPress} testID="checkbox">
-        <Text>{status}</Text>
-      </TouchableOpacity>
-    );
-  },
-}));
+jest.mock("react-native-vector-icons/FontAwesome", () => {
+  const { Text } = require("react-native");
+  return (props) => <Text testID={`icon-${props.name}`}>{props.name}</Text>;
+});
 
 // Mock theme
 jest.mock("../../src/services/styles/theme", () => ({
   colors: {
     neutral: { 0: "#fff", 50: "#f9f9f9", 100: "#f0f0f0" },
-    primary: { 50: "#e3f2fd", 200: "#90caf9", 600: "#1976d2", 800: "#1565c0" },
-    warning: { 50: "#fff3e0", 100: "#ffe0b2", 200: "#ffcc80", 500: "#ff9800", 600: "#fb8c00", 800: "#ef6c00" },
-    error: { 50: "#ffebee", 100: "#ffcdd2", 200: "#ef9a9a", 500: "#f44336", 600: "#e53935", 800: "#c62828" },
+    primary: { 50: "#e3f2fd", 100: "#bbdefb", 200: "#90caf9", 400: "#42a5f5", 600: "#1976d2", 700: "#1565c0", 800: "#0d47a1" },
+    warning: { 50: "#fff3e0", 100: "#ffe0b2", 200: "#ffcc80", 500: "#ff9800", 600: "#fb8c00", 700: "#f57c00", 800: "#ef6c00" },
+    error: { 50: "#ffebee", 100: "#ffcdd2", 200: "#ef9a9a", 400: "#ef5350", 500: "#f44336", 600: "#e53935", 700: "#d32f2f", 800: "#c62828" },
     success: { 500: "#4caf50", 600: "#43a047" },
-    text: { primary: "#000", secondary: "#666", tertiary: "#999" },
-    border: { light: "#e0e0e0" },
+    text: { primary: "#000", secondary: "#666", tertiary: "#999", disabled: "#bbb" },
+    border: { light: "#e0e0e0", default: "#ccc" },
     glass: { overlay: "rgba(0,0,0,0.5)" },
   },
   spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20 },
-  radius: { lg: 12, "2xl": 20 },
+  radius: { sm: 4, md: 8, lg: 12, xl: 16, "2xl": 20 },
   typography: {
     fontSize: { xs: 10, sm: 12, base: 14, xl: 20 },
     fontWeight: { medium: "500", semibold: "600", bold: "700" },
   },
-  shadows: { sm: {}, xl: {} },
+  shadows: { sm: {}, md: {}, xl: {} },
 }));
 
 import CleanerCancellationWarningModal from "../../src/components/modals/CleanerCancellationWarningModal";
@@ -324,9 +317,9 @@ describe("CleanerCancellationWarningModal", () => {
     });
   });
 
-  describe("Agreement Checkbox", () => {
-    it("should toggle checkbox when pressed", () => {
-      const { getByTestId, getByText } = render(
+  describe("Agreement Checkbox and Consent Header", () => {
+    it("should show consent header when checkbox is not checked", () => {
+      const { getByText } = render(
         <CleanerCancellationWarningModal
           visible={true}
           onClose={mockOnClose}
@@ -335,11 +328,62 @@ describe("CleanerCancellationWarningModal", () => {
         />
       );
 
-      const checkbox = getByTestId("checkbox");
-      expect(getByText("unchecked")).toBeTruthy();
+      expect(getByText("Tap below to confirm cancellation")).toBeTruthy();
+    });
 
-      fireEvent.press(checkbox);
-      expect(getByText("checked")).toBeTruthy();
+    it("should toggle checkbox when checkbox container is pressed", () => {
+      const { getByText, queryByText } = render(
+        <CleanerCancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={outsidePenaltyInfo}
+        />
+      );
+
+      // Initially consent header is visible
+      expect(getByText("Tap below to confirm cancellation")).toBeTruthy();
+
+      // Press the checkbox label to toggle
+      const checkboxLabel = getByText("I want to cancel this job");
+      fireEvent.press(checkboxLabel);
+
+      // After pressing, consent header should be hidden (checkbox is now checked)
+      expect(queryByText("Tap below to confirm cancellation")).toBeNull();
+    });
+
+    it("should hide consent header when checkbox is checked", () => {
+      const { getByText, queryByText } = render(
+        <CleanerCancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={outsidePenaltyInfo}
+        />
+      );
+
+      // Check the checkbox
+      fireEvent.press(getByText("I want to cancel this job"));
+
+      // Consent header should be hidden
+      expect(queryByText("Tap below to confirm cancellation")).toBeNull();
+    });
+
+    it("should show check icon when checkbox is checked", () => {
+      const { getByText, getByTestId } = render(
+        <CleanerCancellationWarningModal
+          visible={true}
+          onClose={mockOnClose}
+          onConfirm={mockOnConfirm}
+          cancellationInfo={outsidePenaltyInfo}
+        />
+      );
+
+      // Check the checkbox
+      fireEvent.press(getByText("I want to cancel this job"));
+
+      // Check icon should be visible
+      expect(getByTestId("icon-check")).toBeTruthy();
     });
   });
 
@@ -376,7 +420,7 @@ describe("CleanerCancellationWarningModal", () => {
     });
 
     it("should call onConfirm when checkbox is checked and confirm button is pressed", () => {
-      const { getByTestId, getAllByText } = render(
+      const { getByText, getAllByText } = render(
         <CleanerCancellationWarningModal
           visible={true}
           onClose={mockOnClose}
@@ -385,8 +429,8 @@ describe("CleanerCancellationWarningModal", () => {
         />
       );
 
-      // Check the checkbox first
-      fireEvent.press(getByTestId("checkbox"));
+      // Check the checkbox first by pressing the checkbox label
+      fireEvent.press(getByText("I want to cancel this job"));
 
       // Get all elements with "Cancel Job" text, the last one should be the button
       const elements = getAllByText("Cancel Job");
