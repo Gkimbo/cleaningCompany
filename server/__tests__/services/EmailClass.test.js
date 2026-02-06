@@ -1919,4 +1919,176 @@ describe("EmailClass", () => {
       });
     });
   });
+
+  describe("sendEmployeeJobAssigned", () => {
+    it("should send job assigned email with correct recipient", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St, Boston, MA 02101",
+        5000,
+        "Test Cleaning Co"
+      );
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.to).toBe("employee@example.com");
+    });
+
+    it("should include job date in subject line", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St",
+        5000,
+        "Test Cleaning Co"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.subject).toContain("New Job Assigned");
+    });
+
+    it("should include employee name in greeting", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St",
+        5000,
+        "Test Cleaning Co"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Hi John");
+      expect(mailOptions.text).toContain("Hi John");
+    });
+
+    it("should include client name in email body", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St",
+        5000,
+        "Test Cleaning Co"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Jane Doe");
+      expect(mailOptions.text).toContain("Jane Doe");
+    });
+
+    it("should include address in email body", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "456 Oak Ave, Springfield, IL 62701",
+        5000,
+        "Test Cleaning Co"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("456 Oak Ave");
+      expect(mailOptions.text).toContain("456 Oak Ave");
+    });
+
+    it("should format pay amount correctly", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St",
+        7500, // $75.00
+        "Test Cleaning Co"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("$75.00");
+      expect(mailOptions.text).toContain("$75.00");
+    });
+
+    it("should show TBD when pay amount is null", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St",
+        null,
+        "Test Cleaning Co"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("TBD");
+      expect(mailOptions.text).toContain("TBD");
+    });
+
+    it("should include business name in email body", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St",
+        5000,
+        "Sparkle Clean Services"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toContain("Sparkle Clean Services");
+      expect(mailOptions.text).toContain("Sparkle Clean Services");
+    });
+
+    it("should include both HTML and plain text versions", async () => {
+      await Email.sendEmployeeJobAssigned(
+        "employee@example.com",
+        "John",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St",
+        5000,
+        "Test Cleaning Co"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.html).toBeDefined();
+      expect(mailOptions.text).toBeDefined();
+    });
+
+    it("should handle demo account email redirection", async () => {
+      mockUserFindOne.mockResolvedValue({
+        id: 1,
+        email: "demo_employee@sparkle.demo",
+        isDemoAccount: true,
+        currentPreviewOwnerId: 10,
+      });
+      mockUserFindByPk.mockResolvedValue({
+        id: 10,
+        email: "owner@company.com",
+      });
+
+      await Email.sendEmployeeJobAssigned(
+        "demo_employee@sparkle.demo",
+        "Demo",
+        "2026-02-15",
+        "Jane Doe",
+        "123 Main St",
+        5000,
+        "Test Cleaning Co"
+      );
+
+      const mailOptions = mockSendMail.mock.calls[0][0];
+      expect(mailOptions.to).toBe("owner@company.com");
+      expect(mailOptions.subject).toContain("[DEMO:");
+    });
+  });
 });

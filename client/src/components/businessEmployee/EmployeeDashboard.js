@@ -335,16 +335,13 @@ const EmployeeDashboard = ({ state }) => {
             {profile?.businessOwner?.businessName || "Your Business"}
           </Text>
         </View>
-        <Pressable
-          style={styles.profileButton}
-          onPress={() => navigate("/employee/profile")}
-        >
+        <View style={styles.profileButton}>
           <View style={styles.profileAvatar}>
             <Text style={styles.profileAvatarText}>
               {(profile?.firstName?.[0] || "E").toUpperCase()}
             </Text>
           </View>
-        </Pressable>
+        </View>
       </View>
 
       {error && (
@@ -410,9 +407,9 @@ const EmployeeDashboard = ({ state }) => {
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.quickActions}>
           <QuickAction
-            icon="list"
-            label="All Jobs"
-            onPress={() => navigate("/employee/jobs")}
+            icon="calendar"
+            label="My Calendar"
+            onPress={() => navigate("/employee/profile")}
             color={colors.primary[600]}
           />
           <QuickAction

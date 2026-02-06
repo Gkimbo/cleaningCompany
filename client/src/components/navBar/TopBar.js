@@ -80,6 +80,8 @@ const TopBar = ({ dispatch, state }) => {
   const { onNotification, onNotificationCountUpdate } = useSocket();
   const { login } = useContext(AuthContext);
 
+  
+
   // Fetch pending applications count for owners and HR
   useEffect(() => {
     const fetchPendingApplications = async () => {
@@ -407,11 +409,8 @@ const TopBar = ({ dispatch, state }) => {
                           </>
                         ) : state.account === "employee" ? (
                           <>
-                            {/* Employees only see their assigned jobs - no marketplace access */}
-                            <EmployeeAssignmentsButton
-                              closeModal={closeModal}
-                            />
-                            <EarningsButton closeModal={closeModal} />
+                            {/* Employees access jobs via My Calendar on dashboard */}
+                            {/* Earnings info is shown on the profile page */}
                           </>
                         ) : state.account === "cleaner" ? (
                           <>

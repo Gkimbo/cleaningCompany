@@ -150,6 +150,7 @@ import {
   EmployeeJobDetail,
   EmployeeCalendar,
   CoworkerMessaging,
+  EmployeeProfilePage,
 } from "../src/components/businessEmployee";
 
 export default function App() {
@@ -688,6 +689,10 @@ export default function App() {
               <Route
                 path="/employee/messages"
                 element={<CoworkerMessaging state={state} />}
+              />
+              <Route
+                path="/employee/profile"
+                element={<EmployeeProfilePage state={state} />}
               />
             </Routes>
               <ExitPreviewButton />

@@ -1102,15 +1102,15 @@ async function createDemoAccounts() {
 			});
 
 			// Create BusinessEmployee record if it doesn't exist
-			const existingEmployee = await BusinessEmployee.findOne({
+			let businessEmployeeRecord = await BusinessEmployee.findOne({
 				where: {
 					businessOwnerId: createdAccounts.businessOwner.id,
 					userId: createdAccounts.employee.id,
 				},
 			});
 
-			if (!existingEmployee) {
-				await BusinessEmployee.create({
+			if (!businessEmployeeRecord) {
+				businessEmployeeRecord = await BusinessEmployee.create({
 					businessOwnerId: createdAccounts.businessOwner.id,
 					userId: createdAccounts.employee.id,
 					firstName: "Demo",
@@ -1120,10 +1120,19 @@ async function createDemoAccounts() {
 					payType: "percentage",
 					payRate: 70,
 					canSeeFullSchedule: true,
+					canViewJobEarnings: true,
 					invitationAcceptedAt: new Date(),
 				});
 				console.log("  - Created BusinessEmployee record");
+			} else {
+				// Update existing record to ensure canViewJobEarnings is enabled
+				if (!businessEmployeeRecord.canViewJobEarnings) {
+					await businessEmployeeRecord.update({ canViewJobEarnings: true });
+					console.log("  - Updated BusinessEmployee with canViewJobEarnings");
+				}
 			}
+			// Store the BusinessEmployee ID for use in job assignments
+			createdAccounts.businessEmployeeId = businessEmployeeRecord.id;
 		} catch (error) {
 			console.error("  - Error linking employee:", error.message);
 		}
@@ -1147,71 +1156,66 @@ async function createDemoAccounts() {
 					const jobDate = getFutureDate(i * 2 + 1); // Jobs spread over next 10 days
 					const home = clientHomes[i % clientHomes.length];
 
-					// Check if assignment exists
+					// First create the appointment, then check for existing assignment
+					let appointment = await UserAppointments.findOne({
+						where: { homeId: home.id, date: jobDate },
+					});
+
+					if (!appointment) {
+						const numBeds = parseInt(home.numBeds) || 3;
+						const numBaths = parseInt(home.numBaths) || 2;
+						const bringSheets = i % 2 === 0 ? "yes" : "no";
+						const bringTowels = "yes";
+						const sheetConfigs = bringSheets === "yes" ? generateSheetConfigurations(numBeds) : null;
+						const towelConfigs = generateTowelConfigurations(numBaths);
+
+						const price = calculateAppointmentPrice({
+							numBeds,
+							numBaths,
+							bringSheets,
+							bringTowels,
+							sheetConfigs,
+							towelConfigs,
+						});
+
+						appointment = await UserAppointments.create({
+							userId: home.userId,
+							homeId: home.id,
+							date: jobDate,
+							price: String(price),
+							paid: false,
+							bringTowels,
+							bringSheets,
+							completed: false,
+							hasBeenAssigned: true,
+							employeesAssigned: [createdAccounts.businessEmployeeId.toString()],
+							empoyeesNeeded: 1,
+							timeToBeCompleted: String(2 + (i % 2)),
+							paymentStatus: "pending",
+							sheetConfigurations: sheetConfigs,
+							towelConfigurations: towelConfigs,
+						});
+					}
+
+					// Check if assignment exists for this appointment
 					const existingAssignment = await EmployeeJobAssignment.findOne({
 						where: {
-							employeeId: createdAccounts.employee.id,
-							scheduledDate: jobDate,
+							businessEmployeeId: createdAccounts.businessEmployeeId,
+							appointmentId: appointment.id,
 						},
 					});
 
 					if (!existingAssignment) {
-						// Create an appointment first
-						let appointment = await UserAppointments.findOne({
-							where: { homeId: home.id, date: jobDate },
-						});
-
-						if (!appointment) {
-							const numBeds = parseInt(home.numBeds) || 3;
-							const numBaths = parseInt(home.numBaths) || 2;
-							const bringSheets = i % 2 === 0 ? "yes" : "no";
-							const bringTowels = "yes";
-							const sheetConfigs = bringSheets === "yes" ? generateSheetConfigurations(numBeds) : null;
-							const towelConfigs = generateTowelConfigurations(numBaths);
-
-							const price = calculateAppointmentPrice({
-								numBeds,
-								numBaths,
-								bringSheets,
-								bringTowels,
-								sheetConfigs,
-								towelConfigs,
-							});
-
-							appointment = await UserAppointments.create({
-								userId: home.userId,
-								homeId: home.id,
-								date: jobDate,
-								price: String(price),
-								paid: false,
-								bringTowels,
-								bringSheets,
-								completed: false,
-								hasBeenAssigned: true,
-								employeesAssigned: [createdAccounts.employee.id.toString()],
-								empoyeesNeeded: 1,
-								timeToBeCompleted: String(2 + (i % 2)),
-								paymentStatus: "pending",
-								// Add detailed configurations
-								sheetConfigurations: sheetConfigs,
-								towelConfigurations: towelConfigs,
-							});
-						}
-
 						// Create the job assignment
 						const jobPrice = parseFloat(appointment.price);
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
-							employeeId: createdAccounts.employee.id,
+							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: appointment.id,
-							homeId: home.id,
-							clientId: home.userId,
-							scheduledDate: jobDate,
-							scheduledTime: ["09:00", "10:00", "13:00", "14:00", "15:00"][i],
+							assignedBy: createdAccounts.businessOwner.id,
 							status: "assigned",
 							payType: "percentage",
-							payRate: 70,
-							estimatedPay: Math.round(jobPrice * 0.7 * 100), // 70% of job price in cents
+							payAmount: Math.round(jobPrice * 0.7 * 100), // 70% of job price in cents
 						});
 						console.log(`  - Created job assignment for ${jobDate}`);
 					}
@@ -1346,7 +1350,7 @@ async function createDemoAccounts() {
 							bringSheets: "no",
 							completed: true,
 							hasBeenAssigned: true,
-							employeesAssigned: [createdAccounts.employee.id.toString()],
+							employeesAssigned: [createdAccounts.businessEmployeeId.toString()],
 							empoyeesNeeded: 1,
 							timeToBeCompleted: "2.5",
 							paymentStatus: "paid",
@@ -1358,16 +1362,13 @@ async function createDemoAccounts() {
 						// Create job assignment for past appointments
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
-							employeeId: createdAccounts.employee.id,
+							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: existingAppt.id,
-							homeId: clientHome.id,
-							clientId: createdAccounts.businessClient.id,
-							scheduledDate: pastDate,
-							scheduledTime: "10:00",
+							assignedBy: createdAccounts.businessOwner.id,
 							status: "completed",
 							payType: "percentage",
-							payRate: 70,
-							estimatedPay: Math.round(160 * 0.7 * 100),
+							payAmount: Math.round(160 * 0.7 * 100),
+							completedAt: new Date(pastDate),
 						});
 					}
 					businessClientPastApptIds.push(existingAppt.id);
@@ -1420,7 +1421,7 @@ async function createDemoAccounts() {
 							bringSheets,
 							completed: false,
 							hasBeenAssigned: true,
-							employeesAssigned: [createdAccounts.employee.id.toString()],
+							employeesAssigned: [createdAccounts.businessEmployeeId.toString()],
 							empoyeesNeeded: 1,
 							timeToBeCompleted: "2.5",
 							paymentStatus: "pending",
@@ -1433,16 +1434,12 @@ async function createDemoAccounts() {
 						// Create job assignment for upcoming appointments
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
-							employeeId: createdAccounts.employee.id,
+							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: appointment.id,
-							homeId: clientHome.id,
-							clientId: createdAccounts.businessClient.id,
-							scheduledDate: futureDate,
-							scheduledTime: ["09:00", "11:00", "14:00"][i],
+							assignedBy: createdAccounts.businessOwner.id,
 							status: "assigned",
 							payType: "percentage",
-							payRate: 70,
-							estimatedPay: Math.round(price * 0.7 * 100),
+							payAmount: Math.round(price * 0.7 * 100),
 						});
 					}
 				} catch (error) {

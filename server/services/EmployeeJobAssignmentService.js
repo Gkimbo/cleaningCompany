@@ -20,6 +20,7 @@ const CustomJobFlowService = require("./CustomJobFlowService");
 const AppointmentJobFlowService = require("./AppointmentJobFlowService");
 const GuestNotLeftService = require("./GuestNotLeftService");
 const AnalyticsService = require("./AnalyticsService");
+const NotificationService = require("./NotificationService");
 const { calculateDistance } = require("../utils/geoUtils");
 const EncryptionService = require("./EncryptionService");
 
@@ -133,6 +134,37 @@ class EmployeeJobAssignmentService {
 
       return newAssignment;
     });
+
+    // Send notification to the employee (after transaction completes)
+    try {
+      // Get the employee's user record for notification
+      const employeeUser = await User.findByPk(employee.userId);
+
+      // Get client info
+      const client = await User.findByPk(appointment.userId);
+
+      // Get business owner info
+      const businessOwner = await User.findByPk(businessOwnerId);
+
+      // Only send notification if employee has a user account with email or push token
+      if (employeeUser && (employeeUser.email || employeeUser.expoPushToken)) {
+        const home = appointment.home || await UserHomes.findByPk(appointment.homeId);
+
+        await NotificationService.notifyEmployeeJobAssigned({
+          employeeUserId: employee.userId,
+          employeeName: employee.firstName || "Team Member",
+          appointmentId,
+          appointmentDate: appointment.date,
+          clientName: client ? `${client.firstName || ""} ${client.lastName || ""}`.trim() : "Client",
+          address: home?.address || "Address on file",
+          payAmount,
+          businessName: businessOwner?.businessName || "Your employer",
+        });
+      }
+    } catch (notificationError) {
+      // Log but don't fail the assignment if notification fails
+      console.error("[EmployeeJobAssignmentService] Failed to send job assignment notification:", notificationError);
+    }
 
     return assignment;
   }
@@ -335,6 +367,47 @@ class EmployeeJobAssignmentService {
 
       return assignment;
     });
+
+    // Send notifications after transaction completes
+    try {
+      // Get appointment details
+      const appointment = await UserAppointments.findByPk(currentAssignment.appointmentId, {
+        include: [{ model: UserHomes, as: "home" }],
+      });
+
+      // Get client info
+      const client = await User.findByPk(appointment?.userId);
+
+      // Get business owner info
+      const businessOwner = await User.findByPk(businessOwnerId);
+
+      // Notify new employee about the assignment
+      const newEmployeeUser = await User.findByPk(newEmployee.userId);
+      if (newEmployeeUser && (newEmployeeUser.email || newEmployeeUser.expoPushToken)) {
+        await NotificationService.notifyEmployeeJobAssigned({
+          employeeUserId: newEmployee.userId,
+          employeeName: newEmployee.firstName || "Team Member",
+          appointmentId: currentAssignment.appointmentId,
+          appointmentDate: appointment?.date,
+          clientName: client ? `${client.firstName || ""} ${client.lastName || ""}`.trim() : "Client",
+          address: appointment?.home?.address || "Address on file",
+          payAmount: currentAssignment.payAmount,
+          businessName: businessOwner?.businessName || "Your employer",
+        });
+      }
+
+      // Notify old employee about being unassigned (if they had a user account)
+      const oldEmployee = await BusinessEmployee.findByPk(currentAssignment.businessEmployeeId);
+      if (oldEmployee?.userId) {
+        await NotificationService.notifyEmployeeJobReassigned({
+          employeeUserId: oldEmployee.userId,
+          appointmentId: currentAssignment.appointmentId,
+          appointmentDate: appointment?.date,
+        });
+      }
+    } catch (notificationError) {
+      console.error("[EmployeeJobAssignmentService] Failed to send reassignment notifications:", notificationError);
+    }
 
     return newAssignment;
   }
