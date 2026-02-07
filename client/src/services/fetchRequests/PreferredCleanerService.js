@@ -147,6 +147,36 @@ class PreferredCleanerService {
   }
 
   /**
+   * Check if a cleaner is eligible to be set as preferred for a home
+   * Returns false for business cleaners (their own clients)
+   * @param {string} token - Auth token
+   * @param {number} homeId - Home ID
+   * @param {number} cleanerId - Cleaner ID
+   * @returns {Object} { canSetAsPreferred, reason }
+   */
+  static async checkPreferredEligibility(token, homeId, cleanerId) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/preferred-cleaner/homes/${homeId}/cleaners/${cleanerId}/preferred-eligibility`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        // Default to allowing if check fails (don't block feature due to API error)
+        return { canSetAsPreferred: true, reason: null };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error checking preferred eligibility:", error);
+      // Default to allowing if check fails
+      return { canSetAsPreferred: true, reason: null };
+    }
+  }
+
+  /**
    * Get stats for a specific cleaner at a specific home
    * @param {string} token - Auth token
    * @param {number} homeId - Home ID

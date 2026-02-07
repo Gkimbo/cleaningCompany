@@ -41,9 +41,10 @@ const SoloCompletionOfferModal = ({
     });
   };
 
-  const formatPrice = (cents) => {
-    if (!cents) return "TBD";
-    return `$${(cents / 100).toFixed(2)}`;
+  const formatPrice = (amount) => {
+    if (!amount) return "TBD";
+    // Prices are stored in dollars
+    return `$${parseFloat(amount).toFixed(2)}`;
   };
 
   const formatTimeRemaining = (expiresAt) => {

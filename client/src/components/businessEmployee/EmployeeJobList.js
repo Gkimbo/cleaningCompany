@@ -33,15 +33,6 @@ const STATUS_COLORS = {
 const JobCard = ({ job, onStart, onComplete, onViewDetails, isStarting, isCompleting }) => {
   const statusInfo = STATUS_COLORS[job.status] || STATUS_COLORS.assigned;
 
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
   const formatTime = (timeStr) => {
     if (!timeStr) return "";
     const [hours, minutes] = timeStr.split(":");
@@ -49,118 +40,200 @@ const JobCard = ({ job, onStart, onComplete, onViewDetails, isStarting, isComple
     return `${h > 12 ? h - 12 : h}:${minutes} ${h >= 12 ? "PM" : "AM"}`;
   };
 
-  const isUpcoming = new Date(job.appointment?.date) >= new Date().setHours(0, 0, 0, 0);
-  const isToday =
-    new Date(job.appointment?.date).toDateString() === new Date().toDateString();
+  const jobDate = new Date(job.appointment?.date + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const isToday = jobDate.toDateString() === today.toDateString();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = jobDate.toDateString() === tomorrow.toDateString();
+
+  const getDayLabel = () => {
+    if (isToday) return "Today";
+    if (isTomorrow) return "Tomorrow";
+    return jobDate.toLocaleDateString("en-US", { weekday: "short" });
+  };
+
+  // Determine card accent color based on status and timing
+  const getAccentColor = () => {
+    if (job.status === "started") return colors.warning[500];
+    if (job.status === "completed") return colors.success[500];
+    if (isToday) return colors.primary[600];
+    return colors.neutral[300];
+  };
 
   return (
-    <Pressable style={styles.jobCard} onPress={onViewDetails}>
-      {isToday && (
-        <View style={styles.todayBanner}>
-          <Icon name="calendar-check-o" size={12} color="#fff" />
-          <Text style={styles.todayBannerText}>Today</Text>
-        </View>
-      )}
+    <Pressable
+      style={[
+        styles.jobCard,
+        isToday && job.status === "assigned" && styles.jobCardToday,
+        job.status === "started" && styles.jobCardInProgress,
+      ]}
+      onPress={onViewDetails}
+    >
+      {/* Accent strip */}
+      <View style={[styles.cardAccent, { backgroundColor: getAccentColor() }]} />
 
-      <View style={styles.jobCardHeader}>
-        <View style={styles.jobDateBadge}>
-          <Text style={styles.jobDateDay}>
-            {new Date(job.appointment?.date).getDate()}
-          </Text>
-          <Text style={styles.jobDateMonth}>
-            {new Date(job.appointment?.date).toLocaleDateString("en-US", {
-              month: "short",
-            })}
-          </Text>
-        </View>
+      <View style={styles.jobCardContent}>
+        {/* Top Row: Date & Status */}
+        <View style={styles.jobTopRow}>
+          <View style={styles.dateSection}>
+            <View style={[
+              styles.dateBadge,
+              isToday && styles.dateBadgeToday,
+              job.status === "started" && styles.dateBadgeInProgress,
+            ]}>
+              <Text style={[
+                styles.dateDay,
+                isToday && styles.dateDayToday,
+                job.status === "started" && styles.dateDayInProgress,
+              ]}>
+                {jobDate.getDate()}
+              </Text>
+              <Text style={[
+                styles.dateMonth,
+                isToday && styles.dateMonthToday,
+                job.status === "started" && styles.dateMonthInProgress,
+              ]}>
+                {jobDate.toLocaleDateString("en-US", { month: "short" }).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.dayLabelContainer}>
+              <Text style={[
+                styles.dayLabel,
+                isToday && styles.dayLabelToday,
+              ]}>
+                {getDayLabel()}
+              </Text>
+              {job.appointment?.timeToBeCompleted && (
+                <Text style={styles.timeLabel}>
+                  Completed by {job.appointment.timeToBeCompleted}h
+                </Text>
+              )}
+            </View>
+          </View>
 
-        <View style={styles.jobInfo}>
-          {job.appointment?.home?.address && (
-            <Text style={styles.jobAddress}>{job.appointment.home.address}</Text>
-          )}
-          <Text style={styles.jobTime}>
-            {formatTime(job.appointment?.startTime)} - {job.appointment?.duration || "2"} hours
-          </Text>
-          {job.appointment?.home && (
-            <Text style={styles.jobHomeInfo}>
-              {job.appointment.home.numBeds} bed, {job.appointment.home.numBaths} bath
+          <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
+            <View style={[styles.statusDot, { backgroundColor: statusInfo.text }]} />
+            <Text style={[styles.statusText, { color: statusInfo.text }]}>
+              {statusInfo.label}
             </Text>
+          </View>
+        </View>
+
+        {/* Address & Home Info */}
+        <View style={styles.locationSection}>
+          <View style={styles.locationIcon}>
+            <Icon name="map-marker" size={16} color={colors.primary[500]} />
+          </View>
+          <View style={styles.locationDetails}>
+            {job.appointment?.home?.address ? (
+              <Text style={styles.addressText} numberOfLines={2}>
+                {job.appointment.home.address}
+              </Text>
+            ) : job.appointment?.home?.generalArea ? (
+              <Text style={styles.addressText}>
+                {job.appointment.home.generalArea}
+                {job.appointment.home.addressRestricted && (
+                  <Text style={styles.restrictedNote}> (Full address available day-of)</Text>
+                )}
+              </Text>
+            ) : (
+              <Text style={styles.addressText}>Address pending</Text>
+            )}
+            {job.appointment?.home && (
+              <View style={styles.homeStats}>
+                <View style={styles.homeStat}>
+                  <Icon name="bed" size={12} color={colors.neutral[400]} />
+                  <Text style={styles.homeStatText}>{job.appointment.home.numBeds} bed</Text>
+                </View>
+                <View style={styles.homeStat}>
+                  <Icon name="bath" size={12} color={colors.neutral[400]} />
+                  <Text style={styles.homeStatText}>{job.appointment.home.numBaths} bath</Text>
+                </View>
+                {job.appointment?.duration && (
+                  <View style={styles.homeStat}>
+                    <Icon name="clock-o" size={12} color={colors.neutral[400]} />
+                    <Text style={styles.homeStatText}>{job.appointment.duration}h</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Client & Pay Row */}
+        <View style={styles.detailsRow}>
+          {job.appointment?.user && (
+            <View style={styles.clientChip}>
+              <Icon name="user" size={12} color={colors.neutral[500]} />
+              <Text style={styles.clientChipText}>
+                {job.appointment.user.firstName} {job.appointment.user.lastName?.[0]}.
+              </Text>
+            </View>
+          )}
+
+          {job.payAmount !== undefined && job.payAmount > 0 && (
+            <View style={styles.payChip}>
+              <Icon name="dollar" size={12} color={colors.success[600]} />
+              <Text style={styles.payChipText}>
+                {(job.payAmount / 100).toFixed(0)}
+                {job.payType === "hourly" && "/hr"}
+              </Text>
+            </View>
           )}
         </View>
 
-        <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
-          <Text style={[styles.statusText, { color: statusInfo.text }]}>
-            {statusInfo.label}
-          </Text>
-        </View>
-      </View>
-
-      {/* Client info (if allowed) */}
-      {job.appointment?.user && (
-        <View style={styles.clientInfo}>
-          <Icon name="user" size={14} color={colors.neutral[400]} />
-          <Text style={styles.clientName}>
-            {job.appointment.user.firstName} {job.appointment.user.lastName?.[0]}.
-          </Text>
-        </View>
-      )}
-
-      {/* Pay info (if allowed) */}
-      {job.payAmount !== undefined && (
-        <View style={styles.payInfo}>
-          <Text style={styles.payLabel}>Your Pay:</Text>
-          <Text style={styles.payAmount}>
-            ${(job.payAmount / 100).toFixed(2)}
-            {job.payType === "hourly" && "/hr"}
-          </Text>
-        </View>
-      )}
-
-      {/* Actions for upcoming jobs */}
-      {isUpcoming && job.status === "assigned" && (
-        <View style={styles.jobActions}>
+        {/* Start Job Button - ONLY for today's assigned jobs */}
+        {isToday && job.status === "assigned" && (
           <Pressable
             style={[styles.startButton, isStarting && styles.buttonDisabled]}
-            onPress={onStart}
+            onPress={(e) => { e.stopPropagation(); onStart(); }}
             disabled={isStarting}
           >
             {isStarting ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
-                <Icon name="play" size={14} color="#fff" />
+                <Icon name="play-circle" size={18} color="#fff" />
                 <Text style={styles.startButtonText}>Start Job</Text>
               </>
             )}
           </Pressable>
-        </View>
-      )}
+        )}
 
-      {/* Complete button for in-progress jobs */}
-      {job.status === "started" && (
-        <View style={styles.jobActions}>
-          <View style={styles.inProgressInfo}>
-            <Icon name="clock-o" size={14} color={colors.warning[600]} />
-            <Text style={styles.inProgressText}>
-              Started at {job.startedAt ? new Date(job.startedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}
-            </Text>
+        {/* In Progress Actions */}
+        {job.status === "started" && (
+          <View style={styles.inProgressSection}>
+            <View style={styles.inProgressTimer}>
+              <Icon name="clock-o" size={14} color={colors.warning[600]} />
+              <Text style={styles.inProgressTimerText}>
+                Started {job.startedAt ? new Date(job.startedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}
+              </Text>
+            </View>
+            <Pressable
+              style={[styles.completeButton, isCompleting && styles.buttonDisabled]}
+              onPress={(e) => { e.stopPropagation(); onComplete(); }}
+              disabled={isCompleting}
+            >
+              {isCompleting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Icon name="check-circle" size={18} color="#fff" />
+                  <Text style={styles.completeButtonText}>Complete</Text>
+                </>
+              )}
+            </Pressable>
           </View>
-          <Pressable
-            style={[styles.completeButton, isCompleting && styles.buttonDisabled]}
-            onPress={onComplete}
-            disabled={isCompleting}
-          >
-            {isCompleting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <>
-                <Icon name="check" size={14} color="#fff" />
-                <Text style={styles.completeButtonText}>Complete Job</Text>
-              </>
-            )}
-          </Pressable>
-        </View>
-      )}
+        )}
+      </View>
+
+      {/* Chevron for details */}
+      <View style={styles.chevronContainer}>
+        <Icon name="chevron-right" size={14} color={colors.neutral[300]} />
+      </View>
     </Pressable>
   );
 };
@@ -303,13 +376,21 @@ const EmployeeJobList = ({ state }) => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>My Jobs</Text>
-        <Pressable
-          style={styles.earningsButton}
-          onPress={() => navigate("/employee/earnings")}
-        >
-          <Icon name="dollar" size={16} color={colors.success[600]} />
-          <Text style={styles.earningsButtonText}>Earnings</Text>
-        </Pressable>
+        <View style={styles.headerButtons}>
+          <Pressable
+            style={styles.calendarButton}
+            onPress={() => navigate("/employee/profile", { state: { from: "jobs" } })}
+          >
+            <Icon name="calendar" size={16} color={colors.primary[600]} />
+          </Pressable>
+          <Pressable
+            style={styles.earningsButton}
+            onPress={() => navigate("/employee/earnings")}
+          >
+            <Icon name="dollar" size={16} color={colors.success[600]} />
+            <Text style={styles.earningsButtonText}>Earnings</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* In-Progress Banner */}
@@ -430,6 +511,21 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
+  headerButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  calendarButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
   earningsButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -486,185 +582,284 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
   },
+
+  // Job Card Styles
   jobCard: {
+    flexDirection: "row",
     backgroundColor: colors.background.primary,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
+    borderRadius: radius.lg,
     marginBottom: spacing.md,
+    overflow: "hidden",
     ...shadows.sm,
   },
-  todayBanner: {
-    position: "absolute",
-    top: 0,
-    right: spacing.lg,
+  jobCardToday: {
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    backgroundColor: colors.primary[50] + "30",
+  },
+  jobCardInProgress: {
+    borderWidth: 1,
+    borderColor: colors.warning[300],
+    backgroundColor: colors.warning[50] + "40",
+  },
+  cardAccent: {
+    width: 4,
+  },
+  jobCardContent: {
+    flex: 1,
+    padding: spacing.md,
+  },
+  chevronContainer: {
+    justifyContent: "center",
+    paddingRight: spacing.md,
+  },
+
+  // Top Row
+  jobTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.md,
+  },
+  dateSection: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.primary[600],
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderBottomLeftRadius: radius.md,
-    borderBottomRightRadius: radius.md,
   },
-  todayBannerText: {
-    marginLeft: spacing.xs,
-    color: "#fff",
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  jobCardHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  jobDateBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primary[50],
+  dateBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[100],
     justifyContent: "center",
     alignItems: "center",
   },
-  jobDateDay: {
+  dateBadgeToday: {
+    backgroundColor: colors.primary[600],
+  },
+  dateBadgeInProgress: {
+    backgroundColor: colors.warning[500],
+  },
+  dateDay: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
-    color: colors.primary[700],
+    color: colors.text.primary,
+    lineHeight: 22,
   },
-  jobDateMonth: {
-    fontSize: typography.fontSize.xs,
-    color: colors.primary[600],
-    textTransform: "uppercase",
+  dateDayToday: {
+    color: "#fff",
   },
-  jobInfo: {
-    flex: 1,
-    marginLeft: spacing.md,
+  dateDayInProgress: {
+    color: "#fff",
   },
-  jobAddress: {
-    fontSize: typography.fontSize.base,
+  dateMonth: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    marginTop: -2,
+  },
+  dateMonthToday: {
+    color: "rgba(255,255,255,0.9)",
+  },
+  dateMonthInProgress: {
+    color: "rgba(255,255,255,0.9)",
+  },
+  dayLabelContainer: {
+    marginLeft: spacing.sm,
+  },
+  dayLabel: {
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
   },
-  jobTime: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginTop: 2,
+  dayLabelToday: {
+    color: colors.primary[700],
   },
-  jobHomeInfo: {
+  timeLabel: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
-    marginTop: 2,
+    marginTop: 1,
   },
+
+  // Status Badge
   statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.full,
   },
-  statusText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: spacing.xs,
   },
-  clientInfo: {
+  statusText: {
+    fontSize: 11,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Location Section
+  locationSection: {
+    flexDirection: "row",
+    marginBottom: spacing.md,
+  },
+  locationIcon: {
+    width: 24,
+    alignItems: "center",
+    paddingTop: 2,
+  },
+  locationDetails: {
+    flex: 1,
+  },
+  addressText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+    lineHeight: 20,
+  },
+  restrictedNote: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
+  },
+  homeStats: {
+    flexDirection: "row",
+    marginTop: spacing.xs,
+    gap: spacing.md,
+  },
+  homeStat: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
   },
-  clientName: {
-    marginLeft: spacing.sm,
-    fontSize: typography.fontSize.sm,
+  homeStatText: {
+    marginLeft: 4,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+
+  // Details Row (Client & Pay)
+  detailsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  clientChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[100],
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  clientChipText: {
+    marginLeft: 4,
+    fontSize: typography.fontSize.xs,
     color: colors.text.secondary,
   },
-  payInfo: {
+  payChip: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: spacing.sm,
     backgroundColor: colors.success[50],
-    padding: spacing.sm,
-    borderRadius: radius.md,
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.success[200],
   },
-  payLabel: {
-    fontSize: typography.fontSize.sm,
+  payChipText: {
+    marginLeft: 4,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.success[700],
   },
-  payAmount: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.success[700],
-  },
-  jobActions: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
-  },
+
+  // Action Buttons
   startButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.primary[600],
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    marginTop: spacing.md,
     ...shadows.sm,
   },
   startButtonText: {
     marginLeft: spacing.sm,
     color: "#fff",
     fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.sm,
+  },
+  inProgressSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  inProgressTimer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  inProgressTimerText: {
+    marginLeft: spacing.xs,
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    fontWeight: typography.fontWeight.medium,
   },
   completeButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.success[600],
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
     ...shadows.sm,
   },
   completeButtonText: {
-    marginLeft: spacing.sm,
+    marginLeft: spacing.xs,
     color: "#fff",
     fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.sm,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
-  inProgressInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.md,
-  },
-  inProgressText: {
-    marginLeft: spacing.sm,
-    color: colors.warning[700],
-    fontSize: typography.fontSize.sm,
-  },
+
+  // Empty State
   emptyState: {
     alignItems: "center",
     paddingVertical: spacing["4xl"],
+    paddingHorizontal: spacing.lg,
   },
   emptyStateTitle: {
     marginTop: spacing.lg,
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
   },
   emptyStateText: {
     marginTop: spacing.sm,
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     textAlign: "center",
   },
+
+  // Messages
   errorMessage: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.error[50],
     padding: spacing.md,
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     marginTop: spacing.md,
     borderRadius: radius.md,
     borderLeftWidth: 3,
@@ -681,7 +876,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.success[50],
     padding: spacing.md,
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
     marginTop: spacing.md,
     borderRadius: radius.md,
     borderLeftWidth: 3,

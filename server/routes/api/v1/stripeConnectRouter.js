@@ -485,16 +485,21 @@ stripeConnectRouter.post("/create-account", async (req, res) => {
 /**
  * POST /complete-setup
  *
- * Creates a fully-onboarded Stripe Connect account in one step.
- * Collects all required info (personal, SSN, bank account) and submits to Stripe.
+ * Creates a Stripe Connect account with pre-filled info and generates an onboarding link.
+ * Uses controller properties (Express-style) with Stripe-hosted onboarding.
+ *
+ * Flow:
+ * 1. Collect basic info in app (birthday, address)
+ * 2. Create account with pre-filled data
+ * 3. Return onboarding link for Stripe to collect verification + bank account
  *
  * @body {string} token - JWT authentication token
- * @body {object} personalInfo - Personal information (dob, address, full SSN)
- * @body {object} bankAccount - Bank account details (routingNumber, accountNumber)
- * @returns {object} - Account status
+ * @body {object} personalInfo - Personal information (dob, address)
+ * @body {object} tosAcceptance - ToS acceptance (accepted, date)
+ * @returns {object} - Account status and onboarding URL
  */
 stripeConnectRouter.post("/complete-setup", async (req, res) => {
-  const { token, personalInfo, bankAccount } = req.body;
+  const { token, personalInfo, tosAcceptance } = req.body;
 
   // Validate token
   const decoded = verifyToken(token);
@@ -523,6 +528,14 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
       });
     }
 
+    // Validate ToS acceptance
+    if (!tosAcceptance?.accepted) {
+      return res.status(400).json({
+        error: "You must agree to the Stripe Connected Account Agreement",
+        code: "TOS_NOT_ACCEPTED",
+      });
+    }
+
     // Check if account already exists
     let connectAccount = await StripeConnectAccount.findOne({
       where: { userId: user.id },
@@ -531,10 +544,68 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
     let stripeAccountId;
 
     if (connectAccount) {
+      // Account exists - check if onboarding is complete
       stripeAccountId = connectAccount.stripeAccountId;
-      console.log(`[StripeConnect] Updating existing account ${stripeAccountId}`);
-    } else {
-      // Build individual info
+
+      try {
+        const existingStripeAccount = await stripe.accounts.retrieve(stripeAccountId);
+
+        // If already fully onboarded, return success
+        if (existingStripeAccount.payouts_enabled && existingStripeAccount.details_submitted) {
+          return res.json({
+            success: true,
+            stripeAccountId,
+            accountStatus: ACCOUNT_STATUS.ACTIVE,
+            payoutsEnabled: true,
+            onboardingComplete: true,
+            hasBankAccount: existingStripeAccount.external_accounts?.data?.length > 0,
+          });
+        }
+
+        // Update individual info if provided
+        if (personalInfo) {
+          const individualUpdate = {};
+
+          if (personalInfo.dob) {
+            const dobParts = personalInfo.dob.split("-");
+            if (dobParts.length === 3) {
+              individualUpdate.dob = {
+                year: parseInt(dobParts[0]),
+                month: parseInt(dobParts[1]),
+                day: parseInt(dobParts[2]),
+              };
+            }
+          }
+
+          if (personalInfo.address) {
+            individualUpdate.address = {
+              line1: personalInfo.address.line1 || undefined,
+              line2: personalInfo.address.line2 || undefined,
+              city: personalInfo.address.city || undefined,
+              state: personalInfo.address.state || undefined,
+              postal_code: personalInfo.address.postalCode || undefined,
+              country: "US",
+            };
+          }
+
+          if (Object.keys(individualUpdate).length > 0) {
+            await stripe.accounts.update(stripeAccountId, {
+              individual: individualUpdate,
+            });
+            console.log(`[StripeConnect] Updated individual info for ${stripeAccountId}`);
+          }
+        }
+      } catch (retrieveError) {
+        console.error(`[StripeConnect] Error retrieving account:`, retrieveError.message);
+        // Account may be invalid, delete and recreate
+        await connectAccount.destroy();
+        connectAccount = null;
+      }
+    }
+
+    // Create new account if none exists
+    if (!connectAccount) {
+      // Build individual info for pre-filling
       const individual = {
         first_name: user.firstName || undefined,
         last_name: user.lastName || undefined,
@@ -542,7 +613,7 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
         phone: user.phone || undefined,
       };
 
-      // Add DOB
+      // Add DOB if provided
       if (personalInfo?.dob) {
         const dobParts = personalInfo.dob.split("-");
         if (dobParts.length === 3) {
@@ -554,7 +625,7 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
         }
       }
 
-      // Add address
+      // Add address if provided
       if (personalInfo?.address) {
         individual.address = {
           line1: personalInfo.address.line1 || undefined,
@@ -566,18 +637,18 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
         };
       }
 
-      // Add full SSN
-      if (personalInfo?.ssn) {
-        individual.id_number = personalInfo.ssn;
-      }
-
-      // Create Stripe account
-      // Note: For Express accounts, ToS must be accepted by user via Stripe's hosted flow
+      // Create account using controller properties (matches platform settings)
       const account = await stripe.accounts.create({
         controller: {
-          fees: { payer: "application" },
-          losses: { payments: "application" },
-          stripe_dashboard: { type: "express" },
+          fees: {
+            payer: "application",
+          },
+          losses: {
+            payments: "application",
+          },
+          stripe_dashboard: {
+            type: "express",
+          },
         },
         email: user.email || undefined,
         capabilities: {
@@ -604,7 +675,7 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
       connectAccount = await StripeConnectAccount.create({
         userId: user.id,
         stripeAccountId: account.id,
-        accountStatus: ACCOUNT_STATUS.ONBOARDING,
+        accountStatus: ACCOUNT_STATUS.PENDING,
         payoutsEnabled: false,
         chargesEnabled: false,
         detailsSubmitted: false,
@@ -614,82 +685,30 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
       console.log(`[StripeConnect] Created account ${account.id} for user ${user.id}`);
     }
 
-    // Add bank account
-    if (bankAccount?.routingNumber && bankAccount?.accountNumber) {
-      try {
-        // Create a bank account token
-        const bankToken = await stripe.tokens.create({
-          bank_account: {
-            country: "US",
-            currency: "usd",
-            account_holder_name: `${user.firstName ? EncryptionService.decrypt(user.firstName) : ""} ${user.lastName ? EncryptionService.decrypt(user.lastName) : ""}`.trim() || EncryptionService.decrypt(user.email),
-            account_holder_type: "individual",
-            routing_number: bankAccount.routingNumber,
-            account_number: bankAccount.accountNumber,
-          },
-        });
-
-        // Attach bank account to connected account
-        await stripe.accounts.createExternalAccount(stripeAccountId, {
-          external_account: bankToken.id,
-        });
-
-        console.log(`[StripeConnect] Added bank account to ${stripeAccountId}`);
-      } catch (bankError) {
-        console.error("[StripeConnect] Error adding bank account:", bankError.message);
-        return res.status(400).json({
-          error: bankError.message || "Failed to add bank account",
-          code: "BANK_ACCOUNT_ERROR",
-        });
-      }
-    }
-
-    // Fetch latest status from Stripe
-    const stripeAccount = await stripe.accounts.retrieve(stripeAccountId);
-
-    // Update local record
-    const newStatus = determineAccountStatus(stripeAccount);
-    const isOnboardingComplete = stripeAccount.payouts_enabled && stripeAccount.details_submitted;
-
-    await connectAccount.update({
-      payoutsEnabled: stripeAccount.payouts_enabled,
-      chargesEnabled: stripeAccount.charges_enabled,
-      detailsSubmitted: stripeAccount.details_submitted,
-      onboardingComplete: isOnboardingComplete,
-      accountStatus: newStatus,
+    // Generate onboarding link for Stripe to collect remaining info (SSN, bank account)
+    const baseUrl = getBaseUrl(req);
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeAccountId,
+      refresh_url: `${baseUrl}/api/v1/stripe-connect/onboarding-refresh?userId=${user.id}`,
+      return_url: `${baseUrl}/api/v1/stripe-connect/onboarding-complete?userId=${user.id}`,
+      type: "account_onboarding",
+      collection_options: {
+        fields: "eventually_due",
+      },
     });
 
-    console.log(`[StripeConnect] Setup complete for ${stripeAccountId}. Status: ${newStatus}, Payouts enabled: ${stripeAccount.payouts_enabled}`);
+    // Update status to onboarding
+    await connectAccount.update({ accountStatus: ACCOUNT_STATUS.ONBOARDING });
 
-    // Check if user still needs to complete requirements (like ToS acceptance)
-    const hasPendingRequirements = stripeAccount.requirements?.currently_due?.length > 0;
-    let onboardingUrl = null;
-
-    if (hasPendingRequirements) {
-      // Generate onboarding link for ToS acceptance
-      // Since we pre-filled all the data, they just need to accept ToS
-      const accountLink = await stripe.accountLinks.create({
-        account: stripeAccountId,
-        refresh_url: "http://localhost:3000/earnings?refresh=true",
-        return_url: "http://localhost:3000/earnings?return=true",
-        type: "account_onboarding",
-      });
-      onboardingUrl = accountLink.url;
-      console.log(`[StripeConnect] Generated onboarding link for ToS: ${onboardingUrl}`);
-    }
+    console.log(`[StripeConnect] Generated onboarding link for ${stripeAccountId}`);
 
     return res.json({
       success: true,
       stripeAccountId,
-      accountStatus: newStatus,
-      payoutsEnabled: stripeAccount.payouts_enabled,
-      onboardingComplete: isOnboardingComplete,
-      requirements: {
-        currentlyDue: stripeAccount.requirements?.currently_due || [],
-        eventuallyDue: stripeAccount.requirements?.eventually_due || [],
-      },
-      // Include onboarding URL if ToS still needs to be accepted
-      onboardingUrl,
+      accountStatus: ACCOUNT_STATUS.ONBOARDING,
+      onboardingUrl: accountLink.url,
+      onboardingExpiresAt: accountLink.expires_at,
+      requiresOnboarding: true,
     });
   } catch (error) {
     console.error("[StripeConnect] Error in complete-setup:", error);
@@ -706,6 +725,248 @@ stripeConnectRouter.post("/complete-setup", async (req, res) => {
       error: "Failed to complete account setup",
       code: "SETUP_FAILED",
       details: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+/**
+ * GET /onboarding-complete
+ *
+ * Callback URL after user completes Stripe onboarding.
+ * Redirects to the mobile app with success status.
+ */
+stripeConnectRouter.get("/onboarding-complete", async (req, res) => {
+  const { userId } = req.query;
+
+  try {
+    const connectAccount = await StripeConnectAccount.findOne({
+      where: { userId },
+    });
+
+    if (connectAccount) {
+      // Fetch latest status from Stripe
+      const stripeAccount = await stripe.accounts.retrieve(connectAccount.stripeAccountId);
+
+      const newStatus = determineAccountStatus(stripeAccount);
+      const isOnboardingComplete = stripeAccount.payouts_enabled && stripeAccount.details_submitted;
+
+      await connectAccount.update({
+        payoutsEnabled: stripeAccount.payouts_enabled,
+        chargesEnabled: stripeAccount.charges_enabled,
+        detailsSubmitted: stripeAccount.details_submitted,
+        onboardingComplete: isOnboardingComplete,
+        accountStatus: newStatus,
+      });
+
+      console.log(`[StripeConnect] Onboarding complete callback for user ${userId}. Status: ${newStatus}`);
+    }
+
+    // Redirect to app with success
+    // For mobile apps, you'd use a deep link like: cleaningapp://stripe-onboarding-complete
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Setup Complete</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 50px 20px; }
+            h1 { color: #4CAF50; }
+            p { color: #666; }
+          </style>
+        </head>
+        <body>
+          <h1>Setup Complete!</h1>
+          <p>Your payment account is now set up. You can close this window and return to the app.</p>
+          <script>
+            // Try to redirect back to app
+            setTimeout(function() {
+              window.location.href = 'cleaningapp://stripe-complete';
+            }, 1000);
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("[StripeConnect] Error in onboarding-complete:", error);
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Setup Complete</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+        </head>
+        <body>
+          <h1>Setup Complete</h1>
+          <p>Please return to the app.</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+/**
+ * GET /onboarding-refresh
+ *
+ * Callback URL when onboarding link expires.
+ * Generates a new link and redirects.
+ */
+stripeConnectRouter.get("/onboarding-refresh", async (req, res) => {
+  const { userId } = req.query;
+
+  try {
+    const connectAccount = await StripeConnectAccount.findOne({
+      where: { userId },
+    });
+
+    if (!connectAccount) {
+      return res.status(404).send("Account not found. Please try again from the app.");
+    }
+
+    // Generate new onboarding link
+    const baseUrl = getBaseUrl(req);
+    const accountLink = await stripe.accountLinks.create({
+      account: connectAccount.stripeAccountId,
+      refresh_url: `${baseUrl}/api/v1/stripe-connect/onboarding-refresh?userId=${userId}`,
+      return_url: `${baseUrl}/api/v1/stripe-connect/onboarding-complete?userId=${userId}`,
+      type: "account_onboarding",
+      collection_options: {
+        fields: "eventually_due",
+      },
+    });
+
+    // Redirect to new onboarding link
+    res.redirect(accountLink.url);
+  } catch (error) {
+    console.error("[StripeConnect] Error in onboarding-refresh:", error);
+    res.status(500).send("Failed to refresh onboarding link. Please try again from the app.");
+  }
+});
+
+/**
+ * POST /update-bank-account
+ *
+ * Updates the bank account for a connected account.
+ * Removes the old bank account and adds a new one.
+ *
+ * @body {string} token - JWT authentication token
+ * @body {object} bankAccount - New bank account details (routingNumber, accountNumber)
+ * @returns {object} - Success status
+ */
+stripeConnectRouter.post("/update-bank-account", async (req, res) => {
+  const { token, bankAccount } = req.body;
+
+  // Validate token
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return res.status(401).json({
+      error: "Invalid or expired authentication token",
+      code: "INVALID_TOKEN",
+    });
+  }
+
+  // Validate bank account info
+  if (!bankAccount?.routingNumber || !bankAccount?.accountNumber) {
+    return res.status(400).json({
+      error: "Routing number and account number are required",
+      code: "MISSING_BANK_INFO",
+    });
+  }
+
+  try {
+    // Find user
+    const user = await User.findByPk(decoded.userId);
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    // Find Connect account
+    const connectAccount = await StripeConnectAccount.findOne({
+      where: { userId: user.id },
+    });
+
+    if (!connectAccount) {
+      return res.status(404).json({
+        error: "No Stripe Connect account found. Please complete initial setup first.",
+        code: "ACCOUNT_NOT_FOUND",
+      });
+    }
+
+    const stripeAccountId = connectAccount.stripeAccountId;
+
+    // Get current external accounts (bank accounts)
+    const stripeAccount = await stripe.accounts.retrieve(stripeAccountId);
+    const existingBankAccounts = stripeAccount.external_accounts?.data || [];
+
+    // Get user's name for account holder
+    let accountHolderName = "Account Holder";
+    try {
+      const firstName = user.firstName ? EncryptionService.decrypt(user.firstName) : "";
+      const lastName = user.lastName ? EncryptionService.decrypt(user.lastName) : "";
+      accountHolderName = `${firstName} ${lastName}`.trim() || EncryptionService.decrypt(user.email);
+    } catch (decryptError) {
+      console.warn("[StripeConnect] Could not decrypt user name, using email");
+      accountHolderName = user.email || "Account Holder";
+    }
+
+    // Create new bank account token
+    const bankToken = await stripe.tokens.create({
+      bank_account: {
+        country: "US",
+        currency: "usd",
+        account_holder_name: accountHolderName,
+        account_holder_type: "individual",
+        routing_number: bankAccount.routingNumber,
+        account_number: bankAccount.accountNumber,
+      },
+    });
+
+    // Add new bank account
+    const newBankAccount = await stripe.accounts.createExternalAccount(stripeAccountId, {
+      external_account: bankToken.id,
+    });
+
+    // Set new bank account as default
+    await stripe.accounts.updateExternalAccount(stripeAccountId, newBankAccount.id, {
+      default_for_currency: true,
+    });
+
+    // Delete old bank accounts
+    for (const oldAccount of existingBankAccounts) {
+      if (oldAccount.id !== newBankAccount.id) {
+        try {
+          await stripe.accounts.deleteExternalAccount(stripeAccountId, oldAccount.id);
+          console.log(`[StripeConnect] Deleted old bank account ${oldAccount.id}`);
+        } catch (deleteError) {
+          console.warn(`[StripeConnect] Could not delete old bank account ${oldAccount.id}:`, deleteError.message);
+        }
+      }
+    }
+
+    console.log(`[StripeConnect] Updated bank account for ${stripeAccountId}`);
+
+    return res.json({
+      success: true,
+      message: "Bank account updated successfully",
+      bankAccountLast4: newBankAccount.last4,
+      bankName: newBankAccount.bank_name,
+    });
+  } catch (error) {
+    console.error("[StripeConnect] Error updating bank account:", error);
+
+    if (error.type === "StripeInvalidRequestError") {
+      return res.status(400).json({
+        error: error.message || "Invalid bank account information",
+        code: "INVALID_BANK_INFO",
+      });
+    }
+
+    return res.status(500).json({
+      error: "Failed to update bank account",
+      code: "UPDATE_FAILED",
     });
   }
 });

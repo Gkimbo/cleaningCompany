@@ -72,6 +72,11 @@ class ApplicationInfoClass {
     backgroundConsent,
     drugTestConsent,
     referenceCheckConsent,
+    // Terms and Privacy
+    termsAccepted,
+    termsId,
+    privacyPolicyAccepted,
+    privacyPolicyId,
     // Referral
     referralCode,
   }) {
@@ -110,6 +115,10 @@ class ApplicationInfoClass {
       backgroundConsent,
       drugTestConsent,
       referenceCheckConsent,
+      termsAccepted,
+      termsId,
+      privacyPolicyAccepted,
+      privacyPolicyId,
       referralCode,
     });
 

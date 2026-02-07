@@ -27,7 +27,7 @@ const EditHomeList = ({ state, dispatch }) => {
   };
 
   const handleBack = () => {
-    navigate("/");
+    navigate("/list-of-homes");
   };
 
   const handleEdit = (id) => {

@@ -25,6 +25,23 @@ import CalendarSyncDisclaimerView from "./CalendarSyncDisclaimerView";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
+const refreshAppointments = async (token, dispatch) => {
+  try {
+    const response = await fetch(`${baseURL}/api/v1/user-info`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data = await response.json();
+    if (response.ok && data?.user) {
+      dispatch({ type: "USER_HOME", payload: data.user.homes || [] });
+      dispatch({ type: "USER_APPOINTMENTS", payload: data.user.appointments || [] });
+    }
+  } catch (err) {
+    console.error("Error refreshing appointments:", err);
+  }
+};
+
 const PLATFORM_INFO = {
   airbnb: {
     name: "Airbnb",
@@ -217,10 +234,17 @@ const CalendarSyncManager = ({ state, dispatch }) => {
 
       if (response.ok) {
         setSyncs([data.sync, ...syncs]);
-        setSuccess(data.message);
         setNewUrl("");
         setShowAddForm(false);
-        setTimeout(() => setSuccess(null), 5000);
+
+        // Auto-sync the newly added calendar to create appointments
+        if (data.sync?.id && data.upcomingCheckouts > 0) {
+          setSuccess(`${data.message} Syncing appointments...`);
+          await handleManualSync(data.sync.id);
+        } else {
+          setSuccess(data.message);
+          setTimeout(() => setSuccess(null), 5000);
+        }
       } else {
         setError(data.error || "Failed to add calendar sync");
       }
@@ -311,6 +335,10 @@ const CalendarSyncManager = ({ state, dispatch }) => {
           `Sync complete! Found ${data.checkoutsFound} checkouts, created ${data.appointmentsCreated} new appointments.`
         );
         fetchSyncs(); // Refresh to update lastSyncAt
+        // Refresh appointments in global state so calendar updates immediately
+        if (data.appointmentsCreated > 0) {
+          await refreshAppointments(user?.token, dispatch);
+        }
         setTimeout(() => setSuccess(null), 5000);
       } else {
         Alert.alert("Sync Failed", data.error);

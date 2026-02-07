@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
+import PreferredCleanerService from "../../services/fetchRequests/PreferredCleanerService";
 
 const StarRating = ({ rating, onRatingChange, label, description }) => {
   const [hoveredStar, setHoveredStar] = useState(null);
@@ -145,8 +146,32 @@ const MultiAspectReviewForm = ({
   // Preferred cleaner option (homeowner reviewing cleaner only)
   // Initialize based on whether cleaner is already preferred
   const [setAsPreferred, setSetAsPreferred] = useState(isCleanerPreferred);
+  // Whether the cleaner is eligible for preferred status (false for business cleaners)
+  const [canSetAsPreferred, setCanSetAsPreferred] = useState(true);
 
   const isHomeownerReview = reviewType === "homeowner_to_cleaner";
+
+  // Check if cleaner is eligible for preferred status
+  // Business cleaners (owner's own clients) should not see this option
+  useEffect(() => {
+    const checkEligibility = async () => {
+      if (isHomeownerReview && homeId && userId && state?.token) {
+        try {
+          const result = await PreferredCleanerService.checkPreferredEligibility(
+            state.token,
+            homeId,
+            userId
+          );
+          setCanSetAsPreferred(result.canSetAsPreferred);
+        } catch (error) {
+          console.error("Error checking preferred eligibility:", error);
+          // Default to showing the option if check fails
+          setCanSetAsPreferred(true);
+        }
+      }
+    };
+    checkEligibility();
+  }, [isHomeownerReview, homeId, userId, state?.token]);
 
   const calculateOverall = () => {
     if (isHomeownerReview) {
@@ -526,7 +551,8 @@ const MultiAspectReviewForm = ({
       </View>
 
       {/* Preferred Cleaner Option - only for homeowner reviewing cleaner */}
-      {isHomeownerReview && homeId && (
+      {/* Hidden for business cleaners (their own clients) */}
+      {isHomeownerReview && homeId && canSetAsPreferred && (
         <View style={[
           styles.preferredCleanerSection,
           isCleanerPreferred && !setAsPreferred && styles.preferredCleanerSectionWarning,

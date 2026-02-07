@@ -455,6 +455,42 @@ preferredCleanerRouter.get("/homes/:homeId/cleaners/:cleanerId/is-preferred", ve
   }
 });
 
+/**
+ * GET /homes/:homeId/cleaners/:cleanerId/preferred-eligibility
+ * Check if a cleaner is eligible for preferred status at a home
+ * Returns false for business cleaners (their own clients)
+ */
+preferredCleanerRouter.get("/homes/:homeId/cleaners/:cleanerId/preferred-eligibility", verifyHomeowner, async (req, res) => {
+  try {
+    const { homeId, cleanerId } = req.params;
+    const { UserHomes } = models;
+
+    // Verify homeowner owns this home
+    const home = await UserHomes.findOne({
+      where: { id: homeId, userId: req.user.id },
+    });
+
+    if (!home) {
+      return res.status(404).json({ error: "Home not found" });
+    }
+
+    // Check if the cleaner is the business owner/employee for this client
+    const isBusinessCleaner = await PreferredCleanerService.isBusinessCleanerForHome(
+      parseInt(cleanerId),
+      parseInt(homeId),
+      models
+    );
+
+    res.json({
+      canSetAsPreferred: !isBusinessCleaner,
+      reason: isBusinessCleaner ? "business_relationship" : null,
+    });
+  } catch (err) {
+    console.error("Error checking preferred eligibility:", err);
+    res.status(500).json({ error: "Failed to check eligibility" });
+  }
+});
+
 // =====================
 // CLEANER PREFERRED HOMES ENDPOINTS
 // =====================
@@ -703,6 +739,148 @@ preferredCleanerRouter.get("/check-availability/:date", verifyCleaner, async (re
   } catch (err) {
     console.error("Error checking availability:", err);
     res.status(500).json({ error: "Failed to check availability" });
+  }
+});
+
+// =====================
+// OWNER CONFIG ENDPOINTS
+// =====================
+
+// Middleware to verify owner access
+const verifyOwner = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, secretKey);
+    const user = await User.findByPk(decoded.userId);
+
+    if (!user || user.type !== "owner") {
+      return res.status(403).json({ error: "Owner access required" });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+/**
+ * GET /perks-config
+ * Get full preferred perks configuration (owner only)
+ */
+preferredCleanerRouter.get("/perks-config", verifyOwner, async (req, res) => {
+  try {
+    const { PreferredPerksConfig } = models;
+    const config = await PreferredPerksConfig.getActive();
+
+    res.json({
+      config: PreferredPerksConfigSerializer.serializeOne(config),
+      formData: PreferredPerksConfigSerializer.serializeForForm(config),
+    });
+  } catch (err) {
+    console.error("Error fetching perks config:", err);
+    res.status(500).json({ error: "Failed to fetch configuration" });
+  }
+});
+
+/**
+ * PUT /perks-config
+ * Update preferred perks configuration (owner only)
+ */
+preferredCleanerRouter.put("/perks-config", verifyOwner, async (req, res) => {
+  try {
+    const { PreferredPerksConfig } = models;
+    const data = req.body;
+
+    // Validate tier thresholds are contiguous
+    const thresholds = [
+      { min: data.bronzeMinHomes, max: data.bronzeMaxHomes },
+      { min: data.silverMinHomes, max: data.silverMaxHomes },
+      { min: data.goldMinHomes, max: data.goldMaxHomes },
+      { min: data.platinumMinHomes, max: null },
+    ];
+
+    // Validate bronze starts at 1
+    if (data.bronzeMinHomes !== 1) {
+      return res.status(400).json({ error: "Bronze tier must start at 1 home" });
+    }
+
+    // Validate tier thresholds are contiguous
+    for (let i = 0; i < thresholds.length - 1; i++) {
+      const current = thresholds[i];
+      const next = thresholds[i + 1];
+      if (current.max + 1 !== next.min) {
+        return res.status(400).json({
+          error: `Tier thresholds must be contiguous. Gap between tier ${i + 1} and ${i + 2}`,
+        });
+      }
+    }
+
+    // Validate bonus percentages are within range
+    const bonusFields = ['bronzeBonusPercent', 'silverBonusPercent', 'goldBonusPercent', 'platinumBonusPercent'];
+    for (const field of bonusFields) {
+      if (data[field] !== undefined && (data[field] < 0 || data[field] > 100)) {
+        return res.status(400).json({ error: `${field} must be between 0 and 100` });
+      }
+    }
+
+    // Validate payout hours are positive
+    if (data.goldPayoutHours !== undefined && data.goldPayoutHours < 1) {
+      return res.status(400).json({ error: "Gold payout hours must be at least 1" });
+    }
+    if (data.platinumPayoutHours !== undefined && data.platinumPayoutHours < 1) {
+      return res.status(400).json({ error: "Platinum payout hours must be at least 1" });
+    }
+
+    const updatedConfig = await PreferredPerksConfig.updateConfig(data, req.user.id, models);
+
+    res.json({
+      success: true,
+      config: PreferredPerksConfigSerializer.serializeOne(updatedConfig),
+    });
+  } catch (err) {
+    console.error("Error updating perks config:", err);
+    res.status(500).json({ error: "Failed to update configuration" });
+  }
+});
+
+/**
+ * GET /perks-config/history
+ * Get preferred perks configuration change history (owner only)
+ */
+preferredCleanerRouter.get("/perks-config/history", verifyOwner, async (req, res) => {
+  try {
+    const { PreferredPerksConfig } = models;
+    const limit = parseInt(req.query.limit) || 20;
+
+    const history = await PreferredPerksConfig.getHistory(limit, models);
+
+    // Serialize history with changer info
+    const serializedHistory = history.map((entry) => {
+      const data = entry.toJSON();
+      return {
+        id: data.id,
+        changeType: data.changeType,
+        changes: data.changes,
+        createdAt: data.createdAt,
+        changedBy: data.changer ? {
+          id: data.changer.id,
+          name: data.changer.firstName && data.changer.lastName
+            ? `${EncryptionService.decrypt(data.changer.firstName)} ${EncryptionService.decrypt(data.changer.lastName)}`
+            : data.changer.username,
+        } : null,
+      };
+    });
+
+    res.json({ history: serializedHistory });
+  } catch (err) {
+    console.error("Error fetching perks config history:", err);
+    res.status(500).json({ error: "Failed to fetch history" });
   }
 });
 

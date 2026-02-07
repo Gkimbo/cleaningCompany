@@ -335,15 +335,16 @@ describe("EachAppointment", () => {
 
   describe("Access instructions", () => {
     it("shows access details section when expanded", async () => {
-      const { getByText } = renderWithProvider(
+      const { getByText, getAllByText } = renderWithProvider(
         <EachAppointment {...defaultProps} />
       );
 
       fireEvent.press(getByText("Access Instructions"));
 
       await waitFor(() => {
-        expect(getByText("Key Location")).toBeTruthy();
-        expect(getByText("Door Code")).toBeTruthy();
+        // Use getAllByText since labels may appear multiple times
+        expect(getAllByText("Key Location").length).toBeGreaterThan(0);
+        expect(getAllByText("Door Code").length).toBeGreaterThan(0);
       });
     });
 

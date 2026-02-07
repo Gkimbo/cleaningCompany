@@ -182,14 +182,24 @@ class MessageService {
           },
         }
       );
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to create support conversation");
+
+      // Try to parse response as JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error("Failed to parse response:", parseError);
+        throw new Error("Server returned an invalid response");
       }
-      return await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create support conversation");
+      }
+
+      return data;
     } catch (error) {
       console.error("Error creating support conversation:", error);
-      return { error: error.message };
+      return { error: error.message || "Failed to connect to support" };
     }
   }
 

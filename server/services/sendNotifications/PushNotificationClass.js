@@ -757,6 +757,21 @@ class PushNotification {
       screen: "JobDetails",
     });
   }
+
+  // 52. Homeowner cancelled appointment (to cleaner)
+  static async sendPushHomeownerCancelledAppointment(expoPushToken, cleanerName, appointmentDate, appointmentTime, address, partialPayment = null) {
+    const title = "Appointment Cancelled";
+    const paymentInfo = partialPayment ? ` You'll receive a partial payment of $${partialPayment}.` : "";
+    const body = `The homeowner cancelled the ${formatDate(appointmentDate)}${appointmentTime ? ` at ${appointmentTime}` : ""} cleaning at ${address}.${paymentInfo}`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "homeowner_cancelled_appointment",
+      appointmentDate,
+      appointmentTime,
+      address,
+      partialPayment,
+    });
+  }
 }
 
 module.exports = PushNotification;

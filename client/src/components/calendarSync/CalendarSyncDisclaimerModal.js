@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Dimensions,
 } from "react-native";
-import { Checkbox } from "react-native-paper";
 import {
   colors,
   spacing,
@@ -143,16 +142,24 @@ const CalendarSyncDisclaimerModal = ({ visible, onAccept, onCancel }) => {
 
           <View style={styles.footer}>
             <TouchableOpacity
-              style={styles.checkboxRow}
+              testID="checkbox"
+              style={[
+                styles.checkboxRow,
+                isChecked && styles.checkboxRowChecked,
+                !hasScrolledToBottom && styles.checkboxRowDisabled,
+              ]}
               onPress={() => hasScrolledToBottom && setIsChecked(!isChecked)}
               activeOpacity={hasScrolledToBottom ? 0.7 : 1}
             >
-              <Checkbox
-                status={isChecked ? "checked" : "unchecked"}
-                onPress={() => hasScrolledToBottom && setIsChecked(!isChecked)}
-                color={colors.primary[600]}
-                disabled={!hasScrolledToBottom}
-              />
+              <View
+                style={[
+                  styles.checkboxBox,
+                  isChecked && styles.checkboxBoxChecked,
+                  !hasScrolledToBottom && styles.checkboxBoxDisabled,
+                ]}
+              >
+                {isChecked && <Text style={styles.checkmark}>✓</Text>}
+              </View>
               <Text
                 style={[
                   styles.checkboxLabel,
@@ -272,13 +279,50 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.border.default,
+    backgroundColor: colors.neutral[0],
+  },
+  checkboxRowChecked: {
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[50],
+  },
+  checkboxRowDisabled: {
+    borderColor: colors.neutral[200],
+    backgroundColor: colors.neutral[100],
+  },
+  checkboxBox: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    borderColor: colors.border.default,
+    backgroundColor: colors.neutral[0],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+    marginTop: 2,
+  },
+  checkboxBoxChecked: {
+    borderColor: colors.primary[600],
+    backgroundColor: colors.primary[600],
+  },
+  checkboxBoxDisabled: {
+    borderColor: colors.neutral[300],
+    backgroundColor: colors.neutral[200],
+  },
+  checkmark: {
+    color: colors.neutral[0],
+    fontSize: 16,
+    fontWeight: typography.fontWeight.bold,
   },
   checkboxLabel: {
     flex: 1,
     fontSize: typography.fontSize.sm,
     color: colors.text.primary,
     lineHeight: 20,
-    marginLeft: spacing.xs,
   },
   checkboxLabelDisabled: {
     color: colors.text.tertiary,

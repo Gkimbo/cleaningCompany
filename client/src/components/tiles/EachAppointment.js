@@ -53,10 +53,18 @@ const EachAppointment = ({
   onPaymentRetried,
   originalPrice,
   discountApplied,
+  employeesAssigned,
+  pendingRequestCount,
 }) => {
-  const [code, setCode] = useState("");
-  const [key, setKeyLocation] = useState("");
-  const [keyCodeToggle, setKeyCodeToggle] = useState("");
+  // Normalize bringSheets and bringTowels to ensure they have valid lowercase values
+  const normalizedBringSheets = (bringSheets || "no").toLowerCase();
+  const normalizedBringTowels = (bringTowels || "no").toLowerCase();
+
+  const [code, setCode] = useState(keyPadCode || "");
+  const [key, setKeyLocation] = useState(keyLocation || "");
+  const [keyCodeToggle, setKeyCodeToggle] = useState(
+    keyPadCode && !keyLocation ? "code" : "key"
+  );
   const [error, setError] = useState(null);
   const [redirect, setRedirect] = useState(false);
   const [showAccessDetails, setShowAccessDetails] = useState(false);
@@ -133,6 +141,19 @@ const EachAppointment = ({
     }
   }, [initialTowelConfigs, numBaths]);
 
+  // Initialize configurations when user toggles addons to "yes" and configs are empty
+  useEffect(() => {
+    if (normalizedBringSheets === "yes" && bedConfigurations.length === 0 && numBeds) {
+      setBedConfigurations(initializeBedConfigurations(numBeds));
+    }
+  }, [normalizedBringSheets, bedConfigurations.length, numBeds]);
+
+  useEffect(() => {
+    if (normalizedBringTowels === "yes" && bathroomConfigurations.length === 0 && numBaths) {
+      setBathroomConfigurations(initializeBathroomConfigurations(numBaths));
+    }
+  }, [normalizedBringTowels, bathroomConfigurations.length, numBaths]);
+
   // Update a specific bed configuration
   const updateBedConfig = async (bedNumber, field, value) => {
     const updatedConfigs = bedConfigurations.map((bed) =>
@@ -165,8 +186,8 @@ const EachAppointment = ({
         body: JSON.stringify({
           sheetConfigurations: sheetConfigs,
           towelConfigurations: towelConfigs,
-          bringSheets,
-          bringTowels,
+          bringSheets: normalizedBringSheets,
+          bringTowels: normalizedBringTowels,
         }),
       });
 
@@ -247,17 +268,28 @@ const EachAppointment = ({
     setChangeNotification({ message: "", appointment: "" });
   };
 
-  // Preload values
+  // Preload access instruction values from props
   useEffect(() => {
-    if (keyPadCode !== "") {
+    // Set the values from props
+    if (keyPadCode && keyPadCode !== "") {
       setCode(keyPadCode);
-      setKeyCodeToggle("code");
     }
-    if (keyLocation !== "") {
+    if (keyLocation && keyLocation !== "") {
       setKeyLocation(keyLocation);
+    }
+
+    // Determine which toggle to show
+    if (keyPadCode && keyPadCode !== "" && (!keyLocation || keyLocation === "")) {
+      // Only code is set
+      setKeyCodeToggle("code");
+    } else if (keyLocation && keyLocation !== "") {
+      // Key location is set (or both are set - prefer key)
+      setKeyCodeToggle("key");
+    } else {
+      // Neither is set - default to key location
       setKeyCodeToggle("key");
     }
-  }, []);
+  }, [keyPadCode, keyLocation]);
 
   // Redirect handler
   useEffect(() => {
@@ -338,19 +370,26 @@ const EachAppointment = ({
 
   // Handle confirming cancellation
   const handleConfirmCancel = async () => {
+    console.log("[EachAppointment] handleConfirmCancel called for appointment:", id);
     setCancelLoading(true);
     try {
+      console.log("[EachAppointment] Calling cancelAsHomeowner API...");
       const result = await FetchData.cancelAsHomeowner(id, token);
+      console.log("[EachAppointment] cancelAsHomeowner result:", result);
       if (result.error) {
+        console.log("[EachAppointment] Error from API:", result.error);
         setError(result.error);
         setCancelLoading(false);
         return;
       }
+      console.log("[EachAppointment] Cancellation successful, closing modal");
       setShowCancelModal(false);
       if (onCancel) {
+        console.log("[EachAppointment] Calling onCancel callback");
         onCancel(id, result);
       }
     } catch (err) {
+      console.error("[EachAppointment] Exception during cancellation:", err);
       setError("Failed to cancel appointment");
     } finally {
       setCancelLoading(false);
@@ -574,6 +613,37 @@ const EachAppointment = ({
               <Text style={[styles.badgeText, styles.badgeTextDefault]}>Scheduled</Text>
             </View>
           )}
+          {/* Cleaner Assignment Badges */}
+          <View style={styles.cleanerBadgesRow}>
+            {employeesAssigned >= 1 ? (
+              <View style={[styles.badge, styles.badgeCleanerAssigned]}>
+                <Icon name="user" size={10} color={colors.success[600]} />
+                <Text style={[styles.badgeText, styles.badgeTextCleanerAssigned]}>Cleaner assigned</Text>
+              </View>
+            ) : (
+              <View style={[styles.badge, styles.badgeNoCleaner]}>
+                <Icon name="user-times" size={10} color={colors.warning[600]} />
+                <Text style={[styles.badgeText, styles.badgeTextNoCleaner]}>No cleaner assigned</Text>
+              </View>
+            )}
+            {(!employeesAssigned || employeesAssigned < 1) && pendingRequestCount > 0 && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.badge,
+                  styles.badgePendingRequests,
+                  styles.badgePendingRequestsClickable,
+                  pressed && styles.badgePendingRequestsPressed,
+                ]}
+                onPress={() => navigate("/client-requests")}
+              >
+                <Icon name="hand-paper-o" size={10} color={colors.secondary[600]} />
+                <Text style={[styles.badgeText, styles.badgeTextPendingRequests]}>
+                  {pendingRequestCount} cleaner{pendingRequestCount > 1 ? "s" : ""} requesting
+                </Text>
+                <Icon name="chevron-right" size={8} color={colors.secondary[500]} />
+              </Pressable>
+            )}
+          </View>
         </View>
         <View style={styles.priceContainer}>
           <Text style={styles.priceLabel}>Total</Text>
@@ -587,19 +657,26 @@ const EachAppointment = ({
 
       {/* Quick Info Cards */}
       <View style={styles.infoCards}>
-        {/* Time Window Card - Editable when not disabled */}
-        {!editingTimeWindow ? (
+        {/* Time Window Card - Editable when not disabled and no cleaner assigned */}
+        {(() => {
+          const hasCleanerAssigned = employeesAssigned >= 1;
+          const timeWindowLocked = isDisabled || hasCleanerAssigned;
+
+          return !editingTimeWindow ? (
           <Pressable
-            style={[styles.infoCard, !isDisabled && styles.infoCardEditable]}
-            onPress={() => !isDisabled && setEditingTimeWindow(true)}
-            disabled={isDisabled}
+            style={[styles.infoCard, !timeWindowLocked && styles.infoCardEditable]}
+            onPress={() => !timeWindowLocked && setEditingTimeWindow(true)}
+            disabled={timeWindowLocked}
           >
             <Icon name="clock-o" size={14} color={colors.primary[500]} />
             <View style={styles.infoCardContent}>
               <Text style={styles.infoCardLabel}>Time Window</Text>
               <Text style={styles.infoCardValue}>{getTimeDisplay()}</Text>
+              {hasCleanerAssigned && !isDisabled && (
+                <Text style={styles.infoCardLockedHint}>Locked - cleaner assigned</Text>
+              )}
             </View>
-            {!isDisabled && (
+            {!timeWindowLocked && (
               <Icon name="pencil" size={12} color={colors.text.tertiary} />
             )}
           </Pressable>
@@ -648,7 +725,8 @@ const EachAppointment = ({
               </View>
             )}
           </View>
-        )}
+        );
+        })()}
 
         {/* Contact Card - Editable when not disabled */}
         {!editingContact ? (
@@ -759,10 +837,10 @@ const EachAppointment = ({
         <View style={styles.collapsibleTitleRow}>
           <Icon name="plus-circle" size={14} color={colors.secondary[500]} />
           <Text style={styles.collapsibleTitle}>Add-on Services</Text>
-          {(bringSheets === "yes" || bringTowels === "yes") && (
+          {(normalizedBringSheets === "yes" || normalizedBringTowels === "yes") && (
             <View style={styles.addonIndicator}>
               <Text style={styles.addonIndicatorText}>
-                {[bringSheets === "yes" && "Sheets", bringTowels === "yes" && "Towels"].filter(Boolean).join(", ")}
+                {[normalizedBringSheets === "yes" && "Sheets", normalizedBringTowels === "yes" && "Towels"].filter(Boolean).join(", ")}
               </Text>
             </View>
           )}
@@ -781,21 +859,21 @@ const EachAppointment = ({
               <View>
                 <Text style={styles.toggleLabel}>Fresh Sheets</Text>
                 <Text style={styles.togglePrice}>
-                  {bringSheets === "yes" && bedConfigurations.length > 0
+                  {normalizedBringSheets === "yes" && bedConfigurations.length > 0
                     ? `$${bedConfigurations.filter(b => b.needsSheets).length * sheetFeePerBed} ($${sheetFeePerBed} x ${bedConfigurations.filter(b => b.needsSheets).length} beds)`
                     : `$${sheetFeePerBed} per bed`}
                 </Text>
               </View>
             </View>
             {isDisabled ? (
-              <View style={[styles.lockedValue, bringSheets === "yes" && styles.lockedValueActive]}>
-                <Text style={[styles.lockedValueText, bringSheets === "yes" && styles.lockedValueTextActive]}>
-                  {bringSheets === "yes" ? "Included" : "Not included"}
+              <View style={[styles.lockedValue, normalizedBringSheets === "yes" && styles.lockedValueActive]}>
+                <Text style={[styles.lockedValueText, normalizedBringSheets === "yes" && styles.lockedValueTextActive]}>
+                  {normalizedBringSheets === "yes" ? "Included" : "Not included"}
                 </Text>
               </View>
             ) : (
               <SegmentedButtons
-                value={bringSheets}
+                value={normalizedBringSheets}
                 onValueChange={(value) => handleSheetsToggle(value, id)}
                 buttons={[
                   { value: "no", label: "No" },
@@ -808,7 +886,7 @@ const EachAppointment = ({
           </View>
 
           {/* Bed Size Configuration - shown when sheets is "yes" */}
-          {bringSheets === "yes" && bedConfigurations.length > 0 && !isDisabled && (
+          {normalizedBringSheets === "yes" && bedConfigurations.length > 0 && !isDisabled && (
             <View style={styles.expandableSection}>
               {!showBedOptions ? (
                 <TouchableOpacity
@@ -878,21 +956,21 @@ const EachAppointment = ({
               <View>
                 <Text style={styles.toggleLabel}>Fresh Towels</Text>
                 <Text style={styles.togglePrice}>
-                  {bringTowels === "yes" && bathroomConfigurations.length > 0
+                  {normalizedBringTowels === "yes" && bathroomConfigurations.length > 0
                     ? `$${bathroomConfigurations.reduce((sum, b) => sum + (b.towels || 0) * towelFee + (b.faceCloths || 0) * faceClothFee, 0)} - $${towelFee}/towel, $${faceClothFee}/face cloth`
                     : `$${towelFee}/towel, $${faceClothFee}/face cloth`}
                 </Text>
               </View>
             </View>
             {isDisabled ? (
-              <View style={[styles.lockedValue, bringTowels === "yes" && styles.lockedValueActive]}>
-                <Text style={[styles.lockedValueText, bringTowels === "yes" && styles.lockedValueTextActive]}>
-                  {bringTowels === "yes" ? "Included" : "Not included"}
+              <View style={[styles.lockedValue, normalizedBringTowels === "yes" && styles.lockedValueActive]}>
+                <Text style={[styles.lockedValueText, normalizedBringTowels === "yes" && styles.lockedValueTextActive]}>
+                  {normalizedBringTowels === "yes" ? "Included" : "Not included"}
                 </Text>
               </View>
             ) : (
               <SegmentedButtons
-                value={bringTowels}
+                value={normalizedBringTowels}
                 onValueChange={(value) => handleTowelToggle(value, id)}
                 buttons={[
                   { value: "no", label: "No" },
@@ -905,7 +983,7 @@ const EachAppointment = ({
           </View>
 
           {/* Bathroom Configuration - shown when towels is "yes" */}
-          {bringTowels === "yes" && bathroomConfigurations.length > 0 && !isDisabled && (
+          {normalizedBringTowels === "yes" && bathroomConfigurations.length > 0 && !isDisabled && (
             <View style={styles.expandableSection}>
               {!showTowelOptions ? (
                 <TouchableOpacity
@@ -1251,6 +1329,38 @@ const styles = StyleSheet.create({
   badgeTextWarning: {
     color: colors.warning[700],
   },
+  badgeCleanerAssigned: {
+    backgroundColor: colors.success[100],
+  },
+  badgeTextCleanerAssigned: {
+    color: colors.success[600],
+  },
+  badgeNoCleaner: {
+    backgroundColor: colors.warning[100],
+  },
+  badgeTextNoCleaner: {
+    color: colors.warning[600],
+  },
+  badgePendingRequests: {
+    backgroundColor: colors.secondary[100],
+  },
+  badgeTextPendingRequests: {
+    color: colors.secondary[600],
+  },
+  badgePendingRequestsClickable: {
+    borderWidth: 1,
+    borderColor: colors.secondary[300],
+  },
+  badgePendingRequestsPressed: {
+    backgroundColor: colors.secondary[200],
+    transform: [{ scale: 0.98 }],
+  },
+  cleanerBadgesRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
 
   // Cleaner Info
   cleanerInfo: {
@@ -1312,6 +1422,12 @@ const styles = StyleSheet.create({
   },
   infoCardContent: {
     flex: 1,
+  },
+  infoCardLockedHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
+    marginTop: 2,
   },
   infoCardEditable: {
     borderWidth: 1,

@@ -1174,4 +1174,70 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
   }
 });
 
+/**
+ * POST /book-as-team
+ * Book a multi-cleaner job with a business owner's team
+ * Fills all remaining slots at once with selected team members
+ */
+multiCleanerRouter.post("/book-as-team", async (req, res) => {
+  try {
+    const businessOwnerId = req.userId;
+    const { multiCleanerJobId, teamMembers } = req.body;
+
+    if (!multiCleanerJobId) {
+      return res.status(400).json({ error: "multiCleanerJobId is required" });
+    }
+
+    if (!teamMembers || !Array.isArray(teamMembers) || teamMembers.length === 0) {
+      return res.status(400).json({ error: "teamMembers array is required" });
+    }
+
+    // Validate team member format
+    for (const member of teamMembers) {
+      if (member.type !== "self" && member.type !== "employee") {
+        return res.status(400).json({
+          error: "Each team member must have type 'self' or 'employee'",
+        });
+      }
+      if (member.type === "employee" && !member.businessEmployeeId) {
+        return res.status(400).json({
+          error: "Employee team members must include businessEmployeeId",
+        });
+      }
+    }
+
+    // Verify user is a business owner
+    const user = await User.findByPk(businessOwnerId);
+    if (!user || !user.isBusinessOwner) {
+      return res.status(403).json({
+        error: "Only business owners can book as a team",
+      });
+    }
+
+    // Book the team
+    const result = await MultiCleanerService.bookAsTeam(
+      parseInt(multiCleanerJobId),
+      businessOwnerId,
+      teamMembers
+    );
+
+    // Calculate total earnings for the team
+    const MultiCleanerJobSerializer = require("../../../serializers/MultiCleanerJobSerializer");
+    const totalEarnings = await RoomAssignmentService.calculateTotalJobEarnings(
+      parseInt(multiCleanerJobId)
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully booked with ${result.totalSlotsFilled} team members`,
+      job: MultiCleanerJobSerializer.serializeOne(result.job),
+      assignments: result.assignments,
+      totalEarnings,
+    });
+  } catch (error) {
+    console.error("Error booking as team:", error);
+    return res.status(400).json({ error: error.message });
+  }
+});
+
 module.exports = multiCleanerRouter;

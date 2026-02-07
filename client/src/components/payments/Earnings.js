@@ -33,6 +33,11 @@ const Earnings = ({ state, dispatch }) => {
     platformFeePercent: 10,
     cleanerPercent: 90,
   });
+  const [bonusTotals, setBonusTotals] = useState({
+    totalBonusDollars: "0.00",
+    bonusPayoutCount: 0,
+    currentTier: null,
+  });
   const [accountStatus, setAccountStatus] = useState(null);
   const [assignedAppointments, setAssignedAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,6 +60,36 @@ const Earnings = ({ state, dispatch }) => {
       }
     } catch (err) {
       console.error("Error fetching earnings:", err);
+    }
+  };
+
+  const fetchBonusTotals = async () => {
+    if (!state?.currentUser?.id) return;
+    try {
+      const res = await fetch(
+        `${API_BASE}/stripe-connect/payouts/${state.currentUser.id}`
+      );
+      const data = await res.json();
+      if (res.ok) {
+        const allPayouts = data.payouts || [];
+        const completedPayouts = allPayouts.filter((p) => p.status === "completed");
+        const bonusPayouts = completedPayouts.filter(
+          (p) => p.preferredBonusApplied && p.preferredBonusAmount > 0
+        );
+        const totalBonusCents = bonusPayouts.reduce(
+          (sum, p) => sum + (p.preferredBonusAmount || 0),
+          0
+        );
+        // Get the most recent tier from the latest payout with bonus
+        const latestBonusPayout = bonusPayouts[0];
+        setBonusTotals({
+          totalBonusDollars: (totalBonusCents / 100).toFixed(2),
+          bonusPayoutCount: bonusPayouts.length,
+          currentTier: latestBonusPayout?.cleanerTierAtPayout || null,
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching bonus totals:", err);
     }
   };
 
@@ -99,7 +134,7 @@ const Earnings = ({ state, dispatch }) => {
 
   const loadData = async () => {
     setIsLoading(true);
-    await Promise.all([fetchEarnings(), fetchAccountStatus(), fetchAssignedAppointments()]);
+    await Promise.all([fetchEarnings(), fetchAccountStatus(), fetchAssignedAppointments(), fetchBonusTotals()]);
     setIsLoading(false);
   };
 
@@ -196,6 +231,16 @@ const Earnings = ({ state, dispatch }) => {
     if (appt.completed) return { text: "Completed", type: "success" };
     if (appt.paid) return { text: "Ready to Start", type: "primary" };
     return { text: "Pending Payment", type: "warning" };
+  };
+
+  const getTierColor = (tier) => {
+    const tierColors = {
+      bronze: { bg: "#FDF5E6", text: "#CD7F32" },
+      silver: { bg: "#F5F5F5", text: "#757575" },
+      gold: { bg: "#FFFACD", text: "#D4AF37" },
+      platinum: { bg: "#E5E7EB", text: "#6B7280" },
+    };
+    return tierColors[tier] || { bg: colors.neutral[100], text: colors.neutral[600] };
   };
 
   const calculateCleanerShare = (price, numCleaners = 1, isMultiCleanerJob = false) => {
@@ -302,6 +347,31 @@ const Earnings = ({ state, dispatch }) => {
           </Text>
         </View>
       </View>
+
+      {/* Tier Bonus Summary */}
+      {parseFloat(bonusTotals.totalBonusDollars) > 0 && (
+        <View style={styles.bonusSummaryCard}>
+          <View style={styles.bonusSummaryHeader}>
+            <View style={styles.bonusSummaryIconContainer}>
+              <Feather name="award" size={20} color={colors.success[600]} />
+            </View>
+            <View style={styles.bonusSummaryContent}>
+              <Text style={styles.bonusSummaryTitle}>Tier Bonuses Earned</Text>
+              {bonusTotals.currentTier && (
+                <View style={[styles.tierBadge, { backgroundColor: getTierColor(bonusTotals.currentTier).bg }]}>
+                  <Text style={[styles.tierBadgeText, { color: getTierColor(bonusTotals.currentTier).text }]}>
+                    {bonusTotals.currentTier.charAt(0).toUpperCase() + bonusTotals.currentTier.slice(1)}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.bonusSummaryAmount}>${bonusTotals.totalBonusDollars}</Text>
+          </View>
+          <Text style={styles.bonusSummarySubtext}>
+            Extra earnings from {bonusTotals.bonusPayoutCount} {bonusTotals.bonusPayoutCount === 1 ? "job" : "jobs"} with tier bonus
+          </Text>
+        </View>
+      )}
 
       {/* Earnings Chart */}
       <View style={styles.chartContainer}>
@@ -623,6 +693,58 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
     fontSize: typography.fontSize.xs,
     marginTop: spacing.xs,
+  },
+
+  // Bonus Summary
+  bonusSummaryCard: {
+    backgroundColor: colors.success[50],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  bonusSummaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  bonusSummaryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.success[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+  },
+  bonusSummaryContent: {
+    flex: 1,
+  },
+  bonusSummaryTitle: {
+    color: colors.success[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  tierBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginTop: spacing.xs,
+  },
+  tierBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  bonusSummaryAmount: {
+    color: colors.success[700],
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  bonusSummarySubtext: {
+    color: colors.success[600],
+    fontSize: typography.fontSize.xs,
+    marginTop: spacing.sm,
   },
 
   // Chart

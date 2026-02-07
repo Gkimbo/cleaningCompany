@@ -75,10 +75,29 @@ module.exports = (sequelize, DataTypes) => {
     },
 
     // Pay Configuration
+    payType: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: "hourly",
+      validate: {
+        isIn: [["hourly", "per_job", "percentage"]],
+      },
+      comment: "Type of pay: hourly, per_job (flat rate), or percentage",
+    },
     defaultHourlyRate: {
       type: DataTypes.INTEGER,
       allowNull: true,
-      comment: "Default hourly rate in cents",
+      comment: "Default hourly rate in cents (used when payType is hourly)",
+    },
+    defaultJobRate: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Default flat rate per job in cents (used when payType is per_job)",
+    },
+    payRate: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+      comment: "Percentage of job price (used when payType is percentage)",
     },
     paymentMethod: {
       type: DataTypes.STRING(20),

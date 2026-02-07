@@ -96,6 +96,12 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: true,
       },
+      earlyAccessMinutes: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 30,
+        comment: "Minutes of early access for platinum cleaners to new jobs",
+      },
 
       // Backup cleaner notification settings
       backupCleanerTimeoutHours: {
@@ -147,6 +153,7 @@ module.exports = (sequelize, DataTypes) => {
         fasterPayouts: this.platinumFasterPayouts,
         payoutHours: this.platinumPayoutHours,
         earlyAccess: this.platinumEarlyAccess,
+        earlyAccessMinutes: this.earlyAccessMinutes,
       };
     }
     if (homeCount >= this.goldMinHomes && homeCount <= this.goldMaxHomes) {
@@ -156,6 +163,7 @@ module.exports = (sequelize, DataTypes) => {
         fasterPayouts: this.goldFasterPayouts,
         payoutHours: this.goldPayoutHours,
         earlyAccess: false,
+        earlyAccessMinutes: 0,
       };
     }
     if (homeCount >= this.silverMinHomes && homeCount <= this.silverMaxHomes) {
@@ -165,6 +173,7 @@ module.exports = (sequelize, DataTypes) => {
         fasterPayouts: false,
         payoutHours: 48,
         earlyAccess: false,
+        earlyAccessMinutes: 0,
       };
     }
     return {
@@ -173,7 +182,92 @@ module.exports = (sequelize, DataTypes) => {
       fasterPayouts: false,
       payoutHours: 48,
       earlyAccess: false,
+      earlyAccessMinutes: 0,
     };
+  };
+
+  // Static method to get the current config (creates default if none exists)
+  PreferredPerksConfig.getActive = async function() {
+    let config = await PreferredPerksConfig.findOne();
+    if (!config) {
+      config = await PreferredPerksConfig.create({});
+    }
+    return config;
+  };
+
+  // Static method to update config and log to history
+  PreferredPerksConfig.updateConfig = async function(data, userId, models) {
+    const { PreferredPerksConfigHistory } = models;
+
+    // Get current config
+    let config = await PreferredPerksConfig.findOne();
+    const isNew = !config;
+
+    // Store previous values for history
+    const previousValues = config ? config.toJSON() : null;
+
+    if (isNew) {
+      // Create new config with provided data
+      config = await PreferredPerksConfig.create({
+        ...data,
+        updatedBy: userId,
+      });
+    } else {
+      // Update existing config
+      await config.update({
+        ...data,
+        updatedBy: userId,
+      });
+    }
+
+    // Calculate changes for history
+    const changes = {};
+    const updatableFields = [
+      'bronzeMinHomes', 'bronzeMaxHomes', 'bronzeBonusPercent',
+      'silverMinHomes', 'silverMaxHomes', 'silverBonusPercent',
+      'goldMinHomes', 'goldMaxHomes', 'goldBonusPercent', 'goldFasterPayouts', 'goldPayoutHours',
+      'platinumMinHomes', 'platinumBonusPercent', 'platinumFasterPayouts', 'platinumPayoutHours', 'platinumEarlyAccess',
+      'earlyAccessMinutes', 'backupCleanerTimeoutHours', 'platformMaxDailyJobs', 'platformMaxConcurrentJobs',
+    ];
+
+    for (const field of updatableFields) {
+      const oldVal = previousValues ? previousValues[field] : null;
+      const newVal = config[field];
+      if (oldVal !== newVal) {
+        changes[field] = { old: oldVal, new: newVal };
+      }
+    }
+
+    // Log to history if there are changes
+    if (Object.keys(changes).length > 0) {
+      await PreferredPerksConfigHistory.create({
+        configId: config.id,
+        changedBy: userId,
+        changeType: isNew ? 'create' : 'update',
+        changes,
+        previousValues,
+        newValues: config.toJSON(),
+      });
+    }
+
+    return config;
+  };
+
+  // Static method to get change history
+  PreferredPerksConfig.getHistory = async function(limit = 20, models) {
+    const { PreferredPerksConfigHistory, User } = models;
+
+    const history = await PreferredPerksConfigHistory.findAll({
+      include: [{
+        model: User,
+        as: 'changer',
+        attributes: ['id', 'firstName', 'lastName', 'username'],
+      }],
+      order: [['createdAt', 'DESC']],
+      limit,
+    });
+
+    return history;
   };
 
   return PreferredPerksConfig;

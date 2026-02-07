@@ -106,6 +106,9 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
 
   const home = homes.find((h) => Number(h.id) === Number(appointment.homeId));
 
+  // Check if a cleaner is assigned
+  const hasCleanerAssigned = appointment.employeesAssigned && appointment.employeesAssigned.length > 0;
+
   const formatDateDisplay = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
     return date.toLocaleDateString("en-US", options);
@@ -126,6 +129,7 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
       style={({ pressed }) => [
         styles.appointmentCard,
         isTodayAppointment && styles.appointmentCardToday,
+        !hasCleanerAssigned && styles.appointmentCardNoCleanerBorder,
         pressed && styles.cardPressed,
       ]}
     >
@@ -145,6 +149,27 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
           <Text style={styles.appointmentTime}>
             {formatTime(appointment.time)}
           </Text>
+        )}
+        {/* Cleaner assignment status */}
+        {hasCleanerAssigned ? (
+          <View style={styles.cleanerAssignedBadge}>
+            <Icon name="user" size={10} color={colors.success[600]} />
+            <Text style={styles.cleanerAssignedBadgeText}>Cleaner assigned</Text>
+          </View>
+        ) : (
+          <View style={styles.noCleanerBadge}>
+            <Icon name="user-times" size={10} color={colors.warning[600]} />
+            <Text style={styles.noCleanerBadgeText}>No cleaner assigned</Text>
+          </View>
+        )}
+        {/* Pending cleaner requests */}
+        {!hasCleanerAssigned && appointment.pendingRequestCount > 0 && (
+          <View style={styles.pendingRequestsBadge}>
+            <Icon name="hand-paper-o" size={10} color={colors.secondary[600]} />
+            <Text style={styles.pendingRequestsBadgeText}>
+              {appointment.pendingRequestCount} cleaner{appointment.pendingRequestCount > 1 ? "s" : ""} requesting
+            </Text>
+          </View>
         )}
         <View style={styles.appointmentPriceContainer}>
           {appointment.discountApplied && appointment.originalPrice ? (
@@ -568,13 +593,13 @@ const ClientDashboard = ({ state, dispatch }) => {
             onPress={() => navigate("/schedule-cleaning")}
           />
           <QuickActionButton
-            title="Add Home"
-            subtitle="Register property"
+            title="My Homes"
+            subtitle="View & manage"
             icon="home"
             iconColor="#fff"
             bgColor="#fff"
             accentColor="#10b981"
-            onPress={() => navigate("/add-home")}
+            onPress={() => navigate("/list-of-homes")}
           />
           <QuickActionButton
             title="View Bill"
@@ -928,8 +953,9 @@ const ClientDashboard = ({ state, dispatch }) => {
                     })}
                   </Text>
                 </View>
+                {/* Price is stored in dollars in DB, convert to cents for formatCurrency */}
                 <Text style={styles.recentPrice}>
-                  {formatCurrency(apt.price)}
+                  {formatCurrency((apt.price || 0) * 100)}
                 </Text>
               </View>
             ))}
@@ -1148,6 +1174,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.primary[400],
   },
+  appointmentCardNoCleanerBorder: {
+    borderWidth: 1,
+    borderColor: colors.warning[300],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[500],
+  },
   cardPressed: {
     opacity: 0.9,
   },
@@ -1179,6 +1211,54 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     marginTop: spacing.xs,
+  },
+  cleanerAssignedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    marginTop: spacing.xs,
+    alignSelf: "flex-start",
+    gap: spacing.xs,
+  },
+  cleanerAssignedBadgeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  noCleanerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    marginTop: spacing.xs,
+    alignSelf: "flex-start",
+    gap: spacing.xs,
+  },
+  noCleanerBadgeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  pendingRequestsBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.secondary[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    marginTop: spacing.xs,
+    alignSelf: "flex-start",
+    gap: spacing.xs,
+  },
+  pendingRequestsBadgeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.secondary[700],
+    fontWeight: typography.fontWeight.medium,
   },
   appointmentPriceContainer: {
     position: "absolute",

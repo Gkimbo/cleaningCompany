@@ -179,8 +179,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(5), // 5 days from now (within 7-day window)
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner must be assigned for fee to apply
+        employeesAssigned: ["2"],
       });
 
       const res = await request(app)
@@ -210,8 +210,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(10), // 10 days from now (outside 7-day window)
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Even with cleaner assigned, outside window = no fee
+        employeesAssigned: ["2"],
       });
 
       const res = await request(app)
@@ -238,8 +238,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(3), // 3 days from now (within 7-day window)
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner must be assigned for fee to apply
+        employeesAssigned: ["2"],
       });
 
       const res = await request(app)
@@ -251,6 +251,34 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.hasPaymentMethod).toBe(false);
       // Warning should not mention charging card if no payment method
       expect(res.body.warningMessage).not.toContain("card on file");
+    });
+
+    it("should not charge cancellation fee when no cleaner is assigned", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        type: "homeowner",
+        hasPaymentMethod: true,
+        stripeCustomerId: "cus_test123",
+      });
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        date: getFutureDate(3), // Within 7-day window
+        price: "200",
+        hasBeenAssigned: false, // No cleaner assigned = no fee
+        employeesAssigned: [],
+      });
+
+      const res = await request(app)
+        .get("/api/v1/appointments/cancellation-info/1")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.willChargeCancellationFee).toBe(false);
+      expect(res.body.warningMessage).not.toContain("cancellation fee");
     });
 
     it("should include both penalty window and cancellation fee info when both apply", async () => {
@@ -298,14 +326,14 @@ describe("Cancellation Fee Charging", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock appointment 5 days away (within 7-day window)
+      // Mock appointment 5 days away (within 7-day window) with cleaner assigned
       UserAppointments.findByPk.mockResolvedValue({
         id: 1,
         userId: 1,
         date: getFutureDate(5),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner must be assigned for fee to apply
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -334,7 +362,7 @@ describe("Cancellation Fee Charging", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
       UserPendingRequests.destroy.mockResolvedValue(0);
       Payout.destroy.mockResolvedValue(0);
 
@@ -381,8 +409,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(10), // 10 days away - outside 7-day window
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Even with cleaner assigned
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -411,7 +439,7 @@ describe("Cancellation Fee Charging", () => {
       expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
     });
 
-    it("should block cancellation when user has no payment method within 7-day window", async () => {
+    it("should block cancellation when user has no payment method within 7-day window and cleaner assigned", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -426,8 +454,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(3), // 3 days away - within 7-day window
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = payment method required for fee
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -438,10 +466,55 @@ describe("Cancellation Fee Charging", () => {
         .post("/api/v1/appointments/1/cancel-homeowner")
         .set("Authorization", `Bearer ${token}`);
 
-      // Cancellation should be blocked without payment method
+      // Cancellation should be blocked without payment method when cleaner assigned
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Cannot cancel without a payment method");
       expect(res.body.requiresPaymentMethod).toBe(true);
+      expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+    });
+
+    it("should allow cancellation without payment method when no cleaner assigned", async () => {
+      const token = jwt.sign({ userId: 1 }, secretKey);
+
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        type: "homeowner",
+        hasPaymentMethod: false,
+        stripeCustomerId: null,
+      });
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 1,
+        userId: 1,
+        date: getFutureDate(3), // 3 days away - within 7-day window
+        price: "200",
+        hasBeenAssigned: false, // No cleaner = no fee = no payment method required
+        employeesAssigned: [],
+        completed: false,
+        paymentIntentId: null,
+        update: jest.fn().mockResolvedValue(true),
+        destroy: jest.fn().mockResolvedValue(true),
+      });
+
+      UserBills.findOne.mockResolvedValue({
+        appointmentDue: 0,
+        cancellationFee: 0,
+        totalDue: 0,
+        update: jest.fn().mockResolvedValue(true),
+      });
+
+      UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      Payout.destroy.mockResolvedValue(0);
+
+      const res = await request(app)
+        .post("/api/v1/appointments/1/cancel-homeowner")
+        .set("Authorization", `Bearer ${token}`);
+
+      // Cancellation should succeed without fee when no cleaner assigned
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.cancellationFee).toBeNull();
       expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
     });
 
@@ -460,8 +533,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(5),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = fee applies
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -521,8 +594,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(5),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = fee applies
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -544,7 +617,7 @@ describe("Cancellation Fee Charging", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
       UserPendingRequests.destroy.mockResolvedValue(0);
       Payout.destroy.mockResolvedValue(0);
 
@@ -656,8 +729,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(6),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = fee applies
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -682,7 +755,7 @@ describe("Cancellation Fee Charging", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
       UserPendingRequests.destroy.mockResolvedValue(0);
       Payout.destroy.mockResolvedValue(0);
 
@@ -711,8 +784,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(7), // Exactly 7 days away
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner must be assigned for fee
+        employeesAssigned: ["2"],
       });
 
       const res = await request(app)
@@ -754,7 +827,7 @@ describe("Cancellation Fee Charging", () => {
       expect(res.body.daysUntilAppointment).toBeLessThanOrEqual(3);
     });
 
-    it("should block cancellation when user has stripeCustomerId but hasPaymentMethod false", async () => {
+    it("should block cancellation when user has stripeCustomerId but hasPaymentMethod false and cleaner assigned", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -769,8 +842,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(3),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = payment method required
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -781,7 +854,7 @@ describe("Cancellation Fee Charging", () => {
         .post("/api/v1/appointments/1/cancel-homeowner")
         .set("Authorization", `Bearer ${token}`);
 
-      // Cancellation should be blocked without valid payment method
+      // Cancellation should be blocked without valid payment method when cleaner assigned
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Cannot cancel without a payment method");
       expect(res.body.requiresPaymentMethod).toBe(true);
@@ -791,7 +864,7 @@ describe("Cancellation Fee Charging", () => {
   });
 
   describe("Fee Added to Bill When Charge Fails", () => {
-    it("should block cancellation when user has no payment method configured", async () => {
+    it("should block cancellation when user has no payment method configured and cleaner assigned", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -806,8 +879,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(5),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = payment method required
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -818,7 +891,7 @@ describe("Cancellation Fee Charging", () => {
         .post("/api/v1/appointments/1/cancel-homeowner")
         .set("Authorization", `Bearer ${token}`);
 
-      // Cancellation should be blocked without payment method within 7-day window
+      // Cancellation should be blocked without payment method within 7-day window when cleaner assigned
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Cannot cancel without a payment method");
       expect(res.body.requiresPaymentMethod).toBe(true);
@@ -839,8 +912,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(5),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = fee applies
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -862,7 +935,7 @@ describe("Cancellation Fee Charging", () => {
         update: mockBillUpdate,
       });
 
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
       UserPendingRequests.destroy.mockResolvedValue(0);
       Payout.destroy.mockResolvedValue(0);
 
@@ -898,8 +971,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(5),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = fee applies
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -924,7 +997,7 @@ describe("Cancellation Fee Charging", () => {
         update: mockBillUpdate,
       });
 
-      UserCleanerAppointments.destroy.mockResolvedValue(0);
+      UserCleanerAppointments.destroy.mockResolvedValue(1);
       UserPendingRequests.destroy.mockResolvedValue(0);
       Payout.destroy.mockResolvedValue(0);
 
@@ -948,7 +1021,7 @@ describe("Cancellation Fee Charging", () => {
       );
     });
 
-    it("should block cancellation for user with no payment method even with accumulated fees", async () => {
+    it("should block cancellation for user with no payment method when cleaner assigned", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
       User.findByPk.mockResolvedValue({
@@ -963,8 +1036,8 @@ describe("Cancellation Fee Charging", () => {
         userId: 1,
         date: getFutureDate(5),
         price: "200",
-        hasBeenAssigned: false,
-        employeesAssigned: [],
+        hasBeenAssigned: true, // Cleaner assigned = payment method required
+        employeesAssigned: ["2"],
         completed: false,
         paymentIntentId: null,
         update: jest.fn().mockResolvedValue(true),
@@ -975,7 +1048,7 @@ describe("Cancellation Fee Charging", () => {
         .post("/api/v1/appointments/1/cancel-homeowner")
         .set("Authorization", `Bearer ${token}`);
 
-      // Cancellation should be blocked without payment method
+      // Cancellation should be blocked without payment method when cleaner assigned
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Cannot cancel without a payment method");
       expect(res.body.requiresPaymentMethod).toBe(true);

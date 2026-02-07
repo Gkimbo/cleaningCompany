@@ -20,10 +20,35 @@ const CustomJobFlowService = require("./CustomJobFlowService");
 const AppointmentJobFlowService = require("./AppointmentJobFlowService");
 const GuestNotLeftService = require("./GuestNotLeftService");
 const AnalyticsService = require("./AnalyticsService");
+const NotificationService = require("./NotificationService");
 const { calculateDistance } = require("../utils/geoUtils");
 const EncryptionService = require("./EncryptionService");
 
 class EmployeeJobAssignmentService {
+  /**
+   * Calculate hours worked between two timestamps, rounded UP to nearest 0.5 hour
+   * @param {Date} startTime - Start time
+   * @param {Date} endTime - End time
+   * @returns {number} Hours worked, rounded up to nearest 0.5
+   */
+  static calculateHoursWorked(startTime, endTime) {
+    if (!startTime || !endTime) return 0;
+
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const diffMs = end - start;
+
+    // Convert to hours
+    const hours = diffMs / (1000 * 60 * 60);
+
+    // Round up to nearest 0.5 hour
+    // e.g., 1.1 -> 1.5, 1.6 -> 2.0, 2.0 -> 2.0
+    const roundedUp = Math.ceil(hours * 2) / 2;
+
+    // Minimum of 0.5 hours if any time was worked
+    return hours > 0 ? Math.max(0.5, roundedUp) : 0;
+  }
+
   /**
    * Assign an employee to a job
    * @param {number} businessOwnerId - ID of the business owner
@@ -133,6 +158,37 @@ class EmployeeJobAssignmentService {
 
       return newAssignment;
     });
+
+    // Send notification to the employee (after transaction completes)
+    try {
+      // Get the employee's user record for notification
+      const employeeUser = await User.findByPk(employee.userId);
+
+      // Get client info
+      const client = await User.findByPk(appointment.userId);
+
+      // Get business owner info
+      const businessOwner = await User.findByPk(businessOwnerId);
+
+      // Only send notification if employee has a user account with email or push token
+      if (employeeUser && (employeeUser.email || employeeUser.expoPushToken)) {
+        const home = appointment.home || await UserHomes.findByPk(appointment.homeId);
+
+        await NotificationService.notifyEmployeeJobAssigned({
+          employeeUserId: employee.userId,
+          employeeName: employee.firstName || "Team Member",
+          appointmentId,
+          appointmentDate: appointment.date,
+          clientName: client ? `${client.firstName || ""} ${client.lastName || ""}`.trim() : "Client",
+          address: home?.address || "Address on file",
+          payAmount,
+          businessName: businessOwner?.businessName || "Your employer",
+        });
+      }
+    } catch (notificationError) {
+      // Log but don't fail the assignment if notification fails
+      console.error("[EmployeeJobAssignmentService] Failed to send job assignment notification:", notificationError);
+    }
 
     return assignment;
   }
@@ -336,6 +392,47 @@ class EmployeeJobAssignmentService {
       return assignment;
     });
 
+    // Send notifications after transaction completes
+    try {
+      // Get appointment details
+      const appointment = await UserAppointments.findByPk(currentAssignment.appointmentId, {
+        include: [{ model: UserHomes, as: "home" }],
+      });
+
+      // Get client info
+      const client = await User.findByPk(appointment?.userId);
+
+      // Get business owner info
+      const businessOwner = await User.findByPk(businessOwnerId);
+
+      // Notify new employee about the assignment
+      const newEmployeeUser = await User.findByPk(newEmployee.userId);
+      if (newEmployeeUser && (newEmployeeUser.email || newEmployeeUser.expoPushToken)) {
+        await NotificationService.notifyEmployeeJobAssigned({
+          employeeUserId: newEmployee.userId,
+          employeeName: newEmployee.firstName || "Team Member",
+          appointmentId: currentAssignment.appointmentId,
+          appointmentDate: appointment?.date,
+          clientName: client ? `${client.firstName || ""} ${client.lastName || ""}`.trim() : "Client",
+          address: appointment?.home?.address || "Address on file",
+          payAmount: currentAssignment.payAmount,
+          businessName: businessOwner?.businessName || "Your employer",
+        });
+      }
+
+      // Notify old employee about being unassigned (if they had a user account)
+      const oldEmployee = await BusinessEmployee.findByPk(currentAssignment.businessEmployeeId);
+      if (oldEmployee?.userId) {
+        await NotificationService.notifyEmployeeJobReassigned({
+          employeeUserId: oldEmployee.userId,
+          appointmentId: currentAssignment.appointmentId,
+          appointmentDate: appointment?.date,
+        });
+      }
+    } catch (notificationError) {
+      console.error("[EmployeeJobAssignmentService] Failed to send reassignment notifications:", notificationError);
+    }
+
     return newAssignment;
   }
 
@@ -522,6 +619,13 @@ class EmployeeJobAssignmentService {
         ],
         status: "started",
       },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          attributes: ["id", "price"],
+        },
+      ],
     });
 
     if (!assignment) {
@@ -536,18 +640,51 @@ class EmployeeJobAssignmentService {
       await MarketplaceJobRequirementsService.validateCompletionRequirements(assignmentId);
     }
 
+    const completedAt = new Date();
     const updateData = {
       status: "completed",
-      completedAt: new Date(),
+      completedAt,
     };
 
-    // If hourly, calculate final pay
-    if (assignment.payType === "hourly" && hoursWorked) {
-      updateData.hoursWorked = hoursWorked;
-      // Get employee's hourly rate
-      if (employee) {
-        const hourlyRate = employee.defaultHourlyRate || 0;
-        updateData.payAmount = Math.round(hourlyRate * hoursWorked);
+    // Calculate pay based on pay type
+    const payType = assignment.payType;
+
+    if (payType === "hourly") {
+      // Hourly: pay = hours worked × hourly rate
+      let calculatedHours = hoursWorked;
+      if (!calculatedHours && assignment.startedAt) {
+        calculatedHours = this.calculateHoursWorked(assignment.startedAt, completedAt);
+      }
+
+      if (calculatedHours) {
+        updateData.hoursWorked = calculatedHours;
+        const hourlyRate = employee?.defaultHourlyRate || 0;
+        updateData.payAmount = Math.round(hourlyRate * calculatedHours);
+      }
+    } else if (payType === "per_job" || payType === "flat_rate") {
+      // Per Job / Flat Rate: pay = employee's default job rate
+      const jobRate = employee?.defaultJobRate || 0;
+      if (jobRate > 0) {
+        updateData.payAmount = jobRate;
+      }
+      // Also track hours if available (for records, not pay calculation)
+      if (hoursWorked) {
+        updateData.hoursWorked = hoursWorked;
+      } else if (assignment.startedAt) {
+        updateData.hoursWorked = this.calculateHoursWorked(assignment.startedAt, completedAt);
+      }
+    } else if (payType === "percentage") {
+      // Percentage: pay = (percentage / 100) × job price
+      const appointmentPrice = assignment.appointment?.price || 0;
+      const payRate = parseFloat(employee?.payRate) || 0;
+      if (payRate > 0 && appointmentPrice > 0) {
+        updateData.payAmount = Math.round((payRate / 100) * appointmentPrice);
+      }
+      // Also track hours if available (for records, not pay calculation)
+      if (hoursWorked) {
+        updateData.hoursWorked = hoursWorked;
+      } else if (assignment.startedAt) {
+        updateData.hoursWorked = this.calculateHoursWorked(assignment.startedAt, completedAt);
       }
     }
 
@@ -558,6 +695,63 @@ class EmployeeJobAssignmentService {
       { completed: true },
       { where: { id: assignment.appointmentId } }
     );
+
+    return assignment;
+  }
+
+  /**
+   * Update hours worked for a completed assignment (business owner action)
+   * Recalculates pay based on the new hours if the assignment is hourly
+   * @param {number} assignmentId - Assignment ID
+   * @param {number} businessOwnerId - ID of the business owner
+   * @param {number} hoursWorked - New hours worked value
+   * @returns {Promise<Object>} Updated assignment with employee info
+   */
+  static async updateHoursWorked(assignmentId, businessOwnerId, hoursWorked) {
+    const assignment = await EmployeeJobAssignment.findOne({
+      where: {
+        id: assignmentId,
+        businessOwnerId,
+        status: "completed",
+      },
+      include: [
+        {
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "firstName", "lastName", "defaultHourlyRate", "payType"],
+        },
+      ],
+    });
+
+    if (!assignment) {
+      throw new Error("Completed assignment not found");
+    }
+
+    // Round to nearest 0.5 hours
+    const roundedHours = Math.ceil(hoursWorked * 2) / 2;
+
+    const updateData = {
+      hoursWorked: roundedHours,
+    };
+
+    // Recalculate pay if this is an hourly assignment
+    if (assignment.payType === "hourly" && assignment.employee) {
+      const hourlyRate = assignment.employee.defaultHourlyRate || 0;
+      updateData.payAmount = Math.round(hourlyRate * roundedHours);
+    }
+
+    await assignment.update(updateData);
+
+    // Reload to get fresh data
+    await assignment.reload({
+      include: [
+        {
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "firstName", "lastName", "defaultHourlyRate", "payType"],
+        },
+      ],
+    });
 
     return assignment;
   }
@@ -687,11 +881,13 @@ class EmployeeJobAssignmentService {
               model: UserHomes,
               as: "home",
               attributes: ["id", "address", "numBeds", "numBaths"],
-            },
-            {
-              model: User,
-              as: "user",
-              attributes: ["id", "firstName", "lastName"],
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "firstName", "lastName"],
+                },
+              ],
             },
           ],
         },
@@ -718,7 +914,7 @@ class EmployeeJobAssignmentService {
         {
           model: BusinessEmployee,
           as: "employee",
-          attributes: ["id", "firstName", "lastName", "paymentMethod"],
+          attributes: ["id", "firstName", "lastName", "paymentMethod", "payType", "defaultHourlyRate"],
         },
         {
           model: UserAppointments,
@@ -875,6 +1071,279 @@ class EmployeeJobAssignmentService {
     }
 
     return "Location confirmed";
+  }
+
+  /**
+   * Get timesheet data for all employees (hours summary)
+   * @param {number} businessOwnerId - ID of the business owner
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @param {string} endDate - End date (YYYY-MM-DD)
+   * @returns {Promise<Object>} Timesheet data with employee summaries and job details
+   */
+  static async getTimesheetData(businessOwnerId, startDate, endDate) {
+    // Get all completed assignments with hours in the date range
+    const assignments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId,
+        status: "completed",
+        isSelfAssignment: false,
+      },
+      include: [
+        {
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "firstName", "lastName", "payType", "defaultHourlyRate"],
+        },
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: {
+              [Op.gte]: startDate,
+              [Op.lte]: endDate,
+            },
+          },
+          attributes: ["id", "date", "price"],
+          include: [
+            {
+              model: UserHomes,
+              as: "home",
+              attributes: ["id", "address"],
+            },
+          ],
+        },
+      ],
+      order: [[{ model: UserAppointments, as: "appointment" }, "date", "ASC"]],
+    });
+
+    // Group by employee and calculate totals
+    const employeeMap = new Map();
+    let totalHours = 0;
+    let totalPay = 0;
+
+    assignments.forEach((assignment) => {
+      const data = assignment.dataValues || assignment;
+      const empId = data.businessEmployeeId;
+
+      if (!employeeMap.has(empId)) {
+        employeeMap.set(empId, {
+          employee: data.employee,
+          totalHours: 0,
+          totalPay: 0,
+          jobCount: 0,
+          jobs: [],
+        });
+      }
+
+      const summary = employeeMap.get(empId);
+      const hours = parseFloat(data.hoursWorked) || 0;
+      const pay = data.payAmount || 0;
+
+      summary.totalHours += hours;
+      summary.totalPay += pay;
+      summary.jobCount++;
+      summary.jobs.push({
+        id: data.id,
+        date: data.appointment?.date,
+        hoursWorked: hours,
+        payAmount: pay,
+        payType: data.payType,
+        startedAt: data.startedAt,
+        completedAt: data.completedAt,
+        address: data.appointment?.home?.address,
+      });
+
+      totalHours += hours;
+      totalPay += pay;
+    });
+
+    // Convert map to array and sort by total hours
+    const employeeSummaries = Array.from(employeeMap.values())
+      .sort((a, b) => b.totalHours - a.totalHours);
+
+    return {
+      startDate,
+      endDate,
+      totalHours,
+      totalPay,
+      employeeCount: employeeSummaries.length,
+      jobCount: assignments.length,
+      employees: employeeSummaries,
+    };
+  }
+
+  /**
+   * Get hours detail for a specific employee
+   * @param {number} businessOwnerId - ID of the business owner
+   * @param {number} employeeId - BusinessEmployee ID
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @param {string} endDate - End date (YYYY-MM-DD)
+   * @returns {Promise<Object>} Employee hours detail with daily breakdown
+   */
+  static async getEmployeeHoursDetail(businessOwnerId, employeeId, startDate, endDate) {
+    // Verify employee belongs to this business owner
+    const employee = await BusinessEmployee.findOne({
+      where: {
+        id: employeeId,
+        businessOwnerId,
+      },
+      attributes: ["id", "firstName", "lastName", "payType", "defaultHourlyRate", "defaultJobRate"],
+    });
+
+    if (!employee) {
+      throw new Error("Employee not found");
+    }
+
+    // Get all assignments for this employee in the date range
+    const assignments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId,
+        businessEmployeeId: employeeId,
+        status: { [Op.in]: ["completed", "started", "assigned"] },
+      },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: {
+              [Op.gte]: startDate,
+              [Op.lte]: endDate,
+            },
+          },
+          attributes: ["id", "date", "price"],
+          include: [
+            {
+              model: UserHomes,
+              as: "home",
+              attributes: ["id", "address", "numBeds", "numBaths"],
+            },
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+      order: [[{ model: UserAppointments, as: "appointment" }, "date", "ASC"]],
+    });
+
+    // Group by date for daily breakdown
+    const dailyMap = new Map();
+    let totalHours = 0;
+    let totalPay = 0;
+    let completedJobs = 0;
+    let pendingJobs = 0;
+
+    assignments.forEach((assignment) => {
+      const data = assignment.dataValues || assignment;
+      const date = data.appointment?.date;
+
+      if (!dailyMap.has(date)) {
+        dailyMap.set(date, {
+          date,
+          hours: 0,
+          pay: 0,
+          jobs: [],
+        });
+      }
+
+      const dayData = dailyMap.get(date);
+      const hours = parseFloat(data.hoursWorked) || 0;
+      const pay = data.payAmount || 0;
+
+      dayData.hours += hours;
+      dayData.pay += pay;
+      dayData.jobs.push({
+        id: data.id,
+        status: data.status,
+        hoursWorked: hours,
+        payAmount: pay,
+        payType: data.payType,
+        startedAt: data.startedAt,
+        completedAt: data.completedAt,
+        address: data.appointment?.home?.address,
+        client: data.appointment?.user
+          ? `${data.appointment.user.firstName || ""} ${data.appointment.user.lastName || ""}`.trim()
+          : null,
+        home: data.appointment?.home
+          ? { numBeds: data.appointment.home.numBeds, numBaths: data.appointment.home.numBaths }
+          : null,
+      });
+
+      if (data.status === "completed") {
+        totalHours += hours;
+        totalPay += pay;
+        completedJobs++;
+      } else {
+        pendingJobs++;
+      }
+    });
+
+    // Convert map to array and sort by date descending (most recent first)
+    const dailyBreakdown = Array.from(dailyMap.values())
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Calculate weekly totals
+    const weeklyTotals = this.calculateWeeklyTotals(dailyBreakdown);
+
+    return {
+      employee: {
+        id: employee.id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        payType: employee.payType,
+        hourlyRate: employee.defaultHourlyRate,
+        jobRate: employee.defaultJobRate,
+      },
+      startDate,
+      endDate,
+      totalHours,
+      totalPay,
+      completedJobs,
+      pendingJobs,
+      dailyBreakdown,
+      weeklyTotals,
+    };
+  }
+
+  /**
+   * Calculate weekly totals from daily breakdown
+   * @param {Array} dailyBreakdown - Array of daily data
+   * @returns {Array} Weekly totals
+   */
+  static calculateWeeklyTotals(dailyBreakdown) {
+    const weekMap = new Map();
+
+    dailyBreakdown.forEach((day) => {
+      const date = new Date(day.date);
+      // Get the Sunday of the week
+      const dayOfWeek = date.getDay();
+      const sunday = new Date(date);
+      sunday.setDate(date.getDate() - dayOfWeek);
+      const weekKey = sunday.toISOString().split("T")[0];
+
+      if (!weekMap.has(weekKey)) {
+        const saturday = new Date(sunday);
+        saturday.setDate(sunday.getDate() + 6);
+        weekMap.set(weekKey, {
+          weekStart: weekKey,
+          weekEnd: saturday.toISOString().split("T")[0],
+          hours: 0,
+          pay: 0,
+          jobCount: 0,
+        });
+      }
+
+      const week = weekMap.get(weekKey);
+      week.hours += day.hours;
+      week.pay += day.pay;
+      week.jobCount += day.jobs.filter((j) => j.status === "completed").length;
+    });
+
+    return Array.from(weekMap.values())
+      .sort((a, b) => new Date(b.weekStart) - new Date(a.weekStart));
   }
 }
 

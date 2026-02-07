@@ -48,7 +48,7 @@ const ImportBusinessLanding = () => {
   const stats = [
     { value: `${keepPercent}%`, label: "You Keep" },
     { value: "$0", label: "Monthly Fee" },
-    { value: "24hr", label: "Fast Payouts" },
+    { value: "Fast", label: "Payouts" },
     { value: `${keepPercentLarge}%`, label: "High Volume" },
   ];
 

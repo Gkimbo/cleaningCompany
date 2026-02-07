@@ -29,6 +29,12 @@ jest.mock("../../services/AppointmentJobFlowService", () => ({
   getOrCreateJobFlow: jest.fn(),
 }));
 
+// Mock NotificationService
+jest.mock("../../services/NotificationService", () => ({
+  notifyEmployeeJobAssigned: jest.fn(),
+  notifyEmployeeJobReassigned: jest.fn(),
+}));
+
 // Mock CustomJobFlowService
 jest.mock("../../services/CustomJobFlowService", () => ({
   resolveFlowForAppointment: jest.fn(),
@@ -44,6 +50,7 @@ jest.mock("../../models", () => {
   return {
     BusinessEmployee: {
       findOne: jest.fn(),
+      findByPk: jest.fn(),
     },
     EmployeeJobAssignment: {
       findOne: jest.fn(),
@@ -98,6 +105,7 @@ const {
 const MarketplaceJobRequirementsService = require("../../services/MarketplaceJobRequirementsService");
 const AppointmentJobFlowService = require("../../services/AppointmentJobFlowService");
 const CustomJobFlowService = require("../../services/CustomJobFlowService");
+const NotificationService = require("../../services/NotificationService");
 const EmployeeJobAssignmentService = require("../../services/EmployeeJobAssignmentService");
 
 describe("EmployeeJobAssignmentService", () => {
@@ -236,6 +244,146 @@ describe("EmployeeJobAssignmentService", () => {
         })
       ).rejects.toThrow("already assigned");
     });
+
+    it("should send notification to employee when job is assigned", async () => {
+      const employeeWithUser = {
+        ...mockEmployee,
+        userId: 5,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(employeeWithUser);
+      UserAppointments.findOne.mockResolvedValue({
+        ...mockAppointment,
+        date: "2026-02-15",
+        homeId: 1,
+        home: { address: "123 Main St" },
+      });
+      EmployeeJobAssignment.findOne.mockResolvedValue(null);
+      CustomJobFlowService.resolveFlowForAppointment.mockResolvedValue({
+        usesPlatformFlow: false,
+        customFlowId: null,
+      });
+      AppointmentJobFlowService.createJobFlowForAppointment.mockResolvedValue({
+        id: 1,
+        checklistProgress: null,
+      });
+
+      // Mock User.findByPk for employee, client, and business owner
+      User.findByPk
+        .mockResolvedValueOnce({ id: 5, email: "employee@test.com", expoPushToken: "token123" }) // employee
+        .mockResolvedValueOnce({ id: 50, firstName: "Client", lastName: "Name" }) // client
+        .mockResolvedValueOnce({ id: 10, businessName: "Test Business" }); // business owner
+
+      const mockCreatedAssignment = {
+        id: 1,
+        businessEmployeeId: 1,
+        appointmentId: 100,
+        isMarketplacePickup: false,
+      };
+      EmployeeJobAssignment.create.mockResolvedValue(mockCreatedAssignment);
+
+      await EmployeeJobAssignmentService.assignEmployeeToJob(10, {
+        employeeId: 1,
+        appointmentId: 100,
+        payAmount: 5000,
+      });
+
+      expect(NotificationService.notifyEmployeeJobAssigned).toHaveBeenCalledWith(
+        expect.objectContaining({
+          employeeUserId: 5,
+          employeeName: "John",
+          appointmentId: 100,
+          payAmount: 5000,
+        })
+      );
+    });
+
+    it("should not send notification if employee has no email or push token", async () => {
+      const employeeWithUser = {
+        ...mockEmployee,
+        userId: 5,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(employeeWithUser);
+      UserAppointments.findOne.mockResolvedValue({
+        ...mockAppointment,
+        date: "2026-02-15",
+      });
+      EmployeeJobAssignment.findOne.mockResolvedValue(null);
+      CustomJobFlowService.resolveFlowForAppointment.mockResolvedValue({
+        usesPlatformFlow: false,
+        customFlowId: null,
+      });
+      AppointmentJobFlowService.createJobFlowForAppointment.mockResolvedValue({
+        id: 1,
+        checklistProgress: null,
+      });
+
+      // Mock User.findByPk - employee has no email or push token
+      User.findByPk.mockResolvedValueOnce({ id: 5, email: null, expoPushToken: null });
+
+      const mockCreatedAssignment = {
+        id: 1,
+        businessEmployeeId: 1,
+        appointmentId: 100,
+        isMarketplacePickup: false,
+      };
+      EmployeeJobAssignment.create.mockResolvedValue(mockCreatedAssignment);
+
+      await EmployeeJobAssignmentService.assignEmployeeToJob(10, {
+        employeeId: 1,
+        appointmentId: 100,
+        payAmount: 5000,
+      });
+
+      expect(NotificationService.notifyEmployeeJobAssigned).not.toHaveBeenCalled();
+    });
+
+    it("should not fail assignment if notification fails", async () => {
+      const employeeWithUser = {
+        ...mockEmployee,
+        userId: 5,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(employeeWithUser);
+      UserAppointments.findOne.mockResolvedValue({
+        ...mockAppointment,
+        date: "2026-02-15",
+        home: { address: "123 Main St" },
+      });
+      EmployeeJobAssignment.findOne.mockResolvedValue(null);
+      CustomJobFlowService.resolveFlowForAppointment.mockResolvedValue({
+        usesPlatformFlow: false,
+        customFlowId: null,
+      });
+      AppointmentJobFlowService.createJobFlowForAppointment.mockResolvedValue({
+        id: 1,
+        checklistProgress: null,
+      });
+
+      User.findByPk
+        .mockResolvedValueOnce({ id: 5, email: "employee@test.com", expoPushToken: "token123" })
+        .mockResolvedValueOnce({ id: 50, firstName: "Client", lastName: "Name" })
+        .mockResolvedValueOnce({ id: 10, businessName: "Test Business" });
+
+      // Make notification fail
+      NotificationService.notifyEmployeeJobAssigned.mockRejectedValue(new Error("Notification failed"));
+
+      const mockCreatedAssignment = {
+        id: 1,
+        businessEmployeeId: 1,
+        appointmentId: 100,
+        isMarketplacePickup: false,
+      };
+      EmployeeJobAssignment.create.mockResolvedValue(mockCreatedAssignment);
+
+      // Should not throw even though notification failed
+      const result = await EmployeeJobAssignmentService.assignEmployeeToJob(10, {
+        employeeId: 1,
+        appointmentId: 100,
+        payAmount: 5000,
+      });
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe(1);
+    });
   });
 
   describe("assignSelfToJob", () => {
@@ -364,6 +512,203 @@ describe("EmployeeJobAssignmentService", () => {
       await expect(
         EmployeeJobAssignmentService.completeJob(999, 5)
       ).rejects.toThrow("Assignment not found or cannot be completed");
+    });
+
+    it("should calculate hourly pay correctly", async () => {
+      const mockEmployee = {
+        id: 1,
+        defaultHourlyRate: 2000, // $20.00/hour in cents
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      // Set startedAt to exactly 2 hours and 1 minute ago to ensure consistent rounding to 2.5 hours
+      const startedAt = new Date();
+      startedAt.setHours(startedAt.getHours() - 2);
+      startedAt.setMinutes(startedAt.getMinutes() - 1);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "hourly",
+        appointmentId: 100,
+        startedAt,
+        appointment: { id: 100, price: 15000 },
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      // 2 hours 1 minute rounds UP to 2.5 hours (nearest 0.5)
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          hoursWorked: 2.5, // 2 hours 1 minute rounds up to 2.5
+          payAmount: 5000, // $50.00 (2.5 hours × $20/hour)
+        })
+      );
+    });
+
+    it("should calculate per_job pay correctly using defaultJobRate", async () => {
+      const mockEmployee = {
+        id: 1,
+        defaultJobRate: 7500, // $75.00 per job in cents
+        defaultHourlyRate: 2000,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const startedAt = new Date();
+      startedAt.setHours(startedAt.getHours() - 1.5);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "per_job",
+        appointmentId: 100,
+        startedAt,
+        appointment: { id: 100, price: 15000 },
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          payAmount: 7500, // Uses defaultJobRate, not hourly calculation
+        })
+      );
+    });
+
+    it("should calculate flat_rate pay correctly using defaultJobRate", async () => {
+      const mockEmployee = {
+        id: 1,
+        defaultJobRate: 6000, // $60.00 per job in cents
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "flat_rate",
+        appointmentId: 100,
+        startedAt: new Date(),
+        appointment: { id: 100, price: 15000 },
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          payAmount: 6000, // Uses defaultJobRate
+        })
+      );
+    });
+
+    it("should calculate percentage pay correctly based on job price", async () => {
+      const mockEmployee = {
+        id: 1,
+        payRate: 40, // 40% of job price
+        defaultHourlyRate: 2000,
+        defaultJobRate: 5000,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "percentage",
+        appointmentId: 100,
+        startedAt: new Date(),
+        appointment: { id: 100, price: 15000 }, // $150.00 job
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          payAmount: 6000, // 40% of $150 = $60.00 (6000 cents)
+        })
+      );
+    });
+
+    it("should calculate percentage pay with decimal percentage", async () => {
+      const mockEmployee = {
+        id: 1,
+        payRate: 33.5, // 33.5% of job price
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "percentage",
+        appointmentId: 100,
+        startedAt: new Date(),
+        appointment: { id: 100, price: 20000 }, // $200.00 job
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          payAmount: 6700, // 33.5% of $200 = $67.00 (6700 cents)
+        })
+      );
+    });
+
+    it("should track hours worked for per_job pay type", async () => {
+      const mockEmployee = {
+        id: 1,
+        defaultJobRate: 5000,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const startedAt = new Date();
+      startedAt.setHours(startedAt.getHours() - 3); // 3 hours ago
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "per_job",
+        appointmentId: 100,
+        startedAt,
+        appointment: { id: 100, price: 15000 },
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      // Should still track hours even though pay is flat rate
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hoursWorked: expect.any(Number),
+          payAmount: 5000, // Flat job rate, not hourly
+        })
+      );
     });
   });
 
@@ -579,6 +924,124 @@ describe("EmployeeJobAssignmentService", () => {
       await expect(
         EmployeeJobAssignmentService.getMyJobs(999)
       ).rejects.toThrow("Employee record not found");
+    });
+  });
+
+  describe("reassignJob", () => {
+    const mockCurrentAssignment = {
+      id: 1,
+      businessEmployeeId: 2,
+      appointmentId: 100,
+      businessOwnerId: 10,
+      status: "assigned",
+      payAmount: 5000,
+      payType: "flat_rate",
+      update: jest.fn(),
+    };
+
+    const mockNewEmployee = {
+      id: 3,
+      userId: 15,
+      firstName: "Jane",
+      lastName: "Smith",
+      status: "active",
+    };
+
+    beforeEach(() => {
+      // Reset all mocks before each reassignJob test
+      jest.clearAllMocks();
+      NotificationService.notifyEmployeeJobAssigned.mockResolvedValue({});
+      NotificationService.notifyEmployeeJobReassigned.mockResolvedValue({});
+    });
+
+    it("should notify new employee when job is reassigned", async () => {
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockCurrentAssignment);
+      BusinessEmployee.findOne.mockResolvedValueOnce(mockNewEmployee);
+      BusinessEmployee.findByPk.mockResolvedValueOnce({ id: 2, userId: 8 }); // Old employee
+
+      const mockNewAssignment = {
+        id: 2,
+        businessEmployeeId: 3,
+        appointmentId: 100,
+      };
+      EmployeeJobAssignment.create.mockResolvedValue(mockNewAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        userId: 50,
+        date: "2026-02-20",
+        home: { address: "456 Oak Ave" },
+      });
+
+      User.findByPk
+        .mockResolvedValueOnce({ id: 50, firstName: "Client", lastName: "Test" }) // client
+        .mockResolvedValueOnce({ id: 10, businessName: "Test Business" }) // business owner
+        .mockResolvedValueOnce({ id: 15, email: "jane@test.com", expoPushToken: "token456" }); // new employee
+
+      await EmployeeJobAssignmentService.reassignJob(1, 3, 10);
+
+      expect(NotificationService.notifyEmployeeJobAssigned).toHaveBeenCalledWith(
+        expect.objectContaining({
+          employeeUserId: 15,
+          employeeName: "Jane",
+          appointmentId: 100,
+        })
+      );
+    });
+
+    it("should notify old employee when job is reassigned away from them", async () => {
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockCurrentAssignment);
+      // First call for new employee verification
+      BusinessEmployee.findOne.mockResolvedValueOnce(mockNewEmployee);
+      // findByPk is used to get old employee for notification
+      BusinessEmployee.findByPk.mockResolvedValueOnce({ id: 2, userId: 8 });
+
+      const mockNewAssignment = {
+        id: 2,
+        businessEmployeeId: 3,
+        appointmentId: 100,
+      };
+      EmployeeJobAssignment.create.mockResolvedValue(mockNewAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        userId: 50,
+        date: "2026-02-20",
+        home: { address: "456 Oak Ave" },
+      });
+
+      // User lookups: client, businessOwner, newEmployee user
+      User.findByPk
+        .mockResolvedValueOnce({ id: 50, firstName: "Client", lastName: "Test" }) // client
+        .mockResolvedValueOnce({ id: 10, businessName: "Test Business" }) // business owner
+        .mockResolvedValueOnce({ id: 15, email: "jane@test.com", expoPushToken: "token456" }); // new employee user
+
+      await EmployeeJobAssignmentService.reassignJob(1, 3, 10);
+
+      expect(NotificationService.notifyEmployeeJobReassigned).toHaveBeenCalledWith(
+        expect.objectContaining({
+          employeeUserId: 8,
+          appointmentId: 100,
+        })
+      );
+    });
+
+    it("should throw error when current assignment not found", async () => {
+      EmployeeJobAssignment.findOne.mockResolvedValue(null);
+
+      await expect(
+        EmployeeJobAssignmentService.reassignJob(999, 3, 10)
+      ).rejects.toThrow("Assignment not found or cannot be reassigned");
+    });
+
+    it("should throw error when new employee not found", async () => {
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockCurrentAssignment);
+      // First call for new employee verification returns null
+      BusinessEmployee.findOne.mockResolvedValueOnce(null);
+
+      await expect(
+        EmployeeJobAssignmentService.reassignJob(1, 999, 10)
+      ).rejects.toThrow("New employee not found or not active");
     });
   });
 

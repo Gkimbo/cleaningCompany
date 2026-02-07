@@ -35,6 +35,7 @@ import HRDashboard from "./hr/HRDashboard";
 import ClientDashboard from "./client/ClientDashboard";
 import CleanerDashboard from "./cleaner/CleanerDashboard";
 import { EmployeeDashboard } from "./businessEmployee";
+import BusinessOwnerProfile from "./businessOwner/BusinessOwnerProfile";
 import IncentiveBanner from "./incentives/IncentiveBanner";
 import IncentivesService from "../services/fetchRequests/IncentivesService";
 
@@ -276,6 +277,11 @@ const HomePage = ({ state, dispatch }) => {
   // Show Employee Dashboard for business employees (no marketplace access)
   if (state.account === "employee" && state.currentUser.token) {
     return <EmployeeDashboard state={state} />;
+  }
+
+  // Show Business Owner Dashboard for business owners
+  if (state.isBusinessOwner && state.currentUser.token) {
+    return <BusinessOwnerProfile state={state} />;
   }
 
   // Show Cleaner Dashboard for marketplace cleaners

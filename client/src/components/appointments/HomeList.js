@@ -63,7 +63,9 @@ const HomeList = ({ state, dispatch }) => {
           <Text style={styles.backButtonText}>{"<"} Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>My Homes</Text>
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity style={styles.editButton} onPress={() => navigate("/edit-home")}>
+          <Text style={styles.editButtonText}>Edit</Text>
+        </TouchableOpacity>
       </View>
 
       {totalPendingRequests > 0 && (
@@ -169,8 +171,16 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
-  headerSpacer: {
-    width: 60,
+  editButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+  editButtonText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
   },
   pendingBanner: {
     backgroundColor: colors.secondary[50],

@@ -40,14 +40,20 @@ const EmployeeAssignmentTile = ({
   token,
   onCancelComplete,
   isPreferred = false,
+  isRequesting = false,
   isMultiCleanerJob = false,
   multiCleanerJob = null,
   employeesAssigned = [],
   cleanerRoomAssignments = null,
+  isEarlyAccess = false,
 }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
   const [expandWindow, setExpandWindow] = useState(false);
+
+  // Normalize linen values to handle case-insensitivity ("yes", "Yes", "YES")
+  const needsSheets = bringSheets?.toLowerCase() === "yes";
+  const needsTowels = bringTowels?.toLowerCase() === "yes";
   const [home, setHome] = useState({
     address: "",
     city: "",
@@ -62,6 +68,7 @@ const EmployeeAssignmentTile = ({
   const [loadingCancellation, setLoadingCancellation] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showLinensDetails, setShowLinensDetails] = useState(false);
 
   // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
   const platformFeePercent = isMultiCleanerJob
@@ -255,6 +262,12 @@ const EmployeeAssignmentTile = ({
                 <Text style={styles.teamBadgeText}>Team</Text>
               </View>
             )}
+            {isEarlyAccess && !completed && (
+              <View style={styles.earlyAccessBadge}>
+                <Icon name="bolt" size={10} color={colors.primary[600]} />
+                <Text style={styles.earlyAccessText}>Early Access</Text>
+              </View>
+            )}
             {isPreferred && !completed && (
               <View style={styles.preferredBadge}>
                 <Icon name="star" size={10} color={colors.success[600]} />
@@ -341,19 +354,165 @@ const EmployeeAssignmentTile = ({
             <Icon name="bath" size={14} color={colors.text.secondary} />
             <Text style={styles.propertyText}>{home.numBaths || "?"} Baths</Text>
           </View>
-          {bringSheets === "yes" && (
+          {needsSheets && (
             <View style={styles.propertyItem}>
               <Icon name="th-large" size={12} color={colors.primary[500]} />
               <Text style={styles.propertyText}>Sheets</Text>
             </View>
           )}
-          {bringTowels === "yes" && (
+          {needsTowels && (
             <View style={styles.propertyItem}>
               <Icon name="square" size={12} color={colors.primary[500]} />
               <Text style={styles.propertyText}>Towels</Text>
             </View>
           )}
         </View>
+
+        {/* Prominent Linens Section - Collapsible when cleaner needs to bring linens */}
+        {assigned && (needsSheets || needsTowels) && (
+          <View style={styles.linensCollapsibleContainer}>
+            <Pressable
+              style={styles.linensCollapsibleHeader}
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setShowLinensDetails(!showLinensDetails);
+              }}
+            >
+              <View style={styles.linensCollapsibleHeaderLeft}>
+                <Icon name="exclamation-circle" size={16} color={colors.warning[600]} />
+                <Text style={styles.linensCollapsibleTitle}>
+                  What to Bring
+                </Text>
+                <View style={styles.linensQuickBadges}>
+                  {needsSheets && (
+                    <View style={styles.linensQuickBadge}>
+                      <Text style={styles.linensQuickBadgeText}>Sheets</Text>
+                    </View>
+                  )}
+                  {needsTowels && (
+                    <View style={styles.linensQuickBadge}>
+                      <Text style={styles.linensQuickBadgeText}>Towels</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              <Icon
+                name={showLinensDetails ? "chevron-up" : "chevron-down"}
+                size={14}
+                color={colors.warning[600]}
+              />
+            </Pressable>
+
+            {showLinensDetails && (
+              <View style={styles.linensCollapsibleContent}>
+                {/* Sheet Details */}
+                {needsSheets && (() => {
+                  const effectiveSheets = getEffectiveSheetConfigs(sheetConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
+                  return (
+                    <View style={styles.linensDetailSection}>
+                      <View style={styles.linensDetailHeader}>
+                        <Icon name="th-large" size={14} color={colors.warning[700]} />
+                        <Text style={styles.linensDetailTitle}>Sheets to Bring</Text>
+                      </View>
+                      {effectiveSheets && effectiveSheets.length > 0 ? (
+                        <View style={styles.linensDetailList}>
+                          {effectiveSheets.filter(bed => bed.needsSheets !== false).map((bed, index) => {
+                            const size = bed.size ? bed.size.charAt(0).toUpperCase() + bed.size.slice(1).replace(/_/g, ' ') : "Standard";
+                            return (
+                              <View key={index} style={styles.linensDetailRow}>
+                                <Icon name="check" size={12} color={colors.warning[600]} />
+                                <Text style={styles.linensDetailRowText}>
+                                  Bed {bed.bedNumber}: {size} sheets
+                                </Text>
+                              </View>
+                            );
+                          })}
+                          {isMultiCleanerJob && cleanerRoomAssignments?.length > 0 && (
+                            <Text style={styles.linensAssignmentNote}>
+                              (Your assigned bedrooms only)
+                            </Text>
+                          )}
+                        </View>
+                      ) : (
+                        <View style={styles.linensDetailList}>
+                          {Array.from({ length: parseInt(home.numBeds) || 1 }, (_, i) => (
+                            <View key={i} style={styles.linensDetailRow}>
+                              <Icon name="check" size={12} color={colors.warning[600]} />
+                              <Text style={styles.linensDetailRowText}>
+                                Bed {i + 1}: Queen sheets
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
+
+                {/* Towel Details */}
+                {needsTowels && (() => {
+                  const effectiveTowels = getEffectiveTowelConfigs(towelConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
+                  const totals = getTowelTotals(effectiveTowels);
+                  return (
+                    <View style={styles.linensDetailSection}>
+                      <View style={styles.linensDetailHeader}>
+                        <Icon name="square" size={14} color={colors.warning[700]} />
+                        <Text style={styles.linensDetailTitle}>Towels to Bring</Text>
+                      </View>
+                      {effectiveTowels && effectiveTowels.length > 0 ? (
+                        <View style={styles.linensDetailList}>
+                          {effectiveTowels.map((bath, index) => (
+                            <View key={index} style={styles.linensDetailRow}>
+                              <Icon name="check" size={12} color={colors.warning[600]} />
+                              <Text style={styles.linensDetailRowText}>
+                                Bathroom {bath.bathroomNumber}: {bath.towels || 0} towel{(bath.towels || 0) !== 1 ? "s" : ""}, {bath.faceCloths || 0} washcloth{(bath.faceCloths || 0) !== 1 ? "s" : ""}
+                              </Text>
+                            </View>
+                          ))}
+                          <View style={styles.linensTotalContainer}>
+                            <Text style={styles.linensTotalLabel}>Total:</Text>
+                            <Text style={styles.linensTotalValue}>
+                              {totals.towels} towel{totals.towels !== 1 ? "s" : ""}, {totals.faceCloths} washcloth{totals.faceCloths !== 1 ? "s" : ""}
+                            </Text>
+                          </View>
+                          {isMultiCleanerJob && cleanerRoomAssignments?.length > 0 && (
+                            <Text style={styles.linensAssignmentNote}>
+                              (Your assigned bathrooms only)
+                            </Text>
+                          )}
+                        </View>
+                      ) : (
+                        <View style={styles.linensDetailList}>
+                          {Array.from({ length: Math.floor(parseFloat(home.numBaths) || 1) }, (_, i) => (
+                            <View key={i} style={styles.linensDetailRow}>
+                              <Icon name="check" size={12} color={colors.warning[600]} />
+                              <Text style={styles.linensDetailRowText}>
+                                Bathroom {i + 1}: 2 towels, 1 washcloth
+                              </Text>
+                            </View>
+                          ))}
+                          <View style={styles.linensTotalContainer}>
+                            <Text style={styles.linensTotalLabel}>Total:</Text>
+                            <Text style={styles.linensTotalValue}>
+                              {Math.floor(parseFloat(home.numBaths) || 1) * 2} towel{Math.floor(parseFloat(home.numBaths) || 1) * 2 !== 1 ? "s" : ""}, {Math.floor(parseFloat(home.numBaths) || 1)} washcloth{Math.floor(parseFloat(home.numBaths) || 1) !== 1 ? "s" : ""}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
+
+                <View style={styles.linensReminderBox}>
+                  <Icon name="lightbulb-o" size={14} color={colors.primary[600]} />
+                  <Text style={styles.linensReminderText}>
+                    Prepare these items before your appointment to ensure a smooth cleaning experience
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Expanded Details */}
         {(expandWindow || assigned) && (
@@ -364,7 +523,7 @@ const EmployeeAssignmentTile = ({
                 <Icon name="th-large" size={14} color={colors.primary[600]} />
                 <Text style={styles.linensTitle}>Linens</Text>
               </View>
-              {bringSheets === "yes" || bringTowels === "yes" ? (
+              {needsSheets || needsTowels ? (
                 <View style={styles.linensContent}>
                   <View style={styles.bringLinensAlert}>
                     <Icon name="exclamation-circle" size={14} color={colors.warning[600]} />
@@ -372,7 +531,7 @@ const EmployeeAssignmentTile = ({
                   </View>
 
                   {/* Sheet Details */}
-                  {bringSheets === "yes" && (() => {
+                  {needsSheets && (() => {
                     const effectiveSheets = getEffectiveSheetConfigs(sheetConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
                     return (
                       <View style={styles.linensSection}>
@@ -406,7 +565,7 @@ const EmployeeAssignmentTile = ({
                   })()}
 
                   {/* Towel Details */}
-                  {bringTowels === "yes" && (() => {
+                  {needsTowels && (() => {
                     const effectiveTowels = getEffectiveTowelConfigs(towelConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
                     const totals = getTowelTotals(effectiveTowels);
                     return (
@@ -569,12 +728,17 @@ const EmployeeAssignmentTile = ({
             </Pressable>
           ) : (
             <Pressable
-              style={[styles.actionButton, styles.acceptButton, isPreferred && styles.preferredAcceptButton]}
+              style={[styles.actionButton, styles.acceptButton, isPreferred && styles.preferredAcceptButton, isRequesting && styles.buttonDisabled]}
               onPress={() => addEmployee(cleanerId, id)}
+              disabled={isRequesting}
             >
-              <Icon name={isPreferred ? "star" : "check"} size={14} color={colors.neutral[0]} />
+              {isRequesting ? (
+                <ActivityIndicator size="small" color={colors.neutral[0]} />
+              ) : (
+                <Icon name={isPreferred ? "star" : "check"} size={14} color={colors.neutral[0]} />
+              )}
               <Text style={styles.acceptButtonText}>
-                {isPreferred ? "Book Directly" : "Request This Job"}
+                {isRequesting ? "Requesting..." : isPreferred ? "Book Directly" : "Request This Job"}
               </Text>
             </Pressable>
           )}
@@ -663,6 +827,22 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.semibold,
     color: colors.success[700],
+  },
+  earlyAccessBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
+  earlyAccessText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
   },
   assignedBadge: {
     flexDirection: "row",
@@ -839,6 +1019,124 @@ const styles = StyleSheet.create({
   propertyText: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
+  },
+  linensCollapsibleContainer: {
+    marginTop: spacing.md,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    overflow: "hidden",
+  },
+  linensCollapsibleHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.warning[100],
+  },
+  linensCollapsibleHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flex: 1,
+  },
+  linensCollapsibleTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[800],
+  },
+  linensQuickBadges: {
+    flexDirection: "row",
+    gap: spacing.xs,
+    marginLeft: spacing.sm,
+  },
+  linensQuickBadge: {
+    backgroundColor: colors.warning[200],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  linensQuickBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[800],
+  },
+  linensCollapsibleContent: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  linensDetailSection: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  linensDetailHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.warning[200],
+  },
+  linensDetailTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  linensDetailList: {
+    gap: spacing.xs,
+  },
+  linensDetailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  linensDetailRowText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    flex: 1,
+  },
+  linensTotalContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  linensTotalLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  linensTotalValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.warning[700],
+  },
+  linensAssignmentNote: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    fontStyle: "italic",
+    marginTop: spacing.xs,
+  },
+  linensReminderBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: colors.primary[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+  },
+  linensReminderText: {
+    flex: 1,
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[700],
+    lineHeight: 18,
   },
   expandedSection: {
     marginTop: spacing.md,

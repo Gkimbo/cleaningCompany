@@ -731,6 +731,189 @@ class MultiCleanerService {
       ],
     });
   }
+
+  /**
+   * Book a multi-cleaner job as a team (for business owners)
+   * Fills all remaining slots with the specified team members at once
+   * @param {number} multiCleanerJobId - The multi-cleaner job ID
+   * @param {number} businessOwnerId - The business owner's user ID
+   * @param {Array} teamMembers - Array of { type: "self" | "employee", businessEmployeeId?: number }
+   * @returns {Promise<Object>} Result with job and assignment details
+   */
+  static async bookAsTeam(multiCleanerJobId, businessOwnerId, teamMembers) {
+    const {
+      MultiCleanerJob,
+      UserAppointments,
+      UserHomes,
+      CleanerRoomAssignment,
+      CleanerJobCompletion,
+      UserCleanerAppointments,
+      BusinessEmployee,
+      EmployeeJobAssignment,
+      User,
+    } = require("../models");
+    const RoomAssignmentService = require("./RoomAssignmentService");
+
+    // Get the job with appointment details
+    const job = await MultiCleanerJob.findByPk(multiCleanerJobId, {
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          include: [{ model: UserHomes, as: "home" }],
+        },
+      ],
+    });
+
+    if (!job) {
+      throw new Error("Multi-cleaner job not found");
+    }
+
+    const remainingSlots = job.getRemainingSlots();
+    if (remainingSlots === 0) {
+      throw new Error("All slots are already filled");
+    }
+
+    if (teamMembers.length !== remainingSlots) {
+      throw new Error(
+        `Must select exactly ${remainingSlots} team members. Got ${teamMembers.length}.`
+      );
+    }
+
+    // Resolve all team member user IDs
+    const resolvedMembers = [];
+    for (const member of teamMembers) {
+      if (member.type === "self") {
+        resolvedMembers.push({
+          userId: businessOwnerId,
+          type: "self",
+          businessEmployeeId: null,
+        });
+      } else if (member.type === "employee") {
+        const employee = await BusinessEmployee.findOne({
+          where: {
+            id: member.businessEmployeeId,
+            businessOwnerId,
+            status: "active",
+          },
+        });
+
+        if (!employee) {
+          throw new Error(`Employee ${member.businessEmployeeId} not found or inactive`);
+        }
+
+        if (!employee.userId) {
+          throw new Error(
+            `Employee ${employee.firstName} has not accepted their invitation yet`
+          );
+        }
+
+        resolvedMembers.push({
+          userId: employee.userId,
+          type: "employee",
+          businessEmployeeId: employee.id,
+          employeeName: `${employee.firstName} ${employee.lastName}`,
+        });
+      } else {
+        throw new Error(`Invalid team member type: ${member.type}`);
+      }
+    }
+
+    // Check for duplicates
+    const userIds = resolvedMembers.map((m) => m.userId);
+    const uniqueUserIds = [...new Set(userIds)];
+    if (uniqueUserIds.length !== userIds.length) {
+      throw new Error("Cannot assign the same person multiple times");
+    }
+
+    // Check none are already assigned
+    for (const member of resolvedMembers) {
+      const existingCompletion = await CleanerJobCompletion.findOne({
+        where: { multiCleanerJobId, cleanerId: member.userId },
+      });
+      if (existingCompletion) {
+        throw new Error(
+          `Team member is already assigned to this job`
+        );
+      }
+    }
+
+    // Get all unassigned rooms
+    const unassignedRooms = await CleanerRoomAssignment.findAll({
+      where: {
+        multiCleanerJobId,
+        cleanerId: null,
+      },
+      order: [["estimatedMinutes", "DESC"]], // Largest first for balanced distribution
+    });
+
+    // Distribute rooms evenly among team members
+    const roomsPerCleaner = Math.ceil(unassignedRooms.length / resolvedMembers.length);
+    const assignments = [];
+
+    for (let i = 0; i < resolvedMembers.length; i++) {
+      const member = resolvedMembers[i];
+      const startIdx = i * roomsPerCleaner;
+      const endIdx = Math.min(startIdx + roomsPerCleaner, unassignedRooms.length);
+      const memberRooms = unassignedRooms.slice(startIdx, endIdx);
+      const roomIds = memberRooms.map((r) => r.id);
+
+      // Fill the slot using existing method
+      await this.fillSlot(multiCleanerJobId, member.userId, roomIds);
+
+      // Create cleaner-appointment assignment
+      await UserCleanerAppointments.findOrCreate({
+        where: {
+          appointmentId: job.appointmentId,
+          employeeId: member.userId,
+        },
+      });
+
+      // For employees, create EmployeeJobAssignment for payroll tracking
+      if (member.type === "employee") {
+        const earnings = await RoomAssignmentService.calculateCleanerEarningsShare(
+          member.userId,
+          multiCleanerJobId
+        );
+
+        await EmployeeJobAssignment.create({
+          businessEmployeeId: member.businessEmployeeId,
+          appointmentId: job.appointmentId,
+          businessOwnerId,
+          assignedBy: businessOwnerId,
+          status: "assigned",
+          payAmount: Math.round(earnings * 100), // Convert to cents
+          payType: "flat_rate",
+          isMarketplacePickup: true,
+          payoutStatus: "pending",
+        });
+      }
+
+      assignments.push({
+        userId: member.userId,
+        type: member.type,
+        businessEmployeeId: member.businessEmployeeId,
+        roomsAssigned: roomIds.length,
+      });
+    }
+
+    // Fetch updated job
+    const updatedJob = await MultiCleanerJob.findByPk(multiCleanerJobId, {
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          include: [{ model: UserHomes, as: "home" }],
+        },
+      ],
+    });
+
+    return {
+      job: updatedJob,
+      assignments,
+      totalSlotsFilled: resolvedMembers.length,
+    };
+  }
 }
 
 module.exports = MultiCleanerService;

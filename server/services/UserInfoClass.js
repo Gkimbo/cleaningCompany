@@ -425,6 +425,9 @@ class UserInfoClass {
         price: newPrice,
       });
 
+      // Reload to ensure we have the latest values
+      await existingAppointment.reload();
+
       return existingAppointment;
     } catch (error) {
       throw new Error(error);

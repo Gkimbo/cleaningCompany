@@ -11,6 +11,15 @@ jest.mock("../../services/MultiCleanerService");
 jest.mock("../../services/RoomAssignmentService");
 jest.mock("../../services/MultiCleanerPricingService");
 jest.mock("../../services/NotificationService");
+jest.mock("../../serializers/MultiCleanerJobSerializer", () => ({
+  serializeOne: jest.fn((job) => job),
+  serializeMany: jest.fn((jobs) => jobs),
+  serializeOffer: jest.fn((offer) => offer),
+  serializeOffersResponse: jest.fn((offers, availableJobs) => ({
+    personalOffers: offers,
+    availableJobs: availableJobs,
+  })),
+}));
 
 // Mock models
 jest.mock("../../models", () => ({
@@ -19,6 +28,7 @@ jest.mock("../../models", () => ({
   },
   UserAppointments: {
     findByPk: jest.fn(),
+    findAll: jest.fn(),
   },
   UserHomes: {
     findByPk: jest.fn(),
@@ -64,6 +74,7 @@ const MultiCleanerService = require("../../services/MultiCleanerService");
 const RoomAssignmentService = require("../../services/RoomAssignmentService");
 const MultiCleanerPricingService = require("../../services/MultiCleanerPricingService");
 const NotificationService = require("../../services/NotificationService");
+const MultiCleanerJobSerializer = require("../../serializers/MultiCleanerJobSerializer");
 
 describe("Multi-Cleaner Router", () => {
   let app;
@@ -107,6 +118,7 @@ describe("Multi-Cleaner Router", () => {
       CleanerJobOffer.findAll.mockResolvedValue([]);
       MultiCleanerJob.findAll.mockResolvedValue([]);
       CleanerJobCompletion.findAll.mockResolvedValue([]);
+      UserAppointments.findAll.mockResolvedValue([]);
 
       const res = await request(app)
         .get("/api/v1/multi-cleaner/offers")
@@ -216,6 +228,16 @@ describe("Multi-Cleaner Router", () => {
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
 
+      // Mock MultiCleanerJob.findByPk for the fetch after creation
+      MultiCleanerJob.findByPk.mockResolvedValue({
+        id: 1,
+        appointmentId: 100,
+        totalCleanersRequired: 2,
+        cleanersConfirmed: 0,
+        status: "open",
+        appointment: mockAppointment,
+      });
+
       RoomAssignmentService.createRoomAssignments.mockResolvedValue([
         { id: 1, roomType: "bedroom", roomNumber: 1 },
         { id: 2, roomType: "bathroom", roomNumber: 1 },
@@ -293,6 +315,7 @@ describe("Multi-Cleaner Router", () => {
       ]);
 
       CleanerJobCompletion.findAll.mockResolvedValue([]);
+      UserAppointments.findAll.mockResolvedValue([]);
 
       const res = await request(app)
         .get("/api/v1/multi-cleaner/offers")
@@ -316,6 +339,7 @@ describe("Multi-Cleaner Router", () => {
       CleanerJobCompletion.findAll.mockResolvedValue([
         { multiCleanerJobId: 10 },
       ]);
+      UserAppointments.findAll.mockResolvedValue([]);
 
       const res = await request(app)
         .get("/api/v1/multi-cleaner/offers")
@@ -1757,6 +1781,25 @@ describe("Multi-Cleaner Router", () => {
       ]);
       MultiCleanerPricingService.calculateTotalJobPrice.mockResolvedValue(18000);
       MultiCleanerPricingService.updateRoomEarningsShares.mockResolvedValue(true);
+
+      // Mock findByPk for fetching job with associations
+      MultiCleanerJob.findByPk.mockResolvedValue({
+        id: 1,
+        appointmentId: 100,
+        totalCleanersRequired: 2,
+        cleanersConfirmed: 0,
+        status: "open",
+        appointment: mockAppointment,
+      });
+
+      // Mock serializer
+      MultiCleanerJobSerializer.serializeOne.mockReturnValue({
+        id: 1,
+        appointmentId: 100,
+        totalCleanersRequired: 2,
+        cleanersConfirmed: 0,
+        status: "open",
+      });
 
       const createRes = await request(app)
         .post("/api/v1/multi-cleaner/create")

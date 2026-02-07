@@ -638,6 +638,338 @@ describe("PreferredCleanerPerksService", () => {
     });
   });
 
+  describe("getCleanerPerks", () => {
+    it("should return current perks for a cleaner", async () => {
+      const mockPerks = {
+        cleanerId: 100,
+        tierLevel: "gold",
+        preferredHomeCount: 8,
+        bonusPercent: 5,
+        fasterPayouts: true,
+        payoutHours: 24,
+        earlyAccess: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const models = {
+        HomePreferredCleaner: {
+          count: jest.fn().mockResolvedValue(8),
+        },
+        CleanerPreferredPerks: {
+          findOne: jest.fn().mockResolvedValue(mockPerks),
+          create: jest.fn(),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue(null),
+        },
+      };
+
+      const result = await PreferredCleanerPerksService.getCleanerPerks(100, models);
+
+      expect(result.tierLevel).toBe("gold");
+      expect(result.fasterPayouts).toBe(true);
+      expect(result.payoutHours).toBe(24);
+      expect(result.earlyAccess).toBe(false);
+      expect(result.bonusPercent).toBe(5);
+    });
+
+    it("should return platinum perks with early access", async () => {
+      const mockPerks = {
+        cleanerId: 100,
+        tierLevel: "platinum",
+        preferredHomeCount: 15,
+        bonusPercent: 7,
+        fasterPayouts: true,
+        payoutHours: 24,
+        earlyAccess: true,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const models = {
+        HomePreferredCleaner: {
+          count: jest.fn().mockResolvedValue(15),
+        },
+        CleanerPreferredPerks: {
+          findOne: jest.fn().mockResolvedValue(mockPerks),
+          create: jest.fn(),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue(null),
+        },
+      };
+
+      const result = await PreferredCleanerPerksService.getCleanerPerks(100, models);
+
+      expect(result.tierLevel).toBe("platinum");
+      expect(result.fasterPayouts).toBe(true);
+      expect(result.earlyAccess).toBe(true);
+    });
+
+    it("should respect owner disabling faster payouts in config", async () => {
+      const configWithDisabledFasterPayouts = {
+        bronzeMinHomes: 1,
+        bronzeMaxHomes: 2,
+        bronzeBonusPercent: 0,
+        silverMinHomes: 3,
+        silverMaxHomes: 5,
+        silverBonusPercent: 3,
+        goldMinHomes: 6,
+        goldMaxHomes: 10,
+        goldBonusPercent: 5,
+        goldFasterPayouts: false, // Owner disabled
+        goldPayoutHours: 48,
+        platinumMinHomes: 11,
+        platinumBonusPercent: 7,
+        platinumFasterPayouts: true,
+        platinumPayoutHours: 24,
+        platinumEarlyAccess: true,
+      };
+
+      const mockPerks = {
+        cleanerId: 100,
+        tierLevel: "gold",
+        preferredHomeCount: 8,
+        bonusPercent: 5,
+        fasterPayouts: false,
+        payoutHours: 48,
+        earlyAccess: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const models = {
+        HomePreferredCleaner: {
+          count: jest.fn().mockResolvedValue(8),
+        },
+        CleanerPreferredPerks: {
+          findOne: jest.fn().mockResolvedValue(mockPerks),
+          create: jest.fn(),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue(configWithDisabledFasterPayouts),
+        },
+      };
+
+      const result = await PreferredCleanerPerksService.getCleanerPerks(100, models);
+
+      expect(result.tierLevel).toBe("gold");
+      expect(result.fasterPayouts).toBe(false);
+      expect(result.payoutHours).toBe(48);
+    });
+
+    it("should respect owner disabling early access in config", async () => {
+      const configWithDisabledEarlyAccess = {
+        bronzeMinHomes: 1,
+        bronzeMaxHomes: 2,
+        bronzeBonusPercent: 0,
+        silverMinHomes: 3,
+        silverMaxHomes: 5,
+        silverBonusPercent: 3,
+        goldMinHomes: 6,
+        goldMaxHomes: 10,
+        goldBonusPercent: 5,
+        goldFasterPayouts: true,
+        goldPayoutHours: 24,
+        platinumMinHomes: 11,
+        platinumBonusPercent: 7,
+        platinumFasterPayouts: true,
+        platinumPayoutHours: 24,
+        platinumEarlyAccess: false, // Owner disabled
+      };
+
+      const mockPerks = {
+        cleanerId: 100,
+        tierLevel: "platinum",
+        preferredHomeCount: 15,
+        bonusPercent: 7,
+        fasterPayouts: true,
+        payoutHours: 24,
+        earlyAccess: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const models = {
+        HomePreferredCleaner: {
+          count: jest.fn().mockResolvedValue(15),
+        },
+        CleanerPreferredPerks: {
+          findOne: jest.fn().mockResolvedValue(mockPerks),
+          create: jest.fn(),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue(configWithDisabledEarlyAccess),
+        },
+      };
+
+      const result = await PreferredCleanerPerksService.getCleanerPerks(100, models);
+
+      expect(result.tierLevel).toBe("platinum");
+      expect(result.earlyAccess).toBe(false);
+    });
+  });
+
+  describe("calculatePayoutBonus - fasterPayouts and payoutHours", () => {
+    it("should return fasterPayouts and payoutHours for non-preferred job", async () => {
+      const mockPerks = {
+        cleanerId: 100,
+        tierLevel: "gold",
+        preferredHomeCount: 8,
+        bonusPercent: 5,
+        fasterPayouts: true,
+        payoutHours: 24,
+        earlyAccess: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const models = {
+        HomePreferredCleaner: {
+          findOne: jest.fn().mockResolvedValue(null), // Not preferred at home
+          count: jest.fn().mockResolvedValue(8),
+        },
+        CleanerPreferredPerks: {
+          findOne: jest.fn().mockResolvedValue(mockPerks),
+          create: jest.fn(),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue(null),
+        },
+      };
+
+      const result = await PreferredCleanerPerksService.calculatePayoutBonus(
+        100, 1, 10000, 10, models
+      );
+
+      expect(result.isPreferredJob).toBe(false);
+      expect(result.fasterPayouts).toBe(true);
+      expect(result.payoutHours).toBe(24);
+      expect(result.tierLevel).toBe("gold");
+    });
+
+    it("should return fasterPayouts and payoutHours for preferred job with bonus", async () => {
+      const mockPerks = {
+        cleanerId: 100,
+        tierLevel: "platinum",
+        preferredHomeCount: 15,
+        bonusPercent: 7,
+        fasterPayouts: true,
+        payoutHours: 24,
+        earlyAccess: true,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const models = {
+        HomePreferredCleaner: {
+          findOne: jest.fn().mockResolvedValue({ cleanerId: 100, homeId: 1 }),
+          count: jest.fn().mockResolvedValue(15),
+        },
+        CleanerPreferredPerks: {
+          findOne: jest.fn().mockResolvedValue(mockPerks),
+          create: jest.fn(),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue(null),
+        },
+      };
+
+      const result = await PreferredCleanerPerksService.calculatePayoutBonus(
+        100, 1, 10000, 10, models
+      );
+
+      expect(result.isPreferredJob).toBe(true);
+      expect(result.bonusApplied).toBe(true);
+      expect(result.fasterPayouts).toBe(true);
+      expect(result.payoutHours).toBe(24);
+    });
+
+    it("should return fasterPayouts=false when owner disables it", async () => {
+      const configWithDisabledFasterPayouts = {
+        bronzeMinHomes: 1,
+        bronzeMaxHomes: 2,
+        bronzeBonusPercent: 0,
+        silverMinHomes: 3,
+        silverMaxHomes: 5,
+        silverBonusPercent: 3,
+        goldMinHomes: 6,
+        goldMaxHomes: 10,
+        goldBonusPercent: 5,
+        goldFasterPayouts: false, // Owner disabled
+        goldPayoutHours: 48,
+        platinumMinHomes: 11,
+        platinumBonusPercent: 7,
+        platinumFasterPayouts: true,
+        platinumPayoutHours: 24,
+        platinumEarlyAccess: true,
+      };
+
+      const mockPerks = {
+        cleanerId: 100,
+        tierLevel: "gold",
+        preferredHomeCount: 8,
+        bonusPercent: 5,
+        fasterPayouts: false,
+        payoutHours: 48,
+        earlyAccess: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const models = {
+        HomePreferredCleaner: {
+          findOne: jest.fn().mockResolvedValue({ cleanerId: 100, homeId: 1 }),
+          count: jest.fn().mockResolvedValue(8),
+        },
+        CleanerPreferredPerks: {
+          findOne: jest.fn().mockResolvedValue(mockPerks),
+          create: jest.fn(),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue(configWithDisabledFasterPayouts),
+        },
+      };
+
+      const result = await PreferredCleanerPerksService.calculatePayoutBonus(
+        100, 1, 10000, 10, models
+      );
+
+      expect(result.fasterPayouts).toBe(false);
+      expect(result.payoutHours).toBe(48);
+    });
+
+    it("should return bronze tier perks for new cleaner", async () => {
+      const mockPerks = {
+        cleanerId: 100,
+        tierLevel: "bronze",
+        preferredHomeCount: 1,
+        bonusPercent: 0,
+        fasterPayouts: false,
+        payoutHours: 48,
+        earlyAccess: false,
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      const models = {
+        HomePreferredCleaner: {
+          findOne: jest.fn().mockResolvedValue({ cleanerId: 100, homeId: 1 }),
+          count: jest.fn().mockResolvedValue(1),
+        },
+        CleanerPreferredPerks: {
+          findOne: jest.fn().mockResolvedValue(mockPerks),
+          create: jest.fn(),
+        },
+        PreferredPerksConfig: {
+          findOne: jest.fn().mockResolvedValue(null),
+        },
+      };
+
+      const result = await PreferredCleanerPerksService.calculatePayoutBonus(
+        100, 1, 10000, 10, models
+      );
+
+      expect(result.tierLevel).toBe("bronze");
+      expect(result.bonusApplied).toBe(false);
+      expect(result.fasterPayouts).toBe(false);
+      expect(result.payoutHours).toBe(48);
+    });
+  });
+
   describe("recalculateAllTiers", () => {
     it("should recalculate tiers for all cleaners with preferred status", async () => {
       const mockPerks1 = { update: jest.fn().mockResolvedValue(true) };

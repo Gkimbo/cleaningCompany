@@ -34,6 +34,7 @@ class UserSerializer {
 			"referralCredits",
 			"isBusinessOwner",
 			"businessName",
+			"businessLogo",
 			"yearsInBusiness"
 		];
 
@@ -78,6 +79,7 @@ class UserSerializer {
 			"referralCredits",
 			"isBusinessOwner",
 			"businessName",
+			"businessLogo",
 			"yearsInBusiness",
 		];
 		const serializedUser = {};

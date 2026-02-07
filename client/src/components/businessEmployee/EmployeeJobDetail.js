@@ -331,10 +331,10 @@ const EmployeeJobDetail = ({ state }) => {
               value={home.keyLocation}
             />
           )}
-          {home.notes && (
+          {home.specialNotes && (
             <View style={styles.notesSection}>
               <Text style={styles.notesLabel}>Special Instructions</Text>
-              <Text style={styles.notesText}>{home.notes}</Text>
+              <Text style={styles.notesText}>{home.specialNotes}</Text>
             </View>
           )}
         </View>
@@ -444,9 +444,9 @@ const EmployeeJobDetail = ({ state }) => {
       </ScrollView>
 
       {/* Action Buttons */}
-      {(job.status === "assigned" || job.status === "started") && (
+      {((job.status === "assigned" && isToday) || job.status === "started") && (
         <View style={styles.actionBar}>
-          {job.status === "assigned" && (
+          {job.status === "assigned" && isToday && (
             <Pressable
               style={[styles.startButton, actionLoading && styles.buttonDisabled]}
               onPress={handleStartJob}

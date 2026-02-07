@@ -373,6 +373,20 @@ async function createDemoAccounts() {
 					});
 				}
 				cleanerReviewAppointmentIds.push(appt.id);
+
+				// Always ensure UserCleanerAppointments record exists so cleaner can see the job
+				const existingCleanerAppt = await UserCleanerAppointments.findOne({
+					where: {
+						employeeId: createdAccounts.cleaner.id,
+						appointmentId: appt.id,
+					},
+				});
+				if (!existingCleanerAppt) {
+					await UserCleanerAppointments.create({
+						employeeId: createdAccounts.cleaner.id,
+						appointmentId: appt.id,
+					});
+				}
 			}
 		}
 
@@ -394,6 +408,8 @@ async function createDemoAccounts() {
 						review: reviewRatings[i],
 						reviewComment: reviewComments[i],
 						reviewType: "homeowner_to_cleaner",
+						isPublished: true,
+						reviewerName: `${createdAccounts.homeowner.firstName} ${createdAccounts.homeowner.lastName.charAt(0)}.`,
 						createdAt: new Date(Date.now() - (i * 7 * 24 * 60 * 60 * 1000)), // Spread over weeks
 					});
 				}
@@ -744,12 +760,12 @@ async function createDemoAccounts() {
 			for (let i = 1; i <= 5; i++) {
 				try {
 					const pastDate = getPastDate(i * 14); // Every 2 weeks in the past
-					const existingAppt = await UserAppointments.findOne({
+					let appt = await UserAppointments.findOne({
 						where: { userId: createdAccounts.homeowner.id, date: pastDate },
 					});
 
-					if (!existingAppt) {
-						await UserAppointments.create({
+					if (!appt) {
+						appt = await UserAppointments.create({
 							userId: createdAccounts.homeowner.id,
 							homeId: createdHomes[0].id,
 							date: pastDate,
@@ -767,6 +783,22 @@ async function createDemoAccounts() {
 							completionStatus: "approved",
 						});
 					}
+
+					// Always ensure UserCleanerAppointments record exists
+					if (appt) {
+						const existingCleanerAppt = await UserCleanerAppointments.findOne({
+							where: {
+								employeeId: createdAccounts.cleaner.id,
+								appointmentId: appt.id,
+							},
+						});
+						if (!existingCleanerAppt) {
+							await UserCleanerAppointments.create({
+								employeeId: createdAccounts.cleaner.id,
+								appointmentId: appt.id,
+							});
+						}
+					}
 				} catch (error) {
 					// Ignore duplicates
 				}
@@ -780,11 +812,11 @@ async function createDemoAccounts() {
 			for (let i = 1; i <= 3; i++) {
 				try {
 					const futureDate = getFutureDate(i * 7); // Weekly upcoming
-					const existingAppt = await UserAppointments.findOne({
+					let appt = await UserAppointments.findOne({
 						where: { userId: createdAccounts.homeowner.id, date: futureDate },
 					});
 
-					if (!existingAppt) {
+					if (!appt) {
 						const home = createdHomes[i % createdHomes.length];
 						const numBeds = parseInt(home.numBeds) || 3;
 						const numBaths = parseInt(home.numBaths) || 2;
@@ -802,7 +834,7 @@ async function createDemoAccounts() {
 							towelConfigs,
 						});
 
-						await UserAppointments.create({
+						appt = await UserAppointments.create({
 							userId: createdAccounts.homeowner.id,
 							homeId: home.id,
 							date: futureDate,
@@ -822,11 +854,27 @@ async function createDemoAccounts() {
 							towelConfigurations: JSON.stringify(towelConfigs),
 						});
 					}
+
+					// Always ensure UserCleanerAppointments record exists so cleaner can see the job
+					if (i <= 2 && createdAccounts.cleaner && appt) {
+						const existingCleanerAppt = await UserCleanerAppointments.findOne({
+							where: {
+								employeeId: createdAccounts.cleaner.id,
+								appointmentId: appt.id,
+							},
+						});
+						if (!existingCleanerAppt) {
+							await UserCleanerAppointments.create({
+								employeeId: createdAccounts.cleaner.id,
+								appointmentId: appt.id,
+							});
+						}
+					}
 				} catch (error) {
 					// Ignore duplicates
 				}
 			}
-			console.log("  - Created 3 upcoming appointments");
+			console.log("  - Created 3 upcoming appointments with cleaner assignments");
 		}
 
 		// Create bill balance ($150)
@@ -908,7 +956,7 @@ async function createDemoAccounts() {
 				email: "mike.demo@sparkle.demo",
 				status: "active",
 				payType: "hourly",
-				payRate: 20,
+				defaultHourlyRate: 2000, // $20/hr in cents
 			},
 		];
 
@@ -940,14 +988,17 @@ async function createDemoAccounts() {
 				if (!existingBizEmp) {
 					await BusinessEmployee.create({
 						businessOwnerId: createdAccounts.businessOwner.id,
-						cleanerId: empUser.id,
+						userId: empUser.id,
 						firstName: empData.firstName,
 						lastName: empData.lastName,
 						email: empData.email,
 						status: empData.status,
-						payType: empData.payType,
-						payRate: empData.payRate,
+						payType: empData.payType || "hourly",
+						payRate: empData.payRate || null,
+						defaultHourlyRate: empData.defaultHourlyRate || null,
+						defaultJobRate: empData.defaultJobRate || null,
 						canSeeFullSchedule: true,
+						canViewJobEarnings: true,
 						invitationAcceptedAt: new Date(),
 					});
 					console.log(`  - Created employee: ${empData.firstName} ${empData.lastName}`);
@@ -1054,28 +1105,37 @@ async function createDemoAccounts() {
 			});
 
 			// Create BusinessEmployee record if it doesn't exist
-			const existingEmployee = await BusinessEmployee.findOne({
+			let businessEmployeeRecord = await BusinessEmployee.findOne({
 				where: {
 					businessOwnerId: createdAccounts.businessOwner.id,
 					userId: createdAccounts.employee.id,
 				},
 			});
 
-			if (!existingEmployee) {
-				await BusinessEmployee.create({
+			if (!businessEmployeeRecord) {
+				businessEmployeeRecord = await BusinessEmployee.create({
 					businessOwnerId: createdAccounts.businessOwner.id,
 					userId: createdAccounts.employee.id,
 					firstName: "Demo",
 					lastName: "Employee",
 					email: DEMO_ACCOUNTS.employee.email,
 					status: "active",
-					payType: "percentage",
-					payRate: 70,
+					payType: "hourly",
+					defaultHourlyRate: 2500, // $25/hr in cents
 					canSeeFullSchedule: true,
+					canViewJobEarnings: true,
 					invitationAcceptedAt: new Date(),
 				});
 				console.log("  - Created BusinessEmployee record");
+			} else {
+				// Update existing record to ensure canViewJobEarnings is enabled
+				if (!businessEmployeeRecord.canViewJobEarnings) {
+					await businessEmployeeRecord.update({ canViewJobEarnings: true });
+					console.log("  - Updated BusinessEmployee with canViewJobEarnings");
+				}
 			}
+			// Store the BusinessEmployee ID for use in job assignments
+			createdAccounts.businessEmployeeId = businessEmployeeRecord.id;
 		} catch (error) {
 			console.error("  - Error linking employee:", error.message);
 		}
@@ -1099,71 +1159,66 @@ async function createDemoAccounts() {
 					const jobDate = getFutureDate(i * 2 + 1); // Jobs spread over next 10 days
 					const home = clientHomes[i % clientHomes.length];
 
-					// Check if assignment exists
+					// First create the appointment, then check for existing assignment
+					let appointment = await UserAppointments.findOne({
+						where: { homeId: home.id, date: jobDate },
+					});
+
+					if (!appointment) {
+						const numBeds = parseInt(home.numBeds) || 3;
+						const numBaths = parseInt(home.numBaths) || 2;
+						const bringSheets = i % 2 === 0 ? "yes" : "no";
+						const bringTowels = "yes";
+						const sheetConfigs = bringSheets === "yes" ? generateSheetConfigurations(numBeds) : null;
+						const towelConfigs = generateTowelConfigurations(numBaths);
+
+						const price = calculateAppointmentPrice({
+							numBeds,
+							numBaths,
+							bringSheets,
+							bringTowels,
+							sheetConfigs,
+							towelConfigs,
+						});
+
+						appointment = await UserAppointments.create({
+							userId: home.userId,
+							homeId: home.id,
+							date: jobDate,
+							price: String(price),
+							paid: false,
+							bringTowels,
+							bringSheets,
+							completed: false,
+							hasBeenAssigned: true,
+							employeesAssigned: [createdAccounts.businessEmployeeId.toString()],
+							empoyeesNeeded: 1,
+							timeToBeCompleted: String(2 + (i % 2)),
+							paymentStatus: "pending",
+							sheetConfigurations: sheetConfigs,
+							towelConfigurations: towelConfigs,
+						});
+					}
+
+					// Check if assignment exists for this appointment
 					const existingAssignment = await EmployeeJobAssignment.findOne({
 						where: {
-							employeeId: createdAccounts.employee.id,
-							scheduledDate: jobDate,
+							businessEmployeeId: createdAccounts.businessEmployeeId,
+							appointmentId: appointment.id,
 						},
 					});
 
 					if (!existingAssignment) {
-						// Create an appointment first
-						let appointment = await UserAppointments.findOne({
-							where: { homeId: home.id, date: jobDate },
-						});
-
-						if (!appointment) {
-							const numBeds = parseInt(home.numBeds) || 3;
-							const numBaths = parseInt(home.numBaths) || 2;
-							const bringSheets = i % 2 === 0 ? "yes" : "no";
-							const bringTowels = "yes";
-							const sheetConfigs = bringSheets === "yes" ? generateSheetConfigurations(numBeds) : null;
-							const towelConfigs = generateTowelConfigurations(numBaths);
-
-							const price = calculateAppointmentPrice({
-								numBeds,
-								numBaths,
-								bringSheets,
-								bringTowels,
-								sheetConfigs,
-								towelConfigs,
-							});
-
-							appointment = await UserAppointments.create({
-								userId: home.userId,
-								homeId: home.id,
-								date: jobDate,
-								price: String(price),
-								paid: false,
-								bringTowels,
-								bringSheets,
-								completed: false,
-								hasBeenAssigned: true,
-								employeesAssigned: [createdAccounts.employee.id.toString()],
-								empoyeesNeeded: 1,
-								timeToBeCompleted: String(2 + (i % 2)),
-								paymentStatus: "pending",
-								// Add detailed configurations
-								sheetConfigurations: sheetConfigs,
-								towelConfigurations: towelConfigs,
-							});
-						}
-
 						// Create the job assignment
 						const jobPrice = parseFloat(appointment.price);
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
-							employeeId: createdAccounts.employee.id,
+							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: appointment.id,
-							homeId: home.id,
-							clientId: home.userId,
-							scheduledDate: jobDate,
-							scheduledTime: ["09:00", "10:00", "13:00", "14:00", "15:00"][i],
+							assignedBy: createdAccounts.businessOwner.id,
 							status: "assigned",
 							payType: "percentage",
-							payRate: 70,
-							estimatedPay: Math.round(jobPrice * 0.7 * 100), // 70% of job price in cents
+							payAmount: Math.round(jobPrice * 0.7 * 100), // 70% of job price in cents
 						});
 						console.log(`  - Created job assignment for ${jobDate}`);
 					}
@@ -1298,28 +1353,25 @@ async function createDemoAccounts() {
 							bringSheets: "no",
 							completed: true,
 							hasBeenAssigned: true,
-							employeesAssigned: [createdAccounts.employee.id.toString()],
+							employeesAssigned: [createdAccounts.businessEmployeeId.toString()],
 							empoyeesNeeded: 1,
 							timeToBeCompleted: "2.5",
 							paymentStatus: "paid",
 							amountPaid: 16000,
 							completionStatus: "approved",
-							cleanerId: createdAccounts.businessOwner.id,
+							bookedByCleanerId: createdAccounts.businessOwner.id,
 						});
 
 						// Create job assignment for past appointments
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
-							employeeId: createdAccounts.employee.id,
+							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: existingAppt.id,
-							homeId: clientHome.id,
-							clientId: createdAccounts.businessClient.id,
-							scheduledDate: pastDate,
-							scheduledTime: "10:00",
+							assignedBy: createdAccounts.businessOwner.id,
 							status: "completed",
 							payType: "percentage",
-							payRate: 70,
-							estimatedPay: Math.round(160 * 0.7 * 100),
+							payAmount: Math.round(160 * 0.7 * 100),
+							completedAt: new Date(pastDate),
 						});
 					}
 					businessClientPastApptIds.push(existingAppt.id);
@@ -1372,12 +1424,12 @@ async function createDemoAccounts() {
 							bringSheets,
 							completed: false,
 							hasBeenAssigned: true,
-							employeesAssigned: [createdAccounts.employee.id.toString()],
+							employeesAssigned: [createdAccounts.businessEmployeeId.toString()],
 							empoyeesNeeded: 1,
 							timeToBeCompleted: "2.5",
 							paymentStatus: "pending",
 							amountPaid: 0,
-							cleanerId: createdAccounts.businessOwner.id,
+							bookedByCleanerId: createdAccounts.businessOwner.id,
 							sheetConfigurations: sheetConfigs,
 							towelConfigurations: towelConfigs,
 						});
@@ -1385,16 +1437,12 @@ async function createDemoAccounts() {
 						// Create job assignment for upcoming appointments
 						await EmployeeJobAssignment.create({
 							businessOwnerId: createdAccounts.businessOwner.id,
-							employeeId: createdAccounts.employee.id,
+							businessEmployeeId: createdAccounts.businessEmployeeId,
 							appointmentId: appointment.id,
-							homeId: clientHome.id,
-							clientId: createdAccounts.businessClient.id,
-							scheduledDate: futureDate,
-							scheduledTime: ["09:00", "11:00", "14:00"][i],
+							assignedBy: createdAccounts.businessOwner.id,
 							status: "assigned",
 							payType: "percentage",
-							payRate: 70,
-							estimatedPay: Math.round(price * 0.7 * 100),
+							payAmount: Math.round(price * 0.7 * 100),
 						});
 					}
 				} catch (error) {
@@ -1453,6 +1501,8 @@ async function createDemoAccounts() {
 						review: clientReviews[i].review,
 						reviewComment: clientReviews[i].reviewComment,
 						reviewType: "homeowner_to_cleaner",
+						isPublished: true,
+						reviewerName: `${createdAccounts.businessClient.firstName} ${createdAccounts.businessClient.lastName.charAt(0)}.`,
 						createdAt: new Date(Date.now() - ((i + 1) * 7 * 24 * 60 * 60 * 1000)),
 					});
 				}
@@ -1851,10 +1901,10 @@ async function createDemoAccounts() {
 		console.log("Creating employees for large business...");
 		const largeBusinessEmployees = [
 			{ firstName: "Carlos", lastName: "Rodriguez", email: "carlos.lb@sparkle.demo", payType: "percentage", payRate: 70 },
-			{ firstName: "Aisha", lastName: "Patel", email: "aisha.lb@sparkle.demo", payType: "percentage", payRate: 70 },
-			{ firstName: "James", lastName: "Chen", email: "james.lb@sparkle.demo", payType: "hourly", payRate: 22 },
+			{ firstName: "Aisha", lastName: "Patel", email: "aisha.lb@sparkle.demo", payType: "per_job", defaultJobRate: 7500 }, // $75/job
+			{ firstName: "James", lastName: "Chen", email: "james.lb@sparkle.demo", payType: "hourly", defaultHourlyRate: 2200 },
 			{ firstName: "Maria", lastName: "Santos", email: "maria.lb@sparkle.demo", payType: "percentage", payRate: 65 },
-			{ firstName: "Robert", lastName: "Kim", email: "robert.lb@sparkle.demo", payType: "hourly", payRate: 20 },
+			{ firstName: "Robert", lastName: "Kim", email: "robert.lb@sparkle.demo", payType: "hourly", defaultHourlyRate: 2000 },
 		];
 
 		const createdEmployees = [];
@@ -1886,14 +1936,17 @@ async function createDemoAccounts() {
 				if (!existingBizEmp) {
 					await BusinessEmployee.create({
 						businessOwnerId: largeBizOwner.id,
-						cleanerId: empUser.id,
+						userId: empUser.id,
 						firstName: empData.firstName,
 						lastName: empData.lastName,
 						email: empData.email,
 						status: "active",
-						payType: empData.payType,
-						payRate: empData.payRate,
+						payType: empData.payType || "hourly",
+						payRate: empData.payRate || null,
+						defaultHourlyRate: empData.defaultHourlyRate || null,
+						defaultJobRate: empData.defaultJobRate || null,
 						canSeeFullSchedule: true,
+						canViewJobEarnings: true,
 						invitationAcceptedAt: new Date(),
 					});
 				}
@@ -2108,7 +2161,7 @@ async function createDemoAccounts() {
 						paymentStatus: "paid",
 						amountPaid: (180 + (i * 10)) * 100,
 						completionStatus: "approved",
-						cleanerId: largeBizOwner.id,
+						bookedByCleanerId: largeBizOwner.id,
 					});
 				}
 
@@ -2128,6 +2181,8 @@ async function createDemoAccounts() {
 						review: i < 9 ? 5 : 4, // 9 five-star reviews, 1 four-star
 						reviewComment: reviewComments[i],
 						reviewType: "homeowner_to_cleaner",
+						isPublished: true,
+						reviewerName: `${createdClients[i].firstName} ${createdClients[i].lastName.charAt(0)}.`,
 						createdAt: new Date(Date.now() - (i * 7 * 24 * 60 * 60 * 1000)),
 					});
 				}
@@ -2284,6 +2339,8 @@ async function createDemoAccounts() {
 						review: reviewRatings[i],
 						reviewComment: reviewComments[i],
 						reviewType: "homeowner_to_cleaner",
+						isPublished: true,
+						reviewerName: `${homeowner.firstName} ${homeowner.lastName.charAt(0)}.`,
 						createdAt: new Date(Date.now() - ((i + 1) * 14 * 24 * 60 * 60 * 1000)), // Spread over time
 					});
 				} else {

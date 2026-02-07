@@ -294,9 +294,12 @@ describe("Check Accounts and Linked Accounts Tests", () => {
 					.get("/api/v1/user-sessions/check-accounts?email=test%40example.com");
 
 				expect(response.status).toBe(200);
+				// Email is hashed before querying for privacy
 				expect(User.findAll).toHaveBeenCalledWith(
 					expect.objectContaining({
-						where: { email: "test@example.com" },
+						where: expect.objectContaining({
+							emailHash: expect.any(String),
+						}),
 					})
 				);
 			});
@@ -308,9 +311,12 @@ describe("Check Accounts and Linked Accounts Tests", () => {
 					.get("/api/v1/user-sessions/check-accounts?email=test%2Bsuffix%40example.com");
 
 				expect(response.status).toBe(200);
+				// Email is hashed before querying for privacy
 				expect(User.findAll).toHaveBeenCalledWith(
 					expect.objectContaining({
-						where: { email: "test+suffix@example.com" },
+						where: expect.objectContaining({
+							emailHash: expect.any(String),
+						}),
 					})
 				);
 			});

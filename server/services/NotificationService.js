@@ -608,6 +608,7 @@ class NotificationService {
     clientName,
     address,
     payAmount,
+    businessName,
     io = null,
   }) {
     const formattedDate = formatDate(appointmentDate);
@@ -628,7 +629,11 @@ class NotificationService {
       actionRequired: false,
       relatedAppointmentId: appointmentId,
       sendPush: true,
-      sendEmail: false,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendEmployeeJobAssigned,
+        args: [employeeName, appointmentDate, clientName, address, payAmount, businessName],
+      },
       io,
     });
   }

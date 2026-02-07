@@ -1,5 +1,6 @@
 const bcrypt = require("bcrypt");
 const EncryptionService = require("../services/EncryptionService");
+const { normalizePhone } = require("../utils/phoneUtils");
 
 // Fields that contain PII and should be encrypted
 const PII_FIELDS = [
@@ -201,6 +202,11 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: true,
 			comment: "Whether business owner opts in to marketplace highlighting",
 		},
+		businessLogo: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Base64 encoded business logo image (for business owners)",
+		},
 		// Demo account field for owner preview mode
 		isDemoAccount: {
 			type: DataTypes.BOOLEAN,
@@ -347,6 +353,11 @@ module.exports = (sequelize, DataTypes) => {
 			const hashedPassword = await bcrypt.hash(user.password, salt);
 			user.password = hashedPassword;
 
+			// Normalize phone number (store as digits only)
+			if (user.phone) {
+				user.phone = normalizePhone(user.phone);
+			}
+
 			// Encrypt PII fields
 			encryptPIIFields(user);
 		} catch (error) {
@@ -356,6 +367,10 @@ module.exports = (sequelize, DataTypes) => {
 
 	// Encrypt PII fields before updating
 	User.beforeUpdate((user) => {
+		// Normalize phone number (store as digits only)
+		if (user.changed("phone") && user.phone) {
+			user.phone = normalizePhone(user.phone);
+		}
 		encryptPIIFields(user);
 	});
 

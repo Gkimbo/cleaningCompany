@@ -28,8 +28,8 @@ const ScheduleCleaningButton = ({ closeModal }) => {
       ]}
       onPress={handlePress}
     >
-      <Feather name="calendar" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
-      <Text style={ButtonStyles.buttonText}>Appointments</Text>
+      <Feather name="plus-circle" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
+      <Text style={ButtonStyles.buttonText}>Schedule Cleaning</Text>
     </Pressable>
   );
 };

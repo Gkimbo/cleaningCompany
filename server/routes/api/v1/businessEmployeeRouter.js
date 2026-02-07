@@ -202,10 +202,15 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
     const { EmployeeJobAssignment, UserAppointments, UserHomes, User, BusinessEmployee } = require("../../../models");
     const { Op } = require("sequelize");
 
+    const assignmentId = parseInt(req.params.assignmentId);
+    const employeeId = req.employeeRecord.id;
+
+    console.log(`[DEBUG] Fetching job details: assignmentId=${assignmentId}, employeeId=${employeeId}`);
+
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
-        id: parseInt(req.params.assignmentId),
-        businessEmployeeId: req.employeeRecord.id,
+        id: assignmentId,
+        businessEmployeeId: employeeId,
         // Only show jobs in valid states
         status: { [Op.notIn]: ["cancelled", "no_show"] },
       },
@@ -218,7 +223,7 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
               model: UserHomes,
               as: "home",
               // Fetch all fields, we'll filter below based on permissions
-              attributes: ["id", "address", "numBeds", "numBaths", "keyPadCode", "keyLocation", "notes"],
+              attributes: ["id", "address", "numBeds", "numBaths", "keyPadCode", "keyLocation", "specialNotes"],
             },
             {
               model: User,
@@ -231,6 +236,14 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
     });
 
     if (!assignment) {
+      console.log(`[DEBUG] Job not found: assignmentId=${assignmentId}, employeeId=${employeeId}`);
+      // Check if assignment exists at all
+      const anyAssignment = await EmployeeJobAssignment.findByPk(assignmentId);
+      if (anyAssignment) {
+        console.log(`[DEBUG] Assignment exists but with businessEmployeeId=${anyAssignment.businessEmployeeId}, status=${anyAssignment.status}`);
+      } else {
+        console.log(`[DEBUG] Assignment ${assignmentId} does not exist in database`);
+      }
       return res.status(404).json({ error: "Job not found" });
     }
 

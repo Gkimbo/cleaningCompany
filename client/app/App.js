@@ -22,6 +22,7 @@ import EditEmployeeForm from "../src/components/admin/forms/EditEmployeeForm";
 import EmployeeShiftForm from "../src/components/admin/forms/employee/EmployeeShiftForm";
 import UnassignedAppointments from "../src/components/admin/UnassignedAppointments";
 import AllRequestsCalendar from "../src/components/appointments/AllRequestsCalendar";
+import ClientAppointmentsCalendar from "../src/components/appointments/ClientAppointmentsCalendar";
 import AppointmentList from "../src/components/appointments/AppointmentList";
 import CleaningRequestList from "../src/components/appointments/CleaningRequestList";
 import DetailsComponent from "../src/components/appointments/DetailsComponent";
@@ -40,6 +41,7 @@ import TopBar from "../src/components/navBar/TopBar";
 import Bill from "../src/components/payments/Bill";
 import Earnings from "../src/components/payments/Earnings";
 import PaymentSetup from "../src/components/payments/PaymentSetup";
+import StripeConnectOnboarding from "../src/components/payments/StripeConnectOnboarding";
 import AllCleanerReviewsList from "../src/components/reviews/AllCleanerReviewsList";
 import AllReviewsList from "../src/components/reviews/AllReviewsList";
 import PendingReviewsList from "../src/components/reviews/PendingReviewsList";
@@ -80,6 +82,7 @@ import AcceptEmployeeInvitationScreen from "../src/components/employee/AcceptEmp
 // Owner components
 import TermsEditor from "../src/components/owner/TermsEditor";
 import PricingManagement from "../src/components/owner/PricingManagement";
+import TierManagement from "../src/components/owner/TierManagement";
 import IncentivesManagement from "../src/components/owner/IncentivesManagement";
 import PlatformWithdrawals from "../src/components/owner/PlatformWithdrawals";
 import HREmployeeManagement from "../src/components/owner/HREmployeeManagement";
@@ -89,6 +92,7 @@ import ChecklistEditor from "../src/components/owner/ChecklistEditor";
 import RecommendedSupplies from "../src/components/cleaner/RecommendedSupplies";
 import MyClientsPage from "../src/components/cleaner/MyClientsPage";
 import ClientDetailPage from "../src/components/cleaner/ClientDetailPage";
+import PreferredStatusPage from "../src/components/cleaner/PreferredStatusPage";
 
 // Business components
 import {
@@ -137,6 +141,10 @@ import {
   FinancialsScreen,
   PayrollScreen,
   EmployeeMessaging,
+  BusinessOwnerProfile,
+  AssignmentDetail,
+  TimesheetScreen,
+  EmployeeHoursScreen,
 } from "../src/components/businessOwner";
 
 // Business Employee components
@@ -147,6 +155,7 @@ import {
   EmployeeJobDetail,
   EmployeeCalendar,
   CoworkerMessaging,
+  EmployeeProfilePage,
 } from "../src/components/businessEmployee";
 
 export default function App() {
@@ -169,6 +178,11 @@ export default function App() {
     unreadCount: 0,
     // Cleaner type flags
     isMarketplaceCleaner: false,
+    // Business owner info
+    isBusinessOwner: false,
+    businessName: null,
+    businessLogo: null,
+    yearsInBusiness: null,
   });
 
   const fetchStripeConfig = async () => {
@@ -186,6 +200,11 @@ export default function App() {
   const fetchCurrentUser = async () => {
     try {
       const user = await getCurrentUser();
+      // Handle case where no token exists (user not logged in or logged out)
+      if (!user) {
+        dispatch({ type: "CURRENT_USER", payload: null });
+        return;
+      }
       dispatch({ type: "CURRENT_USER", payload: user.token });
       dispatch({ type: "SET_USER_ID", payload: user.user.id });
       if (user.user.email) {
@@ -402,6 +421,12 @@ export default function App() {
                 element={<AppointmentList state={state} dispatch={dispatch} />}
               />
               <Route
+                path="/appointments-calendar"
+                element={
+                  <ClientAppointmentsCalendar state={state} dispatch={dispatch} />
+                }
+              />
+              <Route
                 path="/my-requests"
                 element={<MyRequests state={state} dispatch={dispatch} />}
               />
@@ -444,6 +469,10 @@ export default function App() {
                 element={<PaymentSetup state={state} dispatch={dispatch} />}
               />
               <Route
+                path="/payout-setup"
+                element={<StripeConnectOnboarding state={state} dispatch={dispatch} />}
+              />
+              <Route
                 path="/earnings"
                 element={<Earnings state={state} dispatch={dispatch} />}
               />
@@ -478,6 +507,11 @@ export default function App() {
               <Route
                 path="/client-detail/:clientId"
                 element={<ClientDetailPage state={state} dispatch={dispatch} />}
+              />
+              {/* Cleaner Preferred Status */}
+              <Route
+                path="/preferred-perks"
+                element={<PreferredStatusPage state={state} />}
               />
               <Route
                 path="/employees"
@@ -553,6 +587,11 @@ export default function App() {
               <Route
                 path="/owner/pricing"
                 element={<PricingManagement state={state} />}
+              />
+              {/* Owner Tier Management */}
+              <Route
+                path="/owner/tiers"
+                element={<TierManagement state={state} />}
               />
               {/* Owner Incentives */}
               <Route
@@ -637,8 +676,24 @@ export default function App() {
                 element={<PayrollScreen state={state} />}
               />
               <Route
+                path="/business-owner/timesheet"
+                element={<TimesheetScreen state={state} />}
+              />
+              <Route
+                path="/business-owner/employees/:employeeId/hours"
+                element={<EmployeeHoursScreen state={state} />}
+              />
+              <Route
                 path="/business-owner/messages"
                 element={<EmployeeMessaging state={state} />}
+              />
+              <Route
+                path="/business-owner/profile"
+                element={<BusinessOwnerProfile state={state} />}
+              />
+              <Route
+                path="/business-owner/assignments/:assignmentId"
+                element={<AssignmentDetail state={state} />}
               />
               {/* Business Employee routes */}
               <Route
@@ -664,6 +719,10 @@ export default function App() {
               <Route
                 path="/employee/messages"
                 element={<CoworkerMessaging state={state} />}
+              />
+              <Route
+                path="/employee/profile"
+                element={<EmployeeProfilePage state={state} />}
               />
             </Routes>
               <ExitPreviewButton />

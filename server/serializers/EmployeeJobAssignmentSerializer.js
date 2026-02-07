@@ -272,19 +272,26 @@ class EmployeeJobAssignmentSerializer {
 
     const data = assignment.dataValues || assignment;
 
-    return {
+    const serialized = {
       id: data.id,
       appointmentId: data.appointmentId,
       payAmount: data.payAmount,
       formattedPay: `$${(data.payAmount / 100).toFixed(2)}`,
       payType: data.payType,
       completedAt: data.completedAt,
+      startedAt: data.startedAt,
       payoutStatus: data.payoutStatus,
+      isSelfAssignment: data.isSelfAssignment,
       employee: data.employee ? {
         id: data.employee.id,
         firstName: this.decryptUserField(data.employee.firstName),
         lastName: this.decryptUserField(data.employee.lastName),
         paymentMethod: data.employee.paymentMethod,
+        payType: data.employee.payType,
+        hourlyRate: data.employee.defaultHourlyRate,
+        formattedHourlyRate: data.employee.defaultHourlyRate
+          ? `$${(data.employee.defaultHourlyRate / 100).toFixed(2)}/hr`
+          : null,
       } : null,
       appointment: data.appointment ? {
         id: data.appointment.id,
@@ -296,6 +303,16 @@ class EmployeeJobAssignmentSerializer {
         } : null,
       } : null,
     };
+
+    // Include hours info for hourly pay type
+    if (data.payType === "hourly") {
+      serialized.hoursWorked = data.hoursWorked ? parseFloat(data.hoursWorked) : null;
+      serialized.formattedHours = data.hoursWorked
+        ? `${parseFloat(data.hoursWorked)} hr${parseFloat(data.hoursWorked) !== 1 ? "s" : ""}`
+        : null;
+    }
+
+    return serialized;
   }
 
   /**

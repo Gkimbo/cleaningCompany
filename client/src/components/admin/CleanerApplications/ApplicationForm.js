@@ -1,6 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import React, { useState, useEffect } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -13,6 +14,7 @@ import {
   View,
 } from "react-native";
 import Application from "../../../services/fetchRequests/ApplicationClass";
+import { API_BASE } from "../../../services/config";
 import ApplicationFormStyles from "../../../services/styles/ApplicationFormStyles";
 import { TermsModal } from "../../terms";
 import {
@@ -184,6 +186,13 @@ const CleanerApplicationForm = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [idVerification, setIdVerification] = useState({
+    isVerifying: false,
+    verified: null, // null = not checked, true = match, false = mismatch
+    confidence: 0,
+    message: "",
+    detectedName: null,
+  });
   const totalSteps = 6;
   const styles = ApplicationFormStyles;
 
@@ -272,50 +281,214 @@ const CleanerApplicationForm = () => {
     });
   };
 
-  // Handle ID upload
-  const handleIdUpload = async () => {
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      Alert.alert(
-        "Permission required",
-        "We need access to your photo library to upload your ID."
-      );
+  // Verify ID name matches entered name
+  const verifyIdName = async (imageBase64) => {
+    // Need first and last name to verify
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      // Silently skip if no name entered - don't show error
+      setIdVerification({
+        isVerifying: false,
+        verified: null,
+        confidence: 0,
+        message: "",
+        detectedName: null,
+        skipped: true,
+        disabled: true,
+      });
       return;
     }
 
-    const pickerResult = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      quality: 0.8,
-    });
+    setIdVerification((prev) => ({ ...prev, isVerifying: true, message: "" }));
 
-    if (!pickerResult.canceled && pickerResult.assets?.length > 0) {
-      let photoUri = pickerResult.assets[0].uri;
+    try {
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-      // On web, blob URLs need to be converted to base64 data URLs
-      // because blob URLs are session-only and can't be displayed later
-      if (Platform.OS === "web" && photoUri.startsWith("blob:")) {
-        try {
-          const response = await fetch(photoUri);
-          const blob = await response.blob();
-          const reader = new FileReader();
-          photoUri = await new Promise((resolve, reject) => {
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        } catch (error) {
-          console.error("Error converting blob to data URL:", error);
-          Alert.alert("Error", "Failed to process the selected image.");
-          return;
-        }
+      const response = await fetch(`${API_BASE}/id-verification/verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageBase64,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // Handle non-OK responses - silently skip
+      if (!response.ok) {
+        console.warn("ID verification API error:", response.status);
+        setIdVerification({
+          isVerifying: false,
+          verified: null,
+          confidence: 0,
+          message: "",
+          detectedName: null,
+          skipped: true,
+          disabled: true,
+        });
+        return;
       }
 
-      setFormData((prev) => ({
-        ...prev,
-        idPhoto: photoUri,
-      }));
+      const result = await response.json();
+
+      // If verification is disabled or skipped, don't show any UI
+      if (result.disabled || result.skipped) {
+        setIdVerification({
+          isVerifying: false,
+          verified: null,
+          confidence: 0,
+          message: "",
+          detectedName: null,
+          skipped: true,
+          disabled: result.disabled || false,
+        });
+        return;
+      }
+
+      setIdVerification({
+        isVerifying: false,
+        verified: result.verified ?? null,
+        confidence: result.confidence || 0,
+        message: result.message || "",
+        detectedName: result.detectedName || null,
+        skipped: false,
+        disabled: false,
+      });
+
+      // Show alert for name mismatch - clear warning to user
+      if (result.verified === false) {
+        const detectedNameText = result.detectedName
+          ? `\n\nName detected on ID: ${result.detectedName.firstName} ${result.detectedName.lastName}`
+          : "";
+
+        Alert.alert(
+          "ID Name Mismatch",
+          `The name on your ID does not appear to match "${formData.firstName} ${formData.lastName}".${detectedNameText}\n\nPlease ensure you enter your name exactly as it appears on your government-issued ID. You may continue, but your application may be delayed for manual review.`,
+          [
+            {
+              text: "I'll Fix My Name",
+              style: "default",
+            },
+            {
+              text: "Continue Anyway",
+              style: "cancel",
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      // Handle all errors silently - just skip verification
+      if (error.name === "AbortError") {
+        console.warn("ID verification timed out");
+      } else {
+        console.warn("ID verification error:", error.message);
+      }
+      // Silently skip - no error messages to user
+      setIdVerification({
+        isVerifying: false,
+        verified: null,
+        confidence: 0,
+        message: "",
+        detectedName: null,
+        skipped: true,
+        disabled: true,
+      });
+    }
+  };
+
+  // Handle ID upload
+  const handleIdUpload = async () => {
+    try {
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert(
+          "Permission required",
+          "We need access to your photo library to upload your ID."
+        );
+        return;
+      }
+
+      const pickerResult = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!pickerResult.canceled && pickerResult.assets?.length > 0) {
+        let photoUri = pickerResult.assets[0].uri;
+        let base64Data = null;
+
+        // Reset verification state
+        setIdVerification({
+          isVerifying: false,
+          verified: null,
+          confidence: 0,
+          message: "",
+          detectedName: null,
+          skipped: false,
+        });
+
+        // On web, blob URLs need to be converted to base64 data URLs
+        // because blob URLs are session-only and can't be displayed later
+        if (Platform.OS === "web" && photoUri.startsWith("blob:")) {
+          try {
+            const response = await fetch(photoUri);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            photoUri = await new Promise((resolve, reject) => {
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            base64Data = photoUri;
+          } catch (error) {
+            console.error("Error converting blob to data URL:", error);
+            Alert.alert("Error", "Failed to process the selected image. Please try again.");
+            return;
+          }
+        } else {
+          // For native platforms, convert URI to base64
+          try {
+            const response = await fetch(photoUri);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            base64Data = await new Promise((resolve, reject) => {
+              reader.onloadend = () => resolve(reader.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          } catch (error) {
+            // Silently skip verification if conversion fails - photo still works
+            console.warn("Error converting image to base64:", error.message);
+          }
+        }
+
+        // Set the photo regardless of verification
+        setFormData((prev) => ({
+          ...prev,
+          idPhoto: photoUri,
+        }));
+
+        // Verify the ID name matches if we have base64 data
+        if (base64Data) {
+          // Run verification in background - don't await to prevent blocking UI
+          verifyIdName(base64Data).catch((err) => {
+            // Silently skip on error
+            console.warn("ID verification failed:", err.message);
+          });
+        }
+      }
+    } catch (error) {
+      // Catch-all to prevent app crashes - still set the photo
+      console.error("Error in handleIdUpload:", error);
+      // Don't show error alert - just let the photo upload work
     }
   };
 
@@ -430,6 +603,27 @@ const CleanerApplicationForm = () => {
       return;
     }
     setFormError(null);
+
+    // Show warning when leaving step 2 with ID name mismatch (only if verification is enabled)
+    if (currentStep === 2 && idVerification.verified === false && !idVerification.skipped && !idVerification.disabled) {
+      Alert.alert(
+        "Name Mismatch Warning",
+        `The name on your ID does not appear to match your application.\n\nApplication: ${formData.firstName} ${formData.lastName}\n${idVerification.detectedName ? `ID: ${idVerification.detectedName.firstName} ${idVerification.detectedName.lastName}` : ""}\n\nWould you like to go back and fix your name, or continue anyway? Continuing with mismatched information may delay your application.`,
+        [
+          {
+            text: "Go Back & Fix",
+            style: "cancel",
+          },
+          {
+            text: "Continue Anyway",
+            style: "destructive",
+            onPress: () => setCurrentStep((prev) => Math.min(prev + 1, totalSteps)),
+          },
+        ]
+      );
+      return;
+    }
+
     setCurrentStep((prev) => Math.min(prev + 1, totalSteps));
   };
 
@@ -551,10 +745,10 @@ const CleanerApplicationForm = () => {
     },
     {
       icon: "⚡",
-      title: "Get Paid in 24 Hours",
+      title: "Get Paid Fast",
       description:
-        "No more waiting weeks for paychecks. Finish a job, get paid within 24 hours directly to your bank account.",
-      stat: "24hr",
+        "No more waiting weeks for paychecks. Finish a job, get paid within 1-2 business days directly to your bank account.",
+      stat: "Fast",
       statLabel: "Payouts",
     },
     {
@@ -569,7 +763,7 @@ const CleanerApplicationForm = () => {
   const perks = [
     {
       icon: "✓",
-      text: `Get paid within 48 hours of each cleaning`,
+      text: `Get paid within 1-2 business days of each cleaning`,
       highlight: true,
     },
     { icon: "✓", text: "Flexible scheduling - accept only jobs you want" },
@@ -596,7 +790,7 @@ const CleanerApplicationForm = () => {
     },
     {
       quote:
-        "The 24-hour payouts changed everything. I can actually plan my finances now instead of waiting 2 weeks for a paycheck.",
+        "The fast payouts changed everything. I can actually plan my finances now instead of waiting 2 weeks for a paycheck.",
       name: "Lisa M.",
       earnings: "$3,500/mo",
       time: "1 year on platform",
@@ -605,7 +799,7 @@ const CleanerApplicationForm = () => {
 
   const comparisonData = [
     { feature: "Set your own schedule", us: true, traditional: false },
-    { feature: "Get paid within 24 hours", us: true, traditional: false },
+    { feature: "Fast payouts (1-2 business days)", us: true, traditional: false },
     { feature: "Choose which jobs to take", us: true, traditional: false },
     { feature: "No boss or supervisor", us: true, traditional: false },
     {
@@ -698,7 +892,7 @@ const CleanerApplicationForm = () => {
           >
             {[
               // { value: `${keepPercent}%`, label: "You Keep" },
-              { value: "24hr", label: "Payouts" },
+              { value: "Fast", label: "Payouts" },
               { value: "4.9", label: "Rating" },
               { value: "$0", label: "To Start" },
             ].map((stat, index) => (
@@ -1714,6 +1908,59 @@ const CleanerApplicationForm = () => {
           resizeMode="contain"
         />
       )}
+
+      {/* ID Verification Status - only show when verification is active (not disabled/skipped) */}
+      {formData.idPhoto && !idVerification.disabled && (
+        <View style={idVerificationStyles.container}>
+          {idVerification.isVerifying ? (
+            <View style={idVerificationStyles.verifyingContainer}>
+              <ActivityIndicator size="small" color={colors.primary[600]} />
+              <Text style={idVerificationStyles.verifyingText}>
+                Verifying name on ID...
+              </Text>
+            </View>
+          ) : idVerification.verified === true ? (
+            <View style={idVerificationStyles.successContainer}>
+              <Text style={idVerificationStyles.successIcon}>✓</Text>
+              <View style={idVerificationStyles.successTextContainer}>
+                <Text style={idVerificationStyles.successText}>
+                  Name verified ({idVerification.confidence}% match)
+                </Text>
+                <Text style={idVerificationStyles.successHint}>
+                  The name on your ID matches your application
+                </Text>
+              </View>
+            </View>
+          ) : idVerification.verified === false && !idVerification.skipped ? (
+            <View style={idVerificationStyles.errorContainer}>
+              <Text style={idVerificationStyles.errorIcon}>⚠</Text>
+              <View style={idVerificationStyles.errorTextContainer}>
+                <Text style={idVerificationStyles.errorTitle}>
+                  Name Does Not Match
+                </Text>
+                {idVerification.detectedName ? (
+                  <>
+                    <Text style={idVerificationStyles.errorText}>
+                      Your application says: {formData.firstName} {formData.lastName}
+                    </Text>
+                    <Text style={idVerificationStyles.errorText}>
+                      Your ID shows: {idVerification.detectedName.firstName}{" "}
+                      {idVerification.detectedName.lastName}
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={idVerificationStyles.errorText}>
+                    The name on your ID does not match what you entered
+                  </Text>
+                )}
+                <Text style={idVerificationStyles.errorHint}>
+                  Please go back and enter your name exactly as shown on your ID, or your application may be delayed
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+      )}
     </>
   );
 
@@ -2188,6 +2435,112 @@ const localStyles = StyleSheet.create({
     color: colors.success ? colors.success[600] : "#16a34a",
     marginLeft: 36,
     marginTop: 4,
+  },
+});
+
+const idVerificationStyles = StyleSheet.create({
+  container: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  verifyingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  verifyingText: {
+    marginLeft: spacing.sm,
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+  },
+  successContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  successIcon: {
+    fontSize: 20,
+    color: colors.success[600],
+    fontWeight: "bold",
+    marginRight: spacing.sm,
+  },
+  successTextContainer: {
+    flex: 1,
+  },
+  successText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  successHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[600],
+    marginTop: 2,
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.error[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.error[300],
+  },
+  errorIcon: {
+    fontSize: 24,
+    color: colors.error[500],
+    marginRight: spacing.sm,
+  },
+  errorTextContainer: {
+    flex: 1,
+  },
+  errorTitle: {
+    fontSize: typography.fontSize.base,
+    color: colors.error[700],
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.xs,
+  },
+  errorText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[700],
+    marginBottom: 2,
+  },
+  errorHint: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[600],
+    marginTop: spacing.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  infoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[100],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  infoIcon: {
+    fontSize: 16,
+    color: colors.neutral[500],
+    marginRight: spacing.sm,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[600],
   },
 });
 

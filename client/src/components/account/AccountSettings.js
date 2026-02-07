@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,8 +12,10 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import FetchData from "../../services/fetchRequests/fetchData";
 import OwnerDashboardService from "../../services/fetchRequests/OwnerDashboardService";
+import getCurrentUser from "../../services/fetchRequests/getCurrentUser";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const AccountSettings = ({ state, dispatch }) => {
@@ -45,8 +48,99 @@ const AccountSettings = ({ state, dispatch }) => {
   const [serviceAreaResult, setServiceAreaResult] = useState(null);
   const [gettingLocation, setGettingLocation] = useState(false);
 
+  // Business owner settings
+  const [businessName, setBusinessName] = useState(state.businessName || "");
+  const [savingBusinessName, setSavingBusinessName] = useState(false);
+  const [businessNameResult, setBusinessNameResult] = useState(null);
+  const [businessLogo, setBusinessLogo] = useState(state.businessLogo || null);
+  const [savingLogo, setSavingLogo] = useState(false);
+  const [logoResult, setLogoResult] = useState(null);
+
   const isOwner = state.account === "owner";
   const isCleaner = state.account === "cleaner";
+  const isBusinessOwner = state.isBusinessOwner;
+
+  // Format phone number for display
+  // US numbers: 555-555-5555
+  // International: +XX XXX XXX XXXX
+  const formatPhoneNumber = (value) => {
+    if (!value) return "";
+
+    const trimmed = value.trim();
+    const isInternational = trimmed.startsWith("+");
+    const digits = trimmed.replace(/\D/g, "");
+
+    if (digits.length === 0) return "";
+
+    // US number without country code (10 digits)
+    if (!isInternational && digits.length <= 10) {
+      if (digits.length <= 3) {
+        return digits;
+      } else if (digits.length <= 6) {
+        return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+      } else {
+        return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+      }
+    }
+
+    // US number with +1 country code
+    if (isInternational && digits.length <= 11 && digits.startsWith("1")) {
+      const usDigits = digits.slice(1);
+      if (usDigits.length <= 3) {
+        return `+1 ${usDigits}`;
+      } else if (usDigits.length <= 6) {
+        return `+1 ${usDigits.slice(0, 3)}-${usDigits.slice(3)}`;
+      } else {
+        return `+1 ${usDigits.slice(0, 3)}-${usDigits.slice(3, 6)}-${usDigits.slice(6, 10)}`;
+      }
+    }
+
+    // Other international numbers
+    if (isInternational) {
+      return "+" + digits;
+    }
+
+    // Fallback for numbers > 10 digits without +
+    return digits;
+  };
+
+  // Handle phone input with formatting
+  const handlePhoneChange = (value) => {
+    // Allow + at the start for international numbers
+    const hasPlus = value.startsWith("+");
+    const formatted = formatPhoneNumber(value);
+    setPhone(hasPlus && !formatted.startsWith("+") ? "+" + formatted : formatted);
+  };
+
+  // Fetch user data if not available in state (for users who logged in before SET_FULL_USER was added)
+  useEffect(() => {
+    const fetchUserData = async () => {
+      // Fetch if user object is missing or doesn't have essential fields
+      const needsFetch = !state.currentUser.user ||
+        (!state.currentUser.user.username && !state.currentUser.user.email && !state.currentUser.user.phone);
+
+      if (needsFetch && state.currentUser.token) {
+        try {
+          const userData = await getCurrentUser(state.currentUser.token);
+          if (userData) {
+            dispatch({ type: "SET_FULL_USER", payload: userData });
+            // Update local form state with fetched data (check both username and userName)
+            setUsername(userData.username || userData.userName || "");
+            setEmail(userData.email || "");
+            setPhone(formatPhoneNumber(userData.phone) || "");
+          }
+        } catch (err) {
+          console.error("Failed to fetch user data:", err);
+        }
+      } else if (state.currentUser.user) {
+        // If user data exists in state, populate local form state
+        setUsername(state.currentUser.user.username || state.currentUser.user.userName || "");
+        setEmail(state.currentUser.user.email || "");
+        setPhone(formatPhoneNumber(state.currentUser.user.phone) || "");
+      }
+    };
+    fetchUserData();
+  }, [state.currentUser.token, dispatch]);
 
   useEffect(() => {
     if (isOwner && state.currentUser.token) {
@@ -206,6 +300,144 @@ const AccountSettings = ({ state, dispatch }) => {
     } finally {
       setSavingServiceArea(false);
     }
+  };
+
+  const handleSaveBusinessName = async () => {
+    if (!businessName.trim()) {
+      setBusinessNameResult({ success: false, error: "Please enter a business name" });
+      return;
+    }
+
+    setSavingBusinessName(true);
+    setBusinessNameResult(null);
+    try {
+      const response = await FetchData.post(
+        "/api/v1/users/update-business-name",
+        { businessName: businessName.trim() },
+        state.currentUser.token
+      );
+
+      if (response.error) {
+        setBusinessNameResult({ success: false, error: response.error });
+      } else {
+        setBusinessNameResult({ success: true, message: "Business name updated successfully" });
+        // Update local state
+        dispatch({
+          type: "SET_BUSINESS_OWNER_INFO",
+          payload: {
+            isBusinessOwner: true,
+            businessName: businessName.trim(),
+            yearsInBusiness: state.yearsInBusiness,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Error saving business name:", err);
+      setBusinessNameResult({ success: false, error: "Failed to save business name" });
+    } finally {
+      setSavingBusinessName(false);
+    }
+  };
+
+  const handlePickLogo = async () => {
+    try {
+      // Request permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", "Please allow access to your photo library to upload a logo.");
+        return;
+      }
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const base64Image = `data:image/jpeg;base64,${asset.base64}`;
+
+        // Save the logo
+        await handleSaveLogo(base64Image);
+      }
+    } catch (err) {
+      console.error("Error picking logo:", err);
+      setLogoResult({ success: false, error: "Failed to select image" });
+    }
+  };
+
+  const handleSaveLogo = async (logoData) => {
+    setSavingLogo(true);
+    setLogoResult(null);
+    try {
+      const response = await FetchData.post(
+        "/api/v1/users/update-business-logo",
+        { businessLogo: logoData },
+        state.currentUser.token
+      );
+
+      if (response.error) {
+        setLogoResult({ success: false, error: response.error });
+      } else {
+        setBusinessLogo(logoData);
+        setLogoResult({ success: true, message: "Logo updated successfully" });
+        // Update local state
+        dispatch({
+          type: "SET_BUSINESS_LOGO",
+          payload: logoData,
+        });
+      }
+    } catch (err) {
+      console.error("Error saving logo:", err);
+      setLogoResult({ success: false, error: "Failed to save logo" });
+    } finally {
+      setSavingLogo(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    Alert.alert(
+      "Remove Logo",
+      "Are you sure you want to remove your business logo?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            setSavingLogo(true);
+            setLogoResult(null);
+            try {
+              const response = await FetchData.post(
+                "/api/v1/users/update-business-logo",
+                { businessLogo: null },
+                state.currentUser.token
+              );
+
+              if (response.error) {
+                setLogoResult({ success: false, error: response.error });
+              } else {
+                setBusinessLogo(null);
+                setLogoResult({ success: true, message: "Logo removed successfully" });
+                dispatch({
+                  type: "SET_BUSINESS_LOGO",
+                  payload: null,
+                });
+              }
+            } catch (err) {
+              console.error("Error removing logo:", err);
+              setLogoResult({ success: false, error: "Failed to remove logo" });
+            } finally {
+              setSavingLogo(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSaveNotificationEmail = async () => {
@@ -482,6 +714,13 @@ const AccountSettings = ({ state, dispatch }) => {
             Your username is used to log into your account.
           </Text>
 
+          <View style={styles.currentValueBox}>
+            <Text style={styles.currentValueLabel}>Current username:</Text>
+            <Text style={styles.currentValueText}>
+              {state.currentUser.user?.username || state.currentUser.user?.userName || username || "Not set"}
+            </Text>
+          </View>
+
           <Text style={styles.label}>New Username</Text>
           <TextInput
             style={styles.input}
@@ -512,6 +751,13 @@ const AccountSettings = ({ state, dispatch }) => {
           <Text style={styles.sectionDescription}>
             Update the email address associated with your account.
           </Text>
+
+          <View style={styles.currentValueBox}>
+            <Text style={styles.currentValueLabel}>Current email:</Text>
+            <Text style={styles.currentValueText}>
+              {state.currentUser.user?.email || state.currentUser.email || email || "Not set"}
+            </Text>
+          </View>
 
           <Text style={styles.label}>New Email Address</Text>
           <TextInput
@@ -544,15 +790,23 @@ const AccountSettings = ({ state, dispatch }) => {
           Update your phone number for account contact purposes.
         </Text>
 
+        <View style={styles.currentValueBox}>
+          <Text style={styles.currentValueLabel}>Current phone:</Text>
+          <Text style={styles.currentValueText}>
+            {formatPhoneNumber(state.currentUser.user?.phone || phone) || "Not set"}
+          </Text>
+        </View>
+
         <Text style={styles.label}>Phone Number</Text>
         <TextInput
           style={styles.input}
           value={phone}
-          onChangeText={setPhone}
-          placeholder="Enter phone number (optional)"
+          onChangeText={handlePhoneChange}
+          placeholder="555-555-5555 or +1 555-555-5555"
           placeholderTextColor={colors.text.tertiary}
           keyboardType="phone-pad"
           autoCorrect={false}
+          maxLength={20}
         />
 
         <Pressable
@@ -685,6 +939,136 @@ const AccountSettings = ({ state, dispatch }) => {
               </View>
             </>
           )}
+        </View>
+      )}
+
+      {/* Business Settings Section - Only visible to business owners */}
+      {isBusinessOwner && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Business Settings</Text>
+          <Text style={styles.sectionDescription}>
+            Customize how your business appears to clients and employees.
+          </Text>
+
+          {/* Business Logo */}
+          <Text style={styles.label}>Business Logo</Text>
+          <View style={styles.logoContainer}>
+            {businessLogo ? (
+              <View style={styles.logoPreviewContainer}>
+                <Image source={{ uri: businessLogo }} style={styles.logoPreview} />
+                <View style={styles.logoActions}>
+                  <Pressable
+                    style={[styles.logoButton, styles.logoChangeButton]}
+                    onPress={handlePickLogo}
+                    disabled={savingLogo}
+                  >
+                    <Feather name="edit-2" size={16} color={colors.primary[600]} />
+                    <Text style={styles.logoChangeText}>Change</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.logoButton, styles.logoRemoveButton]}
+                    onPress={handleRemoveLogo}
+                    disabled={savingLogo}
+                  >
+                    <Feather name="trash-2" size={16} color={colors.error[600]} />
+                    <Text style={styles.logoRemoveText}>Remove</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                style={[styles.logoUploadArea, savingLogo && styles.buttonDisabled]}
+                onPress={handlePickLogo}
+                disabled={savingLogo}
+              >
+                {savingLogo ? (
+                  <ActivityIndicator size="small" color={colors.primary[600]} />
+                ) : (
+                  <>
+                    <View style={styles.logoUploadIcon}>
+                      <Feather name="image" size={32} color={colors.primary[400]} />
+                    </View>
+                    <Text style={styles.logoUploadText}>Tap to upload your logo</Text>
+                    <Text style={styles.logoUploadHint}>Square image recommended</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
+          </View>
+
+          {/* Logo Result Message */}
+          {logoResult && (
+            <View
+              style={[
+                styles.emailResultBox,
+                logoResult.success ? styles.emailResultSuccess : styles.emailResultError,
+              ]}
+            >
+              <Text
+                style={
+                  logoResult.success
+                    ? styles.emailResultSuccessText
+                    : styles.emailResultErrorText
+                }
+              >
+                {logoResult.success ? logoResult.message : logoResult.error}
+              </Text>
+            </View>
+          )}
+
+          {/* Business Name */}
+          <View style={styles.businessNameSection}>
+            <Text style={styles.label}>Business Name</Text>
+            <View style={styles.currentValueBox}>
+              <Text style={styles.currentValueLabel}>Current business name:</Text>
+              <Text style={styles.currentValueText}>
+                {state.businessName || "Not set"}
+              </Text>
+            </View>
+
+            <TextInput
+              style={styles.input}
+              value={businessName}
+              onChangeText={setBusinessName}
+              placeholder="Enter your business name"
+              placeholderTextColor={colors.text.tertiary}
+              autoCapitalize="words"
+            />
+
+            <Pressable
+              style={[
+                styles.button,
+                styles.primaryButton,
+                savingBusinessName && styles.buttonDisabled,
+              ]}
+              onPress={handleSaveBusinessName}
+              disabled={savingBusinessName}
+            >
+              <Text style={styles.primaryButtonText}>
+                {savingBusinessName ? "Saving..." : "Save Business Name"}
+              </Text>
+            </Pressable>
+
+            {/* Result Message */}
+            {businessNameResult && (
+              <View
+                style={[
+                  styles.emailResultBox,
+                  businessNameResult.success ? styles.emailResultSuccess : styles.emailResultError,
+                ]}
+              >
+                <Text
+                  style={
+                    businessNameResult.success
+                      ? styles.emailResultSuccessText
+                      : styles.emailResultErrorText
+                  }
+                >
+                  {businessNameResult.success ? businessNameResult.message : businessNameResult.error}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       )}
 
@@ -1025,6 +1409,24 @@ const styles = StyleSheet.create({
     color: colors.primary[700],
   },
 
+  // Current Value Display
+  currentValueBox: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  currentValueLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 4,
+  },
+  currentValueText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+
   // Notification Email Styles (for owners)
   currentEmailBox: {
     backgroundColor: colors.background.secondary,
@@ -1146,6 +1548,85 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.primary[700],
     lineHeight: 20,
+  },
+
+  // Business Logo Styles
+  logoContainer: {
+    marginBottom: spacing.lg,
+  },
+  logoPreviewContainer: {
+    alignItems: "center",
+  },
+  logoPreview: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.neutral[100],
+    marginBottom: spacing.md,
+  },
+  logoActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  logoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.xs,
+  },
+  logoChangeButton: {
+    backgroundColor: colors.primary[50],
+  },
+  logoChangeText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[600],
+  },
+  logoRemoveButton: {
+    backgroundColor: colors.error[50],
+  },
+  logoRemoveText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.error[600],
+  },
+  logoUploadArea: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.neutral[50],
+    borderWidth: 2,
+    borderColor: colors.border.default,
+    borderStyle: "dashed",
+    borderRadius: radius.xl,
+  },
+  logoUploadIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  logoUploadText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  logoUploadHint: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  businessNameSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
   },
 });
 

@@ -41,7 +41,7 @@ const NewCleanerInformationPage = () => {
 
   const stats = [
     { value: `${keepPercent}%`, label: "You Keep", icon: "dollar-sign" },
-    { value: "24hr", label: "Fast Payouts", icon: "zap" },
+    { value: "Fast", label: "Payouts", icon: "zap" },
     { value: "4.9", label: "Avg Rating", icon: "star" },
     { value: "$0", label: "To Start", icon: "gift" },
   ];
@@ -71,9 +71,9 @@ const NewCleanerInformationPage = () => {
     {
       icon: "zap",
       title: "Get Paid Fast",
-      description: "No more waiting weeks for paychecks. Complete a job, get paid within 24 hours directly to your bank account.",
-      stat: "24hr",
-      statLabel: "To Your Bank",
+      description: "No more waiting weeks for paychecks. Complete a job, get paid within 1-2 business days directly to your bank account.",
+      stat: "Fast",
+      statLabel: "Payouts",
     },
     {
       icon: "shield",
@@ -151,7 +151,7 @@ const NewCleanerInformationPage = () => {
     },
     {
       q: "How fast do I get paid?",
-      a: "Within 24 hours of completing a job, the money is in your bank account. No waiting for bi-weekly paychecks.",
+      a: "Within 1-2 business days of completing a job, the money is in your bank account. No waiting for bi-weekly paychecks.",
     },
   ];
 
@@ -179,7 +179,7 @@ const NewCleanerInformationPage = () => {
 
           <Text style={styles.heroSubtitle}>
             Set your own schedule. Keep {keepPercent}% of every job.{"\n"}
-            Get paid within 24 hours. No boss. No limits.
+            Fast payouts. No boss. No limits.
           </Text>
 
           {/* Stats Row */}

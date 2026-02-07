@@ -545,5 +545,243 @@ describe("Billing Service - Preferred Cleaner Perk Integration", () => {
         })
       );
     });
+
+    it("should set high priority for gold tier with fasterPayouts", async () => {
+      const appointment = createMockAppointment();
+      const payoutUpdate = createMockPayoutUpdate();
+
+      mockModels.StripeConnectAccount.findOne.mockResolvedValue({
+        userId: 100,
+        stripeAccountId: "acct_123",
+      });
+
+      mockModels.Payout.findOne.mockResolvedValue(null);
+      mockModels.Payout.create.mockResolvedValue({
+        id: 1,
+        update: payoutUpdate,
+      });
+
+      PreferredCleanerPerksService.calculatePayoutBonus.mockResolvedValue({
+        isPreferredJob: true,
+        bonusApplied: true,
+        bonusPercent: 5,
+        bonusAmountCents: 50,
+        tierLevel: "gold",
+        adjustedPlatformFee: 950,
+        adjustedNetAmount: 9050,
+        fasterPayouts: true,
+        payoutHours: 24,
+      });
+
+      mockStripe.paymentIntents.retrieve.mockResolvedValue({
+        latest_charge: "ch_123",
+      });
+
+      mockStripe.transfers.create.mockResolvedValue({
+        id: "tr_123",
+      });
+
+      mockModels.Payment.create.mockResolvedValue({});
+
+      await BillingService.processCleanerPayout(appointment, mockModels);
+
+      expect(mockModels.Payout.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payoutPriority: "high",
+          expectedPayoutHours: 24,
+        })
+      );
+    });
+
+    it("should set normal priority for silver tier without fasterPayouts", async () => {
+      const appointment = createMockAppointment();
+      const payoutUpdate = createMockPayoutUpdate();
+
+      mockModels.StripeConnectAccount.findOne.mockResolvedValue({
+        userId: 100,
+        stripeAccountId: "acct_123",
+      });
+
+      mockModels.Payout.findOne.mockResolvedValue(null);
+      mockModels.Payout.create.mockResolvedValue({
+        id: 1,
+        update: payoutUpdate,
+      });
+
+      PreferredCleanerPerksService.calculatePayoutBonus.mockResolvedValue({
+        isPreferredJob: true,
+        bonusApplied: true,
+        bonusPercent: 3,
+        bonusAmountCents: 30,
+        tierLevel: "silver",
+        adjustedPlatformFee: 970,
+        adjustedNetAmount: 9030,
+        fasterPayouts: false,
+        payoutHours: 48,
+      });
+
+      mockStripe.paymentIntents.retrieve.mockResolvedValue({
+        latest_charge: "ch_123",
+      });
+
+      mockStripe.transfers.create.mockResolvedValue({
+        id: "tr_123",
+      });
+
+      mockModels.Payment.create.mockResolvedValue({});
+
+      await BillingService.processCleanerPayout(appointment, mockModels);
+
+      expect(mockModels.Payout.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payoutPriority: "normal",
+          expectedPayoutHours: 48,
+        })
+      );
+    });
+
+    it("should set normal priority when owner disables gold fasterPayouts", async () => {
+      const appointment = createMockAppointment();
+      const payoutUpdate = createMockPayoutUpdate();
+
+      mockModels.StripeConnectAccount.findOne.mockResolvedValue({
+        userId: 100,
+        stripeAccountId: "acct_123",
+      });
+
+      mockModels.Payout.findOne.mockResolvedValue(null);
+      mockModels.Payout.create.mockResolvedValue({
+        id: 1,
+        update: payoutUpdate,
+      });
+
+      // Owner has disabled fasterPayouts for gold tier
+      PreferredCleanerPerksService.calculatePayoutBonus.mockResolvedValue({
+        isPreferredJob: true,
+        bonusApplied: true,
+        bonusPercent: 5,
+        bonusAmountCents: 50,
+        tierLevel: "gold",
+        adjustedPlatformFee: 950,
+        adjustedNetAmount: 9050,
+        fasterPayouts: false, // Owner disabled
+        payoutHours: 48,
+      });
+
+      mockStripe.paymentIntents.retrieve.mockResolvedValue({
+        latest_charge: "ch_123",
+      });
+
+      mockStripe.transfers.create.mockResolvedValue({
+        id: "tr_123",
+      });
+
+      mockModels.Payment.create.mockResolvedValue({});
+
+      await BillingService.processCleanerPayout(appointment, mockModels);
+
+      expect(mockModels.Payout.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payoutPriority: "normal",
+          expectedPayoutHours: 48,
+          cleanerTierAtPayout: "gold",
+        })
+      );
+    });
+
+    it("should set high priority for platinum tier", async () => {
+      const appointment = createMockAppointment();
+      const payoutUpdate = createMockPayoutUpdate();
+
+      mockModels.StripeConnectAccount.findOne.mockResolvedValue({
+        userId: 100,
+        stripeAccountId: "acct_123",
+      });
+
+      mockModels.Payout.findOne.mockResolvedValue(null);
+      mockModels.Payout.create.mockResolvedValue({
+        id: 1,
+        update: payoutUpdate,
+      });
+
+      PreferredCleanerPerksService.calculatePayoutBonus.mockResolvedValue({
+        isPreferredJob: true,
+        bonusApplied: true,
+        bonusPercent: 7,
+        bonusAmountCents: 70,
+        tierLevel: "platinum",
+        adjustedPlatformFee: 930,
+        adjustedNetAmount: 9070,
+        fasterPayouts: true,
+        payoutHours: 24,
+      });
+
+      mockStripe.paymentIntents.retrieve.mockResolvedValue({
+        latest_charge: "ch_123",
+      });
+
+      mockStripe.transfers.create.mockResolvedValue({
+        id: "tr_123",
+      });
+
+      mockModels.Payment.create.mockResolvedValue({});
+
+      await BillingService.processCleanerPayout(appointment, mockModels);
+
+      expect(mockModels.Payout.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payoutPriority: "high",
+          expectedPayoutHours: 24,
+          cleanerTierAtPayout: "platinum",
+        })
+      );
+    });
+
+    it("should default to normal priority when fasterPayouts undefined", async () => {
+      const appointment = createMockAppointment();
+      const payoutUpdate = createMockPayoutUpdate();
+
+      mockModels.StripeConnectAccount.findOne.mockResolvedValue({
+        userId: 100,
+        stripeAccountId: "acct_123",
+      });
+
+      mockModels.Payout.findOne.mockResolvedValue(null);
+      mockModels.Payout.create.mockResolvedValue({
+        id: 1,
+        update: payoutUpdate,
+      });
+
+      // fasterPayouts not included in response
+      PreferredCleanerPerksService.calculatePayoutBonus.mockResolvedValue({
+        isPreferredJob: false,
+        bonusApplied: false,
+        bonusPercent: 0,
+        bonusAmountCents: 0,
+        tierLevel: "bronze",
+        adjustedPlatformFee: 1000,
+        adjustedNetAmount: 9000,
+        // fasterPayouts and payoutHours not included
+      });
+
+      mockStripe.paymentIntents.retrieve.mockResolvedValue({
+        latest_charge: "ch_123",
+      });
+
+      mockStripe.transfers.create.mockResolvedValue({
+        id: "tr_123",
+      });
+
+      mockModels.Payment.create.mockResolvedValue({});
+
+      await BillingService.processCleanerPayout(appointment, mockModels);
+
+      expect(mockModels.Payout.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payoutPriority: "normal",
+          expectedPayoutHours: 48,
+        })
+      );
+    });
   });
 });

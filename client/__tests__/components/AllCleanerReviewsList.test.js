@@ -280,7 +280,7 @@ describe("AllCleanerReviewsList Component", () => {
       });
 
       await waitFor(() => {
-        expect(getByText("Back to My Homes")).toBeTruthy();
+        expect(getByText("Back to Requests")).toBeTruthy();
       });
     });
   });

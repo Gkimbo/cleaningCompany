@@ -5384,6 +5384,87 @@ Kleanr Support Team`;
       console.error("❌ Error sending job auto-completed homeowner email:", error);
     }
   }
+
+  /**
+   * Notify an employee that they have been assigned to a job
+   * @param {string} email - Employee's email
+   * @param {string} employeeName - Employee's first name
+   * @param {string} appointmentDate - The job date
+   * @param {string} clientName - Client's name
+   * @param {string} address - Job address
+   * @param {number} payAmount - Pay amount in cents
+   * @param {string} businessName - Business owner's business name
+   */
+  static async sendEmployeeJobAssigned(email, employeeName, appointmentDate, clientName, address, payAmount, businessName) {
+    try {
+      const transporter = createTransporter();
+      const payDisplay = payAmount ? `$${(payAmount / 100).toFixed(2)}` : "TBD";
+
+      const htmlContent = createEmailTemplate({
+        title: "New Job Assigned",
+        subtitle: `You've been assigned to a cleaning job`,
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: `Hi ${employeeName}! 👋`,
+        content: `<p>Great news! You've been assigned a new cleaning job by ${businessName}. Here are the details:</p>`,
+        infoBox: {
+          icon: "📋",
+          title: "Job Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Client", value: clientName },
+            { label: "Address", value: address },
+            { label: "Your Pay", value: payDisplay },
+          ],
+        },
+        steps: {
+          title: "📱 Next Steps",
+          items: [
+            "Open the Kleanr app to view full job details",
+            "Check the job date on your calendar",
+            "On the day of the job, tap 'Start Job' when you arrive",
+          ],
+        },
+        ctaText: "Log into the app to view more details about this job.",
+        footerMessage: "Good luck with your job!",
+      });
+
+      const textContent = `Hi ${employeeName}!
+
+Great news! You've been assigned a new cleaning job by ${businessName}.
+
+JOB DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Client: ${clientName}
+Address: ${address}
+Your Pay: ${payDisplay}
+
+NEXT STEPS
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app to view full job details
+2. Check the job date on your calendar
+3. On the day of the job, tap 'Start Job' when you arrive
+
+Log into the app to view more details about this job.
+
+Best regards,
+${businessName}`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `🧹 New Job Assigned - ${formatDate(appointmentDate)}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Employee job assigned email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending employee job assigned email:", error);
+    }
+  }
 }
 
 module.exports = Email;

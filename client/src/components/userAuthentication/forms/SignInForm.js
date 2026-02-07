@@ -98,6 +98,7 @@ const SignInForm = ({ state, dispatch }) => {
 			if (response.user) {
 				dispatch({ type: "CURRENT_USER", payload: response.token });
 				dispatch({ type: "SET_USER_ID", payload: response.user.id });
+				dispatch({ type: "SET_FULL_USER", payload: response.user });
 				if (response.user.email) {
 					dispatch({ type: "SET_USER_EMAIL", payload: response.user.email });
 				}
@@ -123,6 +124,13 @@ const SignInForm = ({ state, dispatch }) => {
 							yearsInBusiness: response.user.yearsInBusiness,
 						},
 					});
+					// Set business logo if available
+					if (response.user.businessLogo) {
+						dispatch({
+							type: "SET_BUSINESS_LOGO",
+							payload: response.user.businessLogo,
+						});
+					}
 				}
 				// Store linked accounts for account switching
 				if (response.linkedAccounts && response.linkedAccounts.length > 0) {

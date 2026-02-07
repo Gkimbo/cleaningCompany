@@ -473,7 +473,7 @@ describe("CleanerApplicationForm Landing Page - Content Verification", () => {
 
     await waitFor(() => {
       expect(getByText("Be Your Own Boss")).toBeTruthy();
-      expect(getByText("Get Paid in 24 Hours")).toBeTruthy();
+      expect(getByText("Get Paid Fast")).toBeTruthy();
       expect(getByText("Unlimited Earning Potential")).toBeTruthy();
     });
   });
@@ -482,7 +482,7 @@ describe("CleanerApplicationForm Landing Page - Content Verification", () => {
     const { getByText } = renderCleanerApplicationForm();
 
     await waitFor(() => {
-      expect(getByText("Get paid within 48 hours of each cleaning")).toBeTruthy();
+      expect(getByText("Get paid within 1-2 business days of each cleaning")).toBeTruthy();
       expect(getByText("Flexible scheduling - accept only jobs you want")).toBeTruthy();
       expect(getByText("No experience necessary")).toBeTruthy();
     });

@@ -28,8 +28,8 @@ const AppointmentsButton = ({ closeModal }) => {
       ]}
       onPress={handlePress}
     >
-      <Feather name="edit-3" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
-      <Text style={ButtonStyles.buttonText}>Edit Appointments</Text>
+      <Feather name="calendar" size={18} color="#E5E7EB" style={{ marginRight: 12 }} />
+      <Text style={ButtonStyles.buttonText}>Appointments</Text>
     </Pressable>
   );
 };

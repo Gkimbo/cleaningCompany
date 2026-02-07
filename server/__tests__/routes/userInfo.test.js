@@ -13,6 +13,7 @@ jest.mock("../../models", () => ({
   },
   UserHomes: {
     findAll: jest.fn(),
+    findByPk: jest.fn(),
   },
   UserAppointments: {
     findAll: jest.fn(),
@@ -22,6 +23,9 @@ jest.mock("../../models", () => ({
     findOne: jest.fn(),
   },
   UserReviews: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  UserPendingRequests: {
     findAll: jest.fn().mockResolvedValue([]),
   },
   Op: {

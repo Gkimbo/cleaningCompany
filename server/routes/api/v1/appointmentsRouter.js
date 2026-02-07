@@ -14,6 +14,7 @@ const {
   StripeConnectAccount,
   CleanerClient,
   HomePreferredCleaner,
+  EmployeeJobAssignment,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -56,6 +57,7 @@ appointmentRouter.get("/unassigned", async (req, res) => {
   }
   try {
     const { preferredOnly } = req.query;
+    const PreferredCleanerPerksService = require("../../../services/PreferredCleanerPerksService");
 
     // Decode token to get cleaner info
     const decodedToken = jwt.verify(token, secretKey);
@@ -72,6 +74,10 @@ appointmentRouter.get("/unassigned", async (req, res) => {
 
     const isCleanerDemo = cleaner.isDemoAccount === true;
 
+    // Get cleaner's tier perks to check for early access
+    const cleanerPerks = await PreferredCleanerPerksService.getCleanerPerks(cleanerId, models);
+    const hasEarlyAccess = cleanerPerks.earlyAccess === true;
+
     // Get user IDs that match the cleaner's demo status
     // Demo cleaners only see demo homeowner appointments
     // Real cleaners only see real homeowner appointments
@@ -87,7 +93,16 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       hasBeenAssigned: false,
       assignedToBusinessEmployee: false, // Exclude business-assigned jobs from marketplace
       userId: { [Op.in]: matchingUserIds }, // Filter by demo status match
+      wasCancelled: false, // Exclude cancelled appointments
     };
+
+    // If cleaner doesn't have early access, filter out jobs in early access period
+    if (!hasEarlyAccess) {
+      whereClause[Op.or] = [
+        { earlyAccessUntil: null },
+        { earlyAccessUntil: { [Op.lte]: new Date() } },
+      ];
+    }
 
     // If preferredOnly filter is enabled, filter to cleaner's preferred homes
     if (preferredOnly === "true") {
@@ -112,8 +127,12 @@ appointmentRouter.get("/unassigned", async (req, res) => {
     const userAppointments = await UserAppointments.findAll({
       where: whereClause,
     });
-    const serializedAppointments =
-      AppointmentSerializer.serializeArray(userAppointments);
+
+    // Add early access indicator to serialized appointments
+    const serializedAppointments = AppointmentSerializer.serializeArray(userAppointments).map(appt => ({
+      ...appt,
+      isEarlyAccess: appt.earlyAccessUntil && new Date(appt.earlyAccessUntil) > new Date(),
+    }));
 
     return res.status(200).json({ appointments: serializedAppointments });
   } catch (error) {
@@ -205,7 +224,7 @@ appointmentRouter.get("/my-requests", async (req, res) => {
     const userId = decodedToken.userId;
 
     const existingAppointments = await UserAppointments.findAll({
-      where: { userId },
+      where: { userId, wasCancelled: false },
     });
 
     if (!existingAppointments.length) {
@@ -276,7 +295,7 @@ appointmentRouter.get("/requests-by-home", async (req, res) => {
 
     // Get all appointments for this homeowner
     const existingAppointments = await UserAppointments.findAll({
-      where: { userId },
+      where: { userId, wasCancelled: false },
     });
 
     if (!existingAppointments.length) {
@@ -335,7 +354,7 @@ appointmentRouter.get("/client-pending-requests", async (req, res) => {
 
     // Get all appointments for this user
     const existingAppointments = await UserAppointments.findAll({
-      where: { userId },
+      where: { userId, wasCancelled: false },
     });
 
     if (!existingAppointments.length) {
@@ -427,7 +446,7 @@ appointmentRouter.get("/requests-for-home/:homeId", async (req, res) => {
 
     // Get all appointments for this home
     const appointments = await UserAppointments.findAll({
-      where: { homeId, userId },
+      where: { homeId, userId, wasCancelled: false },
     });
 
     if (!appointments.length) {
@@ -542,7 +561,8 @@ appointmentRouter.get("/cancellation-info/:id", async (req, res) => {
       const cancellationFeeAmount = cancellationConfig.fee;
       const cancellationWindowDays = cancellationConfig.windowDays;
       const isWithinPenaltyWindow = daysUntilAppointment <= penaltyDays && hasCleanerAssigned;
-      const willChargeCancellationFee = daysUntilAppointment <= cancellationWindowDays;
+      // Only charge cancellation fee if cleaner is assigned - homeowners can cancel freely without fee if no cleaner
+      const willChargeCancellationFee = daysUntilAppointment <= cancellationWindowDays && hasCleanerAssigned;
 
       // Check if discount was applied (incentive appointment)
       const discountApplied = appointment.discountApplied === true;
@@ -1016,6 +1036,13 @@ appointmentRouter.post("/", async (req, res) => {
       totalDue: total + appointmentTotal,
     });
 
+    // Calculate early access window for platinum cleaners
+    const perksConfig = await PreferredPerksConfig.getActive();
+    const earlyAccessMinutes = perksConfig.earlyAccessMinutes || 30;
+    const earlyAccessUntil = perksConfig.platinumEarlyAccess
+      ? new Date(Date.now() + earlyAccessMinutes * 60 * 1000)
+      : null;
+
     const appointments = await Promise.all(
       dateArray.map(async (date) => {
         const homeBeingScheduled = await UserHomes.findOne({
@@ -1058,6 +1085,8 @@ appointmentRouter.post("/", async (req, res) => {
           // Last-minute booking fields
           isLastMinuteBooking: date.isLastMinuteBooking || false,
           lastMinuteFeeApplied: date.lastMinuteFeeApplied || null,
+          // Early access for platinum cleaners
+          earlyAccessUntil,
         });
         const appointmentId = newAppointment.dataValues.id;
 
@@ -1200,10 +1229,19 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
       where: { id: appointment.dataValues.homeId },
     });
 
+    // Normalize bringSheets/bringTowels to lowercase for consistent comparison
+    const normalizedBringSheets = (bringSheets || "no").toLowerCase();
+    const normalizedBringTowels = (bringTowels || "no").toLowerCase();
+
+    console.log('[Linens Update] Appointment:', id);
+    console.log('[Linens Update] Home:', home.dataValues.id, 'numBeds:', home.dataValues.numBeds, 'numBaths:', home.dataValues.numBaths);
+    console.log('[Linens Update] Sheets:', normalizedBringSheets, 'Towels:', normalizedBringTowels);
+    console.log('[Linens Update] Old price:', appointment.dataValues.price);
+
     // Calculate new price
     const newPrice = await calculatePrice(
-      bringSheets,
-      bringTowels,
+      normalizedBringSheets,
+      normalizedBringTowels,
       home.dataValues.numBeds,
       home.dataValues.numBaths,
       appointment.dataValues.timeToBeCompleted,
@@ -1211,13 +1249,15 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
       towelConfigurations
     );
 
+    console.log('[Linens Update] New price:', newPrice);
+
     // Update appointment and bill using the service method
     const updatedAppointment = await UserInfo.editAppointmentLinensInDB({
       id,
       sheetConfigurations,
       towelConfigurations,
-      bringSheets,
-      bringTowels,
+      bringSheets: normalizedBringSheets,
+      bringTowels: normalizedBringTowels,
       newPrice,
     });
 
@@ -1299,6 +1339,7 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
     }
 
     const serializedAppointment = AppointmentSerializer.serializeOne(updatedAppointment);
+    console.log('[Linens Update] Returning price:', serializedAppointment.price, 'bringSheets:', serializedAppointment.bringSheets);
     return res.status(200).json({ appointment: serializedAppointment });
   } catch (error) {
     console.error(error);
@@ -2111,6 +2152,32 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
         });
       }
 
+      // If the cleaner is a business owner, set bookedByCleanerId and create a self-assignment
+      // This ensures the job shows up in their Job Assignments when viewing as business owner
+      const cleanerUser = await User.findByPk(cleanerId);
+      if (cleanerUser && cleanerUser.isBusinessOwner) {
+        // Set bookedByCleanerId so it shows up in business owner's job list
+        await appointment.update({ bookedByCleanerId: cleanerId });
+
+        // Create a self-assignment for the business owner
+        const existingAssignment = await EmployeeJobAssignment.findOne({
+          where: { appointmentId, businessOwnerId: cleanerId },
+        });
+
+        if (!existingAssignment) {
+          await EmployeeJobAssignment.create({
+            appointmentId,
+            businessOwnerId: cleanerId,
+            employeeId: null, // No employee - self-assigned
+            isSelfAssignment: true,
+            status: "assigned",
+            assignedBy: cleanerId,
+            payAmount: feeResult.netAmount, // Business owner keeps their payout
+            payType: "flat_rate",
+          });
+        }
+      }
+
       // Capture payment immediately if within 3 days of appointment
       const appointmentDate = new Date(appointment.dataValues.date);
       const now = new Date();
@@ -2714,8 +2781,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     // Get user for Stripe customer info
     const user = await User.findByPk(userId);
 
-    // Block cancellation if within 7 days and no payment method (can't pay cancellation fee)
-    if (isWithinCancellationFeeWindow && (!user.stripeCustomerId || !user.hasPaymentMethod)) {
+    // Block cancellation if within 7 days, cleaner assigned, and no payment method (can't pay cancellation fee)
+    // If no cleaner assigned, allow cancellation without fee or payment method
+    if (isWithinCancellationFeeWindow && hasCleanerAssigned && (!user.stripeCustomerId || !user.hasPaymentMethod)) {
       return res.status(400).json({
         error: "Cannot cancel without a payment method",
         message: "You cannot cancel within 7 days of the appointment without a payment method on file to pay the cancellation fee. Please add a payment method first.",
@@ -2764,8 +2832,9 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     console.log(`[Cancellation] User hasPaymentMethod: ${user.hasPaymentMethod}`);
     console.log(`[Cancellation] Cancellation fee: $${cancellationConfig.fee}`);
 
-    // Charge cancellation fee if within the window and user has payment method
-    if (isWithinCancellationFeeWindow && user.stripeCustomerId && user.hasPaymentMethod) {
+    // Charge cancellation fee if within the window, cleaner is assigned, and user has payment method
+    // No fee charged if no cleaner assigned - homeowner can cancel freely
+    if (isWithinCancellationFeeWindow && hasCleanerAssigned && user.stripeCustomerId && user.hasPaymentMethod) {
       const cancellationFeeAmountCents = Math.round(cancellationConfig.fee * 100);
 
       try {
@@ -2851,8 +2920,8 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
           reason: `Charge failed: ${stripeError.message} - added to bill`,
         };
       }
-    } else if (isWithinCancellationFeeWindow) {
-      // User doesn't have payment method set up, add fee to bill
+    } else if (isWithinCancellationFeeWindow && hasCleanerAssigned) {
+      // User doesn't have payment method set up, add fee to bill (only if cleaner assigned)
       console.log(`[Cancellation] User ${userId} has no payment method configured, adding fee to bill`);
       const existingBillForFee = await UserBills.findOne({ where: { userId } });
       if (existingBillForFee) {
@@ -2869,8 +2938,13 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
         amount: cancellationConfig.fee,
         reason: "No payment method configured - added to bill",
       };
-    } else if (!isWithinCancellationFeeWindow) {
-      console.log(`[Cancellation] Not within cancellation fee window (${daysUntilAppointment} days > ${cancellationConfig.windowDays} days) - no fee charged`);
+    } else {
+      // No fee charged - either outside window or no cleaner assigned
+      if (!hasCleanerAssigned) {
+        console.log(`[Cancellation] No cleaner assigned - no cancellation fee charged`);
+      } else {
+        console.log(`[Cancellation] Not within cancellation fee window (${daysUntilAppointment} days > ${cancellationConfig.windowDays} days) - no fee charged`);
+      }
     }
 
     // Handle payment cancellation/refund for prepaid appointments
@@ -3019,7 +3093,7 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       });
     }
 
-    // Send notifications to cleaners (in-app and email)
+    // Send notifications to cleaners (push, in-app, and email)
     if (hasCleanerAssigned) {
       const cleanerIds = appointment.employeesAssigned || [];
       const home = await UserHomes.findByPk(appointment.homeId);
@@ -3042,34 +3116,70 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
       // Only show payment amount if appointment was paid and cleaner is getting compensated
       const showPayment = isWithinPenaltyWindow && cleanerPayoutResult;
 
+      // Format date and time for notifications
+      const formattedDate = new Date(appointment.date).toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+      });
+      const appointmentTime = appointment.arrivalTime || null;
+      // Home fields are already decrypted by afterFind hook
+      const homeAddress = home
+        ? `${home.city}, ${home.state}`
+        : "the scheduled location";
+
       for (const cleanerId of cleanerIds) {
         const cleaner = await User.findByPk(cleanerId);
         if (cleaner) {
-          // Add in-app notification
-          const notifications = cleaner.notifications || [];
-          const formattedDate = new Date(appointment.date).toLocaleDateString(undefined, {
-            weekday: "long",
-            month: "short",
-            day: "numeric",
-          });
+          // User fields are already decrypted by afterFind hook
+          const cleanerName = cleaner.firstName || cleaner.username;
 
-          notifications.unshift(
-            showPayment
+          // 1. Create in-app notification using NotificationService
+          try {
+            const notificationTitle = "Appointment Cancelled";
+            const notificationBody = showPayment
               ? `The homeowner cancelled the ${formattedDate} cleaning. You will receive a partial payment of $${cleanerPayment}.`
-              : `The homeowner cancelled the ${formattedDate} cleaning at ${home ? EncryptionService.decrypt(home.address) : "their property"}.`
-          );
-          await cleaner.update({ notifications: notifications.slice(0, 50) });
+              : `The homeowner cancelled the ${formattedDate} cleaning at ${homeAddress}.`;
 
-          // Send email notification to cleaner
+            await NotificationService.createNotification({
+              userId: cleanerId,
+              type: "homeowner_cancelled_appointment",
+              title: notificationTitle,
+              body: notificationBody,
+              data: {
+                appointmentId: appointment.id,
+                appointmentDate: appointment.date,
+                partialPayment: showPayment ? cleanerPayment : null,
+              },
+              actionRequired: false,
+              relatedAppointmentId: appointment.id,
+            });
+          } catch (notifError) {
+            console.error(`Error creating in-app notification for cleaner ${cleanerId}:`, notifError);
+          }
+
+          // 2. Send push notification
+          if (cleaner.expoPushToken) {
+            try {
+              await PushNotification.sendPushHomeownerCancelledAppointment(
+                cleaner.expoPushToken,
+                cleanerName,
+                appointment.date,
+                appointmentTime,
+                homeAddress,
+                showPayment ? cleanerPayment : null
+              );
+            } catch (pushError) {
+              console.error(`Error sending push notification to cleaner ${cleanerId}:`, pushError);
+            }
+          }
+
+          // 3. Send email notification (email already decrypted by afterFind hook)
           if (cleaner.email) {
-            const homeAddress = home
-              ? `${EncryptionService.decrypt(home.city)}, ${EncryptionService.decrypt(home.state)}`
-              : "the scheduled location";
-
             try {
               await Email.sendHomeownerCancelledNotification(
-                EncryptionService.decrypt(cleaner.email),
-                cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : cleaner.username,
+                cleaner.email,
+                cleanerName,
                 appointment.date,
                 homeAddress,
                 showPayment,
@@ -3077,7 +3187,6 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
               );
             } catch (emailError) {
               console.error(`Error sending cancellation email to cleaner ${cleanerId}:`, emailError);
-              // Don't fail the cancellation if email fails
             }
           }
         }
@@ -3139,17 +3248,23 @@ appointmentRouter.post("/:id/cancel-homeowner", async (req, res) => {
     const now = new Date();
     const appealWindowExpiresAt = new Date(now.getTime() + 72 * 60 * 60 * 1000); // 72 hours
 
-    await appointment.update({
-      wasCancelled: true,
-      cancellationInitiatedAt: now,
-      cancellationInitiatedBy: userId,
-      cancellationConfirmedAt: now,
-      cancellationReason: req.body.reason || null,
-      cancellationMethod: req.headers["x-platform"] || "web",
-      cancellationType: "homeowner",
-      cancellationConfirmationId: confirmationId,
-      appealWindowExpiresAt: (isWithinPenaltyWindow || isWithinCancellationFeeWindow) ? appealWindowExpiresAt : null,
-    });
+    // Use direct update to ensure all fields are set (Sequelize change tracking has issues with encrypted fields)
+    await UserAppointments.update(
+      {
+        wasCancelled: true,
+        cancellationInitiatedAt: now,
+        cancellationInitiatedBy: userId,
+        cancellationConfirmedAt: now,
+        cancellationReason: req.body.reason || null,
+        cancellationMethod: req.headers["x-platform"] || "web",
+        cancellationType: "homeowner",
+        cancellationConfirmationId: confirmationId,
+        appealWindowExpiresAt: (isWithinPenaltyWindow || isWithinCancellationFeeWindow) ? appealWindowExpiresAt : null,
+      },
+      {
+        where: { id: appointment.id },
+      }
+    );
 
     // Log cancellation confirmed
     const newState = {
@@ -3887,6 +4002,7 @@ appointmentRouter.get("/:homeId", async (req, res) => {
     const appointments = await UserAppointments.findAll({
       where: {
         homeId: homeId,
+        wasCancelled: false,
       },
     });
     const serializedAppointments =

@@ -8,6 +8,7 @@ const {
   UserAppointments,
   UserBills,
   UserReviews,
+  UserPendingRequests,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
@@ -39,6 +40,8 @@ userInfoRouter.get("/", async (req, res) => {
         {
           model: UserAppointments,
           as: "appointments",
+          where: { wasCancelled: false },
+          required: false, // Still include users with no appointments
         },
         {
           model: UserBills,
@@ -59,10 +62,26 @@ userInfoRouter.get("/", async (req, res) => {
     });
     const reviewedAppointmentIds = new Set(clientReviews.map((r) => r.appointmentId));
 
-    // Add hasClientReview to each appointment
+    // Get pending cleaner requests for each appointment
+    const pendingRequests = await UserPendingRequests.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        status: { [Op.in]: ["pending", "onHold"] },
+      },
+      attributes: ["appointmentId"],
+    });
+
+    // Count pending requests per appointment
+    const pendingRequestCounts = {};
+    pendingRequests.forEach((req) => {
+      pendingRequestCounts[req.appointmentId] = (pendingRequestCounts[req.appointmentId] || 0) + 1;
+    });
+
+    // Add hasClientReview and pendingRequestCount to each appointment
     const appointmentsWithReviewStatus = user.appointments.map((apt) => ({
       ...apt.dataValues,
       hasClientReview: reviewedAppointmentIds.has(apt.id),
+      pendingRequestCount: pendingRequestCounts[apt.id] || 0,
     }));
 
     // Replace appointments with enriched data

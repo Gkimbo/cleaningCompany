@@ -25,11 +25,11 @@ import BillButton from "./BillButton";
 import ChooseNewJobButton from "./ChooseNewJobButton";
 import CleanerRequestsButton from "./CleanerRequestsButton";
 import EarningsButton from "./EarningsButton";
-import EditHomeButton from "./EditHomeButton";
 import EmployeeAssignmentsButton from "./EmployeeAssignmentsButton";
 import HomeButton from "./HomeButton";
 import ManageEmployees from "./ManageEmployeeButton";
 import ManagePricingButton from "./ManagePricingButton";
+import ManageTiersButton from "./ManageTiersButton";
 import IncentivesButton from "./IncentivesButton";
 import MyRequestsButton from "./MyRequestsButton";
 import ScheduleCleaningButton from "./ScheduleCleaningButton";
@@ -49,6 +49,7 @@ import HRManagementButton from "./HRManagementButton";
 import TermsEditorButton from "./TermsEditorButton";
 import WithdrawalsButton from "./WithdrawalsButton";
 import MyClientsButton from "./MyClientsButton";
+import MyHomesButton from "./MyHomesButton";
 import SuspiciousReportsButton from "./SuspiciousReportsButton";
 import CalculatorButton from "./CalculatorButton";
 
@@ -78,6 +79,8 @@ const TopBar = ({ dispatch, state }) => {
   const navigate = useNavigate();
   const { onNotification, onNotificationCountUpdate } = useSocket();
   const { login } = useContext(AuthContext);
+
+  
 
   // Fetch pending applications count for owners and HR
   useEffect(() => {
@@ -136,10 +139,16 @@ const TopBar = ({ dispatch, state }) => {
           const hasApplicablePrograms = data.programs.some((program) => {
             if (isCleaner) {
               // Cleaners can use cleaner_to_cleaner and cleaner_to_client programs
-              return program.type === "cleaner_to_cleaner" || program.type === "cleaner_to_client";
+              return (
+                program.type === "cleaner_to_cleaner" ||
+                program.type === "cleaner_to_client"
+              );
             } else {
               // Homeowners/clients can use client_to_client and client_to_cleaner programs
-              return program.type === "client_to_client" || program.type === "client_to_cleaner";
+              return (
+                program.type === "client_to_client" ||
+                program.type === "client_to_cleaner"
+              );
             }
           });
 
@@ -158,7 +167,9 @@ const TopBar = ({ dispatch, state }) => {
     const fetchUnreadCount = async () => {
       if (state.currentUser.token) {
         try {
-          const data = await NotificationsService.getUnreadCount(state.currentUser.token);
+          const data = await NotificationsService.getUnreadCount(
+            state.currentUser.token
+          );
           setUnreadNotifications(data.unreadCount || 0);
         } catch (error) {
           console.error("Error fetching unread notifications:", error);
@@ -211,7 +222,12 @@ const TopBar = ({ dispatch, state }) => {
       navigate("/import-business");
       setImportBusinessRedirect(false);
     }
-  }, [signInRedirect, signUpRedirect, becomeCleanerRedirect, importBusinessRedirect]);
+  }, [
+    signInRedirect,
+    signUpRedirect,
+    becomeCleanerRedirect,
+    importBusinessRedirect,
+  ]);
 
   const toggleModal = () => setModalVisible(!modalVisible);
   const closeModal = () => setModalVisible(false);
@@ -220,6 +236,7 @@ const TopBar = ({ dispatch, state }) => {
   const handleAccountSwitch = (response) => {
     dispatch({ type: "CURRENT_USER", payload: response.token });
     dispatch({ type: "SET_USER_ID", payload: response.user.id });
+    dispatch({ type: "SET_FULL_USER", payload: response.user });
     if (response.user.email) {
       dispatch({ type: "SET_USER_EMAIL", payload: response.user.email });
     }
@@ -257,7 +274,10 @@ const TopBar = ({ dispatch, state }) => {
     }
     // Update linked accounts
     if (response.linkedAccounts && response.linkedAccounts.length > 0) {
-      dispatch({ type: "SET_LINKED_ACCOUNTS", payload: response.linkedAccounts });
+      dispatch({
+        type: "SET_LINKED_ACCOUNTS",
+        payload: response.linkedAccounts,
+      });
     }
     // Update auth context token
     login(response.token);
@@ -288,22 +308,24 @@ const TopBar = ({ dispatch, state }) => {
               <MessagesButton state={state} dispatch={dispatch} />
               <HomeButton />
               {/* Applications notification badge for owners and HR */}
-              {(state.account === "owner" || state.account === "humanResources") && pendingApplications > 0 && (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.notificationButton,
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => navigate("/view-all-applications")}
-                >
-                  <Feather name="users" size={20} color="white" />
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {pendingApplications > 9 ? "9+" : pendingApplications}
-                    </Text>
-                  </View>
-                </Pressable>
-              )}
+              {(state.account === "owner" ||
+                state.account === "humanResources") &&
+                pendingApplications > 0 && (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.notificationButton,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                    onPress={() => navigate("/view-all-applications")}
+                  >
+                    <Feather name="users" size={20} color="white" />
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>
+                        {pendingApplications > 9 ? "9+" : pendingApplications}
+                      </Text>
+                    </View>
+                  </Pressable>
+                )}
               {/* Pending cleaner requests notification badge for clients */}
               {!state.account && pendingCleanerRequests > 0 && (
                 <Pressable
@@ -370,6 +392,7 @@ const TopBar = ({ dispatch, state }) => {
                           <>
                             <ManageEmployees closeModal={closeModal} />
                             <ManagePricingButton closeModal={closeModal} />
+                            <ManageTiersButton closeModal={closeModal} />
                             <CalculatorButton closeModal={closeModal} />
                             <ReferralsButton closeModal={closeModal} />
                             <SeeAllAppointments closeModal={closeModal} />
@@ -386,23 +409,32 @@ const TopBar = ({ dispatch, state }) => {
                           </>
                         ) : state.account === "employee" ? (
                           <>
-                            {/* Employees only see their assigned jobs - no marketplace access */}
-                            <EmployeeAssignmentsButton closeModal={closeModal} />
-                            <EarningsButton closeModal={closeModal} />
+                            {/* Employees access jobs via My Calendar on dashboard */}
+                            {/* Earnings info is shown on the profile page */}
                           </>
                         ) : state.account === "cleaner" ? (
                           <>
                             {/* Search Jobs always at the top for all cleaners */}
                             <ChooseNewJobButton closeModal={closeModal} />
-                            <EmployeeAssignmentsButton closeModal={closeModal} />
+                            <EmployeeAssignmentsButton
+                              closeModal={closeModal}
+                            />
                             <MyRequestsButton closeModal={closeModal} />
                             {/* My Clients only for business owner cleaners */}
-                            {state.isBusinessOwner && <MyClientsButton closeModal={closeModal} />}
+                            {state.isBusinessOwner && (
+                              <MyClientsButton closeModal={closeModal} />
+                            )}
                             {/* <EmployeeShiftButton closeModal={closeModal} /> */}
                             <EarningsButton closeModal={closeModal} />
-                            {state.isBusinessOwner && <CalculatorButton closeModal={closeModal} />}
-                            {referralsEnabled && <MyReferralsButton closeModal={closeModal} />}
-                            <RecommendedSuppliesButton closeModal={closeModal} />
+                            {state.isBusinessOwner && (
+                              <CalculatorButton closeModal={closeModal} />
+                            )}
+                            {referralsEnabled && (
+                              <MyReferralsButton closeModal={closeModal} />
+                            )}
+                            <RecommendedSuppliesButton
+                              closeModal={closeModal}
+                            />
                           </>
                         ) : state.account === "humanResources" ? (
                           <>
@@ -412,48 +444,52 @@ const TopBar = ({ dispatch, state }) => {
                           </>
                         ) : (
                           <>
+                            <AppointmentsButton closeModal={closeModal} />
                             <ScheduleCleaningButton closeModal={closeModal} />
-                            <EditHomeButton closeModal={closeModal} />
-                            {/* <CleanerRequestsButton closeModal={closeModal} /> */}
-                          </>
-                        )}
-
-                        {state.currentUser.token && !state.account && (
-                          <>
-                            {state.appointments.length !== 0 && (
-                              <AppointmentsButton closeModal={closeModal} />
-                            )}
+                            <MyHomesButton closeModal={closeModal} />
                             <BillButton closeModal={closeModal} />
-                            <ArchiveButton closeModal={closeModal} />
                             <ReviewsButton closeModal={closeModal} />
-                            {referralsEnabled && <MyReferralsButton closeModal={closeModal} />}
+                            <ArchiveButton closeModal={closeModal} />
+                            {referralsEnabled && (
+                              <MyReferralsButton closeModal={closeModal} />
+                            )}
                           </>
                         )}
 
                         {/* Switch Account Button - only show if user has linked accounts */}
-                        {state.linkedAccounts && state.linkedAccounts.length > 0 && (
-                          <Pressable
-                            style={({ pressed }) => [
-                              styles.glassButton,
-                              styles.switchAccountButton,
-                              pressed && { opacity: 0.8 },
-                            ]}
-                            onPress={() => {
-                              closeModal();
-                              setShowSwitchModal(true);
-                            }}
-                          >
-                            <View style={styles.switchAccountContent}>
-                              <Feather name="repeat" size={18} color={colors.primary[400]} />
-                              <View style={styles.switchAccountText}>
-                                <Text style={styles.glassButtonText}>Switch Account</Text>
-                                <Text style={styles.currentAccountLabel}>
-                                  Currently: {getCurrentAccountDisplayName(state.account)}
-                                </Text>
+                        {state.linkedAccounts &&
+                          state.linkedAccounts.length > 0 && (
+                            <Pressable
+                              style={({ pressed }) => [
+                                styles.glassButton,
+                                styles.switchAccountButton,
+                                pressed && { opacity: 0.8 },
+                              ]}
+                              onPress={() => {
+                                closeModal();
+                                setShowSwitchModal(true);
+                              }}
+                            >
+                              <View style={styles.switchAccountContent}>
+                                <Feather
+                                  name="repeat"
+                                  size={18}
+                                  color={colors.primary[400]}
+                                />
+                                <View style={styles.switchAccountText}>
+                                  <Text style={styles.glassButtonText}>
+                                    Switch Account
+                                  </Text>
+                                  <Text style={styles.currentAccountLabel}>
+                                    Currently:{" "}
+                                    {getCurrentAccountDisplayName(
+                                      state.account
+                                    )}
+                                  </Text>
+                                </View>
                               </View>
-                            </View>
-                          </Pressable>
-                        )}
+                            </Pressable>
+                          )}
 
                         <AccountSettingsButton closeModal={closeModal} />
                         <SignOutButton

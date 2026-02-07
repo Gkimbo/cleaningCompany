@@ -278,6 +278,12 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "When replacement notifications were sent after cleaner cancellation",
 		},
+		// Early access for platinum tier cleaners
+		earlyAccessUntil: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "Timestamp until which the job is only visible to platinum cleaners",
+		},
 		// 2-Step Completion Confirmation fields
 		completionStatus: {
 			type: DataTypes.ENUM("in_progress", "submitted", "approved", "auto_approved"),

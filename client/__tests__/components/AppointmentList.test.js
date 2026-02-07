@@ -64,7 +64,7 @@ describe("AppointmentList", () => {
       const { getByText } = render(
         <AppointmentList state={state} dispatch={mockDispatch} />
       );
-      expect(getByText("Add a Home")).toBeTruthy();
+      expect(getByText("Add Home")).toBeTruthy();
     });
 
     it("renders Back button", () => {
@@ -75,16 +75,16 @@ describe("AppointmentList", () => {
       expect(getByText("Back")).toBeTruthy();
     });
 
-    it("renders 'Add a Home' button when no homes exist", () => {
+    it("renders 'Add Home' button when no homes exist", () => {
       const state = createState({ homes: [] });
       const { getByText, queryByText } = render(
         <AppointmentList state={state} dispatch={mockDispatch} />
       );
-      expect(getByText("Add a Home")).toBeTruthy();
-      expect(queryByText("Add another Home")).toBeNull();
+      expect(getByText("Add Home")).toBeTruthy();
+      expect(queryByText("Add Another Home")).toBeNull();
     });
 
-    it("renders 'Add another Home' button when homes exist", () => {
+    it("renders 'Add Another Home' button when homes exist", () => {
       const state = createState({
         homes: [
           {
@@ -103,7 +103,7 @@ describe("AppointmentList", () => {
       const { getByText } = render(
         <AppointmentList state={state} dispatch={mockDispatch} />
       );
-      expect(getByText("Add another Home")).toBeTruthy();
+      expect(getByText("Add Another Home")).toBeTruthy();
     });
 
     it("renders home tiles for each home", () => {
@@ -133,11 +133,12 @@ describe("AppointmentList", () => {
           },
         ],
       });
-      const { getByText, getAllByTestId } = render(
+      const { getAllByText, getAllByTestId } = render(
         <AppointmentList state={state} dispatch={mockDispatch} />
       );
-      expect(getByText("Beach House")).toBeTruthy();
-      expect(getByText("Mountain Cabin")).toBeTruthy();
+      // Use getAllByText since home names may appear multiple times (in headers and tiles)
+      expect(getAllByText("Beach House").length).toBeGreaterThan(0);
+      expect(getAllByText("Mountain Cabin").length).toBeGreaterThan(0);
       expect(getAllByTestId("home-appointment-tile")).toHaveLength(2);
     });
   });
@@ -235,20 +236,20 @@ describe("AppointmentList", () => {
   });
 
   describe("Navigation", () => {
-    it("navigates to add-home when Add a Home button is pressed", async () => {
+    it("navigates to add-home when Add Home button is pressed", async () => {
       const state = createState();
       const { getByText } = render(
         <AppointmentList state={state} dispatch={mockDispatch} />
       );
 
-      fireEvent.press(getByText("Add a Home"));
+      fireEvent.press(getByText("Add Home"));
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith("/add-home");
       });
     });
 
-    it("navigates to add-home when Add another Home button is pressed", async () => {
+    it("navigates to add-home when Add Another Home button is pressed", async () => {
       const state = createState({
         homes: [{ id: 1, nickName: "Test Home" }],
       });
@@ -256,7 +257,7 @@ describe("AppointmentList", () => {
         <AppointmentList state={state} dispatch={mockDispatch} />
       );
 
-      fireEvent.press(getByText("Add another Home"));
+      fireEvent.press(getByText("Add Another Home"));
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith("/add-home");
@@ -344,13 +345,14 @@ describe("AppointmentList", () => {
         ],
       });
 
-      const { getByText, getAllByTestId } = render(
+      const { getAllByText, getAllByTestId } = render(
         <AppointmentList state={state} dispatch={mockDispatch} />
       );
 
-      expect(getByText("Home 1")).toBeTruthy();
-      expect(getByText("Home 2")).toBeTruthy();
-      expect(getByText("Home 3")).toBeTruthy();
+      // Use getAllByText since home names may appear multiple times (in headers and tiles)
+      expect(getAllByText("Home 1").length).toBeGreaterThan(0);
+      expect(getAllByText("Home 2").length).toBeGreaterThan(0);
+      expect(getAllByText("Home 3").length).toBeGreaterThan(0);
       expect(getAllByTestId("home-appointment-tile")).toHaveLength(3);
     });
   });

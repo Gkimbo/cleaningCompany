@@ -26,10 +26,13 @@ const MultiCleanerJobCard = ({
   onAccept,
   onDecline,
   onJoinTeam,
+  onBookWithTeam,
   loading = false,
   showActions = true,
   isOffer = false,
   expiresAt = null,
+  isBusinessOwner = false,
+  hasEmployees = false,
 }) => {
   const formatDate = (dateString) => {
     const date = new Date(dateString + "T00:00:00");
@@ -40,9 +43,10 @@ const MultiCleanerJobCard = ({
     });
   };
 
-  const formatPrice = (cents) => {
-    if (!cents) return "TBD";
-    return `$${(cents / 100).toFixed(2)}`;
+  const formatPrice = (amount) => {
+    if (!amount) return "TBD";
+    // Prices are stored in dollars
+    return `$${parseFloat(amount).toFixed(2)}`;
   };
 
   const formatTime = (dateString) => {
@@ -218,6 +222,33 @@ const MultiCleanerJobCard = ({
                 )}
               </Pressable>
             </>
+          ) : isBusinessOwner && slotsRemaining >= 2 ? (
+            // Business owner with multiple slots - show team booking option
+            <View style={styles.businessOwnerActions}>
+              <Pressable
+                style={[styles.actionButton, styles.teamBookButton]}
+                onPress={onBookWithTeam}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <>
+                    <Feather name="users" size={18} color={colors.white} />
+                    <Text style={styles.teamBookButtonText}>Book with Team</Text>
+                  </>
+                )}
+              </Pressable>
+              {onJoinTeam && (
+                <Pressable
+                  style={[styles.actionButton, styles.joinSoloButton]}
+                  onPress={onJoinTeam}
+                  disabled={loading}
+                >
+                  <Text style={styles.joinSoloButtonText}>Join Solo</Text>
+                </Pressable>
+              )}
+            </View>
           ) : onJoinTeam ? (
             <Pressable
               style={[styles.actionButton, styles.joinButton]}
@@ -455,6 +486,29 @@ const styles = StyleSheet.create({
     ...typography.base,
     fontWeight: "600",
     color: colors.white,
+  },
+  // Business owner team booking styles
+  businessOwnerActions: {
+    flex: 1,
+    gap: spacing.sm,
+  },
+  teamBookButton: {
+    backgroundColor: colors.secondary[600],
+    flex: 0,
+  },
+  teamBookButtonText: {
+    ...typography.base,
+    fontWeight: "600",
+    color: colors.white,
+  },
+  joinSoloButton: {
+    backgroundColor: colors.neutral[100],
+    flex: 0,
+  },
+  joinSoloButtonText: {
+    ...typography.sm,
+    fontWeight: "600",
+    color: colors.neutral[700],
   },
 });
 

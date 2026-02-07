@@ -266,6 +266,10 @@ class BillingService {
         const platformFee = bonusInfo.adjustedPlatformFee;
         const netAmount = bonusInfo.adjustedNetAmount;
 
+        // Determine payout priority based on tier perks
+        const payoutPriority = bonusInfo.fasterPayouts ? "high" : "normal";
+        const expectedPayoutHours = bonusInfo.payoutHours || 48;
+
         if (payout) {
           await payout.update({
             amount: netAmount / 100,
@@ -277,6 +281,9 @@ class BillingService {
             preferredBonusPercent: bonusInfo.bonusApplied ? bonusInfo.bonusPercent : null,
             preferredBonusAmount: bonusInfo.bonusApplied ? bonusInfo.bonusAmountCents : null,
             cleanerTierAtPayout: bonusInfo.tierLevel,
+            // Payout priority fields
+            payoutPriority,
+            expectedPayoutHours,
           });
         } else {
           payout = await Payout.create({
@@ -291,6 +298,9 @@ class BillingService {
             preferredBonusPercent: bonusInfo.bonusApplied ? bonusInfo.bonusPercent : null,
             preferredBonusAmount: bonusInfo.bonusApplied ? bonusInfo.bonusAmountCents : null,
             cleanerTierAtPayout: bonusInfo.tierLevel,
+            // Payout priority fields
+            payoutPriority,
+            expectedPayoutHours,
           });
         }
 

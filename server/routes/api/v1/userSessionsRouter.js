@@ -11,6 +11,7 @@ const UserSerializer = require("../../../serializers/userSerializer");
 const authenticateToken = require("../../../middleware/authenticatedToken");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
+const EncryptionService = require("../../../services/EncryptionService");
 
 const sessionRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -97,7 +98,9 @@ sessionRouter.get("/check-accounts", async (req, res) => {
 	}
 
 	try {
-		const users = await User.findAll({ where: { email } });
+		// Hash the email to search by emailHash (email is encrypted in DB)
+		const emailHash = EncryptionService.hash(email);
+		const users = await User.findAll({ where: { emailHash } });
 
 		if (users.length <= 1) {
 			return res.json({ multipleAccounts: false });
@@ -128,8 +131,10 @@ sessionRouter.post("/login", async (req, res) => {
 
 		if (isEmail) {
 			// Email login - check for multiple accounts
+			// Hash the email to search by emailHash (email is encrypted in DB)
+			const emailHash = EncryptionService.hash(username);
 			const usersWithEmail = await User.findAll({
-				where: { email: username }
+				where: { emailHash }
 			});
 
 			if (usersWithEmail.length === 0) {
@@ -309,7 +314,9 @@ sessionRouter.post("/forgot-username", async (req, res) => {
 	}
 
 	try {
-		const usersWithEmail = await User.findAll({ where: { email } });
+		// Hash the email to search by emailHash (email is encrypted in DB)
+		const emailHash = EncryptionService.hash(email);
+		const usersWithEmail = await User.findAll({ where: { emailHash } });
 
 		if (usersWithEmail.length === 0) {
 			// Return success even if user not found for security (don't reveal if email exists)
@@ -324,7 +331,7 @@ sessionRouter.post("/forgot-username", async (req, res) => {
 			accountType: getAccountDisplayName(u),
 		}));
 
-		// Send username recovery email with all usernames
+		// Send username recovery email with all usernames (use the plain email from request, not encrypted)
 		await Email.sendUsernameRecovery(email, usernames.map((u) => `${u.username} (${u.accountType})`).join(", "));
 		console.log(`✅ Username recovery email sent with ${usernames.length} username(s)`);
 
@@ -353,7 +360,9 @@ sessionRouter.post("/forgot-password", async (req, res) => {
 	}
 
 	try {
-		const usersWithEmail = await User.findAll({ where: { email } });
+		// Hash the email to search by emailHash (email is encrypted in DB)
+		const emailHash = EncryptionService.hash(email);
+		const usersWithEmail = await User.findAll({ where: { emailHash } });
 
 		if (usersWithEmail.length === 0) {
 			// Return success even if user not found for security
@@ -397,7 +406,7 @@ sessionRouter.post("/forgot-password", async (req, res) => {
 		// Update user's password
 		await user.update({ password: hashedPassword });
 
-		// Send password reset email
+		// Send password reset email (use the plain email from request, not encrypted)
 		await Email.sendPasswordReset(email, user.username, temporaryPassword);
 		console.log(`✅ Password reset email sent for ${user.username}`);
 
