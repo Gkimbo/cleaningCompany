@@ -15,6 +15,7 @@ const reducer = (state, action) => {
         isBusinessOwner: false,
         isMarketplaceCleaner: false,
         businessName: null,
+        businessLogo: null,
         yearsInBusiness: null,
         linkedAccounts: [],
       };
@@ -246,6 +247,11 @@ const reducer = (state, action) => {
         isBusinessOwner: action.payload.isBusinessOwner,
         businessName: action.payload.businessName,
         yearsInBusiness: action.payload.yearsInBusiness,
+      };
+    case "SET_BUSINESS_LOGO":
+      return {
+        ...state,
+        businessLogo: action.payload,
       };
     case "SET_LINKED_ACCOUNTS":
       return {

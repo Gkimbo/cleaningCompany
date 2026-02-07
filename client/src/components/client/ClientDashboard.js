@@ -953,8 +953,9 @@ const ClientDashboard = ({ state, dispatch }) => {
                     })}
                   </Text>
                 </View>
+                {/* Price is stored in dollars in DB, convert to cents for formatCurrency */}
                 <Text style={styles.recentPrice}>
-                  {formatCurrency(apt.price)}
+                  {formatCurrency((apt.price || 0) * 100)}
                 </Text>
               </View>
             ))}

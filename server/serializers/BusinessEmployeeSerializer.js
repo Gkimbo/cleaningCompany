@@ -38,7 +38,10 @@ class BusinessEmployeeSerializer {
       email: this.decryptField(data.email),
       phone: this.decryptField(data.phone),
       status: data.status,
+      payType: data.payType,
       defaultHourlyRate: data.defaultHourlyRate,
+      defaultJobRate: data.defaultJobRate,
+      payRate: data.payRate ? parseFloat(data.payRate) : null,
       paymentMethod: data.paymentMethod,
       stripeConnectOnboarded: data.stripeConnectOnboarded,
       canViewClientDetails: data.canViewClientDetails,
@@ -52,9 +55,15 @@ class BusinessEmployeeSerializer {
       createdAt: data.createdAt,
     };
 
-    // Include formatted pay rate
+    // Include formatted pay rates
     if (data.defaultHourlyRate) {
-      serialized.formattedHourlyRate = `$${(data.defaultHourlyRate / 100).toFixed(2)}`;
+      serialized.formattedHourlyRate = `$${(data.defaultHourlyRate / 100).toFixed(2)}/hr`;
+    }
+    if (data.defaultJobRate) {
+      serialized.formattedJobRate = `$${(data.defaultJobRate / 100).toFixed(2)}/job`;
+    }
+    if (data.payRate) {
+      serialized.formattedPayRate = `${parseFloat(data.payRate)}%`;
     }
 
     // Serialize nested user if present and requested (check both data and employee for Sequelize associations)

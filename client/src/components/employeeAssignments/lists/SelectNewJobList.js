@@ -23,6 +23,7 @@ import JobFilterModal, { defaultFilters } from "./JobFilterModal";
 import {
   MultiCleanerJobCard,
   MultiCleanerOfferModal,
+  TeamBookingModal,
 } from "../../multiCleaner";
 import {
   colors,
@@ -93,6 +94,10 @@ const SelectNewJobList = ({ state }) => {
   const [selectedMultiCleanerJob, setSelectedMultiCleanerJob] = useState(null);
   const [showMultiCleanerModal, setShowMultiCleanerModal] = useState(false);
   const [multiCleanerLoading, setMultiCleanerLoading] = useState(false);
+
+  // Team booking modal state (for business owners)
+  const [showTeamBookingModal, setShowTeamBookingModal] = useState(false);
+  const [selectedJobForTeam, setSelectedJobForTeam] = useState(null);
 
   // Job request loading state
   const [requestingJobId, setRequestingJobId] = useState(null);
@@ -442,39 +447,77 @@ const SelectNewJobList = ({ state }) => {
     return `${home.city || ""}, ${home.state || ""}`.replace(/^, |, $/g, "");
   };
 
-  const transformOfferToJobData = (offer) => ({
-    id: offer.multiCleanerJob?.id,
-    appointmentDate: offer.multiCleanerJob?.appointment?.date,
-    address: formatAddress(offer.multiCleanerJob?.appointment?.home),
-    totalCleanersRequired: offer.multiCleanerJob?.totalCleanersRequired || 2,
-    cleanersConfirmed: offer.multiCleanerJob?.cleanersConfirmed || 0,
-    status: offer.multiCleanerJob?.status,
-    earningsOffered: offer.earningsOffered,
-    perCleanerEarnings: offer.earningsOffered,
-  });
+  const transformOfferToJobData = (offer) => {
+    // Server stores earningsOffered in cents, convert to dollars for display
+    const earningsInDollars = offer.earningsOffered ? offer.earningsOffered / 100 : null;
 
-  const transformJobData = (job) => ({
-    id: job.id,
-    appointmentDate: job.appointment?.date,
-    address: formatAddress(job.appointment?.home),
-    totalCleanersRequired: job.totalCleanersRequired || 2,
-    cleanersConfirmed: job.cleanersConfirmed || 0,
-    status: job.status,
-  });
+    return {
+      id: offer.multiCleanerJob?.id,
+      appointmentDate: offer.multiCleanerJob?.appointment?.date,
+      address: formatAddress(offer.multiCleanerJob?.appointment?.home),
+      totalCleanersRequired: offer.multiCleanerJob?.totalCleanersRequired || 2,
+      cleanersConfirmed: offer.multiCleanerJob?.cleanersConfirmed || 0,
+      status: offer.multiCleanerJob?.status,
+      earningsOffered: earningsInDollars,
+      perCleanerEarnings: earningsInDollars,
+    };
+  };
 
-  const transformJobToOfferFormat = (job) => ({
-    id: job.id,
-    totalCleanersRequired: job.totalCleanersRequired || 2,
-    appointmentDate: job.appointment?.date,
-    address: formatAddress(job.appointment?.home),
-    estimatedMinutes: null,
-    earningsOffered: null,
-    totalJobPrice: null,
-    platformFee: null,
-    percentOfWork: null,
-    roomAssignments: [],
-    expiresAt: null,
-  });
+  const transformJobData = (job) => {
+    // Calculate per-cleaner earnings from appointment price
+    const totalPrice = job.appointment?.price || 0;
+    const cleanersRequired = job.totalCleanersRequired || 2;
+    const cleanersConfirmed = job.cleanersConfirmed || 0;
+    const perCleanerEarnings = totalPrice > 0 ? Math.round(totalPrice / cleanersRequired) : null;
+
+    // Get estimated time (totalEstimatedMinutes from job, or parse timeToBeCompleted from appointment)
+    let estimatedMinutes = job.totalEstimatedMinutes;
+    if (!estimatedMinutes && job.appointment?.timeToBeCompleted) {
+      // Parse timeToBeCompleted string (e.g., "2 hours", "1.5 hours", "90 minutes")
+      const timeStr = job.appointment.timeToBeCompleted.toLowerCase();
+      const hourMatch = timeStr.match(/([\d.]+)\s*h/);
+      const minMatch = timeStr.match(/([\d.]+)\s*m/);
+      if (hourMatch) {
+        estimatedMinutes = parseFloat(hourMatch[1]) * 60;
+      } else if (minMatch) {
+        estimatedMinutes = parseFloat(minMatch[1]);
+      }
+    }
+
+    return {
+      id: job.id,
+      appointmentId: job.appointmentId,
+      appointmentDate: job.appointment?.date,
+      address: formatAddress(job.appointment?.home),
+      totalCleanersRequired: cleanersRequired,
+      cleanersConfirmed,
+      remainingSlots: cleanersRequired - cleanersConfirmed,
+      status: job.status,
+      perCleanerEarnings,
+      totalJobPrice: totalPrice,
+      estimatedMinutes,
+    };
+  };
+
+  const transformJobToOfferFormat = (job) => {
+    const totalPrice = job.appointment?.price || 0;
+    const cleanersRequired = job.totalCleanersRequired || 2;
+    const perCleanerEarnings = totalPrice > 0 ? Math.round(totalPrice / cleanersRequired) : null;
+
+    return {
+      id: job.id,
+      totalCleanersRequired: cleanersRequired,
+      appointmentDate: job.appointment?.date,
+      address: formatAddress(job.appointment?.home),
+      estimatedMinutes: null,
+      earningsOffered: perCleanerEarnings,
+      totalJobPrice: totalPrice,
+      platformFee: null,
+      percentOfWork: Math.round(100 / cleanersRequired),
+      roomAssignments: [],
+      expiresAt: null,
+    };
+  };
 
   // Handle accepting a multi-cleaner offer
   const handleAcceptOffer = useCallback(async (offer) => {
@@ -554,6 +597,22 @@ const SelectNewJobList = ({ state }) => {
       setMultiCleanerLoading(false);
     }
   }, [state.currentUser.token, fetchData, fetchMultiCleanerJobs]);
+
+  // Handle opening team booking modal (for business owners)
+  const handleOpenTeamBooking = useCallback((job) => {
+    const jobData = transformJobData(job);
+    setSelectedJobForTeam(jobData);
+    setShowTeamBookingModal(true);
+  }, []);
+
+  // Handle successful team booking
+  const handleTeamBookingComplete = useCallback(() => {
+    setShowTeamBookingModal(false);
+    setSelectedJobForTeam(null);
+    // Refresh the job lists
+    fetchData(true);
+    fetchMultiCleanerJobs();
+  }, [fetchData, fetchMultiCleanerJobs]);
 
   // Handle joining an open multi-cleaner job
   const handleJoinMultiCleanerJob = useCallback(async () => {
@@ -888,7 +947,10 @@ const SelectNewJobList = ({ state }) => {
                       job={transformJobData(job)}
                       isOffer={false}
                       onJoinTeam={() => handleDirectJoinMultiCleanerJob(job)}
+                      onBookWithTeam={() => handleOpenTeamBooking(job)}
                       loading={multiCleanerLoading}
+                      isBusinessOwner={state.isBusinessOwner}
+                      hasEmployees={true}
                     />
                   </View>
                 ))}
@@ -1095,6 +1157,18 @@ const SelectNewJobList = ({ state }) => {
         onDecline={handleCloseMultiCleanerModal}
         onClose={handleCloseMultiCleanerModal}
         loading={multiCleanerLoading}
+      />
+
+      {/* Team Booking Modal (for business owners) */}
+      <TeamBookingModal
+        visible={showTeamBookingModal}
+        job={selectedJobForTeam}
+        onBook={handleTeamBookingComplete}
+        onClose={() => {
+          setShowTeamBookingModal(false);
+          setSelectedJobForTeam(null);
+        }}
+        state={state}
       />
     </View>
   );

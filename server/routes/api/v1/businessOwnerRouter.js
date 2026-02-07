@@ -9,7 +9,14 @@ const PayCalculatorService = require("../../../services/PayCalculatorService");
 const CustomJobFlowService = require("../../../services/CustomJobFlowService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
-const { UserAppointments, UserHomes, User, Payout } = require("../../../models");
+const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
+const CustomJobFlowSerializer = require("../../../serializers/CustomJobFlowSerializer");
+const ClientJobFlowAssignmentSerializer = require("../../../serializers/ClientJobFlowAssignmentSerializer");
+const CustomJobFlowChecklistSerializer = require("../../../serializers/CustomJobFlowChecklistSerializer");
+const TimesheetSerializer = require("../../../serializers/TimesheetSerializer");
+const EncryptionService = require("../../../services/EncryptionService");
+const { UserAppointments, UserHomes, User, Payout, CleanerClient, sequelize, EmployeeJobAssignment, BusinessEmployee } = require("../../../models");
+const { Op } = require("sequelize");
 
 // All routes require business owner authentication
 router.use(verifyBusinessOwner);
@@ -63,7 +70,7 @@ router.post("/employees/invite", async (req, res) => {
 
     res.status(201).json({
       message: "Invitation sent successfully",
-      employee,
+      employee: BusinessEmployeeSerializer.serializeOne(employee),
     });
   } catch (error) {
     console.error("Error inviting employee:", error);
@@ -281,10 +288,58 @@ router.post("/assignments", async (req, res) => {
       { employeeId, appointmentId, payAmount: payAmount || 0, payType }
     );
 
-    res.status(201).json({ message: "Employee assigned", assignment });
+    res.status(201).json({ message: "Employee assigned", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
   } catch (error) {
     console.error("Error assigning employee:", error);
     res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /assignments/:assignmentId - Get a single assignment with full details
+ */
+router.get("/assignments/:assignmentId", async (req, res) => {
+  try {
+
+    const assignment = await EmployeeJobAssignment.findOne({
+      where: {
+        id: parseInt(req.params.assignmentId),
+        businessOwnerId: req.businessOwnerId,
+      },
+      include: [
+        {
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "firstName", "lastName", "phone", "email", "defaultHourlyRate"],
+        },
+        {
+          model: UserAppointments,
+          as: "appointment",
+          include: [
+            {
+              model: UserHomes,
+              as: "home",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "firstName", "lastName", "email", "phone"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: "Assignment not found" });
+    }
+
+    res.json({ assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
+  } catch (error) {
+    console.error("Error fetching assignment:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -322,7 +377,7 @@ router.post("/assignments/:assignmentId/reassign", async (req, res) => {
       req.businessOwnerId
     );
 
-    res.json({ message: "Job reassigned", assignment });
+    res.json({ message: "Job reassigned", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
   } catch (error) {
     console.error("Error reassigning job:", error);
     res.status(400).json({ error: error.message });
@@ -339,7 +394,7 @@ router.post("/self-assign/:appointmentId", async (req, res) => {
       parseInt(req.params.appointmentId)
     );
 
-    res.status(201).json({ message: "Self-assigned to job", assignment });
+    res.status(201).json({ message: "Self-assigned to job", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
   } catch (error) {
     console.error("Error self-assigning:", error);
     res.status(400).json({ error: error.message });
@@ -367,7 +422,7 @@ router.put("/assignments/:assignmentId/pay", async (req, res) => {
       { newPayAmount, reason }
     );
 
-    res.json({ message: "Pay updated", assignment });
+    res.json({ message: "Pay updated", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
   } catch (error) {
     console.error("Error updating pay:", error);
     res.status(400).json({ error: error.message });
@@ -387,6 +442,34 @@ router.get("/assignments/:assignmentId/pay-history", async (req, res) => {
   } catch (error) {
     console.error("Error fetching pay history:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /assignments/:assignmentId/hours - Update hours worked for an assignment
+ * Used for hourly employees - recalculates pay based on employee's hourly rate
+ */
+router.put("/assignments/:assignmentId/hours", async (req, res) => {
+  try {
+    const { hoursWorked } = req.body;
+
+    if (hoursWorked === undefined || hoursWorked === null || hoursWorked < 0) {
+      return res.status(400).json({ error: "Valid hours worked value is required" });
+    }
+
+    const assignment = await EmployeeJobAssignmentService.updateHoursWorked(
+      parseInt(req.params.assignmentId),
+      req.businessOwnerId,
+      parseFloat(hoursWorked)
+    );
+
+    res.json({
+      message: "Hours updated",
+      assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment),
+    });
+  } catch (error) {
+    console.error("Error updating hours:", error);
+    res.status(400).json({ error: error.message });
   }
 });
 
@@ -468,12 +551,175 @@ router.get("/dashboard", async (req, res) => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
-    const [employeeStats, financials, upcomingAssignments, unpaidAssignments] = await Promise.all([
+    // Calculate start of current week and month
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    const weekStart = startOfWeek.toISOString().split("T")[0];
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStart = startOfMonth.toISOString().split("T")[0];
+
+    const [
+      employeeStats,
+      financials,
+      upcomingAssignments,
+      unpaidAssignments,
+      todaysAssignments,
+      totalClients,
+      weeklyFinancials,
+      employees,
+    ] = await Promise.all([
       BusinessEmployeeService.getEmployeeStats(req.businessOwnerId),
       PayCalculatorService.getFinancialSummary(req.businessOwnerId, thirtyDaysAgo, today),
       EmployeeJobAssignmentService.getUpcomingAssignments(req.businessOwnerId, today, thirtyDaysFromNow),
       EmployeeJobAssignmentService.getUnpaidAssignments(req.businessOwnerId),
+      EmployeeJobAssignmentService.getUpcomingAssignments(req.businessOwnerId, today, today),
+      CleanerClient.count({ where: { cleanerId: req.businessOwnerId, status: "active" } }),
+      PayCalculatorService.getFinancialSummary(req.businessOwnerId, weekStart, today),
+      BusinessEmployeeService.getEmployeesByBusinessOwner(req.businessOwnerId, { status: ["active"] }),
     ]);
+
+    // Get today's assigned appointments
+    const assignedAppointmentIds = todaysAssignments.map(a => a.appointmentId);
+    const assignedAppointments = todaysAssignments.map(assignment => {
+      // Decrypt employee name (BusinessEmployee has encrypted PII fields)
+      const employeeFirstName = assignment.employee?.firstName
+        ? EncryptionService.decrypt(assignment.employee.firstName)
+        : null;
+      const employeeLastName = assignment.employee?.lastName
+        ? EncryptionService.decrypt(assignment.employee.lastName)
+        : null;
+
+      // Decrypt client/user name (User has encrypted PII fields)
+      const clientFirstName = assignment.appointment?.home?.user?.firstName
+        ? EncryptionService.decrypt(assignment.appointment.home.user.firstName)
+        : null;
+      const clientLastName = assignment.appointment?.home?.user?.lastName
+        ? EncryptionService.decrypt(assignment.appointment.home.user.lastName)
+        : null;
+
+      // Decrypt address (UserHomes has encrypted address)
+      const address = assignment.appointment?.home?.address
+        ? EncryptionService.decrypt(assignment.appointment.home.address)
+        : null;
+
+      return {
+        id: assignment.appointmentId,
+        date: assignment.appointment?.date,
+        status: assignment.status,
+        startTime: assignment.appointment?.startTime,
+        assignedEmployee: assignment.employee ? {
+          id: assignment.employee.id,
+          firstName: employeeFirstName,
+          lastName: employeeLastName,
+        } : (assignment.isSelfAssignment ? { id: null, firstName: "You", lastName: "(Self)" } : null),
+        clientName: clientFirstName && clientLastName
+          ? `${clientFirstName} ${clientLastName}`
+          : "Unknown Client",
+        address,
+        totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
+      };
+    });
+
+    // Get today's unassigned appointments (appointments without assignments)
+    // This includes appointments that were previously assigned but are now unassigned
+    const cancelledTodayAssignments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId: req.businessOwnerId,
+        status: "cancelled",
+      },
+      attributes: ["appointmentId"],
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: today,
+            wasCancelled: { [Op.ne]: true },
+            completed: { [Op.ne]: true },
+          },
+          attributes: ["id"],
+        },
+      ],
+    });
+    const cancelledTodayAppointmentIds = cancelledTodayAssignments
+      .filter(a => a.appointment && !assignedAppointmentIds.includes(a.appointmentId))
+      .map(a => a.appointmentId);
+
+    const todaysUnassignedAppointments = await UserAppointments.findAll({
+      where: {
+        date: today,
+        wasCancelled: { [Op.ne]: true },
+        completed: { [Op.ne]: true },
+        [Op.and]: [
+          // Either booked by this business owner OR has a cancelled assignment from this business owner
+          {
+            [Op.or]: [
+              { bookedByCleanerId: req.businessOwnerId },
+              { id: { [Op.in]: cancelledTodayAppointmentIds.length > 0 ? cancelledTodayAppointmentIds : [0] } },
+            ],
+          },
+          // Exclude actively assigned appointments
+          ...(assignedAppointmentIds.length > 0
+            ? [{ id: { [Op.notIn]: assignedAppointmentIds } }]
+            : []),
+        ],
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+      order: [["date", "ASC"]],
+    });
+
+    const unassignedAppointmentsList = todaysUnassignedAppointments.map(apt => {
+      // Decrypt client/user name
+      const clientFirstName = apt.home?.user?.firstName
+        ? EncryptionService.decrypt(apt.home.user.firstName)
+        : null;
+      const clientLastName = apt.home?.user?.lastName
+        ? EncryptionService.decrypt(apt.home.user.lastName)
+        : null;
+
+      // Decrypt address
+      const address = apt.home?.address
+        ? EncryptionService.decrypt(apt.home.address)
+        : "";
+
+      return {
+        id: apt.id,
+        date: apt.date,
+        status: "unassigned",
+        startTime: apt.startTime,
+        assignedEmployee: null,
+        clientName: clientFirstName && clientLastName
+          ? `${clientFirstName} ${clientLastName}`
+          : "Unknown Client",
+        address,
+        totalPrice: parseFloat(apt.price) * 100,
+      };
+    });
+
+    // Combine assigned and unassigned appointments
+    const todaysAppointments = [...assignedAppointments, ...unassignedAppointmentsList]
+      .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+
+    // Count unpaid client appointments (appointments where paymentStatus is not 'paid')
+    const unpaidAppointments = upcomingAssignments.filter(
+      a => a.appointment?.paymentStatus &&
+           a.appointment.paymentStatus !== "paid" &&
+           a.appointment.paymentStatus !== "not_required"
+    ).length;
 
     res.json({
       employeeStats,
@@ -481,6 +727,14 @@ router.get("/dashboard", async (req, res) => {
       upcomingJobCount: upcomingAssignments.length,
       unpaidPayrollCount: unpaidAssignments.length,
       unpaidPayrollTotal: unpaidAssignments.reduce((sum, a) => sum + a.payAmount, 0),
+      // New data for profile
+      todaysAppointments,
+      weeklyRevenue: weeklyFinancials?.totalRevenue || 0,
+      monthlyRevenue: financials?.totalRevenue || 0,
+      unpaidAppointments,
+      totalClients,
+      // Employees for My Team section
+      employees: BusinessEmployeeSerializer.serializeArray(employees),
     });
   } catch (error) {
     console.error("Error fetching dashboard:", error);
@@ -490,6 +744,8 @@ router.get("/dashboard", async (req, res) => {
 
 /**
  * GET /calendar - Get calendar data
+ * Returns both assigned jobs (via EmployeeJobAssignment) and unassigned jobs
+ * (appointments from business owner's clients without assignments)
  */
 router.get("/calendar", async (req, res) => {
   try {
@@ -501,36 +757,167 @@ router.get("/calendar", async (req, res) => {
     const startDate = new Date(targetYear, targetMonth, 1).toISOString().split("T")[0];
     const endDate = new Date(targetYear, targetMonth + 1, 0).toISOString().split("T")[0];
 
+    // Get all assigned jobs
     const assignments = await EmployeeJobAssignmentService.getUpcomingAssignments(
       req.businessOwnerId,
       startDate,
       endDate
     );
 
-    // Group by date
-    const calendarData = {};
-    for (const assignment of assignments) {
-      const date = assignment.appointment.date;
-      if (!calendarData[date]) {
-        calendarData[date] = [];
-      }
-      calendarData[date].push({
+    // Get all appointments from business owner's clients in this date range
+    // that don't have an active assignment (unassigned jobs)
+    // This includes:
+    // 1. Appointments booked by this business owner
+    // 2. Appointments that have a cancelled/unassigned assignment from this business owner
+    const assignedAppointmentIds = assignments.map(a => a.appointmentId);
+
+    // Find appointments that were previously assigned but are now unassigned (cancelled)
+    const cancelledAssignments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId: req.businessOwnerId,
+        status: "cancelled",
+      },
+      attributes: ["appointmentId"],
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: {
+              [Op.between]: [startDate, endDate],
+            },
+            wasCancelled: { [Op.ne]: true },
+            completed: { [Op.ne]: true },
+          },
+          attributes: ["id"],
+        },
+      ],
+    });
+    const cancelledAppointmentIds = cancelledAssignments
+      .filter(a => a.appointment && !assignedAppointmentIds.includes(a.appointmentId))
+      .map(a => a.appointmentId);
+
+    const unassignedAppointments = await UserAppointments.findAll({
+      where: {
+        date: {
+          [Op.between]: [startDate, endDate],
+        },
+        wasCancelled: { [Op.ne]: true },
+        completed: { [Op.ne]: true },
+        [Op.and]: [
+          // Either booked by this business owner OR has a cancelled assignment from this business owner
+          {
+            [Op.or]: [
+              { bookedByCleanerId: req.businessOwnerId },
+              { id: { [Op.in]: cancelledAppointmentIds.length > 0 ? cancelledAppointmentIds : [0] } },
+            ],
+          },
+          // Exclude actively assigned appointments
+          ...(assignedAppointmentIds.length > 0
+            ? [{ id: { [Op.notIn]: assignedAppointmentIds } }]
+            : []),
+        ],
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+      order: [["date", "ASC"]],
+    });
+
+    // Format unassigned jobs
+    const unassignedJobs = unassignedAppointments.map(apt => {
+      const clientFirstName = apt.home?.user?.firstName
+        ? EncryptionService.decrypt(apt.home.user.firstName)
+        : null;
+      const clientLastName = apt.home?.user?.lastName
+        ? EncryptionService.decrypt(apt.home.user.lastName)
+        : null;
+      const address = apt.home?.address
+        ? EncryptionService.decrypt(apt.home.address)
+        : "";
+
+      return {
+        id: apt.id,
+        date: apt.date,
+        startTime: apt.startTime,
+        clientName: clientFirstName && clientLastName
+          ? `${clientFirstName} ${clientLastName}`
+          : "Unknown Client",
+        address,
+        city: apt.home?.city || "",
+        state: apt.home?.state || "",
+        totalPrice: parseFloat(apt.price) * 100,
+        status: apt.status,
+      };
+    });
+
+    // Format assignments with full appointment data
+    const formattedAssignments = assignments.map(assignment => {
+      // Decrypt employee name
+      const employeeFirstName = assignment.employee?.firstName
+        ? EncryptionService.decrypt(assignment.employee.firstName)
+        : null;
+      const employeeLastName = assignment.employee?.lastName
+        ? EncryptionService.decrypt(assignment.employee.lastName)
+        : null;
+
+      // Decrypt client name
+      const clientFirstName = assignment.appointment?.home?.user?.firstName
+        ? EncryptionService.decrypt(assignment.appointment.home.user.firstName)
+        : null;
+      const clientLastName = assignment.appointment?.home?.user?.lastName
+        ? EncryptionService.decrypt(assignment.appointment.home.user.lastName)
+        : null;
+
+      // Decrypt address
+      const address = assignment.appointment?.home?.address
+        ? EncryptionService.decrypt(assignment.appointment.home.address)
+        : "";
+
+      return {
         id: assignment.id,
         appointmentId: assignment.appointmentId,
-        employeeName: assignment.employee
-          ? `${assignment.employee.firstName} ${assignment.employee.lastName}`
-          : "Self",
-        clientName: assignment.appointment.user
-          ? `${assignment.appointment.user.firstName} ${assignment.appointment.user.lastName}`
-          : "Unknown",
-        address: assignment.appointment.home?.address,
+        businessEmployeeId: assignment.businessEmployeeId,
+        status: assignment.status,
         payAmount: assignment.payAmount,
         isSelfAssignment: assignment.isSelfAssignment,
-        status: assignment.status,
-      });
-    }
+        employee: assignment.employee ? {
+          id: assignment.employee.id,
+          firstName: employeeFirstName,
+          lastName: employeeLastName,
+        } : null,
+        appointment: {
+          id: assignment.appointment?.id,
+          date: assignment.appointment?.date,
+          startTime: assignment.appointment?.startTime,
+          clientName: clientFirstName && clientLastName
+            ? `${clientFirstName} ${clientLastName}`
+            : "Unknown Client",
+          address,
+          city: assignment.appointment?.home?.city || "",
+          state: assignment.appointment?.home?.state || "",
+          totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
+          status: assignment.appointment?.status,
+        },
+      };
+    });
 
-    res.json({ calendar: calendarData, month: targetMonth + 1, year: targetYear });
+    res.json({
+      unassignedJobs,
+      assignments: formattedAssignments,
+      month: targetMonth + 1,
+      year: targetYear,
+    });
   } catch (error) {
     console.error("Error fetching calendar:", error);
     res.status(500).json({ error: error.message });
@@ -580,6 +967,125 @@ router.get("/payroll-summary", async (req, res) => {
   } catch (error) {
     console.error("Error fetching payroll summary:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /payroll/history - Get paid payroll history
+ */
+router.get("/payroll/history", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    const paidAssignments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId: req.businessOwnerId,
+        payoutStatus: { [Op.in]: ["paid", "paid_outside_platform"] },
+        isSelfAssignment: false,
+      },
+      include: [
+        {
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "firstName", "lastName", "payType", "defaultHourlyRate"],
+        },
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: { [Op.gte]: thirtyDaysAgo },
+          },
+          attributes: ["id", "date", "price"],
+          include: [
+            {
+              model: UserHomes,
+              as: "home",
+              attributes: ["id", "address"],
+            },
+          ],
+        },
+      ],
+      order: [["completedAt", "DESC"]],
+      limit,
+    });
+
+    const payouts = EmployeeJobAssignmentSerializer.serializeForPayoutArray(paidAssignments);
+
+    res.json({ payouts });
+  } catch (error) {
+    console.error("Error fetching payroll history:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Timesheet & Hours Tracking Routes
+// =====================================
+
+/**
+ * GET /timesheet - Get timesheet data for all employees
+ * Returns hours summary by employee for a date range
+ */
+router.get("/timesheet", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const now = new Date();
+
+    // Default to current week (Sunday to Saturday)
+    const dayOfWeek = now.getDay();
+    const defaultStart = new Date(now);
+    defaultStart.setDate(now.getDate() - dayOfWeek);
+    const defaultEnd = new Date(defaultStart);
+    defaultEnd.setDate(defaultStart.getDate() + 6);
+
+    const start = startDate || defaultStart.toISOString().split("T")[0];
+    const end = endDate || defaultEnd.toISOString().split("T")[0];
+
+    const timesheetData = await EmployeeJobAssignmentService.getTimesheetData(
+      req.businessOwnerId,
+      start,
+      end
+    );
+
+    res.json(TimesheetSerializer.serializeTimesheetData(timesheetData));
+  } catch (error) {
+    console.error("Error fetching timesheet:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /employees/:employeeId/hours - Get hours detail for a specific employee
+ * Returns daily and weekly breakdown of hours
+ */
+router.get("/employees/:employeeId/hours", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const now = new Date();
+
+    // Default to last 30 days
+    const defaultStart = new Date(now);
+    defaultStart.setDate(now.getDate() - 30);
+
+    const start = startDate || defaultStart.toISOString().split("T")[0];
+    const end = endDate || now.toISOString().split("T")[0];
+
+    const hoursDetail = await EmployeeJobAssignmentService.getEmployeeHoursDetail(
+      req.businessOwnerId,
+      parseInt(req.params.employeeId),
+      start,
+      end
+    );
+
+    res.json(TimesheetSerializer.serializeEmployeeHoursDetail(hoursDetail));
+  } catch (error) {
+    console.error("Error fetching employee hours:", error);
+    if (error.message === "Employee not found") {
+      res.status(404).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
   }
 });
 
@@ -696,20 +1202,10 @@ router.get("/analytics/clients", async (req, res) => {
 });
 
 /**
- * GET /analytics/financials - Get financial breakdown (premium)
+ * GET /analytics/financials - Get financial breakdown (available to all business owners)
  */
 router.get("/analytics/financials", async (req, res) => {
   try {
-    // Check access
-    const access = await BusinessAnalyticsService.getAnalyticsAccess(req.businessOwnerId);
-    if (!access.features.advancedFinancials) {
-      return res.status(403).json({
-        error: "Advanced financials requires premium tier",
-        tier: access.tier,
-        qualification: access.qualification,
-      });
-    }
-
     const financials = await BusinessAnalyticsService.getFinancialAnalytics(
       req.businessOwnerId,
       {
@@ -866,7 +1362,6 @@ router.get("/payouts/pending", async (req, res) => {
 router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
   try {
     const { note } = req.body;
-    const { EmployeeJobAssignment } = require("../../../models");
 
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
@@ -887,9 +1382,175 @@ router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
       paidOutsidePlatformNote: note,
     });
 
-    res.json({ message: "Marked as paid outside platform", assignment });
+    res.json({ message: "Marked as paid outside platform", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
   } catch (error) {
     console.error("Error marking as paid outside:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Client Payment Tracking Routes
+// =====================================
+
+/**
+ * GET /client-payments - Get unpaid client appointments
+ */
+router.get("/client-payments", async (req, res) => {
+  try {
+    const { Op } = require("sequelize");
+
+    // Get all appointments for this business owner's clients that are unpaid
+    const appointments = await UserAppointments.findAll({
+      where: {
+        bookedByCleanerId: req.businessOwnerId,
+        completed: true,
+        paymentStatus: {
+          [Op.notIn]: ["paid", "not_required"],
+        },
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "email"],
+            },
+          ],
+        },
+      ],
+      order: [["date", "ASC"]],
+    });
+
+    const unpaidAppointments = appointments.map((apt) => {
+      const clientFirstName = apt.home?.user?.firstName
+        ? EncryptionService.decrypt(apt.home.user.firstName)
+        : null;
+      const clientLastName = apt.home?.user?.lastName
+        ? EncryptionService.decrypt(apt.home.user.lastName)
+        : null;
+      const clientEmail = apt.home?.user?.email
+        ? EncryptionService.decrypt(apt.home.user.email)
+        : null;
+      const address = apt.home?.address
+        ? EncryptionService.decrypt(apt.home.address)
+        : null;
+
+      return {
+        id: apt.id,
+        date: apt.date,
+        price: apt.price,
+        paymentStatus: apt.paymentStatus,
+        clientName: clientFirstName && clientLastName
+          ? `${clientFirstName} ${clientLastName}`
+          : "Unknown Client",
+        clientEmail,
+        address,
+      };
+    });
+
+    const totalUnpaid = unpaidAppointments.reduce((sum, a) => sum + (a.price || 0), 0);
+
+    res.json({ unpaidAppointments, totalUnpaid });
+  } catch (error) {
+    console.error("Error fetching client payments:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /appointments/:id/mark-paid - Mark appointment as paid by client
+ */
+router.post("/appointments/:id/mark-paid", async (req, res) => {
+  try {
+    const appointmentId = parseInt(req.params.id);
+
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id: appointmentId,
+        bookedByCleanerId: req.businessOwnerId,
+      },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    await appointment.update({
+      paymentStatus: "paid",
+      manuallyPaid: true,
+    });
+
+    res.json({ success: true, appointment: AppointmentSerializer.serializeOne(appointment) });
+  } catch (error) {
+    console.error("Error marking appointment as paid:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /appointments/:id/send-reminder - Send payment reminder to client
+ */
+router.post("/appointments/:id/send-reminder", async (req, res) => {
+  try {
+    const appointmentId = parseInt(req.params.id);
+
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id: appointmentId,
+        bookedByCleanerId: req.businessOwnerId,
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "email"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Decrypt client email and name
+    const clientEmailEncrypted = appointment.home?.user?.email;
+    if (!clientEmailEncrypted) {
+      return res.status(400).json({ error: "Client email not found" });
+    }
+    const clientEmail = EncryptionService.decrypt(clientEmailEncrypted);
+    const clientFirstName = appointment.home?.user?.firstName
+      ? EncryptionService.decrypt(appointment.home.user.firstName)
+      : "Client";
+
+    // Get the business owner info for the email
+    const businessOwner = await User.findByPk(req.businessOwnerId);
+    const businessOwnerFirstName = businessOwner?.firstName
+      ? EncryptionService.decrypt(businessOwner.firstName)
+      : null;
+
+    // Send payment reminder email
+    const Email = require("../../../services/sendNotifications/EmailClass");
+    await Email.sendPaymentReminder(
+      clientEmail,
+      clientFirstName,
+      appointment.date,
+      appointment.price,
+      businessOwner?.businessName || `${businessOwnerFirstName}'s Cleaning`
+    );
+
+    res.json({ success: true, message: "Payment reminder sent" });
+  } catch (error) {
+    console.error("Error sending payment reminder:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -909,7 +1570,7 @@ router.get("/job-flows", async (req, res) => {
       { status }
     );
 
-    res.json({ flows });
+    res.json({ flows: CustomJobFlowSerializer.serializeArrayForList(flows) });
   } catch (error) {
     console.error("Error fetching job flows:", error);
     res.status(500).json({ error: error.message });
@@ -935,7 +1596,7 @@ router.post("/job-flows", async (req, res) => {
       isDefault,
     });
 
-    res.status(201).json({ message: "Job flow created", flow });
+    res.status(201).json({ message: "Job flow created", flow: CustomJobFlowSerializer.serializeOne(flow) });
   } catch (error) {
     console.error("Error creating job flow:", error);
     res.status(400).json({ error: error.message });
@@ -948,7 +1609,7 @@ router.post("/job-flows", async (req, res) => {
 router.get("/job-flows/assignments", async (req, res) => {
   try {
     const assignments = await CustomJobFlowService.getFlowAssignments(req.businessOwnerId);
-    res.json({ assignments });
+    res.json({ assignments: ClientJobFlowAssignmentSerializer.serializeArrayForList(assignments) });
   } catch (error) {
     console.error("Error fetching flow assignments:", error);
     res.status(500).json({ error: error.message });
@@ -965,7 +1626,7 @@ router.get("/job-flows/:flowId", async (req, res) => {
       req.businessOwnerId
     );
 
-    res.json({ flow });
+    res.json({ flow: CustomJobFlowSerializer.serializeOne(flow, { includeChecklist: true, includeAssignments: true }) });
   } catch (error) {
     console.error("Error fetching job flow:", error);
     res.status(404).json({ error: error.message });
@@ -983,7 +1644,7 @@ router.put("/job-flows/:flowId", async (req, res) => {
       req.body
     );
 
-    res.json({ message: "Job flow updated", flow });
+    res.json({ message: "Job flow updated", flow: CustomJobFlowSerializer.serializeOne(flow) });
   } catch (error) {
     console.error("Error updating job flow:", error);
     res.status(400).json({ error: error.message });
@@ -1008,7 +1669,7 @@ router.delete("/job-flows/:flowId", async (req, res) => {
         parseInt(req.params.flowId),
         req.businessOwnerId
       );
-      res.json({ message: "Job flow archived", flow });
+      res.json({ message: "Job flow archived", flow: CustomJobFlowSerializer.serializeOne(flow) });
     }
   } catch (error) {
     console.error("Error deleting job flow:", error);
@@ -1026,7 +1687,7 @@ router.post("/job-flows/:flowId/set-default", async (req, res) => {
       parseInt(req.params.flowId)
     );
 
-    res.json({ message: "Default flow updated", flow });
+    res.json({ message: "Default flow updated", flow: CustomJobFlowSerializer.serializeOne(flow) });
   } catch (error) {
     console.error("Error setting default flow:", error);
     res.status(400).json({ error: error.message });
@@ -1060,7 +1721,7 @@ router.get("/job-flows/:flowId/checklist", async (req, res) => {
       req.businessOwnerId
     );
 
-    res.json({ checklist: flow.checklist || null });
+    res.json({ checklist: flow.checklist ? CustomJobFlowChecklistSerializer.serializeOne(flow.checklist) : null });
   } catch (error) {
     console.error("Error fetching checklist:", error);
     res.status(404).json({ error: error.message });
@@ -1084,7 +1745,7 @@ router.post("/job-flows/:flowId/checklist", async (req, res) => {
       { sections }
     );
 
-    res.status(201).json({ message: "Checklist created", checklist });
+    res.status(201).json({ message: "Checklist created", checklist: CustomJobFlowChecklistSerializer.serializeOne(checklist) });
   } catch (error) {
     console.error("Error creating checklist:", error);
     res.status(400).json({ error: error.message });
@@ -1108,7 +1769,7 @@ router.put("/job-flows/:flowId/checklist", async (req, res) => {
       { sections }
     );
 
-    res.json({ message: "Checklist updated", checklist });
+    res.json({ message: "Checklist updated", checklist: CustomJobFlowChecklistSerializer.serializeOne(checklist) });
   } catch (error) {
     console.error("Error updating checklist:", error);
     res.status(400).json({ error: error.message });
@@ -1145,7 +1806,7 @@ router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
       versionId
     );
 
-    res.status(201).json({ message: "Platform checklist forked", checklist });
+    res.status(201).json({ message: "Platform checklist forked", checklist: CustomJobFlowChecklistSerializer.serializeOne(checklist) });
   } catch (error) {
     console.error("Error forking platform checklist:", error);
     res.status(400).json({ error: error.message });
@@ -1166,7 +1827,7 @@ router.put("/job-flows/:flowId/checklist/items/:itemId/notes", async (req, res) 
       notes
     );
 
-    res.json({ message: "Item notes updated", checklist });
+    res.json({ message: "Item notes updated", checklist: CustomJobFlowChecklistSerializer.serializeOne(checklist) });
   } catch (error) {
     console.error("Error updating item notes:", error);
     res.status(400).json({ error: error.message });
@@ -1194,7 +1855,7 @@ router.post("/job-flows/assignments/client/:clientId", async (req, res) => {
       flowId
     );
 
-    res.status(201).json({ message: "Flow assigned to client", assignment });
+    res.status(201).json({ message: "Flow assigned to client", assignment: ClientJobFlowAssignmentSerializer.serializeOne(assignment) });
   } catch (error) {
     console.error("Error assigning flow to client:", error);
     res.status(400).json({ error: error.message });
@@ -1218,7 +1879,7 @@ router.post("/job-flows/assignments/home/:homeId", async (req, res) => {
       flowId
     );
 
-    res.status(201).json({ message: "Flow assigned to home", assignment });
+    res.status(201).json({ message: "Flow assigned to home", assignment: ClientJobFlowAssignmentSerializer.serializeOne(assignment) });
   } catch (error) {
     console.error("Error assigning flow to home:", error);
     res.status(400).json({ error: error.message });
@@ -1239,6 +1900,94 @@ router.delete("/job-flows/assignments/:assignmentId", async (req, res) => {
   } catch (error) {
     console.error("Error removing flow assignment:", error);
     res.status(400).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Multi-Cleaner Team Booking Routes
+// =====================================
+
+/**
+ * GET /team-for-job - Get available team members for a multi-cleaner job
+ * Used when business owner wants to book a marketplace multi-cleaner job with their team
+ */
+router.get("/team-for-job", async (req, res) => {
+  try {
+    const { jobDate, startTime } = req.query;
+    const businessOwnerId = req.businessOwnerId;
+
+    if (!jobDate) {
+      return res.status(400).json({ error: "jobDate is required" });
+    }
+
+    // Get business owner's user record to check Stripe Connect status
+    const businessOwner = await User.findByPk(businessOwnerId);
+    if (!businessOwner) {
+      return res.status(404).json({ error: "Business owner not found" });
+    }
+
+    // Check if business owner can be included (has Stripe Connect)
+    const selfHasStripeConnect = !!businessOwner.stripeConnectAccountId;
+
+    // Get all active employees with their availability
+    const employees = await BusinessEmployeeService.getEmployeesByBusinessOwner(
+      businessOwnerId,
+      { status: ["active"] }
+    );
+
+    // Parse job date for availability check
+    const date = new Date(jobDate);
+    const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "lowercase" });
+
+    // Check availability for each employee
+    const teamMembers = employees.map((emp) => {
+      let isAvailable = true;
+      let unavailableReason = null;
+
+      // Check if employee has accepted invite (has userId)
+      if (!emp.userId) {
+        isAvailable = false;
+        unavailableReason = "Pending invite acceptance";
+      } else {
+        // Check schedule availability
+        const schedule = emp.availableSchedule || {};
+        const daySchedule = schedule[dayOfWeek];
+
+        if (daySchedule && !daySchedule.available) {
+          isAvailable = false;
+          unavailableReason = "Not scheduled to work this day";
+        } else if (daySchedule && startTime) {
+          // Check time range if provided
+          const jobTime = startTime;
+          const start = daySchedule.start || "00:00";
+          const end = daySchedule.end || "23:59";
+          if (jobTime < start || jobTime > end) {
+            isAvailable = false;
+            unavailableReason = `Outside working hours (${start} - ${end})`;
+          }
+        }
+      }
+
+      return {
+        id: emp.id,
+        userId: emp.userId,
+        firstName: emp.firstName ? EncryptionService.decrypt(emp.firstName) : null,
+        lastName: emp.lastName ? EncryptionService.decrypt(emp.lastName) : null,
+        isAvailable,
+        unavailableReason,
+        // Hourly rate in dollars (stored in cents in DB)
+        hourlyRate: emp.defaultHourlyRate ? emp.defaultHourlyRate / 100 : null,
+      };
+    });
+
+    res.json({
+      canIncludeSelf: true, // Business owner can always include themselves
+      selfHasStripeConnect,
+      employees: teamMembers,
+    });
+  } catch (error) {
+    console.error("Error fetching team for job:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 

@@ -956,7 +956,7 @@ async function createDemoAccounts() {
 				email: "mike.demo@sparkle.demo",
 				status: "active",
 				payType: "hourly",
-				payRate: 20,
+				defaultHourlyRate: 2000, // $20/hr in cents
 			},
 		];
 
@@ -988,14 +988,17 @@ async function createDemoAccounts() {
 				if (!existingBizEmp) {
 					await BusinessEmployee.create({
 						businessOwnerId: createdAccounts.businessOwner.id,
-						cleanerId: empUser.id,
+						userId: empUser.id,
 						firstName: empData.firstName,
 						lastName: empData.lastName,
 						email: empData.email,
 						status: empData.status,
-						payType: empData.payType,
-						payRate: empData.payRate,
+						payType: empData.payType || "hourly",
+						payRate: empData.payRate || null,
+						defaultHourlyRate: empData.defaultHourlyRate || null,
+						defaultJobRate: empData.defaultJobRate || null,
 						canSeeFullSchedule: true,
+						canViewJobEarnings: true,
 						invitationAcceptedAt: new Date(),
 					});
 					console.log(`  - Created employee: ${empData.firstName} ${empData.lastName}`);
@@ -1117,8 +1120,8 @@ async function createDemoAccounts() {
 					lastName: "Employee",
 					email: DEMO_ACCOUNTS.employee.email,
 					status: "active",
-					payType: "percentage",
-					payRate: 70,
+					payType: "hourly",
+					defaultHourlyRate: 2500, // $25/hr in cents
 					canSeeFullSchedule: true,
 					canViewJobEarnings: true,
 					invitationAcceptedAt: new Date(),
@@ -1356,7 +1359,7 @@ async function createDemoAccounts() {
 							paymentStatus: "paid",
 							amountPaid: 16000,
 							completionStatus: "approved",
-							cleanerId: createdAccounts.businessOwner.id,
+							bookedByCleanerId: createdAccounts.businessOwner.id,
 						});
 
 						// Create job assignment for past appointments
@@ -1426,7 +1429,7 @@ async function createDemoAccounts() {
 							timeToBeCompleted: "2.5",
 							paymentStatus: "pending",
 							amountPaid: 0,
-							cleanerId: createdAccounts.businessOwner.id,
+							bookedByCleanerId: createdAccounts.businessOwner.id,
 							sheetConfigurations: sheetConfigs,
 							towelConfigurations: towelConfigs,
 						});
@@ -1898,10 +1901,10 @@ async function createDemoAccounts() {
 		console.log("Creating employees for large business...");
 		const largeBusinessEmployees = [
 			{ firstName: "Carlos", lastName: "Rodriguez", email: "carlos.lb@sparkle.demo", payType: "percentage", payRate: 70 },
-			{ firstName: "Aisha", lastName: "Patel", email: "aisha.lb@sparkle.demo", payType: "percentage", payRate: 70 },
-			{ firstName: "James", lastName: "Chen", email: "james.lb@sparkle.demo", payType: "hourly", payRate: 22 },
+			{ firstName: "Aisha", lastName: "Patel", email: "aisha.lb@sparkle.demo", payType: "per_job", defaultJobRate: 7500 }, // $75/job
+			{ firstName: "James", lastName: "Chen", email: "james.lb@sparkle.demo", payType: "hourly", defaultHourlyRate: 2200 },
 			{ firstName: "Maria", lastName: "Santos", email: "maria.lb@sparkle.demo", payType: "percentage", payRate: 65 },
-			{ firstName: "Robert", lastName: "Kim", email: "robert.lb@sparkle.demo", payType: "hourly", payRate: 20 },
+			{ firstName: "Robert", lastName: "Kim", email: "robert.lb@sparkle.demo", payType: "hourly", defaultHourlyRate: 2000 },
 		];
 
 		const createdEmployees = [];
@@ -1933,14 +1936,17 @@ async function createDemoAccounts() {
 				if (!existingBizEmp) {
 					await BusinessEmployee.create({
 						businessOwnerId: largeBizOwner.id,
-						cleanerId: empUser.id,
+						userId: empUser.id,
 						firstName: empData.firstName,
 						lastName: empData.lastName,
 						email: empData.email,
 						status: "active",
-						payType: empData.payType,
-						payRate: empData.payRate,
+						payType: empData.payType || "hourly",
+						payRate: empData.payRate || null,
+						defaultHourlyRate: empData.defaultHourlyRate || null,
+						defaultJobRate: empData.defaultJobRate || null,
 						canSeeFullSchedule: true,
+						canViewJobEarnings: true,
 						invitationAcceptedAt: new Date(),
 					});
 				}
@@ -2155,7 +2161,7 @@ async function createDemoAccounts() {
 						paymentStatus: "paid",
 						amountPaid: (180 + (i * 10)) * 100,
 						completionStatus: "approved",
-						cleanerId: largeBizOwner.id,
+						bookedByCleanerId: largeBizOwner.id,
 					});
 				}
 

@@ -501,10 +501,10 @@ class BusinessAnalyticsService {
 	}
 
 	/**
-	 * Get financial analytics (premium feature)
+	 * Get financial analytics
 	 * @param {number} businessOwnerId - Business owner user ID
 	 * @param {Object} options - Date range options
-	 * @returns {Promise<Object>} Financial breakdown
+	 * @returns {Promise<Object>} Financial breakdown with pending and completed data
 	 */
 	static async getFinancialAnalytics(businessOwnerId, options = {}) {
 		const {
@@ -514,15 +514,25 @@ class BusinessAnalyticsService {
 		} = require("../models");
 
 		const now = new Date();
+		const today = now.toISOString().split("T")[0];
 		const { months = 6 } = options;
 		const startDate = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+
+		// Calculate time period boundaries
+		const thisWeekStart = new Date(now);
+		thisWeekStart.setDate(now.getDate() - now.getDay());
+		thisWeekStart.setHours(0, 0, 0, 0);
+
+		const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+		const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+		const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
 		try {
 			const config = await PricingConfig.getActive();
 			const businessFee = await BusinessVolumeService.getBusinessFee(businessOwnerId);
 
 			// Get all completed assignments in period
-			const assignments = await EmployeeJobAssignment.findAll({
+			const completedAssignments = await EmployeeJobAssignment.findAll({
 				where: {
 					businessOwnerId,
 					status: "completed",
@@ -533,9 +543,73 @@ class BusinessAnalyticsService {
 					where: {
 						date: { [Op.gte]: startDate.toISOString().split("T")[0] },
 					},
-					attributes: ["id", "date", "price"],
+					attributes: ["id", "date", "price", "paymentStatus"],
 				}],
 			});
+
+			// Get pending/upcoming assignments (assigned but not completed)
+			const pendingAssignments = await EmployeeJobAssignment.findAll({
+				where: {
+					businessOwnerId,
+					status: { [Op.in]: ["assigned", "in_progress"] },
+				},
+				include: [{
+					model: UserAppointments,
+					as: "appointment",
+					where: {
+						date: { [Op.gte]: today },
+					},
+					attributes: ["id", "date", "price", "paymentStatus"],
+				}],
+			});
+
+			// Helper to calculate financials for a set of assignments
+			const calculateFinancials = (assignments) => {
+				const grossRevenue = assignments.reduce(
+					(sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100),
+					0
+				);
+				const totalPayroll = assignments.reduce(
+					(sum, a) => sum + (a.payAmount || 0),
+					0
+				);
+				const platformFees = Math.round(grossRevenue * businessFee.feePercent);
+				const netRevenue = grossRevenue - platformFees;
+				const netProfit = netRevenue - totalPayroll;
+				const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue * 100).toFixed(1) : 0;
+
+				return {
+					grossRevenue,
+					grossRevenueFormatted: `$${(grossRevenue / 100).toFixed(2)}`,
+					platformFees,
+					platformFeesFormatted: `$${(platformFees / 100).toFixed(2)}`,
+					totalPayroll,
+					totalPayrollFormatted: `$${(totalPayroll / 100).toFixed(2)}`,
+					netProfit,
+					netProfitFormatted: `$${(netProfit / 100).toFixed(2)}`,
+					profitMargin: parseFloat(profitMargin),
+					jobCount: assignments.length,
+				};
+			};
+
+			// Filter assignments by time period
+			const filterByPeriod = (assignments, startDate, endDate = null) => {
+				return assignments.filter(a => {
+					const date = new Date(a.appointment.date);
+					if (endDate) {
+						return date >= startDate && date <= endDate;
+					}
+					return date >= startDate;
+				});
+			};
+
+			// Calculate period-specific data
+			const thisWeekCompleted = filterByPeriod(completedAssignments, thisWeekStart);
+			const thisMonthCompleted = filterByPeriod(completedAssignments, thisMonthStart);
+			const lastMonthCompleted = filterByPeriod(completedAssignments, lastMonthStart, lastMonthEnd);
+
+			// Use completedAssignments for the legacy 'assignments' variable
+			const assignments = completedAssignments;
 
 			// Calculate totals
 			const grossRevenue = assignments.reduce(
@@ -603,12 +677,19 @@ class BusinessAnalyticsService {
 				}));
 
 			// Payroll breakdown by status
-			const paidAssignments = assignments.filter(
+			const paidPayrollAssignments = assignments.filter(
 				a => a.payoutStatus === "paid" || a.payoutStatus === "paid_outside_platform"
 			);
-			const pendingPayroll = assignments.filter(a => a.payoutStatus === "pending");
+			const unpaidPayrollAssignments = assignments.filter(a => a.payoutStatus === "pending");
+
+			// Client payment status
+			const paidByClients = assignments.filter(a => a.appointment?.paymentStatus === "paid");
+			const unpaidByClients = assignments.filter(
+				a => a.appointment?.paymentStatus !== "paid" && a.appointment?.paymentStatus !== "not_required"
+			);
 
 			return {
+				// Overall summary for the period
 				summary: {
 					grossRevenue,
 					grossRevenueFormatted: `$${(grossRevenue / 100).toFixed(2)}`,
@@ -625,13 +706,43 @@ class BusinessAnalyticsService {
 					totalJobs: assignments.length,
 					avgJobRevenue: assignments.length > 0 ? Math.round(grossRevenue / assignments.length) : 0,
 				},
-				payrollStatus: {
-					paid: paidAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0),
-					paidFormatted: `$${(paidAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0) / 100).toFixed(2)}`,
-					pending: pendingPayroll.reduce((sum, a) => sum + (a.payAmount || 0), 0),
-					pendingFormatted: `$${(pendingPayroll.reduce((sum, a) => sum + (a.payAmount || 0), 0) / 100).toFixed(2)}`,
-					pendingCount: pendingPayroll.length,
+				// Time period breakdowns
+				periods: {
+					thisWeek: calculateFinancials(thisWeekCompleted),
+					thisMonth: calculateFinancials(thisMonthCompleted),
+					lastMonth: calculateFinancials(lastMonthCompleted),
+					allTime: calculateFinancials(assignments),
 				},
+				// Pending/upcoming jobs
+				pending: {
+					...calculateFinancials(pendingAssignments),
+					jobs: pendingAssignments.map(a => ({
+						id: a.id,
+						appointmentId: a.appointmentId,
+						date: a.appointment?.date,
+						estimatedRevenue: Math.round(parseFloat(a.appointment?.price || 0) * 100),
+						estimatedPayout: a.payAmount || 0,
+					})),
+				},
+				// Payroll status
+				payrollStatus: {
+					paid: paidPayrollAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0),
+					paidFormatted: `$${(paidPayrollAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0) / 100).toFixed(2)}`,
+					paidCount: paidPayrollAssignments.length,
+					pending: unpaidPayrollAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0),
+					pendingFormatted: `$${(unpaidPayrollAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0) / 100).toFixed(2)}`,
+					pendingCount: unpaidPayrollAssignments.length,
+				},
+				// Client payment status
+				clientPayments: {
+					collected: paidByClients.reduce((sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100), 0),
+					collectedFormatted: `$${(paidByClients.reduce((sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100), 0) / 100).toFixed(2)}`,
+					collectedCount: paidByClients.length,
+					outstanding: unpaidByClients.reduce((sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100), 0),
+					outstandingFormatted: `$${(unpaidByClients.reduce((sum, a) => sum + Math.round(parseFloat(a.appointment?.price || 0) * 100), 0) / 100).toFixed(2)}`,
+					outstandingCount: unpaidByClients.length,
+				},
+				// Fee tier info
 				feeTier: {
 					current: businessFee.feeTier,
 					feePercent: businessFee.feePercent * 100,
@@ -767,9 +878,8 @@ class BusinessAnalyticsService {
 			result.clients = await this.getClientAnalytics(businessOwnerId, options);
 		}
 
-		if (access.features.advancedFinancials) {
-			result.financials = await this.getFinancialAnalytics(businessOwnerId, options);
-		}
+		// Financial summary is available to all business owners
+		result.financials = await this.getFinancialAnalytics(businessOwnerId, options);
 
 		// Trends are available to all (basic version)
 		result.trends = await this.getTrends(businessOwnerId, {

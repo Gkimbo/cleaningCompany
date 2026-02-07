@@ -369,10 +369,15 @@ const BusinessOwnerCalendar = ({ state }) => {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>Calendar</Text>
-          <Text style={styles.subtitle}>
-            {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-          </Text>
+          <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+            <Icon name="arrow-left" size={18} color={colors.text.primary} />
+          </Pressable>
+          <View>
+            <Text style={styles.title}>Calendar</Text>
+            <Text style={styles.subtitle}>
+              {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </Text>
+          </View>
         </View>
         <View style={styles.headerActions}>
           <Pressable style={styles.todayButton} onPress={goToToday}>
@@ -538,7 +543,19 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     backgroundColor: colors.background.primary,
   },
-  headerLeft: {},
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
   title: {
     fontSize: typography.fontSize["2xl"],
     fontWeight: typography.fontWeight.bold,

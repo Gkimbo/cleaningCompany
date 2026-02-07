@@ -124,6 +124,13 @@ const SignInForm = ({ state, dispatch }) => {
 							yearsInBusiness: response.user.yearsInBusiness,
 						},
 					});
+					// Set business logo if available
+					if (response.user.businessLogo) {
+						dispatch({
+							type: "SET_BUSINESS_LOGO",
+							payload: response.user.businessLogo,
+						});
+					}
 				}
 				// Store linked accounts for account switching
 				if (response.linkedAccounts && response.linkedAccounts.length > 0) {

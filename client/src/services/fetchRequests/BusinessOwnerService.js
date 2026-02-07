@@ -216,6 +216,30 @@ class BusinessOwnerService {
   }
 
   /**
+   * Get team members available for a specific job (used for team booking)
+   * @param {string} token - Auth token
+   * @param {string} jobDate - Job date (YYYY-MM-DD)
+   * @param {string} startTime - Optional start time (HH:MM)
+   * @returns {Object} { canIncludeSelf, selfHasStripeConnect, employees }
+   */
+  static async getTeamForJob(token, jobDate, startTime = null) {
+    try {
+      const params = new URLSearchParams({ jobDate });
+      if (startTime) params.append("startTime", startTime);
+
+      const response = await fetch(`${API_BASE}/business-owner/team-for-job?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching team for job:", error);
+      return { employees: [] };
+    }
+  }
+
+  /**
    * Resend invitation email to an employee
    * @param {string} token - Auth token
    * @param {number} employeeId - BusinessEmployee ID
@@ -268,6 +292,26 @@ class BusinessOwnerService {
     } catch (error) {
       console.error("[BusinessOwner] Error fetching assignments:", error);
       return { assignments: [] };
+    }
+  }
+
+  /**
+   * Get a single assignment by ID
+   * @param {string} token - Auth token
+   * @param {number} assignmentId - Assignment ID
+   * @returns {Object} { assignment }
+   */
+  static async getAssignmentDetail(token, assignmentId) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching assignment detail:", error);
+      return { error: "Failed to load assignment details" };
     }
   }
 
@@ -559,6 +603,34 @@ class BusinessOwnerService {
       return { success: true, assignment: result.assignment };
     } catch (error) {
       console.error("[BusinessOwner] Error marking paid outside:", error);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  /**
+   * Update hours worked for an assignment (for hourly employees)
+   * @param {string} token - Auth token
+   * @param {number} assignmentId - Assignment ID
+   * @param {number} hoursWorked - Hours worked (will be rounded to nearest 0.5)
+   * @returns {Object} { success, assignment, error }
+   */
+  static async updateHoursWorked(token, assignmentId, hoursWorked) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}/hours`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ hoursWorked }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return { success: false, error: result.error || "Failed to update hours" };
+      }
+      return { success: true, assignment: result.assignment };
+    } catch (error) {
+      console.error("[BusinessOwner] Error updating hours:", error);
       return { success: false, error: "Network error. Please try again." };
     }
   }
@@ -955,6 +1027,165 @@ class BusinessOwnerService {
         label: "50% margin",
       },
     };
+  }
+
+  // =====================
+  // Client Payment Tracking
+  // =====================
+
+  /**
+   * Get unpaid client appointments
+   * @param {string} token - Auth token
+   * @returns {Object} { unpaidAppointments, totalUnpaid }
+   */
+  static async getClientPayments(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/client-payments`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching client payments:", error);
+      return { unpaidAppointments: [], totalUnpaid: 0 };
+    }
+  }
+
+  /**
+   * Mark an appointment as paid by client
+   * @param {string} token - Auth token
+   * @param {number} appointmentId - Appointment ID
+   * @returns {Object} { success, error }
+   */
+  static async markAppointmentPaid(token, appointmentId) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/business-owner/appointments/${appointmentId}/mark-paid`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error marking appointment paid:", error);
+      return { success: false, error: "Failed to mark appointment as paid" };
+    }
+  }
+
+  /**
+   * Send a payment reminder to client
+   * @param {string} token - Auth token
+   * @param {number} appointmentId - Appointment ID
+   * @returns {Object} { success, error }
+   */
+  static async sendPaymentReminder(token, appointmentId) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/business-owner/appointments/${appointmentId}/send-reminder`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error sending payment reminder:", error);
+      return { success: false, error: "Failed to send reminder" };
+    }
+  }
+
+  /**
+   * Get payroll history (paid payments)
+   * @param {string} token - Auth token
+   * @param {number} limit - Number of records to fetch (default 50)
+   * @returns {Object} { payouts: [] }
+   */
+  static async getPayrollHistory(token, limit = 50) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/business-owner/payroll/history?limit=${limit}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        return { payouts: [] };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching payroll history:", error);
+      return { payouts: [] };
+    }
+  }
+
+  // =====================
+  // TIMESHEET & HOURS TRACKING
+  // =====================
+
+  /**
+   * Get timesheet data for all employees
+   * @param {string} token - Auth token
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @param {string} endDate - End date (YYYY-MM-DD)
+   * @returns {Object} Timesheet data with employee summaries
+   */
+  static async getTimesheetData(token, startDate, endDate) {
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
+
+      const url = `${API_BASE}/business-owner/timesheet${params.toString() ? `?${params}` : ""}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching timesheet:", error);
+      return { employees: [], totalHours: 0, totalPay: 0 };
+    }
+  }
+
+  /**
+   * Get hours detail for a specific employee
+   * @param {string} token - Auth token
+   * @param {number} employeeId - BusinessEmployee ID
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @param {string} endDate - End date (YYYY-MM-DD)
+   * @returns {Object} Employee hours with daily and weekly breakdown
+   */
+  static async getEmployeeHours(token, employeeId, startDate, endDate) {
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
+
+      const url = `${API_BASE}/business-owner/employees/${employeeId}/hours${params.toString() ? `?${params}` : ""}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        return { error: result.error || "Failed to fetch hours" };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching employee hours:", error);
+      return { error: "Network error. Please try again." };
+    }
   }
 }
 

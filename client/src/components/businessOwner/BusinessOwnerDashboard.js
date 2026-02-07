@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import PaymentSetupBanner from "./PaymentSetupBanner";
 import {
   colors,
   spacing,
@@ -298,6 +299,9 @@ const BusinessOwnerDashboard = ({ state }) => {
           </Pressable>
         </View>
       )}
+
+      {/* Payment Setup Banner */}
+      <PaymentSetupBanner state={state} />
 
       {/* Stats Grid */}
       <View style={styles.statsGrid}>

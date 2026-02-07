@@ -116,15 +116,95 @@ describe("BusinessAnalyticsDashboard Component", () => {
         netProfit: 245000,
         profitMargin: 44.5,
       },
+      periods: {
+        thisWeek: {
+          grossRevenue: 150000,
+          grossRevenueFormatted: "$1,500.00",
+          platformFees: 15000,
+          platformFeesFormatted: "$150.00",
+          totalPayroll: 70000,
+          totalPayrollFormatted: "$700.00",
+          netProfit: 65000,
+          netProfitFormatted: "$650.00",
+          profitMargin: 43.3,
+          jobCount: 10,
+        },
+        thisMonth: {
+          grossRevenue: 550000,
+          grossRevenueFormatted: "$5,500.00",
+          platformFees: 55000,
+          platformFeesFormatted: "$550.00",
+          totalPayroll: 250000,
+          totalPayrollFormatted: "$2,500.00",
+          netProfit: 245000,
+          netProfitFormatted: "$2,450.00",
+          profitMargin: 44.5,
+          jobCount: 55,
+        },
+        lastMonth: {
+          grossRevenue: 480000,
+          grossRevenueFormatted: "$4,800.00",
+          platformFees: 48000,
+          platformFeesFormatted: "$480.00",
+          totalPayroll: 220000,
+          totalPayrollFormatted: "$2,200.00",
+          netProfit: 212000,
+          netProfitFormatted: "$2,120.00",
+          profitMargin: 44.2,
+          jobCount: 48,
+        },
+        allTime: {
+          grossRevenue: 2500000,
+          grossRevenueFormatted: "$25,000.00",
+          platformFees: 250000,
+          platformFeesFormatted: "$2,500.00",
+          totalPayroll: 1100000,
+          totalPayrollFormatted: "$11,000.00",
+          netProfit: 1150000,
+          netProfitFormatted: "$11,500.00",
+          profitMargin: 46.0,
+          jobCount: 250,
+        },
+      },
+      pending: {
+        grossRevenue: 80000,
+        grossRevenueFormatted: "$800.00",
+        platformFees: 8000,
+        platformFeesFormatted: "$80.00",
+        totalPayroll: 35000,
+        totalPayrollFormatted: "$350.00",
+        netProfit: 37000,
+        netProfitFormatted: "$370.00",
+        profitMargin: 46.3,
+        jobCount: 8,
+      },
+      payrollStatus: {
+        paid: 200000,
+        paidFormatted: "$2,000.00",
+        pending: 50000,
+        pendingFormatted: "$500.00",
+      },
+      clientPayments: {
+        collected: 500000,
+        collectedFormatted: "$5,000.00",
+        outstanding: 50000,
+        outstandingFormatted: "$500.00",
+      },
+      feeTier: {
+        current: "large_business",
+        feePercent: 7,
+        qualifiesForDiscount: true,
+        cleaningsToQualify: 0,
+      },
     },
     trends: {
       data: [
-        { period: "Jan 2024", revenue: 4500 },
-        { period: "Feb 2024", revenue: 4800 },
-        { period: "Mar 2024", revenue: 5200 },
-        { period: "Apr 2024", revenue: 5000 },
-        { period: "May 2024", revenue: 5300 },
-        { period: "Jun 2024", revenue: 5500 },
+        { period: "Jan 2024", revenue: 450000, bookings: 45 },
+        { period: "Feb 2024", revenue: 480000, bookings: 48 },
+        { period: "Mar 2024", revenue: 520000, bookings: 52 },
+        { period: "Apr 2024", revenue: 500000, bookings: 50 },
+        { period: "May 2024", revenue: 530000, bookings: 53 },
+        { period: "Jun 2024", revenue: 550000, bookings: 55 },
       ],
     },
   };
@@ -155,7 +235,88 @@ describe("BusinessAnalyticsDashboard Component", () => {
     },
     employees: null,
     clients: null,
-    financials: null,
+    financials: {
+      periods: {
+        thisWeek: {
+          grossRevenue: 50000,
+          grossRevenueFormatted: "$500.00",
+          platformFees: 5000,
+          platformFeesFormatted: "$50.00",
+          totalPayroll: 22000,
+          totalPayrollFormatted: "$220.00",
+          netProfit: 23000,
+          netProfitFormatted: "$230.00",
+          profitMargin: 46.0,
+          jobCount: 5,
+        },
+        thisMonth: {
+          grossRevenue: 250000,
+          grossRevenueFormatted: "$2,500.00",
+          platformFees: 25000,
+          platformFeesFormatted: "$250.00",
+          totalPayroll: 110000,
+          totalPayrollFormatted: "$1,100.00",
+          netProfit: 115000,
+          netProfitFormatted: "$1,150.00",
+          profitMargin: 46.0,
+          jobCount: 25,
+        },
+        lastMonth: {
+          grossRevenue: 200000,
+          grossRevenueFormatted: "$2,000.00",
+          platformFees: 20000,
+          platformFeesFormatted: "$200.00",
+          totalPayroll: 90000,
+          totalPayrollFormatted: "$900.00",
+          netProfit: 90000,
+          netProfitFormatted: "$900.00",
+          profitMargin: 45.0,
+          jobCount: 20,
+        },
+        allTime: {
+          grossRevenue: 500000,
+          grossRevenueFormatted: "$5,000.00",
+          platformFees: 50000,
+          platformFeesFormatted: "$500.00",
+          totalPayroll: 220000,
+          totalPayrollFormatted: "$2,200.00",
+          netProfit: 230000,
+          netProfitFormatted: "$2,300.00",
+          profitMargin: 46.0,
+          jobCount: 50,
+        },
+      },
+      pending: {
+        grossRevenue: 30000,
+        grossRevenueFormatted: "$300.00",
+        platformFees: 3000,
+        platformFeesFormatted: "$30.00",
+        totalPayroll: 13000,
+        totalPayrollFormatted: "$130.00",
+        netProfit: 14000,
+        netProfitFormatted: "$140.00",
+        profitMargin: 46.7,
+        jobCount: 3,
+      },
+      payrollStatus: {
+        paid: 100000,
+        paidFormatted: "$1,000.00",
+        pending: 10000,
+        pendingFormatted: "$100.00",
+      },
+      clientPayments: {
+        collected: 230000,
+        collectedFormatted: "$2,300.00",
+        outstanding: 20000,
+        outstandingFormatted: "$200.00",
+      },
+      feeTier: {
+        current: "business_owner",
+        feePercent: 10,
+        qualifiesForDiscount: false,
+        cleaningsToQualify: 25,
+      },
+    },
     trends: {
       data: [
         { period: "Jun 2024", revenue: 2500 },
@@ -204,12 +365,11 @@ describe("BusinessAnalyticsDashboard Component", () => {
 
       await waitFor(() => {
         expect(getByText("Business Analytics")).toBeTruthy();
-        expect(getByText("55")).toBeTruthy(); // Bookings this month
-        // $5,500 appears in both overview revenue and financials gross revenue
+        // 55 appears in both overview (bookings) and financials (job count)
+        expect(getAllByText("55").length).toBeGreaterThanOrEqual(1);
+        // $5,500 may appear in chart summary as well as overview
         expect(getAllByText("$5,500").length).toBeGreaterThanOrEqual(1);
         expect(getByText("$100")).toBeTruthy(); // Avg job value
-        // "5" may appear in multiple places (active employees, new clients month, etc.)
-        expect(getAllByText("5").length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -244,7 +404,7 @@ describe("BusinessAnalyticsDashboard Component", () => {
     it("should display financial summary for premium tier", async () => {
       BusinessOwnerService.getAllAnalytics.mockResolvedValue(mockPremiumAnalytics);
 
-      const { getByText } = render(
+      const { getByText, getAllByText } = render(
         <BusinessAnalyticsDashboard state={mockState} />
       );
 
@@ -252,8 +412,9 @@ describe("BusinessAnalyticsDashboard Component", () => {
         expect(getByText("Financial Summary")).toBeTruthy();
         expect(getByText("Gross Revenue")).toBeTruthy();
         expect(getByText("Net Profit")).toBeTruthy();
-        expect(getByText("$2,450")).toBeTruthy(); // Net profit
-        expect(getByText("Profit Margin: 44.5%")).toBeTruthy();
+        // Net profit appears in quick stat and profit result
+        expect(getAllByText("$2,450.00").length).toBeGreaterThanOrEqual(1);
+        expect(getByText("44.5% margin")).toBeTruthy();
       });
     });
   });

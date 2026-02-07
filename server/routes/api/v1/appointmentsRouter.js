@@ -14,6 +14,7 @@ const {
   StripeConnectAccount,
   CleanerClient,
   HomePreferredCleaner,
+  EmployeeJobAssignment,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -2149,6 +2150,32 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
           incentiveApplied: feeResult.incentiveApplied,
           originalPlatformFee: feeResult.originalPlatformFee,
         });
+      }
+
+      // If the cleaner is a business owner, set bookedByCleanerId and create a self-assignment
+      // This ensures the job shows up in their Job Assignments when viewing as business owner
+      const cleanerUser = await User.findByPk(cleanerId);
+      if (cleanerUser && cleanerUser.isBusinessOwner) {
+        // Set bookedByCleanerId so it shows up in business owner's job list
+        await appointment.update({ bookedByCleanerId: cleanerId });
+
+        // Create a self-assignment for the business owner
+        const existingAssignment = await EmployeeJobAssignment.findOne({
+          where: { appointmentId, businessOwnerId: cleanerId },
+        });
+
+        if (!existingAssignment) {
+          await EmployeeJobAssignment.create({
+            appointmentId,
+            businessOwnerId: cleanerId,
+            employeeId: null, // No employee - self-assigned
+            isSelfAssignment: true,
+            status: "assigned",
+            assignedBy: cleanerId,
+            payAmount: feeResult.netAmount, // Business owner keeps their payout
+            payType: "flat_rate",
+          });
+        }
       }
 
       // Capture payment immediately if within 3 days of appointment

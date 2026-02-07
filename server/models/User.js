@@ -202,6 +202,11 @@ module.exports = (sequelize, DataTypes) => {
 			defaultValue: true,
 			comment: "Whether business owner opts in to marketplace highlighting",
 		},
+		businessLogo: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+			comment: "Base64 encoded business logo image (for business owners)",
+		},
 		// Demo account field for owner preview mode
 		isDemoAccount: {
 			type: DataTypes.BOOLEAN,

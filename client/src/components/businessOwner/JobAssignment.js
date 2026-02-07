@@ -92,17 +92,14 @@ const UnassignedJobCard = ({ job, onAssign }) => {
 };
 
 // Assigned Job Card
-const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails }) => {
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
+const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, platformFeePercent }) => {
   const statusColors = STATUS_COLORS[assignment.status] || STATUS_COLORS.assigned;
+
+  // Calculate financials
+  const jobPrice = assignment.appointment?.price || assignment.appointment?.totalPrice || 0;
+  const employeePay = assignment.payAmount || 0;
+  const platformFee = Math.round(jobPrice * (platformFeePercent / 100));
+  const profit = jobPrice - platformFee - employeePay;
 
   return (
     <Pressable style={styles.jobCard} onPress={onViewDetails}>
@@ -126,9 +123,22 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails }) 
               ? "You (Self-assigned)"
               : `${assignment.employee?.firstName || ""} ${assignment.employee?.lastName || ""}`}
           </Text>
-          <Text style={styles.jobPay}>
-            Pay: ${((assignment.payAmount || 0) / 100).toFixed(2)}
-          </Text>
+          <View style={styles.financialInfo}>
+            <Text style={styles.jobPriceLabel}>
+              Job: ${(jobPrice / 100).toFixed(0)}
+            </Text>
+            <Text style={styles.feeLabel}>
+              Fee: ${(platformFee / 100).toFixed(0)}
+            </Text>
+            {!assignment.isSelfAssignment && (
+              <Text style={styles.employeePayLabel}>
+                Pay: ${(employeePay / 100).toFixed(0)}
+              </Text>
+            )}
+            <Text style={[styles.profitLabel, profit < 0 && styles.profitNegative]}>
+              You: ${(profit / 100).toFixed(0)}
+            </Text>
+          </View>
         </View>
         <View>
           <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
@@ -174,18 +184,75 @@ const AssignModal = ({
   const [payAmount, setPayAmount] = useState("");
   const [payType, setPayType] = useState("flat_rate");
   const [showFinancials, setShowFinancials] = useState(false);
+  const [isUsingDefaultPay, setIsUsingDefaultPay] = useState(false);
   const { pricing } = usePricing();
 
   // Get platform fee from config (default 10%)
   const platformFeePercent = (pricing?.platform?.businessOwnerFeePercent || 0.10) * 100;
 
+  // Calculate default pay based on employee's pay type
+  const calculateDefaultPay = (employee, jobPrice) => {
+    if (!employee) return null;
+
+    const empPayType = employee.payType || "per_job";
+
+    switch (empPayType) {
+      case "hourly":
+        // For hourly, show estimated pay (will be calculated at completion)
+        // Use 2 hours as default estimate
+        const hourlyRate = employee.defaultHourlyRate || 0;
+        return {
+          amount: hourlyRate * 2, // 2 hour estimate
+          payType: "hourly",
+          note: `$${(hourlyRate / 100).toFixed(2)}/hr (2hr estimate)`,
+        };
+      case "per_job":
+      case "flat_rate":
+        const jobRate = employee.defaultJobRate || 0;
+        return {
+          amount: jobRate,
+          payType: "flat_rate",
+          note: jobRate > 0 ? `Default: $${(jobRate / 100).toFixed(2)}/job` : null,
+        };
+      case "percentage":
+        const percentage = parseFloat(employee.payRate) || 0;
+        const calculatedPay = Math.round((percentage / 100) * (jobPrice || 0));
+        return {
+          amount: calculatedPay,
+          payType: "percentage",
+          note: `${percentage}% of job price`,
+        };
+      default:
+        return null;
+    }
+  };
+
+  // Set initial pay amount when modal opens (use suggestion if no employee selected yet)
   useEffect(() => {
-    if (job && visible) {
-      // Calculate suggested pay at 35% margin
+    if (job && visible && !selectedEmployee) {
       const suggestions = BusinessOwnerService.suggestPayAmounts(job.totalPrice || 0);
       setPayAmount((suggestions.margin35.payAmount / 100).toFixed(2));
+      setIsUsingDefaultPay(false);
     }
   }, [job, visible]);
+
+  // Update pay when employee is selected
+  useEffect(() => {
+    if (selectedEmployee && job) {
+      const defaultPay = calculateDefaultPay(selectedEmployee, job.totalPrice);
+      if (defaultPay && defaultPay.amount > 0) {
+        setPayAmount((defaultPay.amount / 100).toFixed(2));
+        setPayType(defaultPay.payType);
+        setIsUsingDefaultPay(true);
+      } else {
+        // Fallback to suggested pay if no default set
+        const suggestions = BusinessOwnerService.suggestPayAmounts(job.totalPrice || 0);
+        setPayAmount((suggestions.margin35.payAmount / 100).toFixed(2));
+        setPayType("flat_rate");
+        setIsUsingDefaultPay(false);
+      }
+    }
+  }, [selectedEmployee, job]);
 
   const handleSubmit = () => {
     if (!isSelfAssign && !selectedEmployee) return;
@@ -270,11 +337,15 @@ const AssignModal = ({
                         <Text style={styles.employeeOptionName}>
                           {emp.firstName} {emp.lastName}
                         </Text>
-                        {emp.defaultHourlyRate && (
-                          <Text style={styles.employeeOptionRate}>
-                            Default: ${(emp.defaultHourlyRate / 100).toFixed(2)}/hr
-                          </Text>
-                        )}
+                        <Text style={styles.employeeOptionRate}>
+                          {emp.payType === "hourly" && emp.defaultHourlyRate
+                            ? `$${(emp.defaultHourlyRate / 100).toFixed(2)}/hr`
+                            : emp.payType === "percentage" && emp.payRate
+                            ? `${parseFloat(emp.payRate)}% of job`
+                            : emp.defaultJobRate
+                            ? `$${(emp.defaultJobRate / 100).toFixed(2)}/job`
+                            : "No default rate set"}
+                        </Text>
                       </View>
                       {selectedEmployee?.id === emp.id && (
                         <Icon name="check" size={16} color={colors.primary[600]} />
@@ -290,16 +361,35 @@ const AssignModal = ({
               <>
                 <View style={styles.formGroup}>
                   <Text style={styles.label}>Pay Amount</Text>
+                  {/* Show default pay info when employee selected */}
+                  {selectedEmployee && isUsingDefaultPay && (
+                    <View style={styles.defaultPayNote}>
+                      <Icon name="info-circle" size={12} color={colors.primary[600]} />
+                      <Text style={styles.defaultPayNoteText}>
+                        Using {selectedEmployee.firstName}'s default{" "}
+                        {selectedEmployee.payType === "hourly"
+                          ? "hourly rate (2hr estimate)"
+                          : selectedEmployee.payType === "percentage"
+                          ? `${parseFloat(selectedEmployee.payRate)}% rate`
+                          : "job rate"}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.payInputRow}>
                     <Text style={styles.currencySymbol}>$</Text>
                     <TextInput
                       style={styles.payInput}
                       value={payAmount}
-                      onChangeText={setPayAmount}
+                      onChangeText={(val) => {
+                        setPayAmount(val);
+                        setIsUsingDefaultPay(false); // Mark as overridden when manually changed
+                      }}
                       keyboardType="decimal-pad"
                       placeholder="0.00"
                     />
                   </View>
+                  {/* Quick suggestions */}
+                  <Text style={styles.suggestionsLabel}>Quick suggestions:</Text>
                   <View style={styles.paySuggestions}>
                     {job &&
                       Object.entries(
@@ -308,7 +398,10 @@ const AssignModal = ({
                         <Pressable
                           key={key}
                           style={styles.paySuggestion}
-                          onPress={() => setPayAmount((value.payAmount / 100).toFixed(2))}
+                          onPress={() => {
+                            setPayAmount((value.payAmount / 100).toFixed(2));
+                            setIsUsingDefaultPay(false);
+                          }}
                         >
                           <Text style={styles.paySuggestionAmount}>{value.formatted}</Text>
                           <Text style={styles.paySuggestionLabel}>{value.label}</Text>
@@ -458,6 +551,8 @@ const AssignModal = ({
 // Main Component
 const JobAssignment = ({ state }) => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
+  const platformFeePercent = (pricing?.platform?.businessOwnerFeePercent || 0.10) * 100;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unassignedJobs, setUnassignedJobs] = useState([]);
@@ -690,6 +785,7 @@ const JobAssignment = ({ state }) => {
             <AssignedJobCard
               key={assignment.id}
               assignment={assignment}
+              platformFeePercent={platformFeePercent}
               onReassign={() => {
                 setSelectedJob(assignment.appointment);
                 setIsSelfAssign(false);
@@ -847,6 +943,32 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.success[600],
     marginTop: 2,
+  },
+  financialInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.xs,
+    gap: spacing.sm,
+  },
+  jobPriceLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  feeLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[400],
+  },
+  employeePayLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[600],
+  },
+  profitLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  profitNegative: {
+    color: colors.error[600],
   },
   jobPrice: {
     alignItems: "flex-end",
@@ -1114,6 +1236,26 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     fontSize: typography.fontSize.lg,
     color: colors.text.primary,
+  },
+  defaultPayNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  defaultPayNoteText: {
+    marginLeft: spacing.xs,
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[700],
+    flex: 1,
+  },
+  suggestionsLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
   },
   paySuggestions: {
     flexDirection: "row",

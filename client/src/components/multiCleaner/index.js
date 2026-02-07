@@ -9,3 +9,4 @@ export { default as MultiCleanerChecklist } from "./MultiCleanerChecklist";
 export { default as LargeHomeWarningModal } from "./LargeHomeWarningModal";
 export { default as SoloCompletionOfferModal } from "./SoloCompletionOfferModal";
 export { default as CleanerDropoutModal } from "./CleanerDropoutModal";
+export { default as TeamBookingModal } from "./TeamBookingModal";

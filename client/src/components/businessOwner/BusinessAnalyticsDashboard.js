@@ -96,31 +96,98 @@ const ClientRow = ({ client, isAtRisk }) => (
   </View>
 );
 
-// Simple Bar Chart Component
-const SimpleBarChart = ({ data, valueKey = "revenue", maxBars = 6 }) => {
-  if (!data || data.length === 0) return null;
+// Enhanced Revenue Chart Component
+const RevenueChart = ({ data, maxBars = 6 }) => {
+  if (!data || data.length === 0) {
+    return (
+      <View style={styles.emptyChart}>
+        <Icon name="bar-chart" size={32} color={colors.neutral[300]} />
+        <Text style={styles.emptyChartText}>No revenue data yet</Text>
+      </View>
+    );
+  }
 
   const displayData = data.slice(-maxBars);
-  const maxValue = Math.max(...displayData.map((d) => d[valueKey] || 0));
+  const maxValue = Math.max(...displayData.map((d) => d.revenue || 0));
+  const totalRevenue = displayData.reduce((sum, d) => sum + (d.revenue || 0), 0);
+  const avgRevenue = displayData.length > 0 ? totalRevenue / displayData.length : 0;
+
+  // Find highest and lowest months
+  const sortedByRevenue = [...displayData].sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+  const highestMonth = sortedByRevenue[0];
+  const lowestMonth = sortedByRevenue[sortedByRevenue.length - 1];
 
   return (
-    <View style={styles.chartContainer}>
-      <View style={styles.chartBars}>
-        {displayData.map((item, index) => (
-          <View key={index} style={styles.chartBarWrapper}>
-            <View
-              style={[
-                styles.chartBar,
-                {
-                  height: maxValue > 0 ? (item[valueKey] / maxValue) * 100 : 0,
-                },
-              ]}
-            />
-            <Text style={styles.chartLabel} numberOfLines={1}>
-              {item.period?.split(" ")[0] || ""}
-            </Text>
-          </View>
-        ))}
+    <View style={styles.revenueChartContainer}>
+      {/* Summary Stats */}
+      <View style={styles.chartSummary}>
+        <View style={styles.chartSummaryItem}>
+          <Text style={styles.chartSummaryLabel}>Total</Text>
+          <Text style={styles.chartSummaryValue}>${(totalRevenue / 100).toLocaleString()}</Text>
+        </View>
+        <View style={styles.chartSummaryDivider} />
+        <View style={styles.chartSummaryItem}>
+          <Text style={styles.chartSummaryLabel}>Average</Text>
+          <Text style={styles.chartSummaryValue}>${(avgRevenue / 100).toLocaleString()}</Text>
+        </View>
+        <View style={styles.chartSummaryDivider} />
+        <View style={styles.chartSummaryItem}>
+          <Text style={styles.chartSummaryLabel}>Peak</Text>
+          <Text style={[styles.chartSummaryValue, styles.chartSummaryPeak]}>
+            ${((highestMonth?.revenue || 0) / 100).toLocaleString()}
+          </Text>
+        </View>
+      </View>
+
+      {/* Bar Chart */}
+      <View style={styles.chartBarsContainer}>
+        {displayData.map((item, index) => {
+          const barHeight = maxValue > 0 ? ((item.revenue || 0) / maxValue) * 100 : 0;
+          const isHighest = item === highestMonth && displayData.length > 1;
+          const isLowest = item === lowestMonth && displayData.length > 1 && lowestMonth !== highestMonth;
+          const isCurrentMonth = index === displayData.length - 1;
+
+          return (
+            <View key={index} style={styles.chartBarWrapper}>
+              <View style={styles.chartBarValue}>
+                <Text style={[styles.chartBarValueText, isHighest && styles.chartBarValueHighlight]}>
+                  ${((item.revenue || 0) / 100).toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.chartBarTrack}>
+                <View
+                  style={[
+                    styles.chartBar,
+                    {
+                      height: `${barHeight}%`,
+                    },
+                    isHighest && styles.chartBarHighest,
+                    isLowest && styles.chartBarLowest,
+                    isCurrentMonth && !isHighest && !isLowest && styles.chartBarCurrent,
+                  ]}
+                />
+              </View>
+              <Text style={[styles.chartLabel, isCurrentMonth && styles.chartLabelCurrent]} numberOfLines={1}>
+                {item.period?.split(" ")[0] || ""}
+              </Text>
+              {item.bookings > 0 && (
+                <Text style={styles.chartBookings}>{item.bookings} jobs</Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Legend */}
+      <View style={styles.chartLegendRow}>
+        <View style={styles.chartLegendItem}>
+          <View style={[styles.chartLegendDot, styles.chartLegendDotHighest]} />
+          <Text style={styles.chartLegendText}>Best month</Text>
+        </View>
+        <View style={styles.chartLegendItem}>
+          <View style={[styles.chartLegendDot, styles.chartLegendDotCurrent]} />
+          <Text style={styles.chartLegendText}>Current</Text>
+        </View>
       </View>
     </View>
   );
@@ -151,6 +218,7 @@ const BusinessAnalyticsDashboard = ({ state }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [analytics, setAnalytics] = useState(null);
   const [error, setError] = useState(null);
+  const [selectedPeriod, setSelectedPeriod] = useState("thisMonth");
 
   const fetchAnalytics = async (isRefresh = false) => {
     if (isRefresh) {
@@ -281,16 +349,309 @@ const BusinessAnalyticsDashboard = ({ state }) => {
         </View>
       </View>
 
+      {/* Financial Summary */}
+      <View style={styles.section}>
+        <SectionHeader title="Financial Summary" icon="pie-chart" />
+
+        {/* Period Selector */}
+        <View style={styles.periodSelector}>
+          {[
+            { key: "thisWeek", label: "Week" },
+            { key: "thisMonth", label: "Month" },
+            { key: "lastMonth", label: "Last Mo" },
+            { key: "allTime", label: "All" },
+          ].map((period) => (
+            <Pressable
+              key={period.key}
+              style={[
+                styles.periodOption,
+                selectedPeriod === period.key && styles.periodOptionSelected,
+              ]}
+              onPress={() => setSelectedPeriod(period.key)}
+            >
+              <Text
+                style={[
+                  styles.periodOptionText,
+                  selectedPeriod === period.key && styles.periodOptionTextSelected,
+                ]}
+              >
+                {period.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Quick Stats Row */}
+        <View style={styles.quickStatsRow}>
+          <View style={[styles.quickStatCard, styles.quickStatProfit]}>
+            <Icon name="line-chart" size={16} color={colors.success[600]} />
+            <Text style={styles.quickStatValue}>
+              {financials?.periods?.[selectedPeriod]?.netProfitFormatted || "$0"}
+            </Text>
+            <Text style={styles.quickStatLabel}>Net Profit</Text>
+          </View>
+          <View style={[styles.quickStatCard, styles.quickStatJobs]}>
+            <Icon name="check-circle" size={16} color={colors.primary[600]} />
+            <Text style={styles.quickStatValue}>
+              {financials?.periods?.[selectedPeriod]?.jobCount || 0}
+            </Text>
+            <Text style={styles.quickStatLabel}>Jobs Done</Text>
+          </View>
+          <View style={[styles.quickStatCard, styles.quickStatMargin]}>
+            <Icon name="percent" size={16} color={colors.warning[600]} />
+            <Text style={styles.quickStatValue}>
+              {financials?.periods?.[selectedPeriod]?.profitMargin || 0}%
+            </Text>
+            <Text style={styles.quickStatLabel}>Margin</Text>
+          </View>
+        </View>
+
+        {/* Completed Revenue Breakdown */}
+        <View style={styles.sectionCard}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderLeft}>
+              <View style={[styles.cardIconBadge, styles.cardIconSuccess]}>
+                <Icon name="check" size={12} color={colors.success[600]} />
+              </View>
+              <Text style={styles.cardTitle}>Completed</Text>
+            </View>
+            <View style={styles.jobCountBadge}>
+              <Text style={styles.jobCountText}>{financials?.periods?.[selectedPeriod]?.jobCount || 0} jobs</Text>
+            </View>
+          </View>
+
+          <View style={styles.breakdownContainer}>
+            <View style={styles.breakdownRow}>
+              <View style={styles.breakdownLabelRow}>
+                <Icon name="dollar" size={12} color={colors.text.tertiary} />
+                <Text style={styles.breakdownLabel}>Gross Revenue</Text>
+              </View>
+              <Text style={styles.breakdownValue}>
+                {financials?.periods?.[selectedPeriod]?.grossRevenueFormatted || "$0.00"}
+              </Text>
+            </View>
+
+            <View style={styles.breakdownRow}>
+              <View style={styles.breakdownLabelRow}>
+                <Icon name="minus-circle" size={12} color={colors.error[400]} />
+                <Text style={styles.breakdownLabel}>Platform Fee ({financials?.feeTier?.feePercent || 0}%)</Text>
+              </View>
+              <Text style={[styles.breakdownValue, styles.breakdownNegative]}>
+                -{financials?.periods?.[selectedPeriod]?.platformFeesFormatted || "$0.00"}
+              </Text>
+            </View>
+
+            <View style={styles.breakdownRow}>
+              <View style={styles.breakdownLabelRow}>
+                <Icon name="users" size={12} color={colors.error[400]} />
+                <Text style={styles.breakdownLabel}>Employee Payroll</Text>
+              </View>
+              <Text style={[styles.breakdownValue, styles.breakdownNegative]}>
+                -{financials?.periods?.[selectedPeriod]?.totalPayrollFormatted || "$0.00"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.profitResultContainer}>
+            <View style={styles.profitResultRow}>
+              <Text style={styles.profitResultLabel}>Your Profit</Text>
+              <Text
+                style={[
+                  styles.profitResultValue,
+                  (financials?.periods?.[selectedPeriod]?.netProfit || 0) >= 0
+                    ? styles.profitPositive
+                    : styles.profitNegative,
+                ]}
+              >
+                {financials?.periods?.[selectedPeriod]?.netProfitFormatted || "$0.00"}
+              </Text>
+            </View>
+            {(financials?.periods?.[selectedPeriod]?.profitMargin || 0) > 0 && (
+              <View style={styles.marginIndicator}>
+                <View
+                  style={[
+                    styles.marginBar,
+                    { width: `${Math.min(financials?.periods?.[selectedPeriod]?.profitMargin || 0, 100)}%` }
+                  ]}
+                />
+                <Text style={styles.marginText}>
+                  {financials?.periods?.[selectedPeriod]?.profitMargin}% margin
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Upcoming Jobs */}
+        <View style={[styles.sectionCard, styles.upcomingCard]}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderLeft}>
+              <View style={[styles.cardIconBadge, styles.cardIconPending]}>
+                <Icon name="clock-o" size={12} color={colors.primary[600]} />
+              </View>
+              <Text style={styles.cardTitle}>Upcoming</Text>
+            </View>
+            <View style={[styles.jobCountBadge, styles.jobCountPending]}>
+              <Text style={[styles.jobCountText, styles.jobCountTextPending]}>
+                {financials?.pending?.jobCount || 0} scheduled
+              </Text>
+            </View>
+          </View>
+
+          {(financials?.pending?.jobCount || 0) > 0 ? (
+            <>
+              <View style={styles.breakdownContainer}>
+                <View style={styles.breakdownRow}>
+                  <View style={styles.breakdownLabelRow}>
+                    <Icon name="dollar" size={12} color={colors.text.tertiary} />
+                    <Text style={styles.breakdownLabel}>Expected Revenue</Text>
+                  </View>
+                  <Text style={[styles.breakdownValue, styles.breakdownPending]}>
+                    {financials?.pending?.grossRevenueFormatted || "$0.00"}
+                  </Text>
+                </View>
+
+                <View style={styles.breakdownRow}>
+                  <View style={styles.breakdownLabelRow}>
+                    <Icon name="minus-circle" size={12} color={colors.primary[400]} />
+                    <Text style={styles.breakdownLabel}>Est. Platform Fee</Text>
+                  </View>
+                  <Text style={[styles.breakdownValue, styles.breakdownPendingNeg]}>
+                    -{financials?.pending?.platformFeesFormatted || "$0.00"}
+                  </Text>
+                </View>
+
+                <View style={styles.breakdownRow}>
+                  <View style={styles.breakdownLabelRow}>
+                    <Icon name="users" size={12} color={colors.primary[400]} />
+                    <Text style={styles.breakdownLabel}>Est. Payroll</Text>
+                  </View>
+                  <Text style={[styles.breakdownValue, styles.breakdownPendingNeg]}>
+                    -{financials?.pending?.totalPayrollFormatted || "$0.00"}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.profitResultContainer, styles.profitResultPending]}>
+                <View style={styles.profitResultRow}>
+                  <Text style={styles.profitResultLabel}>Expected Profit</Text>
+                  <Text style={[styles.profitResultValue, styles.profitPending]}>
+                    {financials?.pending?.netProfitFormatted || "$0.00"}
+                  </Text>
+                </View>
+                {(financials?.pending?.profitMargin || 0) > 0 && (
+                  <Text style={styles.expectedMarginText}>
+                    Est. {financials?.pending?.profitMargin}% margin
+                  </Text>
+                )}
+              </View>
+            </>
+          ) : (
+            <View style={styles.emptyUpcoming}>
+              <Icon name="calendar-o" size={24} color={colors.neutral[300]} />
+              <Text style={styles.emptyUpcomingText}>No upcoming jobs scheduled</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Payment Status Grid */}
+        <View style={styles.paymentStatusGrid}>
+          {/* Payroll Status */}
+          <View style={[styles.statusCard, styles.statusCardLeft]}>
+            <View style={styles.statusCardHeader}>
+              <Icon name="users" size={14} color={colors.primary[600]} />
+              <Text style={styles.statusCardTitle}>Payroll</Text>
+            </View>
+            <View style={styles.statusItem}>
+              <View style={[styles.statusDot, styles.statusDotSuccess]} />
+              <Text style={styles.statusLabel}>Paid</Text>
+              <Text style={[styles.statusValue, styles.statusValueSuccess]}>
+                {financials?.payrollStatus?.paidFormatted || "$0"}
+              </Text>
+            </View>
+            <View style={styles.statusItem}>
+              <View style={[styles.statusDot, styles.statusDotWarning]} />
+              <Text style={styles.statusLabel}>Pending</Text>
+              <Text style={[styles.statusValue, styles.statusValueWarning]}>
+                {financials?.payrollStatus?.pendingFormatted || "$0"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Client Payments */}
+          <View style={[styles.statusCard, styles.statusCardRight]}>
+            <View style={styles.statusCardHeader}>
+              <Icon name="credit-card" size={14} color={colors.success[600]} />
+              <Text style={styles.statusCardTitle}>Payments</Text>
+            </View>
+            <View style={styles.statusItem}>
+              <View style={[styles.statusDot, styles.statusDotSuccess]} />
+              <Text style={styles.statusLabel}>Collected</Text>
+              <Text style={[styles.statusValue, styles.statusValueSuccess]}>
+                {financials?.clientPayments?.collectedFormatted || "$0"}
+              </Text>
+            </View>
+            <View style={styles.statusItem}>
+              <View style={[styles.statusDot, styles.statusDotWarning]} />
+              <Text style={styles.statusLabel}>Outstanding</Text>
+              <Text style={[styles.statusValue, styles.statusValueWarning]}>
+                {financials?.clientPayments?.outstandingFormatted || "$0"}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Fee Tier Card */}
+        <View style={styles.feeTierCard}>
+          <View style={styles.feeTierContent}>
+            <View style={styles.feeTierMain}>
+              <View style={[
+                styles.tierBadgeSmall,
+                financials?.feeTier?.current === "large_business" ? styles.tierBadgePremium : styles.tierBadgeStandard
+              ]}>
+                <Icon
+                  name={financials?.feeTier?.current === "large_business" ? "star" : "briefcase"}
+                  size={10}
+                  color={financials?.feeTier?.current === "large_business" ? colors.warning[600] : colors.primary[600]}
+                />
+                <Text style={[
+                  styles.tierBadgeText,
+                  financials?.feeTier?.current === "large_business" ? styles.tierBadgeTextPremium : styles.tierBadgeTextStandard
+                ]}>
+                  {financials?.feeTier?.current === "large_business" ? "Large Business" : "Business Owner"}
+                </Text>
+              </View>
+              <Text style={styles.feeRateText}>{financials?.feeTier?.feePercent || 0}% platform fee</Text>
+            </View>
+            {financials?.feeTier?.cleaningsToQualify > 0 && (
+              <View style={styles.tierProgress}>
+                <View style={styles.tierProgressBar}>
+                  <View
+                    style={[
+                      styles.tierProgressFill,
+                      {
+                        width: `${Math.min(
+                          ((50 - (financials?.feeTier?.cleaningsToQualify || 0)) / 50) * 100,
+                          100
+                        )}%`
+                      }
+                    ]}
+                  />
+                </View>
+                <Text style={styles.tierProgressText}>
+                  {financials?.feeTier?.cleaningsToQualify} more jobs to unlock 7% rate
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </View>
+
       {/* Revenue Trend */}
       <View style={styles.section}>
         <SectionHeader title="Revenue Trend" icon="line-chart" />
-        <View style={styles.chartCard}>
-          <SimpleBarChart data={trends?.data || []} valueKey="revenue" maxBars={6} />
-          {trends?.data?.length > 0 && (
-            <View style={styles.chartLegend}>
-              <Text style={styles.chartLegendText}>Last {trends.data.length} months</Text>
-            </View>
-          )}
+        <View style={styles.revenueChartCard}>
+          <RevenueChart data={trends?.data || []} maxBars={6} />
         </View>
       </View>
 
@@ -352,52 +713,6 @@ const BusinessAnalyticsDashboard = ({ state }) => {
                   ))}
                 </View>
               )}
-            </>
-          )}
-        </View>
-      </View>
-
-      {/* Financial Summary (Premium) */}
-      <View style={styles.section}>
-        <SectionHeader title="Financial Summary" icon="pie-chart" isPremium isLocked={!isPremium} />
-        <View style={styles.sectionCard}>
-          {!isPremium ? (
-            <PremiumLock cleaningsNeeded={cleaningsNeeded} />
-          ) : (
-            <>
-              <View style={styles.financialRow}>
-                <Text style={styles.financialLabel}>Gross Revenue</Text>
-                <Text style={styles.financialValue}>{financials?.summary?.grossRevenueFormatted || "$0"}</Text>
-              </View>
-              <View style={styles.financialRow}>
-                <Text style={styles.financialLabel}>Platform Fees ({financials?.summary?.platformFeePercent || 0}%)</Text>
-                <Text style={[styles.financialValue, styles.financialNegative]}>
-                  -{financials?.summary?.platformFeesFormatted || "$0"}
-                </Text>
-              </View>
-              <View style={styles.financialRow}>
-                <Text style={styles.financialLabel}>Payroll</Text>
-                <Text style={[styles.financialValue, styles.financialNegative]}>
-                  -{financials?.summary?.totalPayrollFormatted || "$0"}
-                </Text>
-              </View>
-              <View style={styles.financialDivider} />
-              <View style={styles.financialRow}>
-                <Text style={styles.financialLabelBold}>Net Profit</Text>
-                <Text
-                  style={[
-                    styles.financialValueBold,
-                    (financials?.summary?.netProfit || 0) >= 0 ? styles.financialPositive : styles.financialNegative,
-                  ]}
-                >
-                  {financials?.summary?.netProfitFormatted || "$0"}
-                </Text>
-              </View>
-              <View style={styles.profitMargin}>
-                <Text style={styles.profitMarginText}>
-                  Profit Margin: {financials?.summary?.profitMargin || 0}%
-                </Text>
-              </View>
             </>
           )}
         </View>
@@ -666,19 +981,19 @@ const styles = StyleSheet.create({
   chartBarWrapper: {
     flex: 1,
     alignItems: "center",
-    marginHorizontal: 4,
   },
   chartBar: {
-    width: "80%",
-    backgroundColor: colors.primary[500],
+    width: "100%",
+    backgroundColor: colors.primary[400],
     borderTopLeftRadius: radius.sm,
     borderTopRightRadius: radius.sm,
     minHeight: 4,
   },
   chartLabel: {
     fontSize: 10,
-    color: colors.text.tertiary,
+    color: colors.text.secondary,
     marginTop: spacing.xs,
+    fontWeight: typography.fontWeight.medium,
   },
   chartCard: {
     backgroundColor: colors.background.primary,
@@ -693,6 +1008,123 @@ const styles = StyleSheet.create({
   chartLegendText: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
+  },
+  // Enhanced Revenue Chart Styles
+  revenueChartCard: {
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  revenueChartContainer: {
+    gap: spacing.lg,
+  },
+  emptyChart: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing["2xl"],
+    gap: spacing.sm,
+  },
+  emptyChartText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  chartSummary: {
+    flexDirection: "row",
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  chartSummaryItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  chartSummaryDivider: {
+    width: 1,
+    backgroundColor: colors.neutral[200],
+    marginVertical: spacing.xs,
+  },
+  chartSummaryLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xxs,
+  },
+  chartSummaryValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  chartSummaryPeak: {
+    color: colors.success[600],
+  },
+  chartBarsContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    height: 140,
+    gap: spacing.xs,
+  },
+  chartBarTrack: {
+    flex: 1,
+    height: 100,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.sm,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
+  chartBarValue: {
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  chartBarValueText: {
+    fontSize: 9,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  chartBarValueHighlight: {
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.bold,
+  },
+  chartBarHighest: {
+    backgroundColor: colors.success[500],
+  },
+  chartBarLowest: {
+    backgroundColor: colors.neutral[300],
+  },
+  chartBarCurrent: {
+    backgroundColor: colors.primary[500],
+  },
+  chartLabelCurrent: {
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+  },
+  chartBookings: {
+    fontSize: 8,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  chartLegendRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.lg,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  chartLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  chartLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: radius.full,
+  },
+  chartLegendDotHighest: {
+    backgroundColor: colors.success[500],
+  },
+  chartLegendDotCurrent: {
+    backgroundColor: colors.primary[500],
   },
   employeeRow: {
     flexDirection: "row",
@@ -876,6 +1308,374 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     fontWeight: typography.fontWeight.medium,
+  },
+  periodSelector: {
+    flexDirection: "row",
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    padding: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  periodOption: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.md,
+    alignItems: "center",
+  },
+  periodOptionSelected: {
+    backgroundColor: colors.primary[600],
+  },
+  periodOptionText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
+  },
+  periodOptionTextSelected: {
+    color: colors.neutral[0],
+  },
+  financialSectionTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  pendingCard: {
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  financialPending: {
+    color: colors.primary[600],
+  },
+  financialWarning: {
+    color: colors.warning[600],
+  },
+  countText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.normal,
+  },
+  // Quick Stats Row
+  quickStatsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  quickStatCard: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  quickStatProfit: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.success[500],
+  },
+  quickStatJobs: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary[500],
+  },
+  quickStatMargin: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[500],
+  },
+  quickStatValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginTop: spacing.xs,
+  },
+  quickStatLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  // Card Header
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  cardHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  cardIconBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardIconSuccess: {
+    backgroundColor: colors.success[100],
+  },
+  cardIconPending: {
+    backgroundColor: colors.primary[100],
+  },
+  cardTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  jobCountBadge: {
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.full,
+  },
+  jobCountPending: {
+    backgroundColor: colors.primary[100],
+  },
+  jobCountText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
+  },
+  jobCountTextPending: {
+    color: colors.primary[700],
+  },
+  // Breakdown
+  breakdownContainer: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  breakdownLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  breakdownLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  breakdownValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  breakdownNegative: {
+    color: colors.error[600],
+  },
+  breakdownPending: {
+    color: colors.primary[600],
+  },
+  breakdownPendingNeg: {
+    color: colors.primary[400],
+  },
+  // Profit Result
+  profitResultContainer: {
+    backgroundColor: colors.success[50],
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  profitResultPending: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
+  },
+  profitResultRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  profitResultLabel: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  profitResultValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  profitPositive: {
+    color: colors.success[600],
+  },
+  profitNegative: {
+    color: colors.error[600],
+  },
+  profitPending: {
+    color: colors.primary[600],
+  },
+  marginIndicator: {
+    marginTop: spacing.sm,
+  },
+  marginBar: {
+    height: 4,
+    backgroundColor: colors.success[400],
+    borderRadius: radius.full,
+    marginBottom: spacing.xs,
+  },
+  marginText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[700],
+  },
+  expectedMarginText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    marginTop: spacing.xs,
+    textAlign: "right",
+  },
+  // Upcoming Card
+  upcomingCard: {
+    backgroundColor: colors.background.primary,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    borderStyle: "dashed",
+  },
+  emptyUpcoming: {
+    alignItems: "center",
+    paddingVertical: spacing.xl,
+    gap: spacing.sm,
+  },
+  emptyUpcomingText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  // Payment Status Grid
+  paymentStatusGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  statusCard: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    ...shadows.sm,
+  },
+  statusCardLeft: {
+    marginRight: spacing.xs,
+  },
+  statusCardRight: {
+    marginLeft: spacing.xs,
+  },
+  statusCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  statusCardTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  statusItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
+    marginRight: spacing.sm,
+  },
+  statusDotSuccess: {
+    backgroundColor: colors.success[500],
+  },
+  statusDotWarning: {
+    backgroundColor: colors.warning[500],
+  },
+  statusLabel: {
+    flex: 1,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  statusValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  statusValueSuccess: {
+    color: colors.success[600],
+  },
+  statusValueWarning: {
+    color: colors.warning[600],
+  },
+  // Fee Tier Card
+  feeTierCard: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  feeTierContent: {
+    gap: spacing.sm,
+  },
+  feeTierMain: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  tierBadgeSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  tierBadgeStandard: {
+    backgroundColor: colors.primary[100],
+  },
+  tierBadgePremium: {
+    backgroundColor: colors.warning[100],
+  },
+  tierBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  tierBadgeTextStandard: {
+    color: colors.primary[700],
+  },
+  tierBadgeTextPremium: {
+    color: colors.warning[700],
+  },
+  feeRateText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  tierProgress: {
+    gap: spacing.xs,
+  },
+  tierProgressBar: {
+    height: 6,
+    backgroundColor: colors.neutral[200],
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  tierProgressFill: {
+    height: "100%",
+    backgroundColor: colors.primary[500],
+    borderRadius: radius.full,
+  },
+  tierProgressText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
   },
   emptyState: {
     padding: spacing.xl,

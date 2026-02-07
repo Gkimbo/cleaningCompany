@@ -368,7 +368,7 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
                 cleaningStatus === "in_progress" && styles.progressDotInProgress,
                 cleaningStatus === "completed" && styles.progressDotActive
               ]}>
-                <Icon name="spray" size={10} color={
+                <Icon name="tint" size={10} color={
                   cleaningStatus === "in_progress" || cleaningStatus === "completed"
                     ? colors.neutral[0] : colors.neutral[400]
                 } />

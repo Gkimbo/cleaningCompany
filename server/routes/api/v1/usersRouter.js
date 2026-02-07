@@ -1190,6 +1190,109 @@ usersRouter.patch("/update-username", async (req, res) => {
   }
 });
 
+// POST: Update business name
+usersRouter.post("/update-business-name", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+    const { businessName } = req.body;
+
+    // Validate business name
+    if (!businessName || businessName.trim().length < 2) {
+      return res.status(400).json({ error: "Business name must be at least 2 characters" });
+    }
+
+    if (businessName.length > 100) {
+      return res.status(400).json({ error: "Business name must be 100 characters or less" });
+    }
+
+    // Find user and verify they are a business owner
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.isBusinessOwner) {
+      return res.status(403).json({ error: "Only business owners can update business name" });
+    }
+
+    // Update business name
+    await user.update({ businessName: businessName.trim() });
+    console.log(`✅ Business name updated for user ${userId}: ${businessName.trim()}`);
+
+    return res.status(200).json({
+      message: "Business name updated successfully",
+      businessName: businessName.trim()
+    });
+  } catch (error) {
+    console.error("Error updating business name:", error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    return res.status(500).json({ error: "Failed to update business name" });
+  }
+});
+
+// POST: Update business logo
+usersRouter.post("/update-business-logo", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+    const { businessLogo } = req.body;
+
+    // Find user and verify they are a business owner
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.isBusinessOwner) {
+      return res.status(403).json({ error: "Only business owners can update business logo" });
+    }
+
+    // Validate logo data (should be base64 string or null to remove)
+    if (businessLogo && typeof businessLogo !== "string") {
+      return res.status(400).json({ error: "Invalid logo format" });
+    }
+
+    // Check size limit (max 5MB base64 - roughly 6.67MB as base64)
+    if (businessLogo && businessLogo.length > 7000000) {
+      return res.status(400).json({ error: "Logo image is too large. Maximum size is 5MB." });
+    }
+
+    // Update business logo (null to remove)
+    await user.update({ businessLogo: businessLogo || null });
+    console.log(`✅ Business logo ${businessLogo ? "updated" : "removed"} for user ${userId}`);
+
+    return res.status(200).json({
+      message: businessLogo ? "Business logo updated successfully" : "Business logo removed",
+      businessLogo: businessLogo || null
+    });
+  } catch (error) {
+    console.error("Error updating business logo:", error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Token has expired" });
+    }
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+    return res.status(500).json({ error: "Failed to update business logo" });
+  }
+});
+
 // PATCH: Update password
 usersRouter.patch("/update-password", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];

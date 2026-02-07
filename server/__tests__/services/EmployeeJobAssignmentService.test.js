@@ -513,6 +513,203 @@ describe("EmployeeJobAssignmentService", () => {
         EmployeeJobAssignmentService.completeJob(999, 5)
       ).rejects.toThrow("Assignment not found or cannot be completed");
     });
+
+    it("should calculate hourly pay correctly", async () => {
+      const mockEmployee = {
+        id: 1,
+        defaultHourlyRate: 2000, // $20.00/hour in cents
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      // Set startedAt to exactly 2 hours and 1 minute ago to ensure consistent rounding to 2.5 hours
+      const startedAt = new Date();
+      startedAt.setHours(startedAt.getHours() - 2);
+      startedAt.setMinutes(startedAt.getMinutes() - 1);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "hourly",
+        appointmentId: 100,
+        startedAt,
+        appointment: { id: 100, price: 15000 },
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      // 2 hours 1 minute rounds UP to 2.5 hours (nearest 0.5)
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          hoursWorked: 2.5, // 2 hours 1 minute rounds up to 2.5
+          payAmount: 5000, // $50.00 (2.5 hours × $20/hour)
+        })
+      );
+    });
+
+    it("should calculate per_job pay correctly using defaultJobRate", async () => {
+      const mockEmployee = {
+        id: 1,
+        defaultJobRate: 7500, // $75.00 per job in cents
+        defaultHourlyRate: 2000,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const startedAt = new Date();
+      startedAt.setHours(startedAt.getHours() - 1.5);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "per_job",
+        appointmentId: 100,
+        startedAt,
+        appointment: { id: 100, price: 15000 },
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          payAmount: 7500, // Uses defaultJobRate, not hourly calculation
+        })
+      );
+    });
+
+    it("should calculate flat_rate pay correctly using defaultJobRate", async () => {
+      const mockEmployee = {
+        id: 1,
+        defaultJobRate: 6000, // $60.00 per job in cents
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "flat_rate",
+        appointmentId: 100,
+        startedAt: new Date(),
+        appointment: { id: 100, price: 15000 },
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          payAmount: 6000, // Uses defaultJobRate
+        })
+      );
+    });
+
+    it("should calculate percentage pay correctly based on job price", async () => {
+      const mockEmployee = {
+        id: 1,
+        payRate: 40, // 40% of job price
+        defaultHourlyRate: 2000,
+        defaultJobRate: 5000,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "percentage",
+        appointmentId: 100,
+        startedAt: new Date(),
+        appointment: { id: 100, price: 15000 }, // $150.00 job
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          payAmount: 6000, // 40% of $150 = $60.00 (6000 cents)
+        })
+      );
+    });
+
+    it("should calculate percentage pay with decimal percentage", async () => {
+      const mockEmployee = {
+        id: 1,
+        payRate: 33.5, // 33.5% of job price
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "percentage",
+        appointmentId: 100,
+        startedAt: new Date(),
+        appointment: { id: 100, price: 20000 }, // $200.00 job
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: "completed",
+          payAmount: 6700, // 33.5% of $200 = $67.00 (6700 cents)
+        })
+      );
+    });
+
+    it("should track hours worked for per_job pay type", async () => {
+      const mockEmployee = {
+        id: 1,
+        defaultJobRate: 5000,
+      };
+      BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
+
+      const startedAt = new Date();
+      startedAt.setHours(startedAt.getHours() - 3); // 3 hours ago
+
+      const mockAssignment = {
+        id: 1,
+        isMarketplacePickup: false,
+        status: "started",
+        payType: "per_job",
+        appointmentId: 100,
+        startedAt,
+        appointment: { id: 100, price: 15000 },
+        update: jest.fn(),
+      };
+      EmployeeJobAssignment.findOne.mockResolvedValue(mockAssignment);
+      UserAppointments.update.mockResolvedValue([1]);
+
+      await EmployeeJobAssignmentService.completeJob(1, 5);
+
+      // Should still track hours even though pay is flat rate
+      expect(mockAssignment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hoursWorked: expect.any(Number),
+          payAmount: 5000, // Flat job rate, not hourly
+        })
+      );
+    });
   });
 
   describe("getMyJobs", () => {
@@ -749,6 +946,13 @@ describe("EmployeeJobAssignmentService", () => {
       lastName: "Smith",
       status: "active",
     };
+
+    beforeEach(() => {
+      // Reset all mocks before each reassignJob test
+      jest.clearAllMocks();
+      NotificationService.notifyEmployeeJobAssigned.mockResolvedValue({});
+      NotificationService.notifyEmployeeJobReassigned.mockResolvedValue({});
+    });
 
     it("should notify new employee when job is reassigned", async () => {
       EmployeeJobAssignment.findOne.mockResolvedValue(mockCurrentAssignment);

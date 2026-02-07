@@ -41,6 +41,7 @@ import TopBar from "../src/components/navBar/TopBar";
 import Bill from "../src/components/payments/Bill";
 import Earnings from "../src/components/payments/Earnings";
 import PaymentSetup from "../src/components/payments/PaymentSetup";
+import StripeConnectOnboarding from "../src/components/payments/StripeConnectOnboarding";
 import AllCleanerReviewsList from "../src/components/reviews/AllCleanerReviewsList";
 import AllReviewsList from "../src/components/reviews/AllReviewsList";
 import PendingReviewsList from "../src/components/reviews/PendingReviewsList";
@@ -140,6 +141,10 @@ import {
   FinancialsScreen,
   PayrollScreen,
   EmployeeMessaging,
+  BusinessOwnerProfile,
+  AssignmentDetail,
+  TimesheetScreen,
+  EmployeeHoursScreen,
 } from "../src/components/businessOwner";
 
 // Business Employee components
@@ -173,6 +178,11 @@ export default function App() {
     unreadCount: 0,
     // Cleaner type flags
     isMarketplaceCleaner: false,
+    // Business owner info
+    isBusinessOwner: false,
+    businessName: null,
+    businessLogo: null,
+    yearsInBusiness: null,
   });
 
   const fetchStripeConfig = async () => {
@@ -459,6 +469,10 @@ export default function App() {
                 element={<PaymentSetup state={state} dispatch={dispatch} />}
               />
               <Route
+                path="/payout-setup"
+                element={<StripeConnectOnboarding state={state} dispatch={dispatch} />}
+              />
+              <Route
                 path="/earnings"
                 element={<Earnings state={state} dispatch={dispatch} />}
               />
@@ -662,8 +676,24 @@ export default function App() {
                 element={<PayrollScreen state={state} />}
               />
               <Route
+                path="/business-owner/timesheet"
+                element={<TimesheetScreen state={state} />}
+              />
+              <Route
+                path="/business-owner/employees/:employeeId/hours"
+                element={<EmployeeHoursScreen state={state} />}
+              />
+              <Route
                 path="/business-owner/messages"
                 element={<EmployeeMessaging state={state} />}
+              />
+              <Route
+                path="/business-owner/profile"
+                element={<BusinessOwnerProfile state={state} />}
+              />
+              <Route
+                path="/business-owner/assignments/:assignmentId"
+                element={<AssignmentDetail state={state} />}
               />
               {/* Business Employee routes */}
               <Route

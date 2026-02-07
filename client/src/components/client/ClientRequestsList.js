@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -402,13 +403,31 @@ const ClientRequestsList = ({ state, dispatch }) => {
                       )
                     }
                   >
-                    <View style={[styles.avatarContainer, isOnHold && styles.avatarContainerOnHold]}>
-                      <Text style={[styles.avatarText, isOnHold && styles.avatarTextOnHold]}>
-                        {cleaner?.username?.charAt(0)?.toUpperCase() || "?"}
-                      </Text>
-                    </View>
+                    {cleaner?.businessLogo ? (
+                      <Image
+                        source={{ uri: cleaner.businessLogo }}
+                        style={[styles.businessLogoImage, isOnHold && styles.avatarContainerOnHold]}
+                      />
+                    ) : (
+                      <View style={[styles.avatarContainer, isOnHold && styles.avatarContainerOnHold]}>
+                        <Text style={[styles.avatarText, isOnHold && styles.avatarTextOnHold]}>
+                          {cleaner?.username?.charAt(0)?.toUpperCase() || "?"}
+                        </Text>
+                      </View>
+                    )}
                     <View style={styles.cleanerDetails}>
-                      <Text style={[styles.cleanerName, isOnHold && styles.cleanerNameOnHold]}>{cleaner?.username}</Text>
+                      {cleaner?.isBusinessOwner && cleaner?.businessName ? (
+                        <>
+                          <Text style={[styles.cleanerName, isOnHold && styles.cleanerNameOnHold]}>
+                            {cleaner.businessName}
+                          </Text>
+                          <Text style={styles.cleanerUsername}>@{cleaner?.username}</Text>
+                        </>
+                      ) : (
+                        <Text style={[styles.cleanerName, isOnHold && styles.cleanerNameOnHold]}>
+                          {cleaner?.username}
+                        </Text>
+                      )}
                       <View style={styles.ratingRow}>
                         <View style={styles.starsRow}>{renderStars(reviews)}</View>
                         {reviews.length > 0 ? (
@@ -688,6 +707,18 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
     marginBottom: 2,
+  },
+  cleanerUsername: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 2,
+  },
+  businessLogoImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.neutral[100],
+    marginRight: spacing.md,
   },
   ratingRow: {
     flexDirection: "row",
