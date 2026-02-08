@@ -32,7 +32,7 @@ const NewConversationModal = ({ visible, onClose }) => {
 
   const isOwner = state.account === "owner";
   const isHR = state.account === "humanResources";
-  const isBusinessOwner = state.currentUser?.isBusinessOwner;
+  const isBusinessOwner = state.isBusinessOwner;
 
   useEffect(() => {
     if (visible) {

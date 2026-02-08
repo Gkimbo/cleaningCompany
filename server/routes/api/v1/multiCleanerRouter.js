@@ -23,6 +23,7 @@ const MultiCleanerService = require("../../../services/MultiCleanerService");
 const RoomAssignmentService = require("../../../services/RoomAssignmentService");
 const MultiCleanerPricingService = require("../../../services/MultiCleanerPricingService");
 const NotificationService = require("../../../services/NotificationService");
+const CleanerApprovalService = require("../../../services/CleanerApprovalService");
 const { cancelEdgeCaseAppointment } = require("../../../services/cron/MultiCleanerFillMonitor");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const EncryptionService = require("../../../services/EncryptionService");
@@ -256,16 +257,21 @@ multiCleanerRouter.get("/offers", async (req, res) => {
       attributes: ["multiCleanerJobId"],
     }).then((completions) => completions.map((c) => c.multiCleanerJobId));
 
+    // Get job IDs where cleaner has pending join requests
+    const pendingRequestJobIds = await CleanerApprovalService.getPendingJobIdsForCleaner(cleanerId);
+
+    // Filter out jobs that cleaner already has offers for, is assigned to, or has pending requests
     const availableJobs = [...filteredOpenJobs, ...edgeLargeHomeJobs].filter(
       (job) =>
         !existingOfferJobIds.includes(job.id) &&
-        !assignedJobIds.includes(job.id)
+        !assignedJobIds.includes(job.id) &&
+        !pendingRequestJobIds.includes(job.id)
     );
 
     // Serialize with decrypted home data
-    return res.status(200).json(
-      MultiCleanerJobSerializer.serializeOffersResponse(offers, availableJobs)
-    );
+    const response = MultiCleanerJobSerializer.serializeOffersResponse(offers, availableJobs);
+    response.pendingRequestJobIds = pendingRequestJobIds;
+    return res.status(200).json(response);
   } catch (error) {
     console.error("Error fetching offers:", error);
     return res.status(500).json({ error: error.message });
@@ -481,7 +487,8 @@ multiCleanerRouter.post("/offers/:offerId/decline", async (req, res) => {
 
 /**
  * POST /join/:multiCleanerJobId
- * Join an open multi-cleaner job directly
+ * Request to join an open multi-cleaner job
+ * Preferred cleaners are auto-approved; others require homeowner approval
  */
 multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
   try {
@@ -530,14 +537,25 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
 
     const roomAssignmentIds = unassignedRooms.map((r) => r.id);
 
-    // Fill the slot
-    await MultiCleanerService.fillSlot(
+    // Use approval service - auto-approves preferred cleaners, creates request for others
+    const result = await CleanerApprovalService.requestToJoin(
       parseInt(multiCleanerJobId),
       cleanerId,
       roomAssignmentIds
     );
 
-    // Create cleaner-appointment assignment
+    if (result.status === "pending") {
+      // Non-preferred cleaner - request sent to homeowner
+      return res.status(202).json({
+        success: true,
+        status: "pending_approval",
+        joinRequestId: result.joinRequestId,
+        expiresAt: result.expiresAt,
+        message: result.message,
+      });
+    }
+
+    // Preferred cleaner - auto-approved, create cleaner-appointment assignment
     await UserCleanerAppointments.create({
       appointmentId: job.appointmentId,
       employeeId: cleanerId,
@@ -562,6 +580,9 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      status: "approved",
+      autoApproved: result.autoApproved,
+      isPreferred: result.isPreferred,
       job: MultiCleanerJobSerializer.serializeOne(updatedJob),
       assignedRooms: roomAssignmentIds.length,
       estimatedEarnings: earnings,

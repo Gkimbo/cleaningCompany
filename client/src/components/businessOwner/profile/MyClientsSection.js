@@ -168,7 +168,7 @@ const MyClientsSection = ({ state }) => {
             <Text style={styles.emptyStateText}>No clients yet</Text>
             <Pressable
               style={styles.addButton}
-              onPress={() => navigate("/my-clients/add")}
+              onPress={() => navigate("/my-clients")}
             >
               <Icon name="plus" size={12} color={colors.neutral[0]} />
               <Text style={styles.addButtonText}>Add Client</Text>
@@ -207,7 +207,7 @@ const MyClientsSection = ({ state }) => {
             <View style={styles.quickActions}>
               <Pressable
                 style={styles.quickActionButton}
-                onPress={() => navigate("/my-clients/add")}
+                onPress={() => navigate("/my-clients")}
               >
                 <Icon name="user-plus" size={14} color={colors.primary[600]} />
                 <Text style={styles.quickActionText}>Add Client</Text>

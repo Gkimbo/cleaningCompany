@@ -38,6 +38,12 @@ module.exports = (sequelize, DataTypes) => {
             "guest_not_left_escalation",
             "guest_not_left_expired",
             "last_minute_urgent",
+            // Cleaner approval notifications
+            "cleaner_join_request",
+            "join_request_approved",
+            "join_request_declined",
+            "join_request_auto_approved",
+            "cleaner_auto_approved",
           ],
         ],
       },

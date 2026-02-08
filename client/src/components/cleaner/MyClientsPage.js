@@ -303,6 +303,9 @@ const MyClientsPage = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+          <Icon name="arrow-left" size={18} color={colors.text.primary} />
+        </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>My Clients</Text>
           <Text style={styles.headerSubtitle}>
@@ -515,6 +518,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[200],
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
   },
   headerContent: {
     flex: 1,

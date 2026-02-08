@@ -253,6 +253,10 @@ const HomeAppointmentTile = ({
         discountApplied={appointment.discountApplied}
         employeesAssigned={appointment.employeesAssigned}
         pendingRequestCount={appointment.pendingRequestCount}
+        cleanersNeeded={appointment.cleanersNeeded}
+        cleanersConfirmed={appointment.cleanersConfirmed}
+        pendingApprovalCount={appointment.pendingApprovalCount}
+        isMultiCleanerJob={appointment.isMultiCleanerJob}
       />
     );
   };

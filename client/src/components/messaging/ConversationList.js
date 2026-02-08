@@ -50,7 +50,8 @@ const ConversationList = () => {
 
   const isOwner = state.account === "owner";
   const isHR = state.account === "humanResources";
-  const canCreateConversation = isOwner || isHR;
+  const isBusinessOwner = state.isBusinessOwner;
+  const canCreateConversation = isOwner || isHR || isBusinessOwner;
 
   const fetchConversations = useCallback(async () => {
     if (!state.currentUser?.token) return;
@@ -451,7 +452,7 @@ const ConversationList = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate("/")} style={styles.backButton}>
+        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
           <Icon name="arrow-left" size={22} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>Messages</Text>

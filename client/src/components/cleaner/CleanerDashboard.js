@@ -365,13 +365,29 @@ const CleanerDashboard = ({ state, dispatch }) => {
   // Preferred cleaner perk status
   const [perkStatus, setPerkStatus] = useState(null);
 
+  // Multi-cleaner requests
+  const [pendingMultiCleanerRequests, setPendingMultiCleanerRequests] = useState([]);
+
   useEffect(() => {
     if (state.currentUser.token) {
       fetchDashboardData();
       fetchStripeAccountStatus();
       fetchPerkStatus();
+      fetchMultiCleanerRequests();
     }
   }, [state.currentUser.token]);
+
+  // Fetch multi-cleaner requests
+  const fetchMultiCleanerRequests = async () => {
+    try {
+      const response = await FetchData.getMyMultiCleanerRequests(state.currentUser.token);
+      if (!response.error) {
+        setPendingMultiCleanerRequests(response.requests || []);
+      }
+    } catch (error) {
+      console.log("[CleanerDashboard] Error fetching multi-cleaner requests:", error.message);
+    }
+  };
 
   // Fetch preferred cleaner perk status
   const fetchPerkStatus = async () => {
@@ -573,6 +589,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
     fetchDashboardData(true);
     fetchStripeAccountStatus();
     fetchPerkStatus();
+    fetchMultiCleanerRequests();
   }, [state.currentUser.token]);
 
   const getGreeting = () => {
@@ -774,7 +791,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
           />
           <StatCard
             title="Pending"
-            value={pendingRequests.length}
+            value={pendingRequests.length + pendingMultiCleanerRequests.length}
             subtitle="requests"
             color={colors.warning[500]}
             onPress={() => navigate("/my-requests")}
@@ -857,7 +874,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
         )}
 
         {/* Pending Requests Section */}
-        {pendingRequests.length > 0 && (
+        {(pendingRequests.length > 0 || pendingMultiCleanerRequests.length > 0) && (
           <View style={styles.section}>
             <SectionHeader
               title="Pending Requests"
@@ -865,27 +882,81 @@ const CleanerDashboard = ({ state, dispatch }) => {
               actionText="View All"
             />
             <View style={styles.requestsList}>
-              {pendingRequests.slice(0, 3).map((request, index) => {
-                // Calculate distance for this request
-                let distance = null;
-                const loc = requestLocations[request.homeId];
-                if (userLocation && loc) {
-                  distance = haversineDistance(
-                    userLocation.latitude,
-                    userLocation.longitude,
-                    loc.latitude,
-                    loc.longitude
-                  );
-                }
-                return (
-                  <PendingRequestCard
-                    key={request.id || index}
-                    request={request}
-                    distance={distance}
-                    onPress={() => navigate("/my-requests")}
-                  />
-                );
-              })}
+              {/* Combine and sort all requests by date */}
+              {[
+                ...pendingRequests.map((r) => ({ ...r, type: "solo", sortDate: new Date(r.date + "T00:00:00") })),
+                ...pendingMultiCleanerRequests.map((r) => ({ ...r, type: "team", sortDate: new Date(r.appointment?.date) })),
+              ]
+                .sort((a, b) => a.sortDate - b.sortDate)
+                .slice(0, 3)
+                .map((request) => {
+                  if (request.type === "team") {
+                    return (
+                      <Pressable
+                        key={`mc-${request.id}`}
+                        style={({ pressed }) => [
+                          styles.teamRequestCard,
+                          pressed && styles.cardPressed,
+                        ]}
+                        onPress={() => navigate("/my-requests")}
+                      >
+                        <View style={styles.teamRequestHeader}>
+                          <View style={styles.teamBadgeSmall}>
+                            <Icon name="users" size={10} color={colors.primary[700]} />
+                            <Text style={styles.teamBadgeSmallText}>Team</Text>
+                          </View>
+                          <View style={styles.requestBadge}>
+                            <Text style={styles.requestBadgeText}>Pending</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.teamRequestLocation}>
+                          {request.appointment?.home?.city}, {request.appointment?.home?.state}
+                        </Text>
+                        <View style={styles.teamRequestInfo}>
+                          <Text style={styles.teamRequestDate}>
+                            {new Date(request.appointment?.date).toLocaleDateString("en-US", {
+                              weekday: "short",
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </Text>
+                          <Text style={styles.teamRequestEarnings}>
+                            ${(((Number(request.appointment?.price) || 0) * cleanerSharePercent) / (request.multiCleanerJob?.totalCleanersRequired || 2)).toFixed(0)}
+                          </Text>
+                        </View>
+                        {request.appointment?.timeToBeCompleted &&
+                         request.appointment.timeToBeCompleted.toLowerCase() !== "anytime" && (
+                          <View style={styles.timeConstraintRow}>
+                            <Icon name="clock-o" size={10} color={colors.warning[600]} />
+                            <Text style={styles.timeConstraintText}>
+                              Complete by {request.appointment.timeToBeCompleted}
+                            </Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  } else {
+                    // Solo request
+                    let distance = null;
+                    const loc = requestLocations[request.homeId];
+                    if (userLocation && loc) {
+                      distance = haversineDistance(
+                        userLocation.latitude,
+                        userLocation.longitude,
+                        loc.latitude,
+                        loc.longitude
+                      );
+                    }
+                    return (
+                      <PendingRequestCard
+                        key={request.id}
+                        request={request}
+                        distance={distance}
+                        onPress={() => navigate("/my-requests")}
+                      />
+                    );
+                  }
+                })}
             </View>
           </View>
         )}
@@ -1287,6 +1358,72 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
+  },
+
+  // Team Request Card
+  teamRequestCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+    ...shadows.sm,
+  },
+  teamRequestHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  teamBadgeSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[100],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    gap: 4,
+  },
+  teamBadgeSmallText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  teamRequestLocation: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  teamRequestInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  teamRequestDate: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  teamRequestEarnings: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  timeConstraintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
+    marginTop: spacing.xs,
+    gap: 4,
+    alignSelf: "flex-start",
+  },
+  timeConstraintText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
   },
   requestBadgeText: {
     fontSize: typography.fontSize.xs,

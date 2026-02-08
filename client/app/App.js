@@ -75,6 +75,7 @@ import ArchivedCleanings from "../src/components/client/ArchivedCleanings";
 import ClientReviews from "../src/components/client/ClientReviews";
 import CompleteHomeSetupWizard from "../src/components/client/CompleteHomeSetupWizard";
 import AcceptInvitationScreen from "../src/components/client/AcceptInvitationScreen";
+import PendingCleanerApprovals from "../src/components/client/PendingCleanerApprovals";
 
 // Employee components
 import AcceptEmployeeInvitationScreen from "../src/components/employee/AcceptEmployeeInvitationScreen";
@@ -580,6 +581,11 @@ export default function App() {
               <Route
                 path="/client-reviews"
                 element={<ClientReviews state={state} />}
+              />
+              {/* Pending Cleaner Approvals */}
+              <Route
+                path="/cleaner-approvals"
+                element={<PendingCleanerApprovals />}
               />
               {/* Owner Terms Editor */}
               <Route

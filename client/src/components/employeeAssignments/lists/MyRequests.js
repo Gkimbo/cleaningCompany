@@ -1,14 +1,26 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from "react-native";
+
+// Enable LayoutAnimation on Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import * as Location from "expo-location";
@@ -23,6 +35,7 @@ import {
   shadows,
 } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
+import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -39,8 +52,16 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 const sortOptions = [
   { value: "dateNewest", label: "Date (Soonest)", icon: "calendar" },
   { value: "dateOldest", label: "Date (Latest)", icon: "calendar-o" },
-  { value: "distanceClosest", label: "Distance (Closest)", icon: "location-arrow" },
-  { value: "distanceFurthest", label: "Distance (Furthest)", icon: "location-arrow" },
+  {
+    value: "distanceClosest",
+    label: "Distance (Closest)",
+    icon: "location-arrow",
+  },
+  {
+    value: "distanceFurthest",
+    label: "Distance (Furthest)",
+    icon: "location-arrow",
+  },
   { value: "priceLow", label: "Price (Low to High)", icon: "dollar" },
   { value: "priceHigh", label: "Price (High to Low)", icon: "dollar" },
 ];
@@ -57,46 +78,138 @@ const MyRequests = ({ state }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Multi-cleaner requests state
+  const [pendingMultiCleanerRequests, setPendingMultiCleanerRequests] =
+    useState([]);
+
+  // Track which request linens dropdowns are expanded
+  const [expandedLinens, setExpandedLinens] = useState({});
+
   const navigate = useNavigate();
 
+  const toggleLinens = useCallback((requestId) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedLinens((prev) => ({
+      ...prev,
+      [requestId]: !prev[requestId],
+    }));
+  }, []);
+
   // Fetch requests and user info
-  const fetchData = useCallback(async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
+  const fetchData = useCallback(
+    async (isRefresh = false) => {
+      if (!isRefresh) setLoading(true);
 
-    try {
-      const [response, userResponse] = await Promise.all([
-        FetchData.get("/api/v1/users/appointments/employee", state?.currentUser?.token),
-        getCurrentUser(state?.currentUser?.token),
-      ]);
+      try {
+        const [response, userResponse] = await Promise.all([
+          FetchData.get(
+            "/api/v1/users/appointments/employee",
+            state?.currentUser?.token
+          ),
+          getCurrentUser(state?.currentUser?.token),
+        ]);
 
-      const now = new Date();
-      const isUpcoming = (item) => new Date(item.date) >= new Date(now.toDateString());
+        const now = new Date();
+        const isUpcoming = (item) =>
+          new Date(item.date) >= new Date(now.toDateString());
 
-      setAllRequests((response?.requested || []).filter(isUpcoming));
-      setUserId(userResponse?.user?.id || null);
-    } catch (error) {
-      console.error("Error fetching requests:", error);
-      setAllRequests([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [state?.currentUser?.token]);
+        setAllRequests((response?.requested || []).filter(isUpcoming));
+        setUserId(userResponse?.user?.id || null);
+      } catch (error) {
+        console.error("Error fetching requests:", error);
+        setAllRequests([]);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [state?.currentUser?.token]
+  );
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Fetch locations for appointments
+  // Fetch multi-cleaner requests
+  const fetchMultiCleanerRequests = useCallback(async () => {
+    try {
+      const response = await FetchData.getMyMultiCleanerRequests(
+        state?.currentUser?.token
+      );
+      if (!response.error) {
+        setPendingMultiCleanerRequests(response.requests || []);
+      }
+    } catch (error) {
+      console.log("Error fetching multi-cleaner requests:", error.message);
+    }
+  }, [state?.currentUser?.token]);
+
+  useEffect(() => {
+    if (state?.currentUser?.token) {
+      fetchMultiCleanerRequests();
+    }
+  }, [fetchMultiCleanerRequests, state?.currentUser?.token]);
+
+  // Handle cancelling a multi-cleaner request
+  const handleCancelMultiCleanerRequest = useCallback(
+    (request) => {
+      Alert.alert(
+        "Cancel Request",
+        "Are you sure you want to cancel this team cleaning request?",
+        [
+          { text: "No, Keep It", style: "cancel" },
+          {
+            text: "Yes, Cancel",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                const result = await FetchData.cancelMultiCleanerRequest(
+                  request.id,
+                  state?.currentUser?.token
+                );
+                if (result.error) {
+                  Alert.alert("Error", result.error);
+                } else {
+                  Alert.alert(
+                    "Request Cancelled",
+                    "Your request has been cancelled."
+                  );
+                  fetchMultiCleanerRequests();
+                }
+              } catch (error) {
+                Alert.alert(
+                  "Error",
+                  "Failed to cancel request. Please try again."
+                );
+              }
+            },
+          },
+        ]
+      );
+    },
+    [state?.currentUser?.token, fetchMultiCleanerRequests]
+  );
+
+  // Fetch locations for all appointments (solo + team)
   useEffect(() => {
     const fetchLocations = async () => {
-      if (allRequests.length === 0) return;
+      // Collect all unique home IDs from solo and team requests
+      const soloHomeIds = (allRequests || [])
+        .map((a) => a.homeId)
+        .filter(Boolean);
+      const teamHomeIds = (pendingMultiCleanerRequests || [])
+        .map((r) => r.homeId || r.appointment?.home?.id)
+        .filter(Boolean);
+
+      const allHomeIds = [...new Set([...soloHomeIds, ...teamHomeIds])];
+
+      if (allHomeIds.length === 0) return;
 
       try {
         const locations = await Promise.all(
-          allRequests.map(async (appointment) => {
-            const loc = await FetchData.getLatAndLong(appointment.homeId);
-            return { [appointment.homeId]: loc };
+          allHomeIds.map(async (homeId) => {
+            const loc = await FetchData.getLatAndLong(homeId);
+            return { [homeId]: loc };
           })
         );
         setAppointmentLocations(Object.assign({}, ...locations));
@@ -106,7 +219,7 @@ const MyRequests = ({ state }) => {
     };
 
     fetchLocations();
-  }, [allRequests]);
+  }, [allRequests, pendingMultiCleanerRequests]);
 
   // Get user location using expo-location
   useEffect(() => {
@@ -159,11 +272,13 @@ const MyRequests = ({ state }) => {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchData(true);
-  }, [fetchData]);
+    fetchMultiCleanerRequests();
+  }, [fetchData, fetchMultiCleanerRequests]);
 
-  // Sort requests
-  const sortedRequests = useMemo(() => {
-    const processed = (allRequests || []).map((appointment) => {
+  // Combine and sort all requests (solo + team)
+  const combinedRequests = useMemo(() => {
+    // Normalize solo requests
+    const soloWithType = (allRequests || []).map((appointment) => {
       let distance = null;
       const loc = appointmentLocations[appointment.homeId];
       if (userLocation && loc) {
@@ -174,32 +289,81 @@ const MyRequests = ({ state }) => {
           loc.longitude
         );
       }
-      return { ...appointment, distance };
+      return {
+        ...appointment,
+        type: "solo",
+        sortDate: new Date(appointment.date + "T00:00:00"),
+        distance,
+        // Normalize price for sorting
+        sortPrice: Number(appointment.price) || 0,
+        cleanerEarnings: (Number(appointment.price) || 0) * cleanerSharePercent,
+      };
     });
 
-    return [...processed].sort((a, b) => {
+    // Normalize team requests
+    const teamWithType = (pendingMultiCleanerRequests || []).map((request) => {
+      const totalCleaners = request.multiCleanerJob?.totalCleanersRequired || 2;
+      const totalPrice = Number(request.appointment?.price) || 0;
+      const cleanerShare = (totalPrice * cleanerSharePercent) / totalCleaners;
+
+      // Calculate distance for team request
+      const teamHomeId = request.homeId || request.appointment?.home?.id;
+      let distance = null;
+      const loc = appointmentLocations[teamHomeId];
+      if (userLocation && loc) {
+        distance = haversineDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          loc.latitude,
+          loc.longitude
+        );
+      }
+
+      return {
+        ...request,
+        type: "team",
+        sortDate: new Date(request.appointment?.date),
+        homeId: teamHomeId,
+        distance,
+        sortPrice: cleanerShare, // Sort by cleaner's share
+        cleanerEarnings: cleanerShare,
+      };
+    });
+
+    // Combine and sort
+    const combined = [...soloWithType, ...teamWithType];
+
+    return combined.sort((a, b) => {
       switch (sortOption) {
         case "dateNewest":
-          return new Date(a.date) - new Date(b.date);
+          return a.sortDate - b.sortDate;
         case "dateOldest":
-          return new Date(b.date) - new Date(a.date);
+          return b.sortDate - a.sortDate;
         case "distanceClosest":
           return (a.distance ?? Infinity) - (b.distance ?? Infinity);
         case "distanceFurthest":
           return (b.distance ?? 0) - (a.distance ?? 0);
         case "priceLow":
-          return (Number(a.price) || 0) - (Number(b.price) || 0);
+          return a.sortPrice - b.sortPrice;
         case "priceHigh":
-          return (Number(b.price) || 0) - (Number(a.price) || 0);
+          return b.sortPrice - a.sortPrice;
         default:
           return 0;
       }
     });
-  }, [allRequests, userLocation, appointmentLocations, sortOption]);
+  }, [
+    allRequests,
+    pendingMultiCleanerRequests,
+    userLocation,
+    appointmentLocations,
+    sortOption,
+    cleanerSharePercent,
+  ]);
 
-  // Calculate stats (cleaners receive 90% of appointment price)
-  const totalEarnings = sortedRequests.reduce(
-    (sum, r) => sum + (Number(r.price) || 0) * cleanerSharePercent,
+  // Calculate stats
+  const totalRequests = combinedRequests.length;
+  const totalEarnings = combinedRequests.reduce(
+    (sum, r) => sum + r.cleanerEarnings,
     0
   );
 
@@ -248,14 +412,14 @@ const MyRequests = ({ state }) => {
         <View style={styles.statsRow}>
           <View style={[styles.statCard, styles.statCardHighlight]}>
             <Text style={[styles.statValue, styles.statValueHighlight]}>
-              {sortedRequests.length}
+              {totalRequests}
             </Text>
             <Text style={[styles.statLabel, styles.statLabelHighlight]}>
               Pending
             </Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>${totalEarnings.toFixed(0)}</Text>
+            <Text style={styles.statValue}>{totalEarnings.toFixed(0)}</Text>
             <Text style={styles.statLabel}>Potential</Text>
           </View>
         </View>
@@ -264,12 +428,12 @@ const MyRequests = ({ state }) => {
         <View style={styles.infoCard}>
           <Icon name="clock-o" size={18} color={colors.warning[600]} />
           <Text style={styles.infoText}>
-            These are jobs you've requested. Once approved by the homeowner, they'll
-            move to your "My Jobs" page.
+            These are jobs you've requested. Once approved by the homeowner,
+            they'll move to your "My Jobs" page.
           </Text>
         </View>
 
-        {sortedRequests.length > 0 ? (
+        {combinedRequests.length > 0 ? (
           <>
             {/* Sort Button */}
             <Pressable
@@ -281,37 +445,289 @@ const MyRequests = ({ state }) => {
               <Icon name="chevron-down" size={12} color={colors.primary[600]} />
             </Pressable>
 
-            {/* Requests Section */}
+            {/* Combined Requests List */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitleRow}>
                   <View style={styles.sectionBadge}>
-                    <Icon name="clock-o" size={12} color={colors.warning[600]} />
+                    <Icon
+                      name="clock-o"
+                      size={12}
+                      color={colors.warning[600]}
+                    />
                   </View>
                   <Text style={styles.sectionTitle}>Pending Approval</Text>
                 </View>
-                <Text style={styles.sectionCount}>{sortedRequests.length}</Text>
+                <Text style={styles.sectionCount}>
+                  {combinedRequests.length}
+                </Text>
               </View>
 
-              {sortedRequests.map((appointment) => (
-                <View key={appointment.id} style={styles.tileWrapper}>
-                  <RequestedTile
-                    {...appointment}
-                    cleanerId={userId}
-                    distance={appointment.distance}
-                    removeRequest={async (employeeId, appointmentId) => {
-                      try {
-                        await FetchData.removeRequest(employeeId, appointmentId);
-                        setAllRequests((prev) =>
-                          prev.filter((a) => a.id !== appointmentId)
-                        );
-                      } catch (error) {
-                        console.error("Error removing request:", error);
-                      }
-                    }}
-                  />
-                </View>
-              ))}
+              {combinedRequests.map((request) => {
+                if (request.type === "team") {
+                  // Team request tile
+                  const hasTimeConstraint =
+                    request.appointment?.timeToBeCompleted &&
+                    request.appointment.timeToBeCompleted.toLowerCase() !==
+                      "anytime";
+
+                  // Calculate per-cleaner linens based on assigned rooms
+                  const totalCleaners =
+                    request.multiCleanerJob?.totalCleanersRequired || 2;
+                  const totalBeds = request.appointment?.home?.numBeds || 0;
+                  const totalBaths = request.appointment?.home?.numBaths || 0;
+                  const hasAssignedRooms =
+                    (request.assignedBedrooms || 0) > 0 ||
+                    (request.assignedBathrooms || 0) > 0;
+
+                  const estimatedBedrooms = hasAssignedRooms
+                    ? request.assignedBedrooms
+                    : Math.ceil(totalBeds / totalCleaners);
+                  const estimatedBathrooms = hasAssignedRooms
+                    ? request.assignedBathrooms
+                    : Math.ceil(totalBaths / totalCleaners);
+
+                  const linensCalc = calculateLinensFromRoomCounts({
+                    assignedBedrooms: estimatedBedrooms,
+                    assignedBathrooms: estimatedBathrooms,
+                    bringSheets:
+                      request.appointment?.bringSheets?.toLowerCase() === "yes",
+                    bringTowels:
+                      request.appointment?.bringTowels?.toLowerCase() === "yes",
+                  });
+                  const isLinensEstimated = !hasAssignedRooms;
+                  const linensKey = `mc-${request.id}`;
+
+                  return (
+                    <View key={`mc-${request.id}`} style={styles.tileWrapper}>
+                      <View style={styles.multiCleanerRequestTile}>
+                        <View style={styles.multiCleanerRequestHeader}>
+                          <View style={styles.teamBadge}>
+                            <Icon
+                              name="users"
+                              size={12}
+                              color={colors.primary[600]}
+                            />
+                            <Text style={styles.teamBadgeText}>
+                              Team Cleaning
+                            </Text>
+                          </View>
+                          <Text style={styles.pendingBadge}>
+                            Awaiting Approval
+                          </Text>
+                        </View>
+
+                        <Text style={styles.multiCleanerRequestAddress}>
+                          {request.appointment?.home?.address},{" "}
+                          {request.appointment?.home?.city}
+                        </Text>
+                        <Text style={styles.multiCleanerRequestDate}>
+                          {new Date(
+                            request.appointment?.date
+                          ).toLocaleDateString("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </Text>
+                        <View style={styles.multiCleanerRequestDetails}>
+                          <Text style={styles.multiCleanerRequestDetail}>
+                            {request.appointment?.home?.numBeds} bed /{" "}
+                            {request.appointment?.home?.numBaths} bath
+                          </Text>
+                          <Text style={styles.multiCleanerRequestDetail}>
+                            {request.multiCleanerJob?.cleanersConfirmed || 0}/
+                            {request.multiCleanerJob?.totalCleanersRequired ||
+                              2}{" "}
+                            cleaners
+                          </Text>
+                          {request.distance != null && (
+                            <Text style={styles.multiCleanerRequestDetail}>
+                              {(request.distance * 0.621371).toFixed(1)} mi away
+                            </Text>
+                          )}
+                        </View>
+
+                        {/* Linens Dropdown */}
+                        {linensCalc.needsLinens && (
+                          <View style={styles.linensContainer}>
+                            <Pressable
+                              style={styles.linensHeader}
+                              onPress={() => toggleLinens(linensKey)}
+                            >
+                              <View style={styles.linensHeaderLeft}>
+                                <Icon
+                                  name="exclamation-triangle"
+                                  size={14}
+                                  color={colors.warning[600]}
+                                />
+                                <Text style={styles.linensHeaderText}>
+                                  Your Linens
+                                </Text>
+                              </View>
+                              <Icon
+                                name={
+                                  expandedLinens[linensKey]
+                                    ? "chevron-up"
+                                    : "chevron-down"
+                                }
+                                size={12}
+                                color={colors.warning[600]}
+                              />
+                            </Pressable>
+                            {expandedLinens[linensKey] && (
+                              <View style={styles.linensContent}>
+                                {linensCalc.needsSheets &&
+                                  linensCalc.sheetsText && (
+                                    <View style={styles.linenSection}>
+                                      <View style={styles.linenCategory}>
+                                        <Icon
+                                          name="bed"
+                                          size={14}
+                                          color={colors.primary[600]}
+                                        />
+                                        <Text style={styles.linenCategoryTitle}>
+                                          Sheets
+                                        </Text>
+                                      </View>
+                                      <Text style={styles.linenSummary}>
+                                        {linensCalc.sheetsText}
+                                      </Text>
+                                    </View>
+                                  )}
+                                {linensCalc.needsTowels &&
+                                  linensCalc.towelsText && (
+                                    <View
+                                      style={[
+                                        styles.linenSection,
+                                        linensCalc.needsSheets &&
+                                          styles.linenSectionSpaced,
+                                      ]}
+                                    >
+                                      <View style={styles.linenCategory}>
+                                        <Icon
+                                          name="tint"
+                                          size={14}
+                                          color={colors.primary[600]}
+                                        />
+                                        <Text style={styles.linenCategoryTitle}>
+                                          Towels
+                                        </Text>
+                                      </View>
+                                      <Text style={styles.linenSummary}>
+                                        {linensCalc.towelsText}
+                                      </Text>
+                                    </View>
+                                  )}
+                                <View style={styles.linenNote}>
+                                  <Icon
+                                    name="info-circle"
+                                    size={12}
+                                    color={colors.text.tertiary}
+                                  />
+                                  <Text style={styles.linenNoteText}>
+                                    {isLinensEstimated
+                                      ? `Estimated for your share (~${estimatedBedrooms} bed, ${estimatedBathrooms} bath)`
+                                      : `Based on your assigned rooms (${linensCalc.assignedBedrooms} bed, ${linensCalc.assignedBathrooms} bath)`}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                          </View>
+                        )}
+
+                        <View style={styles.multiCleanerRequestEarnings}>
+                          <Icon
+                            name="dollar"
+                            size={12}
+                            color={colors.success[600]}
+                          />
+                          <Text style={styles.multiCleanerRequestEarningsText}>
+                            {request.cleanerEarnings.toFixed(0)} your share
+                          </Text>
+                        </View>
+
+                        {/* Time Constraint */}
+                        {hasTimeConstraint && (
+                          <View style={styles.timeConstraintRow}>
+                            <Icon
+                              name="clock-o"
+                              size={12}
+                              color={colors.warning[600]}
+                            />
+                            <Text style={styles.timeConstraintText}>
+                              Complete by{" "}
+                              {request.appointment.timeToBeCompleted}
+                            </Text>
+                          </View>
+                        )}
+
+                        <Text style={styles.expiresText}>
+                          Expires{" "}
+                          {new Date(request.expiresAt).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </Text>
+                        <View style={styles.multiCleanerRequestActions}>
+                          <View style={styles.requestSentBadge}>
+                            <Icon
+                              name="check-circle"
+                              size={14}
+                              color={colors.success[600]}
+                            />
+                            <Text style={styles.requestSentText}>
+                              Request Sent
+                            </Text>
+                          </View>
+                          <Pressable
+                            style={styles.cancelRequestButton}
+                            onPress={() =>
+                              handleCancelMultiCleanerRequest(request)
+                            }
+                          >
+                            <Icon
+                              name="times"
+                              size={14}
+                              color={colors.error[600]}
+                            />
+                            <Text style={styles.cancelRequestText}>Cancel</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                } else {
+                  // Solo request tile
+                  return (
+                    <View key={`solo-${request.id}`} style={styles.tileWrapper}>
+                      <RequestedTile
+                        {...request}
+                        cleanerId={userId}
+                        distance={request.distance}
+                        removeRequest={async (employeeId, appointmentId) => {
+                          try {
+                            await FetchData.removeRequest(
+                              employeeId,
+                              appointmentId
+                            );
+                            setAllRequests((prev) =>
+                              prev.filter((a) => a.id !== appointmentId)
+                            );
+                          } catch (error) {
+                            console.error("Error removing request:", error);
+                          }
+                        }}
+                      />
+                    </View>
+                  );
+                }
+              })}
             </View>
           </>
         ) : (
@@ -322,8 +738,8 @@ const MyRequests = ({ state }) => {
             </View>
             <Text style={styles.emptyTitle}>No Pending Requests</Text>
             <Text style={styles.emptyText}>
-              You haven't requested any jobs yet. Browse available jobs and request
-              the ones you'd like to work on!
+              You haven't requested any jobs yet. Browse available jobs and
+              request the ones you'd like to work on!
             </Text>
             <Pressable
               style={styles.findJobsButton}
@@ -658,6 +1074,210 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: spacing["4xl"],
+  },
+
+  // Multi-cleaner request tile styles
+  multiCleanerRequestTile: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+  },
+  multiCleanerRequestHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  teamBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  teamBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  pendingBadge: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[600],
+    backgroundColor: colors.warning[50],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  multiCleanerRequestAddress: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  multiCleanerRequestDate: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  multiCleanerRequestDetails: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  multiCleanerRequestDetail: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  multiCleanerRequestEarnings: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  multiCleanerRequestEarningsText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  expiresText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
+  },
+  // Time Constraint
+  timeConstraintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
+    alignSelf: "flex-start",
+  },
+  timeConstraintText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
+  },
+  // Linens Dropdown
+  linensContainer: {
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  linensHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  linensHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  linensHeaderText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  linensContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[200],
+    paddingTop: spacing.sm,
+  },
+  linenSection: {
+    marginBottom: spacing.sm,
+  },
+  linenSectionSpaced: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[100],
+  },
+  linenCategory: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: 2,
+  },
+  linenCategoryTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  linenSummary: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    paddingLeft: 22,
+    lineHeight: 20,
+  },
+  linenNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[100],
+  },
+  linenNoteText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    flex: 1,
+    lineHeight: 16,
+  },
+  multiCleanerRequestActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  requestSentBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  requestSentText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  cancelRequestButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.error[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  cancelRequestText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.error[600],
   },
 });
 

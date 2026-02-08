@@ -16,6 +16,7 @@ const {
   HomePreferredCleaner,
   EmployeeJobAssignment,
   PreferredPerksConfig,
+  MultiCleanerJob,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -1078,6 +1079,17 @@ appointmentRouter.post("/", async (req, res) => {
           paid = false
         }
 
+        // Get time window - prefer appointment-specific, fall back to home default
+        const timeWindow = date.timeWindow || homeBeingScheduled.dataValues.timeToBeCompleted || "anytime";
+
+        // Calculate cleaners needed based on home size AND time constraints
+        const { getCleanersNeeded } = require("../../../config/businessConfig");
+        const cleanersNeeded = getCleanersNeeded(
+          homeBeingScheduled.dataValues.numBeds,
+          homeBeingScheduled.dataValues.numBaths,
+          timeWindow
+        );
+
         const newAppointment = await UserAppointments.create({
           userId,
           homeId,
@@ -1090,8 +1102,8 @@ appointmentRouter.post("/", async (req, res) => {
           keyLocation,
           completed: false,
           hasBeenAssigned: false,
-          empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded || 1,
-          timeToBeCompleted: homeBeingScheduled.dataValues.timeToBeCompleted,
+          empoyeesNeeded: cleanersNeeded,
+          timeToBeCompleted: timeWindow,
           sheetConfigurations: date.sheetConfigurations || null,
           towelConfigurations: date.towelConfigurations || null,
           // Discount incentive fields
@@ -3714,7 +3726,26 @@ appointmentRouter.patch("/:id", async (req, res) => {
         contact,
       });
     }
-    return res.status(200).json({ user: userInfo });
+
+    // Map empoyeesNeeded to cleanersNeeded for client compatibility
+    const responseData = userInfo.dataValues || userInfo;
+
+    // Get cleanersConfirmed from MultiCleanerJob if it exists
+    let cleanersConfirmed = 0;
+    if (responseData.multiCleanerJobId) {
+      const multiCleanerJob = await MultiCleanerJob.findByPk(responseData.multiCleanerJobId);
+      if (multiCleanerJob) {
+        cleanersConfirmed = multiCleanerJob.cleanersConfirmed || 0;
+      }
+    }
+
+    const mappedResponse = {
+      ...responseData,
+      cleanersNeeded: responseData.empoyeesNeeded,
+      cleanersConfirmed,
+    };
+
+    return res.status(200).json({ user: mappedResponse });
   } catch (error) {
     console.error(error);
 

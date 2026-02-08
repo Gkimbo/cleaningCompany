@@ -264,25 +264,25 @@ const BusinessAnalyticsDashboard = ({ state }) => {
   const cleaningsNeeded = access?.qualification?.cleaningsNeeded || 0;
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {/* Header */}
+    <View style={styles.container}>
+      {/* Fixed Header */}
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Business Analytics</Text>
-          <View style={[styles.tierBadge, isPremium ? styles.tierPremium : styles.tierStandard]}>
-            <Icon name={isPremium ? "diamond" : "bar-chart"} size={12} color={isPremium ? colors.warning[600] : colors.neutral[600]} />
-            <Text style={[styles.tierText, isPremium ? styles.tierTextPremium : styles.tierTextStandard]}>
-              {isPremium ? "Premium" : "Standard"}
-            </Text>
-          </View>
+        <Text style={styles.title}>Analytics</Text>
+        <View style={[styles.tierBadge, isPremium ? styles.tierPremium : styles.tierStandard]}>
+          <Icon name={isPremium ? "diamond" : "bar-chart"} size={12} color={isPremium ? colors.warning[600] : colors.neutral[600]} />
+          <Text style={[styles.tierText, isPremium ? styles.tierTextPremium : styles.tierTextStandard]}>
+            {isPremium ? "Premium" : "Standard"}
+          </Text>
         </View>
       </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
 
       {/* Tier Progress (if not premium) */}
       {!isPremium && (
@@ -624,7 +624,7 @@ const BusinessAnalyticsDashboard = ({ state }) => {
               <Text style={styles.feeRateText}>{financials?.feeTier?.feePercent || 0}% platform fee</Text>
             </View>
             {financials?.feeTier?.cleaningsToQualify > 0 && (
-              <View style={styles.tierProgress}>
+              <View style={styles.feeTierProgressContainer}>
                 <View style={styles.tierProgressBar}>
                   <View
                     style={[
@@ -718,8 +718,9 @@ const BusinessAnalyticsDashboard = ({ state }) => {
         </View>
       </View>
 
-      <View style={styles.bottomPadding} />
-    </ScrollView>
+        <View style={styles.bottomPadding} />
+      </ScrollView>
+    </View>
   );
 };
 
@@ -742,25 +743,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.md,
+    backgroundColor: colors.background.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: radius.full,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.neutral[100],
     justifyContent: "center",
     alignItems: "center",
-    ...shadows.sm,
-  },
-  headerContent: {
-    flex: 1,
-    marginLeft: spacing.md,
   },
   title: {
-    fontSize: typography.fontSize["2xl"],
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
@@ -770,8 +770,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.full,
-    alignSelf: "flex-start",
-    marginTop: spacing.xs,
+    gap: 4,
+  },
+  scrollView: {
+    flex: 1,
   },
   tierPremium: {
     backgroundColor: colors.warning[100],
@@ -782,7 +784,6 @@ const styles = StyleSheet.create({
   tierText: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
-    marginLeft: 4,
   },
   tierTextPremium: {
     color: colors.warning[700],
@@ -1659,7 +1660,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontWeight: typography.fontWeight.medium,
   },
-  tierProgress: {
+  feeTierProgressContainer: {
     gap: spacing.xs,
   },
   tierProgressBar: {

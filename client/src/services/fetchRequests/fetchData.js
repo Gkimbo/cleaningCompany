@@ -1276,6 +1276,58 @@ class FetchData {
       return { error: "Failed to join job" };
     }
   }
+
+  // Get cleaner's pending multi-cleaner job requests
+  static async getMyMultiCleanerRequests(token) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/cleaner-approval/my-requests",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch requests" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching multi-cleaner requests:", error);
+      return { error: "Failed to fetch requests" };
+    }
+  }
+
+  // Cancel a pending multi-cleaner job request
+  static async cancelMultiCleanerRequest(requestId, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/cleaner-approval/${requestId}/cancel`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to cancel request" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error cancelling multi-cleaner request:", error);
+      return { error: "Failed to cancel request" };
+    }
+  }
 }
 
 export default FetchData;

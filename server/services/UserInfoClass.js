@@ -1,6 +1,6 @@
-const { UserHomes, User, UserAppointments, UserBills } = require("../models");
+const { UserHomes, User, UserAppointments, UserBills, MultiCleanerJob } = require("../models");
 const bcrypt = require("bcrypt");
-const { getPricingConfig } = require("../config/businessConfig");
+const { getPricingConfig, getCleanersNeeded } = require("../config/businessConfig");
 const HomeClass = require("./HomeClass");
 
 class UserInfoClass {
@@ -209,6 +209,7 @@ class UserInfoClass {
   static async editTimeInDB({ id, timeToBeCompleted }) {
     const existingAppointment = await UserAppointments.findOne({
       where: { id },
+      include: [{ model: UserHomes, as: "home" }],
     });
 
     if (!existingAppointment) {
@@ -243,6 +244,13 @@ class UserInfoClass {
       Number(existingBill.dataValues.appointmentDue) + priceDifference;
     const totalOverallPrice = Number(existingBill.dataValues.totalDue) + priceDifference;
 
+    // Calculate new cleaners needed based on home size and new time window
+    const home = existingAppointment.home;
+    const numBeds = home?.numBeds || 1;
+    const numBaths = home?.numBaths || 1;
+    const oldCleanersNeeded = existingAppointment.empoyeesNeeded || 1;
+    const newCleanersNeeded = getCleanersNeeded(numBeds, numBaths, timeToBeCompleted);
+
     try {
       if (priceDifference !== 0 && existingBill) {
         await existingBill.update({
@@ -250,10 +258,53 @@ class UserInfoClass {
           totalDue: totalOverallPrice,
         });
       }
-      await existingAppointment.update({
+
+      // Build update object
+      const updateData = {
         timeToBeCompleted,
         price: finalPrice,
-      });
+      };
+
+      // Update cleaners needed if it changed
+      if (newCleanersNeeded !== oldCleanersNeeded) {
+        updateData.empoyeesNeeded = newCleanersNeeded;
+        console.log(`[TimeWindow Update] Appointment ${id}: cleaners needed changed from ${oldCleanersNeeded} to ${newCleanersNeeded}`);
+
+        // Handle MultiCleanerJob updates
+        if (newCleanersNeeded > 1) {
+          // Need multiple cleaners - create or update MultiCleanerJob
+          let multiCleanerJob = await MultiCleanerJob.findOne({
+            where: { appointmentId: id },
+          });
+
+          if (multiCleanerJob) {
+            // Update existing job
+            await multiCleanerJob.update({
+              totalCleanersRequired: newCleanersNeeded,
+            });
+            console.log(`[TimeWindow Update] Updated MultiCleanerJob ${multiCleanerJob.id} to ${newCleanersNeeded} cleaners`);
+          } else {
+            // Create new job
+            multiCleanerJob = await MultiCleanerJob.create({
+              appointmentId: id,
+              totalCleanersRequired: newCleanersNeeded,
+              cleanersConfirmed: existingAppointment.employeesAssigned?.length || 0,
+              status: "open",
+            });
+            console.log(`[TimeWindow Update] Created MultiCleanerJob ${multiCleanerJob.id} for ${newCleanersNeeded} cleaners`);
+          }
+
+          updateData.isMultiCleanerJob = true;
+          updateData.multiCleanerJobId = multiCleanerJob.id;
+        } else if (oldCleanersNeeded > 1 && newCleanersNeeded === 1) {
+          // No longer needs multiple cleaners - remove MultiCleanerJob link
+          updateData.isMultiCleanerJob = false;
+          // Note: We don't delete the MultiCleanerJob record to preserve history
+          console.log(`[TimeWindow Update] Appointment ${id} no longer needs multiple cleaners`);
+        }
+      }
+
+      await existingAppointment.update(updateData);
 
       return existingAppointment;
     } catch (error) {

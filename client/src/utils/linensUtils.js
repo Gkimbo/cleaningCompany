@@ -138,3 +138,93 @@ export const getEffectiveTowelConfigs = (towelConfigs, roomAssignments, isMultiC
   }
   return filterBathroomsForCleaner(parsedConfigs, roomAssignments);
 };
+
+/**
+ * Calculate linens needed based on assigned room counts
+ * Used for multi-cleaner jobs where we know the number of assigned rooms
+ * @param {Object} params
+ * @param {number} params.assignedBedrooms - Number of bedrooms assigned to cleaner
+ * @param {number} params.assignedBathrooms - Number of bathrooms assigned to cleaner
+ * @param {boolean} params.bringSheets - Whether sheets are required for this job
+ * @param {boolean} params.bringTowels - Whether towels are required for this job
+ * @returns {Object} - { sheets: string, towels: string, needsSheets: boolean, needsTowels: boolean }
+ */
+export const calculateLinensFromRoomCounts = ({
+  assignedBedrooms = 0,
+  assignedBathrooms = 0,
+  bringSheets = false,
+  bringTowels = false,
+}) => {
+  const needsSheets = bringSheets && assignedBedrooms > 0;
+  const needsTowels = bringTowels && assignedBathrooms > 0;
+
+  // Calculate sheets: 1 sheet set per bedroom
+  const sheetsText = needsSheets
+    ? `${assignedBedrooms} sheet set${assignedBedrooms !== 1 ? "s" : ""} (fitted, flat, pillowcases)`
+    : null;
+
+  // Calculate towels: 2 bath towels, 1 hand towel, 2 washcloths per bathroom
+  const bathTowels = assignedBathrooms * 2;
+  const handTowels = assignedBathrooms;
+  const washcloths = assignedBathrooms * 2;
+  const towelsText = needsTowels
+    ? `${bathTowels} bath towel${bathTowels !== 1 ? "s" : ""}, ${handTowels} hand towel${handTowels !== 1 ? "s" : ""}, ${washcloths} washcloth${washcloths !== 1 ? "s" : ""}`
+    : null;
+
+  return {
+    sheetsText,
+    towelsText,
+    needsSheets,
+    needsTowels,
+    needsLinens: needsSheets || needsTowels,
+    assignedBedrooms,
+    assignedBathrooms,
+  };
+};
+
+/**
+ * Calculate linens for a multi-cleaner request/job
+ * Uses assigned rooms if available, otherwise estimates based on equal split
+ * @param {Object} params
+ * @param {number} params.totalBedrooms - Total bedrooms in the home
+ * @param {number} params.totalBathrooms - Total bathrooms in the home
+ * @param {number} params.totalCleaners - Number of cleaners for the job
+ * @param {number|null} params.assignedBedrooms - Specific assigned bedrooms (if known)
+ * @param {number|null} params.assignedBathrooms - Specific assigned bathrooms (if known)
+ * @param {boolean} params.bringSheets - Whether sheets are required
+ * @param {boolean} params.bringTowels - Whether towels are required
+ * @returns {Object} - Linens calculation result
+ */
+export const calculateMultiCleanerLinens = ({
+  totalBedrooms = 0,
+  totalBathrooms = 0,
+  totalCleaners = 2,
+  assignedBedrooms = null,
+  assignedBathrooms = null,
+  bringSheets = false,
+  bringTowels = false,
+}) => {
+  // If we have specific assignments, use those
+  // Otherwise, estimate based on equal split
+  const bedroomsForCleaner = assignedBedrooms !== null
+    ? assignedBedrooms
+    : Math.ceil(totalBedrooms / totalCleaners);
+
+  const bathroomsForCleaner = assignedBathrooms !== null
+    ? assignedBathrooms
+    : Math.ceil(totalBathrooms / totalCleaners);
+
+  const isEstimated = assignedBedrooms === null || assignedBathrooms === null;
+
+  const result = calculateLinensFromRoomCounts({
+    assignedBedrooms: bedroomsForCleaner,
+    assignedBathrooms: bathroomsForCleaner,
+    bringSheets,
+    bringTowels,
+  });
+
+  return {
+    ...result,
+    isEstimated,
+  };
+};

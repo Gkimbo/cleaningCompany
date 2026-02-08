@@ -9,6 +9,8 @@ const {
   UserBills,
   UserReviews,
   UserPendingRequests,
+  MultiCleanerJob,
+  CleanerJoinRequest,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
@@ -77,12 +79,60 @@ userInfoRouter.get("/", async (req, res) => {
       pendingRequestCounts[req.appointmentId] = (pendingRequestCounts[req.appointmentId] || 0) + 1;
     });
 
-    // Add hasClientReview and pendingRequestCount to each appointment
-    const appointmentsWithReviewStatus = user.appointments.map((apt) => ({
-      ...apt.dataValues,
-      hasClientReview: reviewedAppointmentIds.has(apt.id),
-      pendingRequestCount: pendingRequestCounts[apt.id] || 0,
-    }));
+    // Get multi-cleaner job data for appointments
+    const multiCleanerJobs = await MultiCleanerJob.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+      },
+      attributes: ["id", "appointmentId", "totalCleanersRequired", "cleanersConfirmed", "status"],
+    });
+
+    // Map multi-cleaner job data by appointment ID
+    const multiCleanerJobsByAppointment = {};
+    multiCleanerJobs.forEach((job) => {
+      multiCleanerJobsByAppointment[job.appointmentId] = {
+        multiCleanerJobId: job.id,
+        cleanersNeeded: job.totalCleanersRequired,
+        cleanersConfirmed: job.cleanersConfirmed,
+        multiCleanerStatus: job.status,
+      };
+    });
+
+    // Get pending approval requests (cleaner join requests awaiting homeowner approval)
+    const pendingApprovalRequests = await CleanerJoinRequest.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        status: "pending",
+      },
+      attributes: ["appointmentId"],
+    });
+
+    // Count pending approval requests per appointment
+    const pendingApprovalCounts = {};
+    pendingApprovalRequests.forEach((req) => {
+      pendingApprovalCounts[req.appointmentId] = (pendingApprovalCounts[req.appointmentId] || 0) + 1;
+    });
+
+    // Add hasClientReview, pendingRequestCount, and multi-cleaner data to each appointment
+    const appointmentsWithReviewStatus = user.appointments.map((apt) => {
+      const mcJob = multiCleanerJobsByAppointment[apt.id];
+      const employeesCount = apt.employeesAssigned ? apt.employeesAssigned.length : 0;
+      // Use appointment's empoyeesNeeded (calculated at booking with time window factored in)
+      // Fall back to 1 if not set
+      const appointmentNeeds = apt.empoyeesNeeded || 1;
+
+      return {
+        ...apt.dataValues,
+        hasClientReview: reviewedAppointmentIds.has(apt.id),
+        pendingRequestCount: pendingRequestCounts[apt.id] || 0,
+        pendingApprovalCount: pendingApprovalCounts[apt.id] || 0,
+        // If there's a MultiCleanerJob record, use that data; otherwise use appointment's empoyeesNeeded
+        cleanersNeeded: mcJob ? mcJob.cleanersNeeded : appointmentNeeds,
+        cleanersConfirmed: mcJob ? mcJob.cleanersConfirmed : employeesCount,
+        multiCleanerJobId: mcJob ? mcJob.multiCleanerJobId : null,
+        multiCleanerStatus: mcJob ? mcJob.multiCleanerStatus : null,
+      };
+    });
 
     // Replace appointments with enriched data
     const userData = {

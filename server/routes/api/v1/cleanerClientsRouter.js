@@ -404,7 +404,8 @@ const verifyHomeowner = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    if (!user || user.type !== "homeowner") {
+    // In this codebase, homeowners have type: null
+    if (!user || user.type !== null) {
       return res.status(403).json({ error: "Homeowner access required" });
     }
 
@@ -432,7 +433,7 @@ cleanerClientsRouter.get("/my-cleaner", verifyHomeowner, async (req, res) => {
         {
           model: User,
           as: "cleaner",
-          attributes: ["id", "firstName", "lastName", "email", "phoneNumber", "profilePhoto"],
+          attributes: ["id", "firstName", "lastName", "email", "phone"],
         },
       ],
     });
@@ -456,7 +457,6 @@ cleanerClientsRouter.get("/my-cleaner", verifyHomeowner, async (req, res) => {
         id: relationship.cleaner.id,
         firstName: EncryptionService.decrypt(relationship.cleaner.firstName),
         lastName: EncryptionService.decrypt(relationship.cleaner.lastName),
-        profilePhoto: relationship.cleaner.profilePhoto,
         averageRating: avgRating,
         totalReviews: reviews.length,
       },

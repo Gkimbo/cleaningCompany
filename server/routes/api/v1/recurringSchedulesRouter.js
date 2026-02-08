@@ -410,7 +410,8 @@ const verifyHomeowner = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    if (!user || user.type !== "homeowner") {
+    // In this codebase, homeowners have type: null
+    if (!user || user.type !== null) {
       return res.status(403).json({ error: "Homeowner access required" });
     }
 
@@ -436,7 +437,7 @@ recurringSchedulesRouter.get("/my-schedules", verifyHomeowner, async (req, res) 
         {
           model: User,
           as: "cleaner",
-          attributes: ["id", "firstName", "lastName", "profilePhoto"],
+          attributes: ["id", "firstName", "lastName"],
         },
         {
           model: UserHomes,
@@ -465,7 +466,6 @@ recurringSchedulesRouter.get("/my-schedules", verifyHomeowner, async (req, res) 
               id: s.cleaner.id,
               firstName: EncryptionService.decrypt(s.cleaner.firstName),
               lastName: EncryptionService.decrypt(s.cleaner.lastName),
-              profilePhoto: s.cleaner.profilePhoto,
             }
           : null,
         home: s.home

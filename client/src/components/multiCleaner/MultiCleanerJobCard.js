@@ -33,7 +33,11 @@ const MultiCleanerJobCard = ({
   expiresAt = null,
   isBusinessOwner = false,
   hasEmployees = false,
+  timeToBeCompleted = null,
 }) => {
+  // Check if there's a specific time constraint (not "anytime")
+  const hasTimeConstraint = timeToBeCompleted &&
+    timeToBeCompleted.toLowerCase() !== "anytime";
   const formatDate = (dateString) => {
     const date = new Date(dateString + "T00:00:00");
     return date.toLocaleDateString("en-US", {
@@ -118,6 +122,20 @@ const MultiCleanerJobCard = ({
           </View>
         )}
 
+        {/* Distance and Home Size */}
+        <View style={styles.detailsRow}>
+          {job.numBeds != null && job.numBaths != null && (
+            <Text style={styles.detailText}>
+              {job.numBeds} bed / {job.numBaths} bath
+            </Text>
+          )}
+          {job.distance != null && (
+            <Text style={styles.detailText}>
+              {(job.distance * 0.621371).toFixed(1)} mi away
+            </Text>
+          )}
+        </View>
+
         {/* Cleaners Visualization */}
         <View style={styles.cleanersRow}>
           <View style={styles.cleanerSlots}>
@@ -155,6 +173,16 @@ const MultiCleanerJobCard = ({
             <Text style={styles.percentText}>({job.percentOfWork}% of job)</Text>
           )}
         </View>
+
+        {/* Time Constraint */}
+        {hasTimeConstraint && (
+          <View style={styles.timeConstraintRow}>
+            <Feather name="clock" size={12} color={colors.warning[600]} />
+            <Text style={styles.timeConstraintText}>
+              Complete by {timeToBeCompleted}
+            </Text>
+          </View>
+        )}
 
         {/* Room Assignments Preview */}
         {job.assignedRooms && job.assignedRooms.length > 0 && (
@@ -260,7 +288,7 @@ const MultiCleanerJobCard = ({
               ) : (
                 <>
                   <Feather name="user-plus" size={18} color={colors.white} />
-                  <Text style={styles.joinButtonText}>Join Team</Text>
+                  <Text style={styles.joinButtonText}>Request to Join Team</Text>
                 </>
               )}
             </Pressable>
@@ -294,6 +322,22 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.md,
+  },
+  timeConstraintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+    alignSelf: "center",
+  },
+  timeConstraintText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.warning[700],
   },
   teamBadge: {
     flexDirection: "row",
@@ -335,6 +379,16 @@ const styles = StyleSheet.create({
     ...typography.sm,
     color: colors.neutral[600],
     flex: 1,
+  },
+  detailsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  detailText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
   },
   cleanersRow: {
     flexDirection: "row",
