@@ -9,7 +9,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 
-const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBookCleaning, onSetupRecurring, onMessage, onPriceUpdate }) => {
+const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBookCleaning, onSetupRecurring, onMessage, onPriceUpdate, platformPrice }) => {
   const [editingPrice, setEditingPrice] = useState(false);
   const [priceInput, setPriceInput] = useState(client.defaultPrice?.toString() || "");
   const isPending = client.status === "pending_invite";
@@ -49,16 +49,8 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
     setPriceInput(client.defaultPrice?.toString() || "");
   };
 
-  const handlePriceSave = async (e) => {
-    e.stopPropagation();
-    if (!priceInput || isNaN(parseFloat(priceInput))) {
-      Alert.alert("Error", "Please enter a valid price");
-      return;
-    }
-
-    const newPrice = parseFloat(priceInput);
+  const savePrice = async (newPrice) => {
     setEditingPrice(false);
-
     if (onPriceUpdate) {
       const success = await onPriceUpdate(client.id, newPrice);
       if (!success) {
@@ -68,10 +60,46 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
     }
   };
 
+  const handlePriceSave = async (e) => {
+    e.stopPropagation();
+    if (!priceInput || isNaN(parseFloat(priceInput))) {
+      Alert.alert("Error", "Please enter a valid price");
+      return;
+    }
+
+    const newPrice = parseFloat(priceInput);
+    const oldPrice = client.defaultPrice;
+
+    // If active client and price changed, show confirmation
+    if (isActive && newPrice !== oldPrice) {
+      Alert.alert(
+        "Change Price?",
+        "Are you sure you'd like to change the price to clean this home? The client will be notified.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Yes, Change Price",
+            onPress: () => savePrice(newPrice),
+          },
+        ]
+      );
+    } else {
+      // Pending client or same price - no confirmation needed
+      savePrice(newPrice);
+    }
+  };
+
   const handlePriceCancel = (e) => {
     e.stopPropagation();
     setEditingPrice(false);
     setPriceInput(client.defaultPrice?.toString() || "");
+  };
+
+  const handleUsePlatformPrice = (e) => {
+    e.stopPropagation();
+    if (platformPrice) {
+      setPriceInput(platformPrice.toString());
+    }
   };
 
   const displayName = isActive && client.client
@@ -155,28 +183,45 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
           )}
           {(client.defaultPrice || onPriceUpdate) && (
             editingPrice ? (
-              <View style={styles.priceEditContainer}>
-                <Text style={styles.dollarSign}>$</Text>
-                <TextInput
-                  style={styles.priceEditInput}
-                  value={priceInput}
-                  onChangeText={setPriceInput}
-                  keyboardType="decimal-pad"
-                  autoFocus
-                  onBlur={handlePriceCancel}
-                />
-                <Pressable
-                  style={styles.priceSaveBtn}
-                  onPress={handlePriceSave}
-                >
-                  <Feather name="check" size={14} color={colors.neutral[0]} />
-                </Pressable>
-                <Pressable
-                  style={styles.priceCancelBtn}
-                  onPress={handlePriceCancel}
-                >
-                  <Feather name="x" size={14} color={colors.neutral[600]} />
-                </Pressable>
+              <View style={styles.priceEditWrapper}>
+                <View style={styles.priceEditContainer}>
+                  <Text style={styles.dollarSign}>$</Text>
+                  <TextInput
+                    style={styles.priceEditInput}
+                    value={priceInput}
+                    onChangeText={setPriceInput}
+                    keyboardType="decimal-pad"
+                    autoFocus
+                  />
+                  <Pressable
+                    style={styles.priceSaveBtn}
+                    onPress={handlePriceSave}
+                  >
+                    <Feather name="check" size={14} color={colors.neutral[0]} />
+                  </Pressable>
+                  <Pressable
+                    style={styles.priceCancelBtn}
+                    onPress={handlePriceCancel}
+                  >
+                    <Feather name="x" size={14} color={colors.neutral[600]} />
+                  </Pressable>
+                </View>
+                {platformPrice && (
+                  <View style={styles.platformPriceRow}>
+                    <Text style={styles.platformPriceLabel}>
+                      Platform: ${platformPrice}
+                    </Text>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.usePlatformBtn,
+                        pressed && styles.usePlatformBtnPressed,
+                      ]}
+                      onPress={handleUsePlatformPrice}
+                    >
+                      <Text style={styles.usePlatformBtnText}>Use</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             ) : (
               <Pressable
@@ -414,6 +459,10 @@ const styles = StyleSheet.create({
   },
 
   // Price editing
+  priceEditWrapper: {
+    flexDirection: "column",
+    gap: spacing.xs,
+  },
   priceDisplayItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -471,6 +520,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[200],
     alignItems: "center",
     justifyContent: "center",
+  },
+  platformPriceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  platformPriceLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+  },
+  usePlatformBtn: {
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  usePlatformBtnPressed: {
+    backgroundColor: colors.primary[200],
+  },
+  usePlatformBtnText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
   },
 
   // Active client actions

@@ -14,17 +14,15 @@ class Appointment {
         },
       });
       if (!response.ok) {
-        if (response.status === 400) {
-          const responseData = await response.json();
-          return responseData;
-        }
-        const error = new Error(`${response.status}(${response.statusText})`);
-        throw error;
+        const responseData = await response.json();
+        console.error("Failed to add appointment:", response.status, responseData);
+        return { success: false, error: responseData.error || `Error: ${response.status}` };
       }
       const responseData = await response.json();
-      return true;
+      return { success: true, data: responseData };
     } catch (err) {
-      return err;
+      console.error("Error adding appointment:", err);
+      return { success: false, error: err.message || "Network error" };
     }
   }
 

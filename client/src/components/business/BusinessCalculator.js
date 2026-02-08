@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Pressable,
+  Switch,
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import { Feather } from "@expo/vector-icons";
@@ -32,35 +33,68 @@ const BusinessCalculator = ({ state }) => {
   const [avgJobPrice, setAvgJobPrice] = useState("150");
   const [jobsPerWeek, setJobsPerWeek] = useState("10");
 
+  // Employee pay settings
+  const [employeePayEnabled, setEmployeePayEnabled] = useState(false);
+  const [employeePayType, setEmployeePayType] = useState("hourly"); // "hourly", "perJob", "percentage"
+  const [hourlyRate, setHourlyRate] = useState("25");
+  const [hoursPerJob, setHoursPerJob] = useState("1.5");
+  const [amountPerJob, setAmountPerJob] = useState("50");
+  const [percentageOfJob, setPercentageOfJob] = useState("50");
+
   // Parse inputs safely
   const parsedSingleJob = parseFloat(singleJobPrice) || 0;
   const parsedAvgJob = parseFloat(avgJobPrice) || 0;
   const parsedJobsPerWeek = parseFloat(jobsPerWeek) || 0;
+  const parsedHourlyRate = parseFloat(hourlyRate) || 0;
+  const parsedHoursPerJob = parseFloat(hoursPerJob) || 0;
+  const parsedAmountPerJob = parseFloat(amountPerJob) || 0;
+  const parsedPercentageOfJob = parseFloat(percentageOfJob) || 0;
+
+  // Calculate employee pay per job based on pay type
+  const calculateEmployeePay = useCallback((jobPrice) => {
+    if (!employeePayEnabled) return 0;
+    switch (employeePayType) {
+      case "hourly":
+        return parsedHourlyRate * parsedHoursPerJob;
+      case "perJob":
+        return parsedAmountPerJob;
+      case "percentage":
+        return jobPrice * (parsedPercentageOfJob / 100);
+      default:
+        return 0;
+    }
+  }, [employeePayEnabled, employeePayType, parsedHourlyRate, parsedHoursPerJob, parsedAmountPerJob, parsedPercentageOfJob]);
 
   // Single job calculations
   const singleJobFee = parsedSingleJob * feePercent;
-  const singleJobNet = parsedSingleJob * keepPercent;
+  const singleJobEmployeePay = calculateEmployeePay(parsedSingleJob);
+  const singleJobNet = parsedSingleJob * keepPercent - singleJobEmployeePay;
 
   // Projection calculations
   const projections = useMemo(() => {
+    const employeePayPerJob = calculateEmployeePay(parsedAvgJob);
+
     const weeklyGross = parsedAvgJob * parsedJobsPerWeek;
     const weeklyFee = weeklyGross * feePercent;
-    const weeklyNet = weeklyGross * keepPercent;
+    const weeklyEmployeePay = employeePayPerJob * parsedJobsPerWeek;
+    const weeklyNet = weeklyGross * keepPercent - weeklyEmployeePay;
 
     const monthlyGross = weeklyGross * 4.33;
     const monthlyFee = monthlyGross * feePercent;
-    const monthlyNet = monthlyGross * keepPercent;
+    const monthlyEmployeePay = weeklyEmployeePay * 4.33;
+    const monthlyNet = monthlyGross * keepPercent - monthlyEmployeePay;
 
     const yearlyGross = weeklyGross * 52;
     const yearlyFee = yearlyGross * feePercent;
-    const yearlyNet = yearlyGross * keepPercent;
+    const yearlyEmployeePay = weeklyEmployeePay * 52;
+    const yearlyNet = yearlyGross * keepPercent - yearlyEmployeePay;
 
     return {
-      weekly: { gross: weeklyGross, fee: weeklyFee, net: weeklyNet },
-      monthly: { gross: monthlyGross, fee: monthlyFee, net: monthlyNet },
-      yearly: { gross: yearlyGross, fee: yearlyFee, net: yearlyNet },
+      weekly: { gross: weeklyGross, fee: weeklyFee, employeePay: weeklyEmployeePay, net: weeklyNet },
+      monthly: { gross: monthlyGross, fee: monthlyFee, employeePay: monthlyEmployeePay, net: monthlyNet },
+      yearly: { gross: yearlyGross, fee: yearlyFee, employeePay: yearlyEmployeePay, net: yearlyNet },
     };
-  }, [parsedAvgJob, parsedJobsPerWeek, feePercent, keepPercent]);
+  }, [parsedAvgJob, parsedJobsPerWeek, feePercent, keepPercent, calculateEmployeePay]);
 
   const formatCurrency = (value) => {
     return new Intl.NumberFormat("en-US", {
@@ -103,6 +137,177 @@ const BusinessCalculator = ({ state }) => {
           </View>
         </View>
 
+        {/* Employee Pay Section */}
+        <View style={styles.section}>
+          <View style={styles.employeePayHeader}>
+            <View style={styles.employeePayTitleRow}>
+              <Feather name="users" size={20} color={colors.secondary[600]} />
+              <Text style={styles.sectionTitle}>Employee Pay</Text>
+            </View>
+            <Switch
+              value={employeePayEnabled}
+              onValueChange={setEmployeePayEnabled}
+              trackColor={{ false: colors.neutral[300], true: colors.secondary[400] }}
+              thumbColor={employeePayEnabled ? colors.secondary[600] : colors.neutral[100]}
+            />
+          </View>
+
+          {employeePayEnabled && (
+            <View style={styles.employeePayContent}>
+              {/* Pay Type Selector */}
+              <Text style={styles.inputLabel}>Pay Type</Text>
+              <View style={styles.payTypeSelector}>
+                <Pressable
+                  style={[
+                    styles.payTypeOption,
+                    employeePayType === "hourly" && styles.payTypeOptionActive,
+                  ]}
+                  onPress={() => setEmployeePayType("hourly")}
+                >
+                  <Feather
+                    name="clock"
+                    size={16}
+                    color={employeePayType === "hourly" ? colors.neutral[0] : colors.text.secondary}
+                  />
+                  <Text
+                    style={[
+                      styles.payTypeText,
+                      employeePayType === "hourly" && styles.payTypeTextActive,
+                    ]}
+                  >
+                    Per Hour
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.payTypeOption,
+                    employeePayType === "perJob" && styles.payTypeOptionActive,
+                  ]}
+                  onPress={() => setEmployeePayType("perJob")}
+                >
+                  <Feather
+                    name="briefcase"
+                    size={16}
+                    color={employeePayType === "perJob" ? colors.neutral[0] : colors.text.secondary}
+                  />
+                  <Text
+                    style={[
+                      styles.payTypeText,
+                      employeePayType === "perJob" && styles.payTypeTextActive,
+                    ]}
+                  >
+                    Per Job
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.payTypeOption,
+                    employeePayType === "percentage" && styles.payTypeOptionActive,
+                  ]}
+                  onPress={() => setEmployeePayType("percentage")}
+                >
+                  <Feather
+                    name="percent"
+                    size={16}
+                    color={employeePayType === "percentage" ? colors.neutral[0] : colors.text.secondary}
+                  />
+                  <Text
+                    style={[
+                      styles.payTypeText,
+                      employeePayType === "percentage" && styles.payTypeTextActive,
+                    ]}
+                  >
+                    % of Job
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Hourly Rate Inputs */}
+              {employeePayType === "hourly" && (
+                <View style={styles.inputRow}>
+                  <View style={styles.inputGroupHalf}>
+                    <Text style={styles.inputLabel}>Hourly Rate ($)</Text>
+                    <View style={styles.inputWrapper}>
+                      <Text style={styles.inputPrefix}>$</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={hourlyRate}
+                        onChangeText={setHourlyRate}
+                        keyboardType="numeric"
+                        placeholder="0"
+                        placeholderTextColor={colors.text.tertiary}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.inputGroupHalf}>
+                    <Text style={styles.inputLabel}>Hours/Job</Text>
+                    <View style={styles.inputWrapper}>
+                      <Feather name="clock" size={16} color={colors.text.tertiary} style={styles.inputIcon} />
+                      <TextInput
+                        style={styles.input}
+                        value={hoursPerJob}
+                        onChangeText={setHoursPerJob}
+                        keyboardType="numeric"
+                        placeholder="1.5"
+                        placeholderTextColor={colors.text.tertiary}
+                      />
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* Per Job Amount Input */}
+              {employeePayType === "perJob" && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Amount Per Job ($)</Text>
+                  <View style={styles.inputWrapper}>
+                    <Text style={styles.inputPrefix}>$</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={amountPerJob}
+                      onChangeText={setAmountPerJob}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* Percentage Input */}
+              {employeePayType === "percentage" && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Percentage of Job (%)</Text>
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      style={styles.input}
+                      value={percentageOfJob}
+                      onChangeText={setPercentageOfJob}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor={colors.text.tertiary}
+                    />
+                    <Text style={styles.inputSuffix}>%</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Employee Pay Summary */}
+              <View style={styles.employeePaySummary}>
+                <Feather name="info" size={14} color={colors.secondary[600]} />
+                <Text style={styles.employeePaySummaryText}>
+                  {employeePayType === "hourly" && `$${parsedHourlyRate}/hr × ${parsedHoursPerJob} hrs = `}
+                  {employeePayType === "perJob" && "Fixed amount: "}
+                  {employeePayType === "percentage" && `${parsedPercentageOfJob}% of job = `}
+                  <Text style={styles.employeePaySummaryAmount}>
+                    {formatCurrency(calculateEmployeePay(parsedAvgJob))}/job
+                  </Text>
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* Single Job Calculator */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Single Job Breakdown</Text>
@@ -133,10 +338,20 @@ const BusinessCalculator = ({ state }) => {
               </Text>
               <Text style={styles.breakdownValueMuted}>-{formatCurrency(singleJobFee)}</Text>
             </View>
+            {employeePayEnabled && (
+              <View style={styles.breakdownRow}>
+                <Text style={styles.breakdownLabelMuted}>
+                  Employee Pay
+                </Text>
+                <Text style={styles.breakdownValueMuted}>-{formatCurrency(singleJobEmployeePay)}</Text>
+              </View>
+            )}
             <View style={styles.divider} />
             <View style={styles.breakdownRow}>
               <Text style={styles.breakdownLabelBold}>Your Earnings</Text>
-              <Text style={styles.breakdownValueBold}>{formatCurrency(singleJobNet)}</Text>
+              <Text style={[styles.breakdownValueBold, singleJobNet < 0 && styles.breakdownValueNegative]}>
+                {formatCurrency(singleJobNet)}
+              </Text>
             </View>
           </View>
         </View>
@@ -186,21 +401,44 @@ const BusinessCalculator = ({ state }) => {
             <View style={styles.projectionContent}>
               <View style={styles.projectionColumn}>
                 <Text style={styles.projectionLabel}>Gross</Text>
-                <Text style={styles.projectionAmount}>{formatCurrency(projections.weekly.gross)}</Text>
+                <Text style={styles.projectionAmount} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatCurrency(projections.weekly.gross)}
+                </Text>
               </View>
               <View style={styles.projectionArrow}>
                 <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
               </View>
               <View style={styles.projectionColumn}>
                 <Text style={styles.projectionLabel}>Fee</Text>
-                <Text style={styles.projectionAmountMuted}>-{formatCurrency(projections.weekly.fee)}</Text>
+                <Text style={styles.projectionAmountMuted} numberOfLines={1} adjustsFontSizeToFit>
+                  -{formatCurrency(projections.weekly.fee)}
+                </Text>
               </View>
+              {employeePayEnabled && (
+                <>
+                  <View style={styles.projectionArrow}>
+                    <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
+                  </View>
+                  <View style={styles.projectionColumn}>
+                    <Text style={styles.projectionLabel}>Payroll</Text>
+                    <Text style={styles.projectionAmountMuted} numberOfLines={1} adjustsFontSizeToFit>
+                      -{formatCurrency(projections.weekly.employeePay)}
+                    </Text>
+                  </View>
+                </>
+              )}
               <View style={styles.projectionArrow}>
                 <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
               </View>
               <View style={styles.projectionColumnHighlight}>
                 <Text style={styles.projectionLabelHighlight}>Net</Text>
-                <Text style={styles.projectionAmountHighlight}>{formatCurrency(projections.weekly.net)}</Text>
+                <Text
+                  style={[styles.projectionAmountHighlight, projections.weekly.net < 0 && styles.projectionAmountNegative]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {formatCurrency(projections.weekly.net)}
+                </Text>
               </View>
             </View>
           </View>
@@ -215,21 +453,42 @@ const BusinessCalculator = ({ state }) => {
             <View style={styles.projectionContent}>
               <View style={styles.projectionColumn}>
                 <Text style={styles.projectionLabel}>Gross</Text>
-                <Text style={styles.projectionAmount}>{formatCurrency(projections.monthly.gross)}</Text>
+                <Text style={styles.projectionAmount} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatCurrency(projections.monthly.gross)}
+                </Text>
               </View>
               <View style={styles.projectionArrow}>
                 <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
               </View>
               <View style={styles.projectionColumn}>
                 <Text style={styles.projectionLabel}>Fee</Text>
-                <Text style={styles.projectionAmountMuted}>-{formatCurrency(projections.monthly.fee)}</Text>
+                <Text style={styles.projectionAmountMuted} numberOfLines={1} adjustsFontSizeToFit>
+                  -{formatCurrency(projections.monthly.fee)}
+                </Text>
               </View>
+              {employeePayEnabled && (
+                <>
+                  <View style={styles.projectionArrow}>
+                    <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
+                  </View>
+                  <View style={styles.projectionColumn}>
+                    <Text style={styles.projectionLabel}>Payroll</Text>
+                    <Text style={styles.projectionAmountMuted} numberOfLines={1} adjustsFontSizeToFit>
+                      -{formatCurrency(projections.monthly.employeePay)}
+                    </Text>
+                  </View>
+                </>
+              )}
               <View style={styles.projectionArrow}>
                 <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
               </View>
               <View style={[styles.projectionColumnHighlight, { backgroundColor: colors.secondary[50] }]}>
                 <Text style={[styles.projectionLabelHighlight, { color: colors.secondary[600] }]}>Net</Text>
-                <Text style={[styles.projectionAmountHighlight, { color: colors.secondary[700] }]}>
+                <Text
+                  style={[styles.projectionAmountHighlight, { color: colors.secondary[700] }, projections.monthly.net < 0 && styles.projectionAmountNegative]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
                   {formatCurrency(projections.monthly.net)}
                 </Text>
               </View>
@@ -246,21 +505,42 @@ const BusinessCalculator = ({ state }) => {
             <View style={styles.projectionContent}>
               <View style={styles.projectionColumn}>
                 <Text style={styles.projectionLabel}>Gross</Text>
-                <Text style={styles.projectionAmount}>{formatCurrency(projections.yearly.gross)}</Text>
+                <Text style={styles.projectionAmount} numberOfLines={1} adjustsFontSizeToFit>
+                  {formatCurrency(projections.yearly.gross)}
+                </Text>
               </View>
               <View style={styles.projectionArrow}>
                 <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
               </View>
               <View style={styles.projectionColumn}>
                 <Text style={styles.projectionLabel}>Fee</Text>
-                <Text style={styles.projectionAmountMuted}>-{formatCurrency(projections.yearly.fee)}</Text>
+                <Text style={styles.projectionAmountMuted} numberOfLines={1} adjustsFontSizeToFit>
+                  -{formatCurrency(projections.yearly.fee)}
+                </Text>
               </View>
+              {employeePayEnabled && (
+                <>
+                  <View style={styles.projectionArrow}>
+                    <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
+                  </View>
+                  <View style={styles.projectionColumn}>
+                    <Text style={styles.projectionLabel}>Payroll</Text>
+                    <Text style={styles.projectionAmountMuted} numberOfLines={1} adjustsFontSizeToFit>
+                      -{formatCurrency(projections.yearly.employeePay)}
+                    </Text>
+                  </View>
+                </>
+              )}
               <View style={styles.projectionArrow}>
                 <Feather name="arrow-right" size={16} color={colors.text.tertiary} />
               </View>
               <View style={[styles.projectionColumnHighlight, { backgroundColor: colors.success[50] }]}>
                 <Text style={[styles.projectionLabelHighlight, { color: colors.success[600] }]}>Net</Text>
-                <Text style={[styles.projectionAmountHighlight, { color: colors.success[700] }]}>
+                <Text
+                  style={[styles.projectionAmountHighlight, { color: colors.success[700] }, projections.yearly.net < 0 && styles.projectionAmountNegative]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
                   {formatCurrency(projections.yearly.net)}
                 </Text>
               </View>
@@ -277,17 +557,38 @@ const BusinessCalculator = ({ state }) => {
           <View style={styles.summaryStats}>
             <View style={styles.summaryStat}>
               <Text style={styles.summaryStatLabel}>Total Jobs</Text>
-              <Text style={styles.summaryStatValue}>{Math.round(parsedJobsPerWeek * 52)}</Text>
+              <Text style={styles.summaryStatValue} numberOfLines={1} adjustsFontSizeToFit>
+                {Math.round(parsedJobsPerWeek * 52)}
+              </Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryStat}>
-              <Text style={styles.summaryStatLabel}>Total Fees</Text>
-              <Text style={styles.summaryStatValueMuted}>{formatCurrency(projections.yearly.fee)}</Text>
+              <Text style={styles.summaryStatLabel}>Platform Fees</Text>
+              <Text style={styles.summaryStatValueMuted} numberOfLines={1} adjustsFontSizeToFit>
+                {formatCurrency(projections.yearly.fee)}
+              </Text>
             </View>
+            {employeePayEnabled && (
+              <>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryStat}>
+                  <Text style={styles.summaryStatLabel}>Payroll</Text>
+                  <Text style={styles.summaryStatValueMuted} numberOfLines={1} adjustsFontSizeToFit>
+                    {formatCurrency(projections.yearly.employeePay)}
+                  </Text>
+                </View>
+              </>
+            )}
             <View style={styles.summaryDivider} />
             <View style={styles.summaryStat}>
               <Text style={styles.summaryStatLabel}>Take Home</Text>
-              <Text style={styles.summaryStatValueHighlight}>{formatCurrency(projections.yearly.net)}</Text>
+              <Text
+                style={[styles.summaryStatValueHighlight, projections.yearly.net < 0 && styles.summaryStatValueNegative]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {formatCurrency(projections.yearly.net)}
+              </Text>
             </View>
           </View>
         </View>
@@ -378,6 +679,77 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
 
+  // Employee Pay Section
+  employeePayHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  employeePayTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  employeePayContent: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  payTypeSelector: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  payTypeOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[100],
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  payTypeOptionActive: {
+    backgroundColor: colors.secondary[600],
+    borderColor: colors.secondary[600],
+  },
+  payTypeText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
+  },
+  payTypeTextActive: {
+    color: colors.neutral[0],
+  },
+  employeePaySummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.secondary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
+  employeePaySummaryText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.secondary[700],
+  },
+  employeePaySummaryAmount: {
+    fontWeight: typography.fontWeight.bold,
+    color: colors.secondary[700],
+  },
+  inputSuffix: {
+    fontSize: typography.fontSize.lg,
+    color: colors.text.secondary,
+    marginLeft: spacing.xs,
+  },
+
   // Input Groups
   inputGroup: {
     marginBottom: spacing.md,
@@ -462,6 +834,9 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.success[600],
   },
+  breakdownValueNegative: {
+    color: colors.error[600],
+  },
   divider: {
     height: 1,
     backgroundColor: colors.border.light,
@@ -504,17 +879,19 @@ const styles = StyleSheet.create({
   projectionColumn: {
     alignItems: "center",
     flex: 1,
+    minWidth: 50,
   },
   projectionColumnHighlight: {
     alignItems: "center",
-    flex: 1,
+    flex: 1.5,
     backgroundColor: colors.primary[50],
     borderRadius: radius.lg,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    minWidth: 70,
   },
   projectionArrow: {
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: 2,
   },
   projectionLabel: {
     fontSize: typography.fontSize.xs,
@@ -540,6 +917,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
     color: colors.primary[700],
+  },
+  projectionAmountNegative: {
+    color: colors.error[600],
   },
 
   // Summary Card
@@ -571,6 +951,7 @@ const styles = StyleSheet.create({
   summaryStat: {
     flex: 1,
     alignItems: "center",
+    paddingHorizontal: spacing.xs,
   },
   summaryDivider: {
     width: 1,
@@ -596,6 +977,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.success[600],
+  },
+  summaryStatValueNegative: {
+    color: colors.error[600],
   },
 
   bottomSpacer: {

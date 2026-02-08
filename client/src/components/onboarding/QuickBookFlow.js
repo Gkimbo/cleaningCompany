@@ -90,7 +90,7 @@ const QuickBookFlow = ({ state, dispatch }) => {
 
       const response = await Appointment.addAppointmentToDb(infoObject);
 
-      if (response) {
+      if (response.success) {
         const stateApp = datesOfCleaning.map((app) => ({ ...app, homeId: home.id }));
         let apptTotal = 0;
         datesOfCleaning.forEach((date) => {
@@ -100,7 +100,7 @@ const QuickBookFlow = ({ state, dispatch }) => {
         dispatch({ type: "ADD_DATES", payload: stateApp });
         navigate("/list-of-homes");
       } else {
-        setError("Failed to book appointments. Please try again.");
+        setError(response.error || "Failed to book appointments. Please try again.");
       }
     } catch (err) {
       setError("Something went wrong. Please try again.");
@@ -203,8 +203,8 @@ const QuickBookFlow = ({ state, dispatch }) => {
     );
   }
 
-  // Require payment method before booking
-  if (!hasPaymentMethod) {
+  // Require payment method before booking (wait for check to complete)
+  if (!checkingPayment && !hasPaymentMethod) {
     return (
       <View style={styles.loadingContainer}>
         <View style={styles.paymentCard}>

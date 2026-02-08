@@ -19,6 +19,18 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import ExportModal from "./ExportModal";
+import {
+  generateCSV,
+  generatePDF,
+  generateFinancialSummaryHTML,
+  generatePayrollByEmployeeHTML,
+  generateEmployeeEarningsHTML,
+  generatePayrollSummaryHTML,
+  prepareFinancialSummaryCSV,
+  preparePayrollByEmployeeCSV,
+  prepareEmployeeEarningsCSV,
+} from "../../services/exportService";
 
 // Period Selector Component
 const PeriodSelector = ({ value, onChange }) => {
@@ -144,6 +156,10 @@ const FinancialsScreen = ({ state }) => {
   const [employeeEarnings, setEmployeeEarnings] = useState([]);
   const [error, setError] = useState(null);
 
+  // Export modal state
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [exportType, setExportType] = useState(null);
+
   const fetchData = async (isRefresh = false) => {
     if (isRefresh) {
       setRefreshing(true);
@@ -212,9 +228,102 @@ const FinancialsScreen = ({ state }) => {
     return `$${(cents / 100).toFixed(2)}`;
   };
 
-  const handleExport = async (type) => {
-    // TODO: Implement export functionality
-    alert(`Export ${type} - Coming soon!`);
+  // Get period label for exports
+  const getPeriodLabel = () => {
+    const periodLabels = {
+      week: "This Week",
+      month: "This Month",
+      quarter: "This Quarter",
+      year: "This Year",
+    };
+    return periodLabels[period] || period;
+  };
+
+  const handleExport = (type) => {
+    setExportType(type);
+    setExportModalVisible(true);
+  };
+
+  const performExport = async (format, year = null) => {
+    try {
+      const token = state.currentUser?.token;
+
+      // Handle tax document exports (annual data)
+      if (exportType === "employee-earnings" || exportType === "payroll-summary") {
+        if (!year) {
+          return { success: false, error: "Please select a year" };
+        }
+
+        const taxData = await BusinessOwnerService.getTaxExport(token, year);
+        if (taxData.error) {
+          return { success: false, error: taxData.error };
+        }
+
+        if (exportType === "employee-earnings") {
+          if (format === "csv") {
+            const csvData = prepareEmployeeEarningsCSV(taxData.employeeBreakdown || [], year);
+            return await generateCSV(csvData, `employee-earnings-${year}`);
+          } else {
+            const html = generateEmployeeEarningsHTML(
+              taxData.employeeBreakdown || [],
+              year,
+              "Your Business"
+            );
+            return await generatePDF(html, `employee-earnings-${year}`);
+          }
+        } else {
+          // payroll-summary
+          if (format === "csv") {
+            const csvData = prepareFinancialSummaryCSV(taxData.financials || {});
+            return await generateCSV(csvData, `payroll-summary-${year}`);
+          } else {
+            const html = generatePayrollSummaryHTML(
+              {
+                ...taxData.financials,
+                employeeCount: taxData.summary?.totalEmployees || 0,
+              },
+              year,
+              "Your Business"
+            );
+            return await generatePDF(html, `payroll-summary-${year}`);
+          }
+        }
+      }
+
+      // Handle period-based exports
+      if (exportType === "summary") {
+        if (format === "csv") {
+          const csvData = prepareFinancialSummaryCSV(financials || {});
+          return await generateCSV(csvData, `financial-summary-${period}`);
+        } else {
+          const html = generateFinancialSummaryHTML(
+            financials || {},
+            getPeriodLabel(),
+            "Your Business"
+          );
+          return await generatePDF(html, `financial-summary-${period}`);
+        }
+      }
+
+      if (exportType === "payroll") {
+        if (format === "csv") {
+          const csvData = preparePayrollByEmployeeCSV(employeeEarnings || []);
+          return await generateCSV(csvData, `payroll-by-employee-${period}`);
+        } else {
+          const html = generatePayrollByEmployeeHTML(
+            employeeEarnings || [],
+            getPeriodLabel(),
+            "Your Business"
+          );
+          return await generatePDF(html, `payroll-by-employee-${period}`);
+        }
+      }
+
+      return { success: false, error: "Unknown export type" };
+    } catch (err) {
+      console.error("Export error:", err);
+      return { success: false, error: err.message || "Export failed" };
+    }
   };
 
   if (loading) {
@@ -232,7 +341,7 @@ const FinancialsScreen = ({ state }) => {
     totalPayroll = 0,
     stripeFees = 0,
     netProfit = 0,
-    jobCount = 0,
+    jobCount: _jobCount = 0,
     completedJobs = 0,
     pendingPayroll = 0,
   } = financials || {};
@@ -404,13 +513,23 @@ const FinancialsScreen = ({ state }) => {
         <View style={styles.infoCard}>
           <Icon name="info-circle" size={20} color={colors.primary[600]} />
           <Text style={styles.infoText}>
-            Platform fees are currently {platformFeePercent}%. You'll receive a 1099-K
+            Platform fees are currently {platformFeePercent}%. You will receive a 1099-K
             from Stripe at year end based on your total earnings.
           </Text>
         </View>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* Export Modal */}
+      <ExportModal
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+        exportType={exportType}
+        onExport={performExport}
+        showYearSelector={exportType === "employee-earnings" || exportType === "payroll-summary"}
+        periodLabel={getPeriodLabel()}
+      />
     </View>
   );
 };

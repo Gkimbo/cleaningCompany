@@ -222,6 +222,29 @@ const ConversationList = () => {
         return "Team Chat";
       }
     }
+    // Business owner <-> Employee conversations
+    if (conversation.conversationType === "business_employee" ||
+        conversation.conversationType === "employee_group") {
+      if (conversation.title) {
+        return conversation.title;
+      }
+      // Get other participant names
+      const otherParticipants = conversation.participants?.filter(
+        (p) => p.userId !== parseInt(state.currentUser?.userId)
+      );
+      if (otherParticipants?.length === 1) {
+        const user = otherParticipants[0].user;
+        if (user?.firstName) {
+          return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+        }
+        return user?.username || "Employee";
+      }
+      if (otherParticipants?.length > 1) {
+        const firstUser = otherParticipants[0].user;
+        const name = firstUser?.firstName || firstUser?.username || "Employee";
+        return `${name} +${otherParticipants.length - 1}`;
+      }
+    }
     if (conversation.appointment) {
       const date = new Date(conversation.appointment.date);
       return `Appt - ${date.toLocaleDateString([], {
@@ -275,6 +298,7 @@ const ConversationList = () => {
     if (type === "broadcast") return TABS.BROADCASTS;
     if (type === "support") return TABS.SUPPORT;
     if (type === "internal") return TABS.TEAM;
+    if (type === "business_employee" || type === "employee_group") return TABS.TEAM;
     return TABS.ALL;
   };
 
@@ -283,6 +307,8 @@ const ConversationList = () => {
     if (type === "broadcast") return { name: "radio", color: colors.warning[500] };
     if (type === "support") return { name: "life-buoy", color: colors.primary[500] };
     if (type === "internal") return { name: "users", color: colors.secondary[500] };
+    if (type === "business_employee") return { name: "user", color: colors.success[500] };
+    if (type === "employee_group") return { name: "users", color: colors.success[500] };
     if (conv.conversation?.appointment) return { name: "calendar", color: colors.success[500] };
     return { name: "message-circle", color: colors.neutral[400] };
   };
@@ -300,7 +326,10 @@ const ConversationList = () => {
         // Special handling - appointment convos should show in ALL only
         if (activeTab === TABS.BROADCASTS && conv.conversation?.conversationType !== "broadcast") return false;
         if (activeTab === TABS.SUPPORT && conv.conversation?.conversationType !== "support") return false;
-        if (activeTab === TABS.TEAM && conv.conversation?.conversationType !== "internal") return false;
+        if (activeTab === TABS.TEAM) {
+          const teamTypes = ["internal", "business_employee", "employee_group"];
+          if (!teamTypes.includes(conv.conversation?.conversationType)) return false;
+        }
       }
     }
 

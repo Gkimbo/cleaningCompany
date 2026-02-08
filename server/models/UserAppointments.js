@@ -418,6 +418,13 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "When first before photo was uploaded (job start time)",
 		},
+		// Demo appointment flag - never show on marketplace
+		isDemoAppointment: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if created by demo account - excluded from marketplace",
+		},
 	});
 
 	// Define the one-to-many relationship with User

@@ -26,6 +26,7 @@ import ClientCard from "./ClientCard";
 import InviteClientModal from "./InviteClientModal";
 import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
+import { usePricing } from "../../context/PricingContext";
 
 // Payment Setup Banner Component
 const PaymentSetupBanner = ({ onPress }) => (
@@ -54,6 +55,7 @@ const PaymentSetupBanner = ({ onPress }) => (
 
 const MyClientsPage = ({ state }) => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,6 +68,34 @@ const MyClientsPage = ({ state }) => {
 
   // Stripe account status for payment setup banner
   const [showPaymentBanner, setShowPaymentBanner] = useState(false);
+
+  // Calculate platform price for a client based on their home's beds/baths
+  const calculatePlatformPrice = useCallback((client) => {
+    if (!pricing?.basePrice) return null;
+
+    // Use invitedBeds/invitedBaths for pending clients, or home data for active clients
+    const beds = client.invitedBeds || client.home?.numBeds;
+    const baths = client.invitedBaths || client.home?.numBaths;
+
+    if (!beds || !baths) return null;
+
+    const numBeds = parseInt(beds) || 1;
+    const numBaths = parseFloat(baths) || 1;
+
+    const basePrice = pricing.basePrice || 150;
+    const extraBedBathFee = pricing.extraBedBathFee || 50;
+    const halfBathFee = pricing.halfBathFee || 25;
+
+    const extraBeds = Math.max(0, numBeds - 1);
+    const fullBaths = Math.floor(numBaths);
+    const halfBaths = numBaths % 1 >= 0.5 ? 1 : 0;
+    const extraFullBaths = Math.max(0, fullBaths - 1);
+
+    return basePrice +
+           (extraBeds * extraBedBathFee) +
+           (extraFullBaths * extraBedBathFee) +
+           (halfBaths * halfBathFee);
+  }, [pricing]);
 
   const fetchClients = useCallback(async () => {
     if (!state?.currentUser?.token) return;
@@ -418,6 +448,7 @@ const MyClientsPage = ({ state }) => {
               onSetupRecurring={handleSetupRecurring}
               onMessage={handleMessageClient}
               onPriceUpdate={handlePriceUpdate}
+              platformPrice={calculatePlatformPrice(client)}
             />
           ))
         )}

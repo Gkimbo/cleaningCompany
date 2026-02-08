@@ -68,6 +68,7 @@ const DEMO_ACCOUNTS = {
 		lastName: "Homeowner",
 		type: null, // null = homeowner
 		isBusinessOwner: false,
+		hasPaymentMethod: true,
 	},
 	businessOwner: {
 		username: "demo_business_owner",
@@ -342,6 +343,12 @@ async function createDemoAccounts() {
 			limit: 1,
 		});
 
+		// Towel configuration for review appointments (3 bed, 2 bath home)
+		const reviewApptTowelConfigs = [
+			{ bathroomNumber: 1, towels: 2, faceCloths: 2 },
+			{ bathroomNumber: 2, towels: 2, faceCloths: 1 },
+		];
+
 		const cleanerReviewAppointmentIds = [];
 		if (homeownerHomes.length > 0) {
 			for (let i = 0; i < reviewRatings.length; i++) {
@@ -370,6 +377,8 @@ async function createDemoAccounts() {
 						paymentStatus: "paid",
 						amountPaid: 18000,
 						completionStatus: "approved",
+						isDemoAppointment: true,
+						towelConfigurations: JSON.stringify(reviewApptTowelConfigs),
 					});
 				}
 				cleanerReviewAppointmentIds.push(appt.id);
@@ -537,6 +546,7 @@ async function createDemoAccounts() {
 					isMultiCleanerJob: true,
 					sheetConfigurations: JSON.stringify(mansionSheetConfigs),
 					towelConfigurations: JSON.stringify(mansionTowelConfigs),
+					isDemoAppointment: true,
 				});
 				console.log("  - Created multi-cleaner appointment with price: $" + mansionPriceDollars);
 			} else {
@@ -750,11 +760,18 @@ async function createDemoAccounts() {
 		console.log("Creating past appointments for demo homeowner...");
 		if (createdHomes.length > 0 && createdAccounts.cleaner) {
 			// Calculate price for 3 bed, 2 bath home with towels only
+			// Towel configuration for 2 bathrooms
+			const pastApptTowelConfigs = [
+				{ bathroomNumber: 1, towels: 3, faceCloths: 2 },
+				{ bathroomNumber: 2, towels: 2, faceCloths: 1 },
+			];
+
 			const pastApptPrice = calculateAppointmentPrice({
 				numBeds: 3,
 				numBaths: 2,
 				bringSheets: "no",
 				bringTowels: "yes",
+				towelConfigs: pastApptTowelConfigs,
 			}) * 100; // Convert to cents
 
 			for (let i = 1; i <= 5; i++) {
@@ -781,6 +798,8 @@ async function createDemoAccounts() {
 							paymentStatus: "paid",
 							amountPaid: pastApptPrice,
 							completionStatus: "approved",
+							isDemoAppointment: true,
+							towelConfigurations: JSON.stringify(pastApptTowelConfigs),
 						});
 					}
 
@@ -852,6 +871,7 @@ async function createDemoAccounts() {
 							// Add detailed configurations
 							sheetConfigurations: sheetConfigs ? JSON.stringify(sheetConfigs) : null,
 							towelConfigurations: JSON.stringify(towelConfigs),
+							isDemoAppointment: true,
 						});
 					}
 
@@ -876,6 +896,166 @@ async function createDemoAccounts() {
 			}
 			console.log("  - Created 3 upcoming appointments with cleaner assignments");
 		}
+
+		// Create 15 marketplace jobs for demo homeowner (2 bed, 2 bath) - UNASSIGNED
+		// These will appear on the demo marketplace for demo cleaners
+		// Jobs on the same date are for different homes
+		console.log("Creating marketplace jobs for demo homeowner (2 bed, 2 bath)...");
+
+		// Create 3 different 2bed/2bath homes for the demo homeowner
+		const marketplaceHomeConfigs = [
+			{ nickName: "Downtown Apartment", address: "456 Market Street", contact: "555-0123" },
+			{ nickName: "Riverside Condo", address: "789 River Road", contact: "555-0124" },
+			{ nickName: "Midtown Studio", address: "321 Central Ave", contact: "555-0125" },
+		];
+
+		const marketplaceHomes = [];
+		for (const config of marketplaceHomeConfigs) {
+			let home = await UserHomes.findOne({
+				where: {
+					userId: createdAccounts.homeowner.id,
+					nickName: config.nickName,
+				},
+			});
+
+			if (!home) {
+				home = await UserHomes.create({
+					userId: createdAccounts.homeowner.id,
+					nickName: config.nickName,
+					address: config.address,
+					city: "Demo City",
+					state: "DC",
+					zipcode: "12345",
+					numBeds: "2",
+					numBaths: "2",
+					sheetsProvided: "no",
+					towelsProvided: "yes",
+					timeToBeCompleted: "2",
+					cleanersNeeded: 1,
+					contact: config.contact,
+				});
+				console.log(`  - Created home: ${config.nickName}`);
+			}
+			marketplaceHomes.push(home);
+		}
+
+		// Create 15 unassigned marketplace appointments spread across months
+		// Jobs on the same date use different homes (rotating through the 3 homes)
+		// Format: [daysFromNow, homeIndex]
+		const marketplaceJobs = [
+			{ days: 3, homeIndex: 0 },   // Day 3 - Home 1
+			{ days: 3, homeIndex: 1 },   // Day 3 - Home 2
+			{ days: 3, homeIndex: 2 },   // Day 3 - Home 3
+			{ days: 7, homeIndex: 0 },   // Day 7
+			{ days: 10, homeIndex: 1 },  // Day 10
+			{ days: 14, homeIndex: 0 },  // Day 14 - Home 1
+			{ days: 14, homeIndex: 1 },  // Day 14 - Home 2
+			{ days: 14, homeIndex: 2 },  // Day 14 - Home 3
+			{ days: 21, homeIndex: 0 },  // Day 21
+			{ days: 28, homeIndex: 1 },  // Day 28
+			{ days: 35, homeIndex: 0 },  // Day 35 - Home 1
+			{ days: 35, homeIndex: 1 },  // Day 35 - Home 2
+			{ days: 35, homeIndex: 2 },  // Day 35 - Home 3
+			{ days: 42, homeIndex: 0 },  // Day 42
+			{ days: 56, homeIndex: 1 },  // Day 56
+		];
+
+		// Check how many unassigned marketplace appointments exist for demo homeowner
+		const existingMarketAppts = await UserAppointments.count({
+			where: {
+				userId: createdAccounts.homeowner.id,
+				hasBeenAssigned: false,
+				isDemoAppointment: true,
+			},
+		});
+
+		let marketJobsCreated = 0;
+		if (existingMarketAppts < 15) {
+			// Delete existing unassigned demo appointments for all marketplace homes
+			if (existingMarketAppts > 0) {
+				await UserAppointments.destroy({
+					where: {
+						userId: createdAccounts.homeowner.id,
+						hasBeenAssigned: false,
+						isDemoAppointment: true,
+					},
+				});
+				console.log(`  - Cleared ${existingMarketAppts} existing marketplace appointments`);
+			}
+
+			// Create all 15 marketplace appointments
+			// Each home can only have 1 cleaning per day
+			for (let i = 0; i < marketplaceJobs.length; i++) {
+				try {
+					const job = marketplaceJobs[i];
+					const jobDate = getFutureDate(job.days);
+					const home = marketplaceHomes[job.homeIndex];
+
+					// Check if this home already has an appointment on this date
+					const existingApptForHomeOnDate = await UserAppointments.findOne({
+						where: {
+							homeId: home.id,
+							date: jobDate,
+						},
+					});
+
+					if (existingApptForHomeOnDate) {
+						console.log(`  - Skipping: ${home.nickName} already has a cleaning on ${jobDate}`);
+						continue;
+					}
+
+					// Determine if linens are needed
+					const bringSheets = i % 3 === 0 ? "yes" : "no";
+					const bringTowels = "yes";
+
+					// Generate configurations for 2 bed, 2 bath homes
+					const sheetConfigs = bringSheets === "yes" ? [
+						{ bedNumber: 1, size: "queen", needsSheets: true },
+						{ bedNumber: 2, size: "full", needsSheets: true },
+					] : null;
+
+					const towelConfigs = [
+						{ bathroomNumber: 1, towels: 2, faceCloths: 2 },
+						{ bathroomNumber: 2, towels: 2, faceCloths: 1 },
+					];
+
+					const price = calculateAppointmentPrice({
+						numBeds: 2,
+						numBaths: 2,
+						bringSheets,
+						bringTowels,
+						sheetConfigs,
+						towelConfigs,
+					});
+
+					await UserAppointments.create({
+						userId: createdAccounts.homeowner.id,
+						homeId: home.id,
+						date: jobDate,
+						price: String(price * 100), // Convert to cents
+						paid: false,
+						bringTowels,
+						bringSheets,
+						completed: false,
+						hasBeenAssigned: false, // UNASSIGNED - available on marketplace
+						employeesAssigned: [],
+						empoyeesNeeded: 1,
+						timeToBeCompleted: "2",
+						paymentStatus: "pending",
+						isDemoAppointment: true,
+						// Add detailed linen configurations
+						sheetConfigurations: sheetConfigs ? JSON.stringify(sheetConfigs) : null,
+						towelConfigurations: JSON.stringify(towelConfigs),
+					});
+					marketJobsCreated++;
+				} catch (error) {
+					console.error(`  - Error creating marketplace job ${i}:`, error.message);
+				}
+			}
+		} else {
+			console.log(`  - Marketplace appointments already exist (${existingMarketAppts}), skipping`);
+		}
+		console.log(`  - Created ${marketJobsCreated} marketplace jobs across 3 homes (2 bed, 2 bath, unassigned)`);
 
 		// Create bill balance ($150)
 		console.log("Setting up bill for demo homeowner...");
@@ -1185,7 +1365,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: jobDate,
-							price: String(price),
+							price: String(price * 100), // Convert dollars to cents
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1197,6 +1377,7 @@ async function createDemoAccounts() {
 							paymentStatus: "pending",
 							sheetConfigurations: sheetConfigs,
 							towelConfigurations: towelConfigs,
+							isDemoAppointment: true,
 						});
 					}
 
@@ -1360,6 +1541,7 @@ async function createDemoAccounts() {
 							amountPaid: 16000,
 							completionStatus: "approved",
 							bookedByCleanerId: createdAccounts.businessOwner.id,
+							isDemoAppointment: true,
 						});
 
 						// Create job assignment for past appointments
@@ -1418,7 +1600,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.businessClient.id,
 							homeId: clientHome.id,
 							date: futureDate,
-							price: String(price),
+							price: String(price * 100), // Convert dollars to cents
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1432,6 +1614,7 @@ async function createDemoAccounts() {
 							bookedByCleanerId: createdAccounts.businessOwner.id,
 							sheetConfigurations: sheetConfigs,
 							towelConfigurations: towelConfigs,
+							isDemoAppointment: true,
 						});
 
 						// Create job assignment for upcoming appointments
@@ -1557,6 +1740,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-001",
 					hasActiveAppeal: true,
+					isDemoAppointment: true,
 				});
 
 				// Create the appeal
@@ -1633,6 +1817,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-002",
 					hasActiveAppeal: true,
+					isDemoAppointment: true,
 				});
 
 				const appeal2 = await CancellationAppeal.create({
@@ -1687,6 +1872,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-003",
 					hasActiveAppeal: false,
+					isDemoAppointment: true,
 				});
 
 				const appeal3 = await CancellationAppeal.create({
@@ -1747,6 +1933,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-004",
 					hasActiveAppeal: true,
+					isDemoAppointment: true,
 				});
 
 				const appeal4 = await CancellationAppeal.create({
@@ -1797,6 +1984,7 @@ async function createDemoAccounts() {
 					paymentStatus: "paid",
 					amountPaid: 15000,
 					completionStatus: "approved",
+					isDemoAppointment: true,
 				});
 
 				await HomeSizeAdjustmentRequest.create({
@@ -1845,6 +2033,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-006",
 					hasActiveAppeal: false,
+					isDemoAppointment: true,
 				});
 
 				const appeal6 = await CancellationAppeal.create({
@@ -2162,6 +2351,7 @@ async function createDemoAccounts() {
 						amountPaid: (180 + (i * 10)) * 100,
 						completionStatus: "approved",
 						bookedByCleanerId: largeBizOwner.id,
+						isDemoAppointment: true,
 					});
 				}
 
@@ -2305,6 +2495,7 @@ async function createDemoAccounts() {
 						paymentStatus: "paid",
 						amountPaid: (160 + (i * 5)) * 100,
 						completionStatus: "approved",
+						isDemoAppointment: true,
 					});
 
 					// Create a review from this homeowner
@@ -2420,6 +2611,7 @@ async function createDemoAccounts() {
 							paymentStatus: "paid",
 							amountPaid: (160 + (i * 10)) * 100,
 							completionStatus: "approved",
+							isDemoAppointment: true,
 						});
 					}
 				} catch (error) {
@@ -2458,6 +2650,7 @@ async function createDemoAccounts() {
 							// Add detailed configurations
 							sheetConfigurations: i === 0 ? generateSheetConfigurations(numBeds) : null,
 							towelConfigurations: generateTowelConfigurations(numBaths),
+							isDemoAppointment: true,
 						});
 					}
 				} catch (error) {

@@ -37,7 +37,12 @@ employeeInfoRouter.get("/", async (req, res) => {
         },
       ],
     });
-    const appointmentIds = employee.dataValues.cleanerAppointments.map(
+
+    if (!employee) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    const appointmentIds = (employee.dataValues.cleanerAppointments || []).map(
       (appointment) => appointment.appointmentId
     );
     const appointments = await UserAppointments.findAll({

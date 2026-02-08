@@ -537,6 +537,30 @@ class BusinessOwnerService {
   }
 
   /**
+   * Get annual tax export data
+   * @param {string} token - Auth token
+   * @param {number} year - Tax year (current year or up to 2 years back)
+   * @returns {Object} { year, financials, employeeBreakdown, summary }
+   */
+  static async getTaxExport(token, year) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/tax-export/${year}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        return { error: result.error || "Failed to fetch tax data" };
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching tax export:", error);
+      return { error: "Network error. Please try again." };
+    }
+  }
+
+  /**
    * Get payroll summary
    * @param {string} token - Auth token
    * @param {string} period - Period ('week', 'month', 'quarter', 'year')
@@ -1185,6 +1209,44 @@ class BusinessOwnerService {
     } catch (error) {
       console.error("[BusinessOwner] Error fetching employee hours:", error);
       return { error: "Network error. Please try again." };
+    }
+  }
+
+  /**
+   * Get employee workload data for fair job distribution
+   * @param {string} token - Auth token
+   * @returns {Object} { employees, teamAverage, unassignedJobCount }
+   */
+  static async getEmployeeWorkload(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/employee-workload`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching employee workload:", error);
+      return { employees: [], teamAverage: {}, unassignedJobCount: 0 };
+    }
+  }
+
+  /**
+   * Get unassigned jobs for the business owner
+   * @param {string} token - Auth token
+   * @returns {Object} { jobs }
+   */
+  static async getUnassignedJobs(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/unassigned-jobs`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching unassigned jobs:", error);
+      return { jobs: [] };
     }
   }
 }

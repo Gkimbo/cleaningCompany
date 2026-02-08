@@ -308,7 +308,7 @@ paymentRouter.get("/payment-method-status", async (req, res) => {
     let paymentMethods = [];
     let hasValidPaymentMethod = user.hasPaymentMethod;
 
-    // If user has a Stripe customer ID, verify payment methods exist
+    // If user has a Stripe customer ID, fetch payment methods
     if (user.stripeCustomerId) {
       try {
         const methods = await stripe.paymentMethods.list({
@@ -326,16 +326,25 @@ paymentRouter.get("/payment-method-status", async (req, res) => {
         }));
         hasValidPaymentMethod = methods.data.length > 0;
 
-        // Update user if status changed
-        if (user.hasPaymentMethod !== hasValidPaymentMethod) {
+        // Update user if status changed (skip for demo accounts to preserve manual settings)
+        if (!user.isDemoAccount && user.hasPaymentMethod !== hasValidPaymentMethod) {
           console.log(`[Payment] Updating user ${userId} hasPaymentMethod: ${user.hasPaymentMethod} -> ${hasValidPaymentMethod}`);
           await user.update({ hasPaymentMethod: hasValidPaymentMethod });
         }
       } catch (stripeError) {
         console.error("Error fetching payment methods from Stripe:", stripeError);
+        // For demo accounts, trust the database flag if Stripe call fails
+        if (user.isDemoAccount && user.hasPaymentMethod) {
+          console.log(`[Payment] Demo account ${userId} - Stripe error, trusting database hasPaymentMethod: true`);
+          hasValidPaymentMethod = true;
+        }
       }
     } else {
       console.log(`[Payment] User ${userId} has no stripeCustomerId`);
+      // For demo accounts without stripeCustomerId, trust the database flag
+      if (user.isDemoAccount && user.hasPaymentMethod) {
+        hasValidPaymentMethod = true;
+      }
     }
 
     return res.json({
@@ -2646,6 +2655,7 @@ async function runDailyPaymentCheck() {
         hasBeenAssigned: false,
         unassignedWarningSent: false,
         completed: false,
+        isDemoAppointment: false, // Don't send real notifications for demo appointments
       },
     });
 

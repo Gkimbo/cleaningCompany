@@ -189,7 +189,8 @@ multiCleanerRouter.get("/offers", async (req, res) => {
     // Filter by demo status - demo cleaners only see demo homeowner jobs
     const filteredOpenJobs = openJobs.filter((job) => {
       const isHomeownerDemo = job.appointment?.user?.isDemoAccount === true;
-      return isCleanerDemo === isHomeownerDemo;
+      const isAppointmentDemo = job.appointment?.isDemoAppointment === true;
+      return isCleanerDemo === isHomeownerDemo && isCleanerDemo === isAppointmentDemo;
     });
 
     // Find edge large home appointments that don't have a multi-cleaner job yet
@@ -200,6 +201,7 @@ multiCleanerRouter.get("/offers", async (req, res) => {
         hasBeenAssigned: false,
         isMultiCleanerJob: { [Op.or]: [false, null] },
         date: { [Op.gte]: now },
+        isDemoAppointment: isCleanerDemo, // Demo cleaners see demo appointments only
       },
       include: [
         { model: UserHomes, as: "home" },

@@ -2301,6 +2301,7 @@ messageRouter.post("/employee-conversation", authenticateToken, async (req, res)
       conversationType: "business_employee",
       title: `${ownerName} & ${empName}`,
       relatedEntityId: employee.id, // Link to BusinessEmployee record
+      createdBy: businessOwnerId,
     });
 
     // Add participants
@@ -2330,6 +2331,95 @@ messageRouter.post("/employee-conversation", authenticateToken, async (req, res)
   } catch (error) {
     console.error("Error creating employee conversation:", error);
     return res.status(500).json({ error: "Failed to create conversation" });
+  }
+});
+
+/**
+ * POST /api/v1/messages/employee-group-conversation
+ * Create a group conversation with selected employees (business owner only)
+ */
+messageRouter.post("/employee-group-conversation", authenticateToken, async (req, res) => {
+  try {
+    const { employeeIds, title } = req.body;
+    const userId = req.userId;
+
+    const user = await User.findByPk(userId);
+    if (!user || !user.isBusinessOwner) {
+      return res.status(403).json({ error: "Only business owners can create employee group conversations" });
+    }
+
+    if (!employeeIds || !Array.isArray(employeeIds) || employeeIds.length < 2) {
+      return res.status(400).json({ error: "At least 2 employees are required for a group conversation" });
+    }
+
+    // Verify all employees belong to this business owner
+    const employees = await BusinessEmployee.findAll({
+      where: {
+        id: { [Op.in]: employeeIds },
+        businessOwnerId: userId,
+        status: "active",
+        userId: { [Op.ne]: null },
+      },
+      include: [{ model: User, as: "user" }],
+    });
+
+    if (employees.length !== employeeIds.length) {
+      return res.status(400).json({ error: "Some employees were not found or are not active" });
+    }
+
+    // Get owner name for default title
+    const ownerName = user.firstName
+      ? EncryptionService.decrypt(user.firstName)
+      : user.username;
+
+    // Create employee names for default title
+    const employeeNames = employees.map((emp) => emp.firstName).join(", ");
+    const defaultTitle = `${ownerName} & ${employeeNames}`;
+
+    // Create the group conversation
+    const conversation = await Conversation.create({
+      conversationType: "employee_group",
+      title: title || defaultTitle,
+      createdBy: userId,
+    });
+
+    // Add business owner as participant
+    await ConversationParticipant.create({
+      conversationId: conversation.id,
+      userId,
+      role: "business_owner",
+    });
+
+    // Add all employees as participants
+    for (const emp of employees) {
+      await ConversationParticipant.create({
+        conversationId: conversation.id,
+        userId: emp.userId,
+        role: "employee",
+      });
+    }
+
+    // Reload with participants
+    const fullConversation = await Conversation.findByPk(conversation.id, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "username"],
+            },
+          ],
+        },
+      ],
+    });
+
+    return res.status(201).json({ conversation: fullConversation });
+  } catch (error) {
+    console.error("Error creating employee group conversation:", error);
+    return res.status(500).json({ error: "Failed to create group conversation" });
   }
 });
 

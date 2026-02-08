@@ -145,6 +145,9 @@ import {
   AssignmentDetail,
   TimesheetScreen,
   EmployeeHoursScreen,
+  BusinessOwnerJobDetails,
+  BusinessOwnerMyJobs,
+  BusinessOwnerAllJobs,
 } from "../src/components/businessOwner";
 
 // Business Employee components
@@ -694,6 +697,18 @@ export default function App() {
               <Route
                 path="/business-owner/assignments/:assignmentId"
                 element={<AssignmentDetail state={state} />}
+              />
+              <Route
+                path="/business-owner/my-jobs"
+                element={<BusinessOwnerMyJobs state={state} />}
+              />
+              <Route
+                path="/business-owner/all-jobs"
+                element={<BusinessOwnerAllJobs state={state} />}
+              />
+              <Route
+                path="/business-owner/job/:appointmentId"
+                element={<BusinessOwnerJobDetails state={state} />}
               />
               {/* Business Employee routes */}
               <Route

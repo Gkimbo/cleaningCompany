@@ -99,7 +99,7 @@ const DetailsComponent = ({ state, dispatch }) => {
       keyLocation: homeDetails.keyLocation,
     };
     const response = await Appointment.addAppointmentToDb(infoObject);
-    if (response) {
+    if (response.success) {
       const stateApp = datesOfCleaning.map((app) => ({ ...app, homeId: homeDetails.id }));
       let apptTotal = 0;
       datesOfCleaning.forEach((date) => {
@@ -108,6 +108,9 @@ const DetailsComponent = ({ state, dispatch }) => {
       dispatch({ type: "ADD_BILL", payload: apptTotal });
       dispatch({ type: "ADD_DATES", payload: stateApp });
       navigate("/list-of-homes");
+    } else {
+      console.error("Failed to save appointment:", response.error);
+      alert(response.error || "Failed to save appointment. Please try again.");
     }
   };
 

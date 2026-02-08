@@ -15,7 +15,7 @@ const ClientJobFlowAssignmentSerializer = require("../../../serializers/ClientJo
 const CustomJobFlowChecklistSerializer = require("../../../serializers/CustomJobFlowChecklistSerializer");
 const TimesheetSerializer = require("../../../serializers/TimesheetSerializer");
 const EncryptionService = require("../../../services/EncryptionService");
-const { UserAppointments, UserHomes, User, Payout, CleanerClient, sequelize, EmployeeJobAssignment, BusinessEmployee } = require("../../../models");
+const { UserAppointments, UserHomes, User, Payout, CleanerClient, sequelize, EmployeeJobAssignment, BusinessEmployee, RecurringSchedule } = require("../../../models");
 const { Op } = require("sequelize");
 
 // All routes require business owner authentication
@@ -401,6 +401,613 @@ router.post("/self-assign/:appointmentId", async (req, res) => {
   }
 });
 
+/**
+ * GET /my-jobs - Get marketplace jobs booked by business owner with assignment status
+ * Returns only marketplace pickups (excludes direct client bookings)
+ * Jobs with clear indication of assignment status and available actions
+ */
+router.get("/my-jobs", async (req, res) => {
+  try {
+    const { upcoming, status } = req.query;
+    const today = new Date().toISOString().split("T")[0];
+
+    // Get list of client IDs for this business owner
+    // These are direct bookings, not marketplace pickups
+    const clientRelationships = await CleanerClient.findAll({
+      where: { cleanerId: req.businessOwnerId },
+      attributes: ["clientId"],
+    });
+    const clientIds = clientRelationships.map(c => c.clientId);
+
+    // Build where clause for appointments booked by this business owner
+    const whereClause = {
+      bookedByCleanerId: req.businessOwnerId,
+      wasCancelled: { [Op.ne]: true },
+    };
+
+    // Filter by upcoming if specified
+    if (upcoming === "true") {
+      whereClause.date = { [Op.gte]: today };
+      whereClause.completed = { [Op.ne]: true };
+    }
+
+    // Get all appointments booked by this business owner
+    const appointments = await UserAppointments.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+      order: [["date", "ASC"]],
+    });
+
+    // Filter out direct client bookings - only keep marketplace pickups
+    // A marketplace pickup is where the homeowner is NOT a client of the business
+    const marketplaceJobs = appointments.filter(apt => {
+      const homeownerId = apt.home?.user?.id;
+      return homeownerId && !clientIds.includes(homeownerId);
+    });
+
+    // Get all active assignments for these marketplace jobs
+    const appointmentIds = marketplaceJobs.map(a => a.id);
+    const activeAssignments = appointmentIds.length > 0
+      ? await EmployeeJobAssignment.findAll({
+          where: {
+            appointmentId: { [Op.in]: appointmentIds },
+            status: { [Op.notIn]: ["cancelled"] },
+          },
+          include: [
+            {
+              model: BusinessEmployee,
+              as: "employee",
+              attributes: ["id", "userId"],
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["firstName", "lastName"],
+                },
+              ],
+            },
+          ],
+        })
+      : [];
+
+    // Create a map of appointmentId to assignment
+    const assignmentMap = {};
+    activeAssignments.forEach(a => {
+      assignmentMap[a.appointmentId] = a;
+    });
+
+    // Get list of employees for assignment options
+    const employees = await BusinessEmployee.findAll({
+      where: {
+        businessOwnerId: req.businessOwnerId,
+        status: "active",
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "firstName", "lastName"],
+        },
+      ],
+    });
+
+    const employeeList = employees.map(emp => {
+      const firstName = emp.user?.firstName
+        ? EncryptionService.decrypt(emp.user.firstName)
+        : "";
+      const lastName = emp.user?.lastName
+        ? EncryptionService.decrypt(emp.user.lastName)
+        : "";
+      return {
+        id: emp.id,
+        userId: emp.userId,
+        name: `${firstName} ${lastName}`.trim(),
+      };
+    });
+
+    // Format response with assignment status and available actions
+    const jobs = marketplaceJobs.map(apt => {
+      const assignment = assignmentMap[apt.id];
+      const isAssigned = !!assignment;
+
+      // Decrypt client info and home location
+      const clientFirstName = apt.home?.user?.firstName
+        ? EncryptionService.decrypt(apt.home.user.firstName)
+        : null;
+      const clientLastName = apt.home?.user?.lastName
+        ? EncryptionService.decrypt(apt.home.user.lastName)
+        : null;
+      const address = apt.home?.address
+        ? EncryptionService.decrypt(apt.home.address)
+        : "";
+      const city = apt.home?.city
+        ? EncryptionService.decrypt(apt.home.city)
+        : "";
+      const homeState = apt.home?.state
+        ? EncryptionService.decrypt(apt.home.state)
+        : "";
+
+      // Get assigned employee name if assigned
+      let assignedTo = null;
+      if (assignment) {
+        if (assignment.isSelfAssignment) {
+          assignedTo = { type: "self", name: "You (Business Owner)" };
+        } else if (assignment.employee) {
+          const empFirstName = assignment.employee.user?.firstName
+            ? EncryptionService.decrypt(assignment.employee.user.firstName)
+            : "";
+          const empLastName = assignment.employee.user?.lastName
+            ? EncryptionService.decrypt(assignment.employee.user.lastName)
+            : "";
+          assignedTo = {
+            type: "employee",
+            employeeId: assignment.employee.id,
+            name: `${empFirstName} ${empLastName}`.trim(),
+          };
+        }
+      }
+
+      // Filter by status if specified
+      if (status === "unassigned" && isAssigned) return null;
+      if (status === "assigned" && !isAssigned) return null;
+
+      return {
+        id: apt.id,
+        date: apt.date,
+        startTime: apt.startTime,
+        timeToBeCompleted: apt.timeToBeCompleted,
+        price: apt.price,
+        completed: apt.completed,
+        clientName: clientFirstName && clientLastName
+          ? `${clientFirstName} ${clientLastName}`
+          : "Unknown Client",
+        address,
+        city,
+        state: homeState,
+        homeId: apt.homeId,
+        numBeds: apt.home?.numBeds,
+        numBaths: apt.home?.numBaths,
+        // Assignment status
+        isAssigned,
+        assignedTo,
+        assignmentId: assignment?.id || null,
+        assignmentStatus: assignment?.status || null,
+        // Available actions
+        actions: {
+          canSelfAssign: !isAssigned,
+          canAssignEmployee: !isAssigned && employeeList.length > 0,
+          canReassign: isAssigned && assignment?.status === "assigned",
+          canUnassign: isAssigned && assignment?.status === "assigned",
+        },
+      };
+    }).filter(Boolean); // Remove nulls from status filtering
+
+    res.json({
+      jobs,
+      employees: employeeList,
+      summary: {
+        total: jobs.length,
+        assigned: jobs.filter(j => j.isAssigned).length,
+        unassigned: jobs.filter(j => !j.isAssigned).length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching my jobs:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /all-jobs - Get ALL jobs for the business owner (both client and marketplace)
+ * Returns jobs with a source label indicating if from client or marketplace
+ */
+router.get("/all-jobs", async (req, res) => {
+  try {
+    const { upcoming, status } = req.query;
+    const today = new Date().toISOString().split("T")[0];
+
+    // Get list of client IDs for this business owner
+    const clientRelationships = await CleanerClient.findAll({
+      where: { cleanerId: req.businessOwnerId },
+      attributes: ["clientId"],
+    });
+    const clientIds = clientRelationships.map(c => c.clientId);
+
+    // Build where clause for appointments booked by this business owner
+    const whereClause = {
+      bookedByCleanerId: req.businessOwnerId,
+      wasCancelled: { [Op.ne]: true },
+    };
+
+    // Filter by upcoming if specified
+    if (upcoming === "true") {
+      whereClause.date = { [Op.gte]: today };
+      whereClause.completed = { [Op.ne]: true };
+    }
+
+    // Get all appointments booked by this business owner
+    const appointments = await UserAppointments.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+      order: [["date", "ASC"]],
+    });
+
+    // Get all active assignments for these appointments
+    const appointmentIds = appointments.map(a => a.id);
+    const activeAssignments = appointmentIds.length > 0
+      ? await EmployeeJobAssignment.findAll({
+          where: {
+            appointmentId: { [Op.in]: appointmentIds },
+            status: { [Op.notIn]: ["cancelled"] },
+          },
+          include: [
+            {
+              model: BusinessEmployee,
+              as: "employee",
+              attributes: ["id", "userId"],
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["firstName", "lastName"],
+                },
+              ],
+            },
+          ],
+        })
+      : [];
+
+    // Create a map of appointmentId to assignment
+    const assignmentMap = {};
+    activeAssignments.forEach(a => {
+      assignmentMap[a.appointmentId] = a;
+    });
+
+    // Format response with source label
+    const jobs = appointments.map(apt => {
+      const assignment = assignmentMap[apt.id];
+      const isAssigned = !!assignment;
+      const homeownerId = apt.home?.user?.id;
+
+      // Determine source: client job or marketplace pickup
+      const isClientJob = homeownerId && clientIds.includes(homeownerId);
+      const source = isClientJob ? "client" : "marketplace";
+
+      // Decrypt client info and home location
+      const clientFirstName = apt.home?.user?.firstName
+        ? EncryptionService.decrypt(apt.home.user.firstName)
+        : null;
+      const clientLastName = apt.home?.user?.lastName
+        ? EncryptionService.decrypt(apt.home.user.lastName)
+        : null;
+      const address = apt.home?.address
+        ? EncryptionService.decrypt(apt.home.address)
+        : "";
+      const city = apt.home?.city
+        ? EncryptionService.decrypt(apt.home.city)
+        : "";
+      const homeState = apt.home?.state
+        ? EncryptionService.decrypt(apt.home.state)
+        : "";
+
+      // Get assigned employee name if assigned
+      let assignedTo = null;
+      if (assignment) {
+        if (assignment.isSelfAssignment) {
+          assignedTo = { type: "self", name: "You (Business Owner)" };
+        } else if (assignment.employee) {
+          const empFirstName = assignment.employee.user?.firstName
+            ? EncryptionService.decrypt(assignment.employee.user.firstName)
+            : "";
+          const empLastName = assignment.employee.user?.lastName
+            ? EncryptionService.decrypt(assignment.employee.user.lastName)
+            : "";
+          assignedTo = {
+            type: "employee",
+            employeeId: assignment.employee.id,
+            name: `${empFirstName} ${empLastName}`.trim(),
+          };
+        }
+      }
+
+      // Filter by status if specified
+      if (status === "unassigned" && isAssigned) return null;
+      if (status === "assigned" && !isAssigned) return null;
+
+      return {
+        id: apt.id,
+        date: apt.date,
+        startTime: apt.startTime,
+        timeToBeCompleted: apt.timeToBeCompleted,
+        price: apt.price,
+        completed: apt.completed,
+        source, // "client" or "marketplace"
+        clientName: clientFirstName && clientLastName
+          ? `${clientFirstName} ${clientLastName}`
+          : "Unknown Client",
+        address,
+        city,
+        state: homeState,
+        homeId: apt.homeId,
+        numBeds: apt.home?.numBeds,
+        numBaths: apt.home?.numBaths,
+        // Assignment status
+        isAssigned,
+        assignedTo,
+        assignmentId: assignment?.id || null,
+        assignmentStatus: assignment?.status || null,
+      };
+    }).filter(Boolean);
+
+    // Separate by source for summary
+    const clientJobs = jobs.filter(j => j.source === "client");
+    const marketplaceJobs = jobs.filter(j => j.source === "marketplace");
+
+    res.json({
+      jobs,
+      summary: {
+        total: jobs.length,
+        clientJobs: clientJobs.length,
+        marketplaceJobs: marketplaceJobs.length,
+        assigned: jobs.filter(j => j.isAssigned).length,
+        unassigned: jobs.filter(j => !j.isAssigned).length,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching all jobs:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /my-jobs/:appointmentId - Get full details for a specific job
+ * Returns complete job and home details for business owner viewing a marketplace job
+ */
+router.get("/my-jobs/:appointmentId", async (req, res) => {
+  try {
+    const appointmentId = parseInt(req.params.appointmentId);
+
+    // Get the appointment with full home and client details
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id: appointmentId,
+        bookedByCleanerId: req.businessOwnerId,
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName", "email", "phone"],
+            },
+          ],
+        },
+        {
+          model: RecurringSchedule,
+          as: "recurringSchedule",
+          attributes: ["timeWindow"],
+          required: false,
+        },
+      ],
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Job not found or not accessible" });
+    }
+
+    // Check for active assignment
+    const assignment = await EmployeeJobAssignment.findOne({
+      where: {
+        appointmentId: appointment.id,
+        status: { [Op.notIn]: ["cancelled"] },
+      },
+      include: [
+        {
+          model: BusinessEmployee,
+          as: "employee",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+    });
+
+    // Get list of employees for assignment options
+    const employees = await BusinessEmployee.findAll({
+      where: {
+        businessOwnerId: req.businessOwnerId,
+        status: "active",
+      },
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "firstName", "lastName"],
+        },
+      ],
+    });
+
+    const employeeList = employees.map(emp => {
+      const firstName = emp.user?.firstName
+        ? EncryptionService.decrypt(emp.user.firstName)
+        : "";
+      const lastName = emp.user?.lastName
+        ? EncryptionService.decrypt(emp.user.lastName)
+        : "";
+      return {
+        id: emp.id,
+        userId: emp.userId,
+        name: `${firstName} ${lastName}`.trim(),
+      };
+    });
+
+    // Decrypt client info
+    const clientFirstName = appointment.home?.user?.firstName
+      ? EncryptionService.decrypt(appointment.home.user.firstName)
+      : null;
+    const clientLastName = appointment.home?.user?.lastName
+      ? EncryptionService.decrypt(appointment.home.user.lastName)
+      : null;
+    const clientEmail = appointment.home?.user?.email
+      ? EncryptionService.decrypt(appointment.home.user.email)
+      : null;
+    const clientPhone = appointment.home?.user?.phone
+      ? EncryptionService.decrypt(appointment.home.user.phone)
+      : null;
+
+    // Decrypt home info
+    const address = appointment.home?.address
+      ? EncryptionService.decrypt(appointment.home.address)
+      : "";
+    const city = appointment.home?.city
+      ? EncryptionService.decrypt(appointment.home.city)
+      : "";
+    const homeState = appointment.home?.state
+      ? EncryptionService.decrypt(appointment.home.state)
+      : "";
+    const zipcode = appointment.home?.zipcode
+      ? EncryptionService.decrypt(appointment.home.zipcode)
+      : "";
+    const keyPadCode = appointment.keyPadCode
+      ? EncryptionService.decrypt(appointment.keyPadCode)
+      : appointment.home?.keyPadCode
+        ? EncryptionService.decrypt(appointment.home.keyPadCode)
+        : null;
+    const keyLocation = appointment.keyLocation
+      ? EncryptionService.decrypt(appointment.keyLocation)
+      : appointment.home?.keyLocation
+        ? EncryptionService.decrypt(appointment.home.keyLocation)
+        : null;
+    const contact = appointment.contact
+      ? EncryptionService.decrypt(appointment.contact)
+      : appointment.home?.contact
+        ? EncryptionService.decrypt(appointment.home.contact)
+        : null;
+
+    // Build assignment info
+    let assignedTo = null;
+    if (assignment) {
+      if (assignment.isSelfAssignment) {
+        assignedTo = { type: "self", name: "You (Business Owner)" };
+      } else if (assignment.employee) {
+        const empFirstName = assignment.employee.user?.firstName
+          ? EncryptionService.decrypt(assignment.employee.user.firstName)
+          : "";
+        const empLastName = assignment.employee.user?.lastName
+          ? EncryptionService.decrypt(assignment.employee.user.lastName)
+          : "";
+        assignedTo = {
+          type: "employee",
+          employeeId: assignment.employee.id,
+          name: `${empFirstName} ${empLastName}`.trim(),
+        };
+      }
+    }
+
+    const isAssigned = !!assignment;
+
+    res.json({
+      job: {
+        id: appointment.id,
+        date: appointment.date,
+        startTime: appointment.startTime,
+        timeToBeCompleted: appointment.timeToBeCompleted,
+        timeWindow: appointment.recurringSchedule?.timeWindow || null,
+        price: appointment.price,
+        paid: appointment.paid,
+        paymentStatus: appointment.paymentStatus,
+        completed: appointment.completed,
+        wasCancelled: appointment.wasCancelled,
+        bringTowels: appointment.bringTowels,
+        bringSheets: appointment.bringSheets,
+        sheetConfigurations: appointment.sheetConfigurations,
+        towelConfigurations: appointment.towelConfigurations,
+        // Assignment status
+        isAssigned,
+        assignedTo,
+        assignmentId: assignment?.id || null,
+        assignmentStatus: assignment?.status || null,
+        // Available actions
+        actions: {
+          canSelfAssign: !isAssigned,
+          canAssignEmployee: !isAssigned && employeeList.length > 0,
+          canReassign: isAssigned && assignment?.status === "assigned",
+          canUnassign: isAssigned && assignment?.status === "assigned",
+        },
+      },
+      home: {
+        id: appointment.home?.id,
+        nickName: appointment.home?.nickName,
+        address,
+        city,
+        state: homeState,
+        zipcode,
+        numBeds: appointment.home?.numBeds,
+        numBaths: appointment.home?.numBaths,
+        numHalfBaths: appointment.home?.numHalfBaths,
+        squareFootage: appointment.home?.squareFootage,
+        sheetsProvided: appointment.home?.sheetsProvided,
+        towelsProvided: appointment.home?.towelsProvided,
+        cleanersNeeded: appointment.home?.cleanersNeeded,
+        keyPadCode,
+        keyLocation,
+        contact,
+        specialNotes: appointment.home?.specialNotes,
+        recyclingLocation: appointment.home?.recyclingLocation,
+        compostLocation: appointment.home?.compostLocation,
+        trashLocation: appointment.home?.trashLocation,
+        bedConfigurations: appointment.home?.bedConfigurations,
+        bathroomConfigurations: appointment.home?.bathroomConfigurations,
+      },
+      client: {
+        id: appointment.home?.user?.id,
+        firstName: clientFirstName,
+        lastName: clientLastName,
+        fullName: clientFirstName && clientLastName
+          ? `${clientFirstName} ${clientLastName}`
+          : "Unknown Client",
+        email: clientEmail,
+        phone: clientPhone,
+      },
+      employees: employeeList,
+    });
+  } catch (error) {
+    console.error("Error fetching job details:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // =====================================
 // Pay Management Routes
 // =====================================
@@ -548,6 +1155,7 @@ router.get("/suggested-pay/:appointmentId", async (req, res) => {
 router.get("/dashboard", async (req, res) => {
   try {
     const today = new Date().toISOString().split("T")[0];
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
@@ -560,12 +1168,20 @@ router.get("/dashboard", async (req, res) => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthStart = startOfMonth.toISOString().split("T")[0];
 
+    // Get client IDs to determine source (client vs marketplace)
+    const clientRelationships = await CleanerClient.findAll({
+      where: { cleanerId: req.businessOwnerId },
+      attributes: ["clientId"],
+    });
+    const clientIds = clientRelationships.map(c => c.clientId);
+
     const [
       employeeStats,
       financials,
       upcomingAssignments,
       unpaidAssignments,
       todaysAssignments,
+      tomorrowsAssignments,
       totalClients,
       weeklyFinancials,
       employees,
@@ -575,52 +1191,68 @@ router.get("/dashboard", async (req, res) => {
       EmployeeJobAssignmentService.getUpcomingAssignments(req.businessOwnerId, today, thirtyDaysFromNow),
       EmployeeJobAssignmentService.getUnpaidAssignments(req.businessOwnerId),
       EmployeeJobAssignmentService.getUpcomingAssignments(req.businessOwnerId, today, today),
+      EmployeeJobAssignmentService.getUpcomingAssignments(req.businessOwnerId, tomorrow, tomorrow),
       CleanerClient.count({ where: { cleanerId: req.businessOwnerId, status: "active" } }),
       PayCalculatorService.getFinancialSummary(req.businessOwnerId, weekStart, today),
       BusinessEmployeeService.getEmployeesByBusinessOwner(req.businessOwnerId, { status: ["active"] }),
     ]);
 
+    // Helper function to format assigned appointments with source
+    const formatAssignedAppointments = (assignments) => {
+      return assignments.map(assignment => {
+        // Decrypt employee name (BusinessEmployee has encrypted PII fields)
+        const employeeFirstName = assignment.employee?.firstName
+          ? EncryptionService.decrypt(assignment.employee.firstName)
+          : null;
+        const employeeLastName = assignment.employee?.lastName
+          ? EncryptionService.decrypt(assignment.employee.lastName)
+          : null;
+
+        // Decrypt client/user name (User has encrypted PII fields)
+        const clientFirstName = assignment.appointment?.home?.user?.firstName
+          ? EncryptionService.decrypt(assignment.appointment.home.user.firstName)
+          : null;
+        const clientLastName = assignment.appointment?.home?.user?.lastName
+          ? EncryptionService.decrypt(assignment.appointment.home.user.lastName)
+          : null;
+
+        // Decrypt address (UserHomes has encrypted address)
+        const address = assignment.appointment?.home?.address
+          ? EncryptionService.decrypt(assignment.appointment.home.address)
+          : null;
+
+        // Determine source: client job or marketplace pickup
+        const homeownerId = assignment.appointment?.home?.user?.id;
+        const isClientJob = homeownerId && clientIds.includes(homeownerId);
+        const source = isClientJob ? "client" : "marketplace";
+
+        return {
+          id: assignment.appointmentId,
+          date: assignment.appointment?.date,
+          status: assignment.status,
+          startTime: assignment.appointment?.startTime,
+          source,
+          assignedEmployee: assignment.employee ? {
+            id: assignment.employee.id,
+            firstName: employeeFirstName,
+            lastName: employeeLastName,
+          } : (assignment.isSelfAssignment ? { id: null, firstName: "You", lastName: "(Self)" } : null),
+          clientName: clientFirstName && clientLastName
+            ? `${clientFirstName} ${clientLastName}`
+            : "Unknown Client",
+          address,
+          totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
+        };
+      });
+    };
+
     // Get today's assigned appointments
     const assignedAppointmentIds = todaysAssignments.map(a => a.appointmentId);
-    const assignedAppointments = todaysAssignments.map(assignment => {
-      // Decrypt employee name (BusinessEmployee has encrypted PII fields)
-      const employeeFirstName = assignment.employee?.firstName
-        ? EncryptionService.decrypt(assignment.employee.firstName)
-        : null;
-      const employeeLastName = assignment.employee?.lastName
-        ? EncryptionService.decrypt(assignment.employee.lastName)
-        : null;
+    const assignedAppointments = formatAssignedAppointments(todaysAssignments);
 
-      // Decrypt client/user name (User has encrypted PII fields)
-      const clientFirstName = assignment.appointment?.home?.user?.firstName
-        ? EncryptionService.decrypt(assignment.appointment.home.user.firstName)
-        : null;
-      const clientLastName = assignment.appointment?.home?.user?.lastName
-        ? EncryptionService.decrypt(assignment.appointment.home.user.lastName)
-        : null;
-
-      // Decrypt address (UserHomes has encrypted address)
-      const address = assignment.appointment?.home?.address
-        ? EncryptionService.decrypt(assignment.appointment.home.address)
-        : null;
-
-      return {
-        id: assignment.appointmentId,
-        date: assignment.appointment?.date,
-        status: assignment.status,
-        startTime: assignment.appointment?.startTime,
-        assignedEmployee: assignment.employee ? {
-          id: assignment.employee.id,
-          firstName: employeeFirstName,
-          lastName: employeeLastName,
-        } : (assignment.isSelfAssignment ? { id: null, firstName: "You", lastName: "(Self)" } : null),
-        clientName: clientFirstName && clientLastName
-          ? `${clientFirstName} ${clientLastName}`
-          : "Unknown Client",
-        address,
-        totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
-      };
-    });
+    // Get tomorrow's assigned appointments
+    const tomorrowAssignedAppointmentIds = tomorrowsAssignments.map(a => a.appointmentId);
+    const tomorrowAssignedAppointments = formatAssignedAppointments(tomorrowsAssignments);
 
     // Get today's unassigned appointments (appointments without assignments)
     // This includes appointments that were previously assigned but are now unassigned
@@ -682,36 +1314,110 @@ router.get("/dashboard", async (req, res) => {
       order: [["date", "ASC"]],
     });
 
-    const unassignedAppointmentsList = todaysUnassignedAppointments.map(apt => {
-      // Decrypt client/user name
-      const clientFirstName = apt.home?.user?.firstName
-        ? EncryptionService.decrypt(apt.home.user.firstName)
-        : null;
-      const clientLastName = apt.home?.user?.lastName
-        ? EncryptionService.decrypt(apt.home.user.lastName)
-        : null;
+    // Helper function to format unassigned appointments
+    const formatUnassignedAppointments = (appointments) => {
+      return appointments.map(apt => {
+        // Decrypt client/user name
+        const clientFirstName = apt.home?.user?.firstName
+          ? EncryptionService.decrypt(apt.home.user.firstName)
+          : null;
+        const clientLastName = apt.home?.user?.lastName
+          ? EncryptionService.decrypt(apt.home.user.lastName)
+          : null;
 
-      // Decrypt address
-      const address = apt.home?.address
-        ? EncryptionService.decrypt(apt.home.address)
-        : "";
+        // Decrypt address
+        const address = apt.home?.address
+          ? EncryptionService.decrypt(apt.home.address)
+          : "";
 
-      return {
-        id: apt.id,
-        date: apt.date,
-        status: "unassigned",
-        startTime: apt.startTime,
-        assignedEmployee: null,
-        clientName: clientFirstName && clientLastName
-          ? `${clientFirstName} ${clientLastName}`
-          : "Unknown Client",
-        address,
-        totalPrice: parseFloat(apt.price) * 100,
-      };
-    });
+        // Determine source: client job or marketplace pickup
+        const homeownerId = apt.home?.user?.id;
+        const isClientJob = homeownerId && clientIds.includes(homeownerId);
+        const source = isClientJob ? "client" : "marketplace";
+
+        return {
+          id: apt.id,
+          date: apt.date,
+          status: "unassigned",
+          startTime: apt.startTime,
+          source,
+          assignedEmployee: null,
+          clientName: clientFirstName && clientLastName
+            ? `${clientFirstName} ${clientLastName}`
+            : "Unknown Client",
+          address,
+          totalPrice: parseFloat(apt.price) * 100,
+        };
+      });
+    };
+
+    const unassignedAppointmentsList = formatUnassignedAppointments(todaysUnassignedAppointments);
 
     // Combine assigned and unassigned appointments
     const todaysAppointments = [...assignedAppointments, ...unassignedAppointmentsList]
+      .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+
+    // Get tomorrow's unassigned appointments
+    const cancelledTomorrowAssignments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId: req.businessOwnerId,
+        status: "cancelled",
+      },
+      attributes: ["appointmentId"],
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: tomorrow,
+            wasCancelled: { [Op.ne]: true },
+            completed: { [Op.ne]: true },
+          },
+          attributes: ["id"],
+        },
+      ],
+    });
+    const cancelledTomorrowAppointmentIds = cancelledTomorrowAssignments
+      .filter(a => a.appointment && !tomorrowAssignedAppointmentIds.includes(a.appointmentId))
+      .map(a => a.appointmentId);
+
+    const tomorrowsUnassignedAppointments = await UserAppointments.findAll({
+      where: {
+        date: tomorrow,
+        wasCancelled: { [Op.ne]: true },
+        completed: { [Op.ne]: true },
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { bookedByCleanerId: req.businessOwnerId },
+              { id: { [Op.in]: cancelledTomorrowAppointmentIds.length > 0 ? cancelledTomorrowAppointmentIds : [0] } },
+            ],
+          },
+          ...(tomorrowAssignedAppointmentIds.length > 0
+            ? [{ id: { [Op.notIn]: tomorrowAssignedAppointmentIds } }]
+            : []),
+        ],
+      },
+      include: [
+        {
+          model: UserHomes,
+          as: "home",
+          include: [
+            {
+              model: User,
+              as: "user",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+      ],
+      order: [["startTime", "ASC"]],
+    });
+
+    const tomorrowUnassignedList = formatUnassignedAppointments(tomorrowsUnassignedAppointments);
+
+    // Combine tomorrow's assigned and unassigned appointments
+    const tomorrowsAppointments = [...tomorrowAssignedAppointments, ...tomorrowUnassignedList]
       .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 
     // Count unpaid client appointments (appointments where paymentStatus is not 'paid')
@@ -729,6 +1435,7 @@ router.get("/dashboard", async (req, res) => {
       unpaidPayrollTotal: unpaidAssignments.reduce((sum, a) => sum + a.payAmount, 0),
       // New data for profile
       todaysAppointments,
+      tomorrowsAppointments,
       weeklyRevenue: weeklyFinancials?.totalRevenue || 0,
       monthlyRevenue: financials?.totalRevenue || 0,
       unpaidAppointments,
@@ -1019,6 +1726,58 @@ router.get("/payroll/history", async (req, res) => {
   }
 });
 
+/**
+ * GET /tax-export/:year - Get annual tax export data
+ * Returns financial summary and employee breakdown for the entire year
+ */
+router.get("/tax-export/:year", async (req, res) => {
+  try {
+    const year = parseInt(req.params.year);
+    const currentYear = new Date().getFullYear();
+
+    // Validate year (only allow current year and 2 years back)
+    if (isNaN(year) || year < currentYear - 2 || year > currentYear) {
+      return res.status(400).json({ error: "Invalid year. Only current year and 2 years back are allowed." });
+    }
+
+    const startDate = `${year}-01-01`;
+    const endDate = `${year}-12-31`;
+
+    // Get financial summary for the year
+    const financials = await PayCalculatorService.getFinancialSummary(
+      req.businessOwnerId,
+      startDate,
+      endDate
+    );
+
+    // Get employee breakdown
+    const employeeBreakdown = financials.employeeBreakdown || [];
+
+    // Count employees with earnings over $600 (1099 threshold)
+    const threshold1099 = 60000; // $600 in cents
+    const employeesOver1099Threshold = employeeBreakdown.filter(
+      (e) => (e.totalPaid || 0) >= threshold1099
+    ).length;
+
+    res.json({
+      year,
+      financials: financials.financials || {},
+      employeeBreakdown,
+      summary: {
+        totalEmployees: employeeBreakdown.length,
+        employeesRequiring1099: employeesOver1099Threshold,
+        totalPayroll: financials.financials?.totalPayroll || 0,
+        totalRevenue: financials.financials?.totalRevenue || 0,
+        netProfit: financials.financials?.netProfit || 0,
+        completedJobs: financials.financials?.completedJobs || 0,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching tax export data:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // =====================================
 // Timesheet & Hours Tracking Routes
 // =====================================
@@ -1051,6 +1810,40 @@ router.get("/timesheet", async (req, res) => {
     res.json(TimesheetSerializer.serializeTimesheetData(timesheetData));
   } catch (error) {
     console.error("Error fetching timesheet:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /employee-workload - Get employee workload data for fair job distribution
+ * Returns hours metrics, employment duration, and workload percentages
+ */
+router.get("/employee-workload", async (req, res) => {
+  try {
+    const workloadData = await EmployeeJobAssignmentService.getEmployeeWorkloadData(
+      req.businessOwnerId
+    );
+
+    res.json(workloadData);
+  } catch (error) {
+    console.error("Error fetching employee workload:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /unassigned-jobs - Get list of unassigned jobs for the business owner
+ * Returns upcoming jobs not assigned to any employee
+ */
+router.get("/unassigned-jobs", async (req, res) => {
+  try {
+    const unassignedJobs = await EmployeeJobAssignmentService.getUnassignedJobs(
+      req.businessOwnerId
+    );
+
+    res.json({ jobs: unassignedJobs });
+  } catch (error) {
+    console.error("Error fetching unassigned jobs:", error);
     res.status(500).json({ error: error.message });
   }
 });

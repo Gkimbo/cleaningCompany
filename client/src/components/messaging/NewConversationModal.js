@@ -32,6 +32,7 @@ const NewConversationModal = ({ visible, onClose }) => {
 
   const isOwner = state.account === "owner";
   const isHR = state.account === "humanResources";
+  const isBusinessOwner = state.currentUser?.isBusinessOwner;
 
   useEffect(() => {
     if (visible) {
@@ -55,9 +56,27 @@ const NewConversationModal = ({ visible, onClose }) => {
 
   const fetchStaff = async (searchTerm = "") => {
     setLoading(true);
-    const result = await MessageService.getStaffList(searchTerm, state.currentUser.token);
-    if (!result.error) {
-      setStaff(result.staff || []);
+
+    if (isBusinessOwner) {
+      // Fetch employees for business owners
+      const result = await MessageService.getBusinessEmployees(state.currentUser.token);
+      if (!result.error) {
+        let employees = result.employees || [];
+        // Filter by search term if provided
+        if (searchTerm) {
+          const query = searchTerm.toLowerCase();
+          employees = employees.filter((emp) =>
+            `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(query)
+          );
+        }
+        setStaff(employees);
+      }
+    } else {
+      // Fetch HR staff for owners/HR
+      const result = await MessageService.getStaffList(searchTerm, state.currentUser.token);
+      if (!result.error) {
+        setStaff(result.staff || []);
+      }
     }
     setLoading(false);
   };
@@ -98,19 +117,39 @@ const NewConversationModal = ({ visible, onClose }) => {
     setCreating(true);
     try {
       let result;
-      if (selectedMembers.length === 1) {
-        // 1-on-1 conversation
-        result = await MessageService.createDirectConversation(
-          selectedMembers[0].id,
-          state.currentUser.token
-        );
+
+      if (isBusinessOwner) {
+        // Business owner messaging employees
+        if (selectedMembers.length === 1) {
+          // 1-on-1 conversation with employee
+          result = await MessageService.createEmployeeConversation(
+            selectedMembers[0].id,
+            state.currentUser.token
+          );
+        } else {
+          // Group conversation with multiple employees
+          result = await MessageService.createEmployeeGroupConversation(
+            selectedMembers.map((m) => m.id),
+            groupName || null,
+            state.currentUser.token
+          );
+        }
       } else {
-        // Group conversation
-        result = await MessageService.createGroupConversation(
-          selectedMembers.map((m) => m.id),
-          groupName || null,
-          state.currentUser.token
-        );
+        // Owner/HR internal messaging
+        if (selectedMembers.length === 1) {
+          // 1-on-1 conversation
+          result = await MessageService.createDirectConversation(
+            selectedMembers[0].id,
+            state.currentUser.token
+          );
+        } else {
+          // Group conversation
+          result = await MessageService.createGroupConversation(
+            selectedMembers.map((m) => m.id),
+            groupName || null,
+            state.currentUser.token
+          );
+        }
       }
 
       if (result && result.conversation) {
@@ -124,11 +163,26 @@ const NewConversationModal = ({ visible, onClose }) => {
   };
 
   const getDisplayName = (user) => {
+    // For employees (business owner mode)
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    }
+    if (user.firstName) {
+      return user.firstName;
+    }
+    // For HR staff (owner/HR mode)
     return user.username || "Unknown";
   };
 
   const getInitials = (user) => {
-    const name = getDisplayName(user);
+    // For employees, use first/last name initials
+    if (user.firstName) {
+      const first = user.firstName[0] || "";
+      const last = user.lastName?.[0] || "";
+      return (first + last).toUpperCase();
+    }
+    // For HR staff
+    const name = user.username || "?";
     return name
       .split(" ")
       .map((n) => n[0])
@@ -137,11 +191,16 @@ const NewConversationModal = ({ visible, onClose }) => {
       .slice(0, 2);
   };
 
-  const getRoleBadge = (type) => {
-    if (type === "owner") {
+  const getRoleBadge = (user) => {
+    // For employees (check if employee data)
+    if (user.canMessageClients !== undefined) {
+      return { label: "Employee", color: colors.success[600], bg: colors.success[50] };
+    }
+    // For HR staff
+    if (user.type === "owner") {
       return { label: "Owner", color: colors.primary[600], bg: colors.primary[50] };
     }
-    if (type === "humanResources") {
+    if (user.type === "humanResources") {
       return { label: "HR", color: colors.secondary[600], bg: colors.secondary[50] };
     }
     return null;
@@ -149,7 +208,7 @@ const NewConversationModal = ({ visible, onClose }) => {
 
   const renderStaffItem = ({ item }) => {
     const isSelected = selectedMembers.some((m) => m.id === item.id);
-    const roleBadge = getRoleBadge(item.type);
+    const roleBadge = getRoleBadge(item);
 
     return (
       <Pressable
@@ -210,7 +269,7 @@ const NewConversationModal = ({ visible, onClose }) => {
             <Icon name="search" size={18} color={colors.text.tertiary} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search staff..."
+              placeholder={isBusinessOwner ? "Search employees..." : "Search staff..."}
               placeholderTextColor={colors.text.tertiary}
               value={search}
               onChangeText={setSearch}
@@ -222,41 +281,43 @@ const NewConversationModal = ({ visible, onClose }) => {
             )}
           </View>
 
-          {/* Quick Actions */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-            {isOwner && (
-              <Pressable
-                style={styles.quickAction}
-                onPress={() => handleQuickAction("hr-group")}
-                disabled={creating}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: colors.secondary[100] }]}>
-                  <Icon name="users" size={18} color={colors.secondary[600]} />
-                </View>
-                <Text style={styles.quickActionText}>HR Team Chat</Text>
-                <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
-              </Pressable>
-            )}
-            {isHR && (
-              <Pressable
-                style={styles.quickAction}
-                onPress={() => handleQuickAction("message-owner")}
-                disabled={creating}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: colors.primary[100] }]}>
-                  <Icon name="message-circle" size={18} color={colors.primary[600]} />
-                </View>
-                <Text style={styles.quickActionText}>Message Owner</Text>
-                <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
-              </Pressable>
-            )}
-          </View>
+          {/* Quick Actions - Only for Owner/HR, not business owners */}
+          {(isOwner || isHR) && !isBusinessOwner && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+              {isOwner && (
+                <Pressable
+                  style={styles.quickAction}
+                  onPress={() => handleQuickAction("hr-group")}
+                  disabled={creating}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: colors.secondary[100] }]}>
+                    <Icon name="users" size={18} color={colors.secondary[600]} />
+                  </View>
+                  <Text style={styles.quickActionText}>HR Team Chat</Text>
+                  <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
+                </Pressable>
+              )}
+              {isHR && (
+                <Pressable
+                  style={styles.quickAction}
+                  onPress={() => handleQuickAction("message-owner")}
+                  disabled={creating}
+                >
+                  <View style={[styles.quickActionIcon, { backgroundColor: colors.primary[100] }]}>
+                    <Icon name="message-circle" size={18} color={colors.primary[600]} />
+                  </View>
+                  <Text style={styles.quickActionText}>Message Owner</Text>
+                  <Icon name="chevron-right" size={18} color={colors.text.tertiary} />
+                </Pressable>
+              )}
+            </View>
+          )}
 
-          {/* Staff List */}
+          {/* Staff/Employees List */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              {isOwner ? "HR STAFF" : "STAFF MEMBERS"}
+              {isBusinessOwner ? "EMPLOYEES" : isOwner ? "HR STAFF" : "STAFF MEMBERS"}
             </Text>
           </View>
 
@@ -267,7 +328,9 @@ const NewConversationModal = ({ visible, onClose }) => {
           ) : staff.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Icon name="users" size={32} color={colors.text.tertiary} />
-              <Text style={styles.emptyText}>No staff members found</Text>
+              <Text style={styles.emptyText}>
+                {isBusinessOwner ? "No employees found" : "No staff members found"}
+              </Text>
             </View>
           ) : (
             <FlatList

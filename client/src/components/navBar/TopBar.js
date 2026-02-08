@@ -414,18 +414,25 @@ const TopBar = ({ dispatch, state }) => {
                           </>
                         ) : state.account === "cleaner" ? (
                           <>
-                            {/* Search Jobs always at the top for all cleaners */}
-                            <ChooseNewJobButton closeModal={closeModal} />
-                            <EmployeeAssignmentsButton
-                              closeModal={closeModal}
-                            />
+                            {/* Search Jobs, My Jobs, Earnings only for non-business-owner cleaners */}
+                            {!state.isBusinessOwner && (
+                              <>
+                                <ChooseNewJobButton closeModal={closeModal} />
+                                <EmployeeAssignmentsButton
+                                  closeModal={closeModal}
+                                />
+                              </>
+                            )}
                             <MyRequestsButton closeModal={closeModal} />
                             {/* My Clients only for business owner cleaners */}
                             {state.isBusinessOwner && (
                               <MyClientsButton closeModal={closeModal} />
                             )}
                             {/* <EmployeeShiftButton closeModal={closeModal} /> */}
-                            <EarningsButton closeModal={closeModal} />
+                            {/* Earnings only for non-business-owner cleaners */}
+                            {!state.isBusinessOwner && (
+                              <EarningsButton closeModal={closeModal} />
+                            )}
                             {state.isBusinessOwner && (
                               <CalculatorButton closeModal={closeModal} />
                             )}

@@ -2196,6 +2196,74 @@ Kleanr System`;
       console.error("❌ Error sending HR hiring notification email:", error);
     }
   }
+
+  // Notify client when cleaner changes their cleaning price
+  static async sendPriceChangeNotification({
+    clientEmail,
+    clientName,
+    cleanerName,
+    businessName,
+    oldPrice,
+    newPrice,
+    homeAddress,
+  }) {
+    try {
+      const transporter = createTransporter();
+      const displayName = businessName || cleanerName;
+
+      const htmlContent = createEmailTemplate({
+        title: "Cleaning Price Updated",
+        subtitle: `${displayName} has updated your cleaning price`,
+        headerColor: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
+        greeting: `Hi ${clientName},`,
+        content: `<p>Your cleaning service provider has updated the price for your home cleaning.</p>`,
+        infoBox: {
+          icon: "💰",
+          title: "Price Change Details",
+          items: [
+            { label: "Previous Price", value: `$${(oldPrice / 100).toFixed(2)}` },
+            { label: "New Price", value: `$${(newPrice / 100).toFixed(2)}` },
+            { label: "Home", value: homeAddress || "Your home" },
+            { label: "Updated By", value: displayName },
+          ],
+        },
+        ctaText: "Log into the Kleanr app to view your account details.",
+        footerMessage: "Thank you for using Kleanr",
+      });
+
+      const textContent = `Hi ${clientName},
+
+Your cleaning service provider has updated the price for your home cleaning.
+
+PRICE CHANGE DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Previous Price: $${(oldPrice / 100).toFixed(2)}
+New Price: $${(newPrice / 100).toFixed(2)}
+Home: ${homeAddress || "Your home"}
+Updated By: ${displayName}
+
+Log into the Kleanr app to view your account details.
+
+Best regards,
+Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: clientEmail,
+        subject: `💰 Your cleaning price has been updated`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Price change notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending price change notification email:", error);
+      throw error;
+    }
+  }
+
   // Cleaning completed notification to homeowner
   static async sendCleaningCompletedNotification(
     email,

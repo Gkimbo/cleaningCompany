@@ -62,6 +62,9 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 					throw new Error(result.error || "Failed to enter preview mode");
 				}
 
+				// Store the demo token in AsyncStorage so getCurrentUser and other fetches work
+				await AsyncStorage.setItem("token", result.token);
+
 				// Dispatch actions to update app state with demo account data
 				dispatch({ type: "PREVIEW_ENTER", payload: result });
 
@@ -115,6 +118,12 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				console.warn("[PreviewContext] Backend exit failed, using stored state");
 			}
 
+			// Restore the owner's token to AsyncStorage
+			const tokenToRestore = result.success ? result.token : ownerState.token;
+			if (tokenToRestore) {
+				await AsyncStorage.setItem("token", tokenToRestore);
+			}
+
 			// Dispatch action to restore owner state
 			dispatch({
 				type: "PREVIEW_EXIT",
@@ -140,6 +149,7 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 	/**
 	 * Reset demo data back to original seeder state
 	 * Can be called while in preview mode to restore demo accounts
+	 * Automatically refreshes the session with a new token after reset
 	 */
 	const resetDemoData = useCallback(async () => {
 		setIsResetting(true);
@@ -168,13 +178,23 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				throw new Error("No authorization token available");
 			}
 
-			const result = await DemoAccountService.resetDemoData(tokenToUse);
+			// Pass the current preview role so the server can return a new session
+			const result = await DemoAccountService.resetDemoData(tokenToUse, previewRole);
 
 			if (!result.success) {
 				throw new Error(result.error || "Failed to reset demo data");
 			}
 
 			console.log("[PreviewContext] Demo data reset:", result);
+
+			// If we got a new session back, update the state with the new token
+			if (result.newSession && isPreviewMode) {
+				console.log("[PreviewContext] Updating state with new session token");
+				// Also update AsyncStorage so getCurrentUser and other fetches use the new token
+				await AsyncStorage.setItem("token", result.newSession.token);
+				dispatch({ type: "PREVIEW_ENTER", payload: result.newSession });
+			}
+
 			return {
 				success: true,
 				message: result.message,
@@ -188,7 +208,7 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 		} finally {
 			setIsResetting(false);
 		}
-	}, [state, originalOwnerState]);
+	}, [state, originalOwnerState, previewRole, isPreviewMode, dispatch]);
 
 	/**
 	 * Switch to a different demo role without exiting preview mode
@@ -234,6 +254,9 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				if (!result.success) {
 					throw new Error(result.error || "Failed to switch preview role");
 				}
+
+				// Store the new demo token in AsyncStorage
+				await AsyncStorage.setItem("token", result.token);
 
 				// Dispatch action to update app state with new demo account data
 				dispatch({ type: "PREVIEW_ENTER", payload: result });

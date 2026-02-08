@@ -248,10 +248,17 @@ router.get("/check/:role", async (req, res) => {
  * POST /demo-accounts/reset
  * Reset all demo data back to original seeder state
  * This allows owners to restore demo accounts after testing
+ * If currentRole is provided, returns a new session token for that role
  */
 router.post("/reset", async (req, res) => {
 	try {
 		console.log(`[demoAccountRouter] Reset demo data requested by owner ${req.ownerId}`);
+
+		// Get the current preview role from request body or token
+		let currentRole = req.body.currentRole;
+		if (!currentRole && req.previewRole) {
+			currentRole = req.previewRole;
+		}
 
 		const result = await DemoAccountService.resetDemoData();
 
@@ -262,11 +269,34 @@ router.post("/reset", async (req, res) => {
 			});
 		}
 
+		// If we're in preview mode, create a new session for the current role
+		let newSession = null;
+		if (currentRole && req.isPreviewMode) {
+			try {
+				newSession = await DemoAccountService.createPreviewSession(
+					req.ownerId,
+					currentRole
+				);
+				console.log(`[demoAccountRouter] Created new session for role: ${currentRole}`);
+			} catch (sessionError) {
+				console.error("[demoAccountRouter] Failed to create new session:", sessionError);
+				// Don't fail the whole request, just note that session creation failed
+			}
+		}
+
 		res.json({
 			success: true,
 			message: result.message,
 			deleted: result.deleted,
-			created: result.created,
+			created: result.accounts,
+			// Include new session data if available
+			...(newSession && {
+				newSession: {
+					token: newSession.token,
+					user: newSession.user,
+					previewRole: newSession.previewRole,
+				},
+			}),
 		});
 	} catch (error) {
 		console.error("Error resetting demo data:", error);

@@ -1404,6 +1404,7 @@ cleanerClientsRouter.get("/:id/platform-price", verifyCleaner, async (req, res) 
 /**
  * PATCH /:id/default-price
  * Update the default price for a client
+ * If client is active, sends notification via email, push, and in-app
  */
 cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res) => {
   try {
@@ -1421,17 +1422,39 @@ cleanerClientsRouter.patch("/:id/default-price", verifyCleaner, async (req, res)
       return res.status(400).json({ error: "Price must be a positive number" });
     }
 
-    // Get the cleaner-client relationship
+    // Get the cleaner-client relationship with home data
     const cleanerClient = await CleanerClient.findOne({
       where: { id, cleanerId },
+      include: [{ model: UserHomes, as: "home" }],
     });
 
     if (!cleanerClient) {
       return res.status(404).json({ error: "Client not found" });
     }
 
+    // Store old price before update
+    const oldPrice = cleanerClient.defaultPrice;
+    const priceChanged = oldPrice !== numericPrice;
+
     // Update the default price
     await cleanerClient.update({ defaultPrice: numericPrice });
+
+    // Send notifications if active client (has clientId) and price changed
+    if (cleanerClient.clientId && priceChanged) {
+      const cleaner = await User.findByPk(cleanerId);
+      const homeAddress = cleanerClient.home?.streetAddress || null;
+
+      await NotificationService.notifyPriceChange({
+        clientId: cleanerClient.clientId,
+        cleanerId,
+        cleanerName: `${cleaner.firstName} ${cleaner.lastName}`,
+        businessName: cleaner.businessName,
+        oldPrice,
+        newPrice: numericPrice,
+        homeAddress,
+        io: req.app.get("io"),
+      });
+    }
 
     res.json({
       success: true,

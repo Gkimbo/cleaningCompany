@@ -778,6 +778,90 @@ class NotificationService {
       io,
     });
   }
+
+  /**
+   * Notify client when cleaner changes their cleaning price
+   */
+  static async notifyPriceChange({
+    clientId,
+    cleanerId,
+    cleanerName,
+    businessName,
+    oldPrice,
+    newPrice,
+    homeAddress,
+    io = null,
+  }) {
+    try {
+      const client = await User.findByPk(clientId);
+      if (!client) {
+        console.error(`[NotificationService] Client ${clientId} not found for price change notification`);
+        return { success: false, error: "Client not found" };
+      }
+
+      const clientName = client.firstName || "there";
+      const displayName = businessName || cleanerName;
+      const oldPriceDisplay = `$${(oldPrice / 100).toFixed(2)}`;
+      const newPriceDisplay = `$${(newPrice / 100).toFixed(2)}`;
+
+      // 1. Create in-app notification
+      const notification = await this.createNotification({
+        userId: clientId,
+        type: "price_change",
+        title: "Cleaning Price Updated",
+        body: `${displayName} updated your cleaning price from ${oldPriceDisplay} to ${newPriceDisplay}`,
+        data: {
+          cleanerId,
+          oldPrice,
+          newPrice,
+          homeAddress,
+        },
+        actionRequired: false,
+      });
+
+      // 2. Send push notification if client has token
+      if (client.expoPushToken) {
+        await PushNotification.sendPushNotification(
+          client.expoPushToken,
+          "Cleaning Price Updated",
+          `Your cleaning price has been updated to ${newPriceDisplay}`,
+          { type: "price_change", cleanerId }
+        );
+      }
+
+      // 3. Send email notification
+      if (client.email) {
+        await Email.sendPriceChangeNotification({
+          clientEmail: client.email,
+          clientName,
+          cleanerName,
+          businessName,
+          oldPrice,
+          newPrice,
+          homeAddress,
+        });
+      }
+
+      // 4. Emit socket event for real-time update
+      if (io) {
+        io.to(`user_${clientId}`).emit("notification", {
+          type: "price_change",
+          notification,
+        });
+        // Update unread count
+        const unreadCount = await Notification.count({
+          where: { userId: clientId, read: false },
+        });
+        io.to(`user_${clientId}`).emit("unreadNotifications", unreadCount);
+      }
+
+      console.log(`[NotificationService] Price change notification sent to client ${clientId}`);
+      return { success: true, notification };
+    } catch (error) {
+      console.error("[NotificationService] Price change notification error:", error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 module.exports = NotificationService;

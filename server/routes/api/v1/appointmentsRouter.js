@@ -15,6 +15,7 @@ const {
   CleanerClient,
   HomePreferredCleaner,
   EmployeeJobAssignment,
+  PreferredPerksConfig,
 } = require("../../../models");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
@@ -94,6 +95,7 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       assignedToBusinessEmployee: false, // Exclude business-assigned jobs from marketplace
       userId: { [Op.in]: matchingUserIds }, // Filter by demo status match
       wasCancelled: false, // Exclude cancelled appointments
+      isDemoAppointment: isCleanerDemo, // Demo cleaners see demo appointments, real cleaners see real appointments
     };
 
     // If cleaner doesn't have early access, filter out jobs in early access period
@@ -182,6 +184,11 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
 
     // Prevent demo/real cross-access
     if (isCleanerDemo !== isHomeownerDemo) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    // Also check the appointment's demo flag
+    if (userAppointments.isDemoAppointment !== isCleanerDemo) {
       return res.status(403).json({ error: "Access denied" });
     }
 
@@ -830,7 +837,7 @@ appointmentRouter.get("/pending-approval", async (req, res) => {
         {
           model: User,
           as: "bookedByCleaner",
-          attributes: ["id", "firstName", "lastName", "profilePhoto"],
+          attributes: ["id", "firstName", "lastName"],
         },
       ],
       order: [["expiresAt", "ASC"]],
@@ -918,7 +925,12 @@ appointmentRouter.post("/", async (req, res) => {
   }
 
   // Verify user has a payment method set up
+  let isDemoUser = false;
   try {
+    if (!token) {
+      console.error("[Appointments] No token provided");
+      return res.status(401).json({ error: "No authentication token provided" });
+    }
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
     const user = await User.findByPk(userId);
@@ -927,13 +939,17 @@ appointmentRouter.post("/", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Check if this is a demo account
+    isDemoUser = user.isDemoAccount === true;
+
     if (!user.hasPaymentMethod) {
       return res.status(403).json({
         error: "Payment method required. Please add a payment method before booking appointments."
       });
     }
   } catch (tokenError) {
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error("[Appointments] Token verification failed:", tokenError.name, "-", tokenError.message);
+    return res.status(401).json({ error: "Invalid or expired token. Please log out and log back in." });
   }
 
   try {
@@ -1074,7 +1090,7 @@ appointmentRouter.post("/", async (req, res) => {
           keyLocation,
           completed: false,
           hasBeenAssigned: false,
-          empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded,
+          empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded || 1,
           timeToBeCompleted: homeBeingScheduled.dataValues.timeToBeCompleted,
           sheetConfigurations: date.sheetConfigurations || null,
           towelConfigurations: date.towelConfigurations || null,
@@ -1087,6 +1103,8 @@ appointmentRouter.post("/", async (req, res) => {
           lastMinuteFeeApplied: date.lastMinuteFeeApplied || null,
           // Early access for platinum cleaners
           earlyAccessUntil,
+          // Demo appointment flag - never show on marketplace
+          isDemoAppointment: isDemoUser,
         });
         const appointmentId = newAppointment.dataValues.id;
 

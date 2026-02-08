@@ -1309,6 +1309,228 @@ class EmployeeJobAssignmentService {
   }
 
   /**
+   * Get employee workload data for fair job distribution
+   * @param {number} businessOwnerId - ID of the business owner
+   * @returns {Promise<Object>} Workload data with employee metrics and team averages
+   */
+  static async getEmployeeWorkloadData(businessOwnerId) {
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+
+    // Calculate date ranges
+    const dayOfWeek = now.getDay();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - dayOfWeek);
+    const weekStartStr = weekStart.toISOString().split("T")[0];
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStartStr = monthStart.toISOString().split("T")[0];
+
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const yearStartStr = yearStart.toISOString().split("T")[0];
+
+    // Get all active employees with their employment start date
+    const employees = await BusinessEmployee.findAll({
+      where: {
+        businessOwnerId,
+        status: "active",
+      },
+      attributes: ["id", "firstName", "lastName", "userId", "acceptedAt", "createdAt"],
+      order: [["firstName", "ASC"]],
+    });
+
+    if (employees.length === 0) {
+      return {
+        employees: [],
+        teamAverage: { hoursPerWeek: 0, hoursThisWeek: 0 },
+        unassignedJobCount: 0,
+      };
+    }
+
+    // Get all completed assignments for these employees
+    const employeeIds = employees.map((e) => e.id);
+    const allAssignments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId,
+        businessEmployeeId: { [Op.in]: employeeIds },
+        status: "completed",
+        isSelfAssignment: false,
+      },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          attributes: ["id", "date"],
+        },
+      ],
+    });
+
+    // Calculate metrics for each employee
+    const employeeMetrics = employees.map((employee) => {
+      const employedSince = employee.acceptedAt || employee.createdAt;
+      const employmentDays = Math.floor((now - new Date(employedSince)) / (1000 * 60 * 60 * 24));
+      const employmentWeeks = Math.max(1, Math.floor(employmentDays / 7));
+
+      // Filter assignments for this employee
+      const empAssignments = allAssignments.filter(
+        (a) => a.businessEmployeeId === employee.id
+      );
+
+      // Calculate hours for different periods
+      let hoursThisWeek = 0;
+      let hoursThisMonth = 0;
+      let hoursThisYear = 0;
+      let hoursAllTime = 0;
+      let jobsThisWeek = 0;
+      let jobsThisMonth = 0;
+      let jobsAllTime = 0;
+
+      empAssignments.forEach((assignment) => {
+        const hours = parseFloat(assignment.hoursWorked) || 0;
+        const jobDate = assignment.appointment?.date;
+
+        hoursAllTime += hours;
+        jobsAllTime++;
+
+        if (jobDate >= weekStartStr && jobDate <= today) {
+          hoursThisWeek += hours;
+          jobsThisWeek++;
+        }
+        if (jobDate >= monthStartStr && jobDate <= today) {
+          hoursThisMonth += hours;
+          jobsThisMonth++;
+        }
+        if (jobDate >= yearStartStr && jobDate <= today) {
+          hoursThisYear += hours;
+        }
+      });
+
+      const avgHoursPerWeek = hoursAllTime / employmentWeeks;
+
+      return {
+        id: employee.id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        userId: employee.userId,
+        employedSince,
+        employmentDays,
+        employmentWeeks,
+        isNew: employmentDays < 7,
+        hours: {
+          thisWeek: parseFloat(hoursThisWeek.toFixed(1)),
+          thisMonth: parseFloat(hoursThisMonth.toFixed(1)),
+          thisYear: parseFloat(hoursThisYear.toFixed(1)),
+          allTime: parseFloat(hoursAllTime.toFixed(1)),
+        },
+        avgHoursPerWeek: parseFloat(avgHoursPerWeek.toFixed(1)),
+        jobs: {
+          thisWeek: jobsThisWeek,
+          thisMonth: jobsThisMonth,
+          allTime: jobsAllTime,
+        },
+        workloadPercent: 0, // Will be calculated after team average
+      };
+    });
+
+    // Calculate team averages
+    const totalWeeklyHours = employeeMetrics.reduce((sum, e) => sum + e.hours.thisWeek, 0);
+    const activeEmployeeCount = employeeMetrics.length;
+    const teamAvgHoursThisWeek = activeEmployeeCount > 0 ? totalWeeklyHours / activeEmployeeCount : 0;
+
+    const totalAvgHoursPerWeek = employeeMetrics.reduce((sum, e) => sum + e.avgHoursPerWeek, 0);
+    const teamAvgHoursPerWeek = activeEmployeeCount > 0 ? totalAvgHoursPerWeek / activeEmployeeCount : 0;
+
+    // Calculate workload percentage for each employee (relative to team average this week)
+    employeeMetrics.forEach((emp) => {
+      if (teamAvgHoursThisWeek > 0) {
+        emp.workloadPercent = Math.round((emp.hours.thisWeek / teamAvgHoursThisWeek) * 100);
+      } else if (emp.hours.thisWeek > 0) {
+        emp.workloadPercent = 100; // If no team average but employee has hours
+      } else {
+        emp.workloadPercent = 0;
+      }
+    });
+
+    // Get unassigned jobs count (upcoming jobs not assigned to any employee)
+    const unassignedJobs = await UserAppointments.findAll({
+      where: {
+        date: { [Op.gte]: today },
+        completed: false,
+        assignedToBusinessEmployee: false,
+      },
+      include: [
+        {
+          model: CleanerClient,
+          as: "cleanerClient",
+          where: { cleanerId: businessOwnerId },
+          required: true,
+        },
+      ],
+    });
+
+    return {
+      employees: employeeMetrics,
+      teamAverage: {
+        hoursPerWeek: parseFloat(teamAvgHoursPerWeek.toFixed(1)),
+        hoursThisWeek: parseFloat(teamAvgHoursThisWeek.toFixed(1)),
+      },
+      unassignedJobCount: unassignedJobs.length,
+    };
+  }
+
+  /**
+   * Get unassigned jobs for a business owner
+   * @param {number} businessOwnerId - ID of the business owner
+   * @returns {Promise<Array>} Array of unassigned appointments
+   */
+  static async getUnassignedJobs(businessOwnerId) {
+    const today = new Date().toISOString().split("T")[0];
+
+    const unassignedJobs = await UserAppointments.findAll({
+      where: {
+        date: { [Op.gte]: today },
+        completed: false,
+        assignedToBusinessEmployee: false,
+      },
+      include: [
+        {
+          model: CleanerClient,
+          as: "cleanerClient",
+          where: { cleanerId: businessOwnerId },
+          required: true,
+          include: [
+            {
+              model: User,
+              as: "client",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "address", "numBeds", "numBaths"],
+        },
+      ],
+      order: [["date", "ASC"], ["startTime", "ASC"]],
+    });
+
+    return unassignedJobs.map((job) => ({
+      id: job.id,
+      date: job.date,
+      startTime: job.startTime,
+      endTime: job.endTime,
+      price: job.price,
+      clientName: job.cleanerClient?.client
+        ? `${job.cleanerClient.client.firstName || ""} ${job.cleanerClient.client.lastName || ""}`.trim()
+        : "Client",
+      address: job.home?.address || "Address on file",
+      numBeds: job.home?.numBeds,
+      numBaths: job.home?.numBaths,
+    }));
+  }
+
+  /**
    * Calculate weekly totals from daily breakdown
    * @param {Array} dailyBreakdown - Array of daily data
    * @returns {Array} Weekly totals

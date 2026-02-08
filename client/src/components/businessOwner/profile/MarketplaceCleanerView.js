@@ -8,7 +8,7 @@ import { parseLocalDate } from "../../../utils/dateUtils";
 import { usePricing } from "../../../context/PricingContext";
 import FetchData from "../../../services/fetchRequests/fetchData";
 
-const JobCard = ({ job, home, onPress }) => {
+const JobCard = ({ job, onPress }) => {
   const appointmentDate = parseLocalDate(job.date);
   const today = new Date();
   const tomorrow = new Date(today);
@@ -26,6 +26,7 @@ const JobCard = ({ job, home, onPress }) => {
     });
   };
 
+  // Use decrypted fields from backend (city, state, numBeds, numBaths at top level)
   return (
     <Pressable style={styles.jobCard} onPress={onPress}>
       <View style={styles.jobMain}>
@@ -36,10 +37,10 @@ const JobCard = ({ job, home, onPress }) => {
         </View>
         <View style={styles.jobInfo}>
           <Text style={styles.jobLocation} numberOfLines={1}>
-            {home?.city || "Loading..."}, {home?.state || ""}
+            {job.city || "Unknown"}, {job.state || ""}
           </Text>
           <Text style={styles.jobDetails}>
-            {home?.numBeds || "?"} bed | {home?.numBaths || "?"} bath
+            {job.numBeds || "?"} bed | {job.numBaths || "?"} bath
           </Text>
         </View>
       </View>
@@ -109,9 +110,26 @@ const MarketplaceCleanerView = ({ state }) => {
   const navigate = useNavigate();
   const { pricing } = usePricing();
   const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
-  const appointments = state?.appointments || [];
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+  const [marketplaceJobs, setMarketplaceJobs] = useState([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+
+  // Fetch marketplace jobs that the business owner has been approved for
+  const fetchMarketplaceJobs = useCallback(async () => {
+    try {
+      const response = await FetchData.get(
+        "/api/v1/business-owner/my-jobs",
+        state?.currentUser?.token
+      );
+      setMarketplaceJobs(response?.jobs || []);
+    } catch (error) {
+      console.error("Error fetching marketplace jobs:", error);
+      setMarketplaceJobs([]);
+    } finally {
+      setLoadingJobs(false);
+    }
+  }, [state?.currentUser?.token]);
 
   // Fetch pending requests
   const fetchRequests = useCallback(async () => {
@@ -134,23 +152,24 @@ const MarketplaceCleanerView = ({ state }) => {
   }, [state?.currentUser?.token]);
 
   useEffect(() => {
+    fetchMarketplaceJobs();
     fetchRequests();
-  }, [fetchRequests]);
+  }, [fetchMarketplaceJobs, fetchRequests]);
 
-  // Calculate stats from state.appointments
+  // Calculate stats from marketplace jobs
   const { myJobs, stats } = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
-    // Filter to upcoming jobs assigned to this cleaner
-    const upcoming = appointments.filter(apt => {
-      const aptDate = parseLocalDate(apt.date);
-      return aptDate >= now && apt.status !== "completed" && apt.status !== "cancelled";
+    // Filter to upcoming jobs
+    const upcoming = marketplaceJobs.filter(job => {
+      const jobDate = parseLocalDate(job.date);
+      return jobDate >= now && job.status !== "completed" && job.status !== "cancelled";
     });
 
     // Calculate completed stats
-    const completed = appointments.filter(apt => apt.status === "completed");
-    const totalEarnings = completed.reduce((sum, apt) => sum + (apt.cleanerPayout || 0), 0);
+    const completed = marketplaceJobs.filter(job => job.status === "completed");
+    const totalEarnings = completed.reduce((sum, job) => sum + (job.cleanerPayout || 0), 0);
 
     return {
       myJobs: upcoming.slice(0, 3), // Show first 3
@@ -160,7 +179,7 @@ const MarketplaceCleanerView = ({ state }) => {
         upcomingJobs: upcoming.length,
       },
     };
-  }, [appointments]);
+  }, [marketplaceJobs]);
 
   return (
     <View style={styles.container}>
@@ -300,7 +319,7 @@ const MarketplaceCleanerView = ({ state }) => {
           {myJobs.length > 0 && (
             <Pressable
               style={styles.viewAllButton}
-              onPress={() => navigate("/appointments")}
+              onPress={() => navigate("/business-owner/my-jobs")}
             >
               <Text style={styles.viewAllText}>View All</Text>
               <Icon name="chevron-right" size={12} color={colors.primary[600]} />
@@ -309,7 +328,11 @@ const MarketplaceCleanerView = ({ state }) => {
         </View>
 
         <View style={styles.jobsCard}>
-          {myJobs.length === 0 ? (
+          {loadingJobs ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="small" color={colors.primary[600]} />
+            </View>
+          ) : myJobs.length === 0 ? (
             <View style={styles.emptyState}>
               <Icon name="calendar-o" size={32} color={colors.neutral[300]} />
               <Text style={styles.emptyStateTitle}>No upcoming jobs</Text>
@@ -330,14 +353,13 @@ const MarketplaceCleanerView = ({ state }) => {
                 <JobCard
                   key={job.id}
                   job={job}
-                  home={job.home}
-                  onPress={() => navigate(`/details/${job.id}`)}
+                  onPress={() => navigate(`/business-owner/job/${job.id}`)}
                 />
               ))}
               {stats.upcomingJobs > 3 && (
                 <Pressable
                   style={styles.showMoreButton}
-                  onPress={() => navigate("/appointments")}
+                  onPress={() => navigate("/business-owner/my-jobs")}
                 >
                   <Text style={styles.showMoreText}>
                     +{stats.upcomingJobs - 3} more job{stats.upcomingJobs - 3 > 1 ? "s" : ""}
