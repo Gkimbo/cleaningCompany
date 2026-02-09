@@ -114,6 +114,9 @@ const ExitPreviewButton = () => {
 						if (result.success) {
 							setShowResetSuccess(true);
 							setTimeout(() => setShowResetSuccess(false), 3000);
+							// Navigate to home to force a full refresh of dashboard data
+							// This ensures the component remounts with the new session token
+							navigate("/");
 							Alert.alert(
 								"Demo Data Reset",
 								`Successfully reset demo data.\n\nDeleted: ${result.deleted} records\nCreated: ${result.created} records`,

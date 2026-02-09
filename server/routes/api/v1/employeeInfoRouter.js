@@ -127,22 +127,7 @@ employeeInfoRouter.get("/", async (req, res) => {
   }
 });
 
-employeeInfoRouter.get("/home/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    let home = await UserHomes.findOne({
-      where: {
-        id,
-      },
-    });
-
-    return res.status(200).json({ home });
-  } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-});
-
+// Note: /home/LL/:id must come BEFORE /home/:id to avoid route interception
 employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -166,6 +151,22 @@ employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(401).json({ error: "Error fetching coordinates" });
+  }
+});
+
+employeeInfoRouter.get("/home/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    let home = await UserHomes.findOne({
+      where: {
+        id,
+      },
+    });
+
+    return res.status(200).json({ home });
+  } catch (error) {
+    console.log(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
 });
 

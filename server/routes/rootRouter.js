@@ -39,6 +39,7 @@ const demoAccountRouter = require("./api/v1/demoAccountRouter");
 const analyticsRouter = require("./api/v1/analyticsRouter");
 const idVerificationRouter = require("./api/v1/idVerificationRouter");
 const cleanerApprovalRouter = require("./api/v1/cleanerApprovalRouter");
+const guestNotLeftRouter = require("./api/v1/guestNotLeftRouter");
 
 const rootRouter = new express.Router();
 
@@ -81,6 +82,7 @@ rootRouter.use("/api/v1/demo-accounts", demoAccountRouter);
 rootRouter.use("/api/v1/analytics", analyticsRouter);
 rootRouter.use("/api/v1/id-verification", idVerificationRouter);
 rootRouter.use("/api/v1/cleaner-approval", cleanerApprovalRouter);
+rootRouter.use("/api/v1/guest-not-left", guestNotLeftRouter);
 
 rootRouter.use("/", clientRouter);
 

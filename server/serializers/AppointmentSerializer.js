@@ -62,7 +62,11 @@ class AppointmentSerializer {
 			// Pending request count (for homeowners to see cleaner requests)
 			"pendingRequestCount",
 			// Pending approval count (cleaner join requests awaiting homeowner approval)
-			"pendingApprovalCount"
+			"pendingApprovalCount",
+			// Completion status fields
+			"completionStatus",
+			"completionSubmittedAt",
+			"autoApprovalExpiresAt"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
@@ -117,7 +121,11 @@ class AppointmentSerializer {
 			// Pending request count (for homeowners to see cleaner requests)
 			"pendingRequestCount",
 			// Pending approval count (cleaner join requests awaiting homeowner approval)
-			"pendingApprovalCount"
+			"pendingApprovalCount",
+			// Completion status fields
+			"completionStatus",
+			"completionSubmittedAt",
+			"autoApprovalExpiresAt"
 		];
 		const newAppointment = {};
 		// Handle both Sequelize instances and plain objects

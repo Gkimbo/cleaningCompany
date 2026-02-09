@@ -269,15 +269,17 @@ router.post("/reset", async (req, res) => {
 			});
 		}
 
-		// If we're in preview mode, create a new session for the current role
+		// Always create a new session if we have a role (either from body or token)
+		// This ensures the client gets a fresh token pointing to the newly created demo account
 		let newSession = null;
-		if (currentRole && req.isPreviewMode) {
+		if (currentRole) {
 			try {
 				newSession = await DemoAccountService.createPreviewSession(
 					req.ownerId,
-					currentRole
+					currentRole,
+					{ skipDateRefresh: true } // Skip date refresh since seeder just set correct dates
 				);
-				console.log(`[demoAccountRouter] Created new session for role: ${currentRole}`);
+				console.log(`[demoAccountRouter] Created new session for role: ${currentRole}, new user id: ${newSession.user.id}`);
 			} catch (sessionError) {
 				console.error("[demoAccountRouter] Failed to create new session:", sessionError);
 				// Don't fail the whole request, just note that session creation failed
@@ -295,6 +297,7 @@ router.post("/reset", async (req, res) => {
 					token: newSession.token,
 					user: newSession.user,
 					previewRole: newSession.previewRole,
+					originalOwnerId: newSession.originalOwnerId,
 				},
 			}),
 		});

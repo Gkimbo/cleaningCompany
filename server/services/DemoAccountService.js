@@ -132,9 +132,11 @@ class DemoAccountService {
 	 * Create a preview session - generates a token for the demo account
 	 * @param {number} ownerId - The owner's user ID (for audit logging)
 	 * @param {string} role - Role to preview: 'cleaner', 'homeowner', 'businessOwner', 'employee'
+	 * @param {Object} options - Optional settings
+	 * @param {boolean} options.skipDateRefresh - If true, skip refreshing demo dates (used after reset when seeder already set correct dates)
 	 * @returns {Promise<Object>} Preview session data with token and user info
 	 */
-	static async createPreviewSession(ownerId, role) {
+	static async createPreviewSession(ownerId, role, options = {}) {
 		try {
 			// Verify the owner is actually an owner
 			const owner = await User.findByPk(ownerId);
@@ -150,8 +152,13 @@ class DemoAccountService {
 
 			// Refresh demo appointment dates to be relative to today
 			// This ensures the demo data feels current
-			const refreshResult = await this.refreshDemoAppointmentDates();
-			console.log(`[DemoAccountService] Demo data refreshed: ${refreshResult.updated} records updated`);
+			// Skip this after a reset since the seeder already set correct dates
+			if (!options.skipDateRefresh) {
+				const refreshResult = await this.refreshDemoAppointmentDates();
+				console.log(`[DemoAccountService] Demo data refreshed: ${refreshResult.updated} records updated`);
+			} else {
+				console.log(`[DemoAccountService] Skipping date refresh (post-reset)`);
+			}
 
 			// Clear any previous preview owner ID from other demo accounts for this owner
 			// (in case they're switching roles)
@@ -476,17 +483,103 @@ class DemoAccountService {
 			}
 
 			// ===== UPDATE CLEANER APPOINTMENTS (from homeowner assignments) =====
-			if (demoCleaner) {
-				// Find appointments where the cleaner is assigned
-				const cleanerAppointments = await UserAppointments.findAll({
+			if (demoCleaner && demoHomeowner) {
+				// Get the demo homeowner's home
+				const demoHome = await Home.findOne({
+					where: { userId: demoHomeowner.id },
+				});
+
+				// Find today's appointment for demo homeowner (we just set one above)
+				const today = this.getFutureDate(0);
+				let todayAppointment = await UserAppointments.findOne({
 					where: {
-						userId: { [Op.in]: demoUserIds },
+						userId: demoHomeowner.id,
+						date: today,
 						completed: false,
 					},
 				});
 
-				// These are updated via homeowner section, but ensure cleaner sees current dates
-				console.log(`[DemoAccountService] Verified ${cleanerAppointments.length} cleaner-visible appointments`);
+				// If no today appointment exists, create one
+				if (!todayAppointment && demoHome) {
+					todayAppointment = await UserAppointments.create({
+						userId: demoHomeowner.id,
+						homeId: demoHome.id,
+						date: today,
+						price: "18000",
+						paid: true,
+						bringTowels: "yes",
+						bringSheets: "no",
+						completed: false,
+						hasBeenAssigned: true,
+						employeesAssigned: [String(demoCleaner.id)],
+						empoyeesNeeded: 1,
+						timeToBeCompleted: demoHome.timeToBeCompleted || "3_hour",
+						isDemoAppointment: true,
+					});
+					console.log(`[DemoAccountService] Created today's appointment ${todayAppointment.id} for demo homeowner`);
+				}
+
+				if (todayAppointment) {
+					// Ensure demo cleaner is assigned to this appointment
+					const existingLink = await UserCleanerAppointments.findOne({
+						where: {
+							appointmentId: todayAppointment.id,
+							employeeId: demoCleaner.id,
+						},
+					});
+
+					if (!existingLink) {
+						await UserCleanerAppointments.create({
+							appointmentId: todayAppointment.id,
+							employeeId: demoCleaner.id,
+						});
+						console.log(`[DemoAccountService] Linked demo cleaner to today's appointment ${todayAppointment.id}`);
+					}
+
+					// Also ensure employeesAssigned array includes the cleaner
+					const assigned = todayAppointment.employeesAssigned || [];
+					if (!assigned.includes(String(demoCleaner.id))) {
+						await todayAppointment.update({
+							hasBeenAssigned: true,
+							employeesAssigned: [...assigned, String(demoCleaner.id)],
+						});
+						console.log(`[DemoAccountService] Updated employeesAssigned for today's appointment`);
+					}
+
+					updatedCount++;
+				}
+
+				// Clean up stale cleaner links - remove links to non-demo appointments
+				const allCleanerLinks = await UserCleanerAppointments.findAll({
+					where: { employeeId: demoCleaner.id },
+					include: [{
+						model: UserAppointments,
+						as: "appointment",
+						required: false,
+					}],
+				});
+
+				let removedStaleLinks = 0;
+				for (const link of allCleanerLinks) {
+					// Remove link if appointment doesn't exist or belongs to non-demo user
+					if (!link.appointment) {
+						await link.destroy();
+						removedStaleLinks++;
+					} else if (!demoUserIds.includes(link.appointment.userId)) {
+						await link.destroy();
+						removedStaleLinks++;
+					}
+				}
+
+				if (removedStaleLinks > 0) {
+					console.log(`[DemoAccountService] Removed ${removedStaleLinks} stale cleaner appointment links`);
+				}
+
+				// Log final cleaner appointment count
+				const validCleanerLinks = await UserCleanerAppointments.findAll({
+					where: { employeeId: demoCleaner.id },
+				});
+				console.log(`[DemoAccountService] Demo cleaner has ${validCleanerLinks.length} valid appointment links`);
 			}
 
 			// ===== UPDATE BUSINESS CLIENT APPOINTMENTS =====
@@ -799,6 +892,7 @@ class DemoAccountService {
 				deleted: deletedCount,
 				message: "Demo data has been completely reset using the seeder",
 				accounts: Object.keys(createdAccounts).length,
+				createdAccounts, // Return created accounts so caller can get new session
 			};
 		} catch (error) {
 			console.error("[DemoAccountService] Error resetting demo data:", error);
@@ -807,6 +901,71 @@ class DemoAccountService {
 				error: error.message,
 			};
 		}
+	}
+
+	/**
+	 * Reset demo data and return a new session for the specified role
+	 * @param {number} ownerId - Owner performing the reset
+	 * @param {string} role - Current preview role to get new session for
+	 * @returns {Promise<Object>} Reset result with new session
+	 */
+	static async resetDemoDataWithSession(ownerId, role) {
+		const jwt = require("jsonwebtoken");
+		const secretKey = process.env.SESSION_SECRET;
+
+		// First reset the demo data
+		const resetResult = await this.resetDemoData();
+
+		if (!resetResult.success) {
+			return resetResult;
+		}
+
+		// Map role names to demo account usernames
+		const roleToUsername = {
+			cleaner: "demo_cleaner",
+			homeowner: "demo_homeowner",
+			businessOwner: "demo_business_owner",
+			employee: "demo_employee",
+		};
+
+		const username = roleToUsername[role];
+		if (!username) {
+			return {
+				...resetResult,
+				newSession: null,
+			};
+		}
+
+		// Get the newly created demo account
+		const demoUser = await User.findOne({ where: { username } });
+
+		if (!demoUser) {
+			return {
+				...resetResult,
+				newSession: null,
+			};
+		}
+
+		// Generate a new token for the demo account
+		const token = jwt.sign(
+			{ userId: demoUser.id, type: demoUser.type },
+			secretKey,
+			{ expiresIn: "24h" }
+		);
+
+		return {
+			...resetResult,
+			newSession: {
+				token,
+				user: {
+					id: demoUser.id,
+					username: demoUser.username,
+					type: demoUser.type,
+					isBusinessOwner: demoUser.isBusinessOwner,
+					businessName: demoUser.businessName,
+				},
+			},
+		};
 	}
 }
 

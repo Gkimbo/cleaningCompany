@@ -35,6 +35,8 @@ import DeclinedAppointmentsSection from "./DeclinedAppointmentsSection";
 import IncompleteHomeSetupBanner from "./IncompleteHomeSetupBanner";
 import PendingBookingCard from "./PendingBookingCard";
 import PendingBookingModal from "./PendingBookingModal";
+import TenantPresentAlertCard from "./TenantPresentAlertCard";
+import GuestNotLeftService from "../../services/fetchRequests/GuestNotLeftService";
 
 const { width } = Dimensions.get("window");
 
@@ -300,11 +302,13 @@ const ClientDashboard = ({ state, dispatch }) => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [pendingCleanerApprovals, setPendingCleanerApprovals] = useState([]);
+  const [tenantPresentReports, setTenantPresentReports] = useState([]);
 
   useEffect(() => {
     if (state.currentUser.token) {
       fetchDashboardData();
       fetchPendingBookings();
+      fetchTenantPresentReports();
     }
   }, [state.currentUser.token]);
 
@@ -317,6 +321,18 @@ const ClientDashboard = ({ state, dispatch }) => {
       setPendingBookings(data.appointments || []);
     } catch (error) {
       console.error("Error fetching pending bookings:", error);
+    }
+  };
+
+  // Fetch tenant present reports requiring homeowner response
+  const fetchTenantPresentReports = async () => {
+    try {
+      const result = await GuestNotLeftService.getPendingReports(state.currentUser.token);
+      if (result.success) {
+        setTenantPresentReports(result.reports || []);
+      }
+    } catch (error) {
+      console.error("Error fetching tenant present reports:", error);
     }
   };
 
@@ -569,6 +585,20 @@ const ClientDashboard = ({ state, dispatch }) => {
           key={incompleteHome.id}
           home={incompleteHome}
           onComplete={() => navigate(`/complete-home-setup/${incompleteHome.id}`)}
+        />
+      ))}
+
+      {/* Tenant Present Alert - urgent action required */}
+      {tenantPresentReports.map(report => (
+        <TenantPresentAlertCard
+          key={report.id}
+          report={report}
+          token={state.currentUser.token}
+          onResolved={() => fetchTenantPresentReports()}
+          onRefresh={() => {
+            fetchDashboardData(true);
+            fetchTenantPresentReports();
+          }}
         />
       ))}
 

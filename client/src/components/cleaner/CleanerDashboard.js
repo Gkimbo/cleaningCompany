@@ -26,8 +26,8 @@ import {
 } from "../../services/styles/theme";
 import TaxFormsSection from "../tax/TaxFormsSection";
 import ReviewsOverview from "../reviews/ReviewsOverview";
-import TodaysAppointment from "../employeeAssignments/tiles/TodaysAppointment";
 import NextAppointmentPreview from "../employeeAssignments/tiles/NextAppointmentPreview";
+import TodaysJobsList from "./TodaysJobsList";
 import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlow";
 import ClientAppointmentsSection from "./ClientAppointmentsSection";
 import { usePricing } from "../../context/PricingContext";
@@ -879,16 +879,13 @@ const CleanerDashboard = ({ state, dispatch }) => {
         {/* Today's Appointments */}
         {todaysAppointments.length > 0 && (
           <View style={styles.section}>
-            <SectionHeader title={`Today's Jobs (${todaysAppointments.length})`} />
-            {todaysAppointments.map((appointment) => (
-              <TodaysAppointment
-                key={appointment.id}
-                appointment={appointment}
-                onJobCompleted={handleJobCompleted}
-                onJobUnstarted={handleJobUnstarted}
-                token={state.currentUser.token}
-              />
-            ))}
+            <TodaysJobsList
+              appointments={todaysAppointments}
+              homeDetails={homeDetails}
+              onJobCompleted={handleJobCompleted}
+              onJobUnstarted={handleJobUnstarted}
+              token={state.currentUser.token}
+            />
           </View>
         )}
 

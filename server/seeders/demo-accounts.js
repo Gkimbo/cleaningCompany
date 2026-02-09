@@ -702,49 +702,69 @@ async function createDemoAccounts() {
 	if (createdAccounts.homeowner) {
 		console.log("\n--- Creating Demo Homeowner Data ---");
 
-		// Create 2 homes
+		// Create 3 homes with real Boston-area addresses
 		console.log("Creating homes for demo homeowner...");
 		const homesData = [
 			{
-				nickName: "Main Residence",
-				address: "123 Demo Street",
-				city: "Demo City",
-				state: "CA",
-				zipcode: "90210",
-				numBeds: "3",
-				numBaths: "2",
-				numHalfBaths: "1",
-				sqft: 2200,
+				nickName: "Beacon Hill Condo",
+				address: "74 Charles Street",
+				city: "Boston",
+				state: "MA",
+				zipcode: "02114",
+				numBeds: "2",
+				numBaths: "1",
+				numHalfBaths: "0",
+				sqft: 1200,
 				hasGate: false,
 				hasDog: true,
 				dogName: "Buddy",
 				hasCat: false,
-				accessNotes: "Ring doorbell, key under the mat if no answer.",
-				latitude: 34.0901,
-				longitude: -118.4065,
-				contact: "555-123-4567",
-				timeToBeCompleted: "3",
+				accessNotes: "Ring doorbell, key under the mat if no answer. 3rd floor unit.",
+				latitude: 42.3588,
+				longitude: -71.0707,
+				contact: "617-555-1234",
+				timeToBeCompleted: "2",
 			},
 			{
-				nickName: "Beach House",
-				address: "456 Ocean Drive",
-				city: "Malibu",
-				state: "CA",
-				zipcode: "90265",
+				nickName: "Back Bay Brownstone",
+				address: "238 Newbury Street",
+				city: "Boston",
+				state: "MA",
+				zipcode: "02116",
 				numBeds: "3",
 				numBaths: "2",
-				numHalfBaths: "0",
-				sqft: 1800,
+				numHalfBaths: "1",
+				sqft: 2400,
 				hasGate: true,
-				gateCode: "1234",
+				gateCode: "4521",
 				hasDog: false,
 				hasCat: true,
 				catName: "Whiskers",
-				accessNotes: "Use gate code. Alarm code is 5678.",
-				latitude: 34.0259,
-				longitude: -118.7798,
-				contact: "555-987-6543",
-				timeToBeCompleted: "2.5",
+				accessNotes: "Enter through side gate. Alarm code is 7890#.",
+				latitude: 42.3502,
+				longitude: -71.0838,
+				contact: "617-555-5678",
+				timeToBeCompleted: "3",
+			},
+			{
+				nickName: "Cambridge Victorian",
+				address: "45 Brattle Street",
+				city: "Cambridge",
+				state: "MA",
+				zipcode: "02138",
+				numBeds: "4",
+				numBaths: "2",
+				numHalfBaths: "1",
+				sqft: 2800,
+				hasGate: false,
+				hasDog: true,
+				dogName: "Max",
+				hasCat: false,
+				accessNotes: "Lockbox code 1357. Please remove shoes at entry.",
+				latitude: 42.3736,
+				longitude: -71.1217,
+				contact: "617-555-9012",
+				timeToBeCompleted: "3.5",
 			},
 		];
 
@@ -911,16 +931,106 @@ async function createDemoAccounts() {
 			console.log("  - Created 3 upcoming appointments with cleaner assignments");
 		}
 
+		// Create 3 TODAY appointments for demo cleaner (one per home)
+		// These will show up in TodaysJobsList with navigation between them
+		console.log("Creating today's appointments for demo cleaner...");
+		if (createdHomes.length >= 3 && createdAccounts.cleaner) {
+			const todayDate = getFutureDate(0); // Today
+			const timeWindows = ["9am-12pm", "12pm-3pm", "3pm-6pm"];
+
+			for (let i = 0; i < 3; i++) {
+				try {
+					const home = createdHomes[i];
+					const numBeds = parseInt(home.numBeds) || 2;
+					const numBaths = parseInt(home.numBaths) || 1;
+					const numHalfBaths = parseInt(home.numHalfBaths) || 0;
+
+					// Vary linens per appointment for demo variety
+					const bringSheets = i === 1 ? "yes" : "no"; // Only middle job needs sheets
+					const bringTowels = i !== 2 ? "yes" : "no"; // Last job no towels
+					const sheetConfigs = bringSheets === "yes" ? generateSheetConfigurations(numBeds) : null;
+					const towelConfigs = bringTowels === "yes" ? generateTowelConfigurations(numBaths) : null;
+
+					const price = calculateAppointmentPrice({
+						numBeds,
+						numBaths,
+						numHalfBaths,
+						bringSheets,
+						bringTowels,
+						sheetConfigs,
+						towelConfigs,
+					});
+
+					// Check if appointment already exists for this home on today
+					let appt = await UserAppointments.findOne({
+						where: {
+							userId: createdAccounts.homeowner.id,
+							homeId: home.id,
+							date: todayDate,
+						},
+					});
+
+					if (!appt) {
+						appt = await UserAppointments.create({
+							userId: createdAccounts.homeowner.id,
+							homeId: home.id,
+							date: todayDate,
+							price: String(price * 100), // Convert dollars to cents
+							paid: false,
+							bringTowels,
+							bringSheets,
+							completed: false,
+							hasBeenAssigned: true,
+							employeesAssigned: [createdAccounts.cleaner.id.toString()],
+							empoyeesNeeded: 1,
+							timeToBeCompleted: timeWindows[i],
+							paymentStatus: "pending",
+							amountPaid: 0,
+							sheetConfigurations: sheetConfigs ? JSON.stringify(sheetConfigs) : null,
+							towelConfigurations: towelConfigs ? JSON.stringify(towelConfigs) : null,
+							isDemoAppointment: true,
+						});
+						console.log(`  - Created today's appointment for ${home.nickName} ($${price})`);
+					} else {
+						// Update existing appointment to ensure it's assigned to cleaner
+						await appt.update({
+							hasBeenAssigned: true,
+							employeesAssigned: [createdAccounts.cleaner.id.toString()],
+							timeToBeCompleted: timeWindows[i],
+						});
+						console.log(`  - Updated existing today's appointment for ${home.nickName}`);
+					}
+
+					// Ensure UserCleanerAppointments record exists so cleaner can see the job
+					const existingCleanerAppt = await UserCleanerAppointments.findOne({
+						where: {
+							employeeId: createdAccounts.cleaner.id,
+							appointmentId: appt.id,
+						},
+					});
+					if (!existingCleanerAppt) {
+						await UserCleanerAppointments.create({
+							employeeId: createdAccounts.cleaner.id,
+							appointmentId: appt.id,
+						});
+					}
+				} catch (error) {
+					console.error(`  - Error creating today's appointment:`, error.message);
+				}
+			}
+			console.log("  - Created 3 today's appointments for demo cleaner (testing job navigation)");
+		}
+
 		// Create 15 marketplace jobs for demo homeowner (2 bed, 2 bath) - UNASSIGNED
 		// These will appear on the demo marketplace for demo cleaners
 		// Jobs on the same date are for different homes
 		console.log("Creating marketplace jobs for demo homeowner (2 bed, 2 bath)...");
 
-		// Create 3 different 2bed/2bath homes for the demo homeowner
+		// Create 3 different 2bed/2bath homes for the demo homeowner (Boston area)
 		const marketplaceHomeConfigs = [
-			{ nickName: "Downtown Apartment", address: "456 Market Street", contact: "555-0123", latitude: 34.0522, longitude: -118.2437 },
-			{ nickName: "Riverside Condo", address: "789 River Road", contact: "555-0124", latitude: 34.0689, longitude: -118.4452 },
-			{ nickName: "Midtown Studio", address: "321 Central Ave", contact: "555-0125", latitude: 34.0195, longitude: -118.4912 },
+			{ nickName: "Downtown Apartment", address: "101 Tremont Street", city: "Boston", state: "MA", zipcode: "02108", contact: "617-555-0123", latitude: 42.3554, longitude: -71.0640 },
+			{ nickName: "Riverside Condo", address: "55 Memorial Drive", city: "Cambridge", state: "MA", zipcode: "02139", contact: "617-555-0124", latitude: 42.3540, longitude: -71.1045 },
+			{ nickName: "Brookline Studio", address: "1280 Beacon Street", city: "Brookline", state: "MA", zipcode: "02446", contact: "617-555-0125", latitude: 42.3420, longitude: -71.1212 },
 		];
 
 		const marketplaceHomes = [];
@@ -937,9 +1047,9 @@ async function createDemoAccounts() {
 					userId: createdAccounts.homeowner.id,
 					nickName: config.nickName,
 					address: config.address,
-					city: "Demo City",
-					state: "DC",
-					zipcode: "12345",
+					city: config.city,
+					state: config.state,
+					zipcode: config.zipcode,
 					numBeds: "2",
 					numBaths: "2",
 					sheetsProvided: "no",

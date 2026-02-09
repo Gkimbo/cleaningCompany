@@ -246,49 +246,60 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
       { key: STEPS.CLEANING, label: "Clean" },
       { key: STEPS.AFTER_PHOTOS, label: "After" },
       { key: STEPS.PASSES, label: "Passes" },
-      { key: STEPS.REVIEW, label: "Complete" },
+      { key: STEPS.REVIEW, label: "Done" },
     ];
 
     const currentIndex = steps.findIndex((s) => s.key === currentStep);
 
     return (
       <View style={styles.stepIndicator}>
-        {steps.map((step, index) => (
-          <View key={step.key} style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepCircle,
-                index <= currentIndex && styles.stepCircleActive,
-                index < currentIndex && styles.stepCircleCompleted,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.stepNumber,
-                  index <= currentIndex && styles.stepNumberActive,
-                ]}
-              >
-                {index < currentIndex ? "✓" : index + 1}
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.stepLabel,
-                index <= currentIndex && styles.stepLabelActive,
-              ]}
-            >
-              {step.label}
-            </Text>
-            {index < steps.length - 1 && (
-              <View
-                style={[
-                  styles.stepLine,
-                  index < currentIndex && styles.stepLineActive,
-                ]}
-              />
-            )}
-          </View>
-        ))}
+        <View style={styles.stepProgressBar}>
+          <View
+            style={[
+              styles.stepProgressFill,
+              { width: `${((currentIndex) / (steps.length - 1)) * 100}%` }
+            ]}
+          />
+        </View>
+        <View style={styles.stepsRow}>
+          {steps.map((step, index) => {
+            const isCompleted = index < currentIndex;
+            const isCurrent = index === currentIndex;
+            const isUpcoming = index > currentIndex;
+
+            return (
+              <View key={step.key} style={styles.stepItem}>
+                <View
+                  style={[
+                    styles.stepCircle,
+                    isCompleted && styles.stepCircleCompleted,
+                    isCurrent && styles.stepCircleActive,
+                    isUpcoming && styles.stepCircleUpcoming,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.stepNumber,
+                      (isCompleted || isCurrent) && styles.stepNumberActive,
+                    ]}
+                  >
+                    {isCompleted ? "✓" : index + 1}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.stepLabel,
+                    isCompleted && styles.stepLabelCompleted,
+                    isCurrent && styles.stepLabelActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {step.label}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
       </View>
     );
   };
@@ -447,19 +458,20 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
     );
   };
 
-  const statusBarHeight = Platform.OS === 'ios' ? 50 : StatusBar.currentHeight || 0;
+  const statusBarHeight = Platform.OS === 'ios' ? 54 : StatusBar.currentHeight || 24;
 
   return (
-    <View style={[styles.container, { paddingTop: statusBarHeight }]}>
-      <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Job Completion</Text>
-        <View style={styles.headerSpacer} />
+    <View style={styles.container}>
+      <View style={[styles.topSection, { paddingTop: statusBarHeight }]}>
+        <View style={styles.headerBar}>
+          <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+            <Text style={styles.cancelButtonText}>← Exit</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Job Completion</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        {renderStepIndicator()}
       </View>
-
-      {renderStepIndicator()}
 
       {currentStep === STEPS.BEFORE_PHOTOS && (
         <View style={{ flex: 1 }}>

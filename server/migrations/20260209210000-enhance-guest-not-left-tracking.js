@@ -186,7 +186,7 @@ module.exports = {
     await queryInterface.removeIndex("GuestNotLeftReports", "idx_guest_not_left_homeowner_response");
 
     // Remove UserAppointments columns
-    await queryInterface.removeColumn("UserAppointments", "cancellationReason");
+    await queryInterface.removeColumn("UserAppointments", "cancellationCategory");
     await queryInterface.removeColumn("UserAppointments", "reviewsBlocked");
 
     // Remove UserHomes columns
