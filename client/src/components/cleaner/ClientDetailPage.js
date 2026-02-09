@@ -24,6 +24,20 @@ import CleanerClientService from "../../services/fetchRequests/CleanerClientServ
 import EditClientHomeModal from "./EditClientHomeModal";
 import BookForClientModal from "./BookForClientModal";
 
+// Format time constraint for display: "10-3" → "10am - 3pm"
+const formatTimeConstraint = (timeToBeCompleted) => {
+  if (!timeToBeCompleted || timeToBeCompleted.toLowerCase() === "anytime") {
+    return "Anytime";
+  }
+  const match = timeToBeCompleted.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+  if (!match) return timeToBeCompleted;
+  const startHour = parseInt(match[1], 10);
+  const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+  const endHour = parseInt(match[3], 10);
+  const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+  return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+};
+
 // Status badge component
 const StatusBadge = ({ status }) => {
   const statusConfig = {
@@ -91,7 +105,7 @@ const AppointmentCard = ({ appointment }) => {
       <View style={styles.appointmentCardLeft}>
         <Text style={styles.appointmentDate}>{formattedDate}</Text>
         <Text style={styles.appointmentDetails}>
-          {appointment.timeToBeCompleted || "Anytime"}
+          {formatTimeConstraint(appointment.timeToBeCompleted)}
           {appointment.home?.numBeds && ` • ${appointment.home.numBeds}bd/${appointment.home?.numBaths || 1}ba`}
         </Text>
       </View>
@@ -537,7 +551,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                   <View style={styles.detailItem}>
                     <Feather name="clock" size={14} color={colors.neutral[500]} />
                     <Text style={styles.detailText}>
-                      {home.timeToBeCompleted || "Anytime"}
+                      {formatTimeConstraint(home.timeToBeCompleted)}
                     </Text>
                   </View>
                   <View style={styles.detailItem}>
@@ -788,7 +802,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
                   const apt = dayAppointments[0];
                   Alert.alert(
                     `Appointment on ${day.dateString}`,
-                    `Time: ${apt.timeToBeCompleted || "Anytime"}\nPrice: $${apt.price || 0}\nStatus: ${apt.status}`
+                    `Time: ${formatTimeConstraint(apt.timeToBeCompleted)}\nPrice: $${apt.price || 0}\nStatus: ${apt.status}`
                   );
                 }
               }}

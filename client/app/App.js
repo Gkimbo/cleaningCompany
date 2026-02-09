@@ -116,6 +116,7 @@ import SuspiciousReportsPage from "../src/components/hr/SuspiciousReportsPage";
 import {
   ConflictResolutionCenter,
   ConflictCaseView,
+  UserCasesView,
 } from "../src/components/conflicts";
 
 // Notifications
@@ -645,6 +646,10 @@ export default function App() {
               <Route
                 path="/conflicts/:caseType/:caseId"
                 element={<ConflictCaseView state={state} />}
+              />
+              <Route
+                path="/conflicts/user-cases"
+                element={<UserCasesView state={state} />}
               />
               {/* Notifications */}
               <Route

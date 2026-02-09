@@ -23,6 +23,11 @@ jest.mock("../../services/ReviewsClass", () => ({
   getReviewStatus: jest.fn(),
 }));
 
+// Mock PreferredCleanerService
+jest.mock("../../services/PreferredCleanerService", () => ({
+  isBusinessCleanerForHome: jest.fn().mockResolvedValue(false),
+}));
+
 // Mock models
 jest.mock("../../models", () => ({
   User: {

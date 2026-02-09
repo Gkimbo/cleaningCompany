@@ -5533,6 +5533,90 @@ ${businessName}`;
       console.error("❌ Error sending employee job assigned email:", error);
     }
   }
+
+  /**
+   * Send payment dispute notification to HR/Owner
+   */
+  static async sendPaymentDisputeNotification(
+    email,
+    staffName,
+    dispute,
+    cleaner,
+    appointment
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const issueTypeLabels = {
+        missing_payout: "Missing Payment",
+        wrong_amount: "Incorrect Amount",
+        delayed_payout: "Delayed Payment",
+      };
+
+      const htmlContent = createEmailTemplate({
+        title: "Payment Dispute Submitted",
+        subtitle: "Cleaner reported a payment issue",
+        headerColor: "linear-gradient(135deg, #ef4444 0%, #f87171 100%)",
+        greeting: `Hi ${staffName},`,
+        content: `<p>A cleaner has submitted a payment dispute that requires your attention. Please review and resolve within the 48-hour SLA.</p>`,
+        infoBox: {
+          icon: "💰",
+          title: "Dispute Details",
+          items: [
+            { label: "Issue Type", value: issueTypeLabels[dispute.issueType] || dispute.issueType },
+            { label: "Cleaner", value: cleaner.firstName || cleaner.username },
+            { label: "Appointment Date", value: appointment?.date ? formatDate(appointment.date) : "N/A" },
+            { label: "Priority", value: dispute.priority === "high" ? "🔴 High" : "Normal" },
+            ...(dispute.expectedAmount ? [{ label: "Expected Amount", value: `$${(dispute.expectedAmount / 100).toFixed(2)}` }] : []),
+            ...(dispute.receivedAmount ? [{ label: "Received Amount", value: `$${(dispute.receivedAmount / 100).toFixed(2)}` }] : []),
+          ],
+        },
+        warningBox: dispute.description ? {
+          icon: "💬",
+          text: `<strong>Description:</strong> "${dispute.description}"`,
+          bgColor: "#fee2e2",
+          borderColor: "#ef4444",
+          textColor: "#991b1b",
+        } : null,
+        ctaText: "Please review this dispute in the Conflict Resolution Center.",
+        footerMessage: "This requires your attention within 48 hours",
+      });
+
+      const textContent = `Hi ${staffName},
+
+A cleaner has submitted a payment dispute that requires your attention.
+
+DISPUTE DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Issue Type: ${issueTypeLabels[dispute.issueType] || dispute.issueType}
+Cleaner: ${cleaner.firstName || cleaner.username}
+Appointment Date: ${appointment?.date ? formatDate(appointment.date) : "N/A"}
+Priority: ${dispute.priority === "high" ? "HIGH" : "Normal"}
+${dispute.expectedAmount ? `Expected Amount: $${(dispute.expectedAmount / 100).toFixed(2)}` : ""}
+${dispute.receivedAmount ? `Received Amount: $${(dispute.receivedAmount / 100).toFixed(2)}` : ""}
+
+${dispute.description ? `Description: "${dispute.description}"` : ""}
+
+Please review this dispute in the Conflict Resolution Center within 48 hours.
+
+Best regards,
+Kleanr System`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⚠️ Payment Dispute - ${issueTypeLabels[dispute.issueType] || dispute.issueType} - Dispute #${dispute.id}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Payment dispute notification email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending payment dispute notification email:", error);
+    }
+  }
 }
 
 module.exports = Email;

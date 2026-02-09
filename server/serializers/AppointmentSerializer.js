@@ -157,6 +157,9 @@ class AppointmentSerializer {
 						soloAllowed,
 						numBeds,
 						numBaths,
+						// Include home location for distance calculations
+						latitude: home.latitude,
+						longitude: home.longitude,
 					};
 				}
 

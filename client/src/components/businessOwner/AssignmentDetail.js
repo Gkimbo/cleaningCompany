@@ -490,7 +490,7 @@ const AssignmentDetail = ({ state }) => {
   const employee = assignment.employee || {};
 
   // Check if job is today
-  const isToday = appointment.date && new Date(appointment.date).toDateString() === new Date().toDateString();
+  const isToday = appointment.date && new Date(appointment.date + "T00:00:00").toDateString() === new Date().toDateString();
 
   // Get existing employee IDs for this job
   const existingEmployeeIds = allAssignments.map((a) => a.businessEmployeeId).filter(Boolean);
@@ -530,11 +530,11 @@ const AssignmentDetail = ({ state }) => {
           <View style={styles.dateTimeHeader}>
             <View style={styles.dateBadge}>
               <Text style={styles.dateBadgeDay}>
-                {appointment.date ? new Date(appointment.date).getDate() : "-"}
+                {appointment.date ? new Date(appointment.date + "T00:00:00").getDate() : "-"}
               </Text>
               <Text style={styles.dateBadgeMonth}>
                 {appointment.date
-                  ? new Date(appointment.date).toLocaleDateString("en-US", { month: "short" })
+                  ? new Date(appointment.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })
                   : "-"}
               </Text>
             </View>

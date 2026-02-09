@@ -550,6 +550,9 @@ async function handleMultiCleanerApprove(req, res, appointment, cleanerId) {
   // Process payout for this cleaner
   const payoutResults = await processMultiCleanerPayoutForCleaner(appointment, cleanerId);
 
+  // Check if all cleaners in this job are now approved - if so, mark parent appointment as completed
+  await checkAndUpdateParentAppointmentCompletion(appointment.id);
+
   // Notify cleaner
   const cleaner = await User.findByPk(cleanerId);
   if (cleaner) {
@@ -751,6 +754,9 @@ async function handleMultiCleanerRequestReview(req, res, appointment, cleanerId,
 
   // Process payout for this cleaner (they still get paid!)
   const payoutResults = await processMultiCleanerPayoutForCleaner(appointment, cleanerId);
+
+  // Check if all cleaners in this job are now approved - if so, mark parent appointment as completed
+  await checkAndUpdateParentAppointmentCompletion(appointment.id);
 
   // Notify cleaner (don't mention concerns)
   const cleaner = await User.findByPk(cleanerId);
@@ -1216,6 +1222,56 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
   } catch (error) {
     console.error(`[Completion] Multi-cleaner payout error for cleaner ${cleanerId}:`, error);
     return { cleanerId, status: "error", error: error.message };
+  }
+}
+
+/**
+ * Check if all cleaners in a multi-cleaner job have been approved
+ * If so, mark the parent appointment as completed
+ */
+async function checkAndUpdateParentAppointmentCompletion(appointmentId) {
+  try {
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: MultiCleanerJob, as: "multiCleanerJob" }],
+    });
+
+    if (!appointment || !appointment.isMultiCleanerJob) {
+      return false;
+    }
+
+    // Get all completion records for this appointment
+    const completions = await CleanerJobCompletion.findAll({
+      where: {
+        appointmentId,
+        status: { [require("sequelize").Op.notIn]: ["dropped_out", "no_show"] },
+      },
+    });
+
+    if (completions.length === 0) {
+      return false;
+    }
+
+    // Check if all active cleaners have been approved (approved or auto_approved)
+    const allApproved = completions.every(
+      (c) => c.completionStatus === "approved" || c.completionStatus === "auto_approved"
+    );
+
+    if (allApproved && !appointment.completed) {
+      // All cleaners are done - mark parent appointment as completed
+      await appointment.update({
+        completed: true,
+        completionStatus: "approved",
+        completionApprovedAt: new Date(),
+      });
+
+      console.log(`[Completion] All cleaners approved for multi-cleaner appointment ${appointmentId} - marked as completed`);
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error(`[Completion] Error checking parent appointment completion for ${appointmentId}:`, error);
+    return false;
   }
 }
 

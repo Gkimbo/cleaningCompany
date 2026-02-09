@@ -45,6 +45,18 @@ import {
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
 
+// Format time constraint for display: "10-3" → "10am - 3pm"
+const formatTimeConstraint = (time) => {
+  if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+  if (!match) return time;
+  const startHour = parseInt(match[1], 10);
+  const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+  const endHour = parseInt(match[3], 10);
+  const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+  return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+};
+
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371;
@@ -252,20 +264,25 @@ const SelectNewJobList = ({ state }) => {
     }
   }, [fetchMultiCleanerJobs]);
 
+  // Fetch locations only for items missing inline coordinates (fallback)
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        // Collect home IDs from all sources
-        const soloHomeIds = [...allAppointments, ...allRequests].map(
-          (a) => a.homeId
-        );
-        const multiCleanerJobHomeIds = availableMultiCleanerJobs
+        // Only collect home IDs for items missing inline coordinates
+        const soloHomesNeedingFetch = [...allAppointments, ...allRequests]
+          .filter((a) => a.latitude == null || a.longitude == null)
+          .map((a) => a.homeId)
+          .filter(Boolean);
+        const multiCleanerJobHomesNeedingFetch = availableMultiCleanerJobs
+          .filter((j) => j.appointment?.home?.latitude == null || j.appointment?.home?.longitude == null)
           .map((j) => j.homeId || j.appointment?.home?.id)
           .filter(Boolean);
-        const pendingRequestHomeIds = pendingMultiCleanerRequests
+        const pendingRequestHomesNeedingFetch = pendingMultiCleanerRequests
+          .filter((r) => r.appointment?.home?.latitude == null || r.appointment?.home?.longitude == null)
           .map((r) => r.homeId || r.appointment?.home?.id)
           .filter(Boolean);
-        const offerHomeIds = multiCleanerOffers
+        const offerHomesNeedingFetch = multiCleanerOffers
+          .filter((o) => o.multiCleanerJob?.appointment?.home?.latitude == null || o.multiCleanerJob?.appointment?.home?.longitude == null)
           .map(
             (o) =>
               o.multiCleanerJob?.homeId ||
@@ -274,19 +291,19 @@ const SelectNewJobList = ({ state }) => {
           .filter(Boolean);
 
         // Deduplicate homeIds to avoid redundant fetches
-        const uniqueHomeIds = [
+        const homeIdsNeedingFetch = [
           ...new Set([
-            ...soloHomeIds,
-            ...multiCleanerJobHomeIds,
-            ...pendingRequestHomeIds,
-            ...offerHomeIds,
+            ...soloHomesNeedingFetch,
+            ...multiCleanerJobHomesNeedingFetch,
+            ...pendingRequestHomesNeedingFetch,
+            ...offerHomesNeedingFetch,
           ]),
         ];
 
-        if (uniqueHomeIds.length === 0) return;
+        if (homeIdsNeedingFetch.length === 0) return;
 
         const locations = await Promise.all(
-          uniqueHomeIds.map(async (homeId) => {
+          homeIdsNeedingFetch.map(async (homeId) => {
             const response = await FetchData.getLatAndLong(homeId);
             // Validate the response has lat/long
             if (
@@ -594,17 +611,22 @@ const SelectNewJobList = ({ state }) => {
       : null;
 
     // Calculate distance for this offer
+    // Use inline coordinates from API response, fallback to fetched locations
     const offerHomeId =
       offer.multiCleanerJob?.homeId ||
       offer.multiCleanerJob?.appointment?.home?.id;
-    const offerLoc = appointmentLocations?.[offerHomeId];
+    const inlineLat = offer.multiCleanerJob?.appointment?.home?.latitude;
+    const inlineLng = offer.multiCleanerJob?.appointment?.home?.longitude;
+    const fallbackLoc = appointmentLocations?.[offerHomeId];
+    const locLat = inlineLat ?? fallbackLoc?.latitude;
+    const locLng = inlineLng ?? fallbackLoc?.longitude;
     let distance = null;
-    if (userLocation && offerLoc) {
+    if (userLocation && locLat != null && locLng != null) {
       distance = haversineDistance(
         userLocation.latitude,
         userLocation.longitude,
-        offerLoc.latitude,
-        offerLoc.longitude
+        locLat,
+        locLng
       );
     }
 
@@ -612,6 +634,8 @@ const SelectNewJobList = ({ state }) => {
       id: offer.multiCleanerJob?.id,
       appointmentDate: offer.multiCleanerJob?.appointment?.date,
       address: formatAddress(offer.multiCleanerJob?.appointment?.home),
+      city: offer.multiCleanerJob?.appointment?.home?.city,
+      state: offer.multiCleanerJob?.appointment?.home?.state,
       totalCleanersRequired: offer.multiCleanerJob?.totalCleanersRequired || 2,
       cleanersConfirmed: offer.multiCleanerJob?.cleanersConfirmed || 0,
       status: offer.multiCleanerJob?.status,
@@ -648,15 +672,20 @@ const SelectNewJobList = ({ state }) => {
     }
 
     // Calculate distance for this job
+    // Use inline coordinates from API response, fallback to fetched locations
     const jobHomeId = job.homeId || job.appointment?.home?.id;
-    const jobLoc = appointmentLocations?.[jobHomeId];
+    const inlineLat = job.appointment?.home?.latitude;
+    const inlineLng = job.appointment?.home?.longitude;
+    const fallbackLoc = appointmentLocations?.[jobHomeId];
+    const locLat = inlineLat ?? fallbackLoc?.latitude;
+    const locLng = inlineLng ?? fallbackLoc?.longitude;
     let distance = null;
-    if (userLocation && jobLoc) {
+    if (userLocation && locLat != null && locLng != null) {
       distance = haversineDistance(
         userLocation.latitude,
         userLocation.longitude,
-        jobLoc.latitude,
-        jobLoc.longitude
+        locLat,
+        locLng
       );
     }
 
@@ -665,6 +694,8 @@ const SelectNewJobList = ({ state }) => {
       appointmentId: job.appointmentId,
       appointmentDate: job.appointment?.date,
       address: formatAddress(job.appointment?.home),
+      city: job.appointment?.home?.city,
+      state: job.appointment?.home?.state,
       totalCleanersRequired: cleanersRequired,
       cleanersConfirmed,
       remainingSlots: cleanersRequired - cleanersConfirmed,
@@ -691,6 +722,8 @@ const SelectNewJobList = ({ state }) => {
       totalCleanersRequired: cleanersRequired,
       appointmentDate: job.appointment?.date,
       address: formatAddress(job.appointment?.home),
+      city: job.appointment?.home?.city,
+      state: job.appointment?.home?.state,
       estimatedMinutes: null,
       earningsOffered: perCleanerEarnings,
       totalJobPrice: totalPrice,
@@ -919,21 +952,25 @@ const SelectNewJobList = ({ state }) => {
   const sortedData = useMemo(() => {
     const processed = requestsAndAppointments.map((appointment) => {
       let distance = null;
-      const loc = appointmentLocations?.[appointment.homeId];
+      // Use inline coordinates from API response, fallback to fetched locations
+      const inlineLat = appointment.latitude;
+      const inlineLng = appointment.longitude;
+      const fallbackLoc = appointmentLocations?.[appointment.homeId];
+      const locLat = inlineLat ?? fallbackLoc?.latitude;
+      const locLng = inlineLng ?? fallbackLoc?.longitude;
       // Only calculate distance if we have valid user location and home location
       if (
         userLocation &&
         userLocation.latitude !== 0 &&
         userLocation.longitude !== 0 &&
-        loc &&
-        typeof loc.latitude === "number" &&
-        typeof loc.longitude === "number"
+        locLat != null &&
+        locLng != null
       ) {
         distance = haversineDistance(
           userLocation.latitude,
           userLocation.longitude,
-          loc.latitude,
-          loc.longitude
+          locLat,
+          locLng
         );
       }
       return { ...appointment, distance };
@@ -1297,16 +1334,21 @@ const SelectNewJobList = ({ state }) => {
                           "anytime";
 
                       // Calculate distance for this request
+                      // Use inline coordinates from API response, fallback to fetched locations
                       const requestHomeId =
                         request.homeId || request.appointment?.home?.id;
-                      const requestLoc = appointmentLocations?.[requestHomeId];
+                      const requestInlineLat = request.appointment?.home?.latitude;
+                      const requestInlineLng = request.appointment?.home?.longitude;
+                      const requestFallbackLoc = appointmentLocations?.[requestHomeId];
+                      const requestLocLat = requestInlineLat ?? requestFallbackLoc?.latitude;
+                      const requestLocLng = requestInlineLng ?? requestFallbackLoc?.longitude;
                       let requestDistance = null;
-                      if (userLocation && requestLoc) {
+                      if (userLocation && requestLocLat != null && requestLocLng != null) {
                         requestDistance = haversineDistance(
                           userLocation.latitude,
                           userLocation.longitude,
-                          requestLoc.latitude,
-                          requestLoc.longitude
+                          requestLocLat,
+                          requestLocLng
                         );
                       }
 
@@ -1364,12 +1406,12 @@ const SelectNewJobList = ({ state }) => {
                             </View>
 
                             <Text style={styles.multiCleanerRequestAddress}>
-                              {request.appointment?.home?.address},{" "}
-                              {request.appointment?.home?.city}
+                              {request.appointment?.home?.city},{" "}
+                              {request.appointment?.home?.state}
                             </Text>
                             <Text style={styles.multiCleanerRequestDate}>
                               {new Date(
-                                request.appointment?.date
+                                request.appointment?.date + "T00:00:00"
                               ).toLocaleDateString("en-US", {
                                 weekday: "short",
                                 month: "short",
@@ -1518,7 +1560,7 @@ const SelectNewJobList = ({ state }) => {
                                 />
                                 <Text style={styles.timeConstraintText}>
                                   Complete by{" "}
-                                  {request.appointment.timeToBeCompleted}
+                                  {formatTimeConstraint(request.appointment.timeToBeCompleted)}
                                 </Text>
                               </View>
                             )}

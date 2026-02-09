@@ -1,5 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const models = require("../../../models");
 const {
   User,
   UserAppointments,
@@ -17,7 +18,7 @@ const {
   EmployeeJobAssignment,
   PreferredPerksConfig,
   MultiCleanerJob,
-} = require("../../../models");
+} = models;
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const calculatePrice = require("../../../services/CalculatePrice");
@@ -1377,6 +1378,30 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
   }
 });
 
+// NOTE: /id/:id must be defined BEFORE /:id to prevent route interception
+appointmentRouter.delete("/id/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const appointmentToDelete = await UserAppointments.findOne({
+      where: { id: id },
+    });
+
+    const connectionsToDelete = await UserCleanerAppointments.destroy({
+      where: { appointmentId: id },
+    });
+
+    const deletedAppointmentInfo = await UserAppointments.destroy({
+      where: { id: id },
+    });
+
+    return res.status(201).json({ message: "Appointment Deleted" });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+// CATCH-ALL: /:id must be last among DELETE routes to avoid intercepting specific routes
 appointmentRouter.delete("/:id", async (req, res) => {
   const { id } = req.params;
   const { fee, user } = req.body;
@@ -1427,28 +1452,6 @@ appointmentRouter.delete("/:id", async (req, res) => {
         });
       }
     }
-
-    const connectionsToDelete = await UserCleanerAppointments.destroy({
-      where: { appointmentId: id },
-    });
-
-    const deletedAppointmentInfo = await UserAppointments.destroy({
-      where: { id: id },
-    });
-
-    return res.status(201).json({ message: "Appointment Deleted" });
-  } catch (error) {
-    console.error(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-});
-
-appointmentRouter.delete("/id/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    const appointmentToDelete = await UserAppointments.findOne({
-      where: { id: id },
-    });
 
     const connectionsToDelete = await UserCleanerAppointments.destroy({
       where: { appointmentId: id },

@@ -1,4 +1,5 @@
 const { Notification, User } = require("../models");
+const { Op } = require("sequelize");
 const PushNotification = require("./sendNotifications/PushNotificationClass");
 const Email = require("./sendNotifications/EmailClass");
 
@@ -861,6 +862,75 @@ class NotificationService {
       console.error("[NotificationService] Price change notification error:", error);
       return { success: false, error: error.message };
     }
+  }
+
+  /**
+   * Find an active (non-expired) notification of a specific type
+   * @param {number} userId - User ID
+   * @param {string} type - Notification type
+   * @param {number} appointmentId - Related appointment ID
+   * @returns {Promise<Object|null>} Active notification or null
+   */
+  static async findActiveNotification(userId, type, appointmentId) {
+    if (!userId) return null;
+
+    const now = new Date();
+    const notification = await Notification.findOne({
+      where: {
+        userId,
+        type,
+        [Op.or]: [
+          { expiresAt: null },
+          { expiresAt: { [Op.gt]: now } },
+        ],
+      },
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Check if notification data matches the appointment
+    if (notification && notification.data) {
+      const data = typeof notification.data === "string"
+        ? JSON.parse(notification.data)
+        : notification.data;
+      if (data.appointmentId === appointmentId) {
+        return notification;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Find an expired notification of a specific type
+   * @param {number} userId - User ID
+   * @param {string} type - Notification type
+   * @param {number} appointmentId - Related appointment ID
+   * @returns {Promise<Object|null>} Expired notification or null
+   */
+  static async findExpiredNotification(userId, type, appointmentId) {
+    if (!userId) return null;
+
+    const now = new Date();
+    const notification = await Notification.findOne({
+      where: {
+        userId,
+        type,
+        expiresAt: { [Op.lt]: now },
+      },
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Check if notification data matches the appointment
+    if (notification && notification.data) {
+      const data = typeof notification.data === "string"
+        ? JSON.parse(notification.data)
+        : notification.data;
+      if (data.appointmentId === appointmentId) {
+        return notification;
+      }
+    }
+
+    return null;
   }
 }
 

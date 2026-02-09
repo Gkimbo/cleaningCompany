@@ -50,6 +50,7 @@ const ROLE_TYPE_MAP = {
 	humanResources: "humanResources",
 	largeBusinessOwner: "cleaner", // Large business owners are cleaners with isBusinessOwner=true and high volume
 	preferredCleaner: "cleaner", // Preferred cleaners are cleaners with platinum tier perks
+	largeHomeOwner: null, // Large home owner is a homeowner with a large home (for multi-cleaner jobs)
 };
 
 // Demo account email prefixes for identification
@@ -63,6 +64,7 @@ const DEMO_USERNAMES = {
 	humanResources: "demo_hr",
 	largeBusinessOwner: "demo_large_business",
 	preferredCleaner: "demo_preferred_cleaner",
+	largeHomeOwner: "demo_large_home_owner",
 };
 
 class DemoAccountService {
@@ -313,7 +315,7 @@ class DemoAccountService {
 			},
 			{
 				role: "largeBusinessOwner",
-				label: "Large Business",
+				label: "Elite Partner",
 				description: "100+ clients, 7% platform fee tier",
 				icon: "building",
 			},
@@ -322,6 +324,12 @@ class DemoAccountService {
 				label: "Preferred Cleaner",
 				description: "Platinum tier, 20 homes, 7% bonus",
 				icon: "star",
+			},
+			{
+				role: "largeHomeOwner",
+				label: "Large Home Owner",
+				description: "Homeowner with large home for team jobs",
+				icon: "home",
 			},
 		];
 	}

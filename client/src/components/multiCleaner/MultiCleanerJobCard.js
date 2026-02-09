@@ -20,6 +20,18 @@ import {
   shadows,
 } from "../../services/styles/theme";
 
+// Format time constraint for display: "10-3" → "10am - 3pm"
+const formatTimeConstraint = (time) => {
+  if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+  if (!match) return time;
+  const startHour = parseInt(match[1], 10);
+  const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+  const endHour = parseInt(match[3], 10);
+  const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+  return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+};
+
 const MultiCleanerJobCard = ({
   job,
   onViewDetails,
@@ -113,11 +125,11 @@ const MultiCleanerJobCard = ({
           <Text style={styles.dateText}>{formatDate(job.appointmentDate)}</Text>
         </View>
 
-        {job.address && (
+        {(job.city || job.address) && (
           <View style={styles.infoRow}>
             <Feather name="map-pin" size={16} color={colors.neutral[500]} />
             <Text style={styles.addressText} numberOfLines={1}>
-              {job.address}
+              {job.city}, {job.state}
             </Text>
           </View>
         )}
@@ -179,7 +191,7 @@ const MultiCleanerJobCard = ({
           <View style={styles.timeConstraintRow}>
             <Feather name="clock" size={12} color={colors.warning[600]} />
             <Text style={styles.timeConstraintText}>
-              Complete by {timeToBeCompleted}
+              Complete by {formatTimeConstraint(timeToBeCompleted)}
             </Text>
           </View>
         )}

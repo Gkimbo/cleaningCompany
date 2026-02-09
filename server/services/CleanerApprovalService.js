@@ -172,6 +172,15 @@ class CleanerApprovalService {
       request.roomAssignmentIds || []
     );
 
+    // Create cleaner-appointment assignment so job shows in cleaner's My Jobs
+    const { UserCleanerAppointments } = require("../models");
+    await UserCleanerAppointments.findOrCreate({
+      where: {
+        appointmentId: request.appointmentId,
+        employeeId: request.cleanerId,
+      },
+    });
+
     // Update request status
     await request.approve();
 

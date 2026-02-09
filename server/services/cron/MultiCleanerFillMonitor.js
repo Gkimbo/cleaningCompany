@@ -301,6 +301,172 @@ async function processSoloCompletionOffers(io = null) {
 }
 
 /**
+ * Process expired solo completion offers
+ * If a solo offer was sent 12+ hours ago and cleaner didn't respond,
+ * notify homeowner and release the cleaner
+ * @param {Object} io - Socket.io instance
+ * @returns {Promise<number>} Number of jobs processed
+ */
+async function processExpiredSoloOffers(io = null) {
+  // Solo offers expire after 12 hours
+  const expirationThreshold = new Date();
+  expirationThreshold.setHours(expirationThreshold.getHours() - 12);
+
+  // Find jobs where:
+  // - Solo offer was sent (job is partially_filled with 1 cleaner)
+  // - Offer was sent more than 12 hours ago
+  // - Cleaner hasn't accepted (soloCleanerConsent is still false)
+  // - Offer hasn't already been marked as expired or declined
+  const jobs = await MultiCleanerJob.findAll({
+    where: {
+      status: "partially_filled",
+      cleanersConfirmed: { [Op.lte]: 1 },
+      soloOfferExpired: { [Op.or]: [false, null] },
+      soloOfferDeclined: { [Op.or]: [false, null] },
+    },
+    include: [
+      {
+        model: UserAppointments,
+        as: "appointment",
+        where: {
+          soloCleanerConsent: { [Op.or]: [false, null] },
+          completed: false,
+        },
+      },
+      {
+        model: CleanerJobCompletion,
+        as: "completions",
+        where: {
+          status: { [Op.notIn]: ["dropped_out", "no_show"] },
+        },
+        required: false,
+      },
+    ],
+  });
+
+  let processed = 0;
+
+  for (const job of jobs) {
+    try {
+      // Check if there's an unexpired solo_completion_offer notification
+      // If so, skip - the offer is still active
+      const activeOffer = await NotificationService.findActiveNotification(
+        job.completions[0]?.cleanerId,
+        "solo_completion_offer",
+        job.appointmentId
+      );
+
+      if (activeOffer) {
+        // Offer still active, skip
+        continue;
+      }
+
+      // Check if offer was sent but is now expired (notification expired)
+      const expiredOffer = await NotificationService.findExpiredNotification(
+        job.completions[0]?.cleanerId,
+        "solo_completion_offer",
+        job.appointmentId
+      );
+
+      if (!expiredOffer) {
+        // No offer was sent yet, skip
+        continue;
+      }
+
+      // Offer expired - handle it
+      await MultiCleanerService.handleExpiredSoloOffer(job.id);
+      processed++;
+
+      console.log(
+        `[MultiCleanerFillMonitor] Processed expired solo offer for job ${job.id}`
+      );
+    } catch (error) {
+      console.error(
+        `[MultiCleanerFillMonitor] Error processing expired solo offer for job ${job.id}:`,
+        error
+      );
+    }
+  }
+
+  return processed;
+}
+
+/**
+ * Process expired extra work offers
+ * If extra work offers were sent 12+ hours ago and cleaners didn't respond,
+ * release non-responsive cleaners and notify homeowner
+ * @param {Object} io - Socket.io instance
+ * @returns {Promise<number>} Number of jobs processed
+ */
+async function processExpiredExtraWorkOffers(io = null) {
+  const now = new Date();
+
+  // Find jobs where:
+  // - Extra work offers were sent
+  // - Offers have expired (past extraWorkOffersExpireAt)
+  // - Offers haven't already been marked as expired
+  const jobs = await MultiCleanerJob.findAll({
+    where: {
+      extraWorkOffersSentAt: { [Op.ne]: null },
+      extraWorkOffersExpireAt: { [Op.lt]: now },
+      extraWorkOffersExpired: { [Op.or]: [false, null] },
+    },
+    include: [
+      {
+        model: UserAppointments,
+        as: "appointment",
+        where: {
+          completed: false,
+        },
+      },
+      {
+        model: CleanerJobCompletion,
+        as: "completions",
+        required: false,
+      },
+    ],
+  });
+
+  let processed = 0;
+
+  for (const job of jobs) {
+    try {
+      // Check if any cleaners haven't responded
+      const nonResponsive = job.completions.filter(
+        (c) =>
+          !["dropped_out", "no_show"].includes(c.status) &&
+          !c.extraWorkAccepted &&
+          !c.extraWorkDeclined
+      );
+
+      if (nonResponsive.length === 0) {
+        // All cleaners responded, just mark as processed
+        await job.update({
+          extraWorkOffersExpired: true,
+          extraWorkOffersExpiredAt: now,
+        });
+        continue;
+      }
+
+      // Handle the expired offers
+      await MultiCleanerService.handleExpiredExtraWorkOffers(job.id);
+      processed++;
+
+      console.log(
+        `[MultiCleanerFillMonitor] Processed expired extra work offers for job ${job.id}, ${nonResponsive.length} non-responsive`
+      );
+    } catch (error) {
+      console.error(
+        `[MultiCleanerFillMonitor] Error processing expired extra work offers for job ${job.id}:`,
+        error
+      );
+    }
+  }
+
+  return processed;
+}
+
+/**
  * Process edge case homes that need homeowner decision
  * For edge case homes (3/2, 2/3, 3/3) with exactly 1 cleaner confirmed at 3 days out,
  * send notification asking homeowner to proceed or cancel
@@ -318,15 +484,13 @@ async function processEdgeCaseDecisions(io = null) {
 
   // Find edge case jobs that need decision notifications:
   // - Status is partially_filled
-  // - Exactly 1 cleaner confirmed
+  // - At least 1 cleaner confirmed, but fewer than required
   // - Appointment date is within 3 days
   // - Edge case decision not already sent
-  // - totalCleanersRequired is 2 (edge case homes require 2 cleaners)
   const jobs = await MultiCleanerJob.findAll({
     where: {
       status: "partially_filled",
-      cleanersConfirmed: 1,
-      totalCleanersRequired: 2,
+      cleanersConfirmed: { [Op.gte]: 1 },
       edgeCaseDecisionRequired: false,
     },
     include: [
@@ -355,16 +519,11 @@ async function processEdgeCaseDecisions(io = null) {
 
       if (!home || !homeowner) continue;
 
-      // Verify this is an edge case home
-      const isEdge = await MultiCleanerService.isEdgeLargeHome(
-        home.numBeds,
-        home.numBaths,
-        config
-      );
-      if (!isEdge) continue;
+      // Skip jobs that are already filled
+      if (job.cleanersConfirmed >= job.totalCleanersRequired) continue;
 
-      // Get the confirmed cleaner
-      const confirmedCompletion = await CleanerJobCompletion.findOne({
+      // Get all confirmed cleaners
+      const confirmedCompletions = await CleanerJobCompletion.findAll({
         where: {
           multiCleanerJobId: job.id,
           status: { [Op.notIn]: ["dropped_out", "no_show"] },
@@ -372,9 +531,13 @@ async function processEdgeCaseDecisions(io = null) {
         include: [{ model: User, as: "cleaner" }],
       });
 
-      if (!confirmedCompletion || !confirmedCompletion.cleaner) continue;
+      if (confirmedCompletions.length === 0) continue;
 
-      const confirmedCleaner = confirmedCompletion.cleaner;
+      // Calculate shortfall
+      const confirmedCount = confirmedCompletions.length;
+      const requiredCount = job.totalCleanersRequired;
+      const shortfall = requiredCount - confirmedCount;
+
       const expiresAt = new Date(Date.now() + decisionHours * 60 * 60 * 1000);
 
       // Update job with edge case decision fields
@@ -399,18 +562,37 @@ async function processEdgeCaseDecisions(io = null) {
         state: EncryptionService.decrypt(home.state),
         zipcode: EncryptionService.decrypt(home.zipcode),
       };
-      const cleanerName = EncryptionService.decrypt(confirmedCleaner.firstName);
+
+      // Build cleaner names list
+      const cleanerNames = confirmedCompletions
+        .filter((c) => c.cleaner)
+        .map((c) => EncryptionService.decrypt(c.cleaner.firstName));
+      const cleanerNamesDisplay =
+        cleanerNames.length === 1
+          ? cleanerNames[0]
+          : cleanerNames.length === 2
+            ? `${cleanerNames[0]} and ${cleanerNames[1]}`
+            : `${cleanerNames.slice(0, -1).join(", ")}, and ${cleanerNames[cleanerNames.length - 1]}`;
+
+      // Build dynamic message based on shortfall
+      const cleanerWord = confirmedCount === 1 ? "cleaner" : "cleaners";
+      const shortfallWord = shortfall === 1 ? "cleaner" : "cleaners";
+      const notificationTitle = `Action needed: Your cleaning has ${confirmedCount} of ${requiredCount} ${cleanerWord}`;
+      const notificationBody = `Your cleaning on ${formattedDate} has ${cleanerNamesDisplay} confirmed, but we couldn't find ${shortfall} more ${shortfallWord}. Choose to proceed with ${confirmedCount} ${cleanerWord} or cancel with no fees.`;
 
       // Create in-app notification
       await NotificationService.createNotification({
         userId: homeowner.id,
         type: "edge_case_decision_required",
-        title: "Action needed: Your cleaning has 1 cleaner confirmed",
-        body: `Your cleaning on ${formattedDate} has ${cleanerName} confirmed, but we couldn't find a second cleaner. Choose to proceed with 1 cleaner or cancel with no fees.`,
+        title: notificationTitle,
+        body: notificationBody,
         data: {
           appointmentId: appointment.id,
           multiCleanerJobId: job.id,
-          cleanerName: cleanerName,
+          cleanerNames: cleanerNames,
+          confirmedCount: confirmedCount,
+          requiredCount: requiredCount,
+          shortfall: shortfall,
           expiresAt: expiresAt.toISOString(),
           options: ["proceed", "cancel"],
         },
@@ -427,12 +609,14 @@ async function processEdgeCaseDecisions(io = null) {
           await Email.sendEdgeCaseDecisionRequired(
             homeownerEmail,
             homeownerFirstName,
-            cleanerName,
+            cleanerNamesDisplay,
             formattedDate,
             homeAddress,
             decisionHours,
             appointment.id,
-            job.id
+            job.id,
+            confirmedCount,
+            requiredCount
           );
         } catch (emailError) {
           console.error(
@@ -448,9 +632,11 @@ async function processEdgeCaseDecisions(io = null) {
           await PushNotification.sendPushEdgeCaseDecision(
             homeowner.expoPushToken,
             homeownerFirstName,
-            cleanerName,
+            cleanerNamesDisplay,
             formattedDate,
-            decisionHours
+            decisionHours,
+            confirmedCount,
+            requiredCount
           );
         } catch (pushError) {
           console.error(
@@ -462,7 +648,7 @@ async function processEdgeCaseDecisions(io = null) {
 
       processed++;
       console.log(
-        `[MultiCleanerFillMonitor] Sent edge case decision request for job ${job.id} to homeowner ${homeowner.id} (expires in ${decisionHours}h)`
+        `[MultiCleanerFillMonitor] Sent edge case decision request for job ${job.id} to homeowner ${homeowner.id} (${confirmedCount}/${requiredCount} cleaners, expires in ${decisionHours}h)`
       );
     } catch (error) {
       console.error(
@@ -515,8 +701,8 @@ async function processExpiredEdgeCaseDecisions(io = null) {
 
       if (!home || !homeowner) continue;
 
-      // Get the confirmed cleaner
-      const confirmedCompletion = await CleanerJobCompletion.findOne({
+      // Get all confirmed cleaners
+      const confirmedCompletions = await CleanerJobCompletion.findAll({
         where: {
           multiCleanerJobId: job.id,
           status: { [Op.notIn]: ["dropped_out", "no_show"] },
@@ -524,9 +710,10 @@ async function processExpiredEdgeCaseDecisions(io = null) {
         include: [{ model: User, as: "cleaner" }],
       });
 
-      if (!confirmedCompletion || !confirmedCompletion.cleaner) continue;
+      if (confirmedCompletions.length === 0) continue;
 
-      const confirmedCleaner = confirmedCompletion.cleaner;
+      const confirmedCount = confirmedCompletions.length;
+      const requiredCount = job.totalCleanersRequired;
 
       // Auto-proceed: Update job status
       await job.update({
@@ -549,20 +736,42 @@ async function processExpiredEdgeCaseDecisions(io = null) {
         state: EncryptionService.decrypt(home.state),
         zipcode: EncryptionService.decrypt(home.zipcode),
       };
-      const cleanerName = EncryptionService.decrypt(confirmedCleaner.firstName);
+
+      // Build cleaner names list
+      const cleanerNames = confirmedCompletions
+        .filter((c) => c.cleaner)
+        .map((c) => EncryptionService.decrypt(c.cleaner.firstName));
+      const cleanerNamesDisplay =
+        cleanerNames.length === 1
+          ? cleanerNames[0]
+          : cleanerNames.length === 2
+            ? `${cleanerNames[0]} and ${cleanerNames[1]}`
+            : `${cleanerNames.slice(0, -1).join(", ")}, and ${cleanerNames[cleanerNames.length - 1]}`;
+
       const homeownerFirstName = EncryptionService.decrypt(homeowner.firstName);
       const homeownerEmail = EncryptionService.decrypt(homeowner.email);
+
+      // Dynamic messages based on cleaner count
+      const cleanerWord = confirmedCount === 1 ? "cleaner" : "cleaners";
+      const cleanerTitle = confirmedCount === 1
+        ? "Your cleaning will proceed with 1 cleaner"
+        : `Your cleaning will proceed with ${confirmedCount} cleaners`;
+      const cleanerBody = confirmedCount === 1
+        ? `No response received for your cleaning on ${formattedDate}. ${cleanerNamesDisplay} will complete your cleaning. Normal cancellation fees now apply.`
+        : `No response received for your cleaning on ${formattedDate}. ${cleanerNamesDisplay} will complete your cleaning (originally needed ${requiredCount}). Normal cancellation fees now apply.`;
 
       // Notify homeowner that we auto-proceeded
       await NotificationService.createNotification({
         userId: homeowner.id,
         type: "edge_case_auto_proceeded",
-        title: "Your cleaning will proceed with 1 cleaner",
-        body: `No response received for your cleaning on ${formattedDate}. ${cleanerName} will complete your cleaning. Normal cancellation fees now apply.`,
+        title: cleanerTitle,
+        body: cleanerBody,
         data: {
           appointmentId: appointment.id,
           multiCleanerJobId: job.id,
-          cleanerName: cleanerName,
+          cleanerNames: cleanerNames,
+          confirmedCount: confirmedCount,
+          requiredCount: requiredCount,
         },
       });
 
@@ -572,10 +781,12 @@ async function processExpiredEdgeCaseDecisions(io = null) {
           await Email.sendEdgeCaseAutoProceeded(
             homeownerEmail,
             homeownerFirstName,
-            cleanerName,
+            cleanerNamesDisplay,
             formattedDate,
             homeAddress,
-            appointment.id
+            appointment.id,
+            confirmedCount,
+            requiredCount
           );
         } catch (emailError) {
           console.error(
@@ -585,59 +796,80 @@ async function processExpiredEdgeCaseDecisions(io = null) {
         }
       }
 
-      // Notify cleaner they're confirmed as sole cleaner
-      const cleanerEmail = EncryptionService.decrypt(confirmedCleaner.email);
-      const cleanerFirstName = EncryptionService.decrypt(confirmedCleaner.firstName);
+      // Notify each confirmed cleaner
+      for (const completion of confirmedCompletions) {
+        if (!completion.cleaner) continue;
 
-      await NotificationService.createNotification({
-        userId: confirmedCleaner.id,
-        type: "edge_case_cleaner_confirmed",
-        title: "You're confirmed as the sole cleaner",
-        body: `You're confirmed to clean ${homeAddress.street} on ${formattedDate}. You'll receive the full cleaning pay. A second cleaner may still join before the appointment.`,
-        data: {
-          appointmentId: appointment.id,
-          multiCleanerJobId: job.id,
-        },
-      });
+        const cleaner = completion.cleaner;
+        const cleanerEmail = EncryptionService.decrypt(cleaner.email);
+        const cleanerFirstName = EncryptionService.decrypt(cleaner.firstName);
 
-      if (cleanerEmail) {
-        try {
-          await Email.sendEdgeCaseCleanerConfirmed(
-            cleanerEmail,
-            cleanerFirstName,
-            formattedDate,
-            homeAddress,
-            appointment.id,
-            true // fullPay
-          );
-        } catch (emailError) {
-          console.error(
-            `[MultiCleanerFillMonitor] Failed to send cleaner confirmed email for job ${job.id}:`,
-            emailError
-          );
+        // Dynamic message based on whether solo or team
+        const isSolo = confirmedCount === 1;
+        const cleanerNotificationTitle = isSolo
+          ? "You're confirmed as the sole cleaner"
+          : `You're confirmed with ${confirmedCount - 1} other ${confirmedCount - 1 === 1 ? "cleaner" : "cleaners"}`;
+        const cleanerNotificationBody = isSolo
+          ? `You're confirmed to clean ${homeAddress.street} on ${formattedDate}. You'll receive the full cleaning pay. Additional cleaners may still join before the appointment.`
+          : `You're confirmed to clean ${homeAddress.street} on ${formattedDate} with ${cleanerNamesDisplay.replace(cleanerFirstName, "").replace(/^(, and | and |, )/, "").trim() || "your team"}. Originally needed ${requiredCount} cleaners.`;
+
+        await NotificationService.createNotification({
+          userId: cleaner.id,
+          type: "edge_case_cleaner_confirmed",
+          title: cleanerNotificationTitle,
+          body: cleanerNotificationBody,
+          data: {
+            appointmentId: appointment.id,
+            multiCleanerJobId: job.id,
+            confirmedCount: confirmedCount,
+            requiredCount: requiredCount,
+          },
+        });
+
+        if (cleanerEmail) {
+          try {
+            await Email.sendEdgeCaseCleanerConfirmed(
+              cleanerEmail,
+              cleanerFirstName,
+              formattedDate,
+              homeAddress,
+              appointment.id,
+              isSolo, // fullPay only if solo
+              confirmedCount,
+              requiredCount
+            );
+          } catch (emailError) {
+            console.error(
+              `[MultiCleanerFillMonitor] Failed to send cleaner confirmed email for job ${job.id}:`,
+              emailError
+            );
+          }
+        }
+
+        // Send push notification to cleaner
+        if (cleaner.expoPushToken) {
+          try {
+            await PushNotification.sendPushEdgeCaseCleanerConfirmed(
+              cleaner.expoPushToken,
+              cleanerFirstName,
+              formattedDate,
+              homeAddress.street,
+              confirmedCount,
+              requiredCount
+            );
+          } catch (pushError) {
+            console.error(
+              `[MultiCleanerFillMonitor] Failed to send cleaner push for job ${job.id}:`,
+              pushError
+            );
+          }
         }
       }
 
-      // Send push notification to cleaner
-      if (confirmedCleaner.expoPushToken) {
-        try {
-          await PushNotification.sendPushEdgeCaseCleanerConfirmed(
-            confirmedCleaner.expoPushToken,
-            cleanerFirstName,
-            formattedDate,
-            homeAddress.street
-          );
-        } catch (pushError) {
-          console.error(
-            `[MultiCleanerFillMonitor] Failed to send cleaner push for job ${job.id}:`,
-            pushError
-          );
-        }
-      }
-
+      const cleanerIds = confirmedCompletions.map((c) => c.cleaner?.id).filter(Boolean);
       processed++;
       console.log(
-        `[MultiCleanerFillMonitor] Auto-proceeded job ${job.id} - homeowner ${homeowner.id} didn't respond, cleaner ${confirmedCleaner.id} confirmed`
+        `[MultiCleanerFillMonitor] Auto-proceeded job ${job.id} - homeowner ${homeowner.id} didn't respond, ${confirmedCount}/${requiredCount} cleaners confirmed: [${cleanerIds.join(", ")}]`
       );
     } catch (error) {
       console.error(
@@ -672,8 +904,8 @@ async function cancelEdgeCaseAppointment(multiCleanerJob, reason = "lack_of_clea
     const home = appointment.home;
     const homeowner = appointment.user;
 
-    // Get the confirmed cleaner before cancelling
-    const confirmedCompletion = await CleanerJobCompletion.findOne({
+    // Get all confirmed cleaners before cancelling
+    const confirmedCompletions = await CleanerJobCompletion.findAll({
       where: {
         multiCleanerJobId: multiCleanerJob.id,
         status: { [Op.notIn]: ["dropped_out", "no_show"] },
@@ -761,20 +993,29 @@ async function cancelEdgeCaseAppointment(multiCleanerJob, reason = "lack_of_clea
       }
     }
 
-    // Notify cleaner of cancellation (no compensation)
-    if (confirmedCompletion && confirmedCompletion.cleaner) {
-      const cleaner = confirmedCompletion.cleaner;
+    // Notify all confirmed cleaners of cancellation (no compensation)
+    const confirmedCount = confirmedCompletions.length;
+    const requiredCount = multiCleanerJob.totalCleanersRequired;
+    const shortfall = requiredCount - confirmedCount;
+    const shortfallText = shortfall === 1 ? "another cleaner" : `${shortfall} more cleaners`;
+
+    for (const completion of confirmedCompletions) {
+      if (!completion.cleaner) continue;
+
+      const cleaner = completion.cleaner;
       const cleanerEmail = EncryptionService.decrypt(cleaner.email);
       const cleanerFirstName = EncryptionService.decrypt(cleaner.firstName);
 
       await NotificationService.createNotification({
         userId: cleaner.id,
         type: "edge_case_cleaner_cancelled",
-        title: "Cleaning cancelled - no second cleaner",
-        body: `The cleaning on ${formattedDate} at ${homeAddress.street} has been cancelled because no second cleaner was found. The homeowner has cancelled with no fees.`,
+        title: "Cleaning cancelled - not enough cleaners",
+        body: `The cleaning on ${formattedDate} at ${homeAddress.street} has been cancelled because we couldn't find ${shortfallText}. The homeowner has cancelled with no fees.`,
         data: {
           appointmentId: appointment.id,
           reason: reason,
+          confirmedCount: confirmedCount,
+          requiredCount: requiredCount,
         },
       });
 
@@ -785,11 +1026,13 @@ async function cancelEdgeCaseAppointment(multiCleanerJob, reason = "lack_of_clea
             cleanerFirstName,
             formattedDate,
             homeAddress,
-            reason
+            reason,
+            confirmedCount,
+            requiredCount
           );
         } catch (emailError) {
           console.error(
-            `[EdgeCase] Failed to send cancellation email to cleaner:`,
+            `[EdgeCase] Failed to send cancellation email to cleaner ${cleaner.id}:`,
             emailError
           );
         }
@@ -802,11 +1045,13 @@ async function cancelEdgeCaseAppointment(multiCleanerJob, reason = "lack_of_clea
             cleaner.expoPushToken,
             cleanerFirstName,
             formattedDate,
-            homeAddress.street
+            homeAddress.street,
+            confirmedCount,
+            requiredCount
           );
         } catch (pushError) {
           console.error(
-            `[EdgeCase] Failed to send cancellation push to cleaner:`,
+            `[EdgeCase] Failed to send cancellation push to cleaner ${cleaner.id}:`,
             pushError
           );
         }
@@ -836,6 +1081,8 @@ async function processMultiCleanerFillMonitor(io = null) {
     urgentFillNotifications: 0,
     finalWarnings: 0,
     soloCompletionOffers: 0,
+    expiredSoloOffers: 0,
+    expiredExtraWorkOffers: 0,
     edgeCaseDecisions: 0,
     expiredEdgeCaseDecisions: 0,
     errors: 0,
@@ -864,6 +1111,20 @@ async function processMultiCleanerFillMonitor(io = null) {
   }
 
   try {
+    results.expiredSoloOffers = await processExpiredSoloOffers(io);
+  } catch (error) {
+    console.error("[MultiCleanerFillMonitor] Error in expired solo offers:", error);
+    results.errors++;
+  }
+
+  try {
+    results.expiredExtraWorkOffers = await processExpiredExtraWorkOffers(io);
+  } catch (error) {
+    console.error("[MultiCleanerFillMonitor] Error in expired extra work offers:", error);
+    results.errors++;
+  }
+
+  try {
     results.edgeCaseDecisions = await processEdgeCaseDecisions(io);
   } catch (error) {
     console.error("[MultiCleanerFillMonitor] Error in edge case decisions:", error);
@@ -878,7 +1139,7 @@ async function processMultiCleanerFillMonitor(io = null) {
   }
 
   console.log(
-    `[MultiCleanerFillMonitor] Completed. Urgent: ${results.urgentFillNotifications}, Warnings: ${results.finalWarnings}, Solo: ${results.soloCompletionOffers}, EdgeCase: ${results.edgeCaseDecisions}, ExpiredEdgeCase: ${results.expiredEdgeCaseDecisions}`
+    `[MultiCleanerFillMonitor] Completed. Urgent: ${results.urgentFillNotifications}, Warnings: ${results.finalWarnings}, Solo: ${results.soloCompletionOffers}, ExpiredSolo: ${results.expiredSoloOffers}, ExpiredExtraWork: ${results.expiredExtraWorkOffers}, EdgeCase: ${results.edgeCaseDecisions}, ExpiredEdgeCase: ${results.expiredEdgeCaseDecisions}`
   );
 
   return results;
@@ -916,6 +1177,8 @@ module.exports = {
   processUrgentFillNotifications,
   processFinalWarnings,
   processSoloCompletionOffers,
+  processExpiredSoloOffers,
+  processExpiredExtraWorkOffers,
   processEdgeCaseDecisions,
   processExpiredEdgeCaseDecisions,
   cancelEdgeCaseAppointment,

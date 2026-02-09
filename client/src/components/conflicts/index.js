@@ -2,6 +2,7 @@
 export { default as ConflictResolutionCenter } from "./ConflictResolutionCenter";
 export { default as ConflictCaseView } from "./ConflictCaseView";
 export { default as ConflictsStatsWidget } from "./ConflictsStatsWidget";
+export { default as UserCasesView } from "./UserCasesView";
 
 // Section Components
 export { default as CaseOverviewSection } from "./sections/CaseOverviewSection";

@@ -175,6 +175,57 @@ class BusinessVolumeService {
 	}
 
 	/**
+	 * Get monthly qualification history for dashboard display
+	 * Shows which months the business qualified for large business status
+	 * @param {number} businessOwnerId - Business owner user ID
+	 * @param {number} months - Number of months to retrieve (default: 6)
+	 * @returns {Promise<Array>} Monthly history with qualification status
+	 */
+	static async getMonthlyQualificationHistory(businessOwnerId, months = 6) {
+		try {
+			const config = await PricingConfig.getActive();
+			const threshold = config?.largeBusinessMonthlyThreshold || 70;
+			const stats = await BusinessVolumeStats.getRecentStats(businessOwnerId, months);
+
+			// Build history array with qualification status
+			const now = new Date();
+			const history = [];
+
+			for (let i = 0; i < months; i++) {
+				const targetDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+				const month = targetDate.getMonth() + 1;
+				const year = targetDate.getFullYear();
+
+				// Find stats for this month
+				const monthStats = stats.find(
+					(s) => s.month === month && s.year === year
+				);
+
+				const cleanings = monthStats?.completedCleanings || 0;
+				const qualified = cleanings >= threshold;
+				const progress = Math.min(100, Math.round((cleanings / threshold) * 100));
+
+				history.push({
+					month,
+					year,
+					monthName: targetDate.toLocaleString("default", { month: "short" }),
+					cleanings,
+					threshold,
+					qualified,
+					progress,
+					revenue: monthStats?.totalRevenue || 0,
+					revenueFormatted: `$${((monthStats?.totalRevenue || 0) / 100).toFixed(0)}`,
+				});
+			}
+
+			return history;
+		} catch (error) {
+			console.error("[BusinessVolumeService] Error getting qualification history:", error);
+			return [];
+		}
+	}
+
+	/**
 	 * Recalculate volume stats from EmployeeJobAssignment records
 	 * Useful for backfilling or correcting stats
 	 * @param {number} businessOwnerId - Business owner user ID

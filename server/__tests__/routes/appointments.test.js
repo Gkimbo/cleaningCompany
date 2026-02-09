@@ -60,6 +60,7 @@ jest.mock("../../models", () => ({
     findAll: jest.fn(),
     create: jest.fn(),
     destroy: jest.fn(),
+    count: jest.fn().mockResolvedValue(0),
   },
   CleanerClient: {
     findOne: jest.fn(),
@@ -74,6 +75,25 @@ jest.mock("../../models", () => ({
       completionRequiresPhotos: false,
     }),
   },
+  PreferredPerksConfig: {
+    getActive: jest.fn().mockResolvedValue({
+      earlyAccessMinutes: 60,
+      tierBronzeHomes: 3,
+      tierSilverHomes: 5,
+      tierGoldHomes: 10,
+    }),
+    findOne: jest.fn().mockResolvedValue({
+      earlyAccessMinutes: 60,
+      tierBronzeHomes: 3,
+      tierSilverHomes: 5,
+      tierGoldHomes: 10,
+    }),
+  },
+  CleanerPreferredPerks: {
+    findOne: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
 }));
 
 // Mock services
@@ -83,6 +103,22 @@ jest.mock("../../services/UserInfoClass", () => ({
   editTowelsInDB: jest.fn().mockResolvedValue({ success: true }),
   editCodeKeyInDB: jest.fn().mockResolvedValue({ success: true }),
   editAppointmentLinensInDB: jest.fn(),
+}));
+
+// Mock PreferredCleanerPerksService to avoid complex model dependencies
+jest.mock("../../services/PreferredCleanerPerksService", () => ({
+  getCleanerPerks: jest.fn().mockResolvedValue({
+    tierLevel: "none",
+    preferredHomeCount: 0,
+    earlyAccess: false,
+    bonusPercent: 0,
+  }),
+  recalculateTier: jest.fn().mockResolvedValue({
+    tierLevel: "none",
+    preferredHomeCount: 0,
+    earlyAccess: false,
+    bonusPercent: 0,
+  }),
 }));
 
 const mockCalculatePrice = jest.fn(() => 150);
@@ -167,6 +203,7 @@ jest.mock("../../config/businessConfig", () => ({
       extras: { bringSheets: 1000, bringTowels: 500 },
     },
   }),
+  getCleanersNeeded: jest.fn().mockReturnValue(1),
 }));
 
 const {
@@ -347,6 +384,7 @@ describe("Appointment Routes", () => {
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
         userId: 10,
+        isDemoAppointment: false, // Must match cleaner's isDemoAccount
         dataValues: {
           id: 1,
           userId: 10,
@@ -450,6 +488,7 @@ describe("Appointment Routes", () => {
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
         userId: 100,
+        isDemoAppointment: true, // Must match cleaner's isDemoAccount
         dataValues: { id: 1, userId: 100, date: "2025-01-15", price: "150" },
       });
 
@@ -1597,8 +1636,13 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock User.findByPk - first for payment intent check (no stripeCustomerId), then cleaner, then homeowner
+      // Mock User.findByPk - cleanerUser check, then payment intent user, then cleaner, then homeowner
       User.findByPk
+        .mockResolvedValueOnce({
+          // For cleanerUser check (isBusinessOwner) - not a business owner
+          id: 2,
+          isBusinessOwner: false,
+        })
         .mockResolvedValueOnce({
           // For payment intent creation check - no stripeCustomerId so it skips
           id: 1,
@@ -1686,8 +1730,13 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock User.findByPk - first for payment intent check (no stripeCustomerId), then cleaner, then homeowner
+      // Mock User.findByPk - cleanerUser check, then payment intent user, then cleaner, then homeowner
       User.findByPk
+        .mockResolvedValueOnce({
+          // For cleanerUser check (isBusinessOwner) - not a business owner
+          id: 2,
+          isBusinessOwner: false,
+        })
         .mockResolvedValueOnce({
           // For payment intent creation check - no stripeCustomerId so it skips
           id: 1,

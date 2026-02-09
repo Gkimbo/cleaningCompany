@@ -37,34 +37,69 @@ class MultiCleanerJobSerializer {
 		};
 	}
 
-	static serializeHome(home) {
+	/**
+	 * Serialize home with optional full address inclusion
+	 * @param {Object} home - Home object
+	 * @param {boolean} includeFullAddress - Whether to include full address and access details
+	 */
+	static serializeHome(home, includeFullAddress = true) {
 		if (!home) return null;
 		const data = home.dataValues || home;
-		return {
+
+		const serialized = {
 			id: data.id,
 			nickName: data.nickName,
-			address: this.decryptField(data.address),
 			city: this.decryptField(data.city),
 			state: this.decryptField(data.state),
-			zipcode: this.decryptField(data.zipcode),
 			numBeds: data.numBeds,
 			numBaths: data.numBaths,
 			numHalfBaths: data.numHalfBaths,
 			sqft: data.sqft,
-			hasGate: data.hasGate,
-			gateCode: this.decryptField(data.gateCode),
 			hasDog: data.hasDog,
 			dogName: data.dogName,
 			hasCat: data.hasCat,
 			catName: data.catName,
-			accessNotes: this.decryptField(data.accessNotes),
-			contact: this.decryptField(data.contact),
 			timeToBeCompleted: data.timeToBeCompleted,
 			cleanersNeeded: data.cleanersNeeded,
+			// Include coordinates for distance calculations (not sensitive)
+			latitude: data.latitude,
+			longitude: data.longitude,
 		};
+
+		// Only include sensitive address and access details when allowed
+		if (includeFullAddress) {
+			serialized.address = this.decryptField(data.address);
+			serialized.zipcode = this.decryptField(data.zipcode);
+			serialized.hasGate = data.hasGate;
+			serialized.gateCode = this.decryptField(data.gateCode);
+			serialized.accessNotes = this.decryptField(data.accessNotes);
+			serialized.contact = this.decryptField(data.contact);
+		}
+
+		return serialized;
 	}
 
-	static serializeAppointment(appointment) {
+	/**
+	 * Check if appointment date is within 48 hours from now
+	 * @param {string} dateString - Appointment date (YYYY-MM-DD)
+	 * @returns {boolean}
+	 */
+	static isWithin48Hours(dateString) {
+		if (!dateString) return false;
+		const now = new Date();
+		// Assume 10am start time for the appointment
+		const appointmentDate = new Date(dateString + "T10:00:00");
+		const diffTime = appointmentDate.getTime() - now.getTime();
+		const diffHours = diffTime / (1000 * 60 * 60);
+		return diffHours <= 48 && diffHours >= 0;
+	}
+
+	/**
+	 * Serialize appointment with optional full address
+	 * @param {Object} appointment - Appointment object
+	 * @param {boolean} includeFullAddress - Whether to include full address
+	 */
+	static serializeAppointment(appointment, includeFullAddress = true) {
 		if (!appointment) return null;
 		const data = appointment.dataValues || appointment;
 		return {
@@ -76,12 +111,25 @@ class MultiCleanerJobSerializer {
 			timeToBeCompleted: data.timeToBeCompleted,
 			completed: data.completed,
 			isMultiCleanerJob: data.isMultiCleanerJob,
-			home: appointment.home ? this.serializeHome(appointment.home) : null,
+			home: appointment.home ? this.serializeHome(appointment.home, includeFullAddress) : null,
 		};
 	}
 
-	static serializeOne(job) {
+	/**
+	 * Serialize a multi-cleaner job
+	 * @param {Object} job - Job object
+	 * @param {boolean} includeFullAddress - Whether to include full address (default: true for confirmed within 48h)
+	 */
+	static serializeOne(job, includeFullAddress = null) {
 		const data = job.dataValues || job;
+
+		// If includeFullAddress not specified, determine based on appointment date
+		if (includeFullAddress === null && job.appointment) {
+			const appointmentDate = job.appointment.dataValues?.date || job.appointment.date;
+			includeFullAddress = this.isWithin48Hours(appointmentDate);
+		} else if (includeFullAddress === null) {
+			includeFullAddress = false;
+		}
 
 		const serialized = {
 			id: data.id,
@@ -132,14 +180,14 @@ class MultiCleanerJobSerializer {
 
 		// Serialize appointment if included
 		if (job.appointment) {
-			serialized.appointment = this.serializeAppointment(job.appointment);
+			serialized.appointment = this.serializeAppointment(job.appointment, includeFullAddress);
 		}
 
 		return serialized;
 	}
 
-	static serializeArray(jobs) {
-		return jobs.map((job) => this.serializeOne(job));
+	static serializeArray(jobs, includeFullAddress = null) {
+		return jobs.map((job) => this.serializeOne(job, includeFullAddress));
 	}
 
 	static serializeRoomAssignment(assignment) {
@@ -184,8 +232,9 @@ class MultiCleanerJobSerializer {
 		};
 
 		// Serialize multiCleanerJob if included (with nested appointment/home)
+		// Offers are for unconfirmed cleaners, so never include full address
 		if (offer.multiCleanerJob) {
-			serialized.multiCleanerJob = this.serializeOne(offer.multiCleanerJob);
+			serialized.multiCleanerJob = this.serializeOne(offer.multiCleanerJob, false);
 		}
 
 		return serialized;
@@ -228,12 +277,14 @@ class MultiCleanerJobSerializer {
 
 	/**
 	 * Serialize offers response for the /offers endpoint
-	 * Includes both personal offers and available jobs with decrypted home data
+	 * Includes both personal offers and available jobs
+	 * Note: Full address is never included for offers/available jobs (cleaner not confirmed)
 	 */
 	static serializeOffersResponse(personalOffers, availableJobs) {
 		return {
 			personalOffers: this.serializeOfferArray(personalOffers),
-			availableJobs: this.serializeArray(availableJobs),
+			// Available jobs are unconfirmed, so never include full address
+			availableJobs: this.serializeArray(availableJobs, false),
 		};
 	}
 }

@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -25,9 +25,56 @@ const RefundModal = ({ visible, onClose, onSuccess, caseData, caseType, caseId }
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [loadingInfo, setLoadingInfo] = useState(true);
+  const [refundInfo, setRefundInfo] = useState(null);
 
-  const maxRefundAmount = caseData?.appointment?.price || 0;
   const homeowner = caseData?.homeowner;
+
+  // Fetch refund info from server when modal opens
+  const fetchRefundInfo = useCallback(async () => {
+    if (!visible || !caseType || !caseId || !user?.token) return;
+
+    setLoadingInfo(true);
+    try {
+      const result = await ConflictService.getRefundInfo(user.token, caseType, caseId);
+      if (result.success) {
+        setRefundInfo(result);
+      } else {
+        // Fallback to caseData if endpoint fails
+        setRefundInfo({
+          originalAmount: caseData?.appointment?.price || 0,
+          alreadyRefunded: 0,
+          maxRefundable: caseData?.appointment?.price || 0,
+          quickActions: [],
+        });
+      }
+    } catch (err) {
+      // Fallback
+      setRefundInfo({
+        originalAmount: caseData?.appointment?.price || 0,
+        alreadyRefunded: 0,
+        maxRefundable: caseData?.appointment?.price || 0,
+        quickActions: [],
+      });
+    } finally {
+      setLoadingInfo(false);
+    }
+  }, [visible, caseType, caseId, user?.token, caseData]);
+
+  useEffect(() => {
+    if (visible) {
+      fetchRefundInfo();
+    } else {
+      // Reset state when modal closes
+      setAmount("");
+      setReason("");
+      setRefundInfo(null);
+    }
+  }, [visible, fetchRefundInfo]);
+
+  const maxRefundAmount = refundInfo?.maxRefundable || 0;
+  const alreadyRefunded = refundInfo?.alreadyRefunded || 0;
+  const originalAmount = refundInfo?.originalAmount || 0;
 
   const handleSubmit = async () => {
     const amountCents = Math.round(parseFloat(amount || 0) * 100);
@@ -38,7 +85,15 @@ const RefundModal = ({ visible, onClose, onSuccess, caseData, caseType, caseId }
     }
 
     if (amountCents > maxRefundAmount) {
-      Alert.alert("Error", `Amount cannot exceed $${(maxRefundAmount / 100).toFixed(2)}`);
+      const maxFormatted = (maxRefundAmount / 100).toFixed(2);
+      if (alreadyRefunded > 0) {
+        Alert.alert(
+          "Amount Too High",
+          `Maximum refund is $${maxFormatted}.\n\nOriginal: $${(originalAmount / 100).toFixed(2)}\nAlready refunded: $${(alreadyRefunded / 100).toFixed(2)}\nRemaining: $${maxFormatted}`
+        );
+      } else {
+        Alert.alert("Error", `Amount cannot exceed $${maxFormatted}`);
+      }
       return;
     }
 
@@ -59,7 +114,7 @@ const RefundModal = ({ visible, onClose, onSuccess, caseData, caseType, caseId }
 
       if (result.success) {
         Alert.alert("Success", `Refund of $${(amountCents / 100).toFixed(2)} processed successfully`, [
-          { text: "OK", onPress: () => { setAmount(""); setReason(""); onSuccess?.(); } },
+          { text: "OK", onPress: () => { onSuccess?.(); } },
         ]);
       } else {
         Alert.alert("Error", result.error || "Failed to process refund");
@@ -71,9 +126,21 @@ const RefundModal = ({ visible, onClose, onSuccess, caseData, caseType, caseId }
     }
   };
 
-  const setPresetAmount = (percentage) => {
-    const presetAmount = (maxRefundAmount * percentage / 100) / 100;
+  const setPresetAmount = (amountInCents) => {
+    const presetAmount = amountInCents / 100;
     setAmount(presetAmount.toFixed(2));
+  };
+
+  // Get quick action buttons from server or calculate locally
+  const getQuickActions = () => {
+    if (refundInfo?.quickActions?.length > 0) {
+      return refundInfo.quickActions;
+    }
+    // Fallback calculation
+    return [25, 50, 75, 100].map((pct) => ({
+      label: `${pct}%`,
+      amount: Math.round(maxRefundAmount * pct / 100),
+    }));
   };
 
   return (
@@ -96,51 +163,80 @@ const RefundModal = ({ visible, onClose, onSuccess, caseData, caseType, caseId }
           </View>
 
           <View style={styles.content}>
-            {/* Recipient Info */}
-            {homeowner && (
-              <View style={styles.recipientCard}>
-                <Text style={styles.recipientLabel}>Refund To</Text>
-                <Text style={styles.recipientName}>{homeowner.name}</Text>
-                {homeowner.email && (
-                  <Text style={styles.recipientEmail}>{homeowner.email}</Text>
+            {loadingInfo ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={colors.primary[500]} />
+                <Text style={styles.loadingText}>Loading refund info...</Text>
+              </View>
+            ) : (
+              <>
+                {/* Recipient Info */}
+                {homeowner && (
+                  <View style={styles.recipientCard}>
+                    <Text style={styles.recipientLabel}>Refund To</Text>
+                    <Text style={styles.recipientName}>{homeowner.name}</Text>
+                    {homeowner.email && (
+                      <Text style={styles.recipientEmail}>{homeowner.email}</Text>
+                    )}
+                  </View>
                 )}
-              </View>
-            )}
 
-            {/* Amount Input */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Refund Amount</Text>
-              <View style={styles.amountInputContainer}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput
-                  style={styles.amountInput}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor={colors.text.tertiary}
-                  value={amount}
-                  onChangeText={setAmount}
-                />
-              </View>
-              <Text style={styles.maxAmount}>
-                Maximum: ${(maxRefundAmount / 100).toFixed(2)}
-              </Text>
+                {/* Already Refunded Warning */}
+                {alreadyRefunded > 0 && (
+                  <View style={styles.alreadyRefundedCard}>
+                    <Icon name="info-circle" size={14} color={colors.primary[600]} />
+                    <View style={styles.alreadyRefundedContent}>
+                      <Text style={styles.alreadyRefundedTitle}>Previous Refunds Issued</Text>
+                      <Text style={styles.alreadyRefundedText}>
+                        Original: ${(originalAmount / 100).toFixed(2)} • Already refunded: ${(alreadyRefunded / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
-              {/* Preset Buttons */}
-              <View style={styles.presetButtons}>
-                {[25, 50, 75, 100].map((pct) => (
-                  <TouchableOpacity
-                    key={pct}
-                    style={styles.presetButton}
-                    onPress={() => setPresetAmount(pct)}
-                  >
-                    <Text style={styles.presetButtonText}>{pct}%</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+                {/* Amount Input */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Refund Amount</Text>
+                  <View style={styles.amountInputContainer}>
+                    <Text style={styles.currencySymbol}>$</Text>
+                    <TextInput
+                      style={styles.amountInput}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      placeholderTextColor={colors.text.tertiary}
+                      value={amount}
+                      onChangeText={setAmount}
+                    />
+                  </View>
+                  <Text style={styles.maxAmount}>
+                    Maximum refundable: ${(maxRefundAmount / 100).toFixed(2)}
+                  </Text>
 
-            {/* Reason */}
-            <View style={styles.section}>
+                  {/* Preset Buttons */}
+                  <View style={styles.presetButtons}>
+                    {getQuickActions().map((action) => (
+                      <TouchableOpacity
+                        key={action.label}
+                        style={[
+                          styles.presetButton,
+                          action.amount === 0 && styles.presetButtonDisabled,
+                        ]}
+                        onPress={() => setPresetAmount(action.amount)}
+                        disabled={action.amount === 0}
+                      >
+                        <Text style={[
+                          styles.presetButtonText,
+                          action.amount === 0 && styles.presetButtonTextDisabled,
+                        ]}>
+                          {action.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Reason */}
+                <View style={styles.section}>
               <Text style={styles.sectionLabel}>Reason</Text>
               <TextInput
                 style={styles.reasonInput}
@@ -153,13 +249,15 @@ const RefundModal = ({ visible, onClose, onSuccess, caseData, caseType, caseId }
               />
             </View>
 
-            {/* Warning */}
-            <View style={styles.warningCard}>
-              <Icon name="exclamation-triangle" size={14} color={colors.warning[600]} />
-              <Text style={styles.warningText}>
-                This action cannot be undone. The refund will be processed immediately through Stripe.
-              </Text>
-            </View>
+                {/* Warning */}
+                <View style={styles.warningCard}>
+                  <Icon name="exclamation-triangle" size={14} color={colors.warning[600]} />
+                  <Text style={styles.warningText}>
+                    This action cannot be undone. The refund will be processed immediately through Stripe.
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
 
           <View style={styles.footer}>
@@ -233,6 +331,17 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.lg,
   },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xl,
+  },
+  loadingText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
   recipientCard: {
     backgroundColor: colors.neutral[50],
     borderRadius: radius.lg,
@@ -251,6 +360,27 @@ const styles = StyleSheet.create({
   recipientEmail: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
+  },
+  alreadyRefundedCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  alreadyRefundedContent: {
+    flex: 1,
+  },
+  alreadyRefundedTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+    marginBottom: 2,
+  },
+  alreadyRefundedText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
   },
   section: {
     gap: spacing.sm,
@@ -300,6 +430,13 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     color: colors.text.secondary,
+  },
+  presetButtonDisabled: {
+    backgroundColor: colors.neutral[50],
+    opacity: 0.5,
+  },
+  presetButtonTextDisabled: {
+    color: colors.text.tertiary,
   },
   reasonInput: {
     backgroundColor: colors.neutral[100],

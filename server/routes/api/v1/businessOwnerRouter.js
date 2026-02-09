@@ -2183,6 +2183,123 @@ router.post("/payouts/:assignmentId/mark-paid-outside", async (req, res) => {
 });
 
 // =====================================
+// Employee Bonus Routes
+// =====================================
+
+const EmployeeBonusService = require("../../../services/EmployeeBonusService");
+
+/**
+ * POST /bonuses - Create a new bonus for an employee
+ */
+router.post("/bonuses", async (req, res) => {
+  try {
+    const { employeeId, amount, reason } = req.body;
+
+    if (!employeeId || !amount) {
+      return res.status(400).json({ error: "employeeId and amount are required" });
+    }
+
+    const bonus = await EmployeeBonusService.createBonus(
+      req.businessOwnerId,
+      parseInt(employeeId),
+      parseInt(amount),
+      reason
+    );
+
+    res.status(201).json(bonus);
+  } catch (error) {
+    console.error("Error creating bonus:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /bonuses - Get all bonuses for business owner
+ */
+router.get("/bonuses", async (req, res) => {
+  try {
+    const { status, employeeId, limit } = req.query;
+
+    const bonuses = await EmployeeBonusService.getBonusesForBusinessOwner(
+      req.businessOwnerId,
+      {
+        status,
+        employeeId: employeeId ? parseInt(employeeId) : undefined,
+        limit: limit ? parseInt(limit) : 50,
+      }
+    );
+
+    res.json(bonuses);
+  } catch (error) {
+    console.error("Error fetching bonuses:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /bonuses/pending - Get pending bonuses for business owner
+ */
+router.get("/bonuses/pending", async (req, res) => {
+  try {
+    const bonuses = await EmployeeBonusService.getPendingBonuses(req.businessOwnerId);
+    res.json(bonuses);
+  } catch (error) {
+    console.error("Error fetching pending bonuses:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /bonuses/summary - Get bonus summary stats
+ */
+router.get("/bonuses/summary", async (req, res) => {
+  try {
+    const summary = await EmployeeBonusService.getBonusSummary(req.businessOwnerId);
+    res.json(summary);
+  } catch (error) {
+    console.error("Error fetching bonus summary:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /bonuses/:id/paid - Mark a bonus as paid
+ */
+router.put("/bonuses/:id/paid", async (req, res) => {
+  try {
+    const { note } = req.body;
+
+    const bonus = await EmployeeBonusService.markBonusPaid(
+      parseInt(req.params.id),
+      req.businessOwnerId,
+      note
+    );
+
+    res.json(bonus);
+  } catch (error) {
+    console.error("Error marking bonus as paid:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /bonuses/:id - Cancel a pending bonus
+ */
+router.delete("/bonuses/:id", async (req, res) => {
+  try {
+    const result = await EmployeeBonusService.cancelBonus(
+      parseInt(req.params.id),
+      req.businessOwnerId
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error cancelling bonus:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// =====================================
 // Client Payment Tracking Routes
 // =====================================
 

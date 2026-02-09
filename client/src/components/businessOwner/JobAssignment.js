@@ -53,9 +53,9 @@ const UnassignedJobCard = ({ job, onAssign }) => {
     <View style={styles.jobCard}>
       <View style={styles.jobCardHeader}>
         <View style={styles.jobDateBadge}>
-          <Text style={styles.jobDateDay}>{new Date(job.date).getDate()}</Text>
+          <Text style={styles.jobDateDay}>{new Date(job.date + "T00:00:00").getDate()}</Text>
           <Text style={styles.jobDateMonth}>
-            {new Date(job.date).toLocaleDateString("en-US", { month: "short" })}
+            {new Date(job.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
           </Text>
         </View>
         <View style={styles.jobInfo}>
@@ -106,10 +106,10 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
       <View style={styles.jobCardHeader}>
         <View style={styles.jobDateBadge}>
           <Text style={styles.jobDateDay}>
-            {new Date(assignment.appointment?.date).getDate()}
+            {new Date(assignment.appointment?.date + "T00:00:00").getDate()}
           </Text>
           <Text style={styles.jobDateMonth}>
-            {new Date(assignment.appointment?.date).toLocaleDateString("en-US", {
+            {new Date(assignment.appointment?.date + "T00:00:00").toLocaleDateString("en-US", {
               month: "short",
             })}
           </Text>
@@ -303,7 +303,7 @@ const AssignModal = ({
                 {job.clientName || "Client"} - {job.address || "No address"}
               </Text>
               <Text style={styles.jobSummaryDate}>
-                {new Date(job.date).toLocaleDateString("en-US", {
+                {new Date(job.date + "T00:00:00").toLocaleDateString("en-US", {
                   weekday: "long",
                   month: "long",
                   day: "numeric",

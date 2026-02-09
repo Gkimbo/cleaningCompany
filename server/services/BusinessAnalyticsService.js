@@ -21,9 +21,11 @@ class BusinessAnalyticsService {
 	 */
 	static async getAnalyticsAccess(businessOwnerId) {
 		const qualification = await BusinessVolumeService.qualifiesForLargeBusinessFee(businessOwnerId);
+		const monthlyHistory = await BusinessVolumeService.getMonthlyQualificationHistory(businessOwnerId, 6);
 
 		return {
 			tier: qualification.qualifies ? "premium" : "standard",
+			isLargeBusiness: qualification.qualifies,
 			features: {
 				basicMetrics: true,
 				employeeAnalytics: qualification.qualifies,
@@ -35,7 +37,9 @@ class BusinessAnalyticsService {
 				currentCleanings: qualification.totalCleanings,
 				threshold: qualification.threshold,
 				cleaningsNeeded: qualification.cleaningsNeeded,
+				qualifies: qualification.qualifies,
 			},
+			monthlyHistory,
 		};
 	}
 
@@ -237,7 +241,7 @@ class BusinessAnalyticsService {
 					businessOwnerId,
 					status: { [Op.in]: ["active", "inactive"] },
 				},
-				attributes: ["id", "firstName", "lastName", "status", "maxJobsPerDay"],
+				attributes: ["id", "userId", "firstName", "lastName", "status", "maxJobsPerDay"],
 			});
 
 			const employeeStats = await Promise.all(
@@ -307,7 +311,8 @@ class BusinessAnalyticsService {
 						: 0;
 
 					return {
-						employeeId: employee.id,
+						employeeId: employee.userId, // User ID - needed for bonuses
+						businessEmployeeId: employee.id, // BusinessEmployee record ID
 						name: `${employee.firstName} ${employee.lastName}`,
 						status: employee.status,
 						jobsCompleted: completedAssignments.length,

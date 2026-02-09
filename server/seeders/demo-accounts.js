@@ -35,6 +35,8 @@ const {
 	Payout,
 	CancellationAppeal,
 	HomeSizeAdjustmentRequest,
+	PaymentDispute,
+	SupportTicket,
 	CancellationAuditLog,
 	BusinessVolumeStats,
 	HomePreferredCleaner,
@@ -153,6 +155,18 @@ function getFutureDate(daysFromNow) {
 function getPastDate(daysAgo) {
 	const date = new Date();
 	date.setDate(date.getDate() - daysAgo);
+	return date.toISOString().split("T")[0];
+}
+
+// Helper to generate dates within the current month (for volume-based demos)
+function getCurrentMonthDate(dayOfMonth) {
+	const now = new Date();
+	const year = now.getFullYear();
+	const month = now.getMonth();
+	// Clamp day to valid range (1 to current day of month)
+	const maxDay = now.getDate();
+	const day = Math.max(1, Math.min(dayOfMonth, maxDay));
+	const date = new Date(year, month, day);
 	return date.toISOString().split("T")[0];
 }
 
@@ -904,9 +918,9 @@ async function createDemoAccounts() {
 
 		// Create 3 different 2bed/2bath homes for the demo homeowner
 		const marketplaceHomeConfigs = [
-			{ nickName: "Downtown Apartment", address: "456 Market Street", contact: "555-0123" },
-			{ nickName: "Riverside Condo", address: "789 River Road", contact: "555-0124" },
-			{ nickName: "Midtown Studio", address: "321 Central Ave", contact: "555-0125" },
+			{ nickName: "Downtown Apartment", address: "456 Market Street", contact: "555-0123", latitude: 34.0522, longitude: -118.2437 },
+			{ nickName: "Riverside Condo", address: "789 River Road", contact: "555-0124", latitude: 34.0689, longitude: -118.4452 },
+			{ nickName: "Midtown Studio", address: "321 Central Ave", contact: "555-0125", latitude: 34.0195, longitude: -118.4912 },
 		];
 
 		const marketplaceHomes = [];
@@ -933,6 +947,8 @@ async function createDemoAccounts() {
 					timeToBeCompleted: "2",
 					cleanersNeeded: 1,
 					contact: config.contact,
+					latitude: config.latitude,
+					longitude: config.longitude,
 				});
 				console.log(`  - Created home: ${config.nickName}`);
 			}
@@ -1234,6 +1250,8 @@ async function createDemoAccounts() {
 						sqft: 1500 + (i * 200),
 						contact: `555-${String(100 + i).padStart(3, '0')}-0000`,
 						timeToBeCompleted: String(2 + (i % 2)),
+						latitude: 34.0901 + (i * 0.005),
+						longitude: -118.4065 + (i * 0.005),
 					});
 				}
 
@@ -2068,6 +2086,167 @@ async function createDemoAccounts() {
 			} catch (error) {
 				console.error("  - Error creating Scenario 6:", error.message);
 			}
+
+			// ===== SCENARIO 7: Payment Dispute - Wrong Amount =====
+			console.log("Creating Scenario 7: Payment Dispute (Wrong Amount)...");
+			try {
+				// Create a completed appointment for the dispute
+				const paidAppt = await UserAppointments.create({
+					userId: demoHomeowner.id,
+					homeId: homeownerHome.id,
+					date: getPastDate(3),
+					price: "22000", // $220 in cents
+					paid: true,
+					bringTowels: "yes",
+					bringSheets: "yes",
+					completed: true,
+					hasBeenAssigned: true,
+					employeesAssigned: [demoCleaner.id.toString()],
+					empoyeesNeeded: 1,
+					timeToBeCompleted: "4",
+					paymentStatus: "paid",
+					amountPaid: 22000,
+					completionStatus: "approved",
+					isDemoAppointment: true,
+				});
+
+				await PaymentDispute.create({
+					appointmentId: paidAppt.id,
+					cleanerId: demoCleaner.id,
+					issueType: "wrong_amount",
+					expectedAmount: 22000, // $220
+					receivedAmount: 17600, // $176 (only 80% received)
+					description: "I was supposed to receive $220 for a 4-hour cleaning job (5 bed/3 bath home with extras). My payout shows only $176 which is only 80% of the job. The homeowner confirmed they paid the full amount. Please investigate why I didn't receive my full earnings.",
+					status: "under_review",
+					priority: "high",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+					slaDeadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+				});
+
+				console.log("  - Created payment dispute (wrong_amount, under_review)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 7:", error.message);
+			}
+
+			// ===== SCENARIO 8: Payment Dispute - Missing Payout (Resolved) =====
+			console.log("Creating Scenario 8: Payment Dispute (Missing Payout - Resolved)...");
+			try {
+				const missingPayoutAppt = await UserAppointments.create({
+					userId: demoHomeowner.id,
+					homeId: homeownerHome.id,
+					date: getPastDate(10),
+					price: "18000",
+					paid: true,
+					bringTowels: "no",
+					bringSheets: "no",
+					completed: true,
+					hasBeenAssigned: true,
+					employeesAssigned: [demoCleaner.id.toString()],
+					empoyeesNeeded: 1,
+					timeToBeCompleted: "3",
+					paymentStatus: "paid",
+					amountPaid: 18000,
+					completionStatus: "approved",
+					isDemoAppointment: true,
+				});
+
+				await PaymentDispute.create({
+					appointmentId: missingPayoutAppt.id,
+					cleanerId: demoCleaner.id,
+					issueType: "missing_payout",
+					expectedAmount: 18000,
+					receivedAmount: 0,
+					description: "I completed this job 10 days ago but never received payment. The homeowner says they paid through the app. My Stripe account is properly connected and verified.",
+					status: "resolved",
+					priority: "urgent",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+					reviewedBy: demoHR.id,
+					reviewedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+					resolution: { amountPaid: 18000, paidVia: "manual_transfer", stripeTransferId: "tr_demo_123" },
+					resolutionNotes: "Stripe webhook failed to process. Manual transfer completed to cleaner's account.",
+					slaDeadline: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+					closedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+				});
+
+				console.log("  - Created payment dispute (missing_payout, resolved)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 8:", error.message);
+			}
+
+			// ===== SCENARIO 9: Support Ticket - Service Complaint =====
+			console.log("Creating Scenario 9: Support Ticket (Service Complaint)...");
+			try {
+				await SupportTicket.create({
+					reporterId: demoHR.id,
+					subjectUserId: demoCleaner.id,
+					subjectType: "cleaner",
+					category: "service_complaint",
+					description: "Homeowner called to report that the cleaner arrived 45 minutes late to their appointment and left 30 minutes early. The homeowner says several rooms were not cleaned. This is the second complaint about timeliness for this cleaner.",
+					status: "under_review",
+					priority: "high",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(),
+					slaDeadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(),
+				});
+
+				console.log("  - Created support ticket (service_complaint, under_review)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 9:", error.message);
+			}
+
+			// ===== SCENARIO 10: Support Ticket - Billing Question (Resolved) =====
+			console.log("Creating Scenario 10: Support Ticket (Billing Question - Resolved)...");
+			try {
+				await SupportTicket.create({
+					reporterId: demoHR.id,
+					subjectUserId: demoHomeowner.id,
+					subjectType: "homeowner",
+					category: "billing_question",
+					description: "Homeowner called asking why they were charged twice for the same cleaning. Review found duplicate charge due to network timeout. Refund processed.",
+					status: "resolved",
+					priority: "normal",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+					reviewedBy: demoHR.id,
+					reviewedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+					resolution: { refundAmount: 15000, refundReason: "duplicate_charge", stripeRefundId: "re_demo_456" },
+					resolutionNotes: "Duplicate charge confirmed. Full refund of $150 processed to customer's original payment method.",
+					slaDeadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+					closedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+				});
+
+				console.log("  - Created support ticket (billing_question, resolved)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 10:", error.message);
+			}
+
+			// ===== SCENARIO 11: Support Ticket - Policy Violation (Pending Info) =====
+			console.log("Creating Scenario 11: Support Ticket (Policy Violation)...");
+			try {
+				await SupportTicket.create({
+					reporterId: demoHR.id,
+					subjectUserId: demoCleaner.id,
+					subjectType: "cleaner",
+					category: "policy_violation",
+					description: "Multiple homeowners have reported that cleaner is soliciting direct bookings outside of the platform. Cleaner allegedly left business cards and offered 20% discount for booking directly. Awaiting cleaner's response to allegations.",
+					status: "pending_info",
+					priority: "urgent",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+					slaDeadline: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+				});
+
+				console.log("  - Created support ticket (policy_violation, pending_info)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 11:", error.message);
+			}
 		}
 
 		console.log("  - HR demo scenarios complete");
@@ -2176,12 +2355,14 @@ async function createDemoAccounts() {
 		const createdClients = [];
 		for (let i = 0; i < 100; i++) {
 			try {
+				const clientUsername = `lb_client_${i + 1}`;
 				const clientEmail = `lb_client_${i + 1}@sparkle.demo`;
-				let clientUser = await User.findOne({ where: { email: clientEmail } });
+				// Search by username since email may be encrypted
+				let clientUser = await User.findOne({ where: { username: clientUsername } });
 
 				if (!clientUser) {
 					clientUser = await User.create({
-						username: `lb_client_${i + 1}`,
+						username: clientUsername,
 						email: clientEmail,
 						firstName: clientFirstNames[i],
 						lastName: clientLastNames[i],
@@ -2194,6 +2375,15 @@ async function createDemoAccounts() {
 					// Create a home for each client with varied sizes
 					const bedrooms = 2 + (i % 4); // 2-5 bedrooms
 					const bathrooms = 1 + (i % 3); // 1-3 bathrooms
+					// Coordinates for various LA area cities
+					const cityCoords = [
+						{ lat: 34.0901, lng: -118.4065 }, // Beverly Hills
+						{ lat: 34.0195, lng: -118.4912 }, // Santa Monica
+						{ lat: 34.1478, lng: -118.1445 }, // Pasadena
+						{ lat: 34.1425, lng: -118.2551 }, // Glendale
+						{ lat: 34.1808, lng: -118.3090 }, // Burbank
+					];
+					const coords = cityCoords[i % 5];
 					await UserHomes.create({
 						userId: clientUser.id,
 						nickName: `${clientFirstNames[i]}'s Home`,
@@ -2207,30 +2397,37 @@ async function createDemoAccounts() {
 						sqft: 1500 + (i * 30),
 						contact: `555-${String(200 + i).padStart(3, '0')}-0000`,
 						timeToBeCompleted: String(2 + (bedrooms > 3 ? 1 : 0)),
+						latitude: coords.lat + (i * 0.002),
+						longitude: coords.lng + (i * 0.002),
 					});
 				}
+
+				// Push client to array before linking (so we have them even if linking fails)
+				createdClients.push(clientUser);
 
 				// Link as cleaner client
-				const existingClient = await CleanerClient.findOne({
-					where: {
-						cleanerId: largeBizOwner.id,
-						clientId: clientUser.id,
-					},
-				});
-
-				if (!existingClient) {
-					await CleanerClient.create({
-						cleanerId: largeBizOwner.id,
-						clientId: clientUser.id,
-						status: "active",
-						preferredDays: JSON.stringify(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][i % 5]),
-						notes: `Regular client #${i + 1} - ${["weekly", "biweekly", "monthly"][i % 3]} service`,
+				try {
+					const existingClient = await CleanerClient.findOne({
+						where: {
+							cleanerId: largeBizOwner.id,
+							clientId: clientUser.id,
+						},
 					});
-				}
 
-				createdClients.push(clientUser);
+					if (!existingClient) {
+						await CleanerClient.create({
+							cleanerId: largeBizOwner.id,
+							clientId: clientUser.id,
+							status: "active",
+							preferredDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][i % 5],
+							notes: `Regular client #${i + 1} - ${["weekly", "biweekly", "monthly"][i % 3]} service`,
+						});
+					}
+				} catch (linkError) {
+					// Ignore linking errors
+				}
 			} catch (error) {
-				// Ignore duplicates
+				// Ignore errors
 			}
 		}
 		console.log("  - Created 100 clients for large business");
@@ -2382,11 +2579,92 @@ async function createDemoAccounts() {
 		}
 		console.log("  - Created 10 sample reviews");
 
+		// Create 70 completed appointments to qualify as large business
+		console.log("Creating 70 completed appointments for large business...");
+		let completedJobsCreated = 0;
+
+		// First update any existing demo appointments to be in current month
+		const existingDemoApptsList = await UserAppointments.findAll({
+			where: {
+				bookedByCleanerId: largeBizOwner.id,
+				isDemoAppointment: true,
+				completed: true,
+			},
+		});
+
+		// Update existing appointments to current month dates
+		for (let i = 0; i < existingDemoApptsList.length; i++) {
+			const dayOfMonth = (i % 8) + 1;
+			const newDate = getCurrentMonthDate(dayOfMonth);
+			await existingDemoApptsList[i].update({ date: newDate });
+		}
+		if (existingDemoApptsList.length > 0) {
+			console.log(`  - Updated ${existingDemoApptsList.length} existing appointments to current month`);
+		}
+
+		// Only create if we need more
+		const appointmentsNeeded = Math.max(0, 70 - existingDemoApptsList.length);
+
+		for (let i = 10; i < 10 + appointmentsNeeded && i < createdClients.length; i++) {
+			try {
+				const clientHome = await UserHomes.findOne({
+					where: { userId: createdClients[i].id },
+				});
+
+				if (!clientHome) continue;
+
+				// Create a completed appointment within the current month
+				// Spread across days 1 to today to ensure all 70 are in current month
+				const dayOfMonth = (i % 8) + 1; // Days 1-8 of current month
+				const pastDate = getCurrentMonthDate(dayOfMonth);
+				const priceInCents = (150 + (i * 5)) * 100;
+
+				await UserAppointments.create({
+					userId: createdClients[i].id,
+					homeId: clientHome.id,
+					date: pastDate,
+					price: String(priceInCents),
+					paid: true,
+					bringTowels: i % 2 === 0 ? "yes" : "no",
+					bringSheets: i % 3 === 0 ? "yes" : "no",
+					completed: true,
+					hasBeenAssigned: true,
+					employeesAssigned: [largeBizOwner.id.toString()],
+					empoyeesNeeded: 1,
+					timeToBeCompleted: String(2 + (i % 3)),
+					paymentStatus: "paid",
+					amountPaid: priceInCents,
+					completionStatus: "approved",
+					bookedByCleanerId: largeBizOwner.id,
+					isDemoAppointment: true,
+				});
+				completedJobsCreated++;
+			} catch (error) {
+				// Ignore errors
+			}
+		}
+		console.log(`  - Created ${completedJobsCreated} additional completed appointments`);
+
 		// Update the business owner stats
 		await largeBizOwner.update({
 			avgRating: 4.95,
 			totalReviews: 250, // Shows historical review count
 		});
+
+		// Set BusinessVolumeStats to 70 for current month (qualifies for large business tier)
+		const now = new Date();
+		const currentMonth = now.getMonth() + 1;
+		const currentYear = now.getFullYear();
+
+		await BusinessVolumeStats.upsert({
+			businessOwnerId: largeBizOwner.id,
+			month: currentMonth,
+			year: currentYear,
+			completedCleanings: 70,
+			totalRevenue: 70 * 150 * 100, // 70 jobs at $150 avg
+			lastUpdatedAt: now,
+		});
+		console.log("  - Set BusinessVolumeStats to 70 cleanings for current month");
 
 		console.log("  - Large business owner setup complete (qualifies for 7% platform fee)");
 	}
@@ -2449,6 +2727,15 @@ async function createDemoAccounts() {
 					// Create a home for each
 					const bedrooms = 2 + (i % 4);
 					const bathrooms = 1 + (i % 3);
+					// Coordinates for various LA area cities
+					const prefCityCoords = [
+						{ lat: 34.0522, lng: -118.2437 }, // Los Angeles
+						{ lat: 34.1478, lng: -118.1445 }, // Pasadena
+						{ lat: 34.0195, lng: -118.4912 }, // Santa Monica
+						{ lat: 34.1425, lng: -118.2551 }, // Glendale
+						{ lat: 34.1808, lng: -118.3090 }, // Burbank
+					];
+					const prefCoords = prefCityCoords[i % 5];
 					const home = await UserHomes.create({
 						userId: homeowner.id,
 						nickName: `${preferredHomeownerNames[i].first}'s Residence`,
@@ -2463,6 +2750,8 @@ async function createDemoAccounts() {
 						usePreferredCleaners: true,
 						contact: `555-${String(300 + i).padStart(3, '0')}-0000`,
 						timeToBeCompleted: String(2 + (bedrooms > 3 ? 1 : 0)),
+						latitude: prefCoords.lat + (i * 0.003),
+						longitude: prefCoords.lng + (i * 0.003),
 					});
 
 					createdPreferredHomes.push(home);

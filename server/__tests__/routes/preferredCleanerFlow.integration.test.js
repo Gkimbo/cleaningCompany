@@ -30,6 +30,11 @@ jest.mock("../../services/ReviewsClass", () => ({
   getPendingReviewsForUser: jest.fn().mockResolvedValue([]),
 }));
 
+// Mock PreferredCleanerService to allow preferred cleaner creation
+jest.mock("../../services/PreferredCleanerService", () => ({
+  isBusinessCleanerForHome: jest.fn().mockResolvedValue(false),
+}));
+
 // Mock Stripe
 jest.mock("stripe", () => {
   return jest.fn().mockImplementation(() => ({

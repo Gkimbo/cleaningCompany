@@ -38,7 +38,15 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
   const [activePhotoTab, setActivePhotoTab] = useState("before");
   const [photoSize, setPhotoSize] = useState(1); // 0.5 to 1.5 scale
   const [expandedRooms, setExpandedRooms] = useState({});
+  const [expandedCleaners, setExpandedCleaners] = useState({});
   const alertTimerRef = useRef(null);
+  // For multi-cleaner: track which cleaner we're reviewing
+  const [reviewingCleaner, setReviewingCleaner] = useState(null);
+  const [reviewedCleanerIds, setReviewedCleanerIds] = useState(new Set());
+  // Check if this is a multi-cleaner job
+  const isMultiCleanerJob = appointment.isMultiCleanerJob ||
+    (appointment.cleanersNeeded && appointment.cleanersNeeded > 1) ||
+    (assignedCleaners.length > 1);
 
   useEffect(() => {
     fetchCleaningStatus();
@@ -152,21 +160,49 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
   const handleReviewComplete = (data) => {
     setShowReviewModal(false);
 
-    // Update parent state immediately to hide review button
-    if (onReviewSubmitted) {
-      onReviewSubmitted(appointment.id);
+    // Track which cleaner was reviewed for multi-cleaner jobs
+    if (isMultiCleanerJob && reviewingCleaner) {
+      setReviewedCleanerIds((prev) => new Set([...prev, reviewingCleaner.id]));
+      setReviewingCleaner(null);
+
+      // Only call onReviewSubmitted when ALL cleaners have been reviewed
+      const newReviewedCount = reviewedCleanerIds.size + 1;
+      if (newReviewedCount >= assignedCleaners.length && onReviewSubmitted) {
+        onReviewSubmitted(appointment.id);
+      }
+    } else {
+      // Solo job - update parent state immediately
+      if (onReviewSubmitted) {
+        onReviewSubmitted(appointment.id);
+      }
     }
 
     // Use setTimeout to ensure the modal is fully closed before showing the alert
     alertTimerRef.current = setTimeout(() => {
       const bothReviewed = data?.status?.bothReviewed;
-      Alert.alert(
-        "Thank you!",
-        bothReviewed
-          ? "Both reviews are now visible to each other."
-          : "Your review has been submitted. It will become visible once your cleaner submits their review."
-      );
+      if (isMultiCleanerJob) {
+        const remaining = assignedCleaners.length - (reviewedCleanerIds.size + 1);
+        Alert.alert(
+          "Thank you!",
+          remaining > 0
+            ? `Review submitted! You have ${remaining} more cleaner${remaining > 1 ? "s" : ""} to review.`
+            : "All cleaners have been reviewed. Thank you!"
+        );
+      } else {
+        Alert.alert(
+          "Thank you!",
+          bothReviewed
+            ? "Both reviews are now visible to each other."
+            : "Your review has been submitted. It will become visible once your cleaner submits their review."
+        );
+      }
     }, 300);
+  };
+
+  // Helper to start reviewing a specific cleaner
+  const startReviewForCleaner = (cleaner) => {
+    setReviewingCleaner(cleaner);
+    setShowReviewModal(true);
   };
 
   const fetchPhotos = async () => {
@@ -232,10 +268,36 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
     return { grouped, sortedRooms };
   };
 
+  // Group photos by cleaner for multi-cleaner jobs
+  const groupPhotosByCleaner = (photoList) => {
+    const grouped = {};
+    photoList.forEach((photo) => {
+      const cleanerId = photo.cleanerId || "unknown";
+      if (!grouped[cleanerId]) {
+        grouped[cleanerId] = [];
+      }
+      grouped[cleanerId].push(photo);
+    });
+    return grouped;
+  };
+
+  // Get cleaner name by ID
+  const getCleanerName = (cleanerId) => {
+    const cleaner = assignedCleaners.find((c) => c.id === cleanerId || c.id === parseInt(cleanerId, 10));
+    return cleaner?.username || `Cleaner ${cleanerId}`;
+  };
+
   const toggleRoomExpanded = (room) => {
     setExpandedRooms((prev) => ({
       ...prev,
       [room]: !prev[room],
+    }));
+  };
+
+  const toggleCleanerExpanded = (cleanerId) => {
+    setExpandedCleaners((prev) => ({
+      ...prev,
+      [cleanerId]: !prev[cleanerId],
     }));
   };
 
@@ -404,22 +466,54 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
                 <Text style={styles.viewPhotosButtonText}>View Photos</Text>
               </Pressable>
 
-              {/* Review button */}
-              {!appointment.hasClientReview && (
-                <Pressable
-                  style={styles.reviewButton}
-                  onPress={() => setShowReviewModal(true)}
-                >
-                  <Icon name="star" size={16} color={colors.neutral[0]} />
-                  <Text style={styles.reviewButtonText}>Leave a Review</Text>
-                </Pressable>
-              )}
-
-              {appointment.hasClientReview && (
-                <View style={styles.reviewedBadge}>
-                  <Icon name="check-circle" size={14} color={colors.success[600]} />
-                  <Text style={styles.reviewedText}>Review Submitted</Text>
+              {/* Review buttons - different for multi-cleaner vs solo */}
+              {isMultiCleanerJob ? (
+                // Multi-cleaner: Show review button for each cleaner
+                <View style={styles.multiCleanerReviews}>
+                  <Text style={styles.multiCleanerReviewsTitle}>Review Your Cleaners:</Text>
+                  {assignedCleaners.map((cleaner) => {
+                    const isReviewed = reviewedCleanerIds.has(cleaner.id);
+                    return (
+                      <View key={cleaner.id} style={styles.cleanerReviewRow}>
+                        <Text style={styles.cleanerReviewName}>{cleaner.username || "Cleaner"}</Text>
+                        {isReviewed ? (
+                          <View style={styles.cleanerReviewedBadge}>
+                            <Icon name="check-circle" size={12} color={colors.success[600]} />
+                            <Text style={styles.cleanerReviewedText}>Reviewed</Text>
+                          </View>
+                        ) : (
+                          <Pressable
+                            style={styles.cleanerReviewButton}
+                            onPress={() => startReviewForCleaner(cleaner)}
+                          >
+                            <Icon name="star" size={12} color={colors.neutral[0]} />
+                            <Text style={styles.cleanerReviewButtonText}>Review</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
+              ) : (
+                // Solo job: Single review button
+                <>
+                  {!appointment.hasClientReview && (
+                    <Pressable
+                      style={styles.reviewButton}
+                      onPress={() => setShowReviewModal(true)}
+                    >
+                      <Icon name="star" size={16} color={colors.neutral[0]} />
+                      <Text style={styles.reviewButtonText}>Leave a Review</Text>
+                    </Pressable>
+                  )}
+
+                  {appointment.hasClientReview && (
+                    <View style={styles.reviewedBadge}>
+                      <Icon name="check-circle" size={14} color={colors.success[600]} />
+                      <Text style={styles.reviewedText}>Review Submitted</Text>
+                    </View>
+                  )}
+                </>
               )}
             </View>
           )}
@@ -435,21 +529,36 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
         <View style={styles.reviewModalContainer}>
           <View style={styles.reviewModalHeader}>
             <TouchableOpacity
-              onPress={() => setShowReviewModal(false)}
+              onPress={() => {
+                setShowReviewModal(false);
+                setReviewingCleaner(null);
+              }}
               style={styles.reviewModalCloseButton}
             >
               <Icon name="times" size={20} color={colors.text.secondary} />
             </TouchableOpacity>
-            <Text style={styles.reviewModalTitle}>Review Your Cleaner</Text>
+            <Text style={styles.reviewModalTitle}>
+              {isMultiCleanerJob && reviewingCleaner
+                ? `Review ${reviewingCleaner.username || "Cleaner"}`
+                : "Review Your Cleaner"}
+            </Text>
             <View style={styles.reviewModalCloseButton} />
           </View>
           <ScrollView style={styles.reviewModalContent}>
             <MultiAspectReviewForm
               state={state}
               appointmentId={appointment.id}
-              userId={assignedCleaners[0]?.id || parseInt(appointment.employeesAssigned?.[0], 10)}
+              userId={
+                isMultiCleanerJob && reviewingCleaner
+                  ? reviewingCleaner.id
+                  : assignedCleaners[0]?.id || parseInt(appointment.employeesAssigned?.[0], 10)
+              }
               reviewType="homeowner_to_cleaner"
-              revieweeName={assignedCleaners[0]?.username || "Your Cleaner"}
+              revieweeName={
+                isMultiCleanerJob && reviewingCleaner
+                  ? reviewingCleaner.username || "Cleaner"
+                  : assignedCleaners[0]?.username || "Your Cleaner"
+              }
               onComplete={handleReviewComplete}
             />
           </ScrollView>
@@ -568,6 +677,112 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
                     );
                   }
 
+                  // For multi-cleaner jobs, group by cleaner first
+                  if (isMultiCleanerJob && assignedCleaners.length > 1) {
+                    const photosByCleaner = groupPhotosByCleaner(currentPhotos);
+                    const cleanerIds = Object.keys(photosByCleaner);
+
+                    return cleanerIds.map((cleanerId) => {
+                      const cleanerPhotos = photosByCleaner[cleanerId];
+                      const cleanerName = getCleanerName(cleanerId);
+                      const isCleanerExpanded = expandedCleaners[cleanerId] !== false;
+                      const { grouped, sortedRooms } = groupPhotosByRoom(cleanerPhotos);
+
+                      return (
+                        <View key={cleanerId} style={styles.cleanerPhotoSection}>
+                          <Pressable
+                            style={styles.cleanerPhotoHeader}
+                            onPress={() => toggleCleanerExpanded(cleanerId)}
+                          >
+                            <View style={styles.cleanerPhotoHeaderLeft}>
+                              <Icon
+                                name={isCleanerExpanded ? "chevron-down" : "chevron-right"}
+                                size={14}
+                                color={colors.text.secondary}
+                              />
+                              <Icon name="user" size={14} color={colors.primary[600]} />
+                              <Text style={styles.cleanerPhotoTitle}>{cleanerName}</Text>
+                              <View style={styles.cleanerPhotoCount}>
+                                <Text style={styles.cleanerPhotoCountText}>{cleanerPhotos.length} photos</Text>
+                              </View>
+                            </View>
+                          </Pressable>
+
+                          {isCleanerExpanded && sortedRooms.map((room) => {
+                            const roomPhotos = grouped[room];
+                            const roomKey = `${cleanerId}-${room}`;
+                            const isRoomExpanded = expandedRooms[roomKey] !== false;
+
+                            return (
+                              <View key={roomKey} style={styles.roomSection}>
+                                <Pressable
+                                  style={styles.roomHeader}
+                                  onPress={() => toggleRoomExpanded(roomKey)}
+                                >
+                                  <View style={styles.roomHeaderLeft}>
+                                    <Icon
+                                      name={isRoomExpanded ? "chevron-down" : "chevron-right"}
+                                      size={14}
+                                      color={colors.text.secondary}
+                                    />
+                                    <Text style={styles.roomTitle}>{room}</Text>
+                                    <View style={styles.roomCount}>
+                                      <Text style={styles.roomCountText}>{roomPhotos.length}</Text>
+                                    </View>
+                                  </View>
+                                </Pressable>
+
+                                {isRoomExpanded && (
+                                  <View style={[
+                                    styles.roomPhotos,
+                                    photoSize < 0.7 && styles.roomPhotosGrid
+                                  ]}>
+                                    {roomPhotos.map((photo, index) => (
+                                      <View
+                                        key={photo.id || index}
+                                        style={[
+                                          styles.photoItem,
+                                          {
+                                            width: photoSize < 0.7
+                                              ? (screenWidth - spacing.md * 4 - spacing.sm) / 2
+                                              : getPhotoWidth(),
+                                            alignSelf: photoSize >= 0.7 ? 'center' : 'auto'
+                                          }
+                                        ]}
+                                      >
+                                        <Image
+                                          source={{ uri: photo.photoData }}
+                                          style={[
+                                            styles.photoImage,
+                                            {
+                                              width: '100%',
+                                              height: photoSize < 0.7
+                                                ? (screenWidth - spacing.md * 4 - spacing.sm) / 2
+                                                : getPhotoWidth()
+                                            }
+                                          ]}
+                                          resizeMode="cover"
+                                        />
+                                        {roomPhotos.length > 1 && (
+                                          <View style={styles.photoIndex}>
+                                            <Text style={styles.photoIndexText}>
+                                              {index + 1}/{roomPhotos.length}
+                                            </Text>
+                                          </View>
+                                        )}
+                                      </View>
+                                    ))}
+                                  </View>
+                                )}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      );
+                    });
+                  }
+
+                  // Solo job: group by room only
                   const { grouped, sortedRooms } = groupPhotosByRoom(currentPhotos);
 
                   return sortedRooms.map((room) => {
@@ -854,6 +1069,99 @@ const styles = StyleSheet.create({
     color: colors.success[700],
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
+  },
+  // Multi-cleaner review styles
+  multiCleanerReviews: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  multiCleanerReviewsTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  cleanerReviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  cleanerReviewName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  cleanerReviewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.warning[500],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+  },
+  cleanerReviewButtonText: {
+    color: colors.neutral[0],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  cleanerReviewedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  cleanerReviewedText: {
+    color: colors.success[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  // Multi-cleaner photo grouping styles
+  cleanerPhotoSection: {
+    marginBottom: spacing.lg,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  cleanerPhotoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.md,
+    backgroundColor: colors.primary[50],
+  },
+  cleanerPhotoHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  cleanerPhotoTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  cleanerPhotoCount: {
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginLeft: spacing.sm,
+  },
+  cleanerPhotoCountText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[700],
   },
   reviewModalContainer: {
     flex: 1,

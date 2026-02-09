@@ -412,7 +412,7 @@ class CancellationAuditService {
 	/**
 	 * Log appeal resolved
 	 */
-	static async logAppealResolved(appointmentId, appealId, reviewerId, decision, resolution, req) {
+	static async logAppealResolved(appointmentId, appealId, reviewerId, decision, resolution, req, caseNumber = null) {
 		return this.log({
 			appointmentId,
 			appealId,
@@ -422,6 +422,7 @@ class CancellationAuditService {
 			eventData: {
 				decision,
 				resolution,
+				caseNumber,
 			},
 			req,
 		});

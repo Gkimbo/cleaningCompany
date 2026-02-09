@@ -63,7 +63,14 @@ const RequestedTile = ({
   const formatTimeWindow = (time) => {
     if (!time) return null;
     if (time.toLowerCase() === "anytime") return "Anytime";
-    return time;
+    // Format "10-3" → "10am - 3pm"
+    const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+    if (!match) return time;
+    const startHour = parseInt(match[1], 10);
+    const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+    const endHour = parseInt(match[3], 10);
+    const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+    return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
   };
 
   const needsLinens = bringSheets === "yes" || bringTowels === "yes";
@@ -106,9 +113,9 @@ const RequestedTile = ({
         <Text style={styles.pendingBadge}>Awaiting Approval</Text>
       </View>
 
-      {/* Address */}
+      {/* Location */}
       <Text style={styles.address}>
-        {home.address || "Loading..."}, {home.city}
+        {home.city || "Loading..."}, {home.state}
       </Text>
 
       {/* Date */}

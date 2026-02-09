@@ -4,6 +4,7 @@
  */
 
 const crypto = require("crypto");
+const HomeClass = require("./HomeClass");
 
 class InvitationService {
   /**
@@ -243,6 +244,14 @@ class InvitationService {
     // Create the home if address info was provided
     let home = null;
     if (address && address.address) {
+      // Geocode the address to get coordinates for distance calculations
+      const { latitude, longitude } = await HomeClass.geocodeAddress(
+        address.address,
+        address.city || "",
+        address.state || "",
+        address.zipcode || ""
+      );
+
       home = await UserHomes.create({
         userId: user.id,
         nickName: address.nickName || "Home",
@@ -259,6 +268,8 @@ class InvitationService {
         specialNotes: cleanerClient.invitedNotes || null,
         // Mark as incomplete - client needs to finish setup (access info, linens)
         isSetupComplete: false,
+        latitude,
+        longitude,
       });
     }
 

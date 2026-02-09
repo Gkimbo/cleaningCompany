@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
 import PaymentSetupBanner from "./PaymentSetupBanner";
+import CreateSupportTicketModal from "../conflicts/modals/CreateSupportTicketModal";
 import {
   colors,
   spacing,
@@ -143,11 +144,89 @@ const SectionHeader = ({ title, actionLabel, onAction, count }) => (
   </View>
 );
 
+// Elite Partner Status Card Component
+const ElitePartnerStatusCard = ({ qualification, onPress }) => {
+  if (!qualification) return null;
+
+  const { currentCleanings, threshold, cleaningsNeeded, qualifies } = qualification;
+  const progress = Math.min(100, Math.round((currentCleanings / threshold) * 100));
+
+  if (qualifies) {
+    // Qualified - Celebratory Card
+    return (
+      <Pressable style={styles.largeBusinessCard} onPress={onPress}>
+        <View style={styles.largeBusinessHeader}>
+          <View style={styles.largeBusinessIconContainer}>
+            <Icon name="trophy" size={24} color={colors.warning[500]} />
+          </View>
+          <View style={styles.largeBusinessBadge}>
+            <Text style={styles.largeBusinessBadgeText}>ELITE PARTNER</Text>
+          </View>
+        </View>
+        <Text style={styles.largeBusinessTitle}>You're crushing it!</Text>
+        <Text style={styles.largeBusinessSubtitle}>
+          {currentCleanings} cleanings this month
+        </Text>
+        <View style={styles.largeBusinessPerks}>
+          <View style={styles.perkItem}>
+            <Icon name="star" size={12} color={colors.warning[500]} />
+            <Text style={styles.perkText}>7% Platform Fee</Text>
+          </View>
+          <View style={styles.perkItem}>
+            <Icon name="star" size={12} color={colors.warning[500]} />
+            <Text style={styles.perkText}>Premium Analytics</Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  }
+
+  // Not yet qualified - Progress Card
+  const isHalfway = currentCleanings >= threshold / 2;
+
+  return (
+    <Pressable style={styles.elitePartnerCard} onPress={onPress}>
+      <View style={styles.elitePartnerHeader}>
+        <View style={styles.elitePartnerIconContainer}>
+          <Icon name="diamond" size={18} color={colors.primary[600]} />
+        </View>
+        <View style={styles.elitePartnerTitleContainer}>
+          <Text style={styles.elitePartnerTitle}>Become an Elite Partner</Text>
+          <Text style={styles.elitePartnerSubtitle}>Unlock premium features & lower fees</Text>
+        </View>
+        <Icon name="chevron-right" size={16} color={colors.neutral[400]} />
+      </View>
+
+      <View style={styles.elitePartnerProgressSection}>
+        <View style={styles.elitePartnerProgressHeader}>
+          <Text style={styles.elitePartnerProgressLabel}>
+            {currentCleanings} of {threshold} cleanings
+          </Text>
+          <Text style={styles.elitePartnerProgressPercent}>{progress}%</Text>
+        </View>
+        <View style={styles.progressBarContainer}>
+          <View style={[styles.progressBar, { width: `${progress}%` }]} />
+        </View>
+        {isHalfway ? (
+          <Text style={styles.elitePartnerProgressHint}>
+            You're making great progress! {cleaningsNeeded} more to go
+          </Text>
+        ) : (
+          <Text style={styles.elitePartnerProgressHintSubtle}>
+            {cleaningsNeeded} more cleanings needed this month
+          </Text>
+        )}
+      </View>
+    </Pressable>
+  );
+};
+
 // Main Dashboard Component
 const BusinessOwnerDashboard = ({ state }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
   const [dashboardData, setDashboardData] = useState({
     overview: {},
     employees: [],
@@ -156,6 +235,7 @@ const BusinessOwnerDashboard = ({ state }) => {
     unassignedJobs: [],
     pendingPayouts: { count: 0, amount: 0 },
   });
+  const [analyticsAccess, setAnalyticsAccess] = useState(null);
   const [error, setError] = useState(null);
 
   const fetchDashboard = async (isRefresh = false) => {
@@ -167,7 +247,7 @@ const BusinessOwnerDashboard = ({ state }) => {
     setError(null);
 
     try {
-      const [dashboardResult, payoutsResult, calendarResult] = await Promise.all([
+      const [dashboardResult, payoutsResult, calendarResult, accessResult] = await Promise.all([
         BusinessOwnerService.getDashboard(state.currentUser.token),
         BusinessOwnerService.getPendingPayouts(state.currentUser.token),
         BusinessOwnerService.getCalendar(
@@ -175,7 +255,13 @@ const BusinessOwnerDashboard = ({ state }) => {
           new Date().getMonth() + 1,
           new Date().getFullYear()
         ),
+        BusinessOwnerService.getAnalyticsAccess(state.currentUser.token),
       ]);
+
+      // Set analytics access for Elite Partner status
+      if (accessResult && !accessResult.error) {
+        setAnalyticsAccess(accessResult);
+      }
 
       // Process jobs for today and tomorrow
       const today = new Date();
@@ -337,6 +423,12 @@ const BusinessOwnerDashboard = ({ state }) => {
         />
       </View>
 
+      {/* Elite Partner Status Card */}
+      <ElitePartnerStatusCard
+        qualification={analyticsAccess?.qualification}
+        onPress={() => navigate("/business-owner/analytics")}
+      />
+
       {/* Analytics Banner */}
       <Pressable
         style={styles.analyticsBanner}
@@ -383,6 +475,12 @@ const BusinessOwnerDashboard = ({ state }) => {
             onPress={() => navigate("/business-owner/payroll")}
             color={colors.warning[600]}
             badge={pendingPayouts.count}
+          />
+          <QuickAction
+            icon="flag"
+            label="New Ticket"
+            onPress={() => setShowCreateTicketModal(true)}
+            color={colors.error[600]}
           />
         </View>
       </View>
@@ -517,6 +615,17 @@ const BusinessOwnerDashboard = ({ state }) => {
       )}
 
       <View style={styles.bottomPadding} />
+
+      {/* Create Support Ticket Modal */}
+      <CreateSupportTicketModal
+        visible={showCreateTicketModal}
+        onClose={() => setShowCreateTicketModal(false)}
+        onSuccess={() => {
+          setShowCreateTicketModal(false);
+          fetchDashboard(true);
+        }}
+        token={state.currentUser.token}
+      />
     </ScrollView>
   );
 };
@@ -700,10 +809,12 @@ const styles = StyleSheet.create({
   quickActions: {
     flexDirection: "row",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: spacing.sm,
   },
   quickAction: {
     alignItems: "center",
-    width: "23%",
+    width: "18%",
   },
   quickActionIcon: {
     width: 56,
@@ -944,6 +1055,147 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: spacing["4xl"],
+  },
+  // Elite Partner Status Card Styles
+  largeBusinessCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    backgroundColor: colors.success[600],
+    ...shadows.md,
+  },
+  largeBusinessHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  largeBusinessIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  largeBusinessBadge: {
+    marginLeft: spacing.md,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+  },
+  largeBusinessBadgeText: {
+    color: "#fff",
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    letterSpacing: 1,
+  },
+  largeBusinessTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: "#fff",
+    marginTop: spacing.sm,
+  },
+  largeBusinessSubtitle: {
+    fontSize: typography.fontSize.base,
+    color: "rgba(255, 255, 255, 0.9)",
+    marginTop: spacing.xs,
+  },
+  largeBusinessPerks: {
+    flexDirection: "row",
+    marginTop: spacing.md,
+    gap: spacing.lg,
+  },
+  perkItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  perkText: {
+    color: "#fff",
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  // Elite Partner Progress Card Styles (not yet qualified)
+  elitePartnerCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    backgroundColor: colors.background.primary,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+    ...shadows.sm,
+  },
+  elitePartnerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  elitePartnerIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  elitePartnerTitleContainer: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  elitePartnerTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  elitePartnerSubtitle: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: 1,
+  },
+  elitePartnerProgressSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  elitePartnerProgressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  elitePartnerProgressLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  elitePartnerProgressPercent: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  progressBarContainer: {
+    height: 6,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    backgroundColor: colors.primary[500],
+    borderRadius: radius.full,
+  },
+  elitePartnerProgressHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[600],
+    marginTop: spacing.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  elitePartnerProgressHintSubtle: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: spacing.sm,
   },
 });
 

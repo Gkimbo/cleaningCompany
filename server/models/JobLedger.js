@@ -37,7 +37,9 @@ module.exports = (sequelize, DataTypes) => {
 				"manual_adjustment",
 				"stripe_fee",
 				"dispute_chargeback",
-				"dispute_reversal"
+				"dispute_reversal",
+				"conflict_refund",
+				"conflict_payout"
 			),
 			allowNull: false,
 		},

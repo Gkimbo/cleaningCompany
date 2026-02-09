@@ -401,8 +401,9 @@ class RoomAssignmentService {
 
   /**
    * Rebalance room assignments after a cleaner dropout
+   * Distributes unassigned rooms evenly among remaining cleaners
    * @param {number} multiCleanerJobId - Job ID
-   * @returns {Promise<Array>} Updated assignments
+   * @returns {Promise<Object>} Rebalance result with updated assignments
    */
   static async rebalanceAfterDropout(multiCleanerJobId) {
     const { CleanerRoomAssignment, CleanerJobCompletion } = require("../models");
@@ -417,7 +418,7 @@ class RoomAssignmentService {
 
     if (activeCompletions.length === 0) {
       // No cleaners left - nothing to rebalance
-      return [];
+      return { assignments: [], rebalanced: false, reason: "no_cleaners" };
     }
 
     // Get unassigned rooms (from dropped cleaner)
@@ -430,12 +431,17 @@ class RoomAssignmentService {
     });
 
     if (unassignedRooms.length === 0) {
-      return []; // Nothing to reassign
+      const assignments = await CleanerRoomAssignment.findAll({
+        where: { multiCleanerJobId },
+      });
+      return { assignments, rebalanced: false, reason: "no_unassigned_rooms" };
     }
 
-    // If only one cleaner remains, assign all rooms to them
+    const remainingCleanerIds = activeCompletions.map((c) => c.cleanerId);
+
     if (activeCompletions.length === 1) {
-      const remainingCleanerId = activeCompletions[0].cleanerId;
+      // Only one cleaner remains - assign all rooms to them
+      const remainingCleanerId = remainingCleanerIds[0];
       await CleanerRoomAssignment.update(
         { cleanerId: remainingCleanerId },
         {
@@ -445,12 +451,55 @@ class RoomAssignmentService {
           },
         }
       );
+    } else {
+      // Multiple cleaners remain - distribute rooms evenly
+      // First, get current room counts per cleaner
+      const roomCounts = {};
+      for (const cleanerId of remainingCleanerIds) {
+        const count = await CleanerRoomAssignment.count({
+          where: { multiCleanerJobId, cleanerId },
+        });
+        roomCounts[cleanerId] = count;
+      }
+
+      // Assign unassigned rooms to cleaners with fewest rooms (round-robin style)
+      for (const room of unassignedRooms) {
+        // Find cleaner with minimum rooms
+        const minCleanerId = remainingCleanerIds.reduce((minId, id) => {
+          return roomCounts[id] < roomCounts[minId] ? id : minId;
+        }, remainingCleanerIds[0]);
+
+        await room.update({ cleanerId: minCleanerId });
+        roomCounts[minCleanerId]++;
+      }
     }
 
-    // Return updated assignments
-    return CleanerRoomAssignment.findAll({
+    // Return updated assignments with rebalance info
+    const assignments = await CleanerRoomAssignment.findAll({
       where: { multiCleanerJobId },
     });
+
+    return {
+      assignments,
+      rebalanced: true,
+      unassignedCount: unassignedRooms.length,
+      remainingCleaners: activeCompletions.length,
+      roomsPerCleaner: this.getRoomCountsPerCleaner(assignments, remainingCleanerIds),
+    };
+  }
+
+  /**
+   * Get room counts per cleaner from assignments
+   * @param {Array} assignments - Room assignments
+   * @param {Array} cleanerIds - Cleaner IDs
+   * @returns {Object} Map of cleanerId to room count
+   */
+  static getRoomCountsPerCleaner(assignments, cleanerIds) {
+    const counts = {};
+    for (const cleanerId of cleanerIds) {
+      counts[cleanerId] = assignments.filter((a) => a.cleanerId === cleanerId).length;
+    }
+    return counts;
   }
 
   /**

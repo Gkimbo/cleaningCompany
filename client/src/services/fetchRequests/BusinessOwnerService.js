@@ -1249,6 +1249,125 @@ class BusinessOwnerService {
       return { jobs: [] };
     }
   }
+
+  // =====================================
+  // Employee Bonus Methods
+  // =====================================
+
+  /**
+   * Create a bonus for an employee
+   */
+  static async createBonus(token, bonusData) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/bonuses`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bonusData),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error creating bonus:", error);
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Get all bonuses (with optional filters)
+   */
+  static async getBonuses(token, filters = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (filters.status) params.append("status", filters.status);
+      if (filters.employeeId) params.append("employeeId", filters.employeeId);
+      if (filters.limit) params.append("limit", filters.limit);
+
+      const url = `${API_BASE}/business-owner/bonuses${params.toString() ? `?${params}` : ""}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching bonuses:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get pending bonuses
+   */
+  static async getPendingBonuses(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/bonuses/pending`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching pending bonuses:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get bonus summary stats
+   */
+  static async getBonusSummary(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/bonuses/summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching bonus summary:", error);
+      return { pending: { total: 0, count: 0 }, paid: { total: 0, count: 0 } };
+    }
+  }
+
+  /**
+   * Mark a bonus as paid
+   */
+  static async markBonusPaid(token, bonusId, note = null) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/bonuses/${bonusId}/paid`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ note }),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error marking bonus as paid:", error);
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Cancel a pending bonus
+   */
+  static async cancelBonus(token, bonusId) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/bonuses/${bonusId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error cancelling bonus:", error);
+      return { error: error.message };
+    }
+  }
 }
 
 export default BusinessOwnerService;

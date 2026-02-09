@@ -91,6 +91,8 @@ cleanerApprovalRouter.get("/my-requests", async (req, res) => {
                     zipcode: r.appointment.home.zipcode,
                     numBeds: r.appointment.home.numBeds,
                     numBaths: r.appointment.home.numBaths,
+                    latitude: r.appointment.home.latitude,
+                    longitude: r.appointment.home.longitude,
                   }
                 : null,
             }

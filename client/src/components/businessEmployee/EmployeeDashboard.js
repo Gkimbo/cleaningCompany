@@ -300,10 +300,10 @@ const EmployeeDashboard = ({ state }) => {
   // Get today's jobs
   const today = new Date().toDateString();
   const todaysJobs = jobs.filter(
-    (job) => new Date(job.appointment?.date).toDateString() === today
+    (job) => new Date(job.appointment?.date + "T00:00:00").toDateString() === today
   );
   const upcomingJobs = jobs.filter(
-    (job) => new Date(job.appointment?.date).toDateString() !== today
+    (job) => new Date(job.appointment?.date + "T00:00:00").toDateString() !== today
   );
 
   // Count in-progress jobs

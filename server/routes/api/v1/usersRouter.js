@@ -21,6 +21,7 @@ const UserInfo = require("../../../services/UserInfoClass");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const ReferralService = require("../../../services/ReferralService");
+const MultiCleanerService = require("../../../services/MultiCleanerService");
 const { Op } = require("sequelize");
 
 const secretKey = process.env.SESSION_SECRET;
@@ -1075,19 +1076,18 @@ usersRouter.get("/appointments/employee", async (req, res) => {
       requestsForCleaning.map((req) => req.dataValues.appointmentId)
     );
 
-    // Get all partially filled or filled multi-cleaner jobs
-    // These should be excluded from available jobs list for edge large homes
-    const partiallyFilledJobs = await MultiCleanerJob.findAll({
-      where: {
-        status: { [Op.in]: ["partially_filled", "filled"] },
-      },
+    // Get ALL multi-cleaner jobs (any status) - these should be excluded from available jobs
+    // They will appear in the multi-cleaner section instead
+    const multiCleanerJobs = await MultiCleanerJob.findAll({
       attributes: ["appointmentId"],
     });
-    const partiallyFilledAppointmentIds = new Set(
-      partiallyFilledJobs.map((j) => j.appointmentId)
+    const multiCleanerAppointmentIds = new Set(
+      multiCleanerJobs.map((j) => j.appointmentId)
     );
 
-    const filteredAppointments = filteredByDemoStatus.filter((appointment) => {
+    // Filter appointments and exclude large homes that require multi-cleaners
+    const filteredAppointments = [];
+    for (const appointment of filteredByDemoStatus) {
       const assignedEmployees = appointment.dataValues.employeesAssigned;
       const isNotRequested = !requestedAppointmentIds.has(appointment.dataValues.id);
       const isAvailable =
@@ -1095,12 +1095,34 @@ usersRouter.get("/appointments/employee", async (req, res) => {
         assignedEmployees.length === 0 ||
         assignedEmployees.includes(String(userId));
 
-      // Exclude appointments that are partially filled in multi-cleaner (already have cleaners joined)
-      // These will only show in the multi-cleaner section
-      const isNotPartiallyFilled = !partiallyFilledAppointmentIds.has(appointment.dataValues.id);
+      // Exclude appointments that have a multi-cleaner job
+      const hasMultiCleanerJob = multiCleanerAppointmentIds.has(appointment.dataValues.id);
+      if (hasMultiCleanerJob) {
+        continue;
+      }
 
-      return isNotRequested && isAvailable && isNotPartiallyFilled;
-    });
+      // Check if this is a large home that requires multi-cleaners
+      const home = appointment.home;
+      if (home) {
+        const numBeds = parseFloat(home.numBeds) || 0;
+        const numBaths = parseFloat(home.numBaths) || 0;
+        const isLargeHome = await MultiCleanerService.isLargeHome(numBeds, numBaths);
+
+        if (isLargeHome) {
+          // Check if multi-cleaner is required (not an edge case)
+          const multiCleanerRequired = await MultiCleanerService.isMultiCleanerRequired(numBeds, numBaths);
+          if (multiCleanerRequired) {
+            // This is a clearly large home - should only appear in multi-cleaner section
+            continue;
+          }
+          // Edge large home - can still appear in available jobs (cleaner can choose solo)
+        }
+      }
+
+      if (isNotRequested && isAvailable) {
+        filteredAppointments.push(appointment);
+      }
+    }
 
     // Get appointments for pending requests only (not approved/denied)
     const pendingRequestIds = requestsForCleaning

@@ -125,7 +125,7 @@ describe("BusinessEmployeeSerializer", () => {
       const result = BusinessEmployeeSerializer.serializeOne(mockEmployee);
 
       expect(result.defaultHourlyRate).toBe(2500);
-      expect(result.formattedHourlyRate).toBe("$25.00");
+      expect(result.formattedHourlyRate).toBe("$25.00/hr");
     });
 
     it("should not include formattedHourlyRate when rate is not set", () => {

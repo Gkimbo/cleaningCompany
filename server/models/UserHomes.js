@@ -168,6 +168,18 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			// [{type: 'bedroom', label: 'Master Bedroom', squareFt: 300}, ...]
 		},
+		// Tenant present tracking
+		tenantPresentIncidentCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of tenant present incidents at this home",
+		},
+		lastTenantPresentIncidentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When last tenant present incident occurred",
+		},
 	});
 
 	// Helper function to encrypt PII fields

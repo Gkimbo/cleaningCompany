@@ -11,6 +11,7 @@ const {
   UserPendingRequests,
   MultiCleanerJob,
   CleanerJoinRequest,
+  CleanerJobCompletion,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
@@ -113,6 +114,30 @@ userInfoRouter.get("/", async (req, res) => {
       pendingApprovalCounts[req.appointmentId] = (pendingApprovalCounts[req.appointmentId] || 0) + 1;
     });
 
+    // Get multi-cleaner job completion status for appointments
+    const multiCleanerAppointmentIds = user.appointments
+      .filter((apt) => apt.isMultiCleanerJob)
+      .map((apt) => apt.id);
+
+    const cleanerJobCompletions = multiCleanerAppointmentIds.length > 0
+      ? await CleanerJobCompletion.findAll({
+          where: {
+            appointmentId: { [Op.in]: multiCleanerAppointmentIds },
+            status: { [Op.notIn]: ["dropped_out", "no_show"] },
+          },
+          attributes: ["appointmentId", "cleanerId", "completionStatus", "completionSubmittedAt"],
+        })
+      : [];
+
+    // Group completions by appointment ID
+    const completionsByAppointment = {};
+    cleanerJobCompletions.forEach((completion) => {
+      if (!completionsByAppointment[completion.appointmentId]) {
+        completionsByAppointment[completion.appointmentId] = [];
+      }
+      completionsByAppointment[completion.appointmentId].push(completion);
+    });
+
     // Add hasClientReview, pendingRequestCount, and multi-cleaner data to each appointment
     const appointmentsWithReviewStatus = user.appointments.map((apt) => {
       const mcJob = multiCleanerJobsByAppointment[apt.id];
@@ -120,6 +145,16 @@ userInfoRouter.get("/", async (req, res) => {
       // Use appointment's empoyeesNeeded (calculated at booking with time window factored in)
       // Fall back to 1 if not set
       const appointmentNeeds = apt.empoyeesNeeded || 1;
+
+      // Get multi-cleaner completion status
+      const completions = completionsByAppointment[apt.id] || [];
+      const pendingCompletionApprovals = completions.filter(
+        (c) => c.completionStatus === "submitted"
+      ).length;
+      const completedCleaners = completions.filter(
+        (c) => c.completionStatus === "approved" || c.completionStatus === "auto_approved"
+      ).length;
+      const hasSubmittedCompletions = pendingCompletionApprovals > 0;
 
       return {
         ...apt.dataValues,
@@ -131,6 +166,10 @@ userInfoRouter.get("/", async (req, res) => {
         cleanersConfirmed: mcJob ? mcJob.cleanersConfirmed : employeesCount,
         multiCleanerJobId: mcJob ? mcJob.multiCleanerJobId : null,
         multiCleanerStatus: mcJob ? mcJob.multiCleanerStatus : null,
+        // Multi-cleaner completion status
+        pendingCompletionApprovals,
+        completedCleaners,
+        hasSubmittedCompletions,
       };
     });
 

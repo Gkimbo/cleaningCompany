@@ -37,6 +37,18 @@ import {
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
 
+// Format time constraint for display: "10-3" → "10am - 3pm"
+const formatTimeConstraint = (time) => {
+  if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+  if (!match) return time;
+  const startHour = parseInt(match[1], 10);
+  const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+  const endHour = parseInt(match[3], 10);
+  const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+  return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+};
+
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371;
@@ -190,24 +202,26 @@ const MyRequests = ({ state }) => {
     [state?.currentUser?.token, fetchMultiCleanerRequests]
   );
 
-  // Fetch locations for all appointments (solo + team)
+  // Fetch locations only for appointments missing inline coordinates (fallback)
   useEffect(() => {
     const fetchLocations = async () => {
-      // Collect all unique home IDs from solo and team requests
-      const soloHomeIds = (allRequests || [])
+      // Only fetch for homes that don't have inline coordinates
+      const soloHomesNeedingFetch = (allRequests || [])
+        .filter((a) => a.latitude == null || a.longitude == null)
         .map((a) => a.homeId)
         .filter(Boolean);
-      const teamHomeIds = (pendingMultiCleanerRequests || [])
+      const teamHomesNeedingFetch = (pendingMultiCleanerRequests || [])
+        .filter((r) => r.appointment?.home?.latitude == null || r.appointment?.home?.longitude == null)
         .map((r) => r.homeId || r.appointment?.home?.id)
         .filter(Boolean);
 
-      const allHomeIds = [...new Set([...soloHomeIds, ...teamHomeIds])];
+      const homeIdsNeedingFetch = [...new Set([...soloHomesNeedingFetch, ...teamHomesNeedingFetch])];
 
-      if (allHomeIds.length === 0) return;
+      if (homeIdsNeedingFetch.length === 0) return;
 
       try {
         const locations = await Promise.all(
-          allHomeIds.map(async (homeId) => {
+          homeIdsNeedingFetch.map(async (homeId) => {
             const loc = await FetchData.getLatAndLong(homeId);
             return { [homeId]: loc };
           })
@@ -280,13 +294,18 @@ const MyRequests = ({ state }) => {
     // Normalize solo requests
     const soloWithType = (allRequests || []).map((appointment) => {
       let distance = null;
-      const loc = appointmentLocations[appointment.homeId];
-      if (userLocation && loc) {
+      // Use inline coordinates from API response, fallback to fetched locations
+      const lat = appointment.latitude;
+      const lng = appointment.longitude;
+      const fallbackLoc = appointmentLocations[appointment.homeId];
+      const locLat = lat ?? fallbackLoc?.latitude;
+      const locLng = lng ?? fallbackLoc?.longitude;
+      if (userLocation && locLat != null && locLng != null) {
         distance = haversineDistance(
           userLocation.latitude,
           userLocation.longitude,
-          loc.latitude,
-          loc.longitude
+          locLat,
+          locLng
         );
       }
       return {
@@ -307,22 +326,27 @@ const MyRequests = ({ state }) => {
       const cleanerShare = (totalPrice * cleanerSharePercent) / totalCleaners;
 
       // Calculate distance for team request
+      // Use inline coordinates from API response, fallback to fetched locations
       const teamHomeId = request.homeId || request.appointment?.home?.id;
+      const teamLat = request.appointment?.home?.latitude;
+      const teamLng = request.appointment?.home?.longitude;
+      const fallbackLoc = appointmentLocations[teamHomeId];
+      const locLat = teamLat ?? fallbackLoc?.latitude;
+      const locLng = teamLng ?? fallbackLoc?.longitude;
       let distance = null;
-      const loc = appointmentLocations[teamHomeId];
-      if (userLocation && loc) {
+      if (userLocation && locLat != null && locLng != null) {
         distance = haversineDistance(
           userLocation.latitude,
           userLocation.longitude,
-          loc.latitude,
-          loc.longitude
+          locLat,
+          locLng
         );
       }
 
       return {
         ...request,
         type: "team",
-        sortDate: new Date(request.appointment?.date),
+        sortDate: new Date(request.appointment?.date + "T00:00:00"),
         homeId: teamHomeId,
         distance,
         sortPrice: cleanerShare, // Sort by cleaner's share
@@ -518,12 +542,12 @@ const MyRequests = ({ state }) => {
                         </View>
 
                         <Text style={styles.multiCleanerRequestAddress}>
-                          {request.appointment?.home?.address},{" "}
-                          {request.appointment?.home?.city}
+                          {request.appointment?.home?.city},{" "}
+                          {request.appointment?.home?.state}
                         </Text>
                         <Text style={styles.multiCleanerRequestDate}>
                           {new Date(
-                            request.appointment?.date
+                            request.appointment?.date + "T00:00:00"
                           ).toLocaleDateString("en-US", {
                             weekday: "short",
                             month: "short",
@@ -657,7 +681,7 @@ const MyRequests = ({ state }) => {
                             />
                             <Text style={styles.timeConstraintText}>
                               Complete by{" "}
-                              {request.appointment.timeToBeCompleted}
+                              {formatTimeConstraint(request.appointment.timeToBeCompleted)}
                             </Text>
                           </View>
                         )}

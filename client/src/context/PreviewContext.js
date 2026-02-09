@@ -5,14 +5,15 @@
  * Stores preview state and provides functions to enter/exit preview mode.
  */
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DemoAccountService from "../services/fetchRequests/DemoAccountService";
 
 const PreviewContext = createContext(null);
 
-// Storage key for preserving owner state during preview
+// Storage keys for preserving state during preview
 const OWNER_STATE_KEY = "@preview_original_owner_state";
+const PREVIEW_STATE_KEY = "@preview_mode_state";
 
 export const PreviewProvider = ({ children, dispatch, state }) => {
 	const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -22,6 +23,38 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 	const [isResetting, setIsResetting] = useState(false);
 	const [isSwitching, setIsSwitching] = useState(false);
 	const [error, setError] = useState(null);
+	const [isRestoring, setIsRestoring] = useState(true);
+
+	// Automatically restore preview state on mount
+	useEffect(() => {
+		const restorePreviewState = async () => {
+			try {
+				const previewStateStr = await AsyncStorage.getItem(PREVIEW_STATE_KEY);
+				const ownerStateStr = await AsyncStorage.getItem(OWNER_STATE_KEY);
+
+				if (previewStateStr && ownerStateStr) {
+					const previewState = JSON.parse(previewStateStr);
+					const ownerState = JSON.parse(ownerStateStr);
+
+					// Restore the preview state
+					setOriginalOwnerState(ownerState);
+					setIsPreviewMode(previewState.isPreviewMode);
+					setPreviewRole(previewState.previewRole);
+
+					console.log(
+						"[PreviewContext] Auto-restored preview mode:",
+						previewState.previewRole
+					);
+				}
+			} catch (err) {
+				console.error("[PreviewContext] Error restoring preview state:", err);
+			} finally {
+				setIsRestoring(false);
+			}
+		};
+
+		restorePreviewState();
+	}, []);
 
 	/**
 	 * Enter preview mode for a specific role
@@ -65,6 +98,12 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				// Store the demo token in AsyncStorage so getCurrentUser and other fetches work
 				await AsyncStorage.setItem("token", result.token);
 
+				// Save preview state for app reload persistence
+				await AsyncStorage.setItem(
+					PREVIEW_STATE_KEY,
+					JSON.stringify({ isPreviewMode: true, previewRole: role })
+				);
+
 				// Dispatch actions to update app state with demo account data
 				dispatch({ type: "PREVIEW_ENTER", payload: result });
 
@@ -107,9 +146,9 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 				throw new Error("Original owner state not found");
 			}
 
-			// Call backend to get fresh owner token
+			// Call backend to get fresh owner token using the owner's stored token
 			const result = await DemoAccountService.exitPreviewMode(
-				state.currentUser.token,
+				ownerState.token,
 				ownerState.currentUser?.id
 			);
 
@@ -132,6 +171,7 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 
 			// Clean up
 			await AsyncStorage.removeItem(OWNER_STATE_KEY);
+			await AsyncStorage.removeItem(PREVIEW_STATE_KEY);
 			setOriginalOwnerState(null);
 			setIsPreviewMode(false);
 			setPreviewRole(null);
@@ -230,13 +270,15 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 			setError(null);
 
 			try {
-				// Get original owner ID from stored state
+				// Get original owner ID and token from stored state
 				let ownerId = originalOwnerState?.currentUser?.id;
-				if (!ownerId) {
+				let ownerToken = originalOwnerState?.token;
+				if (!ownerId || !ownerToken) {
 					const stored = await AsyncStorage.getItem(OWNER_STATE_KEY);
 					if (stored) {
 						const ownerState = JSON.parse(stored);
-						ownerId = ownerState?.currentUser?.id;
+						ownerId = ownerId || ownerState?.currentUser?.id;
+						ownerToken = ownerToken || ownerState?.token;
 					}
 				}
 
@@ -244,9 +286,13 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 					throw new Error("Original owner ID not found");
 				}
 
-				// Call backend to switch to new demo account
+				if (!ownerToken) {
+					throw new Error("Original owner token not found");
+				}
+
+				// Call backend to switch to new demo account using owner's token
 				const result = await DemoAccountService.switchPreviewRole(
-					state.currentUser.token,
+					ownerToken,
 					newRole,
 					ownerId
 				);
@@ -257,6 +303,12 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 
 				// Store the new demo token in AsyncStorage
 				await AsyncStorage.setItem("token", result.token);
+
+				// Update preview state in storage
+				await AsyncStorage.setItem(
+					PREVIEW_STATE_KEY,
+					JSON.stringify({ isPreviewMode: true, previewRole: newRole })
+				);
 
 				// Dispatch action to update app state with new demo account data
 				dispatch({ type: "PREVIEW_ENTER", payload: result });
@@ -278,19 +330,36 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 	);
 
 	/**
-	 * Check if we're currently in preview mode
+	 * Check and restore preview mode state on app load
+	 * Returns true if we were in preview mode and restored it
 	 */
 	const checkPreviewMode = useCallback(async () => {
 		try {
-			const stored = await AsyncStorage.getItem(OWNER_STATE_KEY);
-			if (stored) {
-				const ownerState = JSON.parse(stored);
+			// Check for stored preview state
+			const previewStateStr = await AsyncStorage.getItem(PREVIEW_STATE_KEY);
+			const ownerStateStr = await AsyncStorage.getItem(OWNER_STATE_KEY);
+
+			if (previewStateStr && ownerStateStr) {
+				const previewState = JSON.parse(previewStateStr);
+				const ownerState = JSON.parse(ownerStateStr);
+
+				// Restore the preview state
 				setOriginalOwnerState(ownerState);
-				// If we have stored owner state but app restarted,
-				// we might be in an inconsistent state
-				// Let the app handle this through the PREVIEW_CHECK action
-				return { wasInPreview: true, ownerState };
+				setIsPreviewMode(previewState.isPreviewMode);
+				setPreviewRole(previewState.previewRole);
+
+				console.log(
+					"[PreviewContext] Restored preview mode:",
+					previewState.previewRole
+				);
+
+				return {
+					wasInPreview: true,
+					ownerState,
+					previewRole: previewState.previewRole,
+				};
 			}
+
 			return { wasInPreview: false };
 		} catch (err) {
 			console.error("[PreviewContext] Error checking preview mode:", err);
@@ -355,6 +424,7 @@ export const PreviewProvider = ({ children, dispatch, state }) => {
 		isLoading,
 		isResetting,
 		isSwitching,
+		isRestoring,
 		error,
 		enterPreviewMode,
 		exitPreviewMode,

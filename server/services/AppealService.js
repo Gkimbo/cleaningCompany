@@ -319,7 +319,8 @@ class AppealService {
 				reviewerId,
 				decision,
 				resolution,
-				req
+				req,
+				appeal.caseNumber
 			);
 
 			return appeal;

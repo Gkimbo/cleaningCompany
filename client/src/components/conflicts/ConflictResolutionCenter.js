@@ -10,7 +10,7 @@ import {
   RefreshControl,
   FlatList,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { AuthContext } from "../../services/AuthContext";
 import ConflictService from "../../services/fetchRequests/ConflictService";
@@ -24,18 +24,67 @@ import {
 
 const ConflictResolutionCenter = () => {
   const { user } = useContext(AuthContext);
-  const navigation = useNavigation();
+  const navigate = useNavigate();
 
   const [cases, setCases] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [lookupMode, setLookupMode] = useState(false); // Toggle between search and lookup
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState(null);
   const [filters, setFilters] = useState({
     caseType: null,
     status: null,
     priority: null,
   });
+
+  // Check if a string looks like a case number
+  const isCaseNumber = (str) => {
+    const caseNumberPattern = /^(APL|ADJ|PD|ST)-\d{8}-[A-Z0-9]{5}$/i;
+    return caseNumberPattern.test(str.trim().toUpperCase());
+  };
+
+  // Handle quick lookup (case number or user search)
+  const handleQuickLookup = async () => {
+    const query = lookupQuery.trim();
+    if (!query) return;
+
+    setLookupLoading(true);
+    setLookupError(null);
+
+    try {
+      if (isCaseNumber(query)) {
+        // Direct case number lookup
+        const result = await ConflictService.lookupByNumber(user.token, query);
+        if (result.success && result.case) {
+          navigate(`/conflicts/${result.case.caseType}/${result.case.id}`);
+          setLookupQuery("");
+        } else {
+          setLookupError(`Case "${query.toUpperCase()}" not found. Please check the case number and try again.`);
+        }
+      } else {
+        // User search (email, phone, or ID)
+        const result = await ConflictService.searchUserCases(user.token, query);
+        if (result.success && result.users?.length > 0) {
+          navigate("/conflicts/user-cases", {
+            state: { users: result.users, searchQuery: query }
+          });
+          setLookupQuery("");
+        } else if (result.success && result.users?.length === 0) {
+          setLookupError(`No users found matching "${query}". Try searching by email, phone number, or user ID.`);
+        } else {
+          setLookupError(result.error || "Search failed. Please try again.");
+        }
+      }
+    } catch (err) {
+      setLookupError("Something went wrong. Please check your connection and try again.");
+    } finally {
+      setLookupLoading(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -71,10 +120,7 @@ const ConflictResolutionCenter = () => {
   };
 
   const handleCasePress = (caseItem) => {
-    navigation.navigate("ConflictCaseView", {
-      caseId: caseItem.id,
-      caseType: caseItem.caseType,
-    });
+    navigate(`/conflicts/${caseItem.caseType}/${caseItem.id}`);
   };
 
   const formatTimeRemaining = (seconds) => {
@@ -96,11 +142,14 @@ const ConflictResolutionCenter = () => {
       escalated: colors.error[500],
       pending_homeowner: colors.warning[500],
       pending_owner: colors.warning[600],
+      pending_info: colors.warning[600],
       approved: colors.success[500],
       owner_approved: colors.success[500],
       denied: colors.error[500],
       owner_denied: colors.error[500],
       partially_approved: colors.primary[500],
+      resolved: colors.success[500],
+      closed: colors.neutral[500],
     };
     return statusColors[status] || colors.neutral[500];
   };
@@ -164,22 +213,100 @@ const ConflictResolutionCenter = () => {
 
   const renderFilters = () => (
     <View style={styles.filtersContainer}>
-      <View style={styles.searchContainer}>
-        <Icon name="search" size={16} color={colors.text.tertiary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search cases..."
-          placeholderTextColor={colors.text.tertiary}
-          value={search}
-          onChangeText={setSearch}
-          onSubmitEditing={fetchData}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => { setSearch(""); fetchData(); }}>
-            <Icon name="times-circle" size={16} color={colors.text.tertiary} />
-          </TouchableOpacity>
-        )}
+      {/* Mode Toggle */}
+      <View style={styles.modeToggleContainer}>
+        <TouchableOpacity
+          style={[styles.modeToggle, !lookupMode && styles.modeToggleActive]}
+          onPress={() => setLookupMode(false)}
+        >
+          <Icon name="list" size={14} color={!lookupMode ? colors.neutral[0] : colors.text.secondary} />
+          <Text style={[styles.modeToggleText, !lookupMode && styles.modeToggleTextActive]}>Queue</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modeToggle, lookupMode && styles.modeToggleActive]}
+          onPress={() => setLookupMode(true)}
+        >
+          <Icon name="bolt" size={14} color={lookupMode ? colors.neutral[0] : colors.text.secondary} />
+          <Text style={[styles.modeToggleText, lookupMode && styles.modeToggleTextActive]}>Quick Lookup</Text>
+        </TouchableOpacity>
       </View>
+
+      {lookupMode ? (
+        <View style={styles.lookupContainer}>
+          <Text style={styles.searchLabel}>Quick Lookup</Text>
+          <View style={styles.searchRow}>
+            <View style={styles.lookupInputContainer}>
+              <Icon name="bolt" size={18} color={colors.primary[500]} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Case # or email/phone/user ID..."
+                placeholderTextColor={colors.text.secondary}
+                value={lookupQuery}
+                onChangeText={(text) => { setLookupQuery(text); setLookupError(null); }}
+                onSubmitEditing={handleQuickLookup}
+                autoCapitalize="none"
+              />
+              {lookupQuery.length > 0 && !lookupLoading && (
+                <TouchableOpacity onPress={() => { setLookupQuery(""); setLookupError(null); }}>
+                  <Icon name="times-circle" size={18} color={colors.neutral[400]} />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[styles.searchButton, (!lookupQuery.trim() || lookupLoading) && styles.searchButtonDisabled]}
+              onPress={handleQuickLookup}
+              disabled={!lookupQuery.trim() || lookupLoading}
+            >
+              {lookupLoading ? (
+                <ActivityIndicator size="small" color={colors.neutral[0]} />
+              ) : (
+                <>
+                  <Icon name="search" size={16} color={colors.neutral[0]} />
+                  <Text style={styles.searchButtonText}>Go</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+          {lookupError && (
+            <View style={styles.lookupErrorContainer}>
+              <Icon name="exclamation-circle" size={16} color={colors.error[600]} />
+              <Text style={styles.lookupErrorText}>{lookupError}</Text>
+            </View>
+          )}
+          <Text style={styles.lookupHint}>
+            Enter a case number to jump directly, or search by email/phone to see all cases for a user
+          </Text>
+        </View>
+      ) : (
+        <>
+          <View style={styles.searchWrapper}>
+            <Text style={styles.searchLabel}>Search Queue</Text>
+            <View style={styles.searchRow}>
+              <View style={styles.searchContainer}>
+                <Icon name="search" size={18} color={colors.primary[500]} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Name, email, phone, case #..."
+                  placeholderTextColor={colors.text.secondary}
+                  value={search}
+                  onChangeText={setSearch}
+                  onSubmitEditing={fetchData}
+                />
+                {search.length > 0 && (
+                  <TouchableOpacity onPress={() => { setSearch(""); fetchData(); }}>
+                    <Icon name="times-circle" size={18} color={colors.neutral[400]} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <TouchableOpacity
+                style={styles.searchButton}
+                onPress={fetchData}
+              >
+                <Icon name="search" size={16} color={colors.neutral[0]} />
+                <Text style={styles.searchButtonText}>Search</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
       <ScrollView
         horizontal
@@ -207,6 +334,20 @@ const ConflictResolutionCenter = () => {
           <Icon name="home" size={12} color={filters.caseType === "adjustment" ? colors.neutral[0] : colors.text.secondary} style={{ marginRight: 4 }} />
           <Text style={[styles.filterChipText, filters.caseType === "adjustment" && styles.filterChipTextActive]}>Adjustments</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterChip, filters.caseType === "payment" && styles.filterChipActive]}
+          onPress={() => setFilters(f => ({ ...f, caseType: "payment" }))}
+        >
+          <Icon name="usd" size={12} color={filters.caseType === "payment" ? colors.neutral[0] : colors.text.secondary} style={{ marginRight: 4 }} />
+          <Text style={[styles.filterChipText, filters.caseType === "payment" && styles.filterChipTextActive]}>Payments</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.filterChip, filters.caseType === "support" && styles.filterChipActive]}
+          onPress={() => setFilters(f => ({ ...f, caseType: "support" }))}
+        >
+          <Icon name="life-ring" size={12} color={filters.caseType === "support" ? colors.neutral[0] : colors.text.secondary} style={{ marginRight: 4 }} />
+          <Text style={[styles.filterChipText, filters.caseType === "support" && styles.filterChipTextActive]}>Support</Text>
+        </TouchableOpacity>
         <View style={styles.filterDivider} />
         <TouchableOpacity
           style={[styles.filterChip, filters.priority === "urgent" && styles.filterChipUrgent]}
@@ -216,27 +357,49 @@ const ConflictResolutionCenter = () => {
           <Text style={[styles.filterChipText, filters.priority === "urgent" && styles.filterChipTextActive]}>Urgent</Text>
         </TouchableOpacity>
       </ScrollView>
+        </>
+      )}
     </View>
   );
 
-  const renderCaseCard = ({ item }) => (
-    <TouchableOpacity
-      style={styles.caseCard}
-      onPress={() => handleCasePress(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.caseHeader}>
-        <View style={styles.caseTypeContainer}>
-          <View style={[styles.caseTypeBadge, { backgroundColor: item.caseType === "appeal" ? colors.primary[100] : colors.warning[100] }]}>
-            <Icon
-              name={item.caseType === "appeal" ? "gavel" : "home"}
-              size={12}
-              color={item.caseType === "appeal" ? colors.primary[600] : colors.warning[600]}
-            />
-            <Text style={[styles.caseTypeText, { color: item.caseType === "appeal" ? colors.primary[600] : colors.warning[600] }]}>
-              {item.caseNumber}
-            </Text>
-          </View>
+  const getCaseTypeColors = (caseType) => {
+    const colorMap = {
+      appeal: { bg: colors.primary[100], text: colors.primary[600] },
+      payment: { bg: colors.error[100], text: colors.error[600] },
+      adjustment: { bg: colors.warning[100], text: colors.warning[600] },
+      support: { bg: colors.secondary[100], text: colors.secondary[600] },
+    };
+    return colorMap[caseType] || { bg: colors.neutral[100], text: colors.neutral[600] };
+  };
+
+  const getCaseTypeIcon = (caseType) => {
+    const iconMap = {
+      appeal: "gavel",
+      payment: "dollar",
+      adjustment: "home",
+      support: "life-ring",
+    };
+    return iconMap[caseType] || "question";
+  };
+
+  const renderCaseCard = ({ item }) => {
+    const caseColors = getCaseTypeColors(item.caseType);
+    const caseIcon = getCaseTypeIcon(item.caseType);
+
+    return (
+      <TouchableOpacity
+        style={styles.caseCard}
+        onPress={() => handleCasePress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.caseHeader}>
+          <View style={styles.caseTypeContainer}>
+            <View style={[styles.caseTypeBadge, { backgroundColor: caseColors.bg }]}>
+              <Icon name={caseIcon} size={12} color={caseColors.text} />
+              <Text style={[styles.caseTypeText, { color: caseColors.text }]}>
+                {item.caseNumber}
+              </Text>
+            </View>
           <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(item.priority) }]} />
         </View>
 
@@ -295,7 +458,8 @@ const ConflictResolutionCenter = () => {
         <Icon name="chevron-right" size={14} color={colors.text.tertiary} />
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -420,19 +584,125 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
   },
-  searchContainer: {
+  modeToggleContainer: {
+    flexDirection: "row",
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    padding: 4,
+  },
+  modeToggle: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.neutral[100],
-    marginHorizontal: spacing.md,
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  modeToggleActive: {
+    backgroundColor: colors.primary[500],
+  },
+  modeToggleText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
+  },
+  modeToggleTextActive: {
+    color: colors.neutral[0],
+  },
+  lookupContainer: {
+    paddingHorizontal: spacing.md,
+  },
+  lookupInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.primary[300],
     gap: spacing.sm,
+    flex: 1,
+    minHeight: 52,
+    ...shadows.sm,
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  searchButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: spacing.lg,
+    minHeight: 52,
+    borderRadius: radius.lg,
+    ...shadows.sm,
+  },
+  searchButtonDisabled: {
+    backgroundColor: colors.neutral[300],
+  },
+  searchButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+  lookupErrorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[200],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+  },
+  lookupErrorText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.error[700],
+  },
+  lookupHint: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: spacing.sm,
+    textAlign: "center",
+  },
+  searchWrapper: {
+    paddingHorizontal: spacing.md,
+  },
+  searchLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: colors.neutral[200],
+    gap: spacing.sm,
+    minHeight: 52,
+    ...shadows.sm,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
   },
   filterChips: {

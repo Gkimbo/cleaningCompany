@@ -133,6 +133,51 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       comment: "When this cleaner uploaded their first before photo",
     },
+    // Solo offer decline tracking
+    soloDeclined: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+      comment: "True if cleaner declined solo completion offer",
+    },
+    soloDeclinedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When this cleaner declined solo completion",
+    },
+    soloDeclineReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: "Reason cleaner gave for declining solo",
+    },
+    // Extra work offer tracking (for partial dropout scenarios)
+    extraWorkAccepted: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+      comment: "True if cleaner accepted extra work after co-cleaner dropout",
+    },
+    extraWorkAcceptedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When this cleaner accepted extra work",
+    },
+    extraWorkDeclined: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+      comment: "True if cleaner declined extra work after co-cleaner dropout",
+    },
+    extraWorkDeclinedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "When this cleaner declined extra work",
+    },
+    extraWorkDeclineReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: "Reason cleaner gave for declining extra work",
+    },
   });
 
   CleanerJobCompletion.associate = (models) => {

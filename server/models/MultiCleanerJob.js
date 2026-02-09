@@ -90,6 +90,43 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
     },
+    // Solo offer tracking fields
+    soloOfferDeclined: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+    },
+    soloOfferDeclinedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    soloOfferExpired: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+    },
+    soloOfferExpiredAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    // Extra work offer tracking (for partial dropout scenarios)
+    extraWorkOffersSentAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    extraWorkOffersExpireAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    extraWorkOffersExpired: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: false,
+    },
+    extraWorkOffersExpiredAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   });
 
   MultiCleanerJob.associate = (models) => {

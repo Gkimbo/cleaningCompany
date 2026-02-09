@@ -38,6 +38,18 @@ import {
 import { usePricing } from "../../../context/PricingContext";
 import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
 
+// Format time constraint for display: "10-3" → "10am - 3pm"
+const formatTimeConstraint = (time) => {
+  if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+  if (!match) return time;
+  const startHour = parseInt(match[1], 10);
+  const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+  const endHour = parseInt(match[3], 10);
+  const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+  return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+};
+
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
   const R = 6371;
@@ -112,7 +124,7 @@ const MyRequestsCalendar = ({ state }) => {
 
         const now = new Date();
         const isUpcoming = (item) =>
-          new Date(item.date) >= new Date(now.toDateString());
+          new Date(item.date + "T00:00:00") >= new Date(now.toDateString());
 
         setRequests((res.requested || []).filter(isUpcoming));
         setUserId(user.user.id);
@@ -632,11 +644,11 @@ const MyRequestsCalendar = ({ state }) => {
                           </View>
 
                           <Text style={styles.teamRequestAddress}>
-                            {req.appointment?.home?.address},{" "}
-                            {req.appointment?.home?.city}
+                            {req.appointment?.home?.city},{" "}
+                            {req.appointment?.home?.state}
                           </Text>
                           <Text style={styles.teamRequestDate}>
-                            {new Date(req.appointment?.date).toLocaleDateString(
+                            {new Date(req.appointment?.date + "T00:00:00").toLocaleDateString(
                               "en-US",
                               {
                                 weekday: "short",
@@ -780,7 +792,7 @@ const MyRequestsCalendar = ({ state }) => {
                                 color={colors.warning[600]}
                               />
                               <Text style={styles.timeConstraintText}>
-                                Complete by {req.appointment.timeToBeCompleted}
+                                Complete by {formatTimeConstraint(req.appointment.timeToBeCompleted)}
                               </Text>
                             </View>
                           )}

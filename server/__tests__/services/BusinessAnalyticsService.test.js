@@ -592,7 +592,8 @@ describe("BusinessAnalyticsService", () => {
 			expect(result).toHaveProperty("trends");
 			expect(result).not.toHaveProperty("employees");
 			expect(result).not.toHaveProperty("clients");
-			expect(result).not.toHaveProperty("financials");
+			// Financials are now available to all tiers
+			expect(result).toHaveProperty("financials");
 			expect(result.access.tier).toBe("standard");
 		});
 

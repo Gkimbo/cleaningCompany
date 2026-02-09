@@ -54,6 +54,34 @@ const PREVIEW_ROLES = [
 		icon: "user",
 		color: colors.warning[600],
 	},
+	{
+		role: "humanResources",
+		label: "HR Manager",
+		description: "See conflict resolution and appeals",
+		icon: "gavel",
+		color: colors.error[400],
+	},
+	{
+		role: "largeBusinessOwner",
+		label: "Elite Partner",
+		description: "Business with 70+ monthly cleanings",
+		icon: "building",
+		color: colors.primary[500],
+	},
+	{
+		role: "preferredCleaner",
+		label: "Preferred Cleaner",
+		description: "Cleaner with platinum tier perks",
+		icon: "star",
+		color: colors.warning[400],
+	},
+	{
+		role: "largeHomeOwner",
+		label: "Large Home Owner",
+		description: "Homeowner with large home for team jobs",
+		icon: "home",
+		color: colors.success[400],
+	},
 ];
 
 const RoleCard = ({ role, isSelected, onSelect, disabled }) => {
@@ -262,7 +290,7 @@ const styles = StyleSheet.create({
 		lineHeight: 20,
 	},
 	rolesList: {
-		maxHeight: 320,
+		maxHeight: 400,
 	},
 	roleCard: {
 		flexDirection: "row",

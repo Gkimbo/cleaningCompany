@@ -31,6 +31,13 @@ const PAYOUT_STATUS = {
   paid_outside_platform: { bg: colors.secondary[100], text: colors.secondary[700], label: "Paid Outside", icon: "check" },
 };
 
+// Bonus Status Colors
+const BONUS_STATUS = {
+  pending: { bg: colors.warning[100], text: colors.warning[700], label: "Pending", icon: "clock-o" },
+  paid: { bg: colors.success[100], text: colors.success[700], label: "Paid", icon: "check" },
+  cancelled: { bg: colors.neutral[100], text: colors.neutral[500], label: "Cancelled", icon: "ban" },
+};
+
 // Pay Type Labels
 const PAY_TYPE_LABELS = {
   hourly: { label: "Hourly", icon: "clock-o", color: colors.primary[600] },
@@ -198,6 +205,79 @@ const PayoutItem = ({ payout, selected, onToggle, onMarkPaid, onEditHours, highl
   );
 };
 
+// Bonus Item Component
+const BonusItem = ({ bonus, onMarkPaid, onCancel }) => {
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "";
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const status = BONUS_STATUS[bonus.status] || BONUS_STATUS.pending;
+  const isPending = bonus.status === "pending";
+
+  return (
+    <View style={styles.bonusItem}>
+      <View style={styles.bonusHeader}>
+        <View style={styles.bonusHeaderLeft}>
+          <View style={styles.bonusIconContainer}>
+            <Icon name="gift" size={18} color={colors.warning[600]} />
+          </View>
+          <View style={styles.bonusInfo}>
+            <Text style={styles.bonusEmployeeName}>
+              {bonus.employee?.firstName || ""} {bonus.employee?.lastName || ""}
+            </Text>
+            <Text style={styles.bonusDate}>
+              Created {formatDate(bonus.createdAt)}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.bonusStatusBadge, { backgroundColor: status.bg }]}>
+          <Icon name={status.icon} size={10} color={status.text} />
+          <Text style={[styles.bonusStatusText, { color: status.text }]}>
+            {status.label}
+          </Text>
+        </View>
+      </View>
+
+      {bonus.reason && (
+        <View style={styles.bonusReasonContainer}>
+          <Icon name="quote-left" size={12} color={colors.text.tertiary} />
+          <Text style={styles.bonusReasonText}>{bonus.reason}</Text>
+        </View>
+      )}
+
+      <View style={styles.bonusFooter}>
+        <View style={styles.bonusAmountContainer}>
+          <Text style={styles.bonusAmountLabel}>Bonus Amount</Text>
+          <Text style={styles.bonusAmount}>
+            ${((bonus.amount || 0) / 100).toFixed(2)}
+          </Text>
+        </View>
+        {isPending && (
+          <View style={styles.bonusActions}>
+            <Pressable style={styles.cancelBonusButton} onPress={onCancel}>
+              <Icon name="times" size={12} color={colors.error[600]} />
+            </Pressable>
+            <Pressable style={styles.markBonusPaidButton} onPress={onMarkPaid}>
+              <Icon name="check-circle" size={14} color="#fff" />
+              <Text style={styles.markBonusPaidText}>Mark Paid</Text>
+            </Pressable>
+          </View>
+        )}
+        {bonus.status === "paid" && bonus.paidAt && (
+          <Text style={styles.bonusPaidDate}>
+            Paid {formatDate(bonus.paidAt)}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+};
+
 // Employee Summary Card
 const EmployeeSummaryCard = ({ employee, summary, onViewDetails, onViewHours }) => {
   const payType = PAY_TYPE_LABELS[employee.payType] || PAY_TYPE_LABELS.per_job;
@@ -300,7 +380,7 @@ const MarkPaidModal = ({ visible, payout, onClose, onConfirm, isSubmitting }) =>
               <View style={styles.modalSummaryRow}>
                 <Text style={styles.modalSummaryLabel}>Job Date</Text>
                 <Text style={styles.modalSummaryValue}>
-                  {new Date(payout.appointment?.date).toLocaleDateString()}
+                  {new Date(payout.appointment?.date + "T00:00:00").toLocaleDateString()}
                 </Text>
               </View>
             </View>
@@ -484,7 +564,7 @@ const EditHoursModal = ({ visible, payout, onClose, onSave, isSubmitting }) => {
               <View style={styles.modalSummaryRow}>
                 <Text style={styles.modalSummaryLabel}>Job Date</Text>
                 <Text style={styles.modalSummaryValue}>
-                  {new Date(payout.appointment?.date).toLocaleDateString()}
+                  {new Date(payout.appointment?.date + "T00:00:00").toLocaleDateString()}
                 </Text>
               </View>
               {hourlyRate && (
@@ -570,6 +650,7 @@ const PayrollScreen = ({ state }) => {
   const [payouts, setPayouts] = useState([]);
   const [paidPayouts, setPaidPayouts] = useState([]);
   const [employeeSummaries, setEmployeeSummaries] = useState([]);
+  const [bonuses, setBonuses] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -580,7 +661,9 @@ const PayrollScreen = ({ state }) => {
   const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [showEditHoursModal, setShowEditHoursModal] = useState(false);
+  const [showMarkBonusPaidModal, setShowMarkBonusPaidModal] = useState(false);
   const [selectedPayout, setSelectedPayout] = useState(null);
+  const [selectedBonus, setSelectedBonus] = useState(null);
   const [editingPayout, setEditingPayout] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -610,14 +693,16 @@ const PayrollScreen = ({ state }) => {
     setError(null);
 
     try {
-      const [pendingResult, paidResult] = await Promise.all([
+      const [pendingResult, paidResult, bonusesResult] = await Promise.all([
         BusinessOwnerService.getPendingPayouts(state.currentUser.token),
         BusinessOwnerService.getPayrollHistory(state.currentUser.token),
+        BusinessOwnerService.getBonuses(state.currentUser.token),
       ]);
 
       const pendingPayouts = pendingResult.pendingPayouts || [];
       setPayouts(pendingPayouts);
       setPaidPayouts(paidResult.payouts || []);
+      setBonuses(bonusesResult.bonuses || []);
 
       // Group by employee for summary
       const employeeMap = new Map();
@@ -629,11 +714,23 @@ const PayrollScreen = ({ state }) => {
             employee: payout.employee,
             pendingCount: 0,
             pendingAmount: 0,
+            pendingBonuses: 0,
+            pendingBonusAmount: 0,
           });
         }
         const summary = employeeMap.get(empId);
         summary.pendingCount++;
         summary.pendingAmount += payout.payAmount || 0;
+      });
+
+      // Add bonus amounts to employee summaries
+      (bonusesResult.bonuses || []).filter(b => b.status === "pending").forEach((bonus) => {
+        const empId = bonus.businessEmployeeId;
+        if (employeeMap.has(empId)) {
+          const summary = employeeMap.get(empId);
+          summary.pendingBonuses++;
+          summary.pendingBonusAmount += bonus.amount || 0;
+        }
       });
 
       setEmployeeSummaries(Array.from(employeeMap.values()));
@@ -767,6 +864,67 @@ const PayrollScreen = ({ state }) => {
     }
   };
 
+  const handleMarkBonusPaid = async (note) => {
+    if (!selectedBonus) return;
+
+    setIsSubmitting(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await BusinessOwnerService.markBonusPaid(
+        state.currentUser.token,
+        selectedBonus.id,
+        note
+      );
+
+      if (result.success || result.bonus) {
+        setSuccess("Bonus marked as paid");
+        setShowMarkBonusPaidModal(false);
+        setSelectedBonus(null);
+        fetchData();
+      } else {
+        setError(result.error || "Failed to mark bonus as paid");
+      }
+    } catch (err) {
+      setError("Failed to mark bonus as paid. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancelBonus = async (bonus) => {
+    Alert.alert(
+      "Cancel Bonus",
+      `Are you sure you want to cancel this $${((bonus.amount || 0) / 100).toFixed(2)} bonus for ${bonus.employee?.firstName}?`,
+      [
+        { text: "No, Keep It", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            setError(null);
+            setSuccess(null);
+            try {
+              const result = await BusinessOwnerService.cancelBonus(
+                state.currentUser.token,
+                bonus.id
+              );
+              if (result.success || result.bonus) {
+                setSuccess("Bonus cancelled");
+                fetchData();
+              } else {
+                setError(result.error || "Failed to cancel bonus");
+              }
+            } catch (err) {
+              setError("Failed to cancel bonus. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Clear messages after 5 seconds
   useEffect(() => {
     if (success || error) {
@@ -787,6 +945,12 @@ const PayrollScreen = ({ state }) => {
   const totalPending = payouts.filter(p => p.payoutStatus === "pending").reduce((sum, p) => sum + (p.payAmount || 0), 0);
   const selectedPayoutsList = payouts.filter((p) => selectedPayouts.has(p.id));
   const selectedTotal = selectedPayoutsList.reduce((sum, p) => sum + (p.payAmount || 0), 0);
+
+  // Bonus calculations
+  const pendingBonuses = bonuses.filter((b) => b.status === "pending");
+  const paidBonuses = bonuses.filter((b) => b.status === "paid");
+  const totalPendingBonuses = pendingBonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
+  const totalPendingAll = totalPending + totalPendingBonuses;
 
   // Get unique employees for filter
   const uniqueEmployees = Array.from(
@@ -823,12 +987,22 @@ const PayrollScreen = ({ state }) => {
         <View style={styles.summaryHeader}>
           <View>
             <Text style={styles.summaryLabel}>Pending Payroll</Text>
-            <Text style={styles.summaryAmount}>${(totalPending / 100).toFixed(2)}</Text>
+            <Text style={styles.summaryAmount}>${(totalPendingAll / 100).toFixed(2)}</Text>
+            {totalPendingBonuses > 0 && (
+              <Text style={styles.summaryBreakdown}>
+                ${(totalPending / 100).toFixed(2)} jobs + ${(totalPendingBonuses / 100).toFixed(2)} bonuses
+              </Text>
+            )}
           </View>
           <View style={styles.summaryStats}>
             <View style={styles.summaryStat}>
               <Text style={styles.summaryStatValue}>{pendingPayouts.length}</Text>
               <Text style={styles.summaryStatLabel}>Jobs</Text>
+            </View>
+            <View style={styles.summaryStatDivider} />
+            <View style={styles.summaryStat}>
+              <Text style={styles.summaryStatValue}>{pendingBonuses.length}</Text>
+              <Text style={styles.summaryStatLabel}>Bonuses</Text>
             </View>
             <View style={styles.summaryStatDivider} />
             <View style={styles.summaryStat}>
@@ -882,6 +1056,12 @@ const PayrollScreen = ({ state }) => {
           active={viewMode === "pending"}
           count={pendingPayouts.length}
           onPress={() => setViewMode("pending")}
+        />
+        <TabButton
+          label="Bonuses"
+          active={viewMode === "bonuses"}
+          count={pendingBonuses.length}
+          onPress={() => setViewMode("bonuses")}
         />
         <TabButton
           label="History"
@@ -953,7 +1133,7 @@ const PayrollScreen = ({ state }) => {
           </View>
         )}
 
-        {viewMode === "pending" ? (
+        {viewMode === "pending" && (
           <>
             {/* Employee Summaries */}
             {employeeSummaries.length > 0 && !employeeFilter && (
@@ -1030,7 +1210,79 @@ const PayrollScreen = ({ state }) => {
               )}
             </View>
           </>
-        ) : (
+        )}
+
+        {viewMode === "bonuses" && (
+          <>
+            {/* Pending Bonuses */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Icon name="gift" size={16} color={colors.warning[600]} />
+                  <Text style={styles.sectionTitle}>Pending Bonuses</Text>
+                </View>
+                <Text style={styles.sectionSubtitle}>
+                  ${(totalPendingBonuses / 100).toFixed(2)} total
+                </Text>
+              </View>
+              {pendingBonuses.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <View style={[styles.emptyStateIcon, { backgroundColor: colors.warning[50] }]}>
+                    <Icon name="gift" size={48} color={colors.warning[400]} />
+                  </View>
+                  <Text style={styles.emptyTitle}>No Pending Bonuses</Text>
+                  <Text style={styles.emptyText}>
+                    Give bonuses to top performers from the Analytics dashboard.
+                  </Text>
+                  <Pressable
+                    style={styles.emptyStateButton}
+                    onPress={() => navigate("/business-owner/analytics")}
+                  >
+                    <Text style={styles.emptyStateButtonText}>View Analytics</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.bonusList}>
+                  {pendingBonuses.map((bonus) => (
+                    <BonusItem
+                      key={bonus.id}
+                      bonus={bonus}
+                      onMarkPaid={() => {
+                        setSelectedBonus(bonus);
+                        setShowMarkBonusPaidModal(true);
+                      }}
+                      onCancel={() => handleCancelBonus(bonus)}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Paid Bonuses History */}
+            {paidBonuses.length > 0 && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Bonus History</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    {paidBonuses.length} paid
+                  </Text>
+                </View>
+                <View style={styles.bonusList}>
+                  {paidBonuses.slice(0, 10).map((bonus) => (
+                    <BonusItem
+                      key={bonus.id}
+                      bonus={bonus}
+                      onMarkPaid={() => {}}
+                      onCancel={() => {}}
+                    />
+                  ))}
+                </View>
+              </View>
+            )}
+          </>
+        )}
+
+        {viewMode === "history" && (
           // History View
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -1111,6 +1363,89 @@ const PayrollScreen = ({ state }) => {
         onSave={handleSaveHours}
         isSubmitting={isSubmitting}
       />
+
+      {/* Mark Bonus Paid Modal */}
+      <Modal visible={showMarkBonusPaidModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={[styles.modalHeaderIcon, { backgroundColor: colors.warning[100] }]}>
+                <Icon name="gift" size={24} color={colors.warning[600]} />
+              </View>
+              <Text style={styles.modalTitle}>Mark Bonus Paid</Text>
+              <Pressable
+                style={styles.modalCloseButton}
+                onPress={() => {
+                  setShowMarkBonusPaidModal(false);
+                  setSelectedBonus(null);
+                }}
+              >
+                <Icon name="times" size={20} color={colors.neutral[500]} />
+              </Pressable>
+            </View>
+
+            <View style={styles.modalBody}>
+              {selectedBonus && (
+                <View style={styles.modalSummaryCard}>
+                  <View style={styles.modalSummaryRow}>
+                    <Text style={styles.modalSummaryLabel}>Employee</Text>
+                    <Text style={styles.modalSummaryValue}>
+                      {selectedBonus.employee?.firstName} {selectedBonus.employee?.lastName}
+                    </Text>
+                  </View>
+                  <View style={styles.modalSummaryRow}>
+                    <Text style={styles.modalSummaryLabel}>Bonus Amount</Text>
+                    <Text style={styles.modalSummaryAmount}>
+                      ${((selectedBonus.amount || 0) / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                  {selectedBonus.reason && (
+                    <View style={styles.modalSummaryRow}>
+                      <Text style={styles.modalSummaryLabel}>Reason</Text>
+                      <Text style={styles.modalSummaryValue} numberOfLines={2}>
+                        {selectedBonus.reason}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <View style={styles.bonusConfirmNote}>
+                <Icon name="info-circle" size={16} color={colors.warning[600]} />
+                <Text style={styles.bonusConfirmNoteText}>
+                  Make sure you've transferred this bonus to the employee before marking it as paid.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <Pressable
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowMarkBonusPaidModal(false);
+                  setSelectedBonus(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.confirmButton, { backgroundColor: colors.warning[600] }, isSubmitting && styles.confirmButtonDisabled]}
+                onPress={() => handleMarkBonusPaid()}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Icon name="check" size={14} color="#fff" />
+                    <Text style={styles.confirmButtonText}>Confirm Paid</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1990,6 +2325,150 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
     marginTop: 2,
+  },
+  // Summary card breakdown
+  summaryBreakdown: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[200],
+    marginTop: spacing.xs,
+  },
+  // Section title row with icon
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  // Bonus styles
+  bonusList: {
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.xl,
+    ...shadows.sm,
+    overflow: "hidden",
+  },
+  bonusItem: {
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
+  },
+  bonusHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.sm,
+  },
+  bonusHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  bonusIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  bonusInfo: {
+    flex: 1,
+  },
+  bonusEmployeeName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  bonusDate: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  bonusStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  bonusStatusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  bonusReasonContainer: {
+    flexDirection: "row",
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  bonusReasonText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    fontStyle: "italic",
+  },
+  bonusFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  bonusAmountContainer: {},
+  bonusAmountLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 2,
+  },
+  bonusAmount: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.warning[600],
+  },
+  bonusActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  cancelBonusButton: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    backgroundColor: colors.error[50],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  markBonusPaidButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.xs,
+  },
+  markBonusPaidText: {
+    fontSize: typography.fontSize.sm,
+    color: "#fff",
+    fontWeight: typography.fontWeight.semibold,
+  },
+  bonusPaidDate: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  bonusConfirmNote: {
+    flexDirection: "row",
+    backgroundColor: colors.warning[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  bonusConfirmNoteText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[800],
+    lineHeight: 20,
   },
 });
 

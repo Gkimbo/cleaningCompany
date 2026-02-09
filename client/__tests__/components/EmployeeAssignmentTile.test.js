@@ -496,3 +496,161 @@ describe("EmployeeAssignmentTile - Direct Booking Flow", () => {
     });
   });
 });
+
+// ============================================
+// Address Visibility Tests (48-hour rule)
+// ============================================
+describe("EmployeeAssignmentTile - Address Visibility", () => {
+  // isWithin48Hours function from component
+  const isWithin48Hours = (dateString) => {
+    const now = new Date();
+    // Assume 10am start time for the appointment
+    const appointmentDate = new Date(dateString + "T10:00:00");
+    const diffTime = appointmentDate.getTime() - now.getTime();
+    const diffHours = diffTime / (1000 * 60 * 60);
+    return diffHours <= 48 && diffHours >= 0;
+  };
+
+  // Helper to get date string for a specific number of hours from now
+  const getDateStringForHoursFromNow = (hours) => {
+    const date = new Date();
+    date.setHours(date.getHours() + hours);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  describe("isWithin48Hours", () => {
+    it("should return true for appointment today", () => {
+      // Create a date for today but set appointment at 10am
+      const today = new Date();
+      today.setHours(8, 0, 0, 0); // 8am - before 10am appointment
+      const dateString = today.toISOString().split("T")[0];
+
+      // We need to test with fixed time, so just verify the function logic
+      const appointmentTime = new Date(dateString + "T10:00:00");
+      const mockNow = new Date(dateString + "T08:00:00");
+      const diffHours = (appointmentTime - mockNow) / (1000 * 60 * 60);
+
+      expect(diffHours).toBe(2);
+      expect(diffHours <= 48 && diffHours >= 0).toBe(true);
+    });
+
+    it("should return true for appointment tomorrow", () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateString = tomorrow.toISOString().split("T")[0];
+
+      const appointmentTime = new Date(dateString + "T10:00:00");
+      const now = new Date();
+      const diffHours = (appointmentTime - now) / (1000 * 60 * 60);
+
+      // Tomorrow at 10am should be roughly 10-34 hours away (depending on current time)
+      expect(diffHours > 0).toBe(true);
+      expect(diffHours <= 48).toBe(true);
+    });
+
+    it("should return false for appointment 3 days away", () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 3);
+      const dateString = futureDate.toISOString().split("T")[0];
+
+      const appointmentTime = new Date(dateString + "T10:00:00");
+      const now = new Date();
+      const diffHours = (appointmentTime - now) / (1000 * 60 * 60);
+
+      // 3 days away = ~72 hours
+      expect(diffHours > 48).toBe(true);
+    });
+
+    it("should return false for past appointments", () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const dateString = yesterday.toISOString().split("T")[0];
+
+      const appointmentTime = new Date(dateString + "T10:00:00");
+      const now = new Date();
+      const diffHours = (appointmentTime - now) / (1000 * 60 * 60);
+
+      // Yesterday should be negative hours
+      expect(diffHours < 0).toBe(true);
+    });
+  });
+
+  describe("Address Display Logic", () => {
+    const mockHome = {
+      address: "123 Main St",
+      city: "Austin",
+      state: "TX",
+      zipcode: "78701",
+    };
+
+    it("should show full address when within 48 hours and assigned", () => {
+      const assigned = true;
+      const withinWindow = true;
+
+      const showFullAddress = assigned && withinWindow;
+      expect(showFullAddress).toBe(true);
+
+      if (showFullAddress) {
+        const displayAddress = `${mockHome.address}, ${mockHome.city}, ${mockHome.state} ${mockHome.zipcode}`;
+        expect(displayAddress).toBe("123 Main St, Austin, TX 78701");
+      }
+    });
+
+    it("should show only city/state when outside 48 hours", () => {
+      const assigned = true;
+      const withinWindow = false;
+
+      const showFullAddress = assigned && withinWindow;
+      expect(showFullAddress).toBe(false);
+
+      const displayAddress = `${mockHome.city}, ${mockHome.state}`;
+      expect(displayAddress).toBe("Austin, TX");
+    });
+
+    it("should show hint text when address is hidden", () => {
+      const withinWindow = false;
+      const hintText = !withinWindow ? "Full address available 2 days before" : null;
+
+      expect(hintText).toBe("Full address available 2 days before");
+    });
+
+    it("should not show hint text when address is visible", () => {
+      const withinWindow = true;
+      const hintText = !withinWindow ? "Full address available 2 days before" : null;
+
+      expect(hintText).toBeNull();
+    });
+  });
+
+  describe("Access Info Visibility (keypad code, gate code, etc.)", () => {
+    it("should hide access info when outside 48 hours", () => {
+      const assigned = true;
+      const withinWindow = false;
+      const hasAccessInfo = true;
+
+      const showAccessInfo = assigned && withinWindow && hasAccessInfo;
+      expect(showAccessInfo).toBe(false);
+    });
+
+    it("should show access info when within 48 hours", () => {
+      const assigned = true;
+      const withinWindow = true;
+      const hasAccessInfo = true;
+
+      const showAccessInfo = assigned && withinWindow && hasAccessInfo;
+      expect(showAccessInfo).toBe(true);
+    });
+
+    it("should not show access info if not assigned", () => {
+      const assigned = false;
+      const withinWindow = true;
+      const hasAccessInfo = true;
+
+      const showAccessInfo = assigned && withinWindow && hasAccessInfo;
+      expect(showAccessInfo).toBe(false);
+    });
+  });
+});

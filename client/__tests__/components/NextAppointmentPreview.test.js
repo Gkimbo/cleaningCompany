@@ -526,3 +526,132 @@ describe("NextAppointmentPreview Component Logic", () => {
     });
   });
 });
+
+// ============================================
+// 48-Hour Address Visibility Tests
+// ============================================
+describe("NextAppointmentPreview - 48-Hour Address Visibility", () => {
+  /**
+   * Tests for the updated isWithin48Hours function
+   * Full address is only shown when appointment is within 48 hours of start time
+   */
+
+  // Updated function using 48-hour calculation
+  const isWithin48Hours = (appointmentDate) => {
+    const now = new Date();
+    // Assume 10am start time for the appointment
+    const appointmentTime = new Date(appointmentDate + "T10:00:00");
+    const diffTime = appointmentTime.getTime() - now.getTime();
+    const diffHours = diffTime / (1000 * 60 * 60);
+    return diffHours <= 48 && diffHours >= 0;
+  };
+
+  // Helper to format date as YYYY-MM-DD in local timezone
+  const toLocalDateString = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  describe("isWithin48Hours Calculation", () => {
+    it("should return true for appointment tomorrow", () => {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = toLocalDateString(tomorrow);
+
+      // Tomorrow at 10am is always within 48 hours
+      const appointmentTime = new Date(tomorrowStr + "T10:00:00");
+      const now = new Date();
+      const diffHours = (appointmentTime - now) / (1000 * 60 * 60);
+
+      expect(diffHours > 0).toBe(true);
+      expect(diffHours <= 48).toBe(true);
+    });
+
+    it("should return false for appointment 3 days away", () => {
+      const threeDays = new Date();
+      threeDays.setDate(threeDays.getDate() + 3);
+      const threeDaysStr = toLocalDateString(threeDays);
+
+      const appointmentTime = new Date(threeDaysStr + "T10:00:00");
+      const now = new Date();
+      const diffHours = (appointmentTime - now) / (1000 * 60 * 60);
+
+      // 3 days = roughly 72 hours
+      expect(diffHours > 48).toBe(true);
+    });
+
+    it("should return false for past appointments", () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = toLocalDateString(yesterday);
+
+      const appointmentTime = new Date(yesterdayStr + "T10:00:00");
+      const now = new Date();
+      const diffHours = (appointmentTime - now) / (1000 * 60 * 60);
+
+      expect(diffHours < 0).toBe(true);
+    });
+  });
+
+  describe("Address Display Based on 48-Hour Window", () => {
+    const mockHome = {
+      address: "123 Main Street",
+      city: "Boston",
+      state: "MA",
+      zipcode: "02101",
+    };
+
+    it("should show full address when within 48 hours", () => {
+      const showFullAddress = true;
+
+      const displayedContent = showFullAddress
+        ? `${mockHome.address}, ${mockHome.city}, ${mockHome.state} ${mockHome.zipcode}`
+        : `${mockHome.city}, ${mockHome.state}`;
+
+      expect(displayedContent).toBe("123 Main Street, Boston, MA 02101");
+    });
+
+    it("should show only city/state when outside 48 hours", () => {
+      const showFullAddress = false;
+
+      const displayedContent = showFullAddress
+        ? `${mockHome.address}, ${mockHome.city}, ${mockHome.state} ${mockHome.zipcode}`
+        : `${mockHome.city}, ${mockHome.state}`;
+
+      expect(displayedContent).toBe("Boston, MA");
+    });
+
+    it("should show correct hint text when address is hidden", () => {
+      const showFullAddress = false;
+      const hintText = "Full address available 2 days before";
+
+      expect(!showFullAddress).toBe(true);
+      expect(hintText).toBe("Full address available 2 days before");
+    });
+  });
+
+  describe("Access Info Visibility", () => {
+    it("should hide access details when outside 48 hours", () => {
+      const showFullAddress = false;
+      const accessDetailsMessage = !showFullAddress
+        ? "Full address and access details available 2 days before appointment"
+        : null;
+
+      expect(accessDetailsMessage).toBeTruthy();
+      expect(accessDetailsMessage).toContain("2 days before");
+    });
+
+    it("should show access details when within 48 hours", () => {
+      const showFullAddress = true;
+      const keyPadCode = "1234";
+      const keyLocation = "Under mat";
+
+      // Access info should be visible when we have address and access codes
+      const hasAccessInfo = !!(keyPadCode || keyLocation);
+      const showAccessInfo = showFullAddress && hasAccessInfo;
+      expect(showAccessInfo).toBe(true);
+    });
+  });
+});

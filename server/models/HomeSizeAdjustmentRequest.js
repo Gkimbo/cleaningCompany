@@ -6,6 +6,11 @@ module.exports = (sequelize, DataTypes) => {
       autoIncrement: true,
       primaryKey: true,
     },
+    caseNumber: {
+      type: DataTypes.STRING(20),
+      allowNull: true, // Will be set by hook after creation
+      unique: true,
+    },
     appointmentId: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -140,6 +145,16 @@ module.exports = (sequelize, DataTypes) => {
       as: 'photos',
     });
   };
+
+  // Generate case number after creation
+  HomeSizeAdjustmentRequest.afterCreate(async (adjustment, options) => {
+    if (!adjustment.caseNumber) {
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const paddedId = String(adjustment.id).padStart(5, "0");
+      const caseNumber = `ADJ-${dateStr}-${paddedId}`;
+      await adjustment.update({ caseNumber }, { transaction: options.transaction });
+    }
+  });
 
   return HomeSizeAdjustmentRequest;
 };

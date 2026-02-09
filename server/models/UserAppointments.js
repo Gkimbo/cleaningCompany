@@ -364,6 +364,17 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "Who/what initiated the cancellation",
 		},
+		cancellationCategory: {
+			type: DataTypes.STRING(50),
+			allowNull: true,
+			comment: "Category: tenant_present, emergency, weather, etc.",
+		},
+		reviewsBlocked: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "Whether reviews are blocked (e.g., tenant present cancellation)",
+		},
 		hasActiveAppeal: {
 			type: DataTypes.BOOLEAN,
 			allowNull: false,

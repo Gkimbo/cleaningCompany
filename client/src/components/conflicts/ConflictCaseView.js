@@ -28,6 +28,7 @@ import MessageThreadSection from "./sections/MessageThreadSection";
 import AuditTrailSection from "./sections/AuditTrailSection";
 import FinancialSection from "./sections/FinancialSection";
 import ResolutionActionsPanel from "./sections/ResolutionActionsPanel";
+import LinkedConversationSection from "./sections/LinkedConversationSection";
 
 // Modals
 import RefundModal from "./modals/RefundModal";
@@ -36,13 +37,19 @@ import PhotoViewerModal from "./modals/PhotoViewerModal";
 import PhotoComparisonModal from "./modals/PhotoComparisonModal";
 import AddNoteModal from "./modals/AddNoteModal";
 
-const TABS = [
+const BASE_TABS = [
   { id: "overview", label: "Overview", icon: "info-circle" },
   { id: "evidence", label: "Evidence", icon: "camera" },
   { id: "context", label: "Context", icon: "list-alt" },
   { id: "messages", label: "Messages", icon: "comments" },
   { id: "activity", label: "Activity", icon: "history" },
   { id: "financial", label: "Financial", icon: "usd" },
+];
+
+const SUPPORT_TABS = [
+  { id: "overview", label: "Overview", icon: "info-circle" },
+  { id: "conversation", label: "Support Chat", icon: "life-ring" },
+  { id: "activity", label: "Activity", icon: "history" },
 ];
 
 const ConflictCaseView = () => {
@@ -194,11 +201,14 @@ const ConflictCaseView = () => {
       escalated: colors.error[500],
       pending_homeowner: colors.warning[500],
       pending_owner: colors.warning[600],
+      pending_info: colors.warning[600],
       approved: colors.success[500],
       owner_approved: colors.success[500],
       denied: colors.error[500],
       owner_denied: colors.error[500],
       partially_approved: colors.primary[500],
+      resolved: colors.success[500],
+      closed: colors.neutral[500],
     };
     return statusColors[status] || colors.neutral[500];
   };
@@ -251,6 +261,13 @@ const ConflictCaseView = () => {
             caseType={caseType}
           />
         );
+      case "conversation":
+        return (
+          <LinkedConversationSection
+            ticketId={caseId}
+            conversationId={caseData?.conversationId}
+          />
+        );
       default:
         return null;
     }
@@ -277,7 +294,8 @@ const ConflictCaseView = () => {
     );
   }
 
-  const isClosed = ["approved", "denied", "partially_approved", "owner_approved", "owner_denied"].includes(caseData.status);
+  const isClosed = ["approved", "denied", "partially_approved", "owner_approved", "owner_denied", "resolved", "closed"].includes(caseData.status);
+  const tabs = caseType === "support" ? SUPPORT_TABS : BASE_TABS;
 
   return (
     <View style={styles.container}>
@@ -289,11 +307,31 @@ const ConflictCaseView = () => {
 
         <View style={styles.headerContent}>
           <View style={styles.caseNumberRow}>
-            <View style={[styles.caseTypeBadge, { backgroundColor: caseType === "appeal" ? colors.primary[100] : colors.warning[100] }]}>
+            <View style={[styles.caseTypeBadge, {
+              backgroundColor: caseType === "appeal"
+                ? colors.primary[100]
+                : caseType === "support"
+                  ? colors.secondary[100]
+                  : caseType === "payment"
+                    ? colors.error[100]
+                    : colors.warning[100]
+            }]}>
               <Icon
-                name={caseType === "appeal" ? "gavel" : "home"}
+                name={caseType === "appeal"
+                  ? "gavel"
+                  : caseType === "support"
+                    ? "life-ring"
+                    : caseType === "payment"
+                      ? "dollar"
+                      : "home"}
                 size={12}
-                color={caseType === "appeal" ? colors.primary[600] : colors.warning[600]}
+                color={caseType === "appeal"
+                  ? colors.primary[600]
+                  : caseType === "support"
+                    ? colors.secondary[600]
+                    : caseType === "payment"
+                      ? colors.error[600]
+                      : colors.warning[600]}
               />
             </View>
             <Text style={styles.caseNumber}>{caseData.caseNumber}</Text>
@@ -324,7 +362,7 @@ const ConflictCaseView = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabsContent}
         >
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <TouchableOpacity
               key={tab.id}
               style={[styles.tab, activeTab === tab.id && styles.tabActive]}

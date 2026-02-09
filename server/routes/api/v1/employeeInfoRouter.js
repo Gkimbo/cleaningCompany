@@ -253,4 +253,30 @@ employeeInfoRouter.post("/shifts", async (req, res) => {
   }
 });
 
+/**
+ * GET /bonuses - Get bonuses received by the employee
+ */
+employeeInfoRouter.get("/bonuses", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const EmployeeBonusService = require("../../../services/EmployeeBonusService");
+    const bonuses = await EmployeeBonusService.getBonusesForEmployee(userId, {
+      limit: parseInt(req.query.limit) || 50,
+      includePending: req.query.includePending === "true",
+    });
+
+    res.json(bonuses);
+  } catch (error) {
+    console.error("Error fetching employee bonuses:", error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
 module.exports = employeeInfoRouter;

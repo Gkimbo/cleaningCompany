@@ -9,6 +9,7 @@
 
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, View, ActivityIndicator, Alert, Modal, ScrollView, TouchableOpacity, TouchableWithoutFeedback } from "react-native";
+import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import {
 	colors,
@@ -28,6 +29,7 @@ const ROLE_ICONS = {
 	humanResources: "gavel",
 	largeBusinessOwner: "building",
 	preferredCleaner: "star",
+	largeHomeOwner: "home",
 };
 
 // Role label mapping
@@ -37,8 +39,9 @@ const ROLE_LABELS = {
 	businessOwner: "Business Owner",
 	employee: "Employee",
 	humanResources: "HR Manager",
-	largeBusinessOwner: "Large Business",
+	largeBusinessOwner: "Elite Partner",
 	preferredCleaner: "Preferred Cleaner",
+	largeHomeOwner: "Large Home Owner",
 };
 
 // Role color mapping
@@ -48,8 +51,9 @@ const ROLE_COLORS = {
 	businessOwner: colors.secondary[600],
 	employee: colors.warning[600],
 	humanResources: colors.error[400],
-	largeBusinessOwner: colors.info ? colors.info[600] : "#0EA5E9",
-	preferredCleaner: colors.warning[400] || "#FBBF24",
+	largeBusinessOwner: colors.primary[500],
+	preferredCleaner: colors.warning[400],
+	largeHomeOwner: colors.success[400],
 };
 
 // All available roles for switching
@@ -61,9 +65,11 @@ const ALL_ROLES = [
 	"humanResources",
 	"largeBusinessOwner",
 	"preferredCleaner",
+	"largeHomeOwner",
 ];
 
 const ExitPreviewButton = () => {
+	const navigate = useNavigate();
 	const {
 		isPreviewMode,
 		previewRole,
@@ -78,6 +84,14 @@ const ExitPreviewButton = () => {
 	const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
 
 	if (!isPreviewMode) return null;
+
+	const handleExit = async () => {
+		const result = await exitPreviewMode();
+		if (result.success) {
+			// Navigate to home page which will show owner profile
+			navigate("/");
+		}
+	};
 
 	const roleIcon = ROLE_ICONS[previewRole] || "user";
 	const roleLabel = ROLE_LABELS[previewRole] || "Unknown";
@@ -215,7 +229,7 @@ const ExitPreviewButton = () => {
 						styles.exitButton,
 						pressed && styles.exitButtonPressed,
 					]}
-					onPress={exitPreviewMode}
+					onPress={handleExit}
 					disabled={isActionDisabled}
 				>
 					{isLoading ? (

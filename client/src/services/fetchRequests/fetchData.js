@@ -1302,6 +1302,31 @@ class FetchData {
     }
   }
 
+  // Get cleaner's confirmed multi-cleaner jobs (jobs they've been approved for)
+  static async getMyConfirmedMultiCleanerJobs(token) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/multi-cleaner/my-confirmed-jobs",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch confirmed jobs" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching confirmed multi-cleaner jobs:", error);
+      return { error: "Failed to fetch confirmed jobs" };
+    }
+  }
+
   // Cancel a pending multi-cleaner job request
   static async cancelMultiCleanerRequest(requestId, token) {
     try {
