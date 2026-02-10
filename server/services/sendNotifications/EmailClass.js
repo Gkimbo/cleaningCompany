@@ -1793,6 +1793,76 @@ Kleanr Support Team`;
     }
   }
 
+  // Email sent to cleaner when homeowner disputes their home size claim
+  static async sendAdjustmentDisputedEmail(email, cleanerName, homeAddress, reportedBeds, reportedBaths, disputeReason) {
+    try {
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 587,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      });
+
+      const htmlContent = createEmailTemplate({
+        title: "Home Size Claim Disputed",
+        subtitle: "Homeowner has disputed your adjustment request",
+        greeting: `Hi ${cleanerName},`,
+        content: `
+          <p>The homeowner has disputed your home size adjustment claim. The request has been escalated to an owner for review.</p>
+          <p>You'll be notified once a final decision has been made.</p>
+        `,
+        infoBox: {
+          icon: "🏠",
+          title: "Claim Details",
+          items: [
+            { label: "Address", value: homeAddress },
+            { label: "Your Reported Size", value: `${reportedBeds} bed, ${reportedBaths} bath` },
+          ],
+        },
+        warningBox: disputeReason ? {
+          icon: "📝",
+          text: `<strong>Homeowner's Reason:</strong> "${disputeReason}"`,
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        } : null,
+        footerMessage: "An owner will review the evidence and make a final decision",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      });
+
+      const textContent = `Hi ${cleanerName},
+
+The homeowner has disputed your home size adjustment claim.
+
+CLAIM DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${homeAddress}
+Your Reported Size: ${reportedBeds} bed, ${reportedBaths} bath
+
+${disputeReason ? `Homeowner's Reason: "${disputeReason}"\n` : ''}
+The request has been escalated to an owner for review. You'll be notified once a final decision has been made.
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "⚠️ Your Home Size Claim Has Been Disputed",
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Adjustment disputed email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending adjustment disputed email:", error);
+    }
+  }
+
   // Payment failed reminder email
   static async sendPaymentFailedReminder(email, firstName, address, appointmentDate, daysRemaining) {
     try {

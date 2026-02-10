@@ -20,6 +20,7 @@ const { startCompletionApprovalMonitor } = require("./services/cron/CompletionAp
 const { startAutoCompleteMonitor } = require("./services/cron/AutoCompleteMonitor");
 const { startApprovalTimeoutJob } = require("./services/cron/CleanerApprovalTimeoutJob");
 const { startTenantPresentTimeoutJob } = require("./services/cron/TenantPresentTimeoutJob");
+const { startExpirationJob: startHomeSizeExpirationJob } = require("./services/cron/HomeSizeAdjustmentExpirationJob");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -198,5 +199,6 @@ server.listen(port, () => {
 		startAutoCompleteMonitor(io, 5 * 60 * 1000); // Auto-complete reminders and fallback (every 5 min)
 		startApprovalTimeoutJob(io, 15 * 60 * 1000); // Multi-cleaner join request auto-approval (every 15 min)
 		startTenantPresentTimeoutJob(io, 5 * 60 * 1000); // Tenant present response/return timeouts (every 5 min)
+		startHomeSizeExpirationJob(io, 15 * 60 * 1000); // Home size adjustment expiration (every 15 min)
 	}
 });

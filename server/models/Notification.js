@@ -49,6 +49,10 @@ module.exports = (sequelize, DataTypes) => {
             "business_owner_declined",
             "client_opened_to_marketplace",
             "client_cancelled_after_decline",
+            // Home size adjustment notifications
+            "adjustment_expired",
+            "adjustment_expired_review",
+            "adjustment_disputed",
           ],
         ],
       },

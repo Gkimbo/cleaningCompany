@@ -19,14 +19,22 @@ const SuspiciousContentDetector = require("../../../services/SuspiciousContentDe
 const EncryptionService = require("../../../services/EncryptionService");
 
 // Helper to decrypt user PII fields from included models
+// Only return safe, non-sensitive fields to the frontend
 const decryptUserFields = (user) => {
   if (!user) return null;
+  const data = user.dataValues || user;
   return {
-    ...user.dataValues || user,
-    firstName: user.firstName ? EncryptionService.decrypt(user.firstName) : null,
-    lastName: user.lastName ? EncryptionService.decrypt(user.lastName) : null,
-    email: user.email ? EncryptionService.decrypt(user.email) : null,
-    phone: user.phone ? EncryptionService.decrypt(user.phone) : null,
+    id: data.id,
+    username: data.username,
+    type: data.type,
+    firstName: data.firstName ? EncryptionService.decrypt(data.firstName) : null,
+    lastName: data.lastName ? EncryptionService.decrypt(data.lastName) : null,
+    email: data.email ? EncryptionService.decrypt(data.email) : null,
+    phone: data.phone ? EncryptionService.decrypt(data.phone) : null,
+    profilePhotoUrl: data.profilePhotoUrl,
+    expoPushToken: data.expoPushToken,
+    isBusinessOwner: data.isBusinessOwner,
+    businessName: data.businessName ? EncryptionService.decrypt(data.businessName) : null,
   };
 };
 

@@ -58,6 +58,7 @@ jest.mock("../../../src/services/styles/theme", () => ({
   colors: {
     neutral: { 0: "#fff", 50: "#f9f9f9", 100: "#f0f0f0", 200: "#e0e0e0", 300: "#bdbdbd" },
     primary: { 50: "#e3f2fd", 100: "#bbdefb", 400: "#42a5f5", 500: "#2196f3", 600: "#1976d2" },
+    secondary: { 50: "#f8fafc", 100: "#f1f5f9", 200: "#e2e8f0", 700: "#334155", 800: "#1e293b" },
     warning: { 50: "#fff3e0", 100: "#ffe0b2", 500: "#ff9800", 600: "#fb8c00" },
     error: { 50: "#ffebee", 100: "#ffcdd2", 400: "#ef5350", 500: "#f44336", 600: "#e53935" },
     success: { 50: "#e8f5e9", 100: "#c8e6c9", 500: "#4caf50", 600: "#43a047" },

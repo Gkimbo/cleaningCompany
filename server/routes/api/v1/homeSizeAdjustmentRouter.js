@@ -1,6 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const { Op } = require("sequelize");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const {
   User,
   UserAppointments,
@@ -13,6 +14,9 @@ const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const EncryptionService = require("../../../services/EncryptionService");
 const AnalyticsService = require("../../../services/AnalyticsService");
+const NotificationService = require("../../../services/NotificationService");
+const { recordPaymentTransaction } = require("./paymentRouter");
+const HomeSizeAdjustmentSerializer = require("../../../serializers/HomeSizeAdjustmentSerializer");
 
 const homeSizeAdjustmentRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -268,7 +272,7 @@ homeSizeAdjustmentRouter.get("/history/:homeId", authenticateToken, async (req, 
       order: [["createdAt", "DESC"]],
     });
 
-    return res.json({ requests });
+    return res.json({ requests: HomeSizeAdjustmentSerializer.serializeArrayForList(requests) });
   } catch (error) {
     console.error("Error fetching history:", error);
     return res.status(500).json({ error: "Failed to fetch history" });
@@ -349,7 +353,7 @@ homeSizeAdjustmentRouter.get("/pending", authenticateToken, async (req, res) => 
       order: [["createdAt", "DESC"]],
     });
 
-    return res.json({ adjustments: requests });
+    return res.json({ adjustments: HomeSizeAdjustmentSerializer.serializeArray(requests) });
   } catch (error) {
     console.error("Error fetching pending requests:", error);
     return res.status(500).json({ error: "Failed to fetch pending requests" });
@@ -424,7 +428,7 @@ homeSizeAdjustmentRouter.get("/:id", authenticateToken, async (req, res) => {
       return res.status(403).json({ error: "Not authorized to view this request" });
     }
 
-    return res.json({ request });
+    return res.json({ request: HomeSizeAdjustmentSerializer.serializeOne(request) });
   } catch (error) {
     console.error("Error fetching request:", error);
     return res.status(500).json({ error: "Failed to fetch request" });
@@ -504,10 +508,60 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
       let chargePaymentIntentId = null;
 
       if (request.priceDifference > 0) {
-        // For now, mark as pending - actual Stripe charge would go here
-        // In production, you'd charge the customer's default payment method
-        chargeStatus = "pending";
-        console.log(`💰 Price difference of $${request.priceDifference} to be charged to homeowner ${userId}`);
+        try {
+          // Get homeowner's default payment method
+          if (!homeowner.stripeCustomerId) {
+            console.warn(`⚠️ Homeowner ${userId} has no Stripe customer ID, marking charge as failed`);
+            chargeStatus = "failed";
+          } else {
+            const customer = await stripe.customers.retrieve(homeowner.stripeCustomerId);
+            const paymentMethodId = customer.invoice_settings?.default_payment_method || customer.default_source;
+
+            if (!paymentMethodId) {
+              console.warn(`⚠️ Homeowner ${userId} has no default payment method, marking charge as failed`);
+              chargeStatus = "failed";
+            } else {
+              const chargeIntent = await stripe.paymentIntents.create({
+                amount: Math.round(request.priceDifference * 100), // cents
+                currency: "usd",
+                customer: homeowner.stripeCustomerId,
+                payment_method: paymentMethodId,
+                confirm: true,
+                off_session: true,
+                description: `Home size adjustment - Case ${request.caseNumber}`,
+                metadata: {
+                  type: "home_size_adjustment",
+                  adjustmentRequestId: request.id.toString(),
+                  homeownerId: homeowner.id.toString(),
+                },
+              });
+
+              if (chargeIntent.status === "succeeded") {
+                chargeStatus = "succeeded";
+                chargePaymentIntentId = chargeIntent.id;
+                console.log(`💰 Successfully charged $${request.priceDifference} to homeowner ${userId} (${chargeIntent.id})`);
+
+                // Record in Payment table
+                await recordPaymentTransaction({
+                  type: "charge",
+                  status: "succeeded",
+                  amount: Math.round(request.priceDifference * 100),
+                  userId: homeowner.id,
+                  appointmentId: request.appointmentId,
+                  stripePaymentIntentId: chargeIntent.id,
+                  description: `Home size adjustment charge (${request.caseNumber})`,
+                  metadata: { adjustmentRequestId: request.id },
+                });
+              } else {
+                console.warn(`⚠️ Charge for homeowner ${userId} not succeeded: ${chargeIntent.status}`);
+                chargeStatus = "failed";
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Stripe charge failed for homeowner ${userId}:`, error.message);
+          chargeStatus = "failed";
+        }
       }
 
       await request.update({
@@ -575,7 +629,42 @@ homeSizeAdjustmentRouter.post("/:id/homeowner-response", authenticateToken, asyn
         }
       }
 
-      console.log(`⚠️ Adjustment request ${id} denied by homeowner. Escalated to owners.`);
+      // Notify cleaner that homeowner disputed their claim
+      const cleanerName = cleaner.firstName
+        ? EncryptionService.decrypt(cleaner.firstName)
+        : cleaner.username;
+      const homeAddress = EncryptionService.decrypt(home.address);
+
+      await NotificationService.notifyUser({
+        userId: cleaner.id,
+        type: "adjustment_disputed",
+        title: "Home Size Claim Disputed",
+        body: `The homeowner disputed your claim for ${homeAddress}. An owner will review and make a final decision.`,
+        data: {
+          adjustmentRequestId: request.id,
+          appointmentId: request.appointmentId,
+          homeAddress,
+          disputeReason: reason || "No reason provided",
+        },
+        actionRequired: false, // Cleaner can't act, must wait for owner
+        relatedAppointmentId: request.appointmentId,
+        sendPush: true,
+        sendEmail: true,
+        emailOptions: {
+          sendFunction: Email.sendAdjustmentDisputedEmail,
+          args: [
+            EncryptionService.decrypt(cleaner.email),
+            cleanerName,
+            homeAddress,
+            request.reportedNumBeds,
+            request.reportedNumBaths,
+            reason,
+          ],
+        },
+        io: req.app.get("io"),
+      });
+
+      console.log(`⚠️ Adjustment request ${id} denied by homeowner. Escalated to owners. Cleaner notified.`);
 
       return res.json({
         success: true,
@@ -686,9 +775,64 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
       console.log(`📝 Added false home size record to homeowner ${homeowner.id}. Total count: ${(homeowner.falseHomeSizeCount || 0) + 1}`);
 
       let chargeStatus = "waived";
+      let chargePaymentIntentId = null;
+
       if (priceDiff > 0) {
-        chargeStatus = "pending";
-        console.log(`💰 Price difference of $${priceDiff} to be charged to homeowner ${request.homeownerId}`);
+        try {
+          // Get homeowner's default payment method
+          if (!homeowner.stripeCustomerId) {
+            console.warn(`⚠️ Homeowner ${request.homeownerId} has no Stripe customer ID, marking charge as failed`);
+            chargeStatus = "failed";
+          } else {
+            const customer = await stripe.customers.retrieve(homeowner.stripeCustomerId);
+            const paymentMethodId = customer.invoice_settings?.default_payment_method || customer.default_source;
+
+            if (!paymentMethodId) {
+              console.warn(`⚠️ Homeowner ${request.homeownerId} has no default payment method, marking charge as failed`);
+              chargeStatus = "failed";
+            } else {
+              const chargeIntent = await stripe.paymentIntents.create({
+                amount: Math.round(priceDiff * 100), // cents
+                currency: "usd",
+                customer: homeowner.stripeCustomerId,
+                payment_method: paymentMethodId,
+                confirm: true,
+                off_session: true,
+                description: `Home size adjustment - Case ${request.caseNumber}`,
+                metadata: {
+                  type: "home_size_adjustment",
+                  adjustmentRequestId: request.id.toString(),
+                  homeownerId: homeowner.id.toString(),
+                  resolvedBy: resolver.type,
+                },
+              });
+
+              if (chargeIntent.status === "succeeded") {
+                chargeStatus = "succeeded";
+                chargePaymentIntentId = chargeIntent.id;
+                console.log(`💰 Successfully charged $${priceDiff} to homeowner ${request.homeownerId} (${chargeIntent.id})`);
+
+                // Record in Payment table
+                await recordPaymentTransaction({
+                  type: "charge",
+                  status: "succeeded",
+                  amount: Math.round(priceDiff * 100),
+                  userId: homeowner.id,
+                  appointmentId: request.appointmentId,
+                  stripePaymentIntentId: chargeIntent.id,
+                  description: `Home size adjustment charge (${request.caseNumber}) - Owner approved`,
+                  metadata: { adjustmentRequestId: request.id },
+                });
+              } else {
+                console.warn(`⚠️ Charge for homeowner ${request.homeownerId} not succeeded: ${chargeIntent.status}`);
+                chargeStatus = "failed";
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`❌ Stripe charge failed for homeowner ${request.homeownerId}:`, error.message);
+          chargeStatus = "failed";
+        }
       }
 
       await request.update({
@@ -697,6 +841,7 @@ homeSizeAdjustmentRouter.post("/:id/owner-resolve", authenticateToken, async (re
         ownerNote: ownerNote || null,
         ownerResolvedAt: new Date(),
         chargeStatus,
+        chargePaymentIntentId,
       });
 
       // Notify both parties

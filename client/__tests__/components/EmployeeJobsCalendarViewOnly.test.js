@@ -1,5 +1,5 @@
 import React from "react";
-import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
 import EmployeeJobsCalendarViewOnly from "../../src/components/businessEmployee/EmployeeJobsCalendarViewOnly";
 import BusinessEmployeeService from "../../src/services/fetchRequests/BusinessEmployeeService";
 
@@ -48,14 +48,13 @@ describe("EmployeeJobsCalendarViewOnly", () => {
   yesterday.setDate(yesterday.getDate() - 1);
 
   // Format dates to match component's toDateString() comparison
-  // The component creates new Date(job.appointment?.date) and uses toDateString()
-  // Use local timezone format (includes T00:00:00) to avoid UTC conversion issues
+  // The component creates new Date(job.appointment?.date + "T00:00:00") and uses toDateString()
+  // So we should NOT include T00:00:00 in the date string, the component adds it
   const formatDateForJob = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    // Adding T00:00:00 makes JavaScript parse it as local time instead of UTC
-    return `${year}-${month}-${day}T00:00:00`;
+    return `${year}-${month}-${day}`;
   };
 
   const todayDateStr = formatDateForJob(today);
@@ -345,35 +344,27 @@ describe("EmployeeJobsCalendarViewOnly", () => {
 
   describe("Job Cards (View Only)", () => {
     it("displays completion time when timeToBeCompleted exists", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("Completed by 3h")).toBeTruthy();
-      });
+      expect(await findByText("Completed by 3h")).toBeTruthy();
     });
 
     it("displays job address", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("123 Main St, City, ST 12345")).toBeTruthy();
-      });
+      expect(await findByText("123 Main St, City, ST 12345")).toBeTruthy();
     });
 
     it("displays client first name", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("John")).toBeTruthy();
-      });
+      expect(await findByText("John")).toBeTruthy();
     });
 
     it("displays job pay amount formatted as dollars", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("$85")).toBeTruthy();
-      });
+      expect(await findByText("$85")).toBeTruthy();
     });
 
     it("displays Scheduled status badge for assigned jobs", async () => {
@@ -395,11 +386,9 @@ describe("EmployeeJobsCalendarViewOnly", () => {
     });
 
     it("displays team indicator for multi-cleaner jobs", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("+1 team member")).toBeTruthy();
-      });
+      expect(await findByText("+1 team member")).toBeTruthy();
     });
 
     it("does NOT display Start Job action button (view-only)", async () => {
@@ -451,19 +440,15 @@ describe("EmployeeJobsCalendarViewOnly", () => {
 
   describe("Time Formatting", () => {
     it("displays completion time for 3 hour job", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("Completed by 3h")).toBeTruthy();
-      });
+      expect(await findByText("Completed by 3h")).toBeTruthy();
     });
 
     it("displays completion time for 2 hour job", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("Completed by 2h")).toBeTruthy();
-      });
+      expect(await findByText("Completed by 2h")).toBeTruthy();
     });
 
     it("does not show time when timeToBeCompleted is missing", async () => {
@@ -486,12 +471,9 @@ describe("EmployeeJobsCalendarViewOnly", () => {
       }];
       BusinessEmployeeService.getMyJobs.mockResolvedValue({ jobs: jobsWithoutTime });
 
-      const { queryByText, getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText, queryByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("123 Main St, City, ST 12345")).toBeTruthy();
-      });
-
+      expect(await findByText("123 Main St, City, ST 12345")).toBeTruthy();
       expect(queryByText(/Completed by/)).toBeNull();
     });
   });
@@ -512,53 +494,41 @@ describe("EmployeeJobsCalendarViewOnly", () => {
 
   describe("Multiple Jobs Same Day", () => {
     it("displays all jobs for today", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("123 Main St, City, ST 12345")).toBeTruthy();
-        expect(getByText("789 Pine Rd, Village, ST 11111")).toBeTruthy();
-      });
+      expect(await findByText("123 Main St, City, ST 12345")).toBeTruthy();
+      expect(await findByText("789 Pine Rd, Village, ST 11111")).toBeTruthy();
     });
 
     it("shows job count indicator on calendar days with multiple jobs", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("+1")).toBeTruthy();
-      });
+      expect(await findByText("+1")).toBeTruthy();
     });
   });
 
   describe("Address Display", () => {
     it("shows address when provided", async () => {
-      // Using default mockJobs which have addresses
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("123 Main St, City, ST 12345")).toBeTruthy();
-      });
+      expect(await findByText("123 Main St, City, ST 12345")).toBeTruthy();
     });
   });
 
   describe("Pay Amount Display", () => {
     it("converts cents to dollars correctly", async () => {
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        // Jobs from today include one with 8500 cents = $85
-        expect(getByText("$85")).toBeTruthy();
-      });
+      // Jobs from today include one with 8500 cents = $85
+      expect(await findByText("$85")).toBeTruthy();
     });
   });
 
   describe("Team Members Display", () => {
     it("shows team member indicator when job has coworkers", async () => {
-      // The default mockJobs include a job with 1 coworker
-      const { getByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
+      const { findByText } = render(<EmployeeJobsCalendarViewOnly state={mockState} />);
 
-      await waitFor(() => {
-        expect(getByText("+1 team member")).toBeTruthy();
-      });
+      expect(await findByText("+1 team member")).toBeTruthy();
     });
   });
 

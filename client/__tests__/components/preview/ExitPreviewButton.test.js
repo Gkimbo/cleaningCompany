@@ -17,12 +17,20 @@ jest.mock("../../../src/context/PreviewContext", () => ({
 // Mock react-native-vector-icons
 jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
 
+// Mock react-router-native useNavigate
+const mockNavigate = jest.fn();
+jest.mock("react-router-native", () => ({
+	useNavigate: () => mockNavigate,
+}));
+
 import ExitPreviewButton from "../../../src/components/preview/ExitPreviewButton";
 
 describe("ExitPreviewButton", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
 		mockExitPreviewMode.mockClear();
+		// Default: exitPreviewMode resolves with success
+		mockExitPreviewMode.mockResolvedValue({ success: true });
 	});
 
 	const setupMock = (overrides = {}) => {

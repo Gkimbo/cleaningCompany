@@ -78,7 +78,9 @@ describe("PreferredCleanerService", () => {
       const result = await PreferredCleanerService.getPreferredCleaners(mockToken, homeId);
 
       expect(result.preferredCleaners).toEqual([]);
-      expect(result.usePreferredCleaners).toBe(true);
+      // When response is explicitly not ok, usePreferredCleaners is false
+      // (different from network error which returns true as a safe default)
+      expect(result.usePreferredCleaners).toBe(false);
     });
 
     it("should handle empty preferred cleaners list", async () => {
