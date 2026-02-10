@@ -379,7 +379,7 @@ async function createDemoAccounts() {
 						userId: createdAccounts.homeowner.id,
 						homeId: homeownerHomes[0].id,
 						date: pastDate,
-						price: "18000", // $180 in cents
+						price: "180", // $180
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -806,7 +806,7 @@ async function createDemoAccounts() {
 				bringSheets: "no",
 				bringTowels: "yes",
 				towelConfigs: pastApptTowelConfigs,
-			}) * 100; // Convert to cents
+			}); // Price in dollars
 
 			for (let i = 1; i <= 5; i++) {
 				try {
@@ -856,7 +856,7 @@ async function createDemoAccounts() {
 					// Ignore duplicates
 				}
 			}
-			console.log("  - Created 5 past completed appointments (3 bed, 2 bath @ $" + (pastApptPrice / 100) + ")");
+			console.log("  - Created 5 past completed appointments (3 bed, 2 bath @ $" + pastApptPrice + ")");
 		}
 
 		// Create 3 upcoming appointments
@@ -891,7 +891,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.homeowner.id,
 							homeId: home.id,
 							date: futureDate,
-							price: String(price * 100), // Convert dollars to cents
+							price: String(price), // Price in dollars
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -975,7 +975,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.homeowner.id,
 							homeId: home.id,
 							date: todayDate,
-							price: String(price * 100), // Convert dollars to cents
+							price: String(price), // Price in dollars
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1158,7 +1158,7 @@ async function createDemoAccounts() {
 						userId: createdAccounts.homeowner.id,
 						homeId: home.id,
 						date: jobDate,
-						price: String(price * 100), // Convert to cents
+						price: String(price), // Price in dollars
 						paid: false,
 						bringTowels,
 						bringSheets,
@@ -1493,7 +1493,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: jobDate,
-							price: String(price * 100), // Convert dollars to cents
+							price: String(price), // Price in dollars
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1656,7 +1656,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.businessClient.id,
 							homeId: clientHome.id,
 							date: pastDate,
-							price: "16000", // $160 in cents
+							price: "160", // $160
 							paid: true,
 							bringTowels: "yes",
 							bringSheets: "no",
@@ -1728,7 +1728,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.businessClient.id,
 							homeId: clientHome.id,
 							date: futureDate,
-							price: String(price * 100), // Convert dollars to cents
+							price: String(price), // Price in dollars
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1852,7 +1852,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(3),
-					price: "18000", // $180 in cents
+					price: "180", // $180
 					paid: false,
 					bringTowels: "yes",
 					bringSheets: "no",
@@ -1929,7 +1929,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(5),
-					price: "18000", // $180 in cents
+					price: "180", // $180
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -1984,7 +1984,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(14),
-					price: "18000", // $180 in cents
+					price: "180", // $180
 					paid: false,
 					bringTowels: "yes",
 					bringSheets: "yes",
@@ -2045,7 +2045,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(7),
-					price: "20000", // $200 in cents
+					price: "200", // $200
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -2100,7 +2100,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(2),
-					price: "15000", // $150 for 3 bed/2 bath in cents
+					price: "150", // $150 for 3 bed/2 bath
 					paid: true,
 					bringTowels: "yes",
 					bringSheets: "no",
@@ -2145,7 +2145,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(21),
-					price: "18000", // $180 in cents
+					price: "180", // $180
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -2205,7 +2205,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(3),
-					price: "22000", // $220 in cents
+					price: "220", // $220
 					paid: true,
 					bringTowels: "yes",
 					bringSheets: "yes",
@@ -2247,7 +2247,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(10),
-					price: "18000",
+					price: "180", // $180
 					paid: true,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -2645,7 +2645,7 @@ async function createDemoAccounts() {
 						userId: createdClients[i].id,
 						homeId: clientHome.id,
 						date: pastDate,
-						price: String((180 + (i * 10)) * 100), // Convert dollars to cents
+						price: String(180 + (i * 10)), // Price in dollars
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -2655,7 +2655,7 @@ async function createDemoAccounts() {
 						empoyeesNeeded: 1,
 						timeToBeCompleted: "3",
 						paymentStatus: "paid",
-						amountPaid: (180 + (i * 10)) * 100,
+						amountPaid: 180 + (i * 10),
 						completionStatus: "approved",
 						bookedByCleanerId: largeBizOwner.id,
 						isDemoAppointment: true,
@@ -2727,13 +2727,13 @@ async function createDemoAccounts() {
 				// Spread across days 1 to today to ensure all 70 are in current month
 				const dayOfMonth = (i % 8) + 1; // Days 1-8 of current month
 				const pastDate = getCurrentMonthDate(dayOfMonth);
-				const priceInCents = (150 + (i * 5)) * 100;
+				const price = 150 + (i * 5); // Price in dollars
 
 				await UserAppointments.create({
 					userId: createdClients[i].id,
 					homeId: clientHome.id,
 					date: pastDate,
-					price: String(priceInCents),
+					price: String(price),
 					paid: true,
 					bringTowels: i % 2 === 0 ? "yes" : "no",
 					bringSheets: i % 3 === 0 ? "yes" : "no",
@@ -2743,7 +2743,7 @@ async function createDemoAccounts() {
 					empoyeesNeeded: 1,
 					timeToBeCompleted: String(2 + (i % 3)),
 					paymentStatus: "paid",
-					amountPaid: priceInCents,
+					amountPaid: price,
 					completionStatus: "approved",
 					bookedByCleanerId: largeBizOwner.id,
 					isDemoAppointment: true,
@@ -2882,7 +2882,7 @@ async function createDemoAccounts() {
 						userId: homeowner.id,
 						homeId: home.id,
 						date: pastDate,
-						price: String((160 + (i * 5)) * 100), // Convert dollars to cents
+						price: String(160 + (i * 5)), // Price in dollars
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -2892,7 +2892,7 @@ async function createDemoAccounts() {
 						empoyeesNeeded: 1,
 						timeToBeCompleted: "3",
 						paymentStatus: "paid",
-						amountPaid: (160 + (i * 5)) * 100,
+						amountPaid: 160 + (i * 5),
 						completionStatus: "approved",
 						isDemoAppointment: true,
 					});
@@ -2998,7 +2998,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: pastDate,
-							price: String((160 + (i * 10)) * 100), // Convert dollars to cents
+							price: String(160 + (i * 10)), // Price in dollars
 							paid: true,
 							bringTowels: "yes",
 							bringSheets: i % 2 === 0 ? "yes" : "no",
@@ -3008,7 +3008,7 @@ async function createDemoAccounts() {
 							empoyeesNeeded: 1,
 							timeToBeCompleted: "3",
 							paymentStatus: "paid",
-							amountPaid: (160 + (i * 10)) * 100,
+							amountPaid: 160 + (i * 10),
 							completionStatus: "approved",
 							isDemoAppointment: true,
 						});
@@ -3036,7 +3036,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: futureDate,
-							price: String((160 + (i * 10)) * 100), // Convert dollars to cents
+							price: String(160 + (i * 10)), // Price in dollars
 							paid: false,
 							bringTowels: "yes",
 							bringSheets: i === 0 ? "yes" : "no",
