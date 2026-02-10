@@ -8,10 +8,13 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Switch,
+  Alert,
 } from "react-native";
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
+import PreferredCleanerService from "../../services/fetchRequests/PreferredCleanerService";
 
 const { width } = Dimensions.get("window");
 
@@ -20,6 +23,10 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [homes, setHomes] = useState([]);
+  const [preferredData, setPreferredData] = useState({}); // { homeId: { cleaners: [], usePreferred: bool } }
+  const [expandedHome, setExpandedHome] = useState(null);
+  const [loadingPreferred, setLoadingPreferred] = useState({});
+  const [updatingToggle, setUpdatingToggle] = useState({});
 
   const fetchHomes = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -48,8 +55,108 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
     fetchHomes();
   }, [fetchHomes]);
 
+  // Fetch preferred cleaners for a home when expanded
+  const fetchPreferredCleaners = useCallback(async (homeId) => {
+    if (!state.currentUser?.token) return;
+
+    setLoadingPreferred((prev) => ({ ...prev, [homeId]: true }));
+    try {
+      const result = await PreferredCleanerService.getPreferredCleaners(
+        state.currentUser.token,
+        homeId
+      );
+      setPreferredData((prev) => ({
+        ...prev,
+        [homeId]: {
+          cleaners: result.preferredCleaners || [],
+          usePreferred: result.usePreferredCleaners !== false,
+        },
+      }));
+    } catch (error) {
+      console.error("Error fetching preferred cleaners:", error);
+    } finally {
+      setLoadingPreferred((prev) => ({ ...prev, [homeId]: false }));
+    }
+  }, [state.currentUser?.token]);
+
+  // Toggle expand/collapse for a home's preferred cleaners section
+  const handleToggleExpand = (homeId) => {
+    if (expandedHome === homeId) {
+      setExpandedHome(null);
+    } else {
+      setExpandedHome(homeId);
+      if (!preferredData[homeId]) {
+        fetchPreferredCleaners(homeId);
+      }
+    }
+  };
+
+  // Toggle use preferred cleaners setting
+  const handleToggleUsePreferred = async (homeId, value) => {
+    setUpdatingToggle((prev) => ({ ...prev, [homeId]: true }));
+    try {
+      const result = await PreferredCleanerService.updatePreferredSettings(
+        state.currentUser.token,
+        homeId,
+        value
+      );
+      if (result.success) {
+        setPreferredData((prev) => ({
+          ...prev,
+          [homeId]: {
+            ...prev[homeId],
+            usePreferred: value,
+          },
+        }));
+      } else {
+        Alert.alert("Error", result.error || "Failed to update setting");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to update preferred cleaners setting");
+    } finally {
+      setUpdatingToggle((prev) => ({ ...prev, [homeId]: false }));
+    }
+  };
+
+  // Remove a preferred cleaner
+  const handleRemoveCleaner = (homeId, cleaner) => {
+    Alert.alert(
+      "Remove Preferred Cleaner",
+      `Remove ${cleaner.cleanerName} from your preferred list?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            const result = await PreferredCleanerService.removePreferredCleaner(
+              state.currentUser.token,
+              homeId,
+              cleaner.cleanerId
+            );
+            if (result.success) {
+              setPreferredData((prev) => ({
+                ...prev,
+                [homeId]: {
+                  ...prev[homeId],
+                  cleaners: prev[homeId].cleaners.filter(
+                    (c) => c.cleanerId !== cleaner.cleanerId
+                  ),
+                },
+              }));
+            } else {
+              Alert.alert("Error", result.error || "Failed to remove cleaner");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const onRefresh = useCallback(() => {
     fetchHomes(true);
+    setPreferredData({}); // Reset preferred data on refresh
+    setExpandedHome(null);
   }, [fetchHomes]);
 
   const handleBack = () => {
@@ -149,57 +256,187 @@ const ScheduleCleaningList = ({ state, dispatch }) => {
             <Text style={styles.sectionTitle}>Your Homes</Text>
           </View>
 
-          {schedulableHomes.map((home, index) => (
-            <View
-              key={home.id}
-              style={[
-                styles.homeItem,
-                index < schedulableHomes.length - 1 && styles.homeItemBorder
-              ]}
-            >
-              <View style={styles.homeInfo}>
-                <Text style={styles.homeNickname}>{home.nickName || "My Home"}</Text>
-                <Text style={styles.homeAddress}>{home.address}</Text>
-                <View style={styles.homeMetaRow}>
-                  <View style={styles.homeMeta}>
-                    <Icon name="bed" size={12} color="#64748b" />
-                    <Text style={styles.homeMetaText}>{home.numBeds} bed</Text>
-                  </View>
-                  <View style={styles.homeMeta}>
-                    <Icon name="bath" size={12} color="#64748b" />
-                    <Text style={styles.homeMetaText}>{home.numBaths} bath</Text>
-                  </View>
-                  <View style={styles.homeMeta}>
-                    <Icon name="map-marker" size={12} color="#64748b" />
-                    <Text style={styles.homeMetaText}>{home.city}</Text>
+          {schedulableHomes.map((home, index) => {
+            const homePreferred = preferredData[home.id];
+            const isExpanded = expandedHome === home.id;
+            const isLoadingThis = loadingPreferred[home.id];
+            const isUpdating = updatingToggle[home.id];
+
+            return (
+              <View
+                key={home.id}
+                style={[
+                  styles.homeItem,
+                  index < schedulableHomes.length - 1 && styles.homeItemBorder
+                ]}
+              >
+                <View style={styles.homeInfo}>
+                  <Text style={styles.homeNickname}>{home.nickName || "My Home"}</Text>
+                  <Text style={styles.homeAddress}>{home.address}</Text>
+                  <View style={styles.homeMetaRow}>
+                    <View style={styles.homeMeta}>
+                      <Icon name="bed" size={12} color="#64748b" />
+                      <Text style={styles.homeMetaText}>{home.numBeds} bed</Text>
+                    </View>
+                    <View style={styles.homeMeta}>
+                      <Icon name="bath" size={12} color="#64748b" />
+                      <Text style={styles.homeMetaText}>{home.numBaths} bath</Text>
+                    </View>
+                    <View style={styles.homeMeta}>
+                      <Icon name="map-marker" size={12} color="#64748b" />
+                      <Text style={styles.homeMetaText}>{home.city}</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.actionButtons}>
+                <View style={styles.actionButtons}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.quickBookButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                    onPress={() => handleQuickBook(home.id)}
+                  >
+                    <Icon name="bolt" size={14} color="#fff" />
+                    <Text style={styles.quickBookText}>Quick Book</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.calendarButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                    onPress={() => handleSchedule(home.id)}
+                  >
+                    <Icon name="calendar" size={14} color="#6366f1" />
+                    <Text style={styles.calendarButtonText}>Calendar</Text>
+                  </Pressable>
+                </View>
+
+                {/* Preferred Cleaners Section */}
                 <Pressable
-                  style={({ pressed }) => [
-                    styles.quickBookButton,
-                    pressed && styles.buttonPressed,
-                  ]}
-                  onPress={() => handleQuickBook(home.id)}
+                  style={styles.preferredHeader}
+                  onPress={() => handleToggleExpand(home.id)}
                 >
-                  <Icon name="bolt" size={14} color="#fff" />
-                  <Text style={styles.quickBookText}>Quick Book</Text>
+                  <View style={styles.preferredHeaderLeft}>
+                    <Icon name="star" size={14} color="#f59e0b" />
+                    <Text style={styles.preferredHeaderText}>Preferred Cleaners</Text>
+                    {homePreferred?.cleaners?.length > 0 && (
+                      <View style={styles.preferredCountBadge}>
+                        <Text style={styles.preferredCountText}>
+                          {homePreferred.cleaners.length}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <Icon
+                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                    size={12}
+                    color="#64748b"
+                  />
                 </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.calendarButton,
-                    pressed && styles.buttonPressed,
-                  ]}
-                  onPress={() => handleSchedule(home.id)}
-                >
-                  <Icon name="calendar" size={14} color="#6366f1" />
-                  <Text style={styles.calendarButtonText}>Calendar</Text>
-                </Pressable>
+
+                {/* Expanded Preferred Cleaners Panel */}
+                {isExpanded && (
+                  <View style={styles.preferredPanel}>
+                    {isLoadingThis ? (
+                      <ActivityIndicator size="small" color="#6366f1" />
+                    ) : (
+                      <>
+                        {/* Toggle - requires 5+ preferred cleaners to enable */}
+                        {(() => {
+                          const cleanerCount = homePreferred?.cleaners?.length || 0;
+                          const canEnable = cleanerCount >= 5;
+                          const isOn = homePreferred?.usePreferred ?? false;
+
+                          return (
+                            <View style={styles.preferredToggleRow}>
+                              <View style={styles.preferredToggleInfo}>
+                                <Text style={styles.preferredToggleLabel}>
+                                  Preferred Only
+                                </Text>
+                                <Text style={styles.preferredToggleHint}>
+                                  {isOn
+                                    ? "Only preferred cleaners can book"
+                                    : canEnable
+                                      ? "All cleaners can book"
+                                      : `Need ${5 - cleanerCount} more preferred cleaner${5 - cleanerCount === 1 ? "" : "s"} to enable`}
+                                </Text>
+                              </View>
+                              <Switch
+                                value={isOn}
+                                onValueChange={(value) =>
+                                  handleToggleUsePreferred(home.id, value)
+                                }
+                                disabled={isUpdating || (!canEnable && !isOn)}
+                                trackColor={{ false: "#e2e8f0", true: "#86efac" }}
+                                thumbColor={isOn ? "#22c55e" : "#f4f4f5"}
+                              />
+                            </View>
+                          );
+                        })()}
+
+                        {/* Cleaners List */}
+                        {homePreferred?.cleaners?.length > 0 ? (
+                          <View style={styles.preferredCleanersList}>
+                            <Text style={styles.preferredListTitle}>
+                              Your Preferred Cleaners
+                            </Text>
+                            {homePreferred.cleaners.map((cleaner) => (
+                              <View key={cleaner.id} style={styles.preferredCleanerItem}>
+                                <View style={styles.cleanerAvatar}>
+                                  <Text style={styles.cleanerAvatarText}>
+                                    {cleaner.cleanerName.charAt(0).toUpperCase()}
+                                  </Text>
+                                </View>
+                                <View style={styles.cleanerInfo}>
+                                  <Text style={styles.cleanerName}>
+                                    {cleaner.cleanerName}
+                                  </Text>
+                                  <View style={styles.cleanerTierBadge}>
+                                    <Icon
+                                      name={
+                                        cleaner.preferenceLevel === "favorite"
+                                          ? "heart"
+                                          : "star"
+                                      }
+                                      size={8}
+                                      color={
+                                        cleaner.preferenceLevel === "favorite"
+                                          ? "#ef4444"
+                                          : "#f59e0b"
+                                      }
+                                    />
+                                    <Text style={styles.cleanerTierText}>
+                                      {cleaner.preferenceLevel === "favorite"
+                                        ? "Favorite"
+                                        : "Preferred"}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <Pressable
+                                  style={styles.removeCleanerBtn}
+                                  onPress={() => handleRemoveCleaner(home.id, cleaner)}
+                                >
+                                  <Icon name="times" size={12} color="#ef4444" />
+                                </Pressable>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <View style={styles.noPreferredCleaners}>
+                            <Icon name="user-plus" size={16} color="#94a3b8" />
+                            <Text style={styles.noPreferredText}>
+                              No preferred cleaners yet. Leave a review to add one!
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
+                )}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       ) : (
         <View style={styles.emptyCard}>
@@ -717,6 +954,139 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 40,
+  },
+
+  // Preferred Cleaners Section
+  preferredHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fffbeb",
+    marginTop: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#fef3c7",
+  },
+  preferredHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  preferredHeaderText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#92400e",
+  },
+  preferredCountBadge: {
+    backgroundColor: "#f59e0b",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 20,
+    alignItems: "center",
+  },
+  preferredCountText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  preferredPanel: {
+    backgroundColor: "#fefce8",
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#fef3c7",
+  },
+  preferredToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#fef3c7",
+    marginBottom: 12,
+  },
+  preferredToggleInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  preferredToggleLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  preferredToggleHint: {
+    fontSize: 11,
+    color: "#64748b",
+    marginTop: 2,
+  },
+  preferredCleanersList: {
+    gap: 8,
+  },
+  preferredListTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748b",
+    marginBottom: 4,
+  },
+  preferredCleanerItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cleanerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#eef2ff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  cleanerAvatarText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6366f1",
+  },
+  cleanerInfo: {
+    flex: 1,
+  },
+  cleanerName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  cleanerTierBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  cleanerTierText: {
+    fontSize: 10,
+    color: "#64748b",
+  },
+  removeCleanerBtn: {
+    padding: 8,
+  },
+  noPreferredCleaners: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+  },
+  noPreferredText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#64748b",
   },
 });
 

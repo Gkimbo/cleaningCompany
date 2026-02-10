@@ -4,6 +4,7 @@ const verifyBusinessOwner = require("../../../middleware/verifyBusinessOwner");
 const BusinessEmployeeService = require("../../../services/BusinessEmployeeService");
 const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssignmentService");
 const BusinessAnalyticsService = require("../../../services/BusinessAnalyticsService");
+const BusinessVolumeService = require("../../../services/BusinessVolumeService");
 const BusinessVerificationService = require("../../../services/BusinessVerificationService");
 const PayCalculatorService = require("../../../services/PayCalculatorService");
 const CustomJobFlowService = require("../../../services/CustomJobFlowService");
@@ -15,7 +16,7 @@ const ClientJobFlowAssignmentSerializer = require("../../../serializers/ClientJo
 const CustomJobFlowChecklistSerializer = require("../../../serializers/CustomJobFlowChecklistSerializer");
 const TimesheetSerializer = require("../../../serializers/TimesheetSerializer");
 const EncryptionService = require("../../../services/EncryptionService");
-const { UserAppointments, UserHomes, User, Payout, CleanerClient, sequelize, EmployeeJobAssignment, BusinessEmployee, RecurringSchedule } = require("../../../models");
+const { UserAppointments, UserHomes, User, Payout, CleanerClient, sequelize, EmployeeJobAssignment, BusinessEmployee, RecurringSchedule, PricingConfig, UserCleanerAppointments } = require("../../../models");
 const { Op } = require("sequelize");
 
 // All routes require business owner authentication
@@ -41,6 +42,143 @@ router.get("/employees", async (req, res) => {
     res.json({ employees: BusinessEmployeeSerializer.serializeArray(employees) });
   } catch (error) {
     console.error("Error fetching employees:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /employees/for-job/:appointmentId - Get employees with calculated pay for a specific job
+ * Calculates estimated hours based on home size (beds/baths) and number of cleaners
+ * Query params:
+ *   - mode: "add" (default) or "reassign" - affects cleaner count calculation
+ */
+router.get("/employees/for-job/:appointmentId", async (req, res) => {
+  try {
+    const appointmentId = parseInt(req.params.appointmentId);
+    const mode = req.query.mode || "add"; // "add" or "reassign"
+
+    // Get the appointment with home details
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    const jobPriceInCents = appointment.price ? Math.round(parseFloat(appointment.price) * 100) : 0;
+
+    // Get home size for duration estimation
+    const numBeds = appointment.home?.numBeds || 2;
+    const numBaths = appointment.home?.numBaths || 1;
+
+    // Get existing employees already assigned to this job (with employee details)
+    const existingAssignmentRecords = await EmployeeJobAssignment.findAll({
+      where: {
+        appointmentId,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      },
+      include: [{ model: BusinessEmployee, as: "employee" }],
+    });
+    const existingAssignments = existingAssignmentRecords.length;
+
+    // Get all active employees
+    const employees = await BusinessEmployeeService.getEmployeesByBusinessOwner(
+      req.businessOwnerId,
+      { status: ["active"] }
+    );
+
+    // Calculate total cleaners based on mode:
+    // - "add": We're adding a new employee, so count = existing + 1
+    // - "reassign": We're replacing an employee, so count stays the same
+    const totalCleaners = mode === "reassign"
+      ? Math.max(1, existingAssignments)  // Keep same count for reassign
+      : existingAssignments + 1;           // Add one for new employee
+
+    const employeesWithPay = employees.map((emp) => {
+      const serialized = BusinessEmployeeSerializer.serializeOne(emp);
+
+      // Estimate hours based on home size and number of cleaners
+      const estimatedHours = EmployeeJobAssignmentService.estimateJobDuration(
+        numBeds,
+        numBaths,
+        totalCleaners
+      );
+
+      // Debug logging for first employee
+      if (employees.indexOf(emp) === 0) {
+        console.log("[employees-for-job] Pay calculation inputs:", {
+          numBeds,
+          numBaths,
+          totalCleaners,
+          estimatedHours,
+          jobPriceInCents,
+          employeePayType: emp.payType,
+          employeeHourlyRate: emp.defaultHourlyRate,
+        });
+      }
+
+      const { payAmount, payType } = EmployeeJobAssignmentService.calculateEmployeePay(
+        emp,
+        jobPriceInCents,
+        estimatedHours
+      );
+
+      return {
+        ...serialized,
+        calculatedPay: payAmount,
+        calculatedPayType: payType,
+        formattedCalculatedPay: `$${(payAmount / 100).toFixed(2)}`,
+        estimatedHours,
+      };
+    });
+
+    // Also calculate total job duration (without dividing by cleaners) for display
+    const totalJobHours = EmployeeJobAssignmentService.estimateJobDuration(numBeds, numBaths, 1);
+    const hoursPerCleaner = EmployeeJobAssignmentService.estimateJobDuration(numBeds, numBaths, totalCleaners);
+
+    // Recalculate pay for existing assigned employees based on new cleaner count
+    // This shows what their pay would be with hours split among more cleaners
+    let recalculatedExistingPay = 0;
+    const recalculatedAssignments = existingAssignmentRecords.map((assignment) => {
+      const emp = assignment.employee;
+      if (!emp) return null;
+
+      // Serialize employee to decrypt fields
+      const serializedEmp = BusinessEmployeeSerializer.serializeOne(emp);
+
+      const { payAmount } = EmployeeJobAssignmentService.calculateEmployeePay(
+        emp,
+        jobPriceInCents,
+        hoursPerCleaner
+      );
+      recalculatedExistingPay += payAmount;
+
+      return {
+        assignmentId: assignment.id,
+        employeeId: emp.id,
+        employeeName: `${serializedEmp.firstName || ""} ${serializedEmp.lastName || ""}`.trim(),
+        originalPay: assignment.payAmount,
+        recalculatedPay: payAmount,
+        formattedRecalculatedPay: `$${(payAmount / 100).toFixed(2)}`,
+      };
+    }).filter(Boolean);
+
+    res.json({
+      employees: employeesWithPay,
+      jobPrice: jobPriceInCents,
+      jobDetails: {
+        numBeds,
+        numBaths,
+        totalJobHours,
+        existingAssignments,
+        totalCleaners,
+        hoursPerCleaner,
+        recalculatedExistingPay,
+        recalculatedAssignments,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching employees for job:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -285,7 +423,7 @@ router.post("/assignments", async (req, res) => {
 
     const assignment = await EmployeeJobAssignmentService.assignEmployeeToJob(
       req.businessOwnerId,
-      { employeeId, appointmentId, payAmount: payAmount || 0, payType }
+      { employeeId, appointmentId, payAmount: Math.floor(payAmount || 0), payType }
     );
 
     res.status(201).json({ message: "Employee assigned", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
@@ -300,7 +438,6 @@ router.post("/assignments", async (req, res) => {
  */
 router.get("/assignments/:assignmentId", async (req, res) => {
   try {
-
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
         id: parseInt(req.params.assignmentId),
@@ -310,7 +447,7 @@ router.get("/assignments/:assignmentId", async (req, res) => {
         {
           model: BusinessEmployee,
           as: "employee",
-          attributes: ["id", "firstName", "lastName", "phone", "email", "defaultHourlyRate"],
+          attributes: ["id", "firstName", "lastName", "phone", "email", "defaultHourlyRate", "payType", "payRate", "defaultJobRate"],
         },
         {
           model: UserAppointments,
@@ -336,7 +473,114 @@ router.get("/assignments/:assignmentId", async (req, res) => {
       return res.status(404).json({ error: "Assignment not found" });
     }
 
-    res.json({ assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
+    // Get all assignments for this appointment (for multi-employee jobs)
+    const allAssignments = await EmployeeJobAssignment.findAll({
+      where: {
+        appointmentId: assignment.appointmentId,
+        businessOwnerId: req.businessOwnerId,
+        status: { [Op.notIn]: ["cancelled", "unassigned"] },
+      },
+      include: [
+        {
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "firstName", "lastName", "phone", "email", "defaultHourlyRate", "payType", "payRate", "defaultJobRate"],
+        },
+      ],
+      order: [["assignedAt", "ASC"]],
+    });
+
+    // Calculate expected pay for each assignment based on home size
+    const numBeds = assignment.appointment?.home?.numBeds || 2;
+    const numBaths = assignment.appointment?.home?.numBaths || 1;
+    const totalCleaners = allAssignments.length;
+    const jobPriceInCents = assignment.appointment?.price
+      ? Math.round(parseFloat(assignment.appointment.price) * 100)
+      : 0;
+
+    // Estimate hours based on home size and number of cleaners
+    const estimatedHours = EmployeeJobAssignmentService.estimateJobDuration(numBeds, numBaths, totalCleaners);
+
+    // Add calculated pay to each assignment
+    const assignmentsWithCalculatedPay = allAssignments.map((a, idx) => {
+      const serialized = EmployeeJobAssignmentSerializer.serializeOne(a);
+
+      // Debug logging for first assignment
+      if (idx === 0) {
+        console.log("[assignment-detail] Calculating pay for assignment:", {
+          numBeds,
+          numBaths,
+          totalCleaners,
+          estimatedHours,
+          jobPriceInCents,
+          isSelfAssignment: a.isSelfAssignment,
+          employeeId: a.employee?.id,
+          employeePayType: a.employee?.payType,
+          employeeHourlyRate: a.employee?.defaultHourlyRate,
+          storedPayAmount: a.payAmount,
+          storedPayType: a.payType,
+        });
+      }
+
+      // For self-assignments or if employee data is missing, use the stored pay
+      let calculatedPay = serialized.payAmount || 0;
+      let calculatedPayType = serialized.payType || "flat_rate";
+
+      // Calculate what this employee SHOULD make based on their default rates
+      if (a.employee) {
+        const result = EmployeeJobAssignmentService.calculateEmployeePay(
+          a.employee,
+          jobPriceInCents,
+          estimatedHours
+        );
+        calculatedPay = result.payAmount;
+        calculatedPayType = result.payType;
+      }
+
+      if (idx === 0) {
+        console.log("[assignment-detail] Calculated:", { calculatedPay, calculatedPayType });
+      }
+
+      // Add employee rate info for display
+      const employeeRateInfo = a.employee ? {
+        defaultHourlyRate: a.employee.defaultHourlyRate,
+        defaultJobRate: a.employee.defaultJobRate,
+        payRate: a.employee.payRate ? parseFloat(a.employee.payRate) : null,
+        payType: a.employee.payType,
+      } : null;
+
+      return {
+        ...serialized,
+        calculatedPay,
+        calculatedPayType,
+        formattedCalculatedPay: `$${(calculatedPay / 100).toFixed(2)}`,
+        estimatedHours,
+        employeeRateInfo,
+        // Flag if stored pay differs from calculated
+        payNeedsUpdate: serialized.payAmount !== calculatedPay || serialized.payType !== calculatedPayType,
+      };
+    });
+
+    // Get platform fee percentage for business owners
+    const pricingConfig = await PricingConfig.getActive();
+    const platformFeePercent = pricingConfig?.businessOwnerFeePercent
+      ? parseFloat(pricingConfig.businessOwnerFeePercent)
+      : 0.10; // Default 10%
+    const platformFeeAmount = Math.round(jobPriceInCents * platformFeePercent);
+
+    res.json({
+      assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment),
+      allAssignments: assignmentsWithCalculatedPay,
+      totalAssigned: allAssignments.length,
+      jobDetails: {
+        numBeds,
+        numBaths,
+        estimatedHours,
+        jobPrice: jobPriceInCents,
+        platformFeePercent,
+        platformFeeAmount,
+      },
+    });
   } catch (error) {
     console.error("Error fetching assignment:", error);
     res.status(500).json({ error: error.message });
@@ -463,7 +707,7 @@ router.get("/my-jobs", async (req, res) => {
       ? await EmployeeJobAssignment.findAll({
           where: {
             appointmentId: { [Op.in]: appointmentIds },
-            status: { [Op.notIn]: ["cancelled"] },
+            status: { [Op.notIn]: ["cancelled", "unassigned"] },
           },
           include: [
             {
@@ -615,35 +859,55 @@ router.get("/my-jobs", async (req, res) => {
  */
 router.get("/all-jobs", async (req, res) => {
   try {
-    const { upcoming, status } = req.query;
+    const { upcoming, status, source: sourceFilter } = req.query;
     const today = new Date().toISOString().split("T")[0];
 
     // Get list of client IDs for this business owner
     const clientRelationships = await CleanerClient.findAll({
-      where: { cleanerId: req.businessOwnerId },
+      where: { cleanerId: req.businessOwnerId, status: "active" },
       attributes: ["clientId"],
     });
-    const clientIds = clientRelationships.map(c => c.clientId);
+    const clientIds = clientRelationships.filter(c => c.clientId).map(c => c.clientId);
 
-    // Build where clause for appointments booked by this business owner
-    const whereClause = {
-      bookedByCleanerId: req.businessOwnerId,
+    // Build base where clause
+    const baseWhere = {
       wasCancelled: { [Op.ne]: true },
     };
 
     // Filter by upcoming if specified
     if (upcoming === "true") {
-      whereClause.date = { [Op.gte]: today };
-      whereClause.completed = { [Op.ne]: true };
+      baseWhere.date = { [Op.gte]: today };
+      baseWhere.completed = { [Op.ne]: true };
     }
 
-    // Get all appointments booked by this business owner
+    // Get appointments from two sources:
+    // 1. Appointments booked by this business owner
+    // 2. Appointments from homes owned by clients of this business owner
+    let whereClause;
+    if (clientIds.length > 0) {
+      whereClause = {
+        ...baseWhere,
+        [Op.or]: [
+          { bookedByCleanerId: req.businessOwnerId },
+          { "$home.userId$": { [Op.in]: clientIds } },
+        ],
+      };
+    } else {
+      // No clients, just get appointments booked by business owner
+      whereClause = {
+        ...baseWhere,
+        bookedByCleanerId: req.businessOwnerId,
+      };
+    }
+
+    // Get all relevant appointments
     const appointments = await UserAppointments.findAll({
       where: whereClause,
       include: [
         {
           model: UserHomes,
           as: "home",
+          required: true,
           include: [
             {
               model: User,
@@ -662,7 +926,7 @@ router.get("/all-jobs", async (req, res) => {
       ? await EmployeeJobAssignment.findAll({
           where: {
             appointmentId: { [Op.in]: appointmentIds },
-            status: { [Op.notIn]: ["cancelled"] },
+            status: { [Op.notIn]: ["cancelled", "unassigned"] },
           },
           include: [
             {
@@ -763,18 +1027,27 @@ router.get("/all-jobs", async (req, res) => {
       };
     }).filter(Boolean);
 
+    // Apply source filter if specified
+    let filteredJobs = jobs;
+    if (sourceFilter === "client") {
+      filteredJobs = jobs.filter(j => j.source === "client");
+    } else if (sourceFilter === "marketplace") {
+      filteredJobs = jobs.filter(j => j.source === "marketplace");
+    }
+
     // Separate by source for summary
     const clientJobs = jobs.filter(j => j.source === "client");
     const marketplaceJobs = jobs.filter(j => j.source === "marketplace");
 
     res.json({
-      jobs,
+      jobs: filteredJobs,
       summary: {
         total: jobs.length,
         clientJobs: clientJobs.length,
         marketplaceJobs: marketplaceJobs.length,
         assigned: jobs.filter(j => j.isAssigned).length,
         unassigned: jobs.filter(j => !j.isAssigned).length,
+        filtered: filteredJobs.length,
       },
     });
   } catch (error) {
@@ -826,7 +1099,7 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
         appointmentId: appointment.id,
-        status: { [Op.notIn]: ["cancelled"] },
+        status: { [Op.notIn]: ["cancelled", "unassigned"] },
       },
       include: [
         {
@@ -1026,12 +1299,33 @@ router.put("/assignments/:assignmentId/pay", async (req, res) => {
     const assignment = await EmployeeJobAssignmentService.updateJobPay(
       parseInt(req.params.assignmentId),
       req.businessOwnerId,
-      { newPayAmount, reason }
+      { newPayAmount: Math.floor(newPayAmount), reason }
     );
 
     res.json({ message: "Pay updated", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
   } catch (error) {
     console.error("Error updating pay:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /assignments/:assignmentId/recalculate-pay - Recalculate pay based on home size
+ * Recalculates pay using the employee's default rate and the home's beds/baths
+ */
+router.post("/assignments/:assignmentId/recalculate-pay", async (req, res) => {
+  try {
+    const assignment = await EmployeeJobAssignmentService.recalculatePay(
+      parseInt(req.params.assignmentId),
+      req.businessOwnerId
+    );
+
+    res.json({
+      message: "Pay recalculated",
+      assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment),
+    });
+  } catch (error) {
+    console.error("Error recalculating pay:", error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -1353,8 +1647,99 @@ router.get("/dashboard", async (req, res) => {
 
     const unassignedAppointmentsList = formatUnassignedAppointments(todaysUnassignedAppointments);
 
-    // Combine assigned and unassigned appointments
-    const todaysAppointments = [...assignedAppointments, ...unassignedAppointmentsList]
+    // Get all user IDs associated with this business (owner + employees)
+    const employeeUserIds = employees
+      .filter(emp => emp.userId)
+      .map(emp => emp.userId);
+    const businessUserIds = [req.businessOwnerId, ...employeeUserIds];
+
+    // Create a map of userId to employee info for formatting
+    const userIdToEmployee = new Map();
+    userIdToEmployee.set(req.businessOwnerId, { id: null, firstName: "You", lastName: "(Self)", isSelf: true });
+    employees.forEach(emp => {
+      if (emp.userId) {
+        userIdToEmployee.set(emp.userId, {
+          id: emp.id,
+          firstName: emp.firstName ? EncryptionService.decrypt(emp.firstName) : null,
+          lastName: emp.lastName ? EncryptionService.decrypt(emp.lastName) : null,
+          isSelf: false,
+        });
+      }
+    });
+
+    // Get today's marketplace pickups where business owner OR employees picked up jobs
+    // These are jobs picked up from the marketplace via the cleaner flow
+    const todaysMarketplacePickups = await UserCleanerAppointments.findAll({
+      where: { employeeId: { [Op.in]: businessUserIds } },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: today,
+            wasCancelled: { [Op.ne]: true },
+            completed: { [Op.ne]: true },
+            // Exclude jobs already in employee assignment system
+            ...(assignedAppointmentIds.length > 0
+              ? { id: { [Op.notIn]: assignedAppointmentIds } }
+              : {}),
+          },
+          include: [
+            {
+              model: UserHomes,
+              as: "home",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "firstName", "lastName"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    // Format marketplace pickups (business owner or employees doing the job)
+    const formatMarketplacePickups = (pickups) => {
+      return pickups
+        .filter(p => p.appointment) // Ensure appointment exists
+        .map(pickup => {
+          const apt = pickup.appointment;
+          const clientFirstName = apt.home?.user?.firstName
+            ? EncryptionService.decrypt(apt.home.user.firstName)
+            : null;
+          const clientLastName = apt.home?.user?.lastName
+            ? EncryptionService.decrypt(apt.home.user.lastName)
+            : null;
+          const address = apt.home?.address
+            ? EncryptionService.decrypt(apt.home.address)
+            : "";
+
+          // Get the employee info who picked up this job
+          const assignedEmp = userIdToEmployee.get(pickup.employeeId) || { id: null, firstName: "Unknown", lastName: "" };
+
+          return {
+            id: apt.id,
+            date: apt.date,
+            status: "assigned",
+            startTime: apt.startTime,
+            source: "marketplace",
+            assignedEmployee: assignedEmp,
+            clientName: clientFirstName && clientLastName
+              ? `${clientFirstName} ${clientLastName}`
+              : "Unknown Client",
+            address,
+            totalPrice: parseFloat(apt.price) * 100,
+          };
+        });
+    };
+
+    const todaysMarketplaceList = formatMarketplacePickups(todaysMarketplacePickups);
+
+    // Combine assigned, unassigned, and marketplace pickup appointments
+    const todaysAppointments = [...assignedAppointments, ...unassignedAppointmentsList, ...todaysMarketplaceList]
       .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 
     // Get tomorrow's unassigned appointments
@@ -1416,8 +1801,43 @@ router.get("/dashboard", async (req, res) => {
 
     const tomorrowUnassignedList = formatUnassignedAppointments(tomorrowsUnassignedAppointments);
 
-    // Combine tomorrow's assigned and unassigned appointments
-    const tomorrowsAppointments = [...tomorrowAssignedAppointments, ...tomorrowUnassignedList]
+    // Get tomorrow's marketplace pickups where business owner OR employees picked up jobs
+    const tomorrowsMarketplacePickups = await UserCleanerAppointments.findAll({
+      where: { employeeId: { [Op.in]: businessUserIds } },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: tomorrow,
+            wasCancelled: { [Op.ne]: true },
+            completed: { [Op.ne]: true },
+            // Exclude jobs already in employee assignment system
+            ...(tomorrowAssignedAppointmentIds.length > 0
+              ? { id: { [Op.notIn]: tomorrowAssignedAppointmentIds } }
+              : {}),
+          },
+          include: [
+            {
+              model: UserHomes,
+              as: "home",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "firstName", "lastName"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const tomorrowsMarketplaceList = formatMarketplacePickups(tomorrowsMarketplacePickups);
+
+    // Combine tomorrow's assigned, unassigned, and marketplace pickup appointments
+    const tomorrowsAppointments = [...tomorrowAssignedAppointments, ...tomorrowUnassignedList, ...tomorrowsMarketplaceList]
       .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 
     // Count unpaid client appointments (appointments where paymentStatus is not 'paid')
@@ -1478,11 +1898,11 @@ router.get("/calendar", async (req, res) => {
     // 2. Appointments that have a cancelled/unassigned assignment from this business owner
     const assignedAppointmentIds = assignments.map(a => a.appointmentId);
 
-    // Find appointments that were previously assigned but are now unassigned (cancelled)
-    const cancelledAssignments = await EmployeeJobAssignment.findAll({
+    // Find appointments that were previously assigned but are now unassigned
+    const removedAssignments = await EmployeeJobAssignment.findAll({
       where: {
         businessOwnerId: req.businessOwnerId,
-        status: "cancelled",
+        status: { [Op.in]: ["unassigned", "cancelled"] },
       },
       attributes: ["appointmentId"],
       include: [
@@ -1500,7 +1920,7 @@ router.get("/calendar", async (req, res) => {
         },
       ],
     });
-    const cancelledAppointmentIds = cancelledAssignments
+    const removedAppointmentIds = removedAssignments
       .filter(a => a.appointment && !assignedAppointmentIds.includes(a.appointmentId))
       .map(a => a.appointmentId);
 
@@ -1516,7 +1936,7 @@ router.get("/calendar", async (req, res) => {
           {
             [Op.or]: [
               { bookedByCleanerId: req.businessOwnerId },
-              { id: { [Op.in]: cancelledAppointmentIds.length > 0 ? cancelledAppointmentIds : [0] } },
+              { id: { [Op.in]: removedAppointmentIds.length > 0 ? removedAppointmentIds : [0] } },
             ],
           },
           // Exclude actively assigned appointments
@@ -1568,6 +1988,111 @@ router.get("/calendar", async (req, res) => {
       };
     });
 
+    // Get all employees to find their user IDs for marketplace pickup query
+    const calendarEmployees = await BusinessEmployeeService.getEmployeesByBusinessOwner(req.businessOwnerId, { status: ["active"] });
+    const calendarEmployeeUserIds = calendarEmployees
+      .filter(emp => emp.userId)
+      .map(emp => emp.userId);
+    const calendarBusinessUserIds = [req.businessOwnerId, ...calendarEmployeeUserIds];
+
+    // Create a map of userId to employee info for formatting
+    const calendarUserIdToEmployee = new Map();
+    calendarUserIdToEmployee.set(req.businessOwnerId, { id: null, firstName: "You", lastName: "(Self)", isSelf: true });
+    calendarEmployees.forEach(emp => {
+      if (emp.userId) {
+        calendarUserIdToEmployee.set(emp.userId, {
+          id: emp.id,
+          firstName: emp.firstName ? EncryptionService.decrypt(emp.firstName) : null,
+          lastName: emp.lastName ? EncryptionService.decrypt(emp.lastName) : null,
+          isSelf: false,
+        });
+      }
+    });
+
+    // Get marketplace pickups where business owner OR employees picked up jobs
+    const marketplacePickups = await UserCleanerAppointments.findAll({
+      where: { employeeId: { [Op.in]: calendarBusinessUserIds } },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          where: {
+            date: { [Op.between]: [startDate, endDate] },
+            wasCancelled: { [Op.ne]: true },
+            completed: { [Op.ne]: true },
+            // Exclude jobs already in employee assignment system
+            ...(assignedAppointmentIds.length > 0
+              ? { id: { [Op.notIn]: assignedAppointmentIds } }
+              : {}),
+          },
+          include: [
+            {
+              model: UserHomes,
+              as: "home",
+              include: [
+                {
+                  model: User,
+                  as: "user",
+                  attributes: ["id", "firstName", "lastName"],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    // Format marketplace pickups to match assignment structure
+    const marketplaceAssignments = marketplacePickups
+      .filter(p => p.appointment)
+      .map(pickup => {
+        const apt = pickup.appointment;
+        const clientFirstName = apt.home?.user?.firstName
+          ? EncryptionService.decrypt(apt.home.user.firstName)
+          : null;
+        const clientLastName = apt.home?.user?.lastName
+          ? EncryptionService.decrypt(apt.home.user.lastName)
+          : null;
+        const address = apt.home?.address
+          ? EncryptionService.decrypt(apt.home.address)
+          : "";
+
+        // Get the employee info who picked up this job
+        const assignedEmp = calendarUserIdToEmployee.get(pickup.employeeId) || { id: null, firstName: "Unknown", lastName: "" };
+
+        return {
+          id: pickup.id,
+          appointmentId: apt.id,
+          businessEmployeeId: assignedEmp.id,
+          status: "assigned",
+          payAmount: parseFloat(apt.price || 0) * 100,
+          isSelfAssignment: assignedEmp.isSelf || false,
+          isMarketplacePickup: true,
+          assignedCount: 1,
+          employee: assignedEmp,
+          appointment: {
+            id: apt.id,
+            date: apt.date,
+            startTime: apt.startTime,
+            clientName: clientFirstName && clientLastName
+              ? `${clientFirstName} ${clientLastName}`
+              : "Unknown Client",
+            address,
+            city: apt.home?.city || "",
+            state: apt.home?.state || "",
+            totalPrice: parseFloat(apt.price || 0) * 100,
+            status: apt.status,
+          },
+        };
+      });
+
+    // Count assignments per appointment (for multi-employee jobs)
+    const appointmentAssignmentCounts = {};
+    assignments.forEach((a) => {
+      const apptId = a.appointmentId;
+      appointmentAssignmentCounts[apptId] = (appointmentAssignmentCounts[apptId] || 0) + 1;
+    });
+
     // Format assignments with full appointment data
     const formattedAssignments = assignments.map(assignment => {
       // Decrypt employee name
@@ -1598,6 +2123,7 @@ router.get("/calendar", async (req, res) => {
         status: assignment.status,
         payAmount: assignment.payAmount,
         isSelfAssignment: assignment.isSelfAssignment,
+        assignedCount: appointmentAssignmentCounts[assignment.appointmentId] || 1,
         employee: assignment.employee ? {
           id: assignment.employee.id,
           firstName: employeeFirstName,
@@ -1619,9 +2145,12 @@ router.get("/calendar", async (req, res) => {
       };
     });
 
+    // Combine employee assignments with marketplace pickups
+    const allAssignments = [...formattedAssignments, ...marketplaceAssignments];
+
     res.json({
       unassignedJobs,
-      assignments: formattedAssignments,
+      assignments: allAssignments,
       month: targetMonth + 1,
       year: targetYear,
     });
@@ -2138,11 +2667,17 @@ router.get("/verification/config", async (req, res) => {
  */
 router.get("/payouts/pending", async (req, res) => {
   try {
-    const unpaidAssignments = await EmployeeJobAssignmentService.getUnpaidAssignments(
-      req.businessOwnerId
-    );
+    const [unpaidAssignments, largeBusinessQualification] = await Promise.all([
+      EmployeeJobAssignmentService.getUnpaidAssignments(req.businessOwnerId),
+      BusinessVolumeService.qualifiesForLargeBusinessFee(req.businessOwnerId),
+    ]);
 
-    res.json({ payouts: EmployeeJobAssignmentSerializer.serializeForPayoutArray(unpaidAssignments) });
+    res.json({
+      payouts: EmployeeJobAssignmentSerializer.serializeForPayoutArray(unpaidAssignments),
+      isLargeBusiness: largeBusinessQualification.qualifies,
+      largeBusinessThreshold: largeBusinessQualification.threshold,
+      currentMonthlyJobs: largeBusinessQualification.totalCleanings,
+    });
   } catch (error) {
     console.error("Error fetching pending payouts:", error);
     res.status(500).json({ error: error.message });
@@ -2465,6 +3000,81 @@ router.post("/appointments/:id/send-reminder", async (req, res) => {
   }
 });
 
+/**
+ * POST /appointments/:appointmentId/decline - Business owner declines a client appointment
+ * Used when business owner cannot assign anyone to the job
+ */
+router.post("/appointments/:appointmentId/decline", async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const { reason } = req.body;
+    const NotificationService = require("../../../services/NotificationService");
+
+    // Find the appointment
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id: appointmentId,
+        bookedByCleanerId: req.businessOwnerId,
+      },
+      include: [
+        { model: User, as: "user" },
+        { model: UserHomes, as: "home" },
+      ],
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found or you don't have permission to decline it"
+      });
+    }
+
+    // Check if already declined
+    if (appointment.businessOwnerDeclined) {
+      return res.status(400).json({ error: "Appointment has already been declined" });
+    }
+
+    // Check if already completed or cancelled
+    if (appointment.completed) {
+      return res.status(400).json({ error: "Cannot decline a completed appointment" });
+    }
+    if (appointment.wasCancelled) {
+      return res.status(400).json({ error: "Cannot decline a cancelled appointment" });
+    }
+
+    // Update appointment with decline info
+    await appointment.update({
+      businessOwnerDeclined: true,
+      businessOwnerDeclinedAt: new Date(),
+      businessOwnerDeclineReason: reason || null,
+    });
+
+    // Get business owner info for notification
+    const businessOwner = await User.findByPk(req.businessOwnerId);
+    const businessOwnerName = businessOwner.businessName ||
+      `${EncryptionService.decrypt(businessOwner.firstName)} ${EncryptionService.decrypt(businessOwner.lastName)}`;
+
+    // Notify the client
+    await NotificationService.notifyBusinessOwnerDeclined({
+      clientId: appointment.userId,
+      businessOwnerId: req.businessOwnerId,
+      businessOwnerName,
+      appointmentId: appointment.id,
+      appointmentDate: appointment.date,
+      reason: reason || null,
+    });
+
+    console.log(`[BusinessOwner] Owner ${req.businessOwnerId} declined appointment ${appointmentId}`);
+
+    res.json({
+      success: true,
+      message: "Appointment declined. Client has been notified.",
+    });
+  } catch (error) {
+    console.error("Error declining appointment:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // =====================================
 // Custom Job Flow Routes
 // =====================================
@@ -2514,12 +3124,118 @@ router.post("/job-flows", async (req, res) => {
 });
 
 /**
- * GET /job-flows/assignments - List all flow assignments
+ * GET /job-flows/assignments - List all flow assignments with clients and homes
+ * Returns assignments, all clients, and all their homes for the assignment management screen
  */
 router.get("/job-flows/assignments", async (req, res) => {
   try {
+    // Get existing assignments
     const assignments = await CustomJobFlowService.getFlowAssignments(req.businessOwnerId);
-    res.json({ assignments: ClientJobFlowAssignmentSerializer.serializeArrayForList(assignments) });
+
+    // Get all active clients for this business owner
+    const cleanerClients = await CleanerClient.findAll({
+      where: {
+        cleanerId: req.businessOwnerId,
+        status: "active",
+      },
+      include: [
+        {
+          model: User,
+          as: "client",
+          attributes: ["id", "firstName", "lastName", "email"],
+          required: false,
+        },
+        {
+          model: UserHomes,
+          as: "home",
+          required: false,
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Build a map of clientId -> all their homes
+    const clientHomeMap = new Map();
+    const clientIds = new Set();
+
+    for (const cc of cleanerClients) {
+      if (cc.clientId) {
+        clientIds.add(cc.clientId);
+      }
+    }
+
+    // Fetch ALL homes for all clients (not just the ones linked to CleanerClient)
+    if (clientIds.size > 0) {
+      const allClientHomes = await UserHomes.findAll({
+        where: {
+          userId: { [Op.in]: Array.from(clientIds) },
+        },
+      });
+
+      for (const home of allClientHomes) {
+        if (!clientHomeMap.has(home.userId)) {
+          clientHomeMap.set(home.userId, []);
+        }
+        clientHomeMap.get(home.userId).push({
+          id: home.id,
+          nickName: home.nickName,
+          address: EncryptionService.decrypt(home.address),
+          city: EncryptionService.decrypt(home.city),
+          state: EncryptionService.decrypt(home.state),
+          numBeds: home.numBeds,
+          numBaths: home.numBaths,
+        });
+      }
+    }
+
+    // Format clients with all their homes
+    const clients = cleanerClients.map((cc) => {
+      const clientName = cc.client
+        ? `${EncryptionService.decrypt(cc.client.firstName)} ${EncryptionService.decrypt(cc.client.lastName)}`
+        : cc.invitedName || "Unknown Client";
+
+      const clientEmail = cc.client
+        ? EncryptionService.decrypt(cc.client.email)
+        : cc.invitedEmail;
+
+      // Get all homes for this client (from the map) or fall back to the single home from CleanerClient
+      let homes = [];
+      if (cc.clientId && clientHomeMap.has(cc.clientId)) {
+        homes = clientHomeMap.get(cc.clientId);
+      } else if (cc.home) {
+        homes = [{
+          id: cc.home.id,
+          nickName: cc.home.nickName,
+          address: EncryptionService.decrypt(cc.home.address),
+          city: EncryptionService.decrypt(cc.home.city),
+          state: EncryptionService.decrypt(cc.home.state),
+          numBeds: cc.home.numBeds,
+          numBaths: cc.home.numBaths,
+        }];
+      }
+
+      return {
+        id: cc.id,
+        clientId: cc.clientId,
+        clientName,
+        clientEmail,
+        status: cc.status,
+        // Include single home for backwards compatibility
+        home: cc.home ? {
+          id: cc.home.id,
+          nickName: cc.home.nickName,
+          address: EncryptionService.decrypt(cc.home.address),
+        } : null,
+        // Include ALL homes for this client
+        homes,
+        homeCount: homes.length,
+      };
+    });
+
+    res.json({
+      assignments: ClientJobFlowAssignmentSerializer.serializeArrayForList(assignments),
+      clients,
+    });
   } catch (error) {
     console.error("Error fetching flow assignments:", error);
     res.status(500).json({ error: error.message });
@@ -2716,7 +3432,7 @@ router.post("/job-flows/:flowId/checklist/fork-platform", async (req, res) => {
       versionId
     );
 
-    res.status(201).json({ message: "Platform checklist forked", checklist: CustomJobFlowChecklistSerializer.serializeOne(checklist) });
+    res.status(201).json({ success: true, message: "Platform checklist forked", checklist: CustomJobFlowChecklistSerializer.serializeOne(checklist) });
   } catch (error) {
     console.error("Error forking platform checklist:", error);
     res.status(400).json({ error: error.message });
@@ -2897,6 +3613,62 @@ router.get("/team-for-job", async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching team for job:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================
+// BUSINESS REVIEWS
+// =====================
+
+/**
+ * GET /reviews
+ * Get business client reviews (reviews for employees that appear on business profile)
+ */
+router.get("/reviews", async (req, res) => {
+  try {
+    const ReviewsClass = require("../../../services/ReviewsClass");
+    const reviews = await ReviewsClass.getBusinessReviewsForOwner(req.businessOwnerId);
+
+    // Serialize reviews
+    const serializedReviews = reviews.map((review) => ({
+      id: review.id,
+      rating: review.review,
+      comment: review.reviewComment,
+      reviewerName: review.reviewerName,
+      createdAt: review.createdAt,
+      appointmentId: review.appointmentId,
+      aspects: {
+        cleaningQuality: review.cleaningQuality,
+        punctuality: review.punctuality,
+        professionalism: review.professionalism,
+        communication: review.communication,
+        attentionToDetail: review.attentionToDetail,
+        thoroughness: review.thoroughness,
+        respectOfProperty: review.respectOfProperty,
+        followedInstructions: review.followedInstructions,
+      },
+      wouldRecommend: review.wouldRecommend,
+    }));
+
+    res.json({ reviews: serializedReviews });
+  } catch (error) {
+    console.error("Error fetching business reviews:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /reviews/stats
+ * Get review statistics for business client reviews
+ */
+router.get("/reviews/stats", async (req, res) => {
+  try {
+    const ReviewsClass = require("../../../services/ReviewsClass");
+    const stats = await ReviewsClass.getBusinessReviewStats(req.businessOwnerId);
+    res.json(stats);
+  } catch (error) {
+    console.error("Error fetching business review stats:", error);
     res.status(500).json({ error: error.message });
   }
 });

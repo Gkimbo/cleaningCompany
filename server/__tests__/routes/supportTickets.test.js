@@ -70,6 +70,7 @@ describe("Support Ticket Routes", () => {
 
   const createMockTicket = (overrides = {}) => ({
     id: 1,
+    caseNumber: "SUP-000001",
     conversationId: 5,
     reporterId: 1,
     subjectUserId: 10,

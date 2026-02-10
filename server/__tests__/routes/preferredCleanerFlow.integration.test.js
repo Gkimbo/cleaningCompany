@@ -104,6 +104,11 @@ jest.mock("../../models", () => {
         }
         return Promise.resolve(null);
       }),
+      count: jest.fn().mockImplementation(({ where }) => {
+        // Homeowner (userId 1) has homes, cleaner (userId 100) does not
+        const userId = where?.userId;
+        return Promise.resolve(userId === 1 ? 1 : 0);
+      }),
     },
     UserAppointments: {
       findByPk: jest.fn().mockImplementation((id) => {

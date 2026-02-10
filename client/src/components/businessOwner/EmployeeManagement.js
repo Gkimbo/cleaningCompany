@@ -896,31 +896,39 @@ const EmployeeManagement = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Team</Text>
-          <View style={styles.headerStats}>
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatValue}>{activeCount}</Text>
-              <Text style={styles.headerStatLabel}>Active</Text>
-            </View>
-            <View style={styles.headerStatDivider} />
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatValue}>{pendingCount}</Text>
-              <Text style={styles.headerStatLabel}>Pending</Text>
-            </View>
-            <View style={styles.headerStatDivider} />
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatValue}>{totalCount}</Text>
-              <Text style={styles.headerStatLabel}>Total</Text>
-            </View>
+        {/* Top Row - Back button and Add button */}
+        <View style={styles.headerTopRow}>
+          <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+            <Icon name="arrow-left" size={16} color="#fff" />
+          </Pressable>
+          <Pressable
+            style={styles.addButton}
+            onPress={() => setShowInviteModal(true)}
+          >
+            <Icon name="user-plus" size={18} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* Title */}
+        <Text style={styles.title}>Your Team</Text>
+
+        {/* Stats Row */}
+        <View style={styles.headerStats}>
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatValue}>{activeCount}</Text>
+            <Text style={styles.headerStatLabel}>Active</Text>
+          </View>
+          <View style={styles.headerStatDivider} />
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatValue}>{pendingCount}</Text>
+            <Text style={styles.headerStatLabel}>Pending</Text>
+          </View>
+          <View style={styles.headerStatDivider} />
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatValue}>{totalCount}</Text>
+            <Text style={styles.headerStatLabel}>Total</Text>
           </View>
         </View>
-        <Pressable
-          style={styles.addButton}
-          onPress={() => setShowInviteModal(true)}
-        >
-          <Icon name="user-plus" size={22} color={colors.primary[600]} />
-        </Pressable>
       </View>
 
       {/* Filter Pills */}
@@ -1059,9 +1067,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
     paddingHorizontal: spacing.lg,
     paddingTop: spacing["4xl"],
     paddingBottom: spacing.xl,
@@ -1069,8 +1074,27 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius["2xl"],
     borderBottomRightRadius: radius["2xl"],
   },
-  headerContent: {
-    flex: 1,
+  headerTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
     fontSize: typography.fontSize["3xl"],
@@ -1109,15 +1133,6 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     marginHorizontal: spacing.xs,
-  },
-  addButton: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.full,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    ...shadows.lg,
   },
   addButtonIcon: {
     color: colors.primary[600],

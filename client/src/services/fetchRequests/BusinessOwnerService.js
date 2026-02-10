@@ -34,6 +34,30 @@ class BusinessOwnerService {
   }
 
   /**
+   * Get employees with calculated pay for a specific job
+   * @param {string} token - Auth token
+   * @param {number} appointmentId - The appointment to calculate pay for
+   * @param {string} [mode="add"] - "add" for adding new employee, "reassign" for replacing
+   * @returns {Object} { employees, jobPrice, jobDetails }
+   */
+  static async getEmployeesForJob(token, appointmentId, mode = "add") {
+    try {
+      const response = await fetch(
+        `${API_BASE}/business-owner/employees/for-job/${appointmentId}?mode=${mode}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessOwner] Error fetching employees for job:", error);
+      return { employees: [] };
+    }
+  }
+
+  /**
    * Invite a new employee
    * @param {string} token - Auth token
    * @param {Object} employeeData - Employee information
@@ -444,6 +468,31 @@ class BusinessOwnerService {
       return { success: true, assignment: result.assignment, changeLog: result.changeLog };
     } catch (error) {
       console.error("[BusinessOwner] Error updating job pay:", error);
+      return { success: false, error: "Network error. Please try again." };
+    }
+  }
+
+  /**
+   * Recalculate pay for an assignment based on home size and employee's default rates
+   * @param {string} token - Auth token
+   * @param {number} assignmentId - Assignment ID
+   * @returns {Object} { success, assignment, error }
+   */
+  static async recalculatePay(token, assignmentId) {
+    try {
+      const response = await fetch(`${API_BASE}/business-owner/assignments/${assignmentId}/recalculate-pay`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return { success: false, error: result.error || "Failed to recalculate pay" };
+      }
+      return { success: true, assignment: result.assignment };
+    } catch (error) {
+      console.error("[BusinessOwner] Error recalculating pay:", error);
       return { success: false, error: "Network error. Please try again." };
     }
   }

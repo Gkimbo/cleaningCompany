@@ -121,7 +121,9 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
           <Text style={styles.jobAssignee}>
             {assignment.isSelfAssignment
               ? "You (Self-assigned)"
-              : `${assignment.employee?.firstName || ""} ${assignment.employee?.lastName || ""}`}
+              : assignment.assignedCount > 1
+                ? `${assignment.assignedCount} employees assigned`
+                : `${assignment.employee?.firstName || ""} ${assignment.employee?.lastName || ""}`}
           </Text>
           <View style={styles.financialInfo}>
             <Text style={styles.jobPriceLabel}>
@@ -181,38 +183,26 @@ const AssignModal = ({
   isSelfAssign,
 }) => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [payAmount, setPayAmount] = useState("");
-  const [payType, setPayType] = useState("flat_rate");
-  const [showFinancials, setShowFinancials] = useState(false);
-  const [isUsingDefaultPay, setIsUsingDefaultPay] = useState(false);
   const { pricing } = usePricing();
 
   // Get platform fee from config (default 10%)
   const platformFeePercent = (pricing?.platform?.businessOwnerFeePercent || 0.10) * 100;
 
-  // Calculate default pay based on employee's pay type
-  const calculateDefaultPay = (employee, jobPrice) => {
-    if (!employee) return null;
+  // Calculate pay based on employee's pay type
+  const calculateEmployeePay = (employee, jobPrice) => {
+    if (!employee) return { amount: 0, payType: "flat_rate", rateDisplay: null, totalDisplay: null };
 
     const empPayType = employee.payType || "per_job";
 
     switch (empPayType) {
       case "hourly":
-        // For hourly, show estimated pay (will be calculated at completion)
-        // Use 2 hours as default estimate
         const hourlyRate = employee.defaultHourlyRate || 0;
+        const estimatedHours = 2; // Default estimate
         return {
-          amount: hourlyRate * 2, // 2 hour estimate
+          amount: hourlyRate * estimatedHours,
           payType: "hourly",
-          note: `$${(hourlyRate / 100).toFixed(2)}/hr (2hr estimate)`,
-        };
-      case "per_job":
-      case "flat_rate":
-        const jobRate = employee.defaultJobRate || 0;
-        return {
-          amount: jobRate,
-          payType: "flat_rate",
-          note: jobRate > 0 ? `Default: $${(jobRate / 100).toFixed(2)}/job` : null,
+          rateDisplay: `$${(hourlyRate / 100).toFixed(0)}/hr`,
+          totalDisplay: `$${((hourlyRate * estimatedHours) / 100).toFixed(2)}`,
         };
       case "percentage":
         const percentage = parseFloat(employee.payRate) || 0;
@@ -220,315 +210,236 @@ const AssignModal = ({
         return {
           amount: calculatedPay,
           payType: "percentage",
-          note: `${percentage}% of job price`,
+          rateDisplay: `${percentage}%`,
+          totalDisplay: `$${(calculatedPay / 100).toFixed(2)}`,
         };
+      case "per_job":
+      case "flat_rate":
       default:
-        return null;
+        const jobRate = employee.defaultJobRate || 0;
+        return {
+          amount: jobRate,
+          payType: "flat_rate",
+          rateDisplay: "Flat",
+          totalDisplay: `$${(jobRate / 100).toFixed(2)}`,
+        };
     }
   };
 
-  // Set initial pay amount when modal opens (use suggestion if no employee selected yet)
-  useEffect(() => {
-    if (job && visible && !selectedEmployee) {
-      const suggestions = BusinessOwnerService.suggestPayAmounts(job.totalPrice || 0);
-      setPayAmount((suggestions.margin35.payAmount / 100).toFixed(2));
-      setIsUsingDefaultPay(false);
-    }
-  }, [job, visible]);
-
-  // Update pay when employee is selected
-  useEffect(() => {
-    if (selectedEmployee && job) {
-      const defaultPay = calculateDefaultPay(selectedEmployee, job.totalPrice);
-      if (defaultPay && defaultPay.amount > 0) {
-        setPayAmount((defaultPay.amount / 100).toFixed(2));
-        setPayType(defaultPay.payType);
-        setIsUsingDefaultPay(true);
-      } else {
-        // Fallback to suggested pay if no default set
-        const suggestions = BusinessOwnerService.suggestPayAmounts(job.totalPrice || 0);
-        setPayAmount((suggestions.margin35.payAmount / 100).toFixed(2));
-        setPayType("flat_rate");
-        setIsUsingDefaultPay(false);
-      }
-    }
-  }, [selectedEmployee, job]);
-
   const handleSubmit = () => {
     if (!isSelfAssign && !selectedEmployee) return;
+    const payInfo = calculateEmployeePay(selectedEmployee, job?.totalPrice);
     onSubmit({
       appointmentId: job.id,
       employeeId: isSelfAssign ? null : selectedEmployee.id,
-      payAmount: Math.round(parseFloat(payAmount) * 100),
-      payType,
+      payAmount: payInfo.amount,
+      payType: payInfo.payType,
       isSelfAssign,
     });
   };
 
   const handleClose = () => {
     setSelectedEmployee(null);
-    setPayAmount("");
-    setPayType("flat_rate");
-    setShowFinancials(false);
     onClose();
   };
 
-  const financials = job
-    ? BusinessOwnerService.calculateJobFinancials(
-        job.totalPrice || 0,
-        Math.round(parseFloat(payAmount || 0) * 100),
-        platformFeePercent
-      )
-    : null;
+  // Calculate financials for selected employee
+  const jobPrice = job?.totalPrice || 0;
+  const platformFee = Math.round(jobPrice * (platformFeePercent / 100));
+  const selectedPayInfo = calculateEmployeePay(selectedEmployee, jobPrice);
+  const profit = jobPrice - platformFee - selectedPayInfo.amount;
 
   if (!job) return null;
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {isSelfAssign ? "Self-Assign Job" : "Assign Employee"}
-            </Text>
-            <Pressable onPress={handleClose}>
-              <Icon name="times" size={24} color={colors.neutral[500]} />
+        <View style={styles.assignModalContent}>
+          {/* Header */}
+          <View style={styles.assignModalHeader}>
+            <View style={styles.assignModalHeaderIcon}>
+              <Icon name={isSelfAssign ? "user" : "user-plus"} size={18} color={colors.primary[500]} />
+            </View>
+            <View style={styles.assignModalHeaderText}>
+              <Text style={styles.assignModalTitle}>
+                {isSelfAssign ? "Self-Assign Job" : "Assign Employee"}
+              </Text>
+              <Text style={styles.assignModalSubtitle}>
+                {job.clientName || "Client"} · ${((job.totalPrice || 0) / 100).toFixed(0)}
+              </Text>
+            </View>
+            <Pressable style={styles.assignModalClose} onPress={handleClose}>
+              <Icon name="times" size={16} color={colors.neutral[400]} />
             </Pressable>
           </View>
 
-          <ScrollView style={styles.modalBody}>
-            {/* Job Details */}
-            <View style={styles.jobSummary}>
-              <Text style={styles.jobSummaryTitle}>
-                {job.clientName || "Client"} - {job.address || "No address"}
-              </Text>
-              <Text style={styles.jobSummaryDate}>
-                {new Date(job.date + "T00:00:00").toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </Text>
-              <Text style={styles.jobSummaryPrice}>
-                Customer Pays: ${((job.totalPrice || 0) / 100).toFixed(2)}
-              </Text>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.assignModalBody}
+          >
+            {/* Job Summary Card */}
+            <View style={styles.assignJobCard}>
+              <View style={styles.assignJobCardDate}>
+                <Text style={styles.assignJobCardDay}>
+                  {new Date(job.date + "T00:00:00").getDate()}
+                </Text>
+                <Text style={styles.assignJobCardMonth}>
+                  {new Date(job.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                </Text>
+              </View>
+              <View style={styles.assignJobCardInfo}>
+                <Text style={styles.assignJobCardClient}>{job.clientName || "Client"}</Text>
+                <Text style={styles.assignJobCardAddress} numberOfLines={1}>{job.address || "No address"}</Text>
+                <Text style={styles.assignJobCardTime}>
+                  {job.startTime ? `${parseInt(job.startTime.split(":")[0]) > 12 ? parseInt(job.startTime.split(":")[0]) - 12 : job.startTime.split(":")[0]}:${job.startTime.split(":")[1]} ${parseInt(job.startTime.split(":")[0]) >= 12 ? "PM" : "AM"}` : "Time TBD"}
+                </Text>
+              </View>
+              <View style={styles.assignJobCardPrice}>
+                <Text style={styles.assignJobCardPriceAmount}>${((job.totalPrice || 0) / 100).toFixed(0)}</Text>
+                <Text style={styles.assignJobCardPriceLabel}>Job Price</Text>
+              </View>
             </View>
 
-            {/* Employee Selection (if not self-assign) */}
-            {!isSelfAssign && (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Select Employee</Text>
-                <ScrollView style={styles.employeeList} horizontal={false}>
-                  {employees.map((emp) => (
-                    <Pressable
-                      key={emp.id}
-                      style={[
-                        styles.employeeOption,
-                        selectedEmployee?.id === emp.id && styles.employeeOptionSelected,
-                      ]}
-                      onPress={() => setSelectedEmployee(emp)}
-                    >
-                      <View style={styles.employeeOptionAvatar}>
-                        <Text style={styles.employeeOptionAvatarText}>
-                          {(emp.firstName?.[0] || "E").toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.employeeOptionInfo}>
-                        <Text style={styles.employeeOptionName}>
-                          {emp.firstName} {emp.lastName}
-                        </Text>
-                        <Text style={styles.employeeOptionRate}>
-                          {emp.payType === "hourly" && emp.defaultHourlyRate
-                            ? `$${(emp.defaultHourlyRate / 100).toFixed(2)}/hr`
-                            : emp.payType === "percentage" && emp.payRate
-                            ? `${parseFloat(emp.payRate)}% of job`
-                            : emp.defaultJobRate
-                            ? `$${(emp.defaultJobRate / 100).toFixed(2)}/job`
-                            : "No default rate set"}
-                        </Text>
-                      </View>
-                      {selectedEmployee?.id === emp.id && (
-                        <Icon name="check" size={16} color={colors.primary[600]} />
-                      )}
-                    </Pressable>
-                  ))}
-                </ScrollView>
+            {/* Self Assign Info */}
+            {isSelfAssign && (
+              <View style={styles.selfAssignCard}>
+                <Icon name="info-circle" size={18} color={colors.primary[500]} />
+                <View style={styles.selfAssignCardText}>
+                  <Text style={styles.selfAssignCardTitle}>You'll clean this job</Text>
+                  <Text style={styles.selfAssignCardDesc}>
+                    No employee pay will be recorded. You keep 100% minus platform fee.
+                  </Text>
+                </View>
               </View>
             )}
 
-            {/* Pay Amount (skip for self-assign) */}
+            {/* Employee Selection (if not self-assign) */}
             {!isSelfAssign && (
               <>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Pay Amount</Text>
-                  {/* Show default pay info when employee selected */}
-                  {selectedEmployee && isUsingDefaultPay && (
-                    <View style={styles.defaultPayNote}>
-                      <Icon name="info-circle" size={12} color={colors.primary[600]} />
-                      <Text style={styles.defaultPayNoteText}>
-                        Using {selectedEmployee.firstName}'s default{" "}
-                        {selectedEmployee.payType === "hourly"
-                          ? "hourly rate (2hr estimate)"
-                          : selectedEmployee.payType === "percentage"
-                          ? `${parseFloat(selectedEmployee.payRate)}% rate`
-                          : "job rate"}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={styles.payInputRow}>
-                    <Text style={styles.currencySymbol}>$</Text>
-                    <TextInput
-                      style={styles.payInput}
-                      value={payAmount}
-                      onChangeText={(val) => {
-                        setPayAmount(val);
-                        setIsUsingDefaultPay(false); // Mark as overridden when manually changed
-                      }}
-                      keyboardType="decimal-pad"
-                      placeholder="0.00"
-                    />
-                  </View>
-                  {/* Quick suggestions */}
-                  <Text style={styles.suggestionsLabel}>Quick suggestions:</Text>
-                  <View style={styles.paySuggestions}>
-                    {job &&
-                      Object.entries(
-                        BusinessOwnerService.suggestPayAmounts(job.totalPrice || 0)
-                      ).map(([key, value]) => (
-                        <Pressable
-                          key={key}
-                          style={styles.paySuggestion}
-                          onPress={() => {
-                            setPayAmount((value.payAmount / 100).toFixed(2));
-                            setIsUsingDefaultPay(false);
-                          }}
-                        >
-                          <Text style={styles.paySuggestionAmount}>{value.formatted}</Text>
-                          <Text style={styles.paySuggestionLabel}>{value.label}</Text>
-                        </Pressable>
-                      ))}
-                  </View>
+                <Text style={styles.assignSectionLabel}>Select Team Member</Text>
+                <View style={styles.assignEmployeeList}>
+                  {employees.map((emp) => {
+                    const isSelected = selectedEmployee?.id === emp.id;
+                    const payInfo = calculateEmployeePay(emp, jobPrice);
+                    return (
+                      <Pressable
+                        key={emp.id}
+                        style={[
+                          styles.assignEmployeeCard,
+                          isSelected && styles.assignEmployeeCardSelected,
+                        ]}
+                        onPress={() => setSelectedEmployee(emp)}
+                      >
+                        <View style={[
+                          styles.assignEmployeeRadio,
+                          isSelected && styles.assignEmployeeRadioSelected,
+                        ]}>
+                          {isSelected && <Icon name="check" size={10} color="#fff" />}
+                        </View>
+                        <View style={[
+                          styles.assignEmployeeAvatar,
+                          isSelected && styles.assignEmployeeAvatarSelected,
+                        ]}>
+                          <Text style={[
+                            styles.assignEmployeeAvatarText,
+                            isSelected && styles.assignEmployeeAvatarTextSelected,
+                          ]}>
+                            {(emp.firstName?.[0] || "E").toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.assignEmployeeInfo}>
+                          <Text style={styles.assignEmployeeName}>
+                            {emp.firstName} {emp.lastName}
+                          </Text>
+                          <View style={styles.assignEmployeePayRow}>
+                            <Text style={styles.assignEmployeeRate}>{payInfo.rateDisplay}</Text>
+                            <View style={styles.assignEmployeePayDot} />
+                            <Text style={styles.assignEmployeeTotal}>{payInfo.totalDisplay}</Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
                 </View>
 
-                {/* Pay Type */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Pay Type</Text>
-                  <View style={styles.payTypeRow}>
-                    <Pressable
-                      style={[
-                        styles.payTypeOption,
-                        payType === "flat_rate" && styles.payTypeOptionSelected,
-                      ]}
-                      onPress={() => setPayType("flat_rate")}
-                    >
-                      <Text
-                        style={[
-                          styles.payTypeText,
-                          payType === "flat_rate" && styles.payTypeTextSelected,
-                        ]}
-                      >
-                        Flat Rate
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.payTypeOption,
-                        payType === "hourly" && styles.payTypeOptionSelected,
-                      ]}
-                      onPress={() => setPayType("hourly")}
-                    >
-                      <Text
-                        style={[
-                          styles.payTypeText,
-                          payType === "hourly" && styles.payTypeTextSelected,
-                        ]}
-                      >
-                        Hourly
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* Financial Breakdown */}
-                <Pressable
-                  style={styles.financialsToggle}
-                  onPress={() => setShowFinancials(!showFinancials)}
-                >
-                  <Text style={styles.financialsToggleText}>
-                    {showFinancials ? "Hide" : "Show"} Financial Breakdown
-                  </Text>
-                  <Icon
-                    name={showFinancials ? "chevron-up" : "chevron-down"}
-                    size={12}
-                    color={colors.primary[600]}
-                  />
-                </Pressable>
-
-                {showFinancials && financials && (
-                  <View style={styles.financialsCard}>
-                    <View style={styles.financialRow}>
-                      <Text style={styles.financialLabel}>Customer Pays</Text>
-                      <Text style={styles.financialValue}>
-                        {financials.formatted.customerPays}
-                      </Text>
+                {/* Financial Preview */}
+                {selectedEmployee && (
+                  <View style={styles.assignFinancialCard}>
+                    <View style={styles.assignFinancialHeader}>
+                      <Icon name="calculator" size={14} color={colors.primary[500]} />
+                      <Text style={styles.assignFinancialTitle}>Financial Breakdown</Text>
                     </View>
-                    <View style={styles.financialRow}>
-                      <Text style={styles.financialLabel}>Platform Fee ({platformFeePercent}%)</Text>
-                      <Text style={[styles.financialValue, { color: colors.error[600] }]}>
-                        -{financials.formatted.platformFee}
-                      </Text>
-                    </View>
-                    <View style={styles.financialRow}>
-                      <Text style={styles.financialLabel}>Employee Pay</Text>
-                      <Text style={[styles.financialValue, { color: colors.error[600] }]}>
-                        -{financials.formatted.employeePay}
-                      </Text>
-                    </View>
-                    <View style={[styles.financialRow, styles.financialRowTotal]}>
-                      <Text style={styles.financialLabelTotal}>Your Profit</Text>
-                      <Text
-                        style={[
-                          styles.financialValueTotal,
-                          financials.businessOwnerProfit < 0 && { color: colors.error[600] },
-                        ]}
-                      >
-                        {financials.formatted.businessOwnerProfit}
-                      </Text>
-                    </View>
-                    <Text style={styles.financialMargin}>
-                      Profit Margin: {financials.formatted.profitMargin}
-                    </Text>
-                    {financials.warnings.map((warning, i) => (
-                      <View key={i} style={styles.warningBadge}>
-                        <Icon name="exclamation-triangle" size={12} color={colors.warning[700]} />
-                        <Text style={styles.warningText}>{warning.message}</Text>
+                    <View style={styles.assignFinancialBody}>
+                      <View style={styles.assignFinancialRow}>
+                        <Text style={styles.assignFinancialLabel}>Job Price</Text>
+                        <Text style={styles.assignFinancialValue}>${(jobPrice / 100).toFixed(2)}</Text>
                       </View>
-                    ))}
+                      <View style={styles.assignFinancialRow}>
+                        <Text style={styles.assignFinancialLabel}>Platform Fee ({platformFeePercent}%)</Text>
+                        <Text style={[styles.assignFinancialValue, styles.assignFinancialDeduct]}>
+                          -${(platformFee / 100).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.assignFinancialRow}>
+                        <Text style={styles.assignFinancialLabel}>{selectedEmployee.firstName}'s Pay</Text>
+                        <Text style={[styles.assignFinancialValue, styles.assignFinancialDeduct]}>
+                          -${(selectedPayInfo.amount / 100).toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.assignFinancialFooter}>
+                      <Text style={styles.assignFinancialProfitLabel}>Your Profit</Text>
+                      <Text style={[
+                        styles.assignFinancialProfitValue,
+                        profit >= 0 ? styles.profitPositive : styles.profitNegative,
+                      ]}>
+                        ${(profit / 100).toFixed(2)}
+                      </Text>
+                    </View>
                   </View>
                 )}
               </>
             )}
 
+            {/* Self-assign Financial Preview */}
             {isSelfAssign && (
-              <View style={styles.selfAssignInfo}>
-                <Icon name="info-circle" size={20} color={colors.primary[600]} />
-                <Text style={styles.selfAssignInfoText}>
-                  Self-assigning this job means you'll clean it yourself. The job will be tracked
-                  with $0 payroll for analytics purposes.
-                </Text>
+              <View style={styles.assignFinancialCard}>
+                <View style={styles.assignFinancialHeader}>
+                  <Icon name="calculator" size={14} color={colors.primary[500]} />
+                  <Text style={styles.assignFinancialTitle}>Your Earnings</Text>
+                </View>
+                <View style={styles.assignFinancialBody}>
+                  <View style={styles.assignFinancialRow}>
+                    <Text style={styles.assignFinancialLabel}>Job Price</Text>
+                    <Text style={styles.assignFinancialValue}>${(jobPrice / 100).toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.assignFinancialRow}>
+                    <Text style={styles.assignFinancialLabel}>Platform Fee ({platformFeePercent}%)</Text>
+                    <Text style={[styles.assignFinancialValue, styles.assignFinancialDeduct]}>
+                      -${(platformFee / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.assignFinancialFooter}>
+                  <Text style={styles.assignFinancialProfitLabel}>You Keep</Text>
+                  <Text style={[styles.assignFinancialProfitValue, styles.profitPositive]}>
+                    ${((jobPrice - platformFee) / 100).toFixed(2)}
+                  </Text>
+                </View>
               </View>
             )}
           </ScrollView>
 
-          <View style={styles.modalFooter}>
-            <Pressable style={styles.cancelButton} onPress={handleClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+          {/* Footer */}
+          <View style={styles.assignModalFooter}>
+            <Pressable style={styles.assignCancelButton} onPress={handleClose}>
+              <Text style={styles.assignCancelButtonText}>Cancel</Text>
             </Pressable>
             <Pressable
               style={[
-                styles.submitButton,
-                (!isSelfAssign && !selectedEmployee) && styles.submitButtonDisabled,
-                isSubmitting && styles.submitButtonDisabled,
+                styles.assignConfirmButton,
+                (!isSelfAssign && !selectedEmployee) && styles.assignConfirmButtonDisabled,
+                isSubmitting && styles.assignConfirmButtonDisabled,
               ]}
               onPress={handleSubmit}
               disabled={(!isSelfAssign && !selectedEmployee) || isSubmitting}
@@ -536,9 +447,12 @@ const AssignModal = ({
               {isSubmitting ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.submitButtonText}>
-                  {isSelfAssign ? "Self-Assign" : "Assign"}
-                </Text>
+                <>
+                  <Icon name="check" size={14} color="#fff" />
+                  <Text style={styles.assignConfirmButtonText}>
+                    {isSelfAssign ? "Assign to Me" : `Assign ${selectedEmployee?.firstName || ""}`}
+                  </Text>
+                </>
               )}
             </Pressable>
           </View>
@@ -1407,6 +1321,321 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: "#fff",
     fontWeight: typography.fontWeight.semibold,
+  },
+
+  // New Assign Modal Styles
+  assignModalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
+    maxHeight: "90%",
+  },
+  assignModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  assignModalHeaderIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  assignModalHeaderText: {
+    flex: 1,
+  },
+  assignModalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  assignModalSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  assignModalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.neutral[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  assignModalBody: {
+    padding: spacing.lg,
+  },
+  assignJobCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  assignJobCardDate: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[500],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  assignJobCardDay: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: "#fff",
+  },
+  assignJobCardMonth: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.semibold,
+    color: "rgba(255,255,255,0.8)",
+    textTransform: "uppercase",
+  },
+  assignJobCardInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  assignJobCardClient: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  assignJobCardAddress: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  assignJobCardTime: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  assignJobCardPrice: {
+    alignItems: "flex-end",
+  },
+  assignJobCardPriceAmount: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  assignJobCardPriceLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  selfAssignCard: {
+    flexDirection: "row",
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  selfAssignCardText: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  selfAssignCardTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  selfAssignCardDesc: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    marginTop: 2,
+  },
+  assignSectionLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  assignEmployeeList: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  assignEmployeeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  assignEmployeeCardSelected: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[500],
+  },
+  assignEmployeeRadio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.neutral[300],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  assignEmployeeRadioSelected: {
+    backgroundColor: colors.primary[500],
+    borderColor: colors.primary[500],
+  },
+  assignEmployeeAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.neutral[200],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  assignEmployeeAvatarSelected: {
+    backgroundColor: colors.primary[500],
+  },
+  assignEmployeeAvatarText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[600],
+  },
+  assignEmployeeAvatarTextSelected: {
+    color: "#fff",
+  },
+  assignEmployeeInfo: {
+    flex: 1,
+  },
+  assignEmployeeName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  assignEmployeePayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  assignEmployeeRate: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  assignEmployeePayDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.neutral[300],
+    marginHorizontal: spacing.xs,
+  },
+  assignEmployeeTotal: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  assignFinancialCard: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    overflow: "hidden",
+  },
+  assignFinancialHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: colors.primary[50],
+    gap: spacing.sm,
+  },
+  assignFinancialTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  assignFinancialBody: {
+    padding: spacing.md,
+  },
+  assignFinancialRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  assignFinancialLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  assignFinancialValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  assignFinancialDeduct: {
+    color: colors.error[500],
+  },
+  assignFinancialFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+  },
+  assignFinancialProfitLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  assignFinancialProfitValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+  },
+  profitPositive: {
+    color: colors.success[600],
+  },
+  profitNegative: {
+    color: colors.error[600],
+  },
+  assignModalFooter: {
+    flexDirection: "row",
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    gap: spacing.md,
+  },
+  assignCancelButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[100],
+    alignItems: "center",
+  },
+  assignCancelButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  assignConfirmButton: {
+    flex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[500],
+    gap: spacing.sm,
+  },
+  assignConfirmButtonDisabled: {
+    backgroundColor: colors.neutral[300],
+  },
+  assignConfirmButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: "#fff",
   },
 });
 

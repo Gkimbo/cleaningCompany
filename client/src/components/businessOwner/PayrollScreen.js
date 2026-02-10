@@ -56,21 +56,25 @@ const QuickAction = ({ icon, label, onPress, color = colors.primary[600] }) => (
 );
 
 // Tab Button
-const TabButton = ({ label, active, count, onPress }) => (
+const TabButton = ({ label, active, count, onPress, locked }) => (
   <Pressable
-    style={[styles.tabButton, active && styles.tabButtonActive]}
+    style={[styles.tabButton, active && styles.tabButtonActive, locked && styles.tabButtonLocked]}
     onPress={onPress}
   >
-    <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>
+    <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive, locked && styles.tabButtonTextLocked]}>
       {label}
     </Text>
-    {count > 0 && (
+    {locked ? (
+      <View style={styles.tabLockBadge}>
+        <Icon name="lock" size={10} color={colors.warning[600]} />
+      </View>
+    ) : count > 0 ? (
       <View style={[styles.tabBadge, active && styles.tabBadgeActive]}>
         <Text style={[styles.tabBadgeText, active && styles.tabBadgeTextActive]}>
           {count}
         </Text>
       </View>
-    )}
+    ) : null}
   </Pressable>
 );
 
@@ -653,6 +657,9 @@ const PayrollScreen = ({ state }) => {
   const [bonuses, setBonuses] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [isLargeBusiness, setIsLargeBusiness] = useState(false);
+  const [largeBusinessThreshold, setLargeBusinessThreshold] = useState(50);
+  const [currentMonthlyJobs, setCurrentMonthlyJobs] = useState(0);
 
   // Selection state
   const [selectedPayouts, setSelectedPayouts] = useState(new Set());
@@ -703,6 +710,11 @@ const PayrollScreen = ({ state }) => {
       setPayouts(pendingPayouts);
       setPaidPayouts(paidResult.payouts || []);
       setBonuses(bonusesResult.bonuses || []);
+
+      // Set large business status from API
+      setIsLargeBusiness(pendingResult.isLargeBusiness || false);
+      setLargeBusinessThreshold(pendingResult.largeBusinessThreshold || 50);
+      setCurrentMonthlyJobs(pendingResult.currentMonthlyJobs || 0);
 
       // Group by employee for summary
       const employeeMap = new Map();
@@ -952,6 +964,9 @@ const PayrollScreen = ({ state }) => {
   const totalPendingBonuses = pendingBonuses.reduce((sum, b) => sum + (b.amount || 0), 0);
   const totalPendingAll = totalPending + totalPendingBonuses;
 
+  // Bonuses are locked for non-large businesses (based on monthly job volume)
+  const isBonusesLocked = !isLargeBusiness;
+
   // Get unique employees for filter
   const uniqueEmployees = Array.from(
     new Map(payouts.filter(p => !p.isSelfAssignment).map((p) => [p.businessEmployeeId, p.employee])).values()
@@ -1060,7 +1075,8 @@ const PayrollScreen = ({ state }) => {
         <TabButton
           label="Bonuses"
           active={viewMode === "bonuses"}
-          count={pendingBonuses.length}
+          count={isBonusesLocked ? 0 : pendingBonuses.length}
+          locked={isBonusesLocked}
           onPress={() => setViewMode("bonuses")}
         />
         <TabButton
@@ -1214,70 +1230,112 @@ const PayrollScreen = ({ state }) => {
 
         {viewMode === "bonuses" && (
           <>
-            {/* Pending Bonuses */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitleRow}>
-                  <Icon name="gift" size={16} color={colors.warning[600]} />
-                  <Text style={styles.sectionTitle}>Pending Bonuses</Text>
-                </View>
-                <Text style={styles.sectionSubtitle}>
-                  ${(totalPendingBonuses / 100).toFixed(2)} total
-                </Text>
-              </View>
-              {pendingBonuses.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <View style={[styles.emptyStateIcon, { backgroundColor: colors.warning[50] }]}>
-                    <Icon name="gift" size={48} color={colors.warning[400]} />
-                  </View>
-                  <Text style={styles.emptyTitle}>No Pending Bonuses</Text>
-                  <Text style={styles.emptyText}>
-                    Give bonuses to top performers from the Analytics dashboard.
-                  </Text>
-                  <Pressable
-                    style={styles.emptyStateButton}
-                    onPress={() => navigate("/business-owner/analytics")}
-                  >
-                    <Text style={styles.emptyStateButtonText}>View Analytics</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <View style={styles.bonusList}>
-                  {pendingBonuses.map((bonus) => (
-                    <BonusItem
-                      key={bonus.id}
-                      bonus={bonus}
-                      onMarkPaid={() => {
-                        setSelectedBonus(bonus);
-                        setShowMarkBonusPaidModal(true);
-                      }}
-                      onCancel={() => handleCancelBonus(bonus)}
-                    />
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Paid Bonuses History */}
-            {paidBonuses.length > 0 && (
+            {isBonusesLocked ? (
+              /* Premium/Locked State for Non-Large Businesses */
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Bonus History</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    {paidBonuses.length} paid
+                <View style={styles.premiumLockedCard}>
+                  <View style={styles.premiumIconContainer}>
+                    <Icon name="gift" size={32} color={colors.warning[500]} />
+                    <View style={styles.premiumLockBadge}>
+                      <Icon name="lock" size={12} color="#fff" />
+                    </View>
+                  </View>
+                  <Text style={styles.premiumTitle}>Employee Bonuses</Text>
+                  <Text style={styles.premiumSubtitle}>Premium Feature</Text>
+                  <Text style={styles.premiumDescription}>
+                    Reward your top performers with bonuses! This feature unlocks when your business reaches {largeBusinessThreshold} jobs per month.
                   </Text>
-                </View>
-                <View style={styles.bonusList}>
-                  {paidBonuses.slice(0, 10).map((bonus) => (
-                    <BonusItem
-                      key={bonus.id}
-                      bonus={bonus}
-                      onMarkPaid={() => {}}
-                      onCancel={() => {}}
-                    />
-                  ))}
+                  <View style={styles.premiumRequirement}>
+                    <Icon name="calendar-check-o" size={14} color={colors.primary[600]} />
+                    <Text style={styles.premiumRequirementText}>
+                      {currentMonthlyJobs} / {largeBusinessThreshold} jobs this month
+                    </Text>
+                  </View>
+                  <View style={styles.premiumProgressContainer}>
+                    <View style={styles.premiumProgressBar}>
+                      <View
+                        style={[
+                          styles.premiumProgressFill,
+                          { width: `${Math.min(100, (currentMonthlyJobs / largeBusinessThreshold) * 100)}%` },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.premiumProgressText}>
+                      {largeBusinessThreshold - currentMonthlyJobs > 0
+                        ? `${largeBusinessThreshold - currentMonthlyJobs} more to unlock`
+                        : "Almost there!"}
+                    </Text>
+                  </View>
                 </View>
               </View>
+            ) : (
+              <>
+                {/* Pending Bonuses */}
+                <View style={styles.section}>
+                  <View style={styles.sectionHeader}>
+                    <View style={styles.sectionTitleRow}>
+                      <Icon name="gift" size={16} color={colors.warning[600]} />
+                      <Text style={styles.sectionTitle}>Pending Bonuses</Text>
+                    </View>
+                    <Text style={styles.sectionSubtitle}>
+                      ${(totalPendingBonuses / 100).toFixed(2)} total
+                    </Text>
+                  </View>
+                  {pendingBonuses.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <View style={[styles.emptyStateIcon, { backgroundColor: colors.warning[50] }]}>
+                        <Icon name="gift" size={48} color={colors.warning[400]} />
+                      </View>
+                      <Text style={styles.emptyTitle}>No Pending Bonuses</Text>
+                      <Text style={styles.emptyText}>
+                        Give bonuses to top performers from the Analytics dashboard.
+                      </Text>
+                      <Pressable
+                        style={styles.emptyStateButton}
+                        onPress={() => navigate("/business-owner/analytics")}
+                      >
+                        <Text style={styles.emptyStateButtonText}>View Analytics</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.bonusList}>
+                      {pendingBonuses.map((bonus) => (
+                        <BonusItem
+                          key={bonus.id}
+                          bonus={bonus}
+                          onMarkPaid={() => {
+                            setSelectedBonus(bonus);
+                            setShowMarkBonusPaidModal(true);
+                          }}
+                          onCancel={() => handleCancelBonus(bonus)}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* Paid Bonuses History */}
+                {paidBonuses.length > 0 && (
+                  <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionTitle}>Bonus History</Text>
+                      <Text style={styles.sectionSubtitle}>
+                        {paidBonuses.length} paid
+                      </Text>
+                    </View>
+                    <View style={styles.bonusList}>
+                      {paidBonuses.slice(0, 10).map((bonus) => (
+                        <BonusItem
+                          key={bonus.id}
+                          bonus={bonus}
+                          onMarkPaid={() => {}}
+                          onCancel={() => {}}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </>
             )}
           </>
         )}
@@ -1642,6 +1700,18 @@ const styles = StyleSheet.create({
   },
   tabBadgeTextActive: {
     color: colors.primary[600],
+  },
+  tabButtonLocked: {
+    opacity: 0.8,
+  },
+  tabButtonTextLocked: {
+    color: colors.text.tertiary,
+  },
+  tabLockBadge: {
+    backgroundColor: colors.warning[100],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
   },
   filtersContainer: {
     maxHeight: 50,
@@ -2469,6 +2539,114 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.warning[800],
     lineHeight: 20,
+  },
+  // Premium locked card styles
+  premiumLockedCard: {
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    alignItems: "center",
+    ...shadows.sm,
+    borderWidth: 2,
+    borderColor: colors.warning[200],
+    borderStyle: "dashed",
+  },
+  premiumIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.md,
+    position: "relative",
+  },
+  premiumLockBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning[500],
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: colors.background.primary,
+  },
+  premiumTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  premiumSubtitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[600],
+    backgroundColor: colors.warning[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    marginBottom: spacing.md,
+  },
+  premiumDescription: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.secondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
+  },
+  premiumRequirement: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  premiumRequirementText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  premiumProgressContainer: {
+    width: "100%",
+    paddingHorizontal: spacing.md,
+  },
+  premiumProgressBar: {
+    height: 8,
+    backgroundColor: colors.neutral[200],
+    borderRadius: radius.full,
+    overflow: "hidden",
+    marginBottom: spacing.sm,
+  },
+  premiumProgressFill: {
+    height: "100%",
+    backgroundColor: colors.primary[500],
+    borderRadius: radius.full,
+  },
+  premiumProgressText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  premiumButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  premiumButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: "#fff",
   },
 });
 

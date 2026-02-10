@@ -21,7 +21,7 @@ import PreferredCleanerService from "../../services/fetchRequests/PreferredClean
 const PreferredCleanersSection = ({ homeId, token }) => {
   const [loading, setLoading] = useState(true);
   const [preferredCleaners, setPreferredCleaners] = useState([]);
-  const [usePreferredCleaners, setUsePreferredCleaners] = useState(true);
+  const [usePreferredCleaners, setUsePreferredCleaners] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [cleanerStats, setCleanerStats] = useState({});
   const [loadingStats, setLoadingStats] = useState({});
@@ -149,24 +149,33 @@ const PreferredCleanersSection = ({ homeId, token }) => {
         <Text style={styles.title}>Preferred Cleaners</Text>
       </View>
 
-      {/* Toggle Section */}
-      <View style={styles.toggleCard}>
-        <View style={styles.toggleContent}>
-          <Text style={styles.toggleLabel}>Use Preferred Cleaners Only</Text>
-          <Text style={styles.toggleDescription}>
-            {usePreferredCleaners
-              ? "Only your preferred cleaners can request jobs"
-              : "All cleaners can request jobs for this home"}
-          </Text>
-        </View>
-        <Switch
-          value={usePreferredCleaners}
-          onValueChange={handleToggle}
-          disabled={updating}
-          trackColor={{ false: colors.neutral[300], true: colors.success[400] }}
-          thumbColor={usePreferredCleaners ? colors.success[600] : colors.neutral[100]}
-        />
-      </View>
+      {/* Toggle Section - requires 5+ preferred cleaners to enable */}
+      {(() => {
+        const cleanerCount = preferredCleaners.length;
+        const canEnable = cleanerCount >= 5;
+
+        return (
+          <View style={styles.toggleCard}>
+            <View style={styles.toggleContent}>
+              <Text style={styles.toggleLabel}>Use Preferred Cleaners Only</Text>
+              <Text style={styles.toggleDescription}>
+                {usePreferredCleaners
+                  ? "Only your preferred cleaners can request jobs"
+                  : canEnable
+                    ? "All cleaners can request jobs for this home"
+                    : `Need ${5 - cleanerCount} more preferred cleaner${5 - cleanerCount === 1 ? "" : "s"} to enable`}
+              </Text>
+            </View>
+            <Switch
+              value={usePreferredCleaners}
+              onValueChange={handleToggle}
+              disabled={updating || (!canEnable && !usePreferredCleaners)}
+              trackColor={{ false: colors.neutral[300], true: colors.success[400] }}
+              thumbColor={usePreferredCleaners ? colors.success[600] : colors.neutral[100]}
+            />
+          </View>
+        );
+      })()}
 
       {/* Preferred Cleaners List */}
       {preferredCleaners.length > 0 ? (

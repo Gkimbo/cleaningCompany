@@ -26,11 +26,13 @@ jest.mock("../../models", () => ({
   UserHomes: {
     findOne: jest.fn(),
     findByPk: jest.fn(),
+    count: jest.fn(),
   },
   HomePreferredCleaner: {
     findAll: jest.fn(),
     findOne: jest.fn(),
     destroy: jest.fn(),
+    count: jest.fn(),
   },
   UserAppointments: {
     findAll: jest.fn(),
@@ -51,13 +53,18 @@ describe("Preferred Cleaner Management Endpoints", () => {
     app.use("/api/v1/preferred-cleaner", preferredCleanerRouter);
   });
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
   const homeownerId = 1;
   const homeId = 10;
   const cleanerId = 100;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Default mock: homeowner has homes, cleaner does not
+    UserHomes.count.mockImplementation(({ where }) => {
+      if (where?.userId === homeownerId) return Promise.resolve(1);
+      return Promise.resolve(0);
+    });
+  });
 
   const createHomeownerToken = () => jwt.sign({ userId: homeownerId }, secretKey);
   const createCleanerToken = () => jwt.sign({ userId: cleanerId }, secretKey);
@@ -387,6 +394,8 @@ describe("Preferred Cleaner Management Endpoints", () => {
       };
 
       UserHomes.findOne.mockResolvedValue(mockHome);
+      // Require at least 5 preferred cleaners to enable feature
+      HomePreferredCleaner.count.mockResolvedValue(5);
 
       const res = await request(app)
         .patch(`/api/v1/preferred-cleaner/homes/${homeId}/preferred-settings`)

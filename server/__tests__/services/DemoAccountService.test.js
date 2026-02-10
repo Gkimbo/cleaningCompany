@@ -624,10 +624,10 @@ describe("DemoAccountService", () => {
 	});
 
 	describe("getAvailableRoles", () => {
-		it("should return all 7 preview roles", () => {
+		it("should return all 8 preview roles", () => {
 			const roles = DemoAccountService.getAvailableRoles();
 
-			expect(roles).toHaveLength(7);
+			expect(roles).toHaveLength(8);
 			expect(roles.map(r => r.role)).toEqual([
 				"cleaner",
 				"homeowner",
@@ -636,6 +636,7 @@ describe("DemoAccountService", () => {
 				"humanResources",
 				"largeBusinessOwner",
 				"preferredCleaner",
+				"largeHomeOwner",
 			]);
 		});
 
@@ -658,8 +659,9 @@ describe("DemoAccountService", () => {
 			expect(roles.find(r => r.role === "businessOwner").label).toBe("Business Owner");
 			expect(roles.find(r => r.role === "employee").label).toBe("Employee");
 			expect(roles.find(r => r.role === "humanResources").label).toBe("HR Manager");
-			expect(roles.find(r => r.role === "largeBusinessOwner").label).toBe("Large Business");
+			expect(roles.find(r => r.role === "largeBusinessOwner").label).toBe("Elite Partner");
 			expect(roles.find(r => r.role === "preferredCleaner").label).toBe("Preferred Cleaner");
+			expect(roles.find(r => r.role === "largeHomeOwner").label).toBe("Large Home Owner");
 		});
 	});
 

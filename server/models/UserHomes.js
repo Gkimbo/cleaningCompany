@@ -146,11 +146,11 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
-		// Toggle for preferred cleaners feature (when false, all cleaners can request jobs)
+		// Toggle for preferred cleaners feature (when true, only preferred cleaners can request jobs)
 		usePreferredCleaners: {
 			type: DataTypes.BOOLEAN,
 			allowNull: false,
-			defaultValue: true,
+			defaultValue: false,
 		},
 		// Tracks whether home setup is complete (false for homes created via invitation)
 		isSetupComplete: {

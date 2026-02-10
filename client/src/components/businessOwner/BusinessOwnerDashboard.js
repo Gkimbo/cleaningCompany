@@ -12,7 +12,6 @@ import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
 import PaymentSetupBanner from "./PaymentSetupBanner";
-import CreateSupportTicketModal from "../conflicts/modals/CreateSupportTicketModal";
 import {
   colors,
   spacing,
@@ -226,7 +225,6 @@ const BusinessOwnerDashboard = ({ state }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
   const [dashboardData, setDashboardData] = useState({
     overview: {},
     employees: [],
@@ -476,12 +474,6 @@ const BusinessOwnerDashboard = ({ state }) => {
             color={colors.warning[600]}
             badge={pendingPayouts.count}
           />
-          <QuickAction
-            icon="flag"
-            label="New Ticket"
-            onPress={() => setShowCreateTicketModal(true)}
-            color={colors.error[600]}
-          />
         </View>
       </View>
 
@@ -615,17 +607,6 @@ const BusinessOwnerDashboard = ({ state }) => {
       )}
 
       <View style={styles.bottomPadding} />
-
-      {/* Create Support Ticket Modal */}
-      <CreateSupportTicketModal
-        visible={showCreateTicketModal}
-        onClose={() => setShowCreateTicketModal(false)}
-        onSuccess={() => {
-          setShowCreateTicketModal(false);
-          fetchDashboard(true);
-        }}
-        token={state.currentUser.token}
-      />
     </ScrollView>
   );
 };

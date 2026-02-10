@@ -156,17 +156,28 @@ export const clearChecklistProgress = async (appointmentId) => {
   }
 };
 
-const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, onProgressUpdate }) => {
+const CleaningChecklist = ({ home, token, appointmentId, onChecklistComplete, onProgressUpdate, customChecklist }) => {
   const [checkedItems, setCheckedItems] = useState({});
   const [checklistData, setChecklistData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedSections, setExpandedSections] = useState({});
   const [progressLoaded, setProgressLoaded] = useState(false);
 
-  // Load checklist from API or cache
+  // Load checklist from custom prop, API, or cache
   useEffect(() => {
+    if (customChecklist) {
+      // Use custom checklist from business owner's job flow
+      const converted = convertApiToLocal(customChecklist);
+      if (converted && Object.keys(converted).length > 0) {
+        setChecklistData(converted);
+        initializeExpandedSections(converted);
+        setLoading(false);
+        return;
+      }
+    }
+    // Fall back to platform checklist
     loadChecklist();
-  }, []);
+  }, [customChecklist]);
 
   // Load saved progress for this appointment
   useEffect(() => {

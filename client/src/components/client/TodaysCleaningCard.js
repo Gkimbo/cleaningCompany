@@ -559,6 +559,8 @@ const TodaysCleaningCard = ({ appointment, home, state, onReviewSubmitted }) => 
                   ? reviewingCleaner.username || "Cleaner"
                   : assignedCleaners[0]?.username || "Your Cleaner"
               }
+              homeId={appointment.homeId}
+              isCleanerPreferred={false}
               onComplete={handleReviewComplete}
             />
           </ScrollView>

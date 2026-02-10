@@ -34,7 +34,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: "assigned",
-      comment: "assigned, started, completed, cancelled, no_show",
+      comment: "assigned, started, completed, cancelled, no_show, unassigned",
     },
 
     // Pay for this specific job

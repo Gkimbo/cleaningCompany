@@ -44,6 +44,11 @@ module.exports = (sequelize, DataTypes) => {
             "join_request_declined",
             "join_request_auto_approved",
             "cleaner_auto_approved",
+            // Business owner client notifications
+            "client_booked",
+            "business_owner_declined",
+            "client_opened_to_marketplace",
+            "client_cancelled_after_decline",
           ],
         ],
       },

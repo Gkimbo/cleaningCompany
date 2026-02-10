@@ -75,6 +75,10 @@ const mockConversationFindOne = jest.fn();
 const mockMessageFindAll = jest.fn();
 const mockAuditLogFindAll = jest.fn();
 const mockAuditLogCreate = jest.fn().mockResolvedValue({ id: 1 });
+const mockPaymentDisputeFindAll = jest.fn();
+const mockPaymentDisputeCount = jest.fn();
+const mockSupportTicketFindAll = jest.fn();
+const mockSupportTicketCount = jest.fn();
 
 jest.mock("../../models", () => ({
 	CancellationAppeal: {
@@ -107,6 +111,14 @@ jest.mock("../../models", () => ({
 	CancellationAuditLog: {
 		findAll: (...args) => mockAuditLogFindAll(...args),
 		create: (...args) => mockAuditLogCreate(...args),
+	},
+	PaymentDispute: {
+		findAll: (...args) => mockPaymentDisputeFindAll(...args),
+		count: (...args) => mockPaymentDisputeCount(...args),
+	},
+	SupportTicket: {
+		findAll: (...args) => mockSupportTicketFindAll(...args),
+		count: (...args) => mockSupportTicketCount(...args),
 	},
 	sequelize: {
 		transaction: jest.fn(() => mockTransaction),
@@ -143,6 +155,14 @@ describe("ConflictResolutionService", () => {
 	});
 
 	describe("getConflictQueue", () => {
+		beforeEach(() => {
+			// Default mocks for PaymentDispute and SupportTicket (empty arrays)
+			mockPaymentDisputeFindAll.mockResolvedValue([]);
+			mockPaymentDisputeCount.mockResolvedValue(0);
+			mockSupportTicketFindAll.mockResolvedValue([]);
+			mockSupportTicketCount.mockResolvedValue(0);
+		});
+
 		const createMockAppeal = (overrides = {}) => ({
 			id: 1,
 			status: "submitted",

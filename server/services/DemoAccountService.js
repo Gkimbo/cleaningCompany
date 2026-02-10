@@ -51,6 +51,7 @@ const ROLE_TYPE_MAP = {
 	largeBusinessOwner: "cleaner", // Large business owners are cleaners with isBusinessOwner=true and high volume
 	preferredCleaner: "cleaner", // Preferred cleaners are cleaners with platinum tier perks
 	largeHomeOwner: null, // Large home owner is a homeowner with a large home (for multi-cleaner jobs)
+	businessClient: null, // Business client is a homeowner who is a client of a business owner
 };
 
 // Demo account email prefixes for identification
@@ -307,6 +308,12 @@ class DemoAccountService {
 				label: "Business Owner",
 				description: "See employees, clients, and analytics",
 				icon: "briefcase",
+			},
+			{
+				role: "businessClient",
+				label: "Business Client",
+				description: "Client of a cleaning business, can book and manage appointments",
+				icon: "user-circle",
 			},
 			{
 				role: "employee",

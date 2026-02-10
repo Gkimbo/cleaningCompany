@@ -85,8 +85,21 @@ const EmployeeJobDetail = ({ state }) => {
   const { assignmentId } = useParams();
   const [loading, setLoading] = useState(true);
   const [job, setJob] = useState(null);
+  const [flowSettings, setFlowSettings] = useState(null);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const fetchJobFlow = async () => {
+    try {
+      const flow = await BusinessEmployeeService.getJobFlow(
+        state.currentUser.token,
+        assignmentId
+      );
+      setFlowSettings(flow);
+    } catch (err) {
+      console.error("Error fetching job flow:", err);
+    }
+  };
 
   const fetchJobDetails = async () => {
     setLoading(true);
@@ -113,6 +126,7 @@ const EmployeeJobDetail = ({ state }) => {
 
   useEffect(() => {
     fetchJobDetails();
+    fetchJobFlow();
   }, [assignmentId]);
 
   const handleStartJob = async () => {
@@ -338,6 +352,17 @@ const EmployeeJobDetail = ({ state }) => {
             </View>
           )}
         </View>
+
+        {/* Job Notes Card (from flow settings) */}
+        {flowSettings?.jobNotes && (
+          <View style={styles.jobNotesCard}>
+            <View style={styles.jobNotesHeader}>
+              <Icon name="sticky-note-o" size={16} color={colors.primary[600]} />
+              <Text style={styles.cardTitle}>Instructions from Your Manager</Text>
+            </View>
+            <Text style={styles.jobNotesText}>{flowSettings.jobNotes}</Text>
+          </View>
+        )}
 
         {/* Client Card */}
         {client.firstName && (
@@ -724,6 +749,30 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.warning[800],
     lineHeight: 20,
+  },
+  jobNotesCard: {
+    backgroundColor: colors.background.primary,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+    ...shadows.sm,
+  },
+  jobNotesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  jobNotesText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: 22,
+    backgroundColor: colors.primary[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
   },
   teamHeader: {
     flexDirection: "row",

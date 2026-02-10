@@ -19,6 +19,10 @@ const mockDefine = jest.fn((name, schema, options) => {
   const Model = function () {};
   Model.prototype = {};
   Model.associate = null;
+  Model.afterCreate = jest.fn(); // Support hooks
+  Model.beforeCreate = jest.fn();
+  Model.beforeUpdate = jest.fn();
+  Model.afterUpdate = jest.fn();
   return Model;
 });
 
@@ -29,7 +33,7 @@ const mockSequelize = {
 // Mock DataTypes with ENUM support
 const DataTypes = {
   INTEGER: "INTEGER",
-  STRING: "STRING",
+  STRING: Object.assign((length) => ({ type: "STRING", length }), { type: "STRING" }),
   DATE: "DATE",
   TEXT: "TEXT",
   BOOLEAN: "BOOLEAN",

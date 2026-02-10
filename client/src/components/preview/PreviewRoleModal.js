@@ -48,6 +48,13 @@ const PREVIEW_ROLES = [
 		color: colors.secondary[600],
 	},
 	{
+		role: "businessClient",
+		label: "Business Client",
+		description: "Client of a cleaning business",
+		icon: "user-circle",
+		color: colors.success[500],
+	},
+	{
 		role: "employee",
 		label: "Employee",
 		description: "See assigned jobs and schedule",

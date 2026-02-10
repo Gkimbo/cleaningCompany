@@ -212,7 +212,7 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
         id: assignmentId,
         businessEmployeeId: employeeId,
         // Only show jobs in valid states
-        status: { [Op.notIn]: ["cancelled", "no_show"] },
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
       },
       include: [
         {
@@ -317,7 +317,7 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
       where: {
         appointmentId: assignment.appointmentId,
         businessEmployeeId: { [Op.ne]: req.employeeRecord.id }, // Exclude current employee
-        status: { [Op.notIn]: ["cancelled"] }, // Exclude cancelled assignments
+        status: { [Op.notIn]: ["cancelled", "unassigned"] }, // Exclude cancelled/unassigned
       },
       include: [
         {
@@ -403,6 +403,42 @@ router.get("/my-jobs/:assignmentId/guest-not-left-status", async (req, res) => {
   } catch (error) {
     console.error("Error getting guest not left status:", error);
     res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /my-jobs/:assignmentId/flow - Get the job flow details for this assignment
+ * Returns photo requirement, checklist, and job notes based on assigned flow
+ */
+router.get("/my-jobs/:assignmentId/flow", async (req, res) => {
+  try {
+    const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
+    const { EmployeeJobAssignment } = require("../../../models");
+
+    const assignmentId = parseInt(req.params.assignmentId);
+    const employeeId = req.employeeRecord.id;
+
+    // Verify the assignment belongs to this employee
+    const assignment = await EmployeeJobAssignment.findOne({
+      where: {
+        id: assignmentId,
+        businessEmployeeId: employeeId,
+      },
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    // Get flow details for this assignment
+    const flowDetails = await AppointmentJobFlowService.getFlowDetailsForEmployee(
+      assignmentId
+    );
+
+    res.json(flowDetails);
+  } catch (error) {
+    console.error("Error fetching job flow:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 

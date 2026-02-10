@@ -14,6 +14,8 @@ const {
   User,
   UserHomes,
   PricingConfig,
+  EmployeeJobAssignment,
+  BusinessEmployee,
 } = require("../../models");
 const NotificationService = require("../NotificationService");
 const EncryptionService = require("../EncryptionService");
@@ -144,6 +146,64 @@ async function processAutoApprovalsSingleCleaner(io = null) {
               appointment.price
             );
           }
+        }
+
+        // Notify business owner if an employee completed this job
+        try {
+          const employeeAssignment = await EmployeeJobAssignment.findOne({
+            where: {
+              appointmentId: appointment.id,
+              isSelfAssignment: false,
+            },
+            include: [{
+              model: BusinessEmployee,
+              as: "employee",
+              attributes: ["id", "userId"],
+              include: [{
+                model: User,
+                as: "user",
+                attributes: ["id", "firstName"],
+              }],
+            }],
+          });
+
+          if (employeeAssignment && employeeAssignment.businessOwnerId) {
+            const businessOwner = await User.findByPk(employeeAssignment.businessOwnerId);
+
+            if (businessOwner) {
+              const employeeName = employeeAssignment.employee?.user?.firstName
+                ? EncryptionService.decrypt(employeeAssignment.employee.user.firstName)
+                : "Your employee";
+              const clientName = appointment.user
+                ? EncryptionService.decrypt(appointment.user.firstName)
+                : "your client";
+
+              // In-app notification for business owner
+              await NotificationService.createNotification(
+                businessOwner.id,
+                `${employeeName}'s job for ${clientName} on ${appointment.date} was auto-approved. Payment sent.`
+              );
+
+              // Push notification to business owner
+              if (businessOwner.expoPushToken) {
+                await PushNotification.sendPushNotification(
+                  businessOwner.expoPushToken,
+                  "Job Auto-Approved",
+                  `${employeeName}'s cleaning for ${clientName} was approved. Payment sent.`,
+                  { appointmentId: appointment.id, type: "employee_job_approved" }
+                );
+              }
+
+              console.log(
+                `[CompletionApprovalMonitor] Business owner ${businessOwner.id} notified of employee job auto-approval`
+              );
+            }
+          }
+        } catch (businessNotificationError) {
+          console.error(
+            `[CompletionApprovalMonitor] Error notifying business owner:`,
+            businessNotificationError
+          );
         }
 
         processed++;

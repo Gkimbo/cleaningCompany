@@ -237,13 +237,13 @@ class CustomJobFlowService {
   static async forkPlatformChecklist(flowId, businessOwnerId, versionId = null) {
     await this.getFlowById(flowId, businessOwnerId); // Authorization check
 
-    // Check if checklist already exists
+    // Delete existing checklist if any (allows re-importing)
     const existing = await CustomJobFlowChecklist.findOne({
       where: { customJobFlowId: flowId },
     });
 
     if (existing) {
-      throw new Error("Checklist already exists for this flow. Delete it first to fork again.");
+      await existing.destroy();
     }
 
     // Get the platform checklist

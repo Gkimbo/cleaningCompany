@@ -150,6 +150,9 @@ import {
   BusinessOwnerJobDetails,
   BusinessOwnerMyJobs,
   BusinessOwnerAllJobs,
+  JobFlowsList,
+  FlowDetailScreen,
+  FlowAssignmentsScreen,
 } from "../src/components/businessOwner";
 
 // Business Employee components
@@ -556,12 +559,12 @@ export default function App() {
                 element={<ConversationList />}
               />
               <Route
-                path="/messages/:conversationId"
-                element={<ChatScreen />}
-              />
-              <Route
                 path="/messages/broadcast"
                 element={<BroadcastForm state={state} />}
+              />
+              <Route
+                path="/messages/:conversationId"
+                element={<ChatScreen />}
               />
               {/* Account Settings */}
               <Route
@@ -644,12 +647,12 @@ export default function App() {
                 element={<ConflictResolutionCenter state={state} />}
               />
               <Route
-                path="/conflicts/:caseType/:caseId"
-                element={<ConflictCaseView state={state} />}
-              />
-              <Route
                 path="/conflicts/user-cases"
                 element={<UserCasesView state={state} />}
+              />
+              <Route
+                path="/conflicts/:caseType/:caseId"
+                element={<ConflictCaseView state={state} />}
               />
               {/* Notifications */}
               <Route
@@ -720,6 +723,19 @@ export default function App() {
               <Route
                 path="/business-owner/job/:appointmentId"
                 element={<BusinessOwnerJobDetails state={state} />}
+              />
+              {/* Job Flows */}
+              <Route
+                path="/job-flows"
+                element={<JobFlowsList state={state} />}
+              />
+              <Route
+                path="/job-flows/assignments"
+                element={<FlowAssignmentsScreen state={state} />}
+              />
+              <Route
+                path="/job-flows/:flowId"
+                element={<FlowDetailScreen state={state} />}
               />
               {/* Business Employee routes */}
               <Route

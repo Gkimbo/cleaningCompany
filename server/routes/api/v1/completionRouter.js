@@ -19,6 +19,8 @@ const {
   PricingConfig,
   MultiCleanerJob,
   UserReviews,
+  EmployeeJobAssignment,
+  BusinessEmployee,
 } = require("../../../models");
 const NotificationService = require("../../../services/NotificationService");
 const EncryptionService = require("../../../services/EncryptionService");
@@ -480,6 +482,63 @@ completionRouter.post("/approve/:appointmentId", verifyToken, async (req, res) =
           appointment.price
         );
       }
+    }
+
+    // Notify business owner if an employee completed this job
+    try {
+      const employeeAssignment = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointment.id,
+          isSelfAssignment: false,
+        },
+        include: [{
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "userId"],
+          include: [{
+            model: User,
+            as: "user",
+            attributes: ["id", "firstName"],
+          }],
+        }],
+      });
+
+      if (employeeAssignment && employeeAssignment.businessOwnerId) {
+        const businessOwner = await User.findByPk(employeeAssignment.businessOwnerId);
+
+        if (businessOwner) {
+          const employeeName = employeeAssignment.employee?.user?.firstName
+            ? EncryptionService.decrypt(employeeAssignment.employee.user.firstName)
+            : "Your employee";
+          const clientName = appointment.user
+            ? EncryptionService.decrypt(appointment.user.firstName)
+            : "your client";
+
+          // In-app notification for business owner
+          await NotificationService.createNotification({
+            userId: businessOwner.id,
+            type: "employee_job_approved",
+            title: "Job Approved",
+            body: `${employeeName}'s cleaning for ${clientName} was approved by the homeowner. Payment sent.`,
+            data: { appointmentId: appointment.id, employeeAssignmentId: employeeAssignment.id },
+            relatedAppointmentId: appointment.id,
+          });
+
+          // Push notification to business owner
+          if (businessOwner.expoPushToken) {
+            await PushNotification.sendPushNotification(
+              businessOwner.expoPushToken,
+              "Job Approved",
+              `${employeeName}'s cleaning for ${clientName} was approved. Payment sent.`,
+              { appointmentId: appointment.id, type: "employee_job_approved" }
+            );
+          }
+
+          console.log(`[Completion] Business owner ${businessOwner.id} notified of employee job approval`);
+        }
+      }
+    } catch (businessNotificationError) {
+      console.error(`[Completion] Error notifying business owner:`, businessNotificationError);
     }
 
     console.log(`[Completion] Approved by homeowner for appointment ${appointmentId}`);

@@ -24,6 +24,7 @@ import TaxFormsSection from "../tax/TaxFormsSection";
 import { ConflictsStatsWidget } from "../conflicts";
 import { PreviewRoleModal } from "../preview";
 import { usePreview } from "../../context/PreviewContext";
+import CreateSupportTicketModal from "../conflicts/modals/CreateSupportTicketModal";
 
 const { width } = Dimensions.get("window");
 
@@ -139,6 +140,7 @@ const OwnerDashboard = ({ state }) => {
   const [recheckLoading, setRecheckLoading] = useState(false);
   const [recheckResult, setRecheckResult] = useState(null);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
 
   const handleSelectPreviewRole = async (role) => {
     const success = await enterPreviewMode(role);
@@ -458,6 +460,26 @@ const OwnerDashboard = ({ state }) => {
       <View style={styles.section}>
         <ConflictsStatsWidget onNavigateToConflicts={() => navigate("/conflicts")} />
       </View>
+
+      {/* Create Support Ticket */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.createTicketCard,
+          pressed && styles.createTicketCardPressed,
+        ]}
+        onPress={() => setShowCreateTicketModal(true)}
+      >
+        <View style={styles.createTicketIcon}>
+          <Icon name="flag" size={20} color={colors.error[600]} />
+        </View>
+        <View style={styles.createTicketContent}>
+          <Text style={styles.createTicketTitle}>Create Support Ticket</Text>
+          <Text style={styles.createTicketDescription}>
+            Report issues or escalate conflicts
+          </Text>
+        </View>
+        <Icon name="chevron-right" size={16} color={colors.text.tertiary} />
+      </Pressable>
 
       {/* User Analytics Section */}
       <View style={styles.section}>
@@ -1155,6 +1177,17 @@ const OwnerDashboard = ({ state }) => {
         isLoading={previewLoading}
         error={previewError}
       />
+
+      {/* Create Support Ticket Modal */}
+      <CreateSupportTicketModal
+        visible={showCreateTicketModal}
+        onClose={() => setShowCreateTicketModal(false)}
+        onSuccess={() => {
+          setShowCreateTicketModal(false);
+          fetchDashboardData(true);
+        }}
+        token={state.currentUser.token}
+      />
     </ScrollView>
   );
 };
@@ -1253,6 +1286,45 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   previewAsRoleDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+
+  // Create Ticket Card
+  createTicketCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.error[100],
+  },
+  createTicketCardPressed: {
+    backgroundColor: colors.error[50],
+    transform: [{ scale: 0.99 }],
+  },
+  createTicketIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    backgroundColor: colors.error[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  createTicketContent: {
+    flex: 1,
+  },
+  createTicketTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  createTicketDescription: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     marginTop: 2,

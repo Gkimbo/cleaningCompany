@@ -70,6 +70,23 @@ class CustomJobFlowSerializer {
 
     const data = flow.dataValues || flow;
 
+    // Calculate checklist item count if checklist exists
+    let checklistItemCount = 0;
+    if (data.checklist) {
+      // Use the model's getItemCount method if available
+      if (typeof data.checklist.getItemCount === "function") {
+        checklistItemCount = data.checklist.getItemCount();
+      } else {
+        // Fallback: count items from snapshotData directly
+        const snapshotData = data.checklist.snapshotData || data.checklist.dataValues?.snapshotData;
+        if (snapshotData?.sections) {
+          checklistItemCount = snapshotData.sections.reduce((count, section) => {
+            return count + (section.items?.length || 0);
+          }, 0);
+        }
+      }
+    }
+
     return {
       id: data.id,
       name: data.name,
@@ -78,6 +95,7 @@ class CustomJobFlowSerializer {
       status: data.status,
       photoRequirement: data.photoRequirement,
       hasChecklist: data.checklist != null,
+      checklistItemCount,
       assignmentCount: data.clientAssignments?.length || 0,
     };
   }

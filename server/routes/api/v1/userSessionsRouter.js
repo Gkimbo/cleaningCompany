@@ -19,7 +19,7 @@ const secretKey = process.env.SESSION_SECRET;
 sessionRouter.post("/", passport.authenticate("local"), async (req, res) => {
 	try {
 		const user = await User.findOne({ where: { id: req.user.id } });
-		res.status(201).json(UserSerializer.serialize(user));
+		res.status(201).json(UserSerializer.serializeOne(user));
 	} catch (error) {
 		console.error(error);
 		res.status(500).json({ message: "Internal server error" });

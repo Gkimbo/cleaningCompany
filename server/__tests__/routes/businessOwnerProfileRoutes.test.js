@@ -22,6 +22,11 @@ jest.mock("../../models", () => ({
   },
   BusinessEmployee: {},
   sequelize: {},
+  RecurringSchedule: {},
+  PricingConfig: {},
+  UserCleanerAppointments: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
 }));
 
 // Mock services

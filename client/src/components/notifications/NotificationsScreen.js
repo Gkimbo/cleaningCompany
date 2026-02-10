@@ -15,6 +15,7 @@ import NotificationsService from "../../services/fetchRequests/NotificationsServ
 import { useSocket } from "../../services/SocketContext";
 import NotificationCard from "./NotificationCard";
 import RebookingModal from "../cleaner/RebookingModal";
+import BusinessOwnerDeclinedModal from "../client/BusinessOwnerDeclinedModal";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
 
 const NotificationsScreen = () => {
@@ -30,6 +31,8 @@ const NotificationsScreen = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [showRebookModal, setShowRebookModal] = useState(false);
   const [selectedNotificationForRebook, setSelectedNotificationForRebook] = useState(null);
+  const [showDeclinedModal, setShowDeclinedModal] = useState(false);
+  const [selectedDeclinedNotification, setSelectedDeclinedNotification] = useState(null);
 
   const fetchNotifications = useCallback(async (pageNum = 1, refresh = false) => {
     try {
@@ -111,6 +114,13 @@ const NotificationsScreen = () => {
       case "booking_expired":
         if (notification.data?.appointmentId) {
           navigate(`/client-detail/${notification.data.cleanerClientId || ""}`);
+        }
+        break;
+      case "business_owner_declined":
+        // Show the decline response modal for actionable declined notifications
+        if (notification.actionRequired) {
+          setSelectedDeclinedNotification(notification);
+          setShowDeclinedModal(true);
         }
         break;
       default:
@@ -232,6 +242,20 @@ const NotificationsScreen = () => {
         }}
         onSuccess={handleRebookSuccess}
         token={state.currentUser.token}
+      />
+
+      {/* Business Owner Declined Modal */}
+      <BusinessOwnerDeclinedModal
+        visible={showDeclinedModal}
+        notification={selectedDeclinedNotification}
+        onClose={() => {
+          setShowDeclinedModal(false);
+          setSelectedDeclinedNotification(null);
+        }}
+        onComplete={() => {
+          // Refresh notifications after action is taken
+          fetchNotifications(1, true);
+        }}
       />
     </View>
   );

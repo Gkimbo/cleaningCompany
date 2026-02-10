@@ -22,6 +22,7 @@ import MyClientsSection from "./profile/MyClientsSection";
 import PayrollSection from "./profile/PayrollSection";
 import ClientPaymentsSection from "./profile/ClientPaymentsSection";
 import MarketplaceCleanerView from "./profile/MarketplaceCleanerView";
+import JobFlowsSection from "./profile/JobFlowsSection";
 
 const MODE_STORAGE_KEY = "@business_owner_mode";
 
@@ -182,6 +183,9 @@ const BusinessOwnerProfile = ({ state }) => {
 
             {/* My Clients Section */}
             <MyClientsSection state={state} />
+
+            {/* Job Flows Section */}
+            <JobFlowsSection state={state} />
 
             {/* Payroll Section */}
             <PayrollSection

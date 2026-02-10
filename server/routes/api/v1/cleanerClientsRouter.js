@@ -544,7 +544,7 @@ cleanerClientsRouter.get("/pending-client-responses", verifyCleaner, async (req,
         home: {
           id: apt.home?.id,
           nickName: apt.home?.nickName,
-          address: apt.home ? `${EncryptionService.decryptHomeField(apt.home.address)}, ${EncryptionService.decryptHomeField(apt.home.city)}` : "",
+          address: apt.home ? `${EncryptionService.decrypt(apt.home.address)}, ${EncryptionService.decrypt(apt.home.city)}` : "",
           beds: apt.home?.numBeds,
           baths: apt.home?.numBaths,
         },

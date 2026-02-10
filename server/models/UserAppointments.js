@@ -167,6 +167,20 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 		},
+		// Business owner decline flow fields (when BO can't assign anyone)
+		businessOwnerDeclined: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		businessOwnerDeclinedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+		},
+		businessOwnerDeclineReason: {
+			type: DataTypes.TEXT,
+			allowNull: true,
+		},
 		// Backup cleaner notification fields
 		backupCleanersNotified: {
 			type: DataTypes.BOOLEAN,

@@ -18,6 +18,14 @@ const NotificationCard = ({ notification, onPress, onMarkRead, onRebook }) => {
         return { name: "x-circle", color: colors.error[500] };
       case "booking_expired":
         return { name: "clock", color: colors.neutral[500] };
+      case "business_owner_declined":
+        return { name: "alert-circle", color: colors.warning[500] };
+      case "client_booked":
+        return { name: "calendar", color: colors.primary[500] };
+      case "client_opened_to_marketplace":
+        return { name: "shopping-bag", color: colors.primary[500] };
+      case "client_cancelled_after_decline":
+        return { name: "x-circle", color: colors.error[500] };
       default:
         return { name: "bell", color: colors.primary[500] };
     }

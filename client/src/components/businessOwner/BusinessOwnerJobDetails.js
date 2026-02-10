@@ -7,6 +7,8 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
@@ -49,6 +51,9 @@ const BusinessOwnerJobDetails = ({ state }) => {
   const [jobData, setJobData] = useState(null);
   const [assigning, setAssigning] = useState(false);
   const [showEmployeeList, setShowEmployeeList] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
 
   useEffect(() => {
     fetchJobDetails();
@@ -176,6 +181,41 @@ const BusinessOwnerJobDetails = ({ state }) => {
         },
       ]
     );
+  };
+
+  const handleDecline = async () => {
+    try {
+      setDeclining(true);
+      const response = await fetch(
+        `${API_BASE}/business-owner/appointments/${appointmentId}/decline`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${state.currentUser?.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            reason: declineReason || undefined,
+          }),
+        }
+      );
+      const data = await response.json();
+      if (response.ok) {
+        setShowDeclineModal(false);
+        Alert.alert(
+          "Job Declined",
+          "The client has been notified and can choose to cancel or find another cleaner.",
+          [{ text: "OK", onPress: () => navigate(-1) }]
+        );
+      } else {
+        Alert.alert("Error", data.error || "Failed to decline job");
+      }
+    } catch (err) {
+      console.error("Error declining job:", err);
+      Alert.alert("Error", "Failed to decline job");
+    } finally {
+      setDeclining(false);
+    }
   };
 
   if (loading) {
@@ -378,6 +418,22 @@ const BusinessOwnerJobDetails = ({ state }) => {
                 )}
               </>
             )}
+
+            {/* Divider before decline option */}
+            <View style={styles.assignmentDivider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Can't Assign / Decline Button */}
+            <Pressable
+              style={styles.declineButton}
+              onPress={() => setShowDeclineModal(true)}
+            >
+              <Icon name="times-circle" size={16} color="#dc2626" />
+              <Text style={styles.declineButtonText}>Can't Assign Anyone</Text>
+            </Pressable>
           </View>
         )}
       </View>
@@ -656,6 +712,68 @@ const BusinessOwnerJobDetails = ({ state }) => {
       </View>
 
       <View style={styles.bottomPadding} />
+
+      {/* Decline Modal */}
+      <Modal
+        visible={showDeclineModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeclineModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconContainer}>
+                <Icon name="exclamation-circle" size={28} color="#dc2626" />
+              </View>
+              <Text style={styles.modalTitle}>Can't Assign Anyone?</Text>
+              <Text style={styles.modalSubtitle}>
+                The client will be notified and can choose to cancel or find another cleaner.
+              </Text>
+            </View>
+
+            <View style={styles.reasonInputContainer}>
+              <Text style={styles.reasonLabel}>Reason (optional)</Text>
+              <TextInput
+                style={styles.reasonInput}
+                placeholder="e.g., Staff unavailable, scheduling conflict..."
+                placeholderTextColor="#9ca3af"
+                value={declineReason}
+                onChangeText={setDeclineReason}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.cancelModalButton}
+                onPress={() => {
+                  setShowDeclineModal(false);
+                  setDeclineReason("");
+                }}
+                disabled={declining}
+              >
+                <Text style={styles.cancelModalButtonText}>Go Back</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.confirmDeclineButton, declining && styles.buttonDisabled]}
+                onPress={handleDecline}
+                disabled={declining}
+              >
+                {declining ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <Icon name="times" size={14} color="#fff" />
+                    <Text style={styles.confirmDeclineButtonText}>Decline Job</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -1265,6 +1383,139 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  // Decline button and modal styles
+  assignmentDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#e5e7eb",
+  },
+  dividerText: {
+    paddingHorizontal: 12,
+    fontSize: 13,
+    color: "#9ca3af",
+    fontWeight: "500",
+  },
+  declineButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#fef2f2",
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  declineButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#dc2626",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#fef2f2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#6b7280",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  reasonInputContainer: {
+    marginBottom: 20,
+  },
+  reasonLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  reasonInput: {
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: "#111827",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  cancelModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+  },
+  cancelModalButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  confirmDeclineButton: {
+    flex: 1,
+    flexDirection: "row",
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#dc2626",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  confirmDeclineButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
 

@@ -117,6 +117,7 @@ const MultiAspectReviewForm = ({
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [step, setStep] = useState(1);
+  const [validationErrors, setValidationErrors] = useState({});
 
   // Common fields
   const [overallRating, setOverallRating] = useState(0);
@@ -217,11 +218,26 @@ const MultiAspectReviewForm = ({
 
   const handleSubmit = async () => {
     const calculatedOverall = calculateOverall();
+    const errors = {};
 
+    // Validate public comment is required
+    if (!publicComment.trim()) {
+      errors.publicComment = "Please share your experience in the public review";
+    }
+
+    // Validate overall rating
     if (calculatedOverall === 0) {
-      Alert.alert("Missing Ratings", "Please rate all aspects before submitting.");
+      errors.ratings = "Please complete all ratings before submitting";
+    }
+
+    // If there are validation errors, show them and don't submit
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
       return;
     }
+
+    // Clear any previous errors
+    setValidationErrors({});
 
     if (!userId || isNaN(userId)) {
       Alert.alert("Error", "Unable to identify who to review. Please try again later.");
@@ -519,19 +535,36 @@ const MultiAspectReviewForm = ({
       </View>
 
       <View style={styles.commentSection}>
-        <Text style={styles.commentLabel}>Public Review</Text>
+        <View style={styles.commentLabelRow}>
+          <Text style={styles.commentLabel}>Public Review</Text>
+          <Text style={styles.requiredBadge}>Required</Text>
+        </View>
         <Text style={styles.commentHint}>
           This will be visible to {revieweeName} and others once both reviews are submitted.
         </Text>
         <TextInput
-          style={styles.commentInput}
+          style={[
+            styles.commentInput,
+            validationErrors.publicComment && styles.commentInputError,
+          ]}
           multiline
           numberOfLines={4}
           placeholder="Share your experience..."
           placeholderTextColor={colors.text.tertiary}
           value={publicComment}
-          onChangeText={setPublicComment}
+          onChangeText={(text) => {
+            setPublicComment(text);
+            if (validationErrors.publicComment) {
+              setValidationErrors((prev) => ({ ...prev, publicComment: null }));
+            }
+          }}
         />
+        {validationErrors.publicComment && (
+          <View style={styles.errorContainer}>
+            <Icon name="exclamation-circle" size={14} color={colors.error[600]} />
+            <Text style={styles.errorText}>{validationErrors.publicComment}</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.commentSection}>
@@ -555,39 +588,66 @@ const MultiAspectReviewForm = ({
       {isHomeownerReview && homeId && canSetAsPreferred && (
         <View style={[
           styles.preferredCleanerSection,
+          setAsPreferred && styles.preferredCleanerSectionActive,
           isCleanerPreferred && !setAsPreferred && styles.preferredCleanerSectionWarning,
         ]}>
-          <View style={styles.preferredCleanerRow}>
-            <View style={styles.preferredCleanerContent}>
-              <View style={styles.preferredCleanerHeader}>
-                <Icon
-                  name="star"
-                  size={16}
-                  color={setAsPreferred ? colors.success[600] : colors.neutral[400]}
-                />
-                <Text style={styles.preferredCleanerLabel}>
-                  {isCleanerPreferred
-                    ? setAsPreferred
-                      ? `Keep ${revieweeName} as a preferred cleaner`
-                      : `Remove ${revieweeName} from preferred cleaners`
-                    : `Make ${revieweeName} a preferred cleaner`}
-                </Text>
-              </View>
-              <Text style={styles.preferredCleanerHint}>
-                {setAsPreferred
-                  ? "They can book directly for this home without needing your approval each time."
-                  : isCleanerPreferred
-                    ? "They will no longer have preferred status for this home."
-                    : "Preferred cleaners can book directly without requesting approval."}
+          {/* Header with icon and toggle */}
+          <View style={styles.preferredCleanerHeader}>
+            <View style={[
+              styles.preferredCleanerIconContainer,
+              setAsPreferred && styles.preferredCleanerIconContainerActive,
+            ]}>
+              <Icon
+                name="star"
+                size={20}
+                color={setAsPreferred ? "#FFFFFF" : colors.primary[500]}
+              />
+            </View>
+            <View style={styles.preferredCleanerTitleContainer}>
+              <Text style={[
+                styles.preferredCleanerTitle,
+                setAsPreferred && styles.preferredCleanerTitleActive,
+              ]}>
+                {isCleanerPreferred
+                  ? "Preferred Cleaner"
+                  : "Make a Preferred Cleaner"}
               </Text>
+              <Text style={styles.preferredCleanerName}>{revieweeName}</Text>
             </View>
             <Switch
               value={setAsPreferred}
               onValueChange={setSetAsPreferred}
-              trackColor={{ false: colors.neutral[300], true: colors.success[400] }}
-              thumbColor={setAsPreferred ? colors.success[600] : colors.neutral[100]}
+              trackColor={{ false: colors.neutral[300], true: colors.success[500] }}
+              thumbColor={setAsPreferred ? "#FFFFFF" : colors.neutral[50]}
+              ios_backgroundColor={colors.neutral[300]}
             />
           </View>
+
+          {/* Benefits list */}
+          <View style={styles.preferredCleanerBenefits}>
+            <View style={styles.preferredCleanerBenefitRow}>
+              <Icon name="check" size={12} color={setAsPreferred ? colors.success[600] : colors.neutral[400]} />
+              <Text style={[styles.preferredCleanerBenefitText, setAsPreferred && styles.preferredCleanerBenefitTextActive]}>
+                Books directly for this home
+              </Text>
+            </View>
+            <View style={styles.preferredCleanerBenefitRow}>
+              <Icon name="check" size={12} color={setAsPreferred ? colors.success[600] : colors.neutral[400]} />
+              <Text style={[styles.preferredCleanerBenefitText, setAsPreferred && styles.preferredCleanerBenefitTextActive]}>
+                Knows your cleaning preferences
+              </Text>
+            </View>
+          </View>
+
+          {/* Status hint */}
+          {isCleanerPreferred && !setAsPreferred && (
+            <View style={styles.preferredCleanerWarningBanner}>
+              <Icon name="exclamation-circle" size={14} color={colors.warning[700]} />
+              <Text style={styles.preferredCleanerWarningText}>
+                This will remove their preferred status
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -862,11 +922,25 @@ const styles = StyleSheet.create({
   commentSection: {
     marginBottom: spacing.lg,
   },
+  commentLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   commentLabel: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
+  },
+  requiredBadge: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.error[600],
+    backgroundColor: colors.error[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
   },
   commentHint: {
     fontSize: typography.fontSize.sm,
@@ -877,10 +951,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
     borderRadius: radius.lg,
     padding: spacing.md,
+    borderWidth: 1,
+    borderColor: "transparent",
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
     minHeight: 100,
     textAlignVertical: "top",
+  },
+  commentInputError: {
+    borderColor: colors.error[500],
+    backgroundColor: colors.error[50],
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  errorText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.error[600],
+    fontWeight: typography.fontWeight.medium,
   },
 
   // Navigation Buttons
@@ -938,41 +1029,87 @@ const styles = StyleSheet.create({
 
   // Preferred Cleaner Section
   preferredCleanerSection: {
-    backgroundColor: colors.success[50],
+    backgroundColor: colors.neutral[50],
     borderRadius: radius.lg,
-    padding: spacing.lg,
+    padding: spacing.md,
     marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.success[200],
+    borderWidth: 1.5,
+    borderColor: colors.neutral[200],
+    borderStyle: "dashed",
+  },
+  preferredCleanerSectionActive: {
+    backgroundColor: colors.success[50],
+    borderColor: colors.success[400],
+    borderStyle: "solid",
   },
   preferredCleanerSectionWarning: {
     backgroundColor: colors.warning[50],
-    borderColor: colors.warning[200],
-  },
-  preferredCleanerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  preferredCleanerContent: {
-    flex: 1,
-    marginRight: spacing.md,
+    borderColor: colors.warning[300],
+    borderStyle: "solid",
   },
   preferredCleanerHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  preferredCleanerLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
+  preferredCleanerIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.sm,
+  },
+  preferredCleanerIconContainerActive: {
+    backgroundColor: colors.success[500],
+  },
+  preferredCleanerTitleContainer: {
+    flex: 1,
+  },
+  preferredCleanerTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.secondary,
+  },
+  preferredCleanerTitleActive: {
     color: colors.success[700],
   },
-  preferredCleanerHint: {
-    fontSize: typography.fontSize.sm,
-    color: colors.success[600],
-    lineHeight: 18,
+  preferredCleanerName: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  preferredCleanerBenefits: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginLeft: 44,
+  },
+  preferredCleanerBenefitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  preferredCleanerBenefitText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  preferredCleanerBenefitTextActive: {
+    color: colors.success[700],
+  },
+  preferredCleanerWarningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[100],
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  preferredCleanerWarningText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    fontWeight: typography.fontWeight.medium,
   },
 });
 

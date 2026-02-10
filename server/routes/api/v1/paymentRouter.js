@@ -2167,6 +2167,71 @@ paymentRouter.post("/complete-job", async (req, res) => {
       console.error("Error sending completion submission notifications:", notificationError);
     }
 
+    // Send notification to business owner if an employee completed this job
+    try {
+      const { EmployeeJobAssignment, BusinessEmployee } = require("../../../models");
+
+      // Find if there's an employee assignment for this appointment (not a self-assignment)
+      const employeeAssignment = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointment.id,
+          isSelfAssignment: false,
+        },
+        include: [{
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "userId"],
+          include: [{
+            model: User,
+            as: "user",
+            attributes: ["id", "firstName"],
+          }],
+        }],
+      });
+
+      if (employeeAssignment && employeeAssignment.businessOwnerId) {
+        const businessOwner = await User.findByPk(employeeAssignment.businessOwnerId);
+
+        if (businessOwner) {
+          const homeowner = await User.findByPk(appointment.userId);
+          const employeeName = employeeAssignment.employee?.user?.firstName
+            ? EncryptionService.decrypt(employeeAssignment.employee.user.firstName)
+            : "Your employee";
+          const clientName = homeowner
+            ? EncryptionService.decrypt(homeowner.firstName)
+            : "your client";
+          const homeAddress = home
+            ? `${EncryptionService.decrypt(home.address)}, ${EncryptionService.decrypt(home.city)}`
+            : "the scheduled location";
+
+          // In-app notification for business owner
+          await NotificationService.createNotification({
+            userId: businessOwner.id,
+            type: "employee_completed_job",
+            title: "Employee Completed Job",
+            body: `${employeeName} has finished cleaning for ${clientName} at ${homeAddress}.`,
+            data: { appointmentId: appointment.id, employeeAssignmentId: employeeAssignment.id },
+            relatedAppointmentId: appointment.id,
+          });
+
+          // Send push notification to business owner
+          if (businessOwner.expoPushToken) {
+            await PushNotification.sendPushNotification(
+              businessOwner.expoPushToken,
+              "Employee Completed Job",
+              `${employeeName} has finished cleaning for ${clientName}.`,
+              { appointmentId: appointment.id, type: "employee_completed_job" }
+            );
+          }
+
+          console.log(`[Complete Job] Business owner notification sent to ${businessOwner.id} for employee job completion`);
+        }
+      }
+    } catch (businessNotificationError) {
+      // Don't fail the submission if business owner notifications fail
+      console.error("Error sending business owner notification:", businessNotificationError);
+    }
+
     return res.json({
       success: true,
       message: "Job submitted for homeowner approval. Payout will be processed after approval.",

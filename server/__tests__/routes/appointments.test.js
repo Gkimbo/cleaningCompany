@@ -22,7 +22,7 @@ jest.mock("../../models", () => ({
   },
   UserHomes: {
     findOne: jest.fn(),
-    findAll: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
     findByPk: jest.fn(),
   },
   UserBills: {
@@ -57,7 +57,7 @@ jest.mock("../../models", () => ({
   },
   HomePreferredCleaner: {
     findOne: jest.fn(),
-    findAll: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     destroy: jest.fn(),
     count: jest.fn().mockResolvedValue(0),

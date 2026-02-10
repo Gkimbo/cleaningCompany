@@ -46,6 +46,8 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "Optional note about payment method (e.g., 'Paid via Venmo')",
 		},
+	}, {
+		tableName: 'EmployeeBonuses',
 	});
 
 	// Instance methods

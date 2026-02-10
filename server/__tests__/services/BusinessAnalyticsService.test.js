@@ -2,6 +2,7 @@
 jest.mock("../../services/BusinessVolumeService", () => ({
 	qualifiesForLargeBusinessFee: jest.fn(),
 	getBusinessFee: jest.fn(),
+	getMonthlyQualificationHistory: jest.fn(),
 }));
 
 // Mock models
@@ -68,6 +69,10 @@ describe("BusinessAnalyticsService", () => {
 				threshold: 50,
 				cleaningsNeeded: 0,
 			});
+			BusinessVolumeService.getMonthlyQualificationHistory.mockResolvedValue([
+				{ month: "2024-01", qualified: true, cleanings: 55 },
+				{ month: "2024-02", qualified: true, cleanings: 60 },
+			]);
 
 			const result = await BusinessAnalyticsService.getAnalyticsAccess(1);
 
@@ -87,6 +92,9 @@ describe("BusinessAnalyticsService", () => {
 				threshold: 50,
 				cleaningsNeeded: 30,
 			});
+			BusinessVolumeService.getMonthlyQualificationHistory.mockResolvedValue([
+				{ month: "2024-01", qualified: false, cleanings: 20 },
+			]);
 
 			const result = await BusinessAnalyticsService.getAnalyticsAccess(1);
 
@@ -195,6 +203,7 @@ describe("BusinessAnalyticsService", () => {
 		const mockEmployees = [
 			{
 				id: 1,
+				userId: 101,
 				firstName: "Jane",
 				lastName: "Doe",
 				status: "active",
@@ -202,6 +211,7 @@ describe("BusinessAnalyticsService", () => {
 			},
 			{
 				id: 2,
+				userId: 102,
 				firstName: "John",
 				lastName: "Smith",
 				status: "active",
@@ -238,7 +248,15 @@ describe("BusinessAnalyticsService", () => {
 
 		beforeEach(() => {
 			BusinessEmployee.findAll.mockResolvedValue(mockEmployees);
-			EmployeeJobAssignment.findAll.mockResolvedValue(mockAssignments);
+			// Mock findAll to filter by businessEmployeeId when present in where clause
+			EmployeeJobAssignment.findAll.mockImplementation((options) => {
+				if (options?.where?.businessEmployeeId) {
+					return Promise.resolve(
+						mockAssignments.filter(a => a.businessEmployeeId === options.where.businessEmployeeId)
+					);
+				}
+				return Promise.resolve(mockAssignments);
+			});
 			UserReviews.findAll.mockResolvedValue([{ rating: 5 }, { rating: 4 }]);
 		});
 
@@ -263,13 +281,9 @@ describe("BusinessAnalyticsService", () => {
 		it("should calculate completion rate correctly", async () => {
 			// Employee 1: 2 completed out of 2 = 100%
 			// Employee 2: 0 completed out of 1 (no_show) = 0%
-			EmployeeJobAssignment.findAll
-				.mockResolvedValueOnce(mockAssignments.filter(a => a.businessEmployeeId === 1))
-				.mockResolvedValueOnce(mockAssignments.filter(a => a.businessEmployeeId === 2));
-
 			const result = await BusinessAnalyticsService.getEmployeeAnalytics(1);
 
-			const emp1 = result.employees.find(e => e.employeeId === 1);
+			const emp1 = result.employees.find(e => e.employeeId === 101);
 			expect(emp1?.completionRate).toBe(100);
 		});
 
@@ -277,7 +291,7 @@ describe("BusinessAnalyticsService", () => {
 			// Employee 2 has 1 no_show out of 1 = 0% on-time
 			const result = await BusinessAnalyticsService.getEmployeeAnalytics(1);
 
-			const emp2 = result.employees.find(e => e.employeeId === 2);
+			const emp2 = result.employees.find(e => e.employeeId === 102);
 			// On-time = (total - noShows) / total * 100
 			expect(emp2?.onTimeRate).toBeDefined();
 		});
@@ -552,6 +566,9 @@ describe("BusinessAnalyticsService", () => {
 				threshold: 50,
 				cleaningsNeeded: 0,
 			});
+			BusinessVolumeService.getMonthlyQualificationHistory.mockResolvedValue([
+				{ month: "2024-01", qualified: true, cleanings: 55 },
+			]);
 			BusinessVolumeService.getBusinessFee.mockResolvedValue({
 				feePercent: 0.07,
 				feeTier: "large",

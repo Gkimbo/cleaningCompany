@@ -170,6 +170,29 @@ class BusinessEmployeeService {
   }
 
   /**
+   * Get job flow settings for an assignment
+   * @param {string} token - Auth token
+   * @param {number} assignmentId - Assignment ID
+   * @returns {Object} Flow settings including photoRequirement, checklist, jobNotes
+   */
+  static async getJobFlow(token, assignmentId) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/flow`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        return null;
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessEmployee] Error fetching job flow:", error);
+      return null;
+    }
+  }
+
+  /**
    * Start a job
    * @param {string} token - Auth token
    * @param {number} assignmentId - Assignment ID

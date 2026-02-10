@@ -22,7 +22,7 @@ class PreferredCleanerService {
       );
       if (!response.ok) {
         console.warn(`[PreferredCleaner] Failed to fetch: ${response.status}`);
-        return { preferredCleaners: [], usePreferredCleaners: true };
+        return { preferredCleaners: [], usePreferredCleaners: false };
       }
       return await response.json();
     } catch (error) {

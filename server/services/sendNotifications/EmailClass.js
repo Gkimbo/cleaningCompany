@@ -3107,6 +3107,94 @@ The Kleanr Team`;
   }
 
   /**
+   * Send notification to client when business owner declines their appointment
+   * @param {string} email - Client's email
+   * @param {string} clientName - Client's first name
+   * @param {string} appointmentDate - Date of appointment
+   * @param {string} businessOwnerName - Business owner's name
+   * @param {string} reason - Optional reason for declining
+   */
+  static async sendBusinessOwnerDeclinedEmail(
+    email,
+    clientName,
+    appointmentDate,
+    businessOwnerName,
+    reason
+  ) {
+    try {
+      const transporter = createTransporter();
+
+      const reasonText = reason
+        ? `<p><strong>Reason:</strong> ${reason}</p>`
+        : "";
+
+      const htmlContent = createEmailTemplate({
+        title: "Appointment Update",
+        subtitle: "Your cleaning needs attention",
+        headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+        greeting: `Hi ${clientName}!`,
+        content: `
+          <p>Unfortunately, <strong>${businessOwnerName}</strong> is unable to complete your cleaning scheduled for <strong>${formatDate(appointmentDate)}</strong>.</p>
+          ${reasonText}
+          <p>But don't worry! You have options:</p>
+        `,
+        steps: {
+          title: "What you can do:",
+          items: [
+            "<strong>Cancel this appointment</strong> - We'll remove it from your schedule",
+            "<strong>Find another cleaner</strong> - We'll open your appointment to our marketplace where qualified cleaners can pick it up",
+          ],
+        },
+        infoBox: {
+          icon: "💡",
+          title: "About the Marketplace",
+          items: [
+            { label: "What is it?", value: "A pool of verified, background-checked cleaners" },
+            { label: "How it works", value: "Cleaners see your job and can claim it" },
+            { label: "Pricing", value: "Based on your home size and cleaning preferences" },
+          ],
+        },
+        ctaText: "Open the Kleanr app to choose what to do next.",
+        footerMessage: "We're here to help you find the right solution!",
+      });
+
+      const textContent = `Hi ${clientName}!
+
+Unfortunately, ${businessOwnerName} is unable to complete your cleaning scheduled for ${formatDate(appointmentDate)}.
+${reason ? `Reason: ${reason}` : ""}
+
+WHAT YOU CAN DO:
+1. Cancel this appointment - We'll remove it from your schedule
+2. Find another cleaner - We'll open your appointment to our marketplace
+
+ABOUT THE MARKETPLACE:
+- A pool of verified, background-checked cleaners
+- Cleaners see your job and can claim it
+- Pricing based on your home size and cleaning preferences
+
+Open the Kleanr app to choose what to do next.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `⚠️ Your cleaning on ${formatDate(appointmentDate)} needs attention`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Business owner declined email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending business owner declined email:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Send notification to cleaner when they are made a preferred cleaner
    * @param {string} email - Cleaner's email
    * @param {string} cleanerName - Cleaner's first name

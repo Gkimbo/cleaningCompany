@@ -28,6 +28,7 @@ jest.mock("../../models", () => ({
   },
   UserHomes: {
     findByPk: jest.fn(),
+    count: jest.fn(),
   },
 }));
 
@@ -49,6 +50,11 @@ describe("Preferred Cleaner Router", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default mock: homeowner (clientId 200) has homes, cleaner (cleanerId 100) does not
+    UserHomes.count.mockImplementation(({ where }) => {
+      if (where?.userId === 200) return Promise.resolve(1);
+      return Promise.resolve(0);
+    });
   });
 
   describe("Cleaner (Business Owner) Endpoints", () => {

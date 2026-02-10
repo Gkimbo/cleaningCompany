@@ -296,6 +296,11 @@ describe("Conflict Router", () => {
 
 	describe("POST /api/v1/conflicts/:type/:id/refund", () => {
 		it("should process refund successfully", async () => {
+			// Mock getConflictCase to return case with appointment price for validation
+			mockGetConflictCase.mockResolvedValue({
+				id: 1,
+				appointment: { id: 100, price: 100, refundAmount: 0 }, // $100 = 10000 cents max refundable
+			});
 			mockProcessRefund.mockResolvedValue({
 				success: true,
 				refundId: "re_test_123",
@@ -325,6 +330,11 @@ describe("Conflict Router", () => {
 		});
 
 		it("should handle refund errors", async () => {
+			// Mock getConflictCase to return case with appointment price for validation
+			mockGetConflictCase.mockResolvedValue({
+				id: 1,
+				appointment: { id: 100, price: 100, refundAmount: 0 }, // $100 = 10000 cents max refundable
+			});
 			mockProcessRefund.mockRejectedValue(new Error("No payment intent found"));
 
 			const response = await request(app)

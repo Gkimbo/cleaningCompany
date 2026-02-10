@@ -292,6 +292,143 @@ class NotificationService {
   }
 
   /**
+   * Notify business owner that their client booked a new appointment
+   */
+  static async notifyClientBookedAppointment({
+    businessOwnerId,
+    clientId,
+    clientName,
+    appointmentId,
+    appointmentDate,
+    homeAddress,
+    price,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "client_booked_appointment",
+      title: "New Client Appointment",
+      body: `${clientName} booked a cleaning for ${formatDate(appointmentDate)}. Tap to view and assign.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientId,
+        clientName,
+        homeAddress,
+        price,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendNewClientAppointmentEmail,
+        args: [appointmentDate, clientName, homeAddress, price, appointmentId],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Notify client that business owner declined their appointment
+   * Client can choose to cancel or open to marketplace
+   */
+  static async notifyBusinessOwnerDeclined({
+    clientId,
+    businessOwnerId,
+    businessOwnerName,
+    appointmentId,
+    appointmentDate,
+    reason,
+    io = null,
+  }) {
+    const reasonText = reason ? ` Reason: ${reason}` : "";
+
+    return this.notifyUser({
+      userId: clientId,
+      type: "business_owner_declined",
+      title: "Appointment Update",
+      body: `${businessOwnerName} is unable to clean on ${formatDate(appointmentDate)}. Tap to choose what to do next.${reasonText}`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        businessOwnerId,
+        businessOwnerName,
+        reason,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendBusinessOwnerDeclinedEmail,
+        args: [appointmentDate, businessOwnerName, reason],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Notify business owner that client chose to open appointment to marketplace
+   */
+  static async notifyClientOpenedToMarketplace({
+    businessOwnerId,
+    clientId,
+    clientName,
+    appointmentId,
+    appointmentDate,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "client_opened_to_marketplace",
+      title: "Client Found Alternative",
+      body: `${clientName} has opened their ${formatDate(appointmentDate)} appointment to the marketplace.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientId,
+        clientName,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify business owner that client cancelled after decline
+   */
+  static async notifyClientCancelledAfterDecline({
+    businessOwnerId,
+    clientId,
+    clientName,
+    appointmentId,
+    appointmentDate,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "client_cancelled_after_decline",
+      title: "Appointment Cancelled",
+      body: `${clientName} has cancelled their ${formatDate(appointmentDate)} appointment.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientId,
+        clientName,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
    * Notify client that a rebooked appointment is available
    */
   static async notifyRebooking({
