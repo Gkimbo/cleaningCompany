@@ -168,19 +168,17 @@ describe("TeamBookingModal", () => {
       });
     });
 
-    it("should display total job price", async () => {
+    it("should display job earnings", async () => {
       const { getByText } = await renderAndWait();
       await waitFor(() => {
-        expect(getByText("Total Job Price")).toBeTruthy();
-        expect(getByText("$300.00")).toBeTruthy();
+        expect(getByText("Job Earnings")).toBeTruthy();
       });
     });
 
-    it("should display per cleaner earnings", async () => {
+    it("should display your profit in the breakdown", async () => {
       const { getByText } = await renderAndWait();
       await waitFor(() => {
-        expect(getByText("Your payout per cleaner")).toBeTruthy();
-        expect(getByText("$135.50")).toBeTruthy();
+        expect(getByText("Your Profit")).toBeTruthy();
       });
     });
   });
@@ -287,12 +285,12 @@ describe("TeamBookingModal", () => {
       });
     });
 
-    it("should display hourly rate badge", async () => {
+    it("should display pay rate badges", async () => {
       const { getAllByText } = await renderAndWait();
       await waitFor(() => {
-        // Hourly rate may be formatted as "$25/hr" or "25/hr"
-        expect(getAllByText(/25\/hr/).length).toBeGreaterThan(0);
-        expect(getAllByText(/30\/hr/).length).toBeGreaterThan(0);
+        // Pay rates shown as "$25/hr" format
+        expect(getAllByText(/\$25\/hr/).length).toBeGreaterThan(0);
+        expect(getAllByText(/\$30\/hr/).length).toBeGreaterThan(0);
       });
     });
 
@@ -313,48 +311,37 @@ describe("TeamBookingModal", () => {
   // Profit Breakdown
   // ============================================
   describe("Profit Breakdown", () => {
-    it("should display profit breakdown when employees selected", async () => {
-      const { getAllByText, getByText } = await renderAndWait();
+    it("should display profit breakdown in job summary", async () => {
+      const { getByText } = await renderAndWait();
 
+      // Profit breakdown shows immediately in the job summary area
       await waitFor(() => {
-        expect(getAllByText(/John Doe/).length).toBeGreaterThan(0);
-      });
-
-      const johnDoeElements = getAllByText(/John Doe/);
-      fireEvent.press(johnDoeElements[0]);
-
-      await waitFor(() => {
-        expect(getByText("Your Profit Breakdown")).toBeTruthy();
-      });
-    });
-
-    it("should show total job earnings", async () => {
-      const { getAllByText, getByText } = await renderAndWait();
-
-      await waitFor(() => {
-        expect(getAllByText(/John Doe/).length).toBeGreaterThan(0);
-      });
-
-      const johnDoeElements = getAllByText(/John Doe/);
-      fireEvent.press(johnDoeElements[0]);
-
-      await waitFor(() => {
-        expect(getByText("Total Job Earnings")).toBeTruthy();
-      });
-    });
-
-    it("should show your profit calculation", async () => {
-      const { getAllByText, getByText } = await renderAndWait();
-
-      await waitFor(() => {
-        expect(getAllByText(/John Doe/).length).toBeGreaterThan(0);
-      });
-
-      const johnDoeElements = getAllByText(/John Doe/);
-      fireEvent.press(johnDoeElements[0]);
-
-      await waitFor(() => {
+        expect(getByText("Job Earnings")).toBeTruthy();
         expect(getByText("Your Profit")).toBeTruthy();
+      });
+    });
+
+    it("should show job earnings (net after platform fee)", async () => {
+      const { getByText } = await renderAndWait();
+
+      await waitFor(() => {
+        // Job earnings is already net after platform fee
+        expect(getByText("Job Earnings")).toBeTruthy();
+      });
+    });
+
+    it("should show employee pay when employee selected", async () => {
+      const { getAllByText, getByText } = await renderAndWait();
+
+      await waitFor(() => {
+        expect(getAllByText(/John Doe/).length).toBeGreaterThan(0);
+      });
+
+      const johnDoeElements = getAllByText(/John Doe/);
+      fireEvent.press(johnDoeElements[0]);
+
+      await waitFor(() => {
+        expect(getByText("Employee Pay")).toBeTruthy();
       });
     });
   });

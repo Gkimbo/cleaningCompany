@@ -3555,15 +3555,16 @@ router.get("/team-for-job", async (req, res) => {
     // Check if business owner can be included (has Stripe Connect)
     const selfHasStripeConnect = !!businessOwner.stripeConnectAccountId;
 
-    // Get all active employees with their availability
+    // Get all active and pending_invite employees with their availability
+    // Include pending_invite so business owners can see employees who haven't accepted yet
     const employees = await BusinessEmployeeService.getEmployeesByBusinessOwner(
       businessOwnerId,
-      { status: ["active"] }
+      { status: ["active", "pending_invite"] }
     );
 
     // Parse job date for availability check
-    const date = new Date(jobDate);
-    const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "lowercase" });
+    const date = new Date(jobDate + "T00:00:00");
+    const dayOfWeek = date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
 
     // Check availability for each employee
     const teamMembers = employees.map((emp) => {
@@ -3601,8 +3602,14 @@ router.get("/team-for-job", async (req, res) => {
         lastName: emp.lastName ? EncryptionService.decrypt(emp.lastName) : null,
         isAvailable,
         unavailableReason,
+        // Pay configuration
+        payType: emp.payType || "hourly",
         // Hourly rate in dollars (stored in cents in DB)
         hourlyRate: emp.defaultHourlyRate ? emp.defaultHourlyRate / 100 : null,
+        // Flat job rate in dollars (stored in cents in DB)
+        jobRate: emp.defaultJobRate ? emp.defaultJobRate / 100 : null,
+        // Percentage of job (stored as whole number, e.g., 65 for 65%)
+        payPercent: emp.payRate ? parseFloat(emp.payRate) / 100 : null,
       };
     });
 
