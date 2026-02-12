@@ -456,71 +456,126 @@ const ClientDetailPage = ({ state, dispatch }) => {
           <View style={styles.cardHeader}>
             <View style={styles.cardTitleRow}>
               <Feather name="home" size={18} color={colors.primary[600]} />
-              <Text style={styles.cardTitle}>Home Details</Text>
+              <Text style={styles.cardTitle}>
+                {homes.length > 1 ? `Homes (${homes.length})` : "Home Details"}
+              </Text>
             </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.editButton,
-                pressed && styles.editButtonPressed,
-              ]}
-              onPress={() => setShowEditModal(true)}
-            >
-              <Feather name="edit-2" size={14} color={colors.primary[600]} />
-              <Text style={styles.editButtonText}>Edit</Text>
-            </Pressable>
+            {homes.length <= 1 && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.editButton,
+                  pressed && styles.editButtonPressed,
+                ]}
+                onPress={() => setShowEditModal(true)}
+              >
+                <Feather name="edit-2" size={14} color={colors.primary[600]} />
+                <Text style={styles.editButtonText}>Edit</Text>
+              </Pressable>
+            )}
           </View>
 
           <View style={styles.cardBody}>
-            {/* Address */}
-            <Text style={styles.addressLine}>
-              {addressData.address || "No address provided"}
-            </Text>
-            <Text style={styles.addressLine}>
-              {[addressData.city, addressData.state, addressData.zipcode]
-                .filter(Boolean)
-                .join(", ")}
-            </Text>
-
-            {/* Bed/Bath */}
-            <View style={styles.detailsRow}>
-              <View style={styles.detailItem}>
-                <Feather name="moon" size={14} color={colors.neutral[500]} />
-                <Text style={styles.detailText}>
-                  {isPending
-                    ? cleanerClient.invitedBeds || 1
-                    : home?.numBeds || 1}{" "}
-                  beds
-                </Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Feather name="droplet" size={14} color={colors.neutral[500]} />
-                <Text style={styles.detailText}>
-                  {isPending
-                    ? cleanerClient.invitedBaths || 1
-                    : home?.numBaths || 1}{" "}
-                  baths
-                </Text>
-              </View>
-            </View>
-
-            {/* Access Info (only for active clients) */}
-            {!isPending && home && (
+            {/* Show pending invite info */}
+            {isPending && (
               <>
-                {(home.keyPadCode || home.keyLocation) && (
+                <Text style={styles.addressLine}>
+                  {cleanerClient.invitedAddress?.address || "No address provided"}
+                </Text>
+                <Text style={styles.addressLine}>
+                  {[cleanerClient.invitedAddress?.city, cleanerClient.invitedAddress?.state, cleanerClient.invitedAddress?.zipcode]
+                    .filter(Boolean)
+                    .join(", ")}
+                </Text>
+                <View style={styles.detailsRow}>
+                  <View style={styles.detailItem}>
+                    <Feather name="moon" size={14} color={colors.neutral[500]} />
+                    <Text style={styles.detailText}>
+                      {cleanerClient.invitedBeds || 1} beds
+                    </Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Feather name="droplet" size={14} color={colors.neutral[500]} />
+                    <Text style={styles.detailText}>
+                      {cleanerClient.invitedBaths || 1} baths
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* Show homes for active clients */}
+            {!isPending && homes.length > 0 && homes.map((homeItem, index) => (
+              <View
+                key={homeItem.id}
+                style={[
+                  styles.homeItemCard,
+                  index > 0 && styles.homeItemCardBorder,
+                ]}
+              >
+                {/* Home header with nickname/address and book button */}
+                <View style={styles.homeItemHeader}>
+                  <View style={styles.homeItemInfo}>
+                    {homeItem.nickName && (
+                      <Text style={styles.homeNickname}>{homeItem.nickName}</Text>
+                    )}
+                    <Text style={styles.addressLine}>
+                      {homeItem.address || "No address"}
+                    </Text>
+                    <Text style={styles.addressLineSmall}>
+                      {[homeItem.city, homeItem.state, homeItem.zipcode]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </Text>
+                  </View>
+                  {cleanerClient.status === "active" && (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.homeBookButton,
+                        pressed && styles.homeBookButtonPressed,
+                      ]}
+                      onPress={() => {
+                        setSelectedHomeForBooking(homeItem);
+                        setShowBookModal(true);
+                      }}
+                    >
+                      <Feather name="calendar" size={14} color={colors.neutral[0]} />
+                      <Text style={styles.homeBookButtonText}>Book</Text>
+                    </Pressable>
+                  )}
+                </View>
+
+                {/* Bed/Bath */}
+                <View style={styles.detailsRow}>
+                  <View style={styles.detailItem}>
+                    <Feather name="moon" size={14} color={colors.neutral[500]} />
+                    <Text style={styles.detailText}>
+                      {homeItem.numBeds || 1} beds
+                    </Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Feather name="droplet" size={14} color={colors.neutral[500]} />
+                    <Text style={styles.detailText}>
+                      {homeItem.numBaths || 1} baths
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Access Info */}
+                {(homeItem.keyPadCode || homeItem.keyLocation) && (
                   <View style={styles.accessSection}>
-                    {home.keyPadCode && (
+                    {homeItem.keyPadCode && (
                       <View style={styles.detailItem}>
                         <Feather name="lock" size={14} color={colors.neutral[500]} />
                         <Text style={styles.detailText}>
-                          Keypad: {home.keyPadCode}
+                          Keypad: {homeItem.keyPadCode}
                         </Text>
                       </View>
                     )}
-                    {home.keyLocation && (
+                    {homeItem.keyLocation && (
                       <View style={styles.detailItem}>
                         <Feather name="map-pin" size={14} color={colors.neutral[500]} />
                         <Text style={styles.detailText}>
-                          {home.keyLocation}
+                          {homeItem.keyLocation}
                         </Text>
                       </View>
                     )}
@@ -531,17 +586,17 @@ const ClientDetailPage = ({ state, dispatch }) => {
                 <View style={styles.linensRow}>
                   <View style={styles.linenItem}>
                     <Feather
-                      name={home.sheetsProvided ? "check-circle" : "circle"}
+                      name={homeItem.sheetsProvided ? "check-circle" : "circle"}
                       size={14}
-                      color={home.sheetsProvided ? colors.success[600] : colors.neutral[400]}
+                      color={homeItem.sheetsProvided ? colors.success[600] : colors.neutral[400]}
                     />
                     <Text style={styles.detailText}>Sheets</Text>
                   </View>
                   <View style={styles.linenItem}>
                     <Feather
-                      name={home.towelsProvided ? "check-circle" : "circle"}
+                      name={homeItem.towelsProvided ? "check-circle" : "circle"}
                       size={14}
-                      color={home.towelsProvided ? colors.success[600] : colors.neutral[400]}
+                      color={homeItem.towelsProvided ? colors.success[600] : colors.neutral[400]}
                     />
                     <Text style={styles.detailText}>Towels</Text>
                   </View>
@@ -552,14 +607,38 @@ const ClientDetailPage = ({ state, dispatch }) => {
                   <View style={styles.detailItem}>
                     <Feather name="clock" size={14} color={colors.neutral[500]} />
                     <Text style={styles.detailText}>
-                      {formatTimeConstraint(home.timeToBeCompleted)}
+                      {formatTimeConstraint(homeItem.timeToBeCompleted)}
                     </Text>
                   </View>
                   <View style={styles.detailItem}>
                     <Feather name="users" size={14} color={colors.neutral[500]} />
                     <Text style={styles.detailText}>
-                      {home.cleanersNeeded || 1} cleaner(s)
+                      {homeItem.cleanersNeeded || 1} cleaner(s)
                     </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+
+            {/* Show single home for active clients with no homes array (fallback) */}
+            {!isPending && homes.length === 0 && home && (
+              <>
+                <Text style={styles.addressLine}>
+                  {home.address || "No address provided"}
+                </Text>
+                <Text style={styles.addressLine}>
+                  {[home.city, home.state, home.zipcode]
+                    .filter(Boolean)
+                    .join(", ")}
+                </Text>
+                <View style={styles.detailsRow}>
+                  <View style={styles.detailItem}>
+                    <Feather name="moon" size={14} color={colors.neutral[500]} />
+                    <Text style={styles.detailText}>{home.numBeds || 1} beds</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Feather name="droplet" size={14} color={colors.neutral[500]} />
+                    <Text style={styles.detailText}>{home.numBaths || 1} baths</Text>
                   </View>
                 </View>
               </>
@@ -1038,6 +1117,54 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     color: colors.neutral[0],
+  },
+
+  // Multi-home styles
+  homeItemCard: {
+    paddingBottom: spacing.md,
+  },
+  homeItemCardBorder: {
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+    paddingTop: spacing.md,
+    marginTop: spacing.md,
+  },
+  homeItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.sm,
+  },
+  homeItemInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  homeNickname: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+    marginBottom: spacing.xs,
+  },
+  homeBookButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[600],
+  },
+  homeBookButtonPressed: {
+    backgroundColor: colors.primary[700],
+  },
+  homeBookButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral[0],
+  },
+  addressLineSmall: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
   },
 
   // Address

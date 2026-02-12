@@ -28,7 +28,7 @@ const TIME_WINDOWS = [
   { value: "12-2", label: "12pm - 2pm" },
 ];
 
-const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
+const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes = [], selectedHome = null }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [customPrice, setCustomPrice] = useState("");
@@ -38,13 +38,16 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
   const [platformPriceData, setPlatformPriceData] = useState(null);
   const [loadingPlatformPrice, setLoadingPlatformPrice] = useState(false);
 
+  // Use selectedHome if provided, otherwise use client.home or first home in homes array
+  const activeHome = selectedHome || client?.home || (homes.length > 0 ? homes[0] : null);
+
   // Get client display info
   const clientName = client?.client
     ? `${client.client.firstName} ${client.client.lastName}`
     : client?.invitedName || "Client";
 
-  const homeAddress = client?.home
-    ? `${client.home.address}, ${client.home.city}`
+  const homeAddress = activeHome
+    ? `${activeHome.address}, ${activeHome.city}`
     : "No address set";
 
   const defaultPrice = client?.defaultPrice
@@ -152,11 +155,17 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
       return;
     }
 
+    if (!activeHome) {
+      Alert.alert("Error", "No home selected for this booking");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const bookingData = {
         date: selectedDate,
         timeWindow,
+        homeId: activeHome.id, // Include homeId for multi-home support
       };
 
       if (customPrice && customPrice.trim()) {
