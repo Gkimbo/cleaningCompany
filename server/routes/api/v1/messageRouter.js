@@ -17,6 +17,7 @@ const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const SuspiciousContentDetector = require("../../../services/SuspiciousContentDetector");
 const EncryptionService = require("../../../services/EncryptionService");
+const MessageSerializer = require("../../../serializers/MessageSerializer");
 
 // Helper to decrypt user PII fields from included models
 // Only return safe, non-sensitive fields to the frontend
@@ -189,7 +190,10 @@ messageRouter.get("/conversation/:conversationId", authenticateToken, async (req
       ],
     });
 
-    return res.json({ messages, conversation });
+    return res.json({
+      messages: MessageSerializer.serializeArray(messages),
+      conversation: MessageSerializer.serializeConversation(conversation),
+    });
   } catch (error) {
     console.error("Error fetching messages:", error);
     return res.status(500).json({ error: "Failed to fetch messages" });

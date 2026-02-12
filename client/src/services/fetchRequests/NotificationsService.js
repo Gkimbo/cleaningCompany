@@ -67,6 +67,26 @@ class NotificationsService {
   }
 
   /**
+   * Get a single notification by ID
+   * @param {string} token - Auth token
+   * @param {number} notificationId - Notification ID
+   * @returns {Object} { notification }
+   */
+  static async getNotificationById(token, notificationId) {
+    try {
+      const response = await fetch(`${API_BASE}/notifications/${notificationId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching notification:", error);
+      return { notification: null };
+    }
+  }
+
+  /**
    * Mark a notification as read
    * @param {string} token - Auth token
    * @param {number} notificationId - Notification ID

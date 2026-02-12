@@ -143,6 +143,88 @@ const SectionHeader = ({ title, actionLabel, onAction, count }) => (
   </View>
 );
 
+// Pending Payroll Card Component
+const PendingPayrollCard = ({ pendingPayroll, onPress, formatCurrency }) => {
+  if (!pendingPayroll || pendingPayroll.totalPending <= 0) return null;
+
+  const formatPayoutDate = (dateStr) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    const today = new Date();
+    const diffDays = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
+
+    if (diffDays <= 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    if (diffDays <= 7) {
+      return date.toLocaleDateString("en-US", { weekday: "long" });
+    }
+    return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  };
+
+  const employeeCount = pendingPayroll.byEmployee?.length || 0;
+
+  return (
+    <Pressable style={styles.pendingPayrollCard} onPress={onPress}>
+      <View style={styles.pendingPayrollHeader}>
+        <View style={styles.pendingPayrollIconContainer}>
+          <Icon name="calendar-check-o" size={22} color={colors.success[600]} />
+        </View>
+        <View style={styles.pendingPayrollInfo}>
+          <Text style={styles.pendingPayrollTitle}>Upcoming Bi-Weekly Payroll</Text>
+          <Text style={styles.pendingPayrollSubtitle}>
+            {employeeCount} employee{employeeCount !== 1 ? "s" : ""} scheduled
+          </Text>
+        </View>
+        <View style={styles.pendingPayrollAmount}>
+          <Text style={styles.pendingPayrollAmountText}>
+            {pendingPayroll.formatted?.totalPending || formatCurrency(pendingPayroll.totalPending)}
+          </Text>
+        </View>
+      </View>
+
+      {pendingPayroll.nextPayoutDate && (
+        <View style={styles.pendingPayrollSchedule}>
+          <Icon name="clock-o" size={14} color={colors.success[600]} />
+          <Text style={styles.pendingPayrollScheduleText}>
+            Scheduled for {formatPayoutDate(pendingPayroll.nextPayoutDate)}
+          </Text>
+        </View>
+      )}
+
+      {/* Employee breakdown preview */}
+      {pendingPayroll.byEmployee && pendingPayroll.byEmployee.length > 0 && (
+        <View style={styles.pendingPayrollEmployees}>
+          {pendingPayroll.byEmployee.slice(0, 3).map((emp, idx) => (
+            <View key={emp.employeeId || idx} style={styles.pendingPayrollEmployee}>
+              <View style={styles.pendingPayrollEmployeeAvatar}>
+                <Text style={styles.pendingPayrollEmployeeAvatarText}>
+                  {(emp.firstName?.[0] || "E").toUpperCase()}
+                </Text>
+              </View>
+              <Text style={styles.pendingPayrollEmployeeName} numberOfLines={1}>
+                {emp.firstName} {emp.lastName?.[0]}.
+              </Text>
+              <Text style={styles.pendingPayrollEmployeeAmount}>
+                {emp.formatted?.amount || formatCurrency(emp.amount || 0)}
+              </Text>
+            </View>
+          ))}
+          {pendingPayroll.byEmployee.length > 3 && (
+            <Text style={styles.pendingPayrollMore}>
+              +{pendingPayroll.byEmployee.length - 3} more
+            </Text>
+          )}
+        </View>
+      )}
+
+      <View style={styles.pendingPayrollAction}>
+        <Text style={styles.pendingPayrollActionText}>View Details</Text>
+        <Icon name="chevron-right" size={14} color={colors.success[600]} />
+      </View>
+    </Pressable>
+  );
+};
+
 // Elite Partner Status Card Component
 const ElitePartnerStatusCard = ({ qualification, onPress }) => {
   if (!qualification) return null;
@@ -234,6 +316,12 @@ const BusinessOwnerDashboard = ({ state }) => {
     pendingPayouts: { count: 0, amount: 0 },
   });
   const [analyticsAccess, setAnalyticsAccess] = useState(null);
+  const [pendingPayroll, setPendingPayroll] = useState({
+    totalPending: 0,
+    nextPayoutDate: null,
+    byEmployee: [],
+    formatted: { totalPending: "$0.00" },
+  });
   const [error, setError] = useState(null);
 
   const fetchDashboard = async (isRefresh = false) => {
@@ -245,7 +333,7 @@ const BusinessOwnerDashboard = ({ state }) => {
     setError(null);
 
     try {
-      const [dashboardResult, payoutsResult, calendarResult, accessResult] = await Promise.all([
+      const [dashboardResult, payoutsResult, calendarResult, accessResult, payrollResult] = await Promise.all([
         BusinessOwnerService.getDashboard(state.currentUser.token),
         BusinessOwnerService.getPendingPayouts(state.currentUser.token),
         BusinessOwnerService.getCalendar(
@@ -254,11 +342,22 @@ const BusinessOwnerDashboard = ({ state }) => {
           new Date().getFullYear()
         ),
         BusinessOwnerService.getAnalyticsAccess(state.currentUser.token),
+        BusinessOwnerService.getPendingPayroll(state.currentUser.token),
       ]);
 
       // Set analytics access for Elite Partner status
       if (accessResult && !accessResult.error) {
         setAnalyticsAccess(accessResult);
+      }
+
+      // Set pending payroll data
+      if (payrollResult && !payrollResult.error) {
+        setPendingPayroll({
+          totalPending: payrollResult.totalPending || 0,
+          nextPayoutDate: payrollResult.nextPayoutDate || null,
+          byEmployee: payrollResult.byEmployee || [],
+          formatted: payrollResult.formatted || { totalPending: "$0.00" },
+        });
       }
 
       // Process jobs for today and tomorrow
@@ -443,6 +542,13 @@ const BusinessOwnerDashboard = ({ state }) => {
         </View>
         <Icon name="chevron-right" size={16} color={colors.primary[600]} />
       </Pressable>
+
+      {/* Pending Bi-Weekly Payroll */}
+      <PendingPayrollCard
+        pendingPayroll={pendingPayroll}
+        onPress={() => navigate("/business-owner/payroll")}
+        formatCurrency={formatCurrency}
+      />
 
       {/* Quick Actions */}
       <View style={styles.section}>
@@ -1036,6 +1142,124 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: spacing["4xl"],
+  },
+  // Pending Payroll Card Styles
+  pendingPayrollCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    backgroundColor: colors.success[50],
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  pendingPayrollHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  pendingPayrollIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: colors.success[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pendingPayrollInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  pendingPayrollTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[800],
+  },
+  pendingPayrollSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    marginTop: 2,
+  },
+  pendingPayrollAmount: {
+    backgroundColor: colors.success[600],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+  },
+  pendingPayrollAmountText: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: "#fff",
+  },
+  pendingPayrollSchedule: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.success[200],
+  },
+  pendingPayrollScheduleText: {
+    marginLeft: spacing.sm,
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  pendingPayrollEmployees: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  pendingPayrollEmployee: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background.primary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+  },
+  pendingPayrollEmployeeAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    backgroundColor: colors.success[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pendingPayrollEmployeeAvatarText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+  },
+  pendingPayrollEmployeeName: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+  },
+  pendingPayrollEmployeeAmount: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+  },
+  pendingPayrollMore: {
+    textAlign: "center",
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    marginTop: spacing.xs,
+  },
+  pendingPayrollAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.success[200],
+  },
+  pendingPayrollActionText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.success[600],
+    marginRight: spacing.xs,
   },
   // Elite Partner Status Card Styles
   largeBusinessCard: {

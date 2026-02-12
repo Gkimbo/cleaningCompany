@@ -10,7 +10,30 @@ const moment = require("moment");
 const CancellationAuditService = require("./CancellationAuditService");
 const JobLedgerService = require("./JobLedgerService");
 const AnalyticsService = require("./AnalyticsService");
+const EncryptionService = require("./EncryptionService");
 const Stripe = require("stripe");
+
+// Helper to decrypt user PII fields
+const decryptUserPII = (user) => {
+	if (!user) return null;
+	return {
+		id: user.id,
+		firstName: user.firstName ? EncryptionService.decrypt(user.firstName) : null,
+		lastName: user.lastName ? EncryptionService.decrypt(user.lastName) : null,
+		email: user.email ? EncryptionService.decrypt(user.email) : null,
+		phone: user.phone ? EncryptionService.decrypt(user.phone) : null,
+		type: user.type,
+		scrutinyLevel: user.appealScrutinyLevel,
+	};
+};
+
+// Helper to format user name from decrypted PII
+const formatUserName = (user) => {
+	if (!user) return null;
+	const firstName = user.firstName ? EncryptionService.decrypt(user.firstName) : "";
+	const lastName = user.lastName ? EncryptionService.decrypt(user.lastName) : "";
+	return `${firstName} ${lastName}`.trim() || null;
+};
 
 class ConflictResolutionService {
 	/**
@@ -89,25 +112,25 @@ class ConflictResolutionService {
 					timeUntilSLA: appeal.getTimeUntilSLA?.() || null,
 					homeowner: appeal.appealer?.type === "homeowner" ? {
 						id: appeal.appealer.id,
-						name: `${appeal.appealer.firstName} ${appeal.appealer.lastName}`,
-						email: appeal.appealer.email,
-						phone: appeal.appealer.phone,
+						name: formatUserName(appeal.appealer),
+						email: appeal.appealer.email ? EncryptionService.decrypt(appeal.appealer.email) : null,
+						phone: appeal.appealer.phone ? EncryptionService.decrypt(appeal.appealer.phone) : null,
 						scrutinyLevel: appeal.appealer.appealScrutinyLevel,
 					} : null,
 					cleaner: appeal.appealer?.type === "cleaner" ? {
 						id: appeal.appealer.id,
-						name: `${appeal.appealer.firstName} ${appeal.appealer.lastName}`,
-						email: appeal.appealer.email,
-						phone: appeal.appealer.phone,
+						name: formatUserName(appeal.appealer),
+						email: appeal.appealer.email ? EncryptionService.decrypt(appeal.appealer.email) : null,
+						phone: appeal.appealer.phone ? EncryptionService.decrypt(appeal.appealer.phone) : null,
 					} : (appeal.appointment?.bookedByCleaner ? {
 						id: appeal.appointment.bookedByCleaner.id,
-						name: `${appeal.appointment.bookedByCleaner.firstName} ${appeal.appointment.bookedByCleaner.lastName}`,
-						email: appeal.appointment.bookedByCleaner.email,
-						phone: appeal.appointment.bookedByCleaner.phone,
+						name: formatUserName(appeal.appointment.bookedByCleaner),
+						email: appeal.appointment.bookedByCleaner.email ? EncryptionService.decrypt(appeal.appointment.bookedByCleaner.email) : null,
+						phone: appeal.appointment.bookedByCleaner.phone ? EncryptionService.decrypt(appeal.appointment.bookedByCleaner.phone) : null,
 					} : null),
 					assignedTo: appeal.assignee ? {
 						id: appeal.assignee.id,
-						name: `${appeal.assignee.firstName} ${appeal.assignee.lastName}`,
+						name: formatUserName(appeal.assignee),
 					} : null,
 					financialImpact: {
 						penaltyAmount: appeal.originalPenaltyAmount,
@@ -173,19 +196,19 @@ class ConflictResolutionService {
 					timeUntilSLA: dispute.slaDeadline ? Math.max(0, Math.floor((new Date(dispute.slaDeadline).getTime() - Date.now()) / 1000)) : null,
 					homeowner: dispute.appointment?.user ? {
 						id: dispute.appointment.user.id,
-						name: `${dispute.appointment.user.firstName} ${dispute.appointment.user.lastName}`,
-						email: dispute.appointment.user.email,
-						phone: dispute.appointment.user.phone,
+						name: formatUserName(dispute.appointment.user),
+						email: dispute.appointment.user.email ? EncryptionService.decrypt(dispute.appointment.user.email) : null,
+						phone: dispute.appointment.user.phone ? EncryptionService.decrypt(dispute.appointment.user.phone) : null,
 					} : null,
 					cleaner: dispute.cleaner ? {
 						id: dispute.cleaner.id,
-						name: `${dispute.cleaner.firstName} ${dispute.cleaner.lastName}`,
-						email: dispute.cleaner.email,
-						phone: dispute.cleaner.phone,
+						name: formatUserName(dispute.cleaner),
+						email: dispute.cleaner.email ? EncryptionService.decrypt(dispute.cleaner.email) : null,
+						phone: dispute.cleaner.phone ? EncryptionService.decrypt(dispute.cleaner.phone) : null,
 					} : null,
 					assignedTo: dispute.assignee ? {
 						id: dispute.assignee.id,
-						name: `${dispute.assignee.firstName} ${dispute.assignee.lastName}`,
+						name: formatUserName(dispute.assignee),
 					} : null,
 					financialImpact: {
 						expectedAmount: dispute.expectedAmount,

@@ -70,6 +70,11 @@ jest.mock("../../services/MultiCleanerPricingService", () => ({
   }),
 }));
 
+// Mock BusinessVolumeService
+jest.mock("../../services/BusinessVolumeService", () => ({
+  qualifiesForLargeBusinessFee: jest.fn().mockResolvedValue({ qualifies: false }),
+}));
+
 const request = require("supertest");
 const express = require("express");
 const jwt = require("jsonwebtoken");
@@ -124,6 +129,12 @@ jest.mock("../../models", () => ({
   CleanerRoomAssignment: {
     findAll: jest.fn(),
   },
+  // Added for business employee payout support
+  EmployeeJobAssignment: {
+    findOne: jest.fn().mockResolvedValue(null), // Default: not a business employee
+    update: jest.fn(),
+  },
+  BusinessEmployee: {},
 }));
 
 const {

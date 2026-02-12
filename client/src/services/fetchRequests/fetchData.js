@@ -562,55 +562,80 @@ class FetchData {
   }
 
   static async approveRequest(requestId, approve) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/appointments/approve-request",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            requestId,
-            approve,
-          }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to delete");
+    const response = await fetch(
+      baseURL + "/api/v1/appointments/approve-request",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requestId,
+          approve,
+        }),
       }
-      const responseData = await response.json();
-      return true;
-    } catch (error) {
-      return error;
+    );
+
+    // Handle 409 Conflict - another cleaner already assigned
+    if (response.status === 409) {
+      const conflictData = await response.json();
+      return { conflict: true, ...conflictData };
     }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to approve request");
+    }
+    const responseData = await response.json();
+    return responseData;
+  }
+
+  static async switchCleaner(appointmentId, newCleanerId, requestId) {
+    const response = await fetch(
+      baseURL + "/api/v1/appointments/switch-cleaner",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          appointmentId,
+          newCleanerId,
+          requestId,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to switch cleaner");
+    }
+
+    const responseData = await response.json();
+    return responseData;
   }
 
   static async denyRequest(id, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/appointments/deny-request",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id,
-            appointmentId,
-          }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to delete");
+    const response = await fetch(
+      baseURL + "/api/v1/appointments/deny-request",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id,
+          appointmentId,
+        }),
       }
-
-      const responseData = await response.json();
-      console.log(responseData);
-      return true;
-    } catch (error) {
-      return error;
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to deny request");
     }
+
+    const responseData = await response.json();
+    return responseData;
   }
 
   static async undoRequest(id, appointmentId) {

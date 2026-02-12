@@ -22,6 +22,7 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import CleanerConflictModal from "../reviews/CleanerConflictModal";
 
 const ClientRequestsList = ({ state, dispatch }) => {
   const navigate = useNavigate();
@@ -33,6 +34,9 @@ const ClientRequestsList = ({ state, dispatch }) => {
   const [processingRequest, setProcessingRequest] = useState(null);
   const [expandedHomes, setExpandedHomes] = useState({});
   const [expandedMultiCleaner, setExpandedMultiCleaner] = useState(true);
+  const [conflictData, setConflictData] = useState(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictContext, setConflictContext] = useState(null);
 
   const toggleHomeExpanded = (homeId) => {
     setExpandedHomes((prev) => ({
@@ -118,7 +122,17 @@ const ClientRequestsList = ({ state, dispatch }) => {
   const handleApprove = async (requestId, cleanerId, appointmentId, cleanerName) => {
     setProcessingRequest(requestId);
     try {
-      await FetchData.approveRequest(requestId, true);
+      const result = await FetchData.approveRequest(requestId, true);
+
+      // Check if it's a conflict response
+      if (result && result.conflict) {
+        setConflictData(result);
+        setConflictContext({ requestId, cleanerId, appointmentId, cleanerName });
+        setShowConflictModal(true);
+        setProcessingRequest(null);
+        return;
+      }
+
       // Remove the request from local state
       setRequestsByHome((prev) =>
         prev
@@ -158,7 +172,96 @@ const ClientRequestsList = ({ state, dispatch }) => {
       );
     } catch (error) {
       console.error("Error approving request:", error);
-      Alert.alert("Error", "Failed to approve the request. Please try again.");
+      Alert.alert("Error", error.message || "Failed to approve the request. Please try again.");
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
+
+  const handleKeepCurrent = async () => {
+    if (!conflictContext) return;
+    setProcessingRequest(conflictContext.requestId);
+    try {
+      await FetchData.denyRequest(conflictContext.cleanerId, conflictContext.appointmentId);
+      setShowConflictModal(false);
+      setConflictData(null);
+
+      // Remove the request from local state
+      setRequestsByHome((prev) =>
+        prev
+          .map((homeGroup) => ({
+            ...homeGroup,
+            requests: homeGroup.requests.filter(
+              (r) => r.request.id !== conflictContext.requestId
+            ),
+          }))
+          .filter((homeGroup) => homeGroup.requests.length > 0)
+      );
+      setTotalCount((prev) => prev - 1);
+
+      if (dispatch) {
+        dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      }
+
+      setConflictContext(null);
+      Alert.alert("Request Denied", "You've kept the current cleaner. This request has been denied.");
+    } catch (error) {
+      console.error("Error denying request:", error);
+      Alert.alert("Error", error.message || "Failed to deny the request.");
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
+
+  const handleSwitchCleaner = async () => {
+    if (!conflictContext || !conflictData) return;
+    setProcessingRequest(conflictContext.requestId);
+    try {
+      await FetchData.switchCleaner(
+        conflictContext.appointmentId,
+        conflictContext.cleanerId,
+        conflictContext.requestId
+      );
+      setShowConflictModal(false);
+      setConflictData(null);
+
+      // Remove ALL requests for this appointment from local state (they're all cleaned up)
+      setRequestsByHome((prev) =>
+        prev
+          .map((homeGroup) => ({
+            ...homeGroup,
+            requests: homeGroup.requests.filter(
+              (r) => r.appointment.id !== conflictContext.appointmentId
+            ),
+          }))
+          .filter((homeGroup) => homeGroup.requests.length > 0)
+      );
+      setTotalCount((prev) => Math.max(0, prev - 1));
+
+      if (dispatch) {
+        dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      }
+
+      // Refresh appointments in global state
+      try {
+        const dashboardData = await ClientDashboardService.getDashboardSummary(
+          state.currentUser.token
+        );
+        if (dashboardData.user?.appointments && dispatch) {
+          dispatch({
+            type: "USER_APPOINTMENTS",
+            payload: dashboardData.user.appointments,
+          });
+        }
+      } catch (refreshError) {
+        console.warn("Failed to refresh appointments:", refreshError);
+      }
+
+      setConflictContext(null);
+      Alert.alert("Success", `${conflictContext.cleanerName || "The cleaner"} has been assigned. The previous cleaner has been notified.`);
+    } catch (error) {
+      console.error("Error switching cleaner:", error);
+      Alert.alert("Error", error.message || "Failed to switch cleaner.");
     } finally {
       setProcessingRequest(null);
     }
@@ -684,6 +787,21 @@ const ClientRequestsList = ({ state, dispatch }) => {
       )}
 
       <View style={styles.bottomSpacer} />
+
+      {/* Cleaner Conflict Modal */}
+      <CleanerConflictModal
+        visible={showConflictModal}
+        onClose={() => {
+          setShowConflictModal(false);
+          setConflictData(null);
+          setConflictContext(null);
+        }}
+        existingCleaner={conflictData?.existingCleaner}
+        newCleaner={conflictData?.newCleaner}
+        onKeepCurrent={handleKeepCurrent}
+        onSwitch={handleSwitchCleaner}
+        loading={!!processingRequest}
+      />
     </ScrollView>
   );
 };

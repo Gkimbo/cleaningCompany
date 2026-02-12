@@ -121,6 +121,7 @@ import {
 
 // Notifications
 import NotificationsScreen from "../src/components/notifications/NotificationsScreen";
+import NotificationDetailScreen from "../src/components/notifications/NotificationDetailScreen";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
@@ -658,6 +659,10 @@ export default function App() {
               <Route
                 path="/notifications"
                 element={<NotificationsScreen />}
+              />
+              <Route
+                path="/notifications/:id"
+                element={<NotificationDetailScreen />}
               />
               {/* Business Owner routes */}
               <Route

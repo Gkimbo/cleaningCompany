@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,62 +21,205 @@ import {
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
 
 const FREQUENCY_OPTIONS = [
-  { value: "weekly", label: "Weekly", description: "Every week on the same day" },
-  { value: "biweekly", label: "Every 2 Weeks", description: "Alternating weeks" },
-  { value: "monthly", label: "Monthly", description: "Once a month" },
+  { value: "weekly", label: "Weekly", icon: "repeat" },
+  { value: "biweekly", label: "Bi-weekly", icon: "refresh-cw" },
+  { value: "monthly", label: "Monthly", icon: "calendar" },
 ];
 
 const DAY_OPTIONS = [
-  { value: 0, label: "Sunday", short: "Sun" },
-  { value: 1, label: "Monday", short: "Mon" },
-  { value: 2, label: "Tuesday", short: "Tue" },
-  { value: 3, label: "Wednesday", short: "Wed" },
-  { value: 4, label: "Thursday", short: "Thu" },
-  { value: 5, label: "Friday", short: "Fri" },
-  { value: 6, label: "Saturday", short: "Sat" },
+  { value: 0, label: "S" },
+  { value: 1, label: "M" },
+  { value: 2, label: "T" },
+  { value: 3, label: "W" },
+  { value: 4, label: "T" },
+  { value: 5, label: "F" },
+  { value: 6, label: "S" },
 ];
 
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 const TIME_WINDOWS = [
-  { value: "anytime", label: "Anytime" },
-  { value: "10-3", label: "10am - 3pm" },
-  { value: "11-4", label: "11am - 4pm" },
-  { value: "12-2", label: "12pm - 2pm" },
+  { value: "anytime", label: "Anytime", icon: "clock" },
+  { value: "10-3", label: "10am-3pm", icon: "sun" },
+  { value: "11-4", label: "11am-4pm", icon: "sun" },
+  { value: "12-2", label: "12pm-2pm", icon: "sun" },
 ];
 
 const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [frequency, setFrequency] = useState("weekly");
-  const [dayOfWeek, setDayOfWeek] = useState(1); // Monday default
+  const [dayOfWeek, setDayOfWeek] = useState(1);
   const [timeWindow, setTimeWindow] = useState("anytime");
   const [customPrice, setCustomPrice] = useState("");
   const [startDate, setStartDate] = useState(null);
   const [hasEndDate, setHasEndDate] = useState(false);
   const [endDate, setEndDate] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
+  // Existing schedules state
+  const [existingSchedules, setExistingSchedules] = useState([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null); // scheduleId being actioned
+
+  // Today's date string for comparison (use local date, not UTC)
+  const todayDate = new Date();
+  const todayString = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
 
   // Get client display info
   const clientName = client?.client
     ? `${client.client.firstName} ${client.client.lastName}`
     : client?.invitedName || "Client";
 
-  const homeAddress = client?.home
-    ? `${client.home.address}, ${client.home.city}`
-    : "No address set";
-
   const defaultPrice = client?.defaultPrice
     ? parseFloat(client.defaultPrice).toFixed(0)
     : null;
+
+  // Fetch existing schedules when modal opens
+  const fetchExistingSchedules = useCallback(async () => {
+    if (!client?.id || !token) return;
+
+    setLoadingSchedules(true);
+    try {
+      const result = await CleanerClientService.getRecurringSchedules(token, client.id);
+      if (result.schedules) {
+        setExistingSchedules(result.schedules.filter(s => s.isActive));
+      }
+    } catch (error) {
+      console.error("Error fetching schedules:", error);
+    } finally {
+      setLoadingSchedules(false);
+    }
+  }, [client?.id, token]);
+
+  useEffect(() => {
+    if (visible && client?.id) {
+      fetchExistingSchedules();
+    }
+  }, [visible, client?.id, fetchExistingSchedules]);
+
+  // Handle cancel schedule
+  const handleCancelSchedule = async (scheduleId, cancelAppointments = false) => {
+    Alert.alert(
+      "Cancel Recurring Schedule",
+      cancelAppointments
+        ? "This will deactivate the schedule AND cancel all future appointments. Continue?"
+        : "This will deactivate the schedule but keep existing appointments. Continue?",
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            setActionLoading(scheduleId);
+            try {
+              const result = await CleanerClientService.deleteRecurringSchedule(
+                token,
+                scheduleId,
+                cancelAppointments
+              );
+              if (result.success) {
+                Alert.alert("Success", "Schedule cancelled");
+                fetchExistingSchedules();
+              } else {
+                Alert.alert("Error", result.error || "Failed to cancel schedule");
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to cancel schedule");
+            } finally {
+              setActionLoading(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle pause/resume
+  const handleTogglePause = async (schedule) => {
+    setActionLoading(schedule.id);
+    try {
+      if (schedule.isPaused) {
+        const result = await CleanerClientService.resumeRecurringSchedule(token, schedule.id);
+        if (result.success) {
+          Alert.alert("Resumed", `Schedule resumed. ${result.appointmentsCreated || 0} new appointments created.`);
+          fetchExistingSchedules();
+        } else {
+          Alert.alert("Error", result.error || "Failed to resume schedule");
+        }
+      } else {
+        const result = await CleanerClientService.pauseRecurringSchedule(token, schedule.id);
+        if (result.success) {
+          Alert.alert("Paused", "Schedule paused. No new appointments will be generated.");
+          fetchExistingSchedules();
+        } else {
+          Alert.alert("Error", result.error || "Failed to pause schedule");
+        }
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to update schedule");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Calculate which dates would be scheduled based on frequency
+  // Shows pattern from startDate if selected, otherwise from today
+  const scheduledDates = useMemo(() => {
+    const dates = new Set();
+
+    // Use startDate if selected, otherwise use today
+    const baseDate = startDate
+      ? new Date(startDate + "T12:00:00")
+      : new Date();
+    baseDate.setHours(12, 0, 0, 0);
+
+    // Find first occurrence of dayOfWeek on or after base date
+    let currentDate = new Date(baseDate);
+    while (currentDate.getDay() !== dayOfWeek) {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Generate dates for the next 6 months
+    const horizon = new Date(baseDate);
+    horizon.setMonth(horizon.getMonth() + 6);
+
+    while (currentDate <= horizon) {
+      if (hasEndDate && endDate && currentDate > new Date(endDate + "T12:00:00")) {
+        break;
+      }
+
+      const year = currentDate.getFullYear();
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const day = String(currentDate.getDate()).padStart(2, '0');
+      dates.add(`${year}-${month}-${day}`);
+
+      // Move to next occurrence based on frequency
+      if (frequency === "weekly") {
+        currentDate.setDate(currentDate.getDate() + 7);
+      } else if (frequency === "biweekly") {
+        currentDate.setDate(currentDate.getDate() + 14);
+      } else {
+        // Monthly - same day of week next month
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        currentDate.setDate(1);
+        while (currentDate.getDay() !== dayOfWeek) {
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      }
+    }
+
+    return dates;
+  }, [startDate, dayOfWeek, frequency, hasEndDate, endDate]);
 
   // Generate calendar days
   const calendarData = useMemo(() => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
-
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startingDay = firstDay.getDay();
-
     const days = [];
 
     for (let i = 0; i < startingDay; i++) {
@@ -89,16 +232,18 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       const isPast = date < today;
-      const dateString = date.toISOString().split("T")[0];
+      // Use local date format instead of UTC
+      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const dayNum = date.getDay();
-      days.push({ day, date: dateString, isPast, dayOfWeek: dayNum });
+      const isScheduled = scheduledDates.has(dateString);
+      days.push({ day, date: dateString, isPast, dayOfWeek: dayNum, isScheduled });
     }
 
     return days;
-  }, [currentMonth]);
+  }, [currentMonth, scheduledDates]);
 
   const monthName = currentMonth.toLocaleDateString("en-US", {
-    month: "long",
+    month: "short",
     year: "numeric",
   });
 
@@ -114,27 +259,21 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
     if (!dateString) return "";
     const date = new Date(dateString + "T12:00:00");
     return date.toLocaleDateString("en-US", {
-      weekday: "short",
       month: "short",
       day: "numeric",
-      year: "numeric",
     });
   };
 
   const getNextOccurrences = () => {
     if (!startDate) return [];
-
     const occurrences = [];
     let currentDate = new Date(startDate + "T12:00:00");
-    const today = new Date();
 
-    // Find first occurrence on selected day
     while (currentDate.getDay() !== dayOfWeek) {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Generate next 4 occurrences
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 3; i++) {
       if (hasEndDate && endDate && currentDate > new Date(endDate + "T12:00:00")) {
         break;
       }
@@ -176,15 +315,12 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
         scheduleData.endDate = endDate;
       }
 
-      const result = await CleanerClientService.createRecurringSchedule(
-        token,
-        scheduleData
-      );
+      const result = await CleanerClientService.createRecurringSchedule(token, scheduleData);
 
       if (result.success) {
         Alert.alert(
           "Schedule Created!",
-          `${result.appointmentsCreated} appointments have been scheduled for ${clientName}.`,
+          `${result.appointmentsCreated} appointments scheduled for ${clientName}.`,
           [{ text: "OK", onPress: () => onSuccess() }]
         );
         resetForm();
@@ -217,121 +353,205 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
   if (!client) return null;
 
   const nextOccurrences = getNextOccurrences();
+  const frequencyLabel = FREQUENCY_OPTIONS.find(f => f.value === frequency)?.label;
+  const timeLabel = TIME_WINDOWS.find(t => t.value === timeWindow)?.label;
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={handleClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
           {/* Header */}
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Set Up Recurring</Text>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <View style={styles.headerIcon}>
+                <Feather name="repeat" size={20} color={colors.primary[600]} />
+              </View>
+              <View>
+                <Text style={styles.headerTitle}>Recurring Schedule</Text>
+                <Text style={styles.headerSubtitle}>{clientName}</Text>
+              </View>
+            </View>
             <Pressable style={styles.closeButton} onPress={handleClose}>
-              <Feather name="x" size={24} color={colors.neutral[500]} />
+              <Feather name="x" size={22} color={colors.neutral[400]} />
             </Pressable>
           </View>
 
-          <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {/* Client Info Card */}
-            <View style={styles.clientCard}>
-              <View style={styles.clientInfo}>
-                <View style={styles.avatar}>
-                  <Feather name="repeat" size={20} color={colors.primary[600]} />
+          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            {/* Existing Schedules Section */}
+            {(existingSchedules.length > 0 || loadingSchedules) && (
+              <View style={styles.existingSection}>
+                <View style={styles.existingHeader}>
+                  <Feather name="calendar" size={16} color={colors.primary[600]} />
+                  <Text style={styles.existingTitle}>Active Schedules</Text>
                 </View>
-                <View style={styles.clientDetails}>
-                  <Text style={styles.clientName}>{clientName}</Text>
-                  <View style={styles.addressRow}>
-                    <Feather name="home" size={12} color={colors.neutral[400]} />
-                    <Text style={styles.addressText}>{homeAddress}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
 
-            {/* Frequency Selection */}
+                {loadingSchedules ? (
+                  <ActivityIndicator size="small" color={colors.primary[600]} />
+                ) : (
+                  existingSchedules.map((schedule) => (
+                    <View key={schedule.id} style={styles.existingCard}>
+                      <View style={styles.existingCardMain}>
+                        <View style={styles.existingCardInfo}>
+                          <View style={styles.scheduleRow}>
+                            <Text style={styles.scheduleFreq}>
+                              {schedule.frequency.charAt(0).toUpperCase() + schedule.frequency.slice(1)}
+                            </Text>
+                            <View style={[
+                              styles.statusBadge,
+                              schedule.isPaused && styles.statusBadgePaused
+                            ]}>
+                              <Text style={[
+                                styles.statusBadgeText,
+                                schedule.isPaused && styles.statusBadgeTextPaused
+                              ]}>
+                                {schedule.isPaused ? "Paused" : "Active"}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.scheduleDay}>
+                            {DAY_NAMES[schedule.dayOfWeek]}s • {schedule.timeWindow === "anytime" ? "Anytime" : schedule.timeWindow}
+                          </Text>
+                          {schedule.nextScheduledDate && !schedule.isPaused && (
+                            <Text style={styles.scheduleNext}>
+                              Next: {new Date(schedule.nextScheduledDate + "T12:00:00").toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </Text>
+                          )}
+                        </View>
+
+                        <View style={styles.existingCardActions}>
+                          {actionLoading === schedule.id ? (
+                            <ActivityIndicator size="small" color={colors.primary[600]} />
+                          ) : (
+                            <>
+                              <Pressable
+                                style={styles.actionBtn}
+                                onPress={() => handleTogglePause(schedule)}
+                              >
+                                <Feather
+                                  name={schedule.isPaused ? "play" : "pause"}
+                                  size={16}
+                                  color={schedule.isPaused ? colors.success[600] : colors.warning[600]}
+                                />
+                              </Pressable>
+                              <Pressable
+                                style={styles.actionBtn}
+                                onPress={() => {
+                                  Alert.alert(
+                                    "Cancel Schedule",
+                                    "What would you like to do?",
+                                    [
+                                      { text: "Never mind", style: "cancel" },
+                                      {
+                                        text: "Keep Appointments",
+                                        onPress: () => handleCancelSchedule(schedule.id, false),
+                                      },
+                                      {
+                                        text: "Cancel All",
+                                        style: "destructive",
+                                        onPress: () => handleCancelSchedule(schedule.id, true),
+                                      },
+                                    ]
+                                  );
+                                }}
+                              >
+                                <Feather name="trash-2" size={16} color={colors.error[600]} />
+                              </Pressable>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            )}
+
+            {/* Divider if existing schedules */}
+            {existingSchedules.length > 0 && (
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>Add New Schedule</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            )}
+
+            {/* Frequency Selection - Horizontal Pills */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>How Often?</Text>
-              <View style={styles.frequencyOptions}>
+              <Text style={styles.sectionLabel}>Frequency</Text>
+              <View style={styles.frequencyRow}>
                 {FREQUENCY_OPTIONS.map((option) => (
                   <Pressable
                     key={option.value}
                     style={[
-                      styles.frequencyOption,
-                      frequency === option.value && styles.frequencyOptionActive,
+                      styles.frequencyPill,
+                      frequency === option.value && styles.frequencyPillActive,
                     ]}
                     onPress={() => setFrequency(option.value)}
                   >
+                    <Feather
+                      name={option.icon}
+                      size={14}
+                      color={frequency === option.value ? colors.neutral[0] : colors.neutral[500]}
+                    />
                     <Text
                       style={[
-                        styles.frequencyLabel,
-                        frequency === option.value && styles.frequencyLabelActive,
+                        styles.frequencyPillText,
+                        frequency === option.value && styles.frequencyPillTextActive,
                       ]}
                     >
                       {option.label}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.frequencyDesc,
-                        frequency === option.value && styles.frequencyDescActive,
-                      ]}
-                    >
-                      {option.description}
                     </Text>
                   </Pressable>
                 ))}
               </View>
             </View>
 
-            {/* Day of Week Selection */}
+            {/* Day Selection - Compact Row */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Which Day?</Text>
-              <View style={styles.dayOptions}>
+              <Text style={styles.sectionLabel}>Day of Week</Text>
+              <View style={styles.dayRow}>
                 {DAY_OPTIONS.map((day) => (
                   <Pressable
                     key={day.value}
                     style={[
-                      styles.dayOption,
-                      dayOfWeek === day.value && styles.dayOptionActive,
+                      styles.dayCircle,
+                      dayOfWeek === day.value && styles.dayCircleActive,
                     ]}
                     onPress={() => setDayOfWeek(day.value)}
                   >
                     <Text
                       style={[
-                        styles.dayOptionText,
-                        dayOfWeek === day.value && styles.dayOptionTextActive,
+                        styles.dayCircleText,
+                        dayOfWeek === day.value && styles.dayCircleTextActive,
                       ]}
                     >
-                      {day.short}
+                      {day.label}
                     </Text>
                   </Pressable>
                 ))}
               </View>
             </View>
 
-            {/* Time Window */}
+            {/* Time Window - Inline */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Time Window</Text>
-              <View style={styles.timeWindowOptions}>
+              <Text style={styles.sectionLabel}>Preferred Time</Text>
+              <View style={styles.timeRow}>
                 {TIME_WINDOWS.map((option) => (
                   <Pressable
                     key={option.value}
                     style={[
-                      styles.timeWindowOption,
-                      timeWindow === option.value && styles.timeWindowOptionActive,
+                      styles.timeChip,
+                      timeWindow === option.value && styles.timeChipActive,
                     ]}
                     onPress={() => setTimeWindow(option.value)}
                   >
                     <Text
                       style={[
-                        styles.timeWindowOptionText,
-                        timeWindow === option.value && styles.timeWindowOptionTextActive,
+                        styles.timeChipText,
+                        timeWindow === option.value && styles.timeChipTextActive,
                       ]}
                     >
                       {option.label}
@@ -341,85 +561,154 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
               </View>
             </View>
 
-            {/* Start Date Calendar */}
+            {/* Start Date - Calendar */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Start Date</Text>
-              <View style={styles.calendar}>
-                <View style={styles.calendarHeader}>
-                  <Pressable style={styles.monthNavButton} onPress={goToPreviousMonth}>
-                    <Feather name="chevron-left" size={20} color={colors.text.primary} />
+              <Text style={styles.sectionLabel}>Start Date</Text>
+              <View style={styles.calendarCard}>
+                {/* Month Navigation */}
+                <View style={styles.calendarNav}>
+                  <Pressable onPress={goToPreviousMonth} style={styles.navButton}>
+                    <View style={styles.navButtonInner}>
+                      <Feather name="chevron-left" size={20} color={colors.primary[600]} />
+                    </View>
                   </Pressable>
-                  <Text style={styles.monthText}>{monthName}</Text>
-                  <Pressable style={styles.monthNavButton} onPress={goToNextMonth}>
-                    <Feather name="chevron-right" size={20} color={colors.text.primary} />
+                  <Text style={styles.monthLabel}>{monthName}</Text>
+                  <Pressable onPress={goToNextMonth} style={styles.navButton}>
+                    <View style={styles.navButtonInner}>
+                      <Feather name="chevron-right" size={20} color={colors.primary[600]} />
+                    </View>
                   </Pressable>
                 </View>
 
-                <View style={styles.dayHeaders}>
-                  {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
-                    <Text key={i} style={styles.dayHeader}>{day}</Text>
+                {/* Day Headers */}
+                <View style={styles.dayLabelsRow}>
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+                    <View key={i} style={styles.dayLabelCell}>
+                      <Text style={[
+                        styles.dayLabelText,
+                        i === dayOfWeek && styles.dayLabelTextActive
+                      ]}>{d}</Text>
+                    </View>
                   ))}
                 </View>
 
+                {/* Calendar Grid */}
                 <View style={styles.calendarGrid}>
-                  {calendarData.map((item, index) => (
-                    <Pressable
-                      key={index}
-                      style={[
-                        styles.dayCell,
-                        !item.day && styles.dayCellEmpty,
-                        item.isPast && styles.dayCellPast,
-                        startDate === item.date && styles.dayCellSelected,
-                        item.dayOfWeek === dayOfWeek && !item.isPast && styles.dayCellHighlight,
-                      ]}
-                      onPress={() => !item.isPast && setStartDate(item.date)}
-                      disabled={!item.day || item.isPast}
-                    >
-                      {item.day && (
-                        <Text
-                          style={[
-                            styles.dayText,
-                            item.isPast && styles.dayTextPast,
-                            startDate === item.date && styles.dayTextSelected,
-                          ]}
-                        >
-                          {item.day}
-                        </Text>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
+                  {calendarData.map((item, index) => {
+                    // Skip styling for empty cells (padding days)
+                    if (!item.day) {
+                      return (
+                        <View key={index} style={styles.calendarDayWrapper}>
+                          <View style={styles.calendarDay} />
+                        </View>
+                      );
+                    }
 
-              {startDate && (
-                <View style={styles.selectedDateBadge}>
-                  <Feather name="calendar" size={14} color={colors.primary[600]} />
-                  <Text style={styles.selectedDateText}>
-                    Starting {formatDate(startDate)}
-                  </Text>
+                    const isSelected = startDate === item.date;
+                    const isScheduled = item.isScheduled && !item.isPast;
+                    const isToday = item.date === todayString;
+
+                    return (
+                      <View key={index} style={styles.calendarDayWrapper}>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.calendarDay,
+                            item.isPast && styles.calendarDayPast,
+                            isScheduled && !isSelected && styles.calendarDayHighlight,
+                            isSelected && styles.calendarDaySelected,
+                            isToday && !isSelected && !isScheduled && styles.calendarDayToday,
+                            pressed && !item.isPast && styles.calendarDayPressed,
+                          ]}
+                          onPress={() => !item.isPast && setStartDate(isSelected ? null : item.date)}
+                          disabled={item.isPast}
+                        >
+                          <Text
+                            style={[
+                              styles.calendarDayText,
+                              item.isPast && styles.calendarDayTextPast,
+                              isScheduled && !isSelected && styles.calendarDayTextHighlight,
+                              isSelected && styles.calendarDayTextSelected,
+                              isToday && !isSelected && !isScheduled && styles.calendarDayTextToday,
+                            ]}
+                          >
+                            {item.day}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    );
+                  })}
                 </View>
-              )}
+
+                {/* Selected Date Display */}
+                {startDate && (
+                  <View style={styles.selectedDateRow}>
+                    <Feather name="check-circle" size={16} color={colors.primary[600]} />
+                    <Text style={styles.selectedDateText}>
+                      Starting {new Date(startDate + "T12:00:00").toLocaleDateString("en-US", {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Price - Compact Input */}
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>
+                Price per Cleaning
+                {defaultPrice && <Text style={styles.defaultPriceHint}> (Default: ${defaultPrice})</Text>}
+              </Text>
+              <View style={styles.priceRow}>
+                <View style={styles.priceInputWrapper}>
+                  <Text style={styles.dollarSign}>$</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder={defaultPrice || "0"}
+                    placeholderTextColor={colors.neutral[400]}
+                    value={customPrice}
+                    onChangeText={setCustomPrice}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                {defaultPrice && !customPrice && (
+                  <View style={styles.usingDefaultBadge}>
+                    <Text style={styles.usingDefaultText}>Using default</Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             {/* End Date Toggle */}
             <View style={styles.section}>
               <Pressable
-                style={styles.toggleRow}
-                onPress={() => setHasEndDate(!hasEndDate)}
+                style={styles.endDateToggle}
+                onPress={() => {
+                  setHasEndDate(!hasEndDate);
+                  if (!hasEndDate) setShowEndDatePicker(true);
+                }}
               >
-                <View style={styles.toggleInfo}>
-                  <Text style={styles.toggleLabel}>Set End Date</Text>
-                  <Text style={styles.toggleDesc}>Leave off for ongoing schedule</Text>
+                <View style={styles.endDateToggleLeft}>
+                  <Feather
+                    name={hasEndDate ? "calendar" : "repeat"}
+                    size={16}
+                    color={hasEndDate ? colors.primary[600] : colors.neutral[500]}
+                  />
+                  <Text style={styles.endDateToggleText}>
+                    {hasEndDate ? `Ends ${endDate ? formatDate(endDate) : "..."}` : "No end date (ongoing)"}
+                  </Text>
                 </View>
-                <View style={[styles.toggle, hasEndDate && styles.toggleActive]}>
-                  {hasEndDate && <Feather name="check" size={14} color={colors.neutral[0]} />}
+                <View style={[styles.toggleSwitch, hasEndDate && styles.toggleSwitchActive]}>
+                  <View style={[styles.toggleKnob, hasEndDate && styles.toggleKnobActive]} />
                 </View>
               </Pressable>
 
               {hasEndDate && (
-                <View style={styles.endDateInput}>
+                <View style={styles.endDatePicker}>
                   <TextInput
-                    style={styles.dateInput}
+                    style={styles.endDateInput}
                     placeholder="YYYY-MM-DD"
                     placeholderTextColor={colors.neutral[400]}
                     value={endDate || ""}
@@ -429,75 +718,50 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
               )}
             </View>
 
-            {/* Price */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                Price per Cleaning {defaultPrice && `(Default: $${defaultPrice})`}
-              </Text>
-              <View style={styles.priceInputContainer}>
-                <Text style={styles.pricePrefix}>$</Text>
-                <TextInput
-                  style={styles.priceInput}
-                  placeholder={defaultPrice || "Enter price"}
-                  placeholderTextColor={colors.neutral[400]}
-                  value={customPrice}
-                  onChangeText={setCustomPrice}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
-
-            {/* Preview */}
-            {startDate && nextOccurrences.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Upcoming Cleanings</Text>
-                <View style={styles.previewCard}>
-                  {nextOccurrences.map((date, index) => (
-                    <View key={index} style={styles.previewRow}>
-                      <Feather name="check-circle" size={14} color={colors.success[500]} />
-                      <Text style={styles.previewText}>
-                        {date.toLocaleDateString("en-US", {
-                          weekday: "long",
-                          month: "short",
-                          day: "numeric",
-                        })}
+            {/* Preview Summary */}
+            {startDate && (
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryHeader}>
+                  <Feather name="check-circle" size={16} color={colors.success[600]} />
+                  <Text style={styles.summaryTitle}>Schedule Preview</Text>
+                </View>
+                <Text style={styles.summaryText}>
+                  {frequencyLabel} on {DAY_NAMES[dayOfWeek]}s, {timeLabel.toLowerCase()}
+                </Text>
+                <View style={styles.upcomingDates}>
+                  {nextOccurrences.map((date, i) => (
+                    <View key={i} style={styles.upcomingDate}>
+                      <Text style={styles.upcomingDateText}>
+                        {date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </Text>
                     </View>
                   ))}
-                  <Text style={styles.previewNote}>
-                    + more appointments will be auto-generated
-                  </Text>
+                  <View style={styles.upcomingMore}>
+                    <Text style={styles.upcomingMoreText}>+more</Text>
+                  </View>
                 </View>
               </View>
             )}
+
+            <View style={{ height: spacing.lg }} />
           </ScrollView>
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.cancelButton,
-                pressed && styles.cancelButtonPressed,
-              ]}
-              onPress={handleClose}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Pressable style={styles.cancelBtn} onPress={handleClose}>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
             </Pressable>
             <Pressable
-              style={({ pressed }) => [
-                styles.submitButton,
-                pressed && styles.submitButtonPressed,
-                (!startDate || isLoading) && styles.buttonDisabled,
-              ]}
+              style={[styles.submitBtn, (!startDate || isLoading) && styles.submitBtnDisabled]}
               onPress={handleSubmit}
               disabled={!startDate || isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color={colors.neutral[0]} />
+                <ActivityIndicator color={colors.neutral[0]} size="small" />
               ) : (
                 <>
-                  <Feather name="repeat" size={18} color={colors.neutral[0]} />
-                  <Text style={styles.submitButtonText}>Create Schedule</Text>
+                  <Feather name="check" size={18} color={colors.neutral[0]} />
+                  <Text style={styles.submitBtnText}>Create Schedule</Text>
                 </>
               )}
             </Pressable>
@@ -511,30 +775,48 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: colors.neutral[0],
     borderTopLeftRadius: radius["2xl"],
     borderTopRightRadius: radius["2xl"],
+    height: "75%",
     maxHeight: "90%",
-    ...shadows.xl,
   },
 
   // Header
-  modalHeader: {
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.neutral[200],
+    borderBottomColor: colors.neutral[100],
   },
-  modalTitle: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: "700",
+    color: colors.neutral[900],
+  },
+  headerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[500],
   },
   closeButton: {
     padding: spacing.sm,
@@ -543,324 +825,363 @@ const styles = StyleSheet.create({
   // Scroll
   scrollView: {
     flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-  },
-
-  // Client Card
-  clientCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.primary[50],
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-  },
-  clientInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: colors.neutral[0],
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: spacing.md,
-  },
-  clientDetails: {
-    flex: 1,
-  },
-  clientName: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: 2,
-  },
-  addressRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  addressText: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-    flex: 1,
+    paddingHorizontal: spacing.lg,
   },
 
   // Section
   section: {
-    marginBottom: spacing.lg,
+    marginTop: spacing.lg,
   },
-  sectionTitle: {
+  sectionLabel: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
+    fontWeight: "600",
+    color: colors.neutral[700],
     marginBottom: spacing.sm,
   },
+  defaultPriceHint: {
+    fontWeight: "400",
+    color: colors.neutral[400],
+  },
 
-  // Frequency Options
-  frequencyOptions: {
+  // Frequency Pills
+  frequencyRow: {
+    flexDirection: "row",
     gap: spacing.sm,
   },
-  frequencyOption: {
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.neutral[50],
-    borderWidth: 2,
-    borderColor: colors.neutral[200],
+  frequencyPill: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
   },
-  frequencyOptionActive: {
-    backgroundColor: colors.primary[50],
-    borderColor: colors.primary[600],
+  frequencyPillActive: {
+    backgroundColor: colors.primary[600],
   },
-  frequencyLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginBottom: 2,
+  frequencyPillText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: "600",
+    color: colors.neutral[600],
   },
-  frequencyLabelActive: {
-    color: colors.primary[700],
-  },
-  frequencyDesc: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-  },
-  frequencyDescActive: {
-    color: colors.primary[600],
+  frequencyPillTextActive: {
+    color: colors.neutral[0],
   },
 
-  // Day Options
-  dayOptions: {
+  // Day Circles
+  dayRow: {
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  dayOption: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
+  dayCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.neutral[100],
     alignItems: "center",
     justifyContent: "center",
   },
-  dayOptionActive: {
+  dayCircleActive: {
     backgroundColor: colors.primary[600],
   },
-  dayOptionText: {
+  dayCircleText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text.secondary,
+    fontWeight: "600",
+    color: colors.neutral[600],
   },
-  dayOptionTextActive: {
+  dayCircleTextActive: {
     color: colors.neutral[0],
   },
 
-  // Time Window
-  timeWindowOptions: {
+  // Time Chips
+  timeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
-  timeWindowOption: {
+  timeChip: {
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.full,
     backgroundColor: colors.neutral[100],
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
   },
-  timeWindowOptionActive: {
+  timeChipActive: {
     backgroundColor: colors.primary[600],
-    borderColor: colors.primary[600],
   },
-  timeWindowOptionText: {
+  timeChipText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text.secondary,
+    fontWeight: "500",
+    color: colors.neutral[600],
   },
-  timeWindowOptionTextActive: {
+  timeChipTextActive: {
     color: colors.neutral[0],
   },
 
   // Calendar
-  calendar: {
+  calendarCard: {
     backgroundColor: colors.neutral[50],
     borderRadius: radius.xl,
     padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
   },
-  calendarHeader: {
+  calendarNav: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: spacing.md,
-  },
-  monthNavButton: {
-    padding: spacing.sm,
-  },
-  monthText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-  },
-  dayHeaders: {
-    flexDirection: "row",
     marginBottom: spacing.sm,
   },
-  dayHeader: {
-    flex: 1,
-    textAlign: "center",
+  navButton: {
+    padding: spacing.xs,
+  },
+  navButtonInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthLabel: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "700",
+    color: colors.neutral[800],
+    letterSpacing: 0.5,
+  },
+  dayLabelsRow: {
+    flexDirection: "row",
+    marginBottom: spacing.xs,
+    paddingBottom: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  dayLabelCell: {
+    width: "14.28%",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  dayLabelText: {
     fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: "600",
     color: colors.neutral[400],
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  dayLabelTextActive: {
+    color: colors.primary[600],
+    fontWeight: "700",
   },
   calendarGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    paddingTop: spacing.xs,
   },
-  dayCell: {
+  calendarDayWrapper: {
     width: "14.28%",
-    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 2,
+  },
+  calendarDay: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
-  dayCellEmpty: {},
-  dayCellPast: {
+  calendarDayPast: {
     opacity: 0.3,
   },
-  dayCellSelected: {
-    backgroundColor: colors.primary[600],
-    borderRadius: radius.full,
-  },
-  dayCellHighlight: {
+  calendarDayHighlight: {
     backgroundColor: colors.primary[100],
-    borderRadius: radius.full,
+    borderWidth: 2,
+    borderColor: colors.primary[200],
   },
-  dayText: {
+  calendarDaySelected: {
+    backgroundColor: colors.primary[600],
+    ...shadows.sm,
+  },
+  calendarDayToday: {
+    borderWidth: 2,
+    borderColor: colors.primary[400],
+  },
+  calendarDayPressed: {
+    backgroundColor: colors.primary[50],
+    transform: [{ scale: 0.95 }],
+  },
+  calendarDayText: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.primary,
+    fontWeight: "500",
+    color: colors.neutral[800],
   },
-  dayTextPast: {
+  calendarDayTextPast: {
     color: colors.neutral[400],
   },
-  dayTextSelected: {
-    color: colors.neutral[0],
-    fontWeight: typography.fontWeight.bold,
+  calendarDayTextHighlight: {
+    color: colors.primary[700],
+    fontWeight: "700",
   },
-  selectedDateBadge: {
+  calendarDayTextSelected: {
+    color: colors.neutral[0],
+    fontWeight: "700",
+  },
+  calendarDayTextToday: {
+    color: colors.primary[600],
+    fontWeight: "700",
+  },
+  selectedDateRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     marginTop: spacing.md,
-    backgroundColor: colors.primary[50],
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.primary[200],
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
   },
   selectedDateText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: "600",
     color: colors.primary[700],
   },
 
-  // Toggle
-  toggleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: spacing.md,
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
-  },
-  toggleInfo: {
-    flex: 1,
-  },
-  toggleLabel: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text.primary,
-  },
-  toggleDesc: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
-  },
-  toggle: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[200],
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toggleActive: {
-    backgroundColor: colors.primary[600],
-  },
-  endDateInput: {
-    marginTop: spacing.md,
-  },
-  dateInput: {
-    backgroundColor: colors.neutral[50],
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-  },
-
-  // Price Input
-  priceInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.neutral[50],
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-  },
-  pricePrefix: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    marginRight: spacing.sm,
-  },
-  priceInput: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-  },
-
-  // Preview
-  previewCard: {
-    backgroundColor: colors.success[50],
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.success[200],
-  },
-  previewRow: {
+  // Price
+  priceRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
+  },
+  priceInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    flex: 1,
+    maxWidth: 140,
+  },
+  dollarSign: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: "600",
+    color: colors.neutral[600],
+  },
+  priceInput: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingLeft: spacing.xs,
+    fontSize: typography.fontSize.lg,
+    fontWeight: "600",
+    color: colors.neutral[900],
+  },
+  usingDefaultBadge: {
+    backgroundColor: colors.success[50],
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  usingDefaultText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[700],
+    fontWeight: "500",
+  },
+
+  // End Date
+  endDateToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.neutral[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+  },
+  endDateToggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  endDateToggleText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[700],
+  },
+  toggleSwitch: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.neutral[300],
+    padding: 2,
+    justifyContent: "center",
+  },
+  toggleSwitchActive: {
+    backgroundColor: colors.primary[600],
+  },
+  toggleKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.neutral[0],
+  },
+  toggleKnobActive: {
+    alignSelf: "flex-end",
+  },
+  endDatePicker: {
+    marginTop: spacing.sm,
+  },
+  endDateInput: {
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[900],
+  },
+
+  // Summary
+  summaryCard: {
+    backgroundColor: colors.success[50],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  summaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
     marginBottom: spacing.xs,
   },
-  previewText: {
+  summaryTitle: {
     fontSize: typography.fontSize.sm,
+    fontWeight: "600",
     color: colors.success[700],
   },
-  previewNote: {
+  summaryText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[800],
+    marginBottom: spacing.sm,
+  },
+  upcomingDates: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  upcomingDate: {
+    backgroundColor: colors.success[100],
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+  },
+  upcomingDateText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: "500",
+    color: colors.success[700],
+  },
+  upcomingMore: {
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+  },
+  upcomingMoreText: {
     fontSize: typography.fontSize.xs,
     color: colors.success[600],
-    marginTop: spacing.sm,
     fontStyle: "italic",
   },
 
@@ -868,47 +1189,143 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     padding: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[200],
     gap: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
   },
-  cancelButton: {
+  cancelBtn: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.md,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.neutral[300],
+    borderColor: colors.neutral[200],
   },
-  cancelButtonPressed: {
-    backgroundColor: colors.neutral[100],
-  },
-  cancelButtonText: {
+  cancelBtnText: {
     fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text.secondary,
+    fontWeight: "600",
+    color: colors.neutral[600],
   },
-  submitButton: {
+  submitBtn: {
     flex: 2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primary[600],
+    gap: spacing.sm,
     paddingVertical: spacing.md,
     borderRadius: radius.lg,
-    gap: spacing.sm,
+    backgroundColor: colors.primary[600],
     ...shadows.md,
   },
-  submitButtonPressed: {
-    backgroundColor: colors.primary[700],
+  submitBtnDisabled: {
+    opacity: 0.5,
   },
-  submitButtonText: {
+  submitBtnText: {
     fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
+    fontWeight: "600",
     color: colors.neutral[0],
   },
-  buttonDisabled: {
-    opacity: 0.5,
+
+  // Existing Schedules
+  existingSection: {
+    marginTop: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+  },
+  existingHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  existingTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: "700",
+    color: colors.neutral[700],
+  },
+  existingCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadows.sm,
+  },
+  existingCardMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  existingCardInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  scheduleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  scheduleFreq: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.neutral[900],
+  },
+  statusBadge: {
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.success[100],
+  },
+  statusBadgePaused: {
+    backgroundColor: colors.warning[100],
+  },
+  statusBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: "600",
+    color: colors.success[700],
+  },
+  statusBadgeTextPaused: {
+    color: colors.warning[700],
+  },
+  scheduleDay: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
+  },
+  scheduleNext: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  existingCardActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.neutral[100],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.lg,
+    gap: spacing.md,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.neutral[200],
+  },
+  dividerText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: "600",
+    color: colors.neutral[400],
   },
 });
 

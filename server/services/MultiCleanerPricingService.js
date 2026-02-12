@@ -466,6 +466,88 @@ class MultiCleanerPricingService {
       platformFeePercent,
     };
   }
+
+  /**
+   * Calculate a specific cleaner's share for a multi-cleaner job
+   * Supports both marketplace cleaners (13% fee) and business employees (10% fee)
+   * @param {Object} appointment - Appointment object
+   * @param {Object} multiCleanerJob - MultiCleanerJob object
+   * @param {number} cleanerId - Cleaner's user ID
+   * @param {Array} roomAssignments - Cleaner's room assignments
+   * @param {Object} pricing - Pricing config
+   * @param {Object} [options] - Optional settings
+   * @param {boolean} [options.isBusinessEmployee] - Whether cleaner is a business employee
+   * @param {number} [options.businessOwnerFeePercent] - Fee percent for business employees
+   * @returns {Promise<Object>} { grossAmount, platformFee, netAmount, platformFeePercent }
+   */
+  static async calculateCleanerShare(
+    appointment,
+    multiCleanerJob,
+    cleanerId,
+    roomAssignments,
+    pricing,
+    options = {}
+  ) {
+    const { UserHomes } = require("../models");
+
+    // Get home for price calculation
+    const home = await UserHomes.findByPk(appointment.homeId);
+
+    // Calculate total job price
+    const totalPriceCents = await this.calculateTotalJobPrice(
+      home,
+      appointment,
+      multiCleanerJob.totalCleanersRequired
+    );
+
+    // Determine platform fee based on cleaner type
+    let platformFeePercent;
+    if (options.isBusinessEmployee && options.businessOwnerFeePercent !== undefined) {
+      platformFeePercent = options.businessOwnerFeePercent;
+    } else {
+      platformFeePercent = pricing?.multiCleaner?.platformFeePercent || 0.13;
+    }
+
+    // Calculate total effort across all cleaners
+    const { CleanerRoomAssignment } = require("../models");
+    const allAssignments = await CleanerRoomAssignment.findAll({
+      where: { multiCleanerJobId: multiCleanerJob.id },
+    });
+
+    const totalEffort = allAssignments.reduce(
+      (sum, a) => sum + (a.estimatedMinutes || 0),
+      0
+    );
+
+    // Calculate this cleaner's effort
+    const cleanerEffort = roomAssignments.reduce(
+      (sum, a) => sum + (a.estimatedMinutes || 0),
+      0
+    );
+
+    // Calculate proportional share
+    let effortRatio;
+    if (totalEffort > 0 && cleanerEffort > 0) {
+      effortRatio = cleanerEffort / totalEffort;
+    } else {
+      // Fallback to equal split based on confirmed cleaners
+      effortRatio = 1 / Math.max(1, multiCleanerJob.cleanersConfirmed);
+    }
+
+    const grossAmount = Math.round(totalPriceCents * effortRatio);
+    const platformFee = Math.round(grossAmount * platformFeePercent);
+    const netAmount = grossAmount - platformFee;
+
+    return {
+      grossAmount,
+      platformFee,
+      netAmount,
+      platformFeePercent,
+      effortRatio,
+      cleanerEffort,
+      totalEffort,
+    };
+  }
 }
 
 module.exports = MultiCleanerPricingService;

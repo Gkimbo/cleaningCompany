@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -202,6 +203,14 @@ const EmployeeDashboard = ({ state }) => {
   const [error, setError] = useState(null);
   const [startingJobId, setStartingJobId] = useState(null);
   const [completingJobId, setCompletingJobId] = useState(null);
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [startingStripeOnboarding, setStartingStripeOnboarding] = useState(false);
+  const [pendingEarnings, setPendingEarnings] = useState({
+    pendingAmount: 0,
+    nextPayoutDate: null,
+    payoutCount: 0,
+    formatted: { pendingAmount: "$0.00" },
+  });
 
   const fetchDashboardData = async (isRefresh = false) => {
     if (isRefresh) {
@@ -212,10 +221,12 @@ const EmployeeDashboard = ({ state }) => {
     setError(null);
 
     try {
-      const [profileResult, jobsResult, earningsResult] = await Promise.all([
+      const [profileResult, jobsResult, earningsResult, stripeResult, pendingResult] = await Promise.all([
         BusinessEmployeeService.getProfile(state.currentUser.token),
         BusinessEmployeeService.getMyJobs(state.currentUser.token, { upcoming: true }),
         BusinessEmployeeService.getEarnings(state.currentUser.token),
+        BusinessEmployeeService.getStripeStatus(state.currentUser.token),
+        BusinessEmployeeService.getPendingEarnings(state.currentUser.token),
       ]);
 
       setProfile(profileResult?.profile || null);
@@ -223,6 +234,13 @@ const EmployeeDashboard = ({ state }) => {
       setEarnings({
         summary: earningsResult?.summary || { totalEarnings: 0, pendingAmount: 0, jobCount: 0 },
         formatted: earningsResult?.formatted || { totalEarnings: "$0.00", pendingAmount: "$0.00" },
+      });
+      setStripeStatus(stripeResult || null);
+      setPendingEarnings({
+        pendingAmount: pendingResult?.pendingAmount || 0,
+        nextPayoutDate: pendingResult?.nextPayoutDate || null,
+        payoutCount: pendingResult?.payouts?.length || 0,
+        formatted: pendingResult?.formatted || { pendingAmount: "$0.00" },
       });
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
@@ -297,6 +315,25 @@ const EmployeeDashboard = ({ state }) => {
     navigate(`/employee/jobs/${job.id}`);
   };
 
+  const handleStartStripeOnboarding = async () => {
+    setStartingStripeOnboarding(true);
+    try {
+      const result = await BusinessEmployeeService.startStripeOnboarding(state.currentUser.token);
+      if (result.success && result.onboardingUrl) {
+        await Linking.openURL(result.onboardingUrl);
+      } else {
+        Alert.alert("Error", result.error || "Failed to start setup. Please try again.");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to start setup. Please try again.");
+    } finally {
+      setStartingStripeOnboarding(false);
+    }
+  };
+
+  // Check if employee needs to set up Stripe for direct payouts
+  const needsStripeSetup = stripeStatus?.paymentMethod === "stripe_connect" && !stripeStatus?.onboarded;
+
   // Get today's jobs
   const today = new Date().toDateString();
   const todaysJobs = jobs.filter(
@@ -344,6 +381,32 @@ const EmployeeDashboard = ({ state }) => {
         </View>
       </View>
 
+      {/* Stripe Setup Banner */}
+      {needsStripeSetup && (
+        <Pressable
+          style={styles.stripeSetupBanner}
+          onPress={handleStartStripeOnboarding}
+          disabled={startingStripeOnboarding}
+        >
+          <View style={styles.stripeSetupIcon}>
+            <Icon name="credit-card" size={24} color={colors.primary[600]} />
+          </View>
+          <View style={styles.stripeSetupContent}>
+            <Text style={styles.stripeSetupTitle}>Set Up Direct Payments</Text>
+            <Text style={styles.stripeSetupText}>
+              Connect your bank account to receive your pay directly
+            </Text>
+          </View>
+          {startingStripeOnboarding ? (
+            <ActivityIndicator size="small" color={colors.primary[600]} />
+          ) : (
+            <View style={styles.stripeSetupArrow}>
+              <Icon name="chevron-right" size={16} color={colors.primary[600]} />
+            </View>
+          )}
+        </Pressable>
+      )}
+
       {error && (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
@@ -383,23 +446,26 @@ const EmployeeDashboard = ({ state }) => {
         />
       </View>
 
-      {/* Pending Earnings */}
-      {earnings.summary.pendingAmount > 0 && (
-        <Pressable
-          style={styles.pendingEarningsCard}
-          onPress={() => navigate("/employee/earnings")}
-        >
+      {/* Pending Bi-Weekly Earnings */}
+      {pendingEarnings.pendingAmount > 0 && (
+        <View style={styles.pendingEarningsCard}>
           <View style={styles.pendingEarningsIcon}>
-            <Icon name="clock-o" size={18} color={colors.warning[700]} />
+            <Icon name="calendar-check-o" size={18} color={colors.success[700]} />
           </View>
           <View style={styles.pendingEarningsInfo}>
-            <Text style={styles.pendingEarningsLabel}>Pending Payment</Text>
-            <Text style={styles.pendingEarningsAmount}>
-              {earnings.formatted.pendingAmount}
+            <Text style={styles.pendingEarningsLabel}>
+              Upcoming Payout ({pendingEarnings.payoutCount} job{pendingEarnings.payoutCount !== 1 ? "s" : ""})
             </Text>
+            <Text style={styles.pendingEarningsAmount}>
+              {pendingEarnings.formatted.pendingAmount}
+            </Text>
+            {pendingEarnings.nextPayoutDate && (
+              <Text style={styles.pendingEarningsDate}>
+                Scheduled for {formatPayoutDate(pendingEarnings.nextPayoutDate)}
+              </Text>
+            )}
           </View>
-          <Icon name="chevron-right" size={14} color={colors.warning[600]} />
-        </Pressable>
+        </View>
       )}
 
       {/* Quick Actions */}
@@ -504,6 +570,22 @@ const getGreeting = () => {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
+};
+
+// Helper function for payout date
+const formatPayoutDate = (dateStr) => {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const diffDays = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) {
+    return "Today";
+  } else if (diffDays === 1) {
+    return "Tomorrow";
+  } else if (diffDays <= 7) {
+    return date.toLocaleDateString("en-US", { weekday: "long" });
+  }
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 };
 
 const styles = StyleSheet.create({
@@ -635,19 +717,19 @@ const styles = StyleSheet.create({
   pendingEarningsCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.warning[50],
+    backgroundColor: colors.success[50],
     marginHorizontal: spacing.lg,
     marginTop: spacing.lg,
     padding: spacing.lg,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.warning[200],
+    borderColor: colors.success[200],
   },
   pendingEarningsIcon: {
     width: 36,
     height: 36,
     borderRadius: radius.full,
-    backgroundColor: colors.warning[100],
+    backgroundColor: colors.success[100],
     justifyContent: "center",
     alignItems: "center",
   },
@@ -657,12 +739,17 @@ const styles = StyleSheet.create({
   },
   pendingEarningsLabel: {
     fontSize: typography.fontSize.sm,
-    color: colors.warning[700],
+    color: colors.success[700],
   },
   pendingEarningsAmount: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
-    color: colors.warning[800],
+    color: colors.success[800],
+  },
+  pendingEarningsDate: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[600],
+    marginTop: 2,
   },
   section: {
     marginTop: spacing.xl,
@@ -894,6 +981,49 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: spacing["4xl"],
+  },
+  // Stripe Setup Banner
+  stripeSetupBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 2,
+    borderColor: colors.primary[200],
+    borderStyle: "dashed",
+  },
+  stripeSetupIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  stripeSetupContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  stripeSetupTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  stripeSetupText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    marginTop: 2,
+  },
+  stripeSetupArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 

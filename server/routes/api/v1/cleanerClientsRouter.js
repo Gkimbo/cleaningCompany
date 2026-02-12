@@ -20,6 +20,7 @@ const {
 const InvitationService = require("../../../services/InvitationService");
 const calculatePrice = require("../../../services/CalculatePrice");
 const IncentiveService = require("../../../services/IncentiveService");
+const { getPricingConfig } = require("../../../config/businessConfig");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const EncryptionService = require("../../../services/EncryptionService");
@@ -1124,18 +1125,27 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       });
     }
 
-    // Calculate cleaner payout (platform takes fee)
-    const platformFeePercent = await IncentiveService.calculateCleanerFee(req.user.id, models);
-    const platformFee = appointmentPrice * (platformFeePercent / 100);
-    const cleanerPayout = appointmentPrice - platformFee;
+    // Calculate cleaner payout (platform takes fee) - get fee from database config
+    const pricingConfig = await getPricingConfig();
+    const standardFeePercent = pricingConfig?.platform?.feePercent || 0.10;
+    const appointmentPriceInCents = Math.round(appointmentPrice * 100);
+
+    const feeResult = await IncentiveService.calculateCleanerFee(
+      req.user.id,
+      appointmentPriceInCents,
+      standardFeePercent
+    );
 
     // Create payout record
     await Payout.create({
       cleanerId: req.user.id,
       appointmentId: appointment.id,
-      amount: cleanerPayout,
-      platformFee: platformFee,
+      grossAmount: appointmentPriceInCents,
+      platformFee: feeResult.platformFee,
+      netAmount: feeResult.netAmount,
       status: "pending",
+      incentiveApplied: feeResult.incentiveApplied,
+      originalPlatformFee: feeResult.originalPlatformFee,
     });
 
     // TODO: Send notification to client about the booking
@@ -1283,19 +1293,26 @@ cleanerClientsRouter.post("/:id/book-for-client", verifyCleaner, async (req, res
     const io = req.app.get("io");
 
     // Notify client via all channels (push, email, in-app, socket)
-    await NotificationService.notifyPendingBooking({
-      clientId: cleanerClient.clientId,
-      cleanerId,
-      appointmentId: appointment.id,
-      appointmentDate: date,
-      price: appointmentPrice,
-      cleanerName,
-      io,
-    });
+    // Wrap in try/catch so notification failure doesn't fail the booking
+    try {
+      await NotificationService.notifyPendingBooking({
+        clientId: cleanerClient.clientId,
+        cleanerId,
+        appointmentId: appointment.id,
+        appointmentDate: date,
+        price: appointmentPrice,
+        cleanerName,
+        io,
+      });
+    } catch (notifyErr) {
+      console.error(`[BookForClient] Notification failed for appointment ${appointment.id}:`, notifyErr.message);
+      // Continue - booking was successful even if notification failed
+    }
 
     console.log(`[BookForClient] Cleaner ${cleanerId} booked appointment ${appointment.id} for client ${cleanerClient.clientId}`);
 
     res.status(201).json({
+      success: true,
       message: "Booking created successfully. Waiting for client approval.",
       appointment: {
         id: appointment.id,

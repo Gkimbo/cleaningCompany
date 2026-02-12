@@ -29,6 +29,7 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendBookingAcceptedEmail: jest.fn(),
   sendBookingDeclinedEmail: jest.fn(),
   sendBookingExpiredEmail: jest.fn(),
+  sendNewClientAppointmentEmail: jest.fn(),
 }));
 
 const { Notification, User } = require("../../models");
@@ -404,6 +405,187 @@ describe("NotificationService", () => {
       expect(Notification.create).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.stringContaining("$60.00"),
+        })
+      );
+    });
+  });
+
+  describe("notifyClientBookedAppointment", () => {
+    const mockBusinessOwner = {
+      id: 10,
+      email: "owner@business.com",
+      expoPushToken: "ExponentPushToken[owner]",
+      notifications: ["email", "push"],
+      getNotificationEmail: jest.fn().mockReturnValue("owner@business.com"),
+    };
+
+    const mockNotification = {
+      id: 5,
+      userId: 10,
+      type: "client_booked_appointment",
+      title: "New Client Appointment",
+      body: "John Doe booked a cleaning for Saturday, Feb 15, 2026. Tap to view and assign.",
+      createdAt: new Date(),
+    };
+
+    it("should notify business owner when client books appointment", async () => {
+      User.findByPk.mockResolvedValue(mockBusinessOwner);
+      Notification.create.mockResolvedValue(mockNotification);
+
+      await NotificationService.notifyClientBookedAppointment({
+        businessOwnerId: 10,
+        clientId: 5,
+        clientName: "John Doe",
+        appointmentId: 100,
+        appointmentDate: "2026-02-15",
+        homeAddress: "123 Main St, Anytown",
+        price: 15000,
+      });
+
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 10,
+          type: "client_booked_appointment",
+          title: "New Client Appointment",
+          actionRequired: true,
+          relatedAppointmentId: 100,
+        })
+      );
+    });
+
+    it("should include client name in notification body", async () => {
+      User.findByPk.mockResolvedValue(mockBusinessOwner);
+      Notification.create.mockResolvedValue(mockNotification);
+
+      await NotificationService.notifyClientBookedAppointment({
+        businessOwnerId: 10,
+        clientId: 5,
+        clientName: "Jane Smith",
+        appointmentId: 100,
+        appointmentDate: "2026-02-20",
+        homeAddress: "456 Oak Ave",
+        price: 12000,
+      });
+
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining("Jane Smith"),
+        })
+      );
+    });
+
+    it("should include appointment data in notification", async () => {
+      User.findByPk.mockResolvedValue(mockBusinessOwner);
+      Notification.create.mockResolvedValue(mockNotification);
+
+      await NotificationService.notifyClientBookedAppointment({
+        businessOwnerId: 10,
+        clientId: 5,
+        clientName: "John Doe",
+        appointmentId: 100,
+        appointmentDate: "2026-02-15",
+        homeAddress: "123 Main St",
+        price: 15000,
+      });
+
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            appointmentId: 100,
+            appointmentDate: "2026-02-15",
+            clientId: 5,
+            clientName: "John Doe",
+            homeAddress: "123 Main St",
+            price: 15000,
+          }),
+        })
+      );
+    });
+
+    it("should send push notification to business owner", async () => {
+      User.findByPk.mockResolvedValue(mockBusinessOwner);
+      Notification.create.mockResolvedValue(mockNotification);
+
+      await NotificationService.notifyClientBookedAppointment({
+        businessOwnerId: 10,
+        clientId: 5,
+        clientName: "John Doe",
+        appointmentId: 100,
+        appointmentDate: "2026-02-15",
+        homeAddress: "123 Main St",
+        price: 15000,
+      });
+
+      expect(PushNotification.sendPushNotification).toHaveBeenCalledWith(
+        mockBusinessOwner.expoPushToken,
+        "New Client Appointment",
+        expect.stringContaining("John Doe"),
+        expect.objectContaining({
+          notificationId: 5,
+          type: "client_booked_appointment",
+        })
+      );
+    });
+
+    it("should send email notification to business owner", async () => {
+      User.findByPk.mockResolvedValue(mockBusinessOwner);
+      Notification.create.mockResolvedValue(mockNotification);
+
+      await NotificationService.notifyClientBookedAppointment({
+        businessOwnerId: 10,
+        clientId: 5,
+        clientName: "John Doe",
+        appointmentId: 100,
+        appointmentDate: "2026-02-15",
+        homeAddress: "123 Main St",
+        price: 15000,
+      });
+
+      expect(Email.sendNewClientAppointmentEmail).toHaveBeenCalledWith(
+        "owner@business.com",
+        "2026-02-15",
+        "John Doe",
+        "123 Main St",
+        15000,
+        100
+      );
+    });
+
+    it("should not send push when business owner has no push token", async () => {
+      const ownerNoPush = { ...mockBusinessOwner, expoPushToken: null };
+      User.findByPk.mockResolvedValue(ownerNoPush);
+      Notification.create.mockResolvedValue(mockNotification);
+
+      await NotificationService.notifyClientBookedAppointment({
+        businessOwnerId: 10,
+        clientId: 5,
+        clientName: "John Doe",
+        appointmentId: 100,
+        appointmentDate: "2026-02-15",
+        homeAddress: "123 Main St",
+        price: 15000,
+      });
+
+      expect(PushNotification.sendPushNotification).not.toHaveBeenCalled();
+    });
+
+    it("should set actionRequired to true for assignment", async () => {
+      User.findByPk.mockResolvedValue(mockBusinessOwner);
+      Notification.create.mockResolvedValue(mockNotification);
+
+      await NotificationService.notifyClientBookedAppointment({
+        businessOwnerId: 10,
+        clientId: 5,
+        clientName: "John Doe",
+        appointmentId: 100,
+        appointmentDate: "2026-02-15",
+        homeAddress: "123 Main St",
+        price: 15000,
+      });
+
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionRequired: true,
         })
       );
     });

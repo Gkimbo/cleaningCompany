@@ -13,6 +13,7 @@ import { useNavigate, useParams, useLocation } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import FetchData from "../../services/fetchRequests/fetchData";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
+import CleanerConflictModal from "./CleanerConflictModal";
 
 // Review Card component with multi-aspect support
 const ReviewCardWithAspects = ({ review, renderStars, formatDate }) => {
@@ -113,6 +114,8 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
   const [sortOption, setSortOption] = useState("newest");
   const [isProcessing, setIsProcessing] = useState(false);
   const [requestHandled, setRequestHandled] = useState(false);
+  const [conflictData, setConflictData] = useState(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
   const { width } = Dimensions.get("window");
   const iconSize = width < 400 ? 16 : width < 800 ? 20 : 24;
   const navigate = useNavigate();
@@ -167,7 +170,16 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
     if (!requestId) return;
     setIsProcessing(true);
     try {
-      await FetchData.approveRequest(requestId, true);
+      const result = await FetchData.approveRequest(requestId, true);
+
+      // Check if it's a conflict response
+      if (result && result.conflict) {
+        setConflictData(result);
+        setShowConflictModal(true);
+        setIsProcessing(false);
+        return;
+      }
+
       setRequestHandled("approved");
       if (dispatch) {
         dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
@@ -177,7 +189,52 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
       ]);
     } catch (error) {
       console.error("Error approving request:", error);
-      Alert.alert("Error", "Failed to approve the request. Please try again.");
+      const errorMessage = error.message || "Failed to approve the request. Please try again.";
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleKeepCurrent = async () => {
+    // User wants to keep the current cleaner, so deny this request
+    setIsProcessing(true);
+    try {
+      await FetchData.denyRequest(cleanerId, appointmentId);
+      setShowConflictModal(false);
+      setConflictData(null);
+      setRequestHandled("denied");
+      if (dispatch) {
+        dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      }
+      Alert.alert("Request Denied", "You've kept the current cleaner. This request has been denied.", [
+        { text: "OK", onPress: () => navigate("/client-requests") }
+      ]);
+    } catch (error) {
+      console.error("Error denying request:", error);
+      Alert.alert("Error", error.message || "Failed to deny the request.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSwitchCleaner = async () => {
+    if (!conflictData) return;
+    setIsProcessing(true);
+    try {
+      await FetchData.switchCleaner(appointmentId, cleanerId, requestId);
+      setShowConflictModal(false);
+      setConflictData(null);
+      setRequestHandled("approved");
+      if (dispatch) {
+        dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      }
+      Alert.alert("Success", "Cleaner has been switched successfully!", [
+        { text: "OK", onPress: () => navigate("/client-requests") }
+      ]);
+    } catch (error) {
+      console.error("Error switching cleaner:", error);
+      Alert.alert("Error", error.message || "Failed to switch cleaner.");
     } finally {
       setIsProcessing(false);
     }
@@ -192,11 +249,7 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
 
     setIsProcessing(true);
     try {
-      const result = await FetchData.denyRequest(cleanerId, appointmentId);
-      // Check if result is an error (denyRequest returns error instead of throwing)
-      if (result instanceof Error) {
-        throw result;
-      }
+      await FetchData.denyRequest(cleanerId, appointmentId);
       setRequestHandled("denied");
       if (dispatch) {
         dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
@@ -206,7 +259,8 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
       ]);
     } catch (error) {
       console.error("Error denying request:", error);
-      Alert.alert("Error", "Failed to deny the request. Please try again.");
+      const errorMessage = error.message || "Failed to deny the request. Please try again.";
+      Alert.alert("Error", errorMessage);
     } finally {
       setIsProcessing(false);
     }
@@ -509,6 +563,17 @@ const AllCleanerReviewsList = ({ state, dispatch }) => {
       </View>
 
       <View style={styles.bottomSpacer} />
+
+      {/* Cleaner Conflict Modal */}
+      <CleanerConflictModal
+        visible={showConflictModal}
+        onClose={() => setShowConflictModal(false)}
+        existingCleaner={conflictData?.existingCleaner}
+        newCleaner={conflictData?.newCleaner}
+        onKeepCurrent={handleKeepCurrent}
+        onSwitch={handleSwitchCleaner}
+        loading={isProcessing}
+      />
     </ScrollView>
   );
 };

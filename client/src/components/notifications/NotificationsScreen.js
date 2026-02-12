@@ -33,6 +33,7 @@ const NotificationsScreen = () => {
   const [selectedNotificationForRebook, setSelectedNotificationForRebook] = useState(null);
   const [showDeclinedModal, setShowDeclinedModal] = useState(false);
   const [selectedDeclinedNotification, setSelectedDeclinedNotification] = useState(null);
+  const [pendingReviewsCount, setPendingReviewsCount] = useState(0);
 
   const fetchNotifications = useCallback(async (pageNum = 1, refresh = false) => {
     try {
@@ -73,6 +74,31 @@ const NotificationsScreen = () => {
     fetchNotifications(1);
   }, [fetchNotifications]);
 
+  // Fetch pending reviews count
+  useEffect(() => {
+    const fetchPendingReviews = async () => {
+      if (state.currentUser.token) {
+        try {
+          const response = await fetch(
+            `${require("../../services/config").API_BASE}/reviews/pending`,
+            {
+              headers: {
+                Authorization: `Bearer ${state.currentUser.token}`,
+              },
+            }
+          );
+          const data = await response.json();
+          if (response.ok) {
+            setPendingReviewsCount(data.pendingReviews?.length || 0);
+          }
+        } catch (error) {
+          console.error("Error fetching pending reviews:", error);
+        }
+      }
+    };
+    fetchPendingReviews();
+  }, [state.currentUser.token]);
+
   // Listen for new notifications in real-time
   useEffect(() => {
     const unsubscribe = onNotification((data) => {
@@ -102,30 +128,15 @@ const NotificationsScreen = () => {
       );
     }
 
-    // Navigate based on notification type
-    switch (notification.type) {
-      case "pending_booking":
-        if (notification.data?.appointmentId) {
-          navigate("/");
-        }
-        break;
-      case "booking_accepted":
-      case "booking_declined":
-      case "booking_expired":
-        if (notification.data?.appointmentId) {
-          navigate(`/client-detail/${notification.data.cleanerClientId || ""}`);
-        }
-        break;
-      case "business_owner_declined":
-        // Show the decline response modal for actionable declined notifications
-        if (notification.actionRequired) {
-          setSelectedDeclinedNotification(notification);
-          setShowDeclinedModal(true);
-        }
-        break;
-      default:
-        break;
+    // Special case: business_owner_declined with action required shows modal
+    if (notification.type === "business_owner_declined" && notification.actionRequired) {
+      setSelectedDeclinedNotification(notification);
+      setShowDeclinedModal(true);
+      return;
     }
+
+    // Navigate to notification detail page
+    navigate(`/notifications/${notification.id}`);
   };
 
   const handleMarkAllRead = async () => {
@@ -207,6 +218,27 @@ const NotificationsScreen = () => {
         )}
       </View>
 
+      {/* Pending Reviews Banner */}
+      {pendingReviewsCount > 0 && (
+        <Pressable
+          style={styles.pendingReviewsBanner}
+          onPress={() => navigate("/pending-reviews")}
+        >
+          <View style={styles.pendingReviewsIcon}>
+            <Feather name="star" size={20} color={colors.warning[600]} />
+          </View>
+          <View style={styles.pendingReviewsContent}>
+            <Text style={styles.pendingReviewsTitle}>
+              {pendingReviewsCount} completed {pendingReviewsCount === 1 ? "job" : "jobs"} awaiting your review
+            </Text>
+            <Text style={styles.pendingReviewsSubtitle}>
+              Tap to leave your feedback
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+        </Pressable>
+      )}
+
       {/* Notification List */}
       <FlatList
         data={notifications}
@@ -229,7 +261,7 @@ const NotificationsScreen = () => {
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
-        contentContainerStyle={notifications.length === 0 && styles.emptyList}
+        contentContainerStyle={notifications.length === 0 && pendingReviewsCount === 0 && styles.emptyList}
       />
 
       {/* Rebooking Modal */}
@@ -325,6 +357,39 @@ const styles = StyleSheet.create({
   footer: {
     padding: spacing.md,
     alignItems: "center",
+  },
+  pendingReviewsBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  pendingReviewsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.warning[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+  },
+  pendingReviewsContent: {
+    flex: 1,
+  },
+  pendingReviewsTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.warning[800],
+  },
+  pendingReviewsSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[600],
+    marginTop: 2,
   },
 });
 

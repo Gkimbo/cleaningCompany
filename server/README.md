@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-5038_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5128_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -45,6 +45,9 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - **Internal Analytics** for tracking flow abandonment, job duration, offline usage, disputes, and pay overrides
 - **Employee timesheets** with hours tracking and approval workflow
 - **Transit time calculation** between jobs for scheduling optimization
+- **Bi-weekly batch payouts** for employees (every other Friday)
+- **Database-driven pricing** with owner-configurable fees via PricingConfig
+- **Employee pay types** supporting hourly, percentage, and flat/per-job rates
 
 ---
 
@@ -196,7 +199,10 @@ Business owners can hire and manage employees:
 - **Job Type Restrictions**: Limit employees to specific job types
 - **Max Daily Jobs**: Configure maximum jobs per employee per day
 - **Payment Methods**: Stripe Connect or direct payment from owner
-- **Hourly vs Flat Rate**: Flexible pay structure per employee
+- **Pay Types**: Hourly rate, percentage of job, or flat per-job rate
+- **Bi-Weekly Payouts**: Employees paid every other Friday (business owner paid immediately)
+- **Early Payout**: Business owners can trigger early payout for employees
+- **Termination Payout**: Employees paid immediately upon termination
 - **Job Assignment**: Assign specific jobs to employees with transit time
 - **Self-Assignment**: Business owners can assign jobs to themselves
 - **Marketplace Pickup**: Allow employees to pick up open marketplace jobs
@@ -385,7 +391,7 @@ Handle situations when guests haven't left by checkout time:
 - **Payment Retry**: Automatic retry of failed payments
 - **Overdue Reminders**: Configurable reminder frequency
 
-**Pricing Configuration:**
+**Pricing Configuration (Database-Driven via PricingConfig):**
 - Base price per cleaning
 - Per bedroom fee
 - Per bathroom fee
@@ -398,6 +404,14 @@ Handle situations when guests haven't left by checkout time:
 - Refund percentage
 - Last-minute booking fee (appointments within 48 hours)
 - Large business volume-based fees (for 50+ jobs/month)
+
+**Platform Fee Structure (Owner Configurable):**
+- `platformFeePercent`: 10% - Standard marketplace cleaner fee
+- `businessOwnerFeePercent`: 10% - Business owner employee fee
+- `largeBusinessFeePercent`: 7% - High-volume business owners (50+ jobs/month)
+- `multiCleanerPlatformFeePercent`: 13% - Multi-cleaner job assignments
+- `incentiveRefundPercent`: 10% - Incentive cancellation refunds
+- `incentiveCleanerPercent`: 40% - Cleaner portion on incentive cancellation
 
 ### Reviews & Ratings
 
@@ -940,7 +954,7 @@ Handle situations when guests haven't left by checkout time:
 
 ## Database
 
-### Models (62 Total)
+### Models (66 Total)
 
 #### Core Models
 
@@ -961,6 +975,7 @@ Handle situations when guests haven't left by checkout time:
 | `EmployeeJobAssignment` | Job assignments to employees with pay tracking and transit time |
 | `EmployeePayChangeLog` | Audit trail for pay rate changes |
 | `EmployeeTimesheet` | Employee timesheet entries with hours worked and approval status |
+| `EmployeePendingPayout` | Pending employee earnings awaiting bi-weekly payout |
 | `CleanerClient` | Business owner to client relationships with invitation flow |
 
 #### Multi-Cleaner Models
@@ -991,7 +1006,7 @@ Handle situations when guests haven't left by checkout time:
 | `PlatformEarnings` | Aggregated platform earnings |
 | `OwnerWithdrawal` | Platform owner withdrawal requests |
 | `StripeConnectAccount` | Stripe Connect account status tracking |
-| `PricingConfig` | Platform pricing configuration |
+| `PricingConfig` | Platform pricing and fee configuration (owner-configurable) |
 
 #### Communication Models
 
@@ -1530,6 +1545,35 @@ await TimesheetService.approveTimesheet(timesheetId, businessOwnerId);
 const summary = await TimesheetService.getHoursSummary(businessOwnerId, startDate, endDate);
 ```
 
+### EmployeeBatchPayoutService
+
+Bi-weekly batch payout processing for employees:
+
+```javascript
+const EmployeeBatchPayoutService = require('./services/EmployeeBatchPayoutService');
+
+// Get next payout date (every other Friday)
+const nextPayoutDate = EmployeeBatchPayoutService.getNextPayoutDate();
+
+// Queue employee payout when job completes
+await EmployeeBatchPayoutService.createPendingPayout(assignment, amount, appointment);
+
+// Get pending earnings for employee dashboard
+const pending = await EmployeeBatchPayoutService.getPendingEarningsForEmployee(employeeId);
+
+// Get pending payroll for business owner
+const payroll = await EmployeeBatchPayoutService.getPendingPayrollForBusiness(ownerId);
+
+// Process all due payouts (called by cron every other Friday)
+await EmployeeBatchPayoutService.processBiWeeklyPayouts();
+
+// Pay immediately on termination
+await EmployeeBatchPayoutService.processTerminationPayout(employeeId);
+
+// Business owner triggers early payout
+await EmployeeBatchPayoutService.processEarlyPayout(employeeId, ownerId);
+```
+
 ### TransitTimeService
 
 Calculate travel time between job locations:
@@ -1565,6 +1609,9 @@ const optimized = await TransitTimeService.optimizeJobOrder(jobIds);
 | `0 1 * * *` | Calendar Sync | Syncs all active iCal calendars |
 | `0 3 * * 0` | Recurring Generation | Generates appointments from recurring schedules |
 | `0 7 * * *` | Supply Reminder | Reminds cleaners to bring supplies for today's appointments |
+| `0 6 * * 5` | Bi-Weekly Payout | Processes employee batch payouts (every other Friday) |
+| `*/5 * * * *` | Auto-Complete Monitor | Sends reminders and auto-completes jobs past scheduled time |
+| `*/15 * * * *` | Completion Approval | Auto-approves homeowner/cleaner completion after timeout |
 
 ### Cron Job Details
 
@@ -1581,6 +1628,23 @@ const optimized = await TransitTimeService.optimizeJobOrder(jobIds);
 **Multi-Cleaner Offer Expiration** (`MultiCleanerOfferExpiration.js`)
 - Expires job offers that haven't been accepted
 - Frees up slots for new offers
+
+**Bi-Weekly Payout Job** (`BiWeeklyPayoutJob.js`)
+- Runs every Friday at 6 AM UTC
+- Checks if it's a "payout Friday" (every other Friday)
+- Processes all pending employee payouts
+- Transfers funds via Stripe Connect to employee bank accounts
+- Marks payouts as completed with transaction IDs
+
+**Auto-Complete Monitor** (`AutoCompleteMonitor.js`)
+- Sends reminder when cleaner forgets to mark job complete
+- Auto-completes jobs after configured hours past scheduled end time
+- Configurable time windows: "anytime", "10-3", "11-4", "12-2"
+- Minimum on-site time verification
+
+**Completion Approval Monitor** (`CompletionApprovalMonitor.js`)
+- Auto-approves homeowner after 24 hours if not manually approved
+- Auto-approves cleaner after 48 hours if homeowner approved
 
 ---
 
@@ -1670,7 +1734,8 @@ npm test -- --watch
 | Employee Timesheets | 45 | Timesheet submission, approval, hours tracking |
 | Transit Time | 28 | Distance calculation, scheduling optimization |
 | Business Client | 35 | Business client portal, corporate bookings |
-| **Total** | **5038** | 178 test suites |
+| Bi-Weekly Payouts | 34 | Employee batch payout processing |
+| **Total** | **5128** | 202 test suites |
 
 ---
 

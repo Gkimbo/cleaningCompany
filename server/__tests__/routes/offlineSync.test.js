@@ -52,6 +52,7 @@ jest.mock("../../middleware/verifyBusinessEmployee", () => (req, res, next) => {
 jest.mock("../../serializers/EmployeeJobAssignmentSerializer", () => ({
   serializeArrayForEmployee: jest.fn((jobs) => jobs),
   serializeForEmployee: jest.fn((job) => job),
+  serializeOne: jest.fn((job) => job),
 }));
 
 // Mock models

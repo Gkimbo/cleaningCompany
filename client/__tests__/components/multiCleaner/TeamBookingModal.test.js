@@ -47,6 +47,18 @@ jest.mock("../../../src/services/fetchRequests/fetchData", () => ({
   post: jest.fn(),
 }));
 
+// Mock PricingContext
+jest.mock("../../../src/context/PricingContext", () => ({
+  usePricing: () => ({
+    pricing: {
+      platform: {
+        feePercent: 0.1,
+      },
+    },
+    loading: false,
+  }),
+}));
+
 import TeamBookingModal from "../../../src/components/multiCleaner/TeamBookingModal";
 import FetchData from "../../../src/services/fetchRequests/fetchData";
 
@@ -168,10 +180,10 @@ describe("TeamBookingModal", () => {
       });
     });
 
-    it("should display job earnings", async () => {
+    it("should display appointment price in profit breakdown", async () => {
       const { getByText } = await renderAndWait();
       await waitFor(() => {
-        expect(getByText("Job Earnings")).toBeTruthy();
+        expect(getByText("Appointment Price")).toBeTruthy();
       });
     });
 
@@ -316,17 +328,17 @@ describe("TeamBookingModal", () => {
 
       // Profit breakdown shows immediately in the job summary area
       await waitFor(() => {
-        expect(getByText("Job Earnings")).toBeTruthy();
+        expect(getByText("Appointment Price")).toBeTruthy();
         expect(getByText("Your Profit")).toBeTruthy();
       });
     });
 
-    it("should show job earnings (net after platform fee)", async () => {
+    it("should show net earnings after platform fee", async () => {
       const { getByText } = await renderAndWait();
 
       await waitFor(() => {
-        // Job earnings is already net after platform fee
-        expect(getByText("Job Earnings")).toBeTruthy();
+        // Net earnings is shown after platform fee deduction
+        expect(getByText("Net Earnings")).toBeTruthy();
       });
     });
 

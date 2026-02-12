@@ -8,6 +8,8 @@ const BusinessVolumeService = require("../../../services/BusinessVolumeService")
 const BusinessVerificationService = require("../../../services/BusinessVerificationService");
 const PayCalculatorService = require("../../../services/PayCalculatorService");
 const CustomJobFlowService = require("../../../services/CustomJobFlowService");
+const EmployeeStripeConnectService = require("../../../services/EmployeeStripeConnectService");
+const EmployeeDirectPayoutService = require("../../../services/EmployeeDirectPayoutService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
@@ -2256,6 +2258,78 @@ router.get("/payroll/history", async (req, res) => {
 });
 
 /**
+ * GET /payroll/pending - Get pending bi-weekly payout summary
+ *
+ * Returns pending payroll for all employees waiting for the next bi-weekly payout.
+ * Employees are paid every other Friday.
+ */
+router.get("/payroll/pending", async (req, res) => {
+  try {
+    const EmployeeBatchPayoutService = require("../../../services/EmployeeBatchPayoutService");
+
+    const pendingPayroll = await EmployeeBatchPayoutService.getPendingPayrollForBusiness(
+      req.businessOwnerId
+    );
+
+    res.json({
+      success: true,
+      ...pendingPayroll,
+    });
+  } catch (error) {
+    console.error("Error fetching pending payroll:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /payroll/early-payout/:employeeId - Trigger early payout for an employee
+ *
+ * Allows business owner to pay an employee before the scheduled bi-weekly payout date.
+ * This immediately transfers all pending earnings to the employee.
+ */
+router.post("/payroll/early-payout/:employeeId", async (req, res) => {
+  try {
+    const EmployeeBatchPayoutService = require("../../../services/EmployeeBatchPayoutService");
+    const { BusinessEmployee } = require("../../../models");
+
+    const employeeId = parseInt(req.params.employeeId);
+
+    // Verify the employee belongs to this business owner
+    const employee = await BusinessEmployee.findOne({
+      where: {
+        id: employeeId,
+        businessOwnerId: req.businessOwnerId,
+      },
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    const result = await EmployeeBatchPayoutService.processEarlyPayout(
+      employeeId,
+      req.businessOwnerId
+    );
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Paid ${result.formattedAmount || `$${(result.totalAmount / 100).toFixed(2)}`} to ${employee.firstName} ${employee.lastName}`,
+      ...result,
+    });
+  } catch (error) {
+    console.error("Error processing early payout:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /tax-export/:year - Get annual tax export data
  * Returns financial summary and employee breakdown for the entire year
  */
@@ -3676,6 +3750,185 @@ router.get("/reviews/stats", async (req, res) => {
     res.json(stats);
   } catch (error) {
     console.error("Error fetching business review stats:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// =====================================
+// Employee Payout Settings
+// =====================================
+
+/**
+ * GET /settings/employee-payouts
+ * Get current employee payout method setting
+ */
+router.get("/settings/employee-payouts", async (req, res) => {
+  try {
+    const businessOwner = await User.findByPk(req.businessOwnerId);
+    if (!businessOwner) {
+      return res.status(404).json({ error: "Business owner not found" });
+    }
+
+    // Get count of employees with Stripe Connect ready
+    const employees = await BusinessEmployee.findAll({
+      where: {
+        businessOwnerId: req.businessOwnerId,
+        status: "active",
+      },
+    });
+
+    const employeesWithStripe = employees.filter(
+      (e) => e.stripeConnectAccountId && e.stripeConnectOnboarded
+    ).length;
+
+    res.json({
+      employeePayoutMethod: businessOwner.employeePayoutMethod || "all_to_owner",
+      totalActiveEmployees: employees.length,
+      employeesReadyForDirectPayout: employeesWithStripe,
+      directPayoutsAvailable: employeesWithStripe > 0,
+    });
+  } catch (error) {
+    console.error("Error fetching employee payout settings:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /settings/employee-payouts
+ * Update employee payout method setting
+ */
+router.put("/settings/employee-payouts", async (req, res) => {
+  try {
+    const { employeePayoutMethod } = req.body;
+
+    if (!["all_to_owner", "direct_to_employees"].includes(employeePayoutMethod)) {
+      return res.status(400).json({
+        error: "Invalid payout method. Must be 'all_to_owner' or 'direct_to_employees'",
+      });
+    }
+
+    const businessOwner = await User.findByPk(req.businessOwnerId);
+    if (!businessOwner) {
+      return res.status(404).json({ error: "Business owner not found" });
+    }
+
+    await businessOwner.update({ employeePayoutMethod });
+
+    console.log(
+      `[BusinessOwner] Updated employee payout method to ${employeePayoutMethod} for owner ${req.businessOwnerId}`
+    );
+
+    res.json({
+      success: true,
+      employeePayoutMethod,
+      message:
+        employeePayoutMethod === "direct_to_employees"
+          ? "Employees with Stripe accounts will now receive payouts directly"
+          : "All payouts will go to your account",
+    });
+  } catch (error) {
+    console.error("Error updating employee payout settings:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /employees/:employeeId/stripe-eligibility
+ * Check if an employee can receive direct payouts
+ */
+router.get("/employees/:employeeId/stripe-eligibility", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    const employee = await BusinessEmployee.findOne({
+      where: {
+        id: parseInt(employeeId),
+        businessOwnerId: req.businessOwnerId,
+      },
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    const status = await EmployeeStripeConnectService.checkOnboardingStatus(
+      employee.id
+    );
+
+    res.json({
+      employeeId: employee.id,
+      employeeName: `${employee.firstName} ${employee.lastName}`,
+      ...status,
+      canReceiveDirectPayouts: status.hasAccount && status.payoutsEnabled,
+    });
+  } catch (error) {
+    console.error("Error checking employee Stripe eligibility:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /employees/:employeeId/invite-to-stripe
+ * Send invitation for employee to set up Stripe Connect
+ */
+router.post("/employees/:employeeId/invite-to-stripe", async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    const employee = await BusinessEmployee.findOne({
+      where: {
+        id: parseInt(employeeId),
+        businessOwnerId: req.businessOwnerId,
+        status: "active",
+      },
+    });
+
+    if (!employee) {
+      return res.status(404).json({ error: "Active employee not found" });
+    }
+
+    if (!employee.userId) {
+      return res.status(400).json({
+        error: "Employee must accept their invitation first before setting up Stripe",
+      });
+    }
+
+    // Update payment method to stripe_connect
+    await employee.update({ paymentMethod: "stripe_connect" });
+
+    // TODO: Send notification to employee about setting up Stripe
+
+    res.json({
+      success: true,
+      message: "Employee can now set up Stripe Connect from their app",
+      employeeId: employee.id,
+    });
+  } catch (error) {
+    console.error("Error inviting employee to Stripe:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /settings/employee-payouts/summary
+ * Get payout summary for direct employee payments
+ */
+router.get("/settings/employee-payouts/summary", async (req, res) => {
+  try {
+    const { dateFrom, dateTo } = req.query;
+
+    const options = {};
+    if (dateFrom) options.dateFrom = new Date(dateFrom);
+    if (dateTo) options.dateTo = new Date(dateTo);
+
+    const summary = await EmployeeDirectPayoutService.getPayoutSummary(
+      req.businessOwnerId,
+      options
+    );
+
+    res.json(summary);
+  } catch (error) {
+    console.error("Error fetching payout summary:", error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -284,6 +284,30 @@ class BusinessEmployeeService {
     }
   }
 
+  /**
+   * Get pending bi-weekly payout earnings for the authenticated employee
+   * @param {string} token - Auth token
+   * @returns {Object} { pendingAmount, nextPayoutDate, payouts, formatted }
+   */
+  static async getPendingEarnings(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/pending-earnings`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessEmployee] Error fetching pending earnings:", error);
+      return {
+        pendingAmount: 0,
+        nextPayoutDate: null,
+        payouts: [],
+        formatted: { pendingAmount: "$0.00" },
+      };
+    }
+  }
+
   // =====================
   // PROFILE
   // =====================

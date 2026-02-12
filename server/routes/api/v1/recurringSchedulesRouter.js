@@ -20,6 +20,7 @@ const {
 const calculatePrice = require("../../../services/CalculatePrice");
 const IncentiveService = require("../../../services/IncentiveService");
 const EncryptionService = require("../../../services/EncryptionService");
+const { getPricingConfig } = require("../../../config/businessConfig");
 
 const recurringSchedulesRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -80,41 +81,68 @@ async function generateAppointmentsForSchedule(schedule, weeksAhead = null) {
   const home = cleanerClient.home;
   const createdAppointments = [];
 
-  // Start from last generated date or start date
-  let currentDate = schedule.lastGeneratedDate
-    ? new Date(schedule.lastGeneratedDate)
-    : new Date(schedule.startDate);
-  currentDate.setDate(currentDate.getDate() + 1); // Start from day after
+  // Get platform fee from database config
+  const pricingConfig = await getPricingConfig();
+  const standardFeePercent = pricingConfig?.platform?.feePercent || 0.10;
 
-  // Calculate the platform fee percentage
-  const platformFeePercent = await IncentiveService.calculateCleanerFee(
-    schedule.cleanerId,
-    models
-  );
+  // Find the first appointment date
+  let nextDate;
+  if (schedule.lastGeneratedDate) {
+    // Start from last generated date and add the frequency interval
+    nextDate = new Date(schedule.lastGeneratedDate + "T12:00:00");
+    if (schedule.frequency === "weekly") {
+      nextDate.setDate(nextDate.getDate() + 7);
+    } else if (schedule.frequency === "biweekly") {
+      nextDate.setDate(nextDate.getDate() + 14);
+    } else {
+      // Monthly - same day of week next month
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      // Find the first occurrence of dayOfWeek in that month
+      nextDate.setDate(1);
+      while (nextDate.getDay() !== schedule.dayOfWeek) {
+        nextDate.setDate(nextDate.getDate() + 1);
+      }
+    }
+  } else {
+    // Start from start date, find first occurrence of dayOfWeek
+    nextDate = new Date(schedule.startDate + "T12:00:00");
+    while (nextDate.getDay() !== schedule.dayOfWeek) {
+      nextDate.setDate(nextDate.getDate() + 1);
+    }
+  }
 
-  while (currentDate <= horizon) {
-    // Calculate next occurrence
-    const nextDate = schedule.calculateNextDate(currentDate);
+  console.log(`[RecurringSchedule] Generating for schedule ${schedule.id}: frequency=${schedule.frequency}, dayOfWeek=${schedule.dayOfWeek}, startDate=${schedule.startDate}, firstDate=${nextDate.toISOString()}, horizon=${horizon.toISOString()}`);
 
-    if (!nextDate || nextDate > horizon) {
+  // Generate appointments until we hit the horizon
+  while (nextDate <= horizon) {
+    // Check for end date
+    if (schedule.endDate && nextDate > new Date(schedule.endDate + "T23:59:59")) {
+      console.log(`[RecurringSchedule] Stopping: past end date ${schedule.endDate}`);
       break;
     }
 
     // Check if schedule is paused
-    if (schedule.isPaused && schedule.pausedUntil) {
-      if (nextDate <= new Date(schedule.pausedUntil)) {
-        currentDate = new Date(nextDate);
-        currentDate.setDate(currentDate.getDate() + 1);
-        continue;
+    if (schedule.isPaused && schedule.pausedUntil && nextDate <= new Date(schedule.pausedUntil)) {
+      // Skip this date, move to next occurrence
+      if (schedule.frequency === "weekly") {
+        nextDate.setDate(nextDate.getDate() + 7);
+      } else if (schedule.frequency === "biweekly") {
+        nextDate.setDate(nextDate.getDate() + 14);
+      } else {
+        nextDate.setMonth(nextDate.getMonth() + 1);
+        nextDate.setDate(1);
+        while (nextDate.getDay() !== schedule.dayOfWeek) {
+          nextDate.setDate(nextDate.getDate() + 1);
+        }
       }
+      continue;
     }
 
-    // Check for end date
-    if (schedule.endDate && nextDate > new Date(schedule.endDate)) {
-      break;
-    }
-
-    const dateString = nextDate.toISOString().split("T")[0];
+    // Format date as YYYY-MM-DD using local time
+    const year = nextDate.getFullYear();
+    const month = String(nextDate.getMonth() + 1).padStart(2, '0');
+    const day = String(nextDate.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
 
     // Check if appointment already exists
     const existingAppointment = await UserAppointments.findOne({
@@ -124,7 +152,12 @@ async function generateAppointmentsForSchedule(schedule, weeksAhead = null) {
       },
     });
 
+    if (existingAppointment) {
+      console.log(`[RecurringSchedule] Skipping ${dateString}: appointment already exists`);
+    }
+
     if (!existingAppointment) {
+      console.log(`[RecurringSchedule] Creating appointment for ${dateString}`);
       // Create the appointment
       const appointment = await UserAppointments.create({
         userId: client.id,
@@ -178,36 +211,75 @@ async function generateAppointmentsForSchedule(schedule, weeksAhead = null) {
         });
       }
 
-      // Create payout record
-      const platformFee = appointmentPrice * (platformFeePercent / 100);
-      const cleanerPayout = appointmentPrice - platformFee;
+      // Create payout record - calculate fee using IncentiveService for potential discounts
+      const appointmentPriceInCents = Math.round(appointmentPrice * 100);
+      const feeResult = await IncentiveService.calculateCleanerFee(
+        schedule.cleanerId,
+        appointmentPriceInCents,
+        standardFeePercent
+      );
 
       await Payout.create({
         cleanerId: schedule.cleanerId,
         appointmentId: appointment.id,
-        amount: cleanerPayout,
-        platformFee: platformFee,
+        grossAmount: appointmentPriceInCents,
+        platformFee: feeResult.platformFee,
+        netAmount: feeResult.netAmount,
         status: "pending",
+        incentiveApplied: feeResult.incentiveApplied,
+        originalPlatformFee: feeResult.originalPlatformFee,
       });
 
       createdAppointments.push(appointment);
 
-      // Update last generated date
+      // Update last generated date (both in DB and in memory for the loop)
       await schedule.update({ lastGeneratedDate: dateString });
+      schedule.lastGeneratedDate = dateString;
     }
 
-    // Move to next day after this occurrence
-    currentDate = new Date(nextDate);
-    currentDate.setDate(currentDate.getDate() + 1);
+    // Move to next occurrence based on frequency
+    if (schedule.frequency === "weekly") {
+      nextDate.setDate(nextDate.getDate() + 7);
+    } else if (schedule.frequency === "biweekly") {
+      nextDate.setDate(nextDate.getDate() + 14);
+    } else {
+      // Monthly - same day of week next month
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      nextDate.setDate(1);
+      while (nextDate.getDay() !== schedule.dayOfWeek) {
+        nextDate.setDate(nextDate.getDate() + 1);
+      }
+    }
   }
 
-  // Update next scheduled date
-  const nextScheduled = schedule.calculateNextDate(new Date());
-  if (nextScheduled) {
-    await schedule.update({
-      nextScheduledDate: nextScheduled.toISOString().split("T")[0],
-    });
+  // Update next scheduled date - find first occurrence of dayOfWeek from today
+  const today = new Date();
+  let nextScheduledDate = new Date(today);
+  while (nextScheduledDate.getDay() !== schedule.dayOfWeek) {
+    nextScheduledDate.setDate(nextScheduledDate.getDate() + 1);
   }
+  // If that's today or in the past, move to next occurrence
+  if (nextScheduledDate <= today) {
+    if (schedule.frequency === "weekly") {
+      nextScheduledDate.setDate(nextScheduledDate.getDate() + 7);
+    } else if (schedule.frequency === "biweekly") {
+      nextScheduledDate.setDate(nextScheduledDate.getDate() + 14);
+    } else {
+      nextScheduledDate.setMonth(nextScheduledDate.getMonth() + 1);
+      nextScheduledDate.setDate(1);
+      while (nextScheduledDate.getDay() !== schedule.dayOfWeek) {
+        nextScheduledDate.setDate(nextScheduledDate.getDate() + 1);
+      }
+    }
+  }
+
+  // Format as YYYY-MM-DD using local time
+  const nsYear = nextScheduledDate.getFullYear();
+  const nsMonth = String(nextScheduledDate.getMonth() + 1).padStart(2, '0');
+  const nsDay = String(nextScheduledDate.getDate()).padStart(2, '0');
+  await schedule.update({
+    nextScheduledDate: `${nsYear}-${nsMonth}-${nsDay}`,
+  });
 
   return createdAppointments;
 }

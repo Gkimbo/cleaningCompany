@@ -820,7 +820,11 @@ const ClientDashboard = ({ state, dispatch }) => {
       {/* Pending Reviews Section */}
       {pendingReviews.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader title="Pending Reviews" />
+          <SectionHeader
+            title="Pending Reviews"
+            actionText={pendingReviews.length > 2 ? "See All" : null}
+            onPress={() => navigate("/pending-reviews")}
+          />
           <View style={styles.pendingReviewsCard}>
             <View style={styles.pendingReviewsHeader}>
               <Icon name="star" size={16} color={colors.warning[500]} />
@@ -832,7 +836,7 @@ const ClientDashboard = ({ state, dispatch }) => {
               Share your feedback about your recent cleanings
             </Text>
             <View style={styles.pendingReviewsList}>
-              {pendingReviews.slice(0, 3).map((apt) => {
+              {pendingReviews.slice(0, 2).map((apt) => {
                 const home = homes.find((h) => Number(h.id) === Number(apt.homeId));
                 return (
                   <TodaysCleaningCard

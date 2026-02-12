@@ -42,6 +42,7 @@ import AccountSettingsButton from "./AccountSettingsButton";
 import RecommendedSuppliesButton from "./RecommendedSuppliesButton";
 import ArchiveButton from "./ArchiveButton";
 import ReviewsButton from "./ReviewsButton";
+import PendingReviewsButton from "./PendingReviewsButton";
 import ReferralsButton from "./ReferralsButton";
 import MyReferralsButton from "./MyReferralsButton";
 import ChecklistEditorButton from "./ChecklistEditorButton";
@@ -70,6 +71,7 @@ const TopBar = ({ dispatch, state }) => {
   const [importBusinessRedirect, setImportBusinessRedirect] = useState(false);
   const [referralsEnabled, setReferralsEnabled] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [pendingReviews, setPendingReviews] = useState(0);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
 
   // Use global state for pending applications and cleaner requests
@@ -120,6 +122,36 @@ const TopBar = ({ dispatch, state }) => {
     const interval = setInterval(fetchPendingCleanerRequests, 60000);
     return () => clearInterval(interval);
   }, [state.account, state.currentUser.token, dispatch]);
+
+  // Fetch pending reviews count for homeowners/clients
+  useEffect(() => {
+    const fetchPendingReviews = async () => {
+      // Fetch for regular users (clients/homeowners) and cleaners
+      if (state.currentUser.token) {
+        try {
+          const response = await fetch(
+            `${require("../../services/config").API_BASE}/reviews/pending`,
+            {
+              headers: {
+                Authorization: `Bearer ${state.currentUser.token}`,
+              },
+            }
+          );
+          const data = await response.json();
+          if (response.ok) {
+            setPendingReviews(data.pendingReviews?.length || 0);
+          }
+        } catch (error) {
+          console.error("Error fetching pending reviews:", error);
+        }
+      }
+    };
+    fetchPendingReviews();
+
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchPendingReviews, 60000);
+    return () => clearInterval(interval);
+  }, [state.currentUser.token]);
 
   // Fetch referral programs status to determine if referrals button should be shown
   useEffect(() => {
@@ -354,10 +386,10 @@ const TopBar = ({ dispatch, state }) => {
                 onPress={() => navigate("/notifications")}
               >
                 <Feather name="bell" size={20} color="white" />
-                {unreadNotifications > 0 && (
+                {(unreadNotifications + pendingReviews) > 0 && (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>
-                      {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                      {(unreadNotifications + pendingReviews) > 9 ? "9+" : (unreadNotifications + pendingReviews)}
                     </Text>
                   </View>
                 )}
@@ -455,6 +487,7 @@ const TopBar = ({ dispatch, state }) => {
                             <ScheduleCleaningButton closeModal={closeModal} />
                             <MyHomesButton closeModal={closeModal} />
                             <BillButton closeModal={closeModal} />
+                            <PendingReviewsButton closeModal={closeModal} />
                             <ReviewsButton closeModal={closeModal} />
                             <ArchiveButton closeModal={closeModal} />
                             {referralsEnabled && (

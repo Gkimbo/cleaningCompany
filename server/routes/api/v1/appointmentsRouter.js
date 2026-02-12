@@ -2093,8 +2093,60 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
     }
 
     if (approve) {
-      // Block if a cleaner is already assigned
+      // If a cleaner is already assigned, return 409 Conflict with comparison data
       if (appointment.dataValues.hasBeenAssigned) {
+        // Get existing cleaner assignment
+        const existingAssignment = await UserCleanerAppointments.findOne({
+          where: { appointmentId: appointment.dataValues.id },
+        });
+
+        if (existingAssignment) {
+          // Get details of existing cleaner
+          const existingCleaner = await User.findByPk(existingAssignment.employeeId, {
+            attributes: ["id", "username", "completedJobs"],
+          });
+
+          // Get details of new cleaner (from the pending request)
+          const newCleaner = await User.findByPk(request.dataValues.employeeId, {
+            attributes: ["id", "username", "completedJobs"],
+          });
+
+          // Calculate average ratings for both cleaners
+          const [existingCleanerReviews, newCleanerReviews] = await Promise.all([
+            UserReviews.findAll({ where: { cleanerId: existingCleaner.id } }),
+            UserReviews.findAll({ where: { cleanerId: newCleaner.id } }),
+          ]);
+
+          const existingAvgRating = existingCleanerReviews.length > 0
+            ? existingCleanerReviews.reduce((sum, r) => sum + parseFloat(r.review || 0), 0) / existingCleanerReviews.length
+            : 0;
+          const newAvgRating = newCleanerReviews.length > 0
+            ? newCleanerReviews.reduce((sum, r) => sum + parseFloat(r.review || 0), 0) / newCleanerReviews.length
+            : 0;
+
+          return res.status(409).json({
+            error: "cleaner_conflict",
+            message: "Another cleaner is already assigned to this appointment",
+            existingCleaner: {
+              id: existingCleaner.id,
+              username: existingCleaner.username,
+              avgRating: parseFloat(existingAvgRating.toFixed(1)),
+              completedJobs: existingCleaner.completedJobs || 0,
+              reviewCount: existingCleanerReviews.length,
+            },
+            newCleaner: {
+              id: newCleaner.id,
+              username: newCleaner.username,
+              avgRating: parseFloat(newAvgRating.toFixed(1)),
+              completedJobs: newCleaner.completedJobs || 0,
+              reviewCount: newCleanerReviews.length,
+            },
+            appointmentId: appointment.dataValues.id,
+            requestId: requestId,
+          });
+        }
+
+        // Fallback if no assignment found (shouldn't happen)
         return res.status(400).json({
           error: "A cleaner is already assigned to this appointment. Remove them first to approve another.",
         });
@@ -2393,17 +2445,50 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       // Update the approved request status to "approved"
       await request.update({ status: "approved" });
 
-      // Set all other pending requests for this appointment to "onHold"
-      await UserPendingRequests.update(
-        { status: "onHold" },
-        {
-          where: {
-            appointmentId: request.dataValues.appointmentId,
-            status: "pending",
-            id: { [Op.ne]: request.id },
-          },
+      // Get all other pending requests for this appointment to notify and delete
+      const otherPendingRequests = await UserPendingRequests.findAll({
+        where: {
+          appointmentId: request.dataValues.appointmentId,
+          id: { [Op.ne]: request.id },
+        },
+      });
+
+      // Notify and delete each denied request
+      for (const pendingRequest of otherPendingRequests) {
+        const deniedCleaner = await User.findByPk(pendingRequest.employeeId);
+        if (deniedCleaner) {
+          // Add in-app notification
+          const deniedCleanerNotifications = deniedCleaner.dataValues.notifications || [];
+          deniedCleanerNotifications.unshift(
+            `Your cleaning request for ${formattedDate} was not approved. The homeowner chose another cleaner. Check out other available appointments!`
+          );
+          await deniedCleaner.update({ notifications: deniedCleanerNotifications.slice(0, 50) });
+
+          // Send push notification
+          if (deniedCleaner.dataValues.expoPushToken) {
+            await PushNotification.sendPushRequestDenied(
+              deniedCleaner.dataValues.expoPushToken,
+              deniedCleaner.dataValues.username,
+              appointment.dataValues.date
+            );
+          }
+
+          // Send email notification
+          await Email.sendRequestDenied(
+            EncryptionService.decrypt(deniedCleaner.dataValues.email),
+            deniedCleaner.dataValues.username,
+            appointment.dataValues.date
+          );
         }
-      );
+      }
+
+      // Delete all other pending requests (the approved one stays)
+      await UserPendingRequests.destroy({
+        where: {
+          appointmentId: request.dataValues.appointmentId,
+          id: { [Op.ne]: request.id },
+        },
+      });
 
       return res.status(200).json({ message: "Cleaner assigned successfully" });
     } else {
@@ -2412,6 +2497,199 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
     }
   } catch (error) {
     console.error(error);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Switch cleaner endpoint - replaces existing assigned cleaner with a new one
+appointmentRouter.post("/switch-cleaner", async (req, res) => {
+  const { appointmentId, newCleanerId, requestId } = req.body;
+  const transaction = await models.sequelize.transaction();
+
+  try {
+    // 1. Get appointment and verify it exists
+    const appointment = await UserAppointments.findByPk(appointmentId, { transaction });
+    if (!appointment) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // 2. Get existing cleaner assignment
+    const existingAssignment = await UserCleanerAppointments.findOne({
+      where: { appointmentId },
+      transaction,
+    });
+    if (!existingAssignment) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "No cleaner is currently assigned to this appointment" });
+    }
+
+    const oldCleanerId = existingAssignment.employeeId;
+
+    // 3. Get both cleaners for notifications
+    const [oldCleaner, newCleaner, homeowner, home] = await Promise.all([
+      User.findByPk(oldCleanerId, { transaction }),
+      User.findByPk(newCleanerId, { transaction }),
+      User.findByPk(appointment.dataValues.userId, { transaction }),
+      UserHomes.findByPk(appointment.dataValues.homeId, { transaction }),
+    ]);
+
+    if (!newCleaner) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "New cleaner not found" });
+    }
+
+    // 4. Remove old cleaner assignment
+    await existingAssignment.destroy({ transaction });
+
+    // 5. Remove old payout record
+    await Payout.destroy({
+      where: { appointmentId, cleanerId: oldCleanerId },
+      transaction,
+    });
+
+    // 6. Remove old employee job assignment if exists
+    await EmployeeJobAssignment.destroy({
+      where: { appointmentId, businessOwnerId: oldCleanerId },
+      transaction,
+    });
+
+    // 7. Create new cleaner assignment
+    await UserCleanerAppointments.create({
+      employeeId: newCleanerId,
+      appointmentId,
+    }, { transaction });
+
+    // 8. Update appointment
+    await appointment.update({
+      employeesAssigned: [String(newCleanerId)],
+      bookedByCleanerId: newCleaner.isBusinessOwner ? newCleanerId : null,
+    }, { transaction });
+
+    // 9. Create new payout record
+    const pricingConfig = await getPricingConfig();
+    const { platform: platformConfig } = pricingConfig;
+
+    const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+      ? parseFloat(appointment.dataValues.originalPrice)
+      : parseFloat(appointment.dataValues.price);
+    const priceInCents = Math.round(payoutPrice * 100);
+
+    const feeResult = await IncentiveService.calculateCleanerFee(
+      newCleanerId,
+      priceInCents,
+      platformConfig.feePercent
+    );
+
+    await Payout.create({
+      appointmentId,
+      cleanerId: newCleanerId,
+      grossAmount: priceInCents,
+      platformFee: feeResult.platformFee,
+      netAmount: feeResult.netAmount,
+      status: appointment.dataValues.paymentStatus === "captured" ? "held" : "pending",
+      incentiveApplied: feeResult.incentiveApplied,
+      originalPlatformFee: feeResult.originalPlatformFee,
+    }, { transaction });
+
+    // 10. Create self-assignment for business owner if applicable
+    if (newCleaner.isBusinessOwner) {
+      await EmployeeJobAssignment.create({
+        appointmentId,
+        businessOwnerId: newCleanerId,
+        employeeId: null,
+        isSelfAssignment: true,
+        status: "assigned",
+        assignedBy: newCleanerId,
+        payAmount: feeResult.netAmount,
+        payType: "flat_rate",
+      }, { transaction });
+    }
+
+    // 11. Delete ALL pending requests for this appointment
+    await UserPendingRequests.destroy({
+      where: { appointmentId },
+      transaction,
+    });
+
+    await transaction.commit();
+
+    // 12. Send notifications (outside transaction)
+    const formattedDate = new Date(appointment.dataValues.date).toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const address = home ? {
+      street: home.dataValues.address,
+      city: home.dataValues.city,
+      state: home.dataValues.state,
+      zipcode: home.dataValues.zipcode,
+    } : {};
+
+    // Notify old cleaner they were replaced
+    if (oldCleaner) {
+      const oldCleanerNotifications = oldCleaner.dataValues.notifications || [];
+      oldCleanerNotifications.unshift(
+        `Your assignment for ${formattedDate} at ${home?.dataValues.address || "a location"} has been reassigned to another cleaner.`
+      );
+      await oldCleaner.update({ notifications: oldCleanerNotifications.slice(0, 50) });
+
+      if (oldCleaner.dataValues.expoPushToken) {
+        await PushNotification.sendPushNotification(
+          oldCleaner.dataValues.expoPushToken,
+          "Assignment Changed",
+          `Your cleaning appointment for ${formattedDate} has been reassigned to another cleaner.`
+        );
+      }
+
+      await Email.sendGenericNotification(
+        EncryptionService.decrypt(oldCleaner.dataValues.email),
+        oldCleaner.dataValues.username,
+        "Assignment Changed",
+        `Your cleaning appointment for ${formattedDate} has been reassigned to another cleaner. Please check the marketplace for other available appointments.`
+      );
+    }
+
+    // Notify new cleaner they were approved
+    if (newCleaner && homeowner && home) {
+      const linensConfig = {
+        bringSheets: appointment.dataValues.bringSheets,
+        bringTowels: appointment.dataValues.bringTowels,
+        sheetConfigurations: appointment.dataValues.sheetConfigurations,
+        towelConfigurations: appointment.dataValues.towelConfigurations,
+      };
+      await Email.sendRequestApproved(
+        EncryptionService.decrypt(newCleaner.dataValues.email),
+        newCleaner.dataValues.username,
+        homeowner.dataValues.username,
+        address,
+        appointment.dataValues.date,
+        linensConfig
+      );
+
+      if (newCleaner.dataValues.expoPushToken) {
+        await PushNotification.sendPushRequestApproved(
+          newCleaner.dataValues.expoPushToken,
+          newCleaner.dataValues.username,
+          homeowner.dataValues.username,
+          appointment.dataValues.date,
+          address
+        );
+      }
+
+      const newCleanerNotifications = newCleaner.dataValues.notifications || [];
+      newCleanerNotifications.unshift(
+        `Your cleaning request for ${formattedDate} at ${home.dataValues.address} has been approved!`
+      );
+      await newCleaner.update({ notifications: newCleanerNotifications.slice(0, 50) });
+    }
+
+    return res.status(200).json({ message: "Cleaner switched successfully" });
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error switching cleaner:", error);
     return res.status(500).json({ error: "Server error" });
   }
 });

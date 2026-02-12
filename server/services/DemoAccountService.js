@@ -7,6 +7,7 @@
  */
 
 const jwt = require("jsonwebtoken");
+const EncryptionService = require("./EncryptionService");
 const {
 	User,
 	UserAppointments,
@@ -195,12 +196,12 @@ class DemoAccountService {
 				user: {
 					id: demoAccount.id,
 					username: demoAccount.username,
-					firstName: demoAccount.firstName,
-					lastName: demoAccount.lastName,
-					email: demoAccount.email,
+					firstName: EncryptionService.decrypt(demoAccount.firstName),
+					lastName: EncryptionService.decrypt(demoAccount.lastName),
+					email: EncryptionService.decrypt(demoAccount.email),
 					type: demoAccount.type,
 					isBusinessOwner: demoAccount.isBusinessOwner,
-					businessName: demoAccount.businessName,
+					businessName: demoAccount.businessName ? EncryptionService.decrypt(demoAccount.businessName) : null,
 					isDemoAccount: true,
 				},
 				previewRole: role,
@@ -250,9 +251,9 @@ class DemoAccountService {
 				user: {
 					id: owner.id,
 					username: owner.username,
-					firstName: owner.firstName,
-					lastName: owner.lastName,
-					email: owner.email,
+					firstName: EncryptionService.decrypt(owner.firstName),
+					lastName: EncryptionService.decrypt(owner.lastName),
+					email: EncryptionService.decrypt(owner.email),
 					type: owner.type,
 				},
 			};

@@ -21,6 +21,7 @@ const { startAutoCompleteMonitor } = require("./services/cron/AutoCompleteMonito
 const { startApprovalTimeoutJob } = require("./services/cron/CleanerApprovalTimeoutJob");
 const { startTenantPresentTimeoutJob } = require("./services/cron/TenantPresentTimeoutJob");
 const { startExpirationJob: startHomeSizeExpirationJob } = require("./services/cron/HomeSizeAdjustmentExpirationJob");
+const { startBiWeeklyPayoutJob } = require("./services/cron/BiWeeklyPayoutJob");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -200,5 +201,6 @@ server.listen(port, () => {
 		startApprovalTimeoutJob(io, 15 * 60 * 1000); // Multi-cleaner join request auto-approval (every 15 min)
 		startTenantPresentTimeoutJob(io, 5 * 60 * 1000); // Tenant present response/return timeouts (every 5 min)
 		startHomeSizeExpirationJob(io, 15 * 60 * 1000); // Home size adjustment expiration (every 15 min)
+		startBiWeeklyPayoutJob(io); // Bi-weekly employee payouts (every other Friday at 6 AM UTC)
 	}
 });

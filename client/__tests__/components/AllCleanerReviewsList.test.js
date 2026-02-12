@@ -286,8 +286,8 @@ describe("AllCleanerReviewsList Component", () => {
   });
 
   describe("Error Handling", () => {
-    it("should show error alert when approval fails", async () => {
-      FetchData.approveRequest.mockRejectedValue(new Error("Network error"));
+    it("should show server error message when approval fails", async () => {
+      FetchData.approveRequest.mockRejectedValue(new Error("A cleaner is already assigned to this appointment"));
 
       const { getByText } = render(
         <AllCleanerReviewsList state={mockState} dispatch={mockDispatch} />
@@ -304,7 +304,7 @@ describe("AllCleanerReviewsList Component", () => {
       await waitFor(() => {
         expect(Alert.alert).toHaveBeenCalledWith(
           "Error",
-          "Failed to approve the request. Please try again."
+          "A cleaner is already assigned to this appointment"
         );
       });
     });
@@ -327,13 +327,13 @@ describe("AllCleanerReviewsList Component", () => {
       await waitFor(() => {
         expect(Alert.alert).toHaveBeenCalledWith(
           "Error",
-          "Failed to deny the request. Please try again."
+          "Network error"
         );
       });
     });
 
-    it("should handle denyRequest returning an Error object", async () => {
-      FetchData.denyRequest.mockResolvedValue(new Error("Failed to delete"));
+    it("should show server error message when denyRequest fails", async () => {
+      FetchData.denyRequest.mockRejectedValue(new Error("Request not found"));
 
       const { getByText } = render(
         <AllCleanerReviewsList state={mockState} dispatch={mockDispatch} />
@@ -350,7 +350,7 @@ describe("AllCleanerReviewsList Component", () => {
       await waitFor(() => {
         expect(Alert.alert).toHaveBeenCalledWith(
           "Error",
-          "Failed to deny the request. Please try again."
+          "Request not found"
         );
       });
     });

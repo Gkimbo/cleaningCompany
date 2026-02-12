@@ -15,6 +15,20 @@ const getStatusTierBadge = (tier) => {
   return tiers[tier] || null;
 };
 
+// Generate avatar colors based on name
+const getAvatarColor = (name) => {
+  const avatarColors = [
+    { bg: colors.primary[100], text: colors.primary[700] },
+    { bg: colors.success[100], text: colors.success[700] },
+    { bg: "#E0E7FF", text: "#4338CA" }, // Indigo
+    { bg: "#FCE7F3", text: "#BE185D" }, // Pink
+    { bg: "#CCFBF1", text: "#0F766E" }, // Teal
+    { bg: "#FEF3C7", text: "#B45309" }, // Amber
+  ];
+  const index = name.charCodeAt(0) % avatarColors.length;
+  return avatarColors[index];
+};
+
 const ClientCard = ({ client }) => {
   const navigate = useNavigate();
 
@@ -31,15 +45,17 @@ const ClientCard = ({ client }) => {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     if (date.toDateString() === today.toDateString()) {
-      return "Today";
+      return { label: "Today", isToday: true };
     } else if (date.toDateString() === tomorrow.toDateString()) {
-      return "Tomorrow";
+      return { label: "Tomorrow", isToday: false };
     } else {
-      return date.toLocaleDateString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      });
+      return {
+        label: date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+        isToday: false,
+      };
     }
   };
 
@@ -48,54 +64,98 @@ const ClientCard = ({ client }) => {
     ? `${client.clientUser.firstName} ${client.clientUser.lastName || ""}`
     : client.clientName || "Unknown Client";
 
+  // Get initials
+  const getInitials = (name) => {
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
   // Get address preview
   const addressPreview = client.home?.address
     ? client.home.address.split(",")[0]
     : "No address";
 
+  // Home details
+  const homeDetails = client.home
+    ? `${client.home.numBeds || 0}bd • ${client.home.numBaths || 0}ba`
+    : null;
+
   // Payment status from next appointment
   const paymentStatus = nextAppointment?.paymentStatus || null;
   const isUnpaid = paymentStatus && paymentStatus !== "paid" && paymentStatus !== "not_required";
 
+  const avatarColor = getAvatarColor(clientName);
+  const dateInfo = nextAppointment ? formatDate(nextAppointment.date) : null;
+
   return (
     <Pressable
-      style={styles.clientCard}
+      style={({ pressed }) => [
+        styles.clientCard,
+        pressed && styles.clientCardPressed,
+      ]}
       onPress={() => navigate(`/my-clients/${client.id}`)}
     >
+      {/* Avatar */}
+      <View style={[styles.avatar, { backgroundColor: avatarColor.bg }]}>
+        <Text style={[styles.avatarText, { color: avatarColor.text }]}>
+          {getInitials(clientName)}
+        </Text>
+      </View>
+
+      {/* Client Info */}
       <View style={styles.clientMain}>
-        <View style={styles.clientInfo}>
-          <View style={styles.clientNameRow}>
-            <Text style={styles.clientName} numberOfLines={1}>
-              {clientName}
-            </Text>
-            {statusTier && (
-              <View style={[styles.tierBadge, { backgroundColor: statusTier.bgColor }]}>
-                <Icon name="star" size={10} color={statusTier.color} />
-                <Text style={[styles.tierText, { color: statusTier.color }]}>
-                  {statusTier.label}
-                </Text>
-              </View>
-            )}
-          </View>
+        <View style={styles.clientNameRow}>
+          <Text style={styles.clientName} numberOfLines={1}>
+            {clientName}
+          </Text>
+          {statusTier && (
+            <View style={[styles.tierBadge, { backgroundColor: statusTier.bgColor }]}>
+              <Icon name="star" size={8} color={statusTier.color} />
+            </View>
+          )}
+        </View>
+        <View style={styles.clientDetailsRow}>
+          <Icon name="map-marker" size={10} color={colors.neutral[400]} />
           <Text style={styles.clientAddress} numberOfLines={1}>
             {addressPreview}
           </Text>
+          {homeDetails && (
+            <>
+              <View style={styles.detailDot} />
+              <Text style={styles.homeDetails}>{homeDetails}</Text>
+            </>
+          )}
         </View>
       </View>
 
+      {/* Right Side - Appointment Info */}
       <View style={styles.clientMeta}>
         {nextAppointment ? (
-          <View style={styles.appointmentInfo}>
-            <Text style={styles.appointmentDate}>{formatDate(nextAppointment.date)}</Text>
-            {isUnpaid && (
-              <View style={styles.unpaidBadge}>
-                <Icon name="exclamation-circle" size={10} color={colors.warning[600]} />
-                <Text style={styles.unpaidText}>Unpaid</Text>
-              </View>
-            )}
+          <View style={[
+            styles.appointmentBadge,
+            dateInfo?.isToday && styles.appointmentBadgeToday,
+            isUnpaid && styles.appointmentBadgeUnpaid,
+          ]}>
+            <Icon
+              name="calendar"
+              size={10}
+              color={dateInfo?.isToday ? colors.primary[600] : isUnpaid ? colors.warning[600] : colors.neutral[500]}
+            />
+            <Text style={[
+              styles.appointmentDate,
+              dateInfo?.isToday && styles.appointmentDateToday,
+              isUnpaid && styles.appointmentDateUnpaid,
+            ]}>
+              {dateInfo?.label}
+            </Text>
           </View>
         ) : (
-          <Text style={styles.noAppointment}>No upcoming</Text>
+          <View style={styles.noAppointmentBadge}>
+            <Text style={styles.noAppointmentText}>—</Text>
+          </View>
         )}
         <Icon name="chevron-right" size={12} color={colors.neutral[300]} />
       </View>
@@ -103,7 +163,7 @@ const ClientCard = ({ client }) => {
   );
 };
 
-const MyClientsSection = ({ state }) => {
+const MyClientsSection = ({ state, refreshTrigger }) => {
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -123,7 +183,7 @@ const MyClientsSection = ({ state }) => {
 
   useEffect(() => {
     fetchClients();
-  }, [fetchClients]);
+  }, [fetchClients, refreshTrigger]);
 
   // Show only first 4 clients in the summary
   const displayedClients = clients.slice(0, 4);
@@ -320,72 +380,106 @@ const styles = StyleSheet.create({
   clientCard: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     padding: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
+    gap: spacing.md,
+  },
+  clientCardPressed: {
+    backgroundColor: colors.neutral[50],
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "700",
   },
   clientMain: {
     flex: 1,
-    marginRight: spacing.md,
-  },
-  clientInfo: {
-    gap: spacing.xxs,
+    gap: 4,
   },
   clientNameRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   clientName: {
     fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: "600",
     color: colors.text.primary,
     flexShrink: 1,
   },
   tierBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clientDetailsRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 2,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.sm,
-    gap: 3,
-  },
-  tierText: {
-    fontSize: 10,
-    fontWeight: typography.fontWeight.semibold,
+    gap: 4,
   },
   clientAddress: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    color: colors.neutral[500],
+    flexShrink: 1,
+  },
+  detailDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: colors.neutral[300],
+    marginHorizontal: 4,
+  },
+  homeDetails: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[400],
   },
   clientMeta: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  appointmentInfo: {
-    alignItems: "flex-end",
-    gap: spacing.xxs,
-  },
-  appointmentDate: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text.primary,
-  },
-  unpaidBadge: {
+  appointmentBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: 4,
+    backgroundColor: colors.neutral[100],
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
   },
-  unpaidText: {
+  appointmentBadgeToday: {
+    backgroundColor: colors.primary[50],
+  },
+  appointmentBadgeUnpaid: {
+    backgroundColor: colors.warning[50],
+  },
+  appointmentDate: {
     fontSize: typography.fontSize.xs,
-    color: colors.warning[600],
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: "600",
+    color: colors.neutral[600],
   },
-  noAppointment: {
+  appointmentDateToday: {
+    color: colors.primary[600],
+  },
+  appointmentDateUnpaid: {
+    color: colors.warning[600],
+  },
+  noAppointmentBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+  },
+  noAppointmentText: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
+    color: colors.neutral[300],
   },
   showMoreButton: {
     padding: spacing.md,

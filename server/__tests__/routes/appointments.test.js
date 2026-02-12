@@ -1617,7 +1617,10 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock the update for setting other requests to onHold
+      // Mock findAll for getting other pending requests to delete
+      UserPendingRequests.findAll.mockResolvedValue([]);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      // Mock the update for setting other requests to onHold (legacy)
       UserPendingRequests.update.mockResolvedValue([0]);
 
       UserCleanerAppointments.create.mockResolvedValue({ id: 1 });
@@ -1711,7 +1714,10 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock the update for setting other requests to onHold
+      // Mock findAll for getting other pending requests to delete
+      UserPendingRequests.findAll.mockResolvedValue([]);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      // Mock the update for setting other requests to onHold (legacy)
       UserPendingRequests.update.mockResolvedValue([0]);
 
       UserCleanerAppointments.create.mockResolvedValue({ id: 1 });
@@ -1788,7 +1794,7 @@ describe("Appointment Routes", () => {
       expect(createCall.netAmount).toBe(18000);
     });
 
-    it("should block approval if cleaner already assigned", async () => {
+    it("should return 409 conflict with cleaner comparison when cleaner already assigned", async () => {
       UserPendingRequests.findOne.mockResolvedValue({
         id: 1,
         dataValues: { id: 1, employeeId: 3, appointmentId: 1 },
@@ -1811,12 +1817,40 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
+      // Mock the existing cleaner assignment
+      UserCleanerAppointments.findOne.mockResolvedValue({
+        employeeId: 2,
+      });
+
+      // Mock User.findByPk for existing and new cleaner
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 2,
+          username: "existingCleaner",
+          completedJobs: 10,
+        })
+        .mockResolvedValueOnce({
+          id: 3,
+          username: "newCleaner",
+          completedJobs: 5,
+        });
+
+      // Mock reviews for both cleaners
+      UserReviews.findAll
+        .mockResolvedValueOnce([{ review: 4.5 }]) // existing cleaner reviews
+        .mockResolvedValueOnce([{ review: 5.0 }]); // new cleaner reviews
+
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")
         .send({ requestId: 1, approve: true });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe("A cleaner is already assigned to this appointment. Remove them first to approve another.");
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe("cleaner_conflict");
+      expect(res.body.message).toBe("Another cleaner is already assigned to this appointment");
+      expect(res.body.existingCleaner).toBeDefined();
+      expect(res.body.newCleaner).toBeDefined();
+      expect(res.body.existingCleaner.id).toBe(2);
+      expect(res.body.newCleaner.id).toBe(3);
     });
 
     it("should return 404 if request not found", async () => {
