@@ -22,6 +22,7 @@ const { startApprovalTimeoutJob } = require("./services/cron/CleanerApprovalTime
 const { startTenantPresentTimeoutJob } = require("./services/cron/TenantPresentTimeoutJob");
 const { startExpirationJob: startHomeSizeExpirationJob } = require("./services/cron/HomeSizeAdjustmentExpirationJob");
 const { startBiWeeklyPayoutJob } = require("./services/cron/BiWeeklyPayoutJob");
+const { startUnassignedReminderJob } = require("./services/cron/UnassignedReminderJob");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -202,5 +203,6 @@ server.listen(port, () => {
 		startTenantPresentTimeoutJob(io, 5 * 60 * 1000); // Tenant present response/return timeouts (every 5 min)
 		startHomeSizeExpirationJob(io, 15 * 60 * 1000); // Home size adjustment expiration (every 15 min)
 		startBiWeeklyPayoutJob(io); // Bi-weekly employee payouts (every other Friday at 6 AM UTC)
+		startUnassignedReminderJob(io, 24 * 60 * 60 * 1000); // Daily unassigned appointment reminders to business owners
 	}
 });

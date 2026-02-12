@@ -92,11 +92,23 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.JSON,
 			allowNull: true,
 		},
-		// Track if unassigned warning notification has been sent
+		// Track if unassigned warning notification has been sent (to homeowner)
 		unassignedWarningSent: {
 			type: DataTypes.BOOLEAN,
 			allowNull: false,
 			defaultValue: false,
+		},
+		// Track business owner reminder notifications for unassigned appointments
+		businessOwnerRemindersSent: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Count of unassigned appointment reminders sent to business owner",
+		},
+		lastBusinessOwnerReminderAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the last business owner reminder was sent",
 		},
 		// Track if payment capture has failed (needs manual retry)
 		paymentCaptureFailed: {

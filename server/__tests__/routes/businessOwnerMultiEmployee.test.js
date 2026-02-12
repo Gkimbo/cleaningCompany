@@ -66,6 +66,7 @@ jest.mock("../../models", () => {
 // Mock services
 jest.mock("../../services/EmployeeJobAssignmentService", () => ({
   assignEmployeeToJob: jest.fn(),
+  assignSelfToJob: jest.fn(),
   unassignJob: jest.fn(),
   getUpcomingAssignments: jest.fn(),
   getAssignmentHistory: jest.fn(),
@@ -366,7 +367,8 @@ describe("Business Owner Router - Multi-Employee Endpoints", () => {
         expect.objectContaining({
           employeeId: 2,
           appointmentId: 100,
-        })
+        }),
+        undefined // io parameter
       );
     });
 
@@ -385,6 +387,180 @@ describe("Business Owner Router - Multi-Employee Endpoints", () => {
         .expect(400);
 
       expect(response.body.error).toContain("already assigned");
+    });
+  });
+
+  describe("POST /self-assign/:appointmentId - Self Assignment within Multi-Cleaner Job", () => {
+    it("should allow business owner to self-assign to a job", async () => {
+      const mockSelfAssignment = {
+        id: 3,
+        appointmentId: 100,
+        businessOwnerId: 10,
+        businessEmployeeId: null,
+        isSelfAssignment: true,
+        status: "assigned",
+        payAmount: 0,
+      };
+
+      EmployeeJobAssignmentService.assignSelfToJob.mockResolvedValue(mockSelfAssignment);
+
+      const response = await request(app)
+        .post("/api/v1/business-owner/self-assign/100")
+        .expect(201);
+
+      expect(response.body.message).toBe("Self-assigned to job");
+      expect(response.body.assignment).toBeDefined();
+      expect(EmployeeJobAssignmentService.assignSelfToJob).toHaveBeenCalledWith(10, 100, undefined);
+    });
+
+    it("should allow self-assign to job that already has employees", async () => {
+      // Mock existing employee assignment on the job
+      EmployeeJobAssignment.findAll.mockResolvedValue([
+        { id: 1, appointmentId: 100, businessEmployeeId: 1, status: "assigned" },
+      ]);
+
+      const mockSelfAssignment = {
+        id: 2,
+        appointmentId: 100,
+        businessOwnerId: 10,
+        businessEmployeeId: null,
+        isSelfAssignment: true,
+        status: "assigned",
+        payAmount: 0,
+      };
+
+      EmployeeJobAssignmentService.assignSelfToJob.mockResolvedValue(mockSelfAssignment);
+
+      const response = await request(app)
+        .post("/api/v1/business-owner/self-assign/100")
+        .expect(201);
+
+      expect(response.body.message).toBe("Self-assigned to job");
+      expect(response.body.assignment.isSelfAssignment).toBe(true);
+    });
+  });
+
+  describe("Multi-Cleaner Financial Calculations", () => {
+    it("should calculate correct profit with multiple employees", () => {
+      // Test the financial calculation logic
+      const calculateProfit = (jobPrice, platformFeePercent, employeePays) => {
+        const platformFee = Math.round(jobPrice * (platformFeePercent / 100));
+        const totalEmployeePay = employeePays.reduce((sum, pay) => sum + pay, 0);
+        return jobPrice - platformFee - totalEmployeePay;
+      };
+
+      const jobPrice = 15000; // $150
+      const platformFeePercent = 10;
+
+      // 2 hourly employees at adjusted rate (1 hour each instead of 2)
+      const employee1Pay = 2000; // $20 (1 hr × $20/hr)
+      const employee2Pay = 2500; // $25 (1 hr × $25/hr)
+
+      const profit = calculateProfit(jobPrice, platformFeePercent, [employee1Pay, employee2Pay]);
+      // $150 - $15 (fee) - $45 (pay) = $90
+      expect(profit).toBe(9000);
+    });
+
+    it("should calculate higher profit when owner helps", () => {
+      const calculateProfit = (jobPrice, platformFeePercent, employeePays) => {
+        const platformFee = Math.round(jobPrice * (platformFeePercent / 100));
+        const totalEmployeePay = employeePays.reduce((sum, pay) => sum + pay, 0);
+        return jobPrice - platformFee - totalEmployeePay;
+      };
+
+      const jobPrice = 15000; // $150
+      const platformFeePercent = 10;
+
+      // 1 hourly employee at adjusted rate (1 hour because owner helps)
+      // Owner pays $0
+      const employee1Pay = 2000; // $20 (1 hr × $20/hr)
+      const ownerPay = 0;
+
+      const profit = calculateProfit(jobPrice, platformFeePercent, [employee1Pay, ownerPay]);
+      // $150 - $15 (fee) - $20 (pay) = $115
+      expect(profit).toBe(11500);
+    });
+
+    it("should calculate adjusted hourly pay based on cleaner count", () => {
+      const calculateAdjustedHourlyPay = (hourlyRate, baseDuration, cleanerCount) => {
+        const adjustedDuration = baseDuration / cleanerCount;
+        return Math.round(hourlyRate * adjustedDuration);
+      };
+
+      const hourlyRate = 2000; // $20/hr
+      const baseDuration = 2; // 2 hour job
+
+      // Single cleaner: 2 hours × $20 = $40
+      expect(calculateAdjustedHourlyPay(hourlyRate, baseDuration, 1)).toBe(4000);
+
+      // Two cleaners: 1 hour each × $20 = $20 each
+      expect(calculateAdjustedHourlyPay(hourlyRate, baseDuration, 2)).toBe(2000);
+
+      // Three cleaners: 0.667 hours each × $20 = $13.33 each
+      expect(calculateAdjustedHourlyPay(hourlyRate, baseDuration, 3)).toBe(1333);
+
+      // Four cleaners: 0.5 hours each × $20 = $10 each
+      expect(calculateAdjustedHourlyPay(hourlyRate, baseDuration, 4)).toBe(1000);
+    });
+
+    it("should not adjust flat rate pay regardless of cleaner count", () => {
+      const calculateFlatRatePay = (jobRate, cleanerCount) => {
+        // Flat rate doesn't change based on cleaner count
+        return jobRate;
+      };
+
+      const jobRate = 5000; // $50 flat rate
+
+      expect(calculateFlatRatePay(jobRate, 1)).toBe(5000);
+      expect(calculateFlatRatePay(jobRate, 2)).toBe(5000);
+      expect(calculateFlatRatePay(jobRate, 3)).toBe(5000);
+    });
+
+    it("should not adjust percentage pay regardless of cleaner count", () => {
+      const calculatePercentagePay = (jobPrice, percentageRate, cleanerCount) => {
+        // Percentage doesn't change based on cleaner count
+        return Math.round(jobPrice * (percentageRate / 100));
+      };
+
+      const jobPrice = 15000; // $150
+      const percentageRate = 40; // 40%
+
+      expect(calculatePercentagePay(jobPrice, percentageRate, 1)).toBe(6000);
+      expect(calculatePercentagePay(jobPrice, percentageRate, 2)).toBe(6000);
+      expect(calculatePercentagePay(jobPrice, percentageRate, 3)).toBe(6000);
+    });
+  });
+
+  describe("Duration Adjustment Display", () => {
+    it("should calculate time savings for display", () => {
+      const calculateTimeSavings = (baseDuration, cleanerCount) => {
+        if (cleanerCount <= 1) return null;
+        const adjustedDuration = baseDuration / cleanerCount;
+        return {
+          originalDuration: baseDuration,
+          adjustedDuration: adjustedDuration,
+          cleanerCount: cleanerCount,
+          displayText: `${baseDuration} hr job → ${adjustedDuration.toFixed(1)} hr per cleaner`,
+        };
+      };
+
+      // No savings for single cleaner
+      expect(calculateTimeSavings(2, 1)).toBeNull();
+
+      // 2 cleaners
+      const twoCleaners = calculateTimeSavings(2, 2);
+      expect(twoCleaners.adjustedDuration).toBe(1);
+      expect(twoCleaners.displayText).toBe("2 hr job → 1.0 hr per cleaner");
+
+      // 3 cleaners
+      const threeCleaners = calculateTimeSavings(3, 3);
+      expect(threeCleaners.adjustedDuration).toBe(1);
+      expect(threeCleaners.displayText).toBe("3 hr job → 1.0 hr per cleaner");
+
+      // 2 cleaners on 3 hour job
+      const twoOnThree = calculateTimeSavings(3, 2);
+      expect(twoOnThree.adjustedDuration).toBe(1.5);
+      expect(twoOnThree.displayText).toBe("3 hr job → 1.5 hr per cleaner");
     });
   });
 });

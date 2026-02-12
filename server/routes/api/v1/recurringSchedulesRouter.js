@@ -16,6 +16,7 @@ const {
   UserCleanerAppointments,
   UserBills,
   Payout,
+  EmployeeJobAssignment,
 } = models;
 const calculatePrice = require("../../../services/CalculatePrice");
 const IncentiveService = require("../../../services/IncentiveService");
@@ -697,14 +698,34 @@ recurringSchedulesRouter.delete("/:id", verifyCleaner, async (req, res) => {
     let cancelledCount = 0;
     if (cancelFutureAppointments === "true") {
       const today = new Date().toISOString().split("T")[0];
-      const result = await UserAppointments.destroy({
+
+      // First, get the appointment IDs that will be deleted
+      const appointmentsToDelete = await UserAppointments.findAll({
         where: {
           recurringScheduleId: id,
           date: { [Op.gt]: today },
           completed: false,
         },
+        attributes: ["id"],
       });
-      cancelledCount = result;
+      const appointmentIds = appointmentsToDelete.map(a => a.id);
+
+      if (appointmentIds.length > 0) {
+        // Delete related records first to avoid foreign key constraint errors
+        await UserCleanerAppointments.destroy({
+          where: { appointmentId: { [Op.in]: appointmentIds } },
+        });
+
+        await EmployeeJobAssignment.destroy({
+          where: { appointmentId: { [Op.in]: appointmentIds } },
+        });
+
+        // Now delete the appointments
+        const result = await UserAppointments.destroy({
+          where: { id: { [Op.in]: appointmentIds } },
+        });
+        cancelledCount = result;
+      }
     }
 
     res.json({

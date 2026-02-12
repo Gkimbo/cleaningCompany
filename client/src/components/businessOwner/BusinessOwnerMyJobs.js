@@ -23,6 +23,7 @@ const JobCard = ({ job, onPress }) => {
   const isToday = appointmentDate.toDateString() === today.toDateString();
   const isTomorrow = appointmentDate.toDateString() === tomorrow.toDateString();
   const isPast = appointmentDate < new Date(today.toDateString());
+  const isSelfAssigned = job.assignedTo?.type === "self";
 
   const formatDate = () => {
     if (isToday) return "Today";
@@ -40,6 +41,7 @@ const JobCard = ({ job, onPress }) => {
         styles.jobCard,
         pressed && styles.jobCardPressed,
         isPast && styles.jobCardPast,
+        isSelfAssigned && styles.jobCardSelfAssigned,
       ]}
       onPress={onPress}
     >
@@ -48,11 +50,13 @@ const JobCard = ({ job, onPress }) => {
           styles.jobDateBadge,
           isToday && styles.todayBadge,
           isPast && styles.pastBadge,
+          isSelfAssigned && styles.selfAssignedDateBadge,
         ]}>
           <Text style={[
             styles.jobDateText,
             isToday && styles.todayText,
             isPast && styles.pastText,
+            isSelfAssigned && styles.selfAssignedDateText,
           ]}>
             {formatDate()}
           </Text>
@@ -64,14 +68,19 @@ const JobCard = ({ job, onPress }) => {
           <Text style={styles.jobDetails}>
             {job.numBeds || "?"} bed | {job.numBaths || "?"} bath
           </Text>
-          {job.isAssigned && (
+          {isSelfAssigned ? (
+            <View style={styles.selfAssignedBadge}>
+              <Icon name="star" size={10} color={colors.warning[600]} />
+              <Text style={styles.selfAssignedText}>You're cleaning this</Text>
+            </View>
+          ) : job.isAssigned ? (
             <View style={styles.assignedBadge}>
               <Icon name="user" size={10} color={colors.success[600]} />
               <Text style={styles.assignedText}>
-                {job.assignedTo?.type === "self" ? "You" : job.assignedTo?.name || "Assigned"}
+                {job.assignedTo?.name || "Assigned"}
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
       <View style={styles.jobMeta}>
@@ -381,6 +390,33 @@ const styles = StyleSheet.create({
   assignedText: {
     fontSize: typography.fontSize.xs,
     color: colors.success[600],
+  },
+  jobCardSelfAssigned: {
+    backgroundColor: colors.warning[50],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[400],
+  },
+  selfAssignedDateBadge: {
+    backgroundColor: colors.warning[100],
+  },
+  selfAssignedDateText: {
+    color: colors.warning[700],
+  },
+  selfAssignedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.xs,
+    gap: spacing.xs,
+    backgroundColor: colors.warning[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    alignSelf: "flex-start",
+  },
+  selfAssignedText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
   },
   jobMeta: {
     flexDirection: "row",

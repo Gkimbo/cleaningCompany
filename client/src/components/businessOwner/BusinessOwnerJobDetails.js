@@ -144,9 +144,14 @@ const BusinessOwnerJobDetails = ({ state }) => {
   };
 
   const handleUnassign = async () => {
+    const isMultiCleaner = jobData?.job?.isMultiCleaner;
+    const assignmentIds = jobData?.job?.assignmentIds || [jobData?.job?.assignmentId];
+
     Alert.alert(
       "Unassign from Job",
-      "Are you sure you want to remove the assignment?",
+      isMultiCleaner
+        ? `Are you sure you want to remove all ${assignmentIds.length} cleaners from this job?`
+        : "Are you sure you want to remove the assignment?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -155,21 +160,41 @@ const BusinessOwnerJobDetails = ({ state }) => {
           onPress: async () => {
             try {
               setAssigning(true);
-              const response = await fetch(
-                `${API_BASE}/business-owner/assignments/${jobData.job.assignmentId}`,
-                {
-                  method: "DELETE",
-                  headers: {
-                    Authorization: `Bearer ${state.currentUser?.token}`,
-                  },
-                }
-              );
-              const data = await response.json();
-              if (response.ok) {
-                Alert.alert("Success", "Assignment removed");
-                fetchJobDetails();
+
+              let response;
+              if (isMultiCleaner) {
+                // Use bulk endpoint for multi-cleaner jobs to avoid race conditions
+                response = await fetch(
+                  `${API_BASE}/business-owner/appointments/${appointmentId}/assignments`,
+                  {
+                    method: "DELETE",
+                    headers: {
+                      Authorization: `Bearer ${state.currentUser?.token}`,
+                    },
+                  }
+                );
               } else {
+                // Single cleaner - use existing endpoint
+                const assignmentId = assignmentIds[0];
+                response = await fetch(
+                  `${API_BASE}/business-owner/assignments/${assignmentId}`,
+                  {
+                    method: "DELETE",
+                    headers: {
+                      Authorization: `Bearer ${state.currentUser?.token}`,
+                    },
+                  }
+                );
+              }
+
+              if (response.ok) {
+                Alert.alert("Success", "Assignment removed", [
+                  { text: "OK", onPress: () => navigate("/business-owner/all-jobs") }
+                ]);
+              } else {
+                const data = await response.json();
                 Alert.alert("Error", data.error || "Failed to unassign");
+                fetchJobDetails();
               }
             } catch (err) {
               console.error("Error unassigning:", err);
@@ -305,10 +330,12 @@ const BusinessOwnerJobDetails = ({ state }) => {
                 job.isAssigned ? styles.assignedText : styles.unassignedText,
               ]}
             >
-              {job.isAssigned ? "Assigned" : "Needs Assignment"}
+              {job.isAssigned
+                ? (job.isMultiCleaner ? `${job.assignees?.length} Cleaners` : "Assigned")
+                : "Needs Assignment"}
             </Text>
           </View>
-          {job.isAssigned && job.assignedTo && (
+          {job.isAssigned && job.assignedTo && !job.isMultiCleaner && (
             <Text style={styles.assignedToText}>
               {job.assignedTo.name}
             </Text>
@@ -343,15 +370,59 @@ const BusinessOwnerJobDetails = ({ state }) => {
           </View>
         ) : job.isAssigned ? (
           <View style={styles.assignedActions}>
-            <View style={styles.currentAssignment}>
-              <View style={styles.currentAssignmentIcon}>
-                <Icon name="user" size={16} color="#fff" />
+            {/* Multi-cleaner display */}
+            {job.isMultiCleaner && job.assignees?.length > 0 ? (
+              <View style={styles.multiCleanerAssignment}>
+                <View style={styles.multiCleanerHeader}>
+                  <Icon name="users" size={14} color="#6366f1" />
+                  <Text style={styles.multiCleanerTitle}>
+                    {job.assignees.length} Cleaners Assigned
+                  </Text>
+                </View>
+                {job.assignees.map((assignee, index) => (
+                  <View
+                    key={assignee.id || index}
+                    style={[
+                      styles.assigneeRow,
+                      index === job.assignees.length - 1 && styles.assigneeRowLast,
+                    ]}
+                  >
+                    <View style={[
+                      styles.assigneeIcon,
+                      assignee.isSelfAssignment && styles.assigneeIconSelf,
+                    ]}>
+                      <Icon
+                        name={assignee.isSelfAssignment ? "star" : "user"}
+                        size={12}
+                        color={assignee.isSelfAssignment ? "#d97706" : "#6366f1"}
+                      />
+                    </View>
+                    <Text style={[
+                      styles.assigneeName,
+                      assignee.isSelfAssignment && styles.assigneeNameSelf,
+                    ]}>
+                      {assignee.name}
+                    </Text>
+                    {assignee.payAmount > 0 && (
+                      <Text style={styles.assigneePay}>
+                        {formatCurrency(assignee.payAmount)}
+                      </Text>
+                    )}
+                  </View>
+                ))}
               </View>
-              <View style={styles.currentAssignmentInfo}>
-                <Text style={styles.currentAssignmentLabel}>Currently assigned to</Text>
-                <Text style={styles.currentAssignmentName}>{job.assignedTo?.name}</Text>
+            ) : (
+              /* Single cleaner display */
+              <View style={styles.currentAssignment}>
+                <View style={styles.currentAssignmentIcon}>
+                  <Icon name="user" size={16} color="#fff" />
+                </View>
+                <View style={styles.currentAssignmentInfo}>
+                  <Text style={styles.currentAssignmentLabel}>Currently assigned to</Text>
+                  <Text style={styles.currentAssignmentName}>{job.assignedTo?.name}</Text>
+                </View>
               </View>
-            </View>
+            )}
             {job.actions.canUnassign && (
               <Pressable
                 style={styles.unassignButton}
@@ -1058,6 +1129,62 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: "#166534",
+  },
+  // Multi-cleaner styles
+  multiCleanerAssignment: {
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  multiCleanerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#dcfce7",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#bbf7d0",
+  },
+  multiCleanerTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#166534",
+  },
+  assigneeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#dcfce7",
+  },
+  assigneeRowLast: {
+    borderBottomWidth: 0,
+  },
+  assigneeIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#e0e7ff",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  assigneeIconSelf: {
+    backgroundColor: "#fef3c7",
+  },
+  assigneeName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#166534",
+  },
+  assigneeNameSelf: {
+    fontWeight: "600",
+  },
+  assigneePay: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#047857",
   },
   unassignButton: {
     flexDirection: "row",

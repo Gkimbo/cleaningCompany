@@ -135,8 +135,10 @@ class MultiCleanerService {
     const beds = parseFloat(home.numBeds) || 1;
     const baths = parseFloat(home.numBaths) || 1;
 
-    // Base estimate: 30 min per bedroom, 20 min per bathroom, plus 30 min base
-    const baseMinutes = 30 + beds * 30 + baths * 20;
+    // Base estimate: 60 min base + 15 min per bedroom + 30 min per bathroom
+    const rawMinutes = 60 + beds * 15 + baths * 30;
+    // Round to nearest 30 minutes (0.5 hours)
+    const baseMinutes = Math.round(rawMinutes / 30) * 30;
 
     // Divide by number of cleaners (with some overlap inefficiency)
     const efficiencyFactor = cleanerCount > 1 ? 0.85 : 1; // 15% overlap overhead for multi-cleaner

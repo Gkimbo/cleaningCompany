@@ -14,6 +14,7 @@ const {
   CleanerClient,
   AppointmentJobFlow,
   MultiCleanerJob,
+  Notification,
   sequelize,
 } = require("../models");
 const MarketplaceJobRequirementsService = require("./MarketplaceJobRequirementsService");
@@ -60,10 +61,12 @@ class EmployeeJobAssignmentService {
   static estimateJobDuration(numBeds = 2, numBaths = 1, numCleaners = 1) {
     // Base time + time per bedroom + time per bathroom
     const baseHours = 1;
-    const hoursPerBed = 0.5;
+    const hoursPerBed = 0.25;
     const hoursPerBath = 0.5;
 
-    const totalHours = baseHours + (numBeds * hoursPerBed) + (numBaths * hoursPerBath);
+    const rawTotalHours = baseHours + (numBeds * hoursPerBed) + (numBaths * hoursPerBath);
+    // Round total to nearest 0.5 before dividing by cleaners
+    const totalHours = Math.round(rawTotalHours * 2) / 2;
 
     // Divide by number of cleaners (minimum 1 hour per person)
     const hoursPerCleaner = Math.max(1, totalHours / Math.max(1, numCleaners));
@@ -119,7 +122,7 @@ class EmployeeJobAssignmentService {
    * @param {string} [assignmentData.payType] - 'flat_rate' or 'hourly'
    * @returns {Promise<Object>} Created assignment
    */
-  static async assignEmployeeToJob(businessOwnerId, assignmentData) {
+  static async assignEmployeeToJob(businessOwnerId, assignmentData, io = null) {
     const { employeeId, appointmentId, payAmount, payType = "flat_rate" } = assignmentData;
 
     // Verify employee belongs to this business owner
@@ -233,6 +236,9 @@ class EmployeeJobAssignmentService {
     });
 
     // Send notification to the employee (after transaction completes)
+    // NOTE: We intentionally do NOT notify the homeowner when employees are assigned/unassigned.
+    // The homeowner is only notified if the business owner fully declines/cancels the appointment
+    // (handled via NotificationService.notifyBusinessOwnerDeclined).
     try {
       // Get the employee's user record for notification
       const employeeUser = await User.findByPk(employee.userId);
@@ -263,6 +269,31 @@ class EmployeeJobAssignmentService {
       console.error("[EmployeeJobAssignmentService] Failed to send job assignment notification:", notificationError);
     }
 
+    // Delete any unassigned reminder notifications for this appointment
+    // These should be removed from the notification list since someone is now assigned
+    try {
+      await Notification.destroy({
+        where: {
+          relatedAppointmentId: appointmentId,
+          type: "unassigned_reminder_bo",
+        },
+      });
+
+      // Emit socket event to update badge count in real-time
+      if (io) {
+        const [unreadCount, actionRequiredCount] = await Promise.all([
+          Notification.getUnreadCount(businessOwnerId),
+          Notification.getActionRequiredCount(businessOwnerId),
+        ]);
+        io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+          unreadCount,
+          actionRequiredCount,
+        });
+      }
+    } catch (clearError) {
+      console.error("[EmployeeJobAssignmentService] Failed to clear unassigned reminder notifications:", clearError);
+    }
+
     return assignment;
   }
 
@@ -270,9 +301,10 @@ class EmployeeJobAssignmentService {
    * Assign business owner to their own job (self-assignment)
    * @param {number} businessOwnerId - ID of the business owner
    * @param {number} appointmentId - Appointment ID
+   * @param {Object} io - Socket.io instance for real-time updates
    * @returns {Promise<Object>} Created assignment
    */
-  static async assignSelfToJob(businessOwnerId, appointmentId) {
+  static async assignSelfToJob(businessOwnerId, appointmentId, io = null) {
     // Verify business owner
     const businessOwner = await User.findByPk(businessOwnerId);
     if (!businessOwner || !businessOwner.isBusinessOwner) {
@@ -354,16 +386,45 @@ class EmployeeJobAssignmentService {
       return newAssignment;
     });
 
+    // Delete any unassigned reminder notifications for this appointment
+    // These should be removed from the notification list since someone is now assigned
+    try {
+      await Notification.destroy({
+        where: {
+          relatedAppointmentId: appointmentId,
+          type: "unassigned_reminder_bo",
+        },
+      });
+
+      // Emit socket event to update badge count in real-time
+      if (io) {
+        const [unreadCount, actionRequiredCount] = await Promise.all([
+          Notification.getUnreadCount(businessOwnerId),
+          Notification.getActionRequiredCount(businessOwnerId),
+        ]);
+        io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+          unreadCount,
+          actionRequiredCount,
+        });
+      }
+    } catch (clearError) {
+      console.error("[EmployeeJobAssignmentService] Failed to clear unassigned reminder notifications:", clearError);
+    }
+
     return assignment;
   }
 
   /**
    * Unassign an employee from a job
+   * NOTE: This method intentionally does NOT notify the homeowner.
+   * Employee rearrangements are internal to the business owner's operations.
+   * The homeowner is only notified if the appointment is fully cancelled/declined.
    * @param {number} assignmentId - Assignment ID
    * @param {number} businessOwnerId - ID of the business owner
+   * @param {Object} io - Socket.io instance for real-time updates
    * @returns {Promise<void>}
    */
-  static async unassignFromJob(assignmentId, businessOwnerId) {
+  static async unassignFromJob(assignmentId, businessOwnerId, io = null) {
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
         id: assignmentId,
@@ -404,7 +465,141 @@ class EmployeeJobAssignmentService {
       await assignment.update({ status: "unassigned" }, { transaction: t });
     });
 
+    // If the job is now fully unassigned and within 4 days, create a reminder notification
+    if (otherAssignments === 0) {
+      try {
+        const appointment = await UserAppointments.findByPk(assignment.appointmentId, {
+          include: [{ model: User, as: "user" }],
+        });
+
+        if (appointment && !appointment.completed && !appointment.wasCancelled) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          // Parse as local time by appending T00:00:00 to avoid UTC interpretation
+          const appointmentDate = new Date(appointment.date + "T00:00:00");
+          const daysUntil = Math.round((appointmentDate - today) / (1000 * 60 * 60 * 24));
+
+          // Only create notification if appointment is within 4 days
+          if (daysUntil >= 0 && daysUntil <= 4) {
+            // Get client name
+            let clientName = "Client";
+            if (appointment.user) {
+              const firstName = appointment.user.firstName
+                ? EncryptionService.decrypt(appointment.user.firstName)
+                : "";
+              const lastName = appointment.user.lastName
+                ? EncryptionService.decrypt(appointment.user.lastName)
+                : "";
+              clientName = `${firstName} ${lastName}`.trim() || "Client";
+            }
+
+            // Create the notification (this also emits socket event via NotificationService)
+            await NotificationService.notifyUnassignedAppointmentReminder({
+              businessOwnerId,
+              appointmentId: appointment.id,
+              appointmentDate: appointment.date,
+              clientName,
+              daysUntil,
+              reminderCount: 1,
+              io,
+            });
+          }
+        }
+      } catch (notifyError) {
+        console.error("[EmployeeJobAssignmentService] Failed to create unassigned reminder:", notifyError);
+      }
+    }
+
     return { remainingAssignments: otherAssignments };
+  }
+
+  /**
+   * Bulk unassign all cleaners from a job (for multi-cleaner jobs)
+   * Handles everything in a single transaction to avoid race conditions
+   * @param {number} appointmentId - The appointment to unassign all cleaners from
+   * @param {number} businessOwnerId - ID of the business owner
+   * @param {Object} io - Socket.io instance for notifications
+   * @returns {Promise<Object>} Result with count of removed assignments
+   */
+  static async bulkUnassignFromJob(appointmentId, businessOwnerId, io = null) {
+    // Find all active assignments for this appointment
+    const assignments = await EmployeeJobAssignment.findAll({
+      where: {
+        appointmentId,
+        businessOwnerId,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      },
+    });
+
+    if (assignments.length === 0) {
+      throw new Error("No active assignments found for this job");
+    }
+
+    await sequelize.transaction(async (t) => {
+      // Update the appointment to mark as unassigned
+      await UserAppointments.update(
+        {
+          assignedToBusinessEmployee: false,
+          businessEmployeeAssignmentId: null,
+        },
+        {
+          where: { id: appointmentId },
+          transaction: t,
+        }
+      );
+
+      // Mark all assignments as unassigned
+      await EmployeeJobAssignment.update(
+        { status: "unassigned" },
+        {
+          where: {
+            id: { [Op.in]: assignments.map((a) => a.id) },
+          },
+          transaction: t,
+        }
+      );
+    });
+
+    // Create notification if job is within 4 days
+    try {
+      const appointment = await UserAppointments.findByPk(appointmentId, {
+        include: [{ model: User, as: "user" }],
+      });
+
+      if (appointment && !appointment.completed && !appointment.wasCancelled) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const appointmentDate = new Date(appointment.date + "T00:00:00");
+        const daysUntil = Math.round((appointmentDate - today) / (1000 * 60 * 60 * 24));
+
+        if (daysUntil >= 0 && daysUntil <= 4) {
+          let clientName = "Client";
+          if (appointment.user) {
+            const firstName = appointment.user.firstName
+              ? EncryptionService.decrypt(appointment.user.firstName)
+              : "";
+            const lastName = appointment.user.lastName
+              ? EncryptionService.decrypt(appointment.user.lastName)
+              : "";
+            clientName = `${firstName} ${lastName}`.trim() || "Client";
+          }
+
+          await NotificationService.notifyUnassignedAppointmentReminder({
+            businessOwnerId,
+            appointmentId: appointment.id,
+            appointmentDate: appointment.date,
+            clientName,
+            daysUntil,
+            reminderCount: 1,
+            io,
+          });
+        }
+      }
+    } catch (notifyError) {
+      console.error("[EmployeeJobAssignmentService] Failed to create unassigned reminder:", notifyError);
+    }
+
+    return { removedCount: assignments.length };
   }
 
   /**
@@ -514,6 +709,9 @@ class EmployeeJobAssignmentService {
     });
 
     // Send notifications after transaction completes
+    // NOTE: We intentionally only notify employees (new and old), NOT the homeowner.
+    // Employee rearrangements are internal to the business owner's operations.
+    // The homeowner is only notified if the appointment is fully cancelled/declined.
     try {
       // Get client info
       const client = await User.findByPk(appointment?.userId);

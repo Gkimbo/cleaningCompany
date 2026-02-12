@@ -292,7 +292,7 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
                 {/* Calendar Grid */}
                 <View style={styles.calendarGrid}>
                   {calendarData.map((item, index) => {
-                    const isSelected = selectedDate === item.date;
+                    const isSelected = selectedDate && item.date && selectedDate === item.date;
                     return (
                       <View key={index} style={styles.dayCellWrapper}>
                         <Pressable

@@ -135,6 +135,12 @@ const NotificationsScreen = () => {
       return;
     }
 
+    // Special case: unassigned_reminder_bo - navigate to job assignment page
+    if (notification.type === "unassigned_reminder_bo" && notification.data?.appointmentId) {
+      navigate(`/business-owner/assign?jobId=${notification.data.appointmentId}`);
+      return;
+    }
+
     // Navigate to notification detail page
     navigate(`/notifications/${notification.id}`);
   };

@@ -5775,6 +5775,105 @@ Kleanr System`;
       console.error("❌ Error sending payment dispute notification email:", error);
     }
   }
+
+  /**
+   * Send unassigned appointment reminder to business owner
+   * @param {string} email - Business owner's email
+   * @param {string} appointmentDate - The appointment date
+   * @param {string} clientName - The client's name
+   * @param {number} daysUntil - Days until the appointment
+   * @param {number} reminderCount - How many reminders have been sent
+   */
+  static async sendUnassignedReminderToBo(email, appointmentDate, clientName, daysUntil, reminderCount) {
+    try {
+      const transporter = createTransporter();
+
+      // Determine urgency level
+      const isUrgent = daysUntil <= 1;
+      const isWarning = daysUntil <= 2;
+      const urgencyPrefix = isUrgent ? "🚨 URGENT: " : isWarning ? "⚠️ " : "";
+      const daysText = daysUntil === 0 ? "TODAY" : daysUntil === 1 ? "TOMORROW" : `in ${daysUntil} days`;
+
+      const headerColor = isUrgent
+        ? "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+        : isWarning
+          ? "linear-gradient(135deg, #d97706 0%, #f59e0b 100%)"
+          : "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)";
+
+      const htmlContent = createEmailTemplate({
+        title: `${urgencyPrefix}Unassigned Appointment`,
+        subtitle: `Action required: Assign someone to this job`,
+        headerColor,
+        greeting: `Hi there! 👋`,
+        content: `<p>You have an appointment ${daysText} that still needs someone assigned. Please assign yourself or a team member to ensure the job gets done.</p>`,
+        infoBox: {
+          icon: "📋",
+          title: "Appointment Details",
+          items: [
+            { label: "Date", value: formatDate(appointmentDate) },
+            { label: "Client", value: clientName },
+            { label: "Status", value: "⚠️ Unassigned" },
+          ],
+        },
+        warningBox: isUrgent ? {
+          title: "Immediate Action Required",
+          content: "This appointment is coming up very soon. Please assign someone right away to avoid disappointing your client.",
+        } : null,
+        steps: {
+          title: "📱 How to Assign",
+          items: [
+            "Open the Kleanr app",
+            "Go to your Business Dashboard",
+            "Tap on the appointment or 'Assign Jobs'",
+            "Select yourself or an employee to assign",
+          ],
+        },
+        ctaText: "Open the app now to assign someone to this job.",
+        footerMessage: "Don't leave your client waiting!",
+      });
+
+      const textContent = `${urgencyPrefix}UNASSIGNED APPOINTMENT REMINDER
+
+Hi there!
+
+You have an appointment ${daysText} that still needs someone assigned.
+
+APPOINTMENT DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Date: ${formatDate(appointmentDate)}
+Client: ${clientName}
+Status: ⚠️ Unassigned
+
+${isUrgent ? `⚠️ IMMEDIATE ACTION REQUIRED
+This appointment is coming up very soon. Please assign someone right away.
+
+` : ""}HOW TO ASSIGN
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Go to your Business Dashboard
+3. Tap on the appointment or 'Assign Jobs'
+4. Select yourself or an employee to assign
+
+Open the app now to assign someone to this job.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `${urgencyPrefix}Unassigned Appointment ${daysText} - ${clientName}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Unassigned reminder email sent to business owner:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending unassigned reminder email:", error);
+    }
+  }
 }
 
 module.exports = Email;

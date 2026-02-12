@@ -11,7 +11,9 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import NotificationsService from "../../services/fetchRequests/NotificationsService";
 import PaymentSetupBanner from "./PaymentSetupBanner";
+import { useSocket } from "../../services/SocketContext";
 import {
   colors,
   spacing,
@@ -92,9 +94,15 @@ const JobCard = ({ job, onPress, isUnassigned }) => {
     return `${h > 12 ? h - 12 : h}:${minutes} ${h >= 12 ? "PM" : "AM"}`;
   };
 
+  const isSelfAssigned = job.isSelfAssignment;
+
   return (
     <Pressable
-      style={[styles.jobCard, isUnassigned && styles.jobCardUnassigned]}
+      style={[
+        styles.jobCard,
+        isUnassigned && styles.jobCardUnassigned,
+        isSelfAssigned && styles.jobCardSelfAssigned,
+      ]}
       onPress={onPress}
     >
       <View style={styles.jobCardLeft}>
@@ -104,13 +112,23 @@ const JobCard = ({ job, onPress, isUnassigned }) => {
             <Text style={styles.unassignedBadgeText}>!</Text>
           </View>
         )}
+        {isSelfAssigned && (
+          <View style={styles.selfAssignedBadge}>
+            <Icon name="star" size={10} color={colors.warning[600]} />
+          </View>
+        )}
       </View>
       <View style={styles.jobCardContent}>
         <Text style={styles.jobCardClient}>{job.clientName || "Client"}</Text>
         <Text style={styles.jobCardAddress} numberOfLines={1}>
           {job.address || "No address"}
         </Text>
-        {job.employeeName ? (
+        {isSelfAssigned ? (
+          <View style={styles.selfAssignedTag}>
+            <Icon name="star" size={10} color={colors.warning[600]} />
+            <Text style={styles.selfAssignedTagText}>You're cleaning this</Text>
+          </View>
+        ) : job.employeeName ? (
           <View style={styles.assignedTag}>
             <Icon name="user" size={10} color={colors.primary[600]} />
             <Text style={styles.assignedTagText}>{job.employeeName}</Text>
@@ -323,6 +341,55 @@ const BusinessOwnerDashboard = ({ state }) => {
     formatted: { totalPending: "$0.00" },
   });
   const [error, setError] = useState(null);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [actionRequiredCount, setActionRequiredCount] = useState(0);
+
+  // Socket hooks for real-time notification updates
+  const { onNotification, onNotificationCountUpdate } = useSocket();
+
+  // Fetch notification counts (unread + action-required)
+  useEffect(() => {
+    const fetchNotificationCounts = async () => {
+      if (state.currentUser?.token) {
+        try {
+          const data = await NotificationsService.getUnreadCount(state.currentUser.token);
+          setUnreadNotifications(data.unreadCount || 0);
+          setActionRequiredCount(data.actionRequiredCount || 0);
+        } catch (err) {
+          console.error("Error fetching notification counts:", err);
+        }
+      }
+    };
+    fetchNotificationCounts();
+  }, [state.currentUser?.token]);
+
+  // Listen for real-time notification updates
+  useEffect(() => {
+    const unsubNotification = onNotification((data) => {
+      setUnreadNotifications((prev) => prev + 1);
+      // If the notification requires action, increment that count too
+      if (data?.notification?.actionRequired) {
+        setActionRequiredCount((prev) => prev + 1);
+      }
+    });
+
+    const unsubCountUpdate = onNotificationCountUpdate((data) => {
+      if (typeof data.unreadCount === "number") {
+        setUnreadNotifications(data.unreadCount);
+      }
+      if (typeof data.actionRequiredCount === "number") {
+        setActionRequiredCount(data.actionRequiredCount);
+      }
+    });
+
+    return () => {
+      unsubNotification();
+      unsubCountUpdate();
+    };
+  }, [onNotification, onNotificationCountUpdate]);
+
+  // Badge shows max of unread and action-required (action-required persists until resolved)
+  const notificationBadgeCount = Math.max(unreadNotifications, actionRequiredCount);
 
   const fetchDashboard = async (isRefresh = false) => {
     if (isRefresh) {
@@ -376,6 +443,7 @@ const BusinessOwnerDashboard = ({ state }) => {
         ...(calendarResult.assignments || []).map((a) => ({
           ...a.appointment,
           isAssigned: true,
+          isSelfAssignment: a.isSelfAssignment,
           employeeName: a.isSelfAssignment
             ? "You"
             : `${a.employee?.firstName || ""} ${a.employee?.lastName || ""}`.trim(),
@@ -470,6 +538,13 @@ const BusinessOwnerDashboard = ({ state }) => {
             onPress={() => navigate("/notifications")}
           >
             <Icon name="bell" size={18} color={colors.neutral[600]} />
+            {notificationBadgeCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {notificationBadgeCount > 9 ? "9+" : notificationBadgeCount}
+                </Text>
+              </View>
+            )}
           </Pressable>
         </View>
       </View>
@@ -763,6 +838,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...shadows.sm,
   },
+  notificationBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    backgroundColor: colors.error[500],
+    borderRadius: radius.full,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: colors.background.primary,
+  },
+  notificationBadgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+  },
   errorBanner: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1002,6 +1096,40 @@ const styles = StyleSheet.create({
     color: colors.warning[600],
     marginTop: spacing.xs,
     fontWeight: typography.fontWeight.medium,
+  },
+  jobCardSelfAssigned: {
+    borderWidth: 2,
+    borderColor: colors.warning[400],
+    backgroundColor: colors.warning[50],
+  },
+  selfAssignedBadge: {
+    position: "absolute",
+    top: -8,
+    right: -8,
+    width: 18,
+    height: 18,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning[100],
+    borderWidth: 2,
+    borderColor: colors.warning[400],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  selfAssignedTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.xs,
+    backgroundColor: colors.warning[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    alignSelf: "flex-start",
+  },
+  selfAssignedTagText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    marginLeft: 4,
+    fontWeight: typography.fontWeight.semibold,
   },
   jobCardPrice: {
     fontSize: typography.fontSize.lg,

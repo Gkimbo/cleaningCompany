@@ -306,11 +306,11 @@ const NotificationDetailScreen = () => {
           </Pressable>
         )}
 
-        {/* View Related Button */}
-        {!notification.actionRequired && notification.data?.appointmentId && (
-          <Pressable style={styles.viewButton} onPress={handleActionPress}>
-            <Text style={styles.viewButtonText}>View Details</Text>
-            <Feather name="external-link" size={16} color={colors.primary[600]} />
+        {/* Back to Home Button */}
+        {!notification.actionRequired && (
+          <Pressable style={styles.viewButton} onPress={() => navigate("/")}>
+            <Feather name="home" size={16} color={colors.primary[600]} />
+            <Text style={styles.viewButtonText}>Back to Home</Text>
           </Pressable>
         )}
 

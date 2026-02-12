@@ -675,27 +675,40 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
       };
     }
 
-    // Decrypt home fields if present
+    // Helper to format home data
+    const formatHomeData = (home) => ({
+      id: home.id,
+      nickName: home.nickName,
+      address: EncryptionService.decrypt(home.address),
+      city: EncryptionService.decrypt(home.city),
+      state: EncryptionService.decrypt(home.state),
+      zipcode: EncryptionService.decrypt(home.zipcode),
+      numBeds: home.numBeds,
+      numBaths: home.numBaths,
+      keyPadCode: home.keyPadCode ? EncryptionService.decrypt(home.keyPadCode) : null,
+      keyLocation: home.keyLocation ? EncryptionService.decrypt(home.keyLocation) : null,
+      sheetsProvided: home.sheetsProvided,
+      towelsProvided: home.towelsProvided,
+      timeToBeCompleted: home.timeToBeCompleted,
+      cleanersNeeded: home.cleanersNeeded,
+      specialNotes: home.specialNotes,
+      contact: home.contact ? EncryptionService.decrypt(home.contact) : null,
+    });
+
+    // Decrypt home fields if present (primary home linked to CleanerClient)
     let homeData = null;
     if (cleanerClient.home) {
-      homeData = {
-        id: cleanerClient.home.id,
-        nickName: cleanerClient.home.nickName,
-        address: EncryptionService.decrypt(cleanerClient.home.address),
-        city: EncryptionService.decrypt(cleanerClient.home.city),
-        state: EncryptionService.decrypt(cleanerClient.home.state),
-        zipcode: EncryptionService.decrypt(cleanerClient.home.zipcode),
-        numBeds: cleanerClient.home.numBeds,
-        numBaths: cleanerClient.home.numBaths,
-        keyPadCode: cleanerClient.home.keyPadCode ? EncryptionService.decrypt(cleanerClient.home.keyPadCode) : null,
-        keyLocation: cleanerClient.home.keyLocation ? EncryptionService.decrypt(cleanerClient.home.keyLocation) : null,
-        sheetsProvided: cleanerClient.home.sheetsProvided,
-        towelsProvided: cleanerClient.home.towelsProvided,
-        timeToBeCompleted: cleanerClient.home.timeToBeCompleted,
-        cleanersNeeded: cleanerClient.home.cleanersNeeded,
-        specialNotes: cleanerClient.home.specialNotes,
-        contact: cleanerClient.home.contact ? EncryptionService.decrypt(cleanerClient.home.contact) : null,
-      };
+      homeData = formatHomeData(cleanerClient.home);
+    }
+
+    // Fetch ALL homes for this client (not just the one linked to CleanerClient)
+    let allHomes = [];
+    if (cleanerClient.clientId) {
+      const clientHomes = await UserHomes.findAll({
+        where: { userId: cleanerClient.clientId },
+        order: [["createdAt", "ASC"]],
+      });
+      allHomes = clientHomes.map(formatHomeData);
     }
 
     // Fetch appointments if home exists
@@ -759,6 +772,7 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
       },
       client: clientData,
       home: homeData,
+      homes: allHomes, // All homes belonging to this client
       appointments,
       recurringSchedules: cleanerClient.recurringSchedules || [],
     });
@@ -995,7 +1009,7 @@ cleanerClientsRouter.post("/:id/resend-invite", verifyCleaner, async (req, res) 
 cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
   try {
     const { id } = req.params;
-    const { date, price, notes, timeWindow } = req.body;
+    const { date, price, notes, timeWindow, homeId } = req.body;
 
     // Validate date
     if (!date) {
@@ -1028,14 +1042,34 @@ cleanerClientsRouter.post("/:id/book", verifyCleaner, async (req, res) => {
       });
     }
 
-    if (!cleanerClient.client || !cleanerClient.home) {
+    if (!cleanerClient.client) {
       return res.status(400).json({
-        error: "Client must have an account and home set up before booking",
+        error: "Client must have an account set up before booking",
       });
     }
 
     const client = cleanerClient.client;
-    const home = cleanerClient.home;
+
+    // Use specified homeId or default to the primary home
+    let home;
+    if (homeId) {
+      // Verify the home belongs to this client
+      home = await UserHomes.findOne({
+        where: { id: homeId, userId: client.id },
+      });
+      if (!home) {
+        return res.status(400).json({
+          error: "Home not found or does not belong to this client",
+        });
+      }
+    } else {
+      home = cleanerClient.home;
+      if (!home) {
+        return res.status(400).json({
+          error: "No home set up for this client. Please specify a homeId.",
+        });
+      }
+    }
 
     // Check if client has payment method
     if (!client.paymentMethod) {

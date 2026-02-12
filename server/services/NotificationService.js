@@ -120,9 +120,12 @@ class NotificationService {
           },
         });
 
-        // Also emit unread count update
-        const unreadCount = await Notification.getUnreadCount(userId);
-        io.to(`user_${userId}`).emit("notification_count_update", { unreadCount });
+        // Also emit unread count update (include actionRequiredCount for badge persistence)
+        const [unreadCount, actionRequiredCount] = await Promise.all([
+          Notification.getUnreadCount(userId),
+          Notification.getActionRequiredCount(userId),
+        ]);
+        io.to(`user_${userId}`).emit("notification_count_update", { unreadCount, actionRequiredCount });
       }
 
       // 5. Send email if user has notifications enabled and emailOptions provided
@@ -999,6 +1002,61 @@ class NotificationService {
       console.error("[NotificationService] Price change notification error:", error);
       return { success: false, error: error.message };
     }
+  }
+
+  // =====================================
+  // Business Owner Reminders
+  // =====================================
+
+  /**
+   * Notify business owner about an unassigned appointment
+   * Sent daily starting 4 days before the appointment
+   * @param {Object} params - Notification parameters
+   * @param {number} params.businessOwnerId - Business owner's user ID
+   * @param {number} params.appointmentId - Appointment ID
+   * @param {string} params.appointmentDate - Appointment date
+   * @param {string} params.clientName - Client's name
+   * @param {number} params.daysUntil - Days until the appointment
+   * @param {number} params.reminderCount - How many reminders have been sent
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyUnassignedAppointmentReminder({
+    businessOwnerId,
+    appointmentId,
+    appointmentDate,
+    clientName,
+    daysUntil,
+    reminderCount,
+    io = null,
+  }) {
+    // Determine urgency level for title
+    const isUrgent = daysUntil <= 1;
+    const isWarning = daysUntil <= 2;
+    const urgencyPrefix = isUrgent ? "URGENT: " : isWarning ? "Reminder: " : "";
+    const daysText = daysUntil === 0 ? "today" : daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`;
+
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "unassigned_reminder_bo",
+      title: `${urgencyPrefix}Unassigned Appointment`,
+      body: `${clientName}'s cleaning ${daysText} needs someone assigned. Tap to assign.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientName,
+        daysUntil,
+        reminderCount,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendUnassignedReminderToBo,
+        args: [appointmentDate, clientName, daysUntil, reminderCount],
+      },
+      io,
+    });
   }
 
   /**

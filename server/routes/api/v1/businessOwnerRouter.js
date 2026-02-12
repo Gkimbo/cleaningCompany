@@ -423,9 +423,11 @@ router.post("/assignments", async (req, res) => {
       return res.status(400).json({ error: "Employee ID and appointment ID are required" });
     }
 
+    const io = req.app.get("io");
     const assignment = await EmployeeJobAssignmentService.assignEmployeeToJob(
       req.businessOwnerId,
-      { employeeId, appointmentId, payAmount: Math.floor(payAmount || 0), payType }
+      { employeeId, appointmentId, payAmount: Math.floor(payAmount || 0), payType },
+      io
     );
 
     res.status(201).json({ message: "Employee assigned", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
@@ -594,14 +596,36 @@ router.get("/assignments/:assignmentId", async (req, res) => {
  */
 router.delete("/assignments/:assignmentId", async (req, res) => {
   try {
+    const io = req.app.get("io");
     await EmployeeJobAssignmentService.unassignFromJob(
       parseInt(req.params.assignmentId),
-      req.businessOwnerId
+      req.businessOwnerId,
+      io
     );
 
     res.json({ message: "Assignment removed" });
   } catch (error) {
     console.error("Error removing assignment:", error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /appointments/:appointmentId/assignments - Bulk unassign all cleaners from a job
+ * Use this for multi-cleaner jobs to avoid race conditions
+ */
+router.delete("/appointments/:appointmentId/assignments", async (req, res) => {
+  try {
+    const io = req.app.get("io");
+    const result = await EmployeeJobAssignmentService.bulkUnassignFromJob(
+      parseInt(req.params.appointmentId),
+      req.businessOwnerId,
+      io
+    );
+
+    res.json({ message: "All assignments removed", removedCount: result.removedCount });
+  } catch (error) {
+    console.error("Error bulk removing assignments:", error);
     res.status(400).json({ error: error.message });
   }
 });
@@ -635,9 +659,11 @@ router.post("/assignments/:assignmentId/reassign", async (req, res) => {
  */
 router.post("/self-assign/:appointmentId", async (req, res) => {
   try {
+    const io = req.app.get("io");
     const assignment = await EmployeeJobAssignmentService.assignSelfToJob(
       req.businessOwnerId,
-      parseInt(req.params.appointmentId)
+      parseInt(req.params.appointmentId),
+      io
     );
 
     res.status(201).json({ message: "Self-assigned to job", assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment) });
@@ -655,7 +681,9 @@ router.post("/self-assign/:appointmentId", async (req, res) => {
 router.get("/my-jobs", async (req, res) => {
   try {
     const { upcoming, status } = req.query;
-    const today = new Date().toISOString().split("T")[0];
+    // Use local date to avoid timezone issues
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
     // Get list of client IDs for this business owner
     // These are direct bookings, not marketplace pickups
@@ -862,7 +890,9 @@ router.get("/my-jobs", async (req, res) => {
 router.get("/all-jobs", async (req, res) => {
   try {
     const { upcoming, status, source: sourceFilter } = req.query;
-    const today = new Date().toISOString().split("T")[0];
+    // Use local date to avoid timezone issues
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
     // Get list of client IDs for this business owner
     const clientRelationships = await CleanerClient.findAll({
@@ -882,25 +912,49 @@ router.get("/all-jobs", async (req, res) => {
       baseWhere.completed = { [Op.ne]: true };
     }
 
-    // Get appointments from two sources:
+    // Get appointment IDs that have active assignments for this business owner
+    // (includes marketplace pickups via EmployeeJobAssignment)
+    const assignedAppointments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId: req.businessOwnerId,
+        status: { [Op.notIn]: ["cancelled", "unassigned"] },
+      },
+      attributes: ["appointmentId"],
+    });
+    const assignedAppointmentIds = assignedAppointments.map(a => a.appointmentId);
+
+    // Get appointment IDs from UserCleanerAppointments (cleaner flow pickups)
+    // This ensures jobs picked up via the cleaner dashboard also show here
+    const cleanerAppointments = await UserCleanerAppointments.findAll({
+      where: { employeeId: req.businessOwnerId },
+      attributes: ["appointmentId"],
+    });
+    const cleanerAppointmentIds = cleanerAppointments.map(a => a.appointmentId);
+
+    // Combine all appointment IDs from assignments and cleaner appointments
+    const allLinkedAppointmentIds = [...new Set([...assignedAppointmentIds, ...cleanerAppointmentIds])];
+
+    // Get appointments from four sources:
     // 1. Appointments booked by this business owner
     // 2. Appointments from homes owned by clients of this business owner
-    let whereClause;
+    // 3. Appointments assigned to this business owner (EmployeeJobAssignment)
+    // 4. Appointments linked via UserCleanerAppointments (cleaner flow)
+    const orConditions = [
+      { bookedByCleanerId: req.businessOwnerId },
+    ];
+
     if (clientIds.length > 0) {
-      whereClause = {
-        ...baseWhere,
-        [Op.or]: [
-          { bookedByCleanerId: req.businessOwnerId },
-          { "$home.userId$": { [Op.in]: clientIds } },
-        ],
-      };
-    } else {
-      // No clients, just get appointments booked by business owner
-      whereClause = {
-        ...baseWhere,
-        bookedByCleanerId: req.businessOwnerId,
-      };
+      orConditions.push({ "$home.userId$": { [Op.in]: clientIds } });
     }
+
+    if (allLinkedAppointmentIds.length > 0) {
+      orConditions.push({ id: { [Op.in]: allLinkedAppointmentIds } });
+    }
+
+    const whereClause = {
+      ...baseWhere,
+      [Op.or]: orConditions,
+    };
 
     // Get all relevant appointments
     const appointments = await UserAppointments.findAll({
@@ -909,7 +963,6 @@ router.get("/all-jobs", async (req, res) => {
         {
           model: UserHomes,
           as: "home",
-          required: true,
           include: [
             {
               model: User,
@@ -920,6 +973,7 @@ router.get("/all-jobs", async (req, res) => {
         },
       ],
       order: [["date", "ASC"]],
+      subQuery: false, // Ensure OR conditions work correctly with joined tables
     });
 
     // Get all active assignments for these appointments
@@ -1060,18 +1114,48 @@ router.get("/all-jobs", async (req, res) => {
 
 /**
  * GET /my-jobs/:appointmentId - Get full details for a specific job
- * Returns complete job and home details for business owner viewing a marketplace job
+ * Returns complete job and home details for business owner viewing a job
+ * Accessible if: booked by business owner, assigned to their employee, or from their client
  */
 router.get("/my-jobs/:appointmentId", async (req, res) => {
   try {
     const appointmentId = parseInt(req.params.appointmentId);
 
+    // Get list of client IDs for this business owner
+    const clientRelationships = await CleanerClient.findAll({
+      where: { cleanerId: req.businessOwnerId, status: "active" },
+      attributes: ["clientId"],
+    });
+    const clientIds = clientRelationships.filter(c => c.clientId).map(c => c.clientId);
+
+    // Check if this appointment is assigned to the business owner's employee
+    const hasAssignment = await EmployeeJobAssignment.findOne({
+      where: {
+        appointmentId,
+        businessOwnerId: req.businessOwnerId,
+        status: { [Op.notIn]: ["cancelled", "unassigned"] },
+      },
+    });
+
+    // Build where clause: business owner can view if:
+    // 1. They booked the appointment, OR
+    // 2. It's assigned to one of their employees, OR
+    // 3. It's from one of their clients
+    const whereClause = {
+      id: appointmentId,
+    };
+
+    // If not assigned to their employee, check other access conditions
+    if (!hasAssignment) {
+      whereClause[Op.or] = [
+        { bookedByCleanerId: req.businessOwnerId },
+        ...(clientIds.length > 0 ? [{ "$home.userId$": { [Op.in]: clientIds } }] : []),
+      ];
+    }
+
     // Get the appointment with full home and client details
     const appointment = await UserAppointments.findOne({
-      where: {
-        id: appointmentId,
-        bookedByCleanerId: req.businessOwnerId,
-      },
+      where: whereClause,
       include: [
         {
           model: UserHomes,
@@ -1097,8 +1181,8 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
       return res.status(404).json({ error: "Job not found or not accessible" });
     }
 
-    // Check for active assignment
-    const assignment = await EmployeeJobAssignment.findOne({
+    // Check for active assignments (supports multi-cleaner jobs)
+    const allAssignments = await EmployeeJobAssignment.findAll({
       where: {
         appointmentId: appointment.id,
         status: { [Op.notIn]: ["cancelled", "unassigned"] },
@@ -1116,7 +1200,11 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
           ],
         },
       ],
+      order: [["assignedAt", "ASC"]],
     });
+
+    // For backwards compatibility, use first assignment
+    const assignment = allAssignments.length > 0 ? allAssignments[0] : null;
 
     // Get list of employees for assignment options
     const employees = await BusinessEmployee.findAll({
@@ -1190,27 +1278,51 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
         ? EncryptionService.decrypt(appointment.home.contact)
         : null;
 
-    // Build assignment info
+    // Build assignment info (supports multi-cleaner jobs)
     let assignedTo = null;
-    if (assignment) {
-      if (assignment.isSelfAssignment) {
-        assignedTo = { type: "self", name: "You (Business Owner)" };
-      } else if (assignment.employee) {
-        const empFirstName = assignment.employee.user?.firstName
-          ? EncryptionService.decrypt(assignment.employee.user.firstName)
+    const assignees = [];
+
+    allAssignments.forEach(a => {
+      if (a.isSelfAssignment) {
+        assignees.push({
+          id: a.id,
+          type: "self",
+          name: "You (Business Owner)",
+          isSelfAssignment: true,
+          payAmount: a.payAmount || 0,
+        });
+      } else if (a.employee) {
+        const empFirstName = a.employee.user?.firstName
+          ? EncryptionService.decrypt(a.employee.user.firstName)
           : "";
-        const empLastName = assignment.employee.user?.lastName
-          ? EncryptionService.decrypt(assignment.employee.user.lastName)
+        const empLastName = a.employee.user?.lastName
+          ? EncryptionService.decrypt(a.employee.user.lastName)
           : "";
-        assignedTo = {
+        assignees.push({
+          id: a.id,
           type: "employee",
-          employeeId: assignment.employee.id,
+          employeeId: a.employee.id,
           name: `${empFirstName} ${empLastName}`.trim(),
-        };
+          isSelfAssignment: false,
+          payAmount: a.payAmount || 0,
+        });
       }
+    });
+
+    // For backwards compatibility, set assignedTo to first assignee or combined name
+    if (assignees.length === 1) {
+      assignedTo = assignees[0];
+    } else if (assignees.length > 1) {
+      const names = assignees.map(a => a.name);
+      assignedTo = {
+        type: "multi",
+        name: names.join(" + "),
+        count: assignees.length,
+      };
     }
 
-    const isAssigned = !!assignment;
+    const isAssigned = assignees.length > 0;
+    const isMultiCleaner = assignees.length > 1;
 
     res.json({
       job: {
@@ -1230,8 +1342,11 @@ router.get("/my-jobs/:appointmentId", async (req, res) => {
         towelConfigurations: appointment.towelConfigurations,
         // Assignment status
         isAssigned,
+        isMultiCleaner,
         assignedTo,
+        assignees,
         assignmentId: assignment?.id || null,
+        assignmentIds: allAssignments.map(a => a.id),
         assignmentStatus: assignment?.status || null,
         // Available actions
         actions: {
@@ -1450,19 +1565,30 @@ router.get("/suggested-pay/:appointmentId", async (req, res) => {
  */
 router.get("/dashboard", async (req, res) => {
   try {
-    const today = new Date().toISOString().split("T")[0];
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    // Use local dates to avoid timezone issues
+    const now = new Date();
+    const formatLocalDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    const today = formatLocalDate(now);
+    const tomorrowDate = new Date(now);
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrow = formatLocalDate(tomorrowDate);
+
+    const thirtyDaysAgoDate = new Date(now);
+    thirtyDaysAgoDate.setDate(thirtyDaysAgoDate.getDate() - 30);
+    const thirtyDaysAgo = formatLocalDate(thirtyDaysAgoDate);
+
+    const thirtyDaysFromNowDate = new Date(now);
+    thirtyDaysFromNowDate.setDate(thirtyDaysFromNowDate.getDate() + 30);
+    const thirtyDaysFromNow = formatLocalDate(thirtyDaysFromNowDate);
 
     // Calculate start of current week and month
-    const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
-    const weekStart = startOfWeek.toISOString().split("T")[0];
+    const weekStart = formatLocalDate(startOfWeek);
 
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthStart = startOfMonth.toISOString().split("T")[0];
+    const monthStart = formatLocalDate(startOfMonth);
 
     // Get client IDs to determine source (client vs marketplace)
     const clientRelationships = await CleanerClient.findAll({
@@ -1494,8 +1620,14 @@ router.get("/dashboard", async (req, res) => {
     ]);
 
     // Helper function to format assigned appointments with source
+    // Deduplicates by appointmentId to handle multi-cleaner jobs
     const formatAssignedAppointments = (assignments) => {
-      return assignments.map(assignment => {
+      // Group assignments by appointmentId
+      const appointmentMap = new Map();
+
+      assignments.forEach(assignment => {
+        const apptId = assignment.appointmentId;
+
         // Decrypt employee name (BusinessEmployee has encrypted PII fields)
         const employeeFirstName = assignment.employee?.firstName
           ? EncryptionService.decrypt(assignment.employee.firstName)
@@ -1504,42 +1636,56 @@ router.get("/dashboard", async (req, res) => {
           ? EncryptionService.decrypt(assignment.employee.lastName)
           : null;
 
-        // Decrypt client/user name (User has encrypted PII fields)
-        const clientFirstName = assignment.appointment?.home?.user?.firstName
-          ? EncryptionService.decrypt(assignment.appointment.home.user.firstName)
-          : null;
-        const clientLastName = assignment.appointment?.home?.user?.lastName
-          ? EncryptionService.decrypt(assignment.appointment.home.user.lastName)
-          : null;
+        const assignee = assignment.employee ? {
+          id: assignment.employee.id,
+          firstName: employeeFirstName,
+          lastName: employeeLastName,
+          isSelfAssignment: false,
+        } : (assignment.isSelfAssignment ? { id: null, firstName: "You", lastName: "(Self)", isSelfAssignment: true } : null);
 
-        // Decrypt address (UserHomes has encrypted address)
-        const address = assignment.appointment?.home?.address
-          ? EncryptionService.decrypt(assignment.appointment.home.address)
-          : null;
+        if (!appointmentMap.has(apptId)) {
+          // Decrypt client/user name (User has encrypted PII fields)
+          const clientFirstName = assignment.appointment?.home?.user?.firstName
+            ? EncryptionService.decrypt(assignment.appointment.home.user.firstName)
+            : null;
+          const clientLastName = assignment.appointment?.home?.user?.lastName
+            ? EncryptionService.decrypt(assignment.appointment.home.user.lastName)
+            : null;
 
-        // Determine source: client job or marketplace pickup
-        const homeownerId = assignment.appointment?.home?.user?.id;
-        const isClientJob = homeownerId && clientIds.includes(homeownerId);
-        const source = isClientJob ? "client" : "marketplace";
+          // Decrypt address (UserHomes has encrypted address)
+          const address = assignment.appointment?.home?.address
+            ? EncryptionService.decrypt(assignment.appointment.home.address)
+            : null;
 
-        return {
-          id: assignment.appointmentId,
-          date: assignment.appointment?.date,
-          status: assignment.status,
-          startTime: assignment.appointment?.startTime,
-          source,
-          assignedEmployee: assignment.employee ? {
-            id: assignment.employee.id,
-            firstName: employeeFirstName,
-            lastName: employeeLastName,
-          } : (assignment.isSelfAssignment ? { id: null, firstName: "You", lastName: "(Self)" } : null),
-          clientName: clientFirstName && clientLastName
-            ? `${clientFirstName} ${clientLastName}`
-            : "Unknown Client",
-          address,
-          totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
-        };
+          // Determine source: client job or marketplace pickup
+          const homeownerId = assignment.appointment?.home?.user?.id;
+          const isClientJob = homeownerId && clientIds.includes(homeownerId);
+          const source = isClientJob ? "client" : "marketplace";
+
+          appointmentMap.set(apptId, {
+            id: apptId,
+            date: assignment.appointment?.date,
+            status: assignment.status,
+            startTime: assignment.appointment?.startTime,
+            source,
+            assignedEmployee: assignee,
+            assignees: assignee ? [assignee] : [],
+            clientName: clientFirstName && clientLastName
+              ? `${clientFirstName} ${clientLastName}`
+              : "Unknown Client",
+            address,
+            totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
+          });
+        } else {
+          // Add additional assignee for multi-cleaner jobs
+          const existing = appointmentMap.get(apptId);
+          if (assignee) {
+            existing.assignees.push(assignee);
+          }
+        }
       });
+
+      return Array.from(appointmentMap.values());
     };
 
     // Get today's assigned appointments
@@ -1798,7 +1944,7 @@ router.get("/dashboard", async (req, res) => {
           ],
         },
       ],
-      order: [["startTime", "ASC"]],
+      order: [["date", "ASC"]],
     });
 
     const tomorrowUnassignedList = formatUnassignedAppointments(tomorrowsUnassignedAppointments);
@@ -1975,6 +2121,12 @@ router.get("/calendar", async (req, res) => {
         ? EncryptionService.decrypt(apt.home.address)
         : "";
 
+      // Calculate estimated duration from beds/baths (base 1hr + 0.25hr per bed + 0.5hr per bath, rounded to nearest 0.5)
+      const numBeds = apt.home?.numBeds || 2;
+      const numBaths = apt.home?.numBaths || 1;
+      const rawDuration = 1 + (numBeds * 0.25) + (numBaths * 0.5);
+      const duration = Math.round(rawDuration * 2) / 2; // Round to nearest 0.5
+
       return {
         id: apt.id,
         date: apt.date,
@@ -1987,6 +2139,9 @@ router.get("/calendar", async (req, res) => {
         state: apt.home?.state || "",
         totalPrice: parseFloat(apt.price) * 100,
         status: apt.status,
+        duration,
+        numBeds,
+        numBaths,
       };
     });
 
@@ -2088,11 +2243,57 @@ router.get("/calendar", async (req, res) => {
         };
       });
 
-    // Count assignments per appointment (for multi-employee jobs)
+    // Get appointment IDs that have ANY EmployeeJobAssignment records (including unassigned)
+    // to avoid duplicate entries from marketplace pickups
+    const marketplaceAppointmentIds = marketplaceAssignments.map(mp => mp.appointmentId);
+    const appointmentsWithTeamAssignments = marketplaceAppointmentIds.length > 0
+      ? await EmployeeJobAssignment.findAll({
+          where: {
+            appointmentId: { [Op.in]: marketplaceAppointmentIds },
+            businessOwnerId: req.businessOwnerId,
+          },
+          attributes: ["appointmentId"],
+          group: ["appointmentId"],
+        })
+      : [];
+    const appointmentsWithTeamAssignmentIds = new Set(
+      appointmentsWithTeamAssignments.map(a => a.appointmentId)
+    );
+
+    // Filter out marketplace pickups for appointments that have team assignment records
+    // (those are handled by EmployeeJobAssignment, not marketplace pickup display)
+    const filteredMarketplaceAssignments = marketplaceAssignments.filter(
+      mp => !appointmentsWithTeamAssignmentIds.has(mp.appointmentId)
+    );
+
+    // Count assignments per appointment and group them (for multi-employee jobs)
     const appointmentAssignmentCounts = {};
+    const appointmentAssignmentsMap = {};
     assignments.forEach((a) => {
       const apptId = a.appointmentId;
       appointmentAssignmentCounts[apptId] = (appointmentAssignmentCounts[apptId] || 0) + 1;
+      if (!appointmentAssignmentsMap[apptId]) {
+        appointmentAssignmentsMap[apptId] = [];
+      }
+      // Store basic info for each assignment on this appointment
+      const empFirstName = a.employee?.firstName
+        ? EncryptionService.decrypt(a.employee.firstName)
+        : null;
+      const empLastName = a.employee?.lastName
+        ? EncryptionService.decrypt(a.employee.lastName)
+        : null;
+      appointmentAssignmentsMap[apptId].push({
+        id: a.id,
+        employeeId: a.businessEmployeeId,
+        payAmount: a.payAmount,
+        payType: a.payType,
+        isSelfAssignment: a.isSelfAssignment,
+        employee: a.employee ? {
+          id: a.employee.id,
+          firstName: empFirstName,
+          lastName: empLastName,
+        } : null,
+      });
     });
 
     // Format assignments with full appointment data
@@ -2118,6 +2319,12 @@ router.get("/calendar", async (req, res) => {
         ? EncryptionService.decrypt(assignment.appointment.home.address)
         : "";
 
+      // Calculate estimated duration from beds/baths (base 1hr + 0.25hr per bed + 0.5hr per bath, rounded to nearest 0.5)
+      const numBeds = assignment.appointment?.home?.numBeds || 2;
+      const numBaths = assignment.appointment?.home?.numBaths || 1;
+      const rawDuration = 1 + (numBeds * 0.25) + (numBaths * 0.5);
+      const estimatedDuration = Math.round(rawDuration * 2) / 2; // Round to nearest 0.5
+
       return {
         id: assignment.id,
         appointmentId: assignment.appointmentId,
@@ -2135,6 +2342,9 @@ router.get("/calendar", async (req, res) => {
           id: assignment.appointment?.id,
           date: assignment.appointment?.date,
           startTime: assignment.appointment?.startTime,
+          duration: estimatedDuration,
+          numBeds,
+          numBaths,
           clientName: clientFirstName && clientLastName
             ? `${clientFirstName} ${clientLastName}`
             : "Unknown Client",
@@ -2144,11 +2354,13 @@ router.get("/calendar", async (req, res) => {
           totalPrice: parseFloat(assignment.appointment?.price || 0) * 100,
           status: assignment.appointment?.status,
         },
+        // Include all assignments for this appointment (for multi-cleaner display)
+        allAssignments: appointmentAssignmentsMap[assignment.appointmentId] || [],
       };
     });
 
-    // Combine employee assignments with marketplace pickups
-    const allAssignments = [...formattedAssignments, ...marketplaceAssignments];
+    // Combine employee assignments with marketplace pickups (filtered to avoid duplicates)
+    const allAssignments = [...formattedAssignments, ...filteredMarketplaceAssignments];
 
     res.json({
       unassignedJobs,

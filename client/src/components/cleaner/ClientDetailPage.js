@@ -144,6 +144,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
   const [savingNotes, setSavingNotes] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
+  const [selectedHomeForBooking, setSelectedHomeForBooking] = useState(null);
   const [platformPriceData, setPlatformPriceData] = useState(null);
   const [editingPrice, setEditingPrice] = useState(false);
   const [priceInput, setPriceInput] = useState("");
@@ -382,7 +383,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
     );
   }
 
-  const { cleanerClient, home, client } = clientData;
+  const { cleanerClient, home, homes = [], client } = clientData;
   const isPending = cleanerClient.status === "pending_invite";
 
   // Get display name and email
@@ -839,13 +840,19 @@ const ClientDetailPage = ({ state, dispatch }) => {
       {/* Book for Client Modal */}
       <BookForClientModal
         visible={showBookModal}
-        onClose={() => setShowBookModal(false)}
+        onClose={() => {
+          setShowBookModal(false);
+          setSelectedHomeForBooking(null);
+        }}
         onSuccess={() => {
           setShowBookModal(false);
+          setSelectedHomeForBooking(null);
           fetchClientData(); // Refresh to show pending booking
         }}
         client={cleanerClient}
         token={state?.currentUser?.token}
+        homes={homes}
+        selectedHome={selectedHomeForBooking}
       />
     </View>
   );
