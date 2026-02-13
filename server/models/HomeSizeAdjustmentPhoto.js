@@ -22,7 +22,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
     },
     photoUrl: {
-      type: DataTypes.STRING(500),
+      type: DataTypes.TEXT,  // TEXT to store full base64 images
       allowNull: false,
     },
     s3Key: {

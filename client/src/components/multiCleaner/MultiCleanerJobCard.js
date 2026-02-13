@@ -20,6 +20,18 @@ import {
   shadows,
 } from "../../services/styles/theme";
 
+// Format time constraint for display: "10-3" → "10am - 3pm"
+const formatTimeConstraint = (time) => {
+  if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+  if (!match) return time;
+  const startHour = parseInt(match[1], 10);
+  const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+  const endHour = parseInt(match[3], 10);
+  const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+  return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+};
+
 const MultiCleanerJobCard = ({
   job,
   onViewDetails,
@@ -33,7 +45,11 @@ const MultiCleanerJobCard = ({
   expiresAt = null,
   isBusinessOwner = false,
   hasEmployees = false,
+  timeToBeCompleted = null,
 }) => {
+  // Check if there's a specific time constraint (not "anytime")
+  const hasTimeConstraint = timeToBeCompleted &&
+    timeToBeCompleted.toLowerCase() !== "anytime";
   const formatDate = (dateString) => {
     const date = new Date(dateString + "T00:00:00");
     return date.toLocaleDateString("en-US", {
@@ -109,14 +125,28 @@ const MultiCleanerJobCard = ({
           <Text style={styles.dateText}>{formatDate(job.appointmentDate)}</Text>
         </View>
 
-        {job.address && (
+        {(job.city || job.address) && (
           <View style={styles.infoRow}>
             <Feather name="map-pin" size={16} color={colors.neutral[500]} />
             <Text style={styles.addressText} numberOfLines={1}>
-              {job.address}
+              {job.city}, {job.state}
             </Text>
           </View>
         )}
+
+        {/* Distance and Home Size */}
+        <View style={styles.detailsRow}>
+          {job.numBeds != null && job.numBaths != null && (
+            <Text style={styles.detailText}>
+              {job.numBeds} bed / {job.numBaths} bath
+            </Text>
+          )}
+          {job.distance != null && (
+            <Text style={styles.detailText}>
+              {(job.distance * 0.621371).toFixed(1)} mi away
+            </Text>
+          )}
+        </View>
 
         {/* Cleaners Visualization */}
         <View style={styles.cleanersRow}>
@@ -155,6 +185,16 @@ const MultiCleanerJobCard = ({
             <Text style={styles.percentText}>({job.percentOfWork}% of job)</Text>
           )}
         </View>
+
+        {/* Time Constraint */}
+        {hasTimeConstraint && (
+          <View style={styles.timeConstraintRow}>
+            <Feather name="clock" size={12} color={colors.warning[600]} />
+            <Text style={styles.timeConstraintText}>
+              Complete by {formatTimeConstraint(timeToBeCompleted)}
+            </Text>
+          </View>
+        )}
 
         {/* Room Assignments Preview */}
         {job.assignedRooms && job.assignedRooms.length > 0 && (
@@ -260,7 +300,7 @@ const MultiCleanerJobCard = ({
               ) : (
                 <>
                   <Feather name="user-plus" size={18} color={colors.white} />
-                  <Text style={styles.joinButtonText}>Join Team</Text>
+                  <Text style={styles.joinButtonText}>Request to Join Team</Text>
                 </>
               )}
             </Pressable>
@@ -294,6 +334,22 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.md,
+  },
+  timeConstraintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+    alignSelf: "center",
+  },
+  timeConstraintText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.warning[700],
   },
   teamBadge: {
     flexDirection: "row",
@@ -335,6 +391,16 @@ const styles = StyleSheet.create({
     ...typography.sm,
     color: colors.neutral[600],
     flex: 1,
+  },
+  detailsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  detailText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
   },
   cleanersRow: {
     flexDirection: "row",

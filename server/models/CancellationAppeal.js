@@ -5,6 +5,11 @@ module.exports = (sequelize, DataTypes) => {
 			autoIncrement: true,
 			primaryKey: true,
 		},
+		caseNumber: {
+			type: DataTypes.STRING(20),
+			allowNull: true, // Will be set by hook after creation
+			unique: true,
+		},
 		appointmentId: {
 			type: DataTypes.INTEGER,
 			allowNull: false,
@@ -108,6 +113,11 @@ module.exports = (sequelize, DataTypes) => {
 		},
 		resolutionNotes: {
 			type: DataTypes.TEXT,
+		},
+		refundAmount: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Amount in cents that was refunded as part of appeal resolution",
 		},
 
 		// SLA tracking
@@ -250,6 +260,16 @@ module.exports = (sequelize, DataTypes) => {
 			order: [["slaDeadline", "ASC"]],
 		});
 	};
+
+	// Generate case number after creation
+	CancellationAppeal.afterCreate(async (appeal, options) => {
+		if (!appeal.caseNumber) {
+			const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+			const paddedId = String(appeal.id).padStart(5, "0");
+			const caseNumber = `APL-${dateStr}-${paddedId}`;
+			await appeal.update({ caseNumber }, { transaction: options.transaction });
+		}
+	});
 
 	return CancellationAppeal;
 };

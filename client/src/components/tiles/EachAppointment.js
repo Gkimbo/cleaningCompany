@@ -55,6 +55,11 @@ const EachAppointment = ({
   discountApplied,
   employeesAssigned,
   pendingRequestCount,
+  // Multi-cleaner job fields
+  cleanersNeeded,
+  cleanersConfirmed,
+  pendingApprovalCount,
+  isMultiCleanerJob,
 }) => {
   // Normalize bringSheets and bringTowels to ensure they have valid lowercase values
   const normalizedBringSheets = (bringSheets || "no").toLowerCase();
@@ -615,18 +620,82 @@ const EachAppointment = ({
           )}
           {/* Cleaner Assignment Badges */}
           <View style={styles.cleanerBadgesRow}>
-            {employeesAssigned >= 1 ? (
-              <View style={[styles.badge, styles.badgeCleanerAssigned]}>
-                <Icon name="user" size={10} color={colors.success[600]} />
-                <Text style={[styles.badgeText, styles.badgeTextCleanerAssigned]}>Cleaner assigned</Text>
-              </View>
+            {/* Multi-cleaner job display */}
+            {cleanersNeeded && cleanersNeeded > 1 ? (
+              <>
+                <View style={[
+                  styles.badge,
+                  cleanersConfirmed >= cleanersNeeded
+                    ? styles.badgeCleanerAssigned
+                    : cleanersConfirmed > 0
+                    ? styles.badgePartiallyFilled
+                    : styles.badgeNoCleaner
+                ]}>
+                  <Icon
+                    name="users"
+                    size={10}
+                    color={
+                      cleanersConfirmed >= cleanersNeeded
+                        ? colors.success[600]
+                        : cleanersConfirmed > 0
+                        ? colors.primary[600]
+                        : colors.warning[600]
+                    }
+                  />
+                  <Text style={[
+                    styles.badgeText,
+                    cleanersConfirmed >= cleanersNeeded
+                      ? styles.badgeTextCleanerAssigned
+                      : cleanersConfirmed > 0
+                      ? styles.badgeTextPartiallyFilled
+                      : styles.badgeTextNoCleaner
+                  ]}>
+                    {cleanersConfirmed || 0}/{cleanersNeeded} cleaners
+                  </Text>
+                </View>
+                {cleanersConfirmed < cleanersNeeded && (
+                  <View style={[styles.badge, styles.badgeMultiCleanerInfo]}>
+                    <Icon name="info-circle" size={10} color={colors.text.tertiary} />
+                    <Text style={[styles.badgeText, styles.badgeTextMultiCleanerInfo]}>
+                      Large home
+                    </Text>
+                  </View>
+                )}
+              </>
             ) : (
-              <View style={[styles.badge, styles.badgeNoCleaner]}>
-                <Icon name="user-times" size={10} color={colors.warning[600]} />
-                <Text style={[styles.badgeText, styles.badgeTextNoCleaner]}>No cleaner assigned</Text>
-              </View>
+              /* Single cleaner job display */
+              employeesAssigned >= 1 ? (
+                <View style={[styles.badge, styles.badgeCleanerAssigned]}>
+                  <Icon name="user" size={10} color={colors.success[600]} />
+                  <Text style={[styles.badgeText, styles.badgeTextCleanerAssigned]}>Cleaner assigned</Text>
+                </View>
+              ) : (
+                <View style={[styles.badge, styles.badgeNoCleaner]}>
+                  <Icon name="user-times" size={10} color={colors.warning[600]} />
+                  <Text style={[styles.badgeText, styles.badgeTextNoCleaner]}>No cleaner assigned</Text>
+                </View>
+              )
             )}
-            {(!employeesAssigned || employeesAssigned < 1) && pendingRequestCount > 0 && (
+            {/* Pending approval requests (for multi-cleaner jobs) */}
+            {pendingApprovalCount > 0 && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.badge,
+                  styles.badgePendingApproval,
+                  styles.badgePendingRequestsClickable,
+                  pressed && styles.badgePendingRequestsPressed,
+                ]}
+                onPress={() => navigate("/cleaner-approvals")}
+              >
+                <Icon name="user-plus" size={10} color={colors.warning[600]} />
+                <Text style={[styles.badgeText, styles.badgeTextPendingApproval]}>
+                  {pendingApprovalCount} awaiting approval
+                </Text>
+                <Icon name="chevron-right" size={8} color={colors.warning[500]} />
+              </Pressable>
+            )}
+            {/* Pending marketplace requests (cleaners wanting to take job) */}
+            {(!employeesAssigned || employeesAssigned < 1) && pendingRequestCount > 0 && !pendingApprovalCount && (
               <Pressable
                 style={({ pressed }) => [
                   styles.badge,
@@ -1339,6 +1408,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning[100],
   },
   badgeTextNoCleaner: {
+    color: colors.warning[600],
+  },
+  badgePartiallyFilled: {
+    backgroundColor: colors.primary[100],
+  },
+  badgeTextPartiallyFilled: {
+    color: colors.primary[600],
+  },
+  badgeMultiCleanerInfo: {
+    backgroundColor: colors.neutral[100],
+  },
+  badgeTextMultiCleanerInfo: {
+    color: colors.text.tertiary,
+  },
+  badgePendingApproval: {
+    backgroundColor: colors.warning[100],
+  },
+  badgeTextPendingApproval: {
     color: colors.warning[600],
   },
   badgePendingRequests: {

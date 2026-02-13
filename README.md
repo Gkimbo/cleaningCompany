@@ -6,7 +6,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-9151_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-10256_Passing-brightgreen?style=for-the-badge)
 
 **A comprehensive cleaning service marketplace platform connecting homeowners with professional cleaners and cleaning businesses**
 
@@ -23,6 +23,7 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 **Key Capabilities:**
 - Multi-tenant cleaning service marketplace with offline support
 - Business owner onboarding with employee management and payroll
+- **Business client portal** for companies to manage their cleaning services
 - Multi-cleaner job support for large homes with room assignments
 - Real-time messaging with suspicious content detection
 - Dynamic pricing with incentive and referral programs
@@ -35,6 +36,8 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Unified Conflict Resolution Center** for appeals and disputes
 - **Cancellation Appeals System** with 72-hour appeal window and HR review
 - **Job Ledger** with double-entry accounting and Stripe reconciliation
+- **Employee timesheets** with hours tracking and payroll integration
+- **Transit time calculation** between jobs for scheduling optimization
 - HR dispute management and content moderation
 - Before/after job photo documentation with offline capture
 - Guest-not-left tracking with GPS verification
@@ -96,7 +99,9 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Upgrade Path**: Cleaners can become business owners
 - **Employee Management**: Invite and manage team members
 - **Employee Payroll**: Hourly or flat-rate pay with automatic calculations
+- **Timesheet Management**: Track employee hours and approve timesheets
 - **Client Invitations**: Invite clients via email with token expiration
+- **Business Client Portal**: Dedicated portal for business clients
 - **Client Management**: View all direct clients
 - **Book For Clients**: Create appointments on their behalf
 - **Custom Pricing**: Set per-home pricing
@@ -104,10 +109,12 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Direct Revenue**: No platform fee on own clients
 - **Client History**: View appointment and payment history
 - **Recurring Schedules**: Set up weekly/biweekly/monthly
-- **Job Assignment**: Assign jobs to specific employees
+- **Job Assignment**: Assign jobs to specific employees with transit time
 - **Team Calendar**: View all employee schedules
 - **Team Messaging**: Communicate with employees
-- **Financial Dashboard**: Revenue, payroll, and analytics
+- **Immediate Payouts**: Business owner paid instantly when jobs complete
+- **Employee Payroll**: Bi-weekly batch payouts with early payout option
+- **Financial Dashboard**: Revenue, payroll, pending payouts, and analytics
 
 </td>
 <td width="50%" valign="top">
@@ -121,10 +128,13 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 - **Job Type Restrictions**: Owner can limit job types
 - **Max Daily Jobs**: Configurable limits per employee
 - **Payment Methods**: Stripe Connect or direct from owner
+- **Bi-Weekly Payouts**: Employees paid every other Friday (batched)
+- **Pay Types**: Hourly rate, percentage of job, or flat per-job rate
 - **Self-Assignment**: Business owners can assign themselves
 - **Marketplace Pickup**: Option to pick up open jobs
 - **Coworker Messaging**: Communicate with team members
-- **Earnings Tracking**: View pay history and totals
+- **Earnings Tracking**: View pay history, pending earnings, and next payout date
+- **Timesheet Submission**: Log hours worked per job
 - **Photo & Checklist**: Same job completion workflow as cleaners
 
 </td>
@@ -202,6 +212,11 @@ Kleanr is a full-stack mobile platform that connects vacation rental hosts with 
 | **Cancellation Audit Log** | Immutable event tracking for all cancellation-related actions. Captures actor, changes, timestamps for compliance and dispute resolution. |
 | **Preview as Role** | Platform owners can preview the app as any user type using demo accounts. Preserves owner state for seamless return. Full functionality with demo data. |
 | **Internal Analytics** | Platform-level metrics dashboard for owners. Flow abandonment tracking with step-by-step funnel analysis. Job duration statistics (avg/min/max/percentiles). Offline usage monitoring (sync success rate, duration). Dispute and pay override frequency with breakdowns by type/reason. Date range filtering (7/30/90 days). |
+| **Transit Time** | Automatic calculation of travel time between jobs for scheduling optimization. Factors in distance and traffic patterns. Helps prevent overbooking and late arrivals. |
+| **Employee Timesheets** | Track employee hours worked per job and day. Business owners can review and approve timesheets. Integrates with payroll for accurate wage calculations. Exportable reports for accounting. |
+| **Bi-Weekly Batch Payouts** | Business owners get paid immediately when jobs complete. Employees accumulate earnings and get paid every other Friday. Supports early payout trigger and immediate payout on termination. |
+| **Database-Driven Pricing** | All platform fees and pricing configurable via database (PricingConfig). Platform fee (10%), business owner fee (10%), large business fee (7%), multi-cleaner fee (13%), incentive percentages. Owner can adjust via admin dashboard. |
+| **Employee Pay Calculation** | Supports three pay types: hourly (rate × hours worked), percentage (% of job price), and flat/per-job (fixed amount). Pay calculated at job completion with full audit trail. |
 
 ---
 
@@ -414,7 +429,7 @@ kleanr/
 │   │   ├── cancellationAppealRouter.js  # Cancellation appeals
 │   │   ├── demoAccountRouter.js     # Preview as Role
 │   │   └── analyticsRouter.js       # Internal analytics
-│   ├── services/                    # 39 business logic services
+│   ├── services/                    # 41 business logic services
 │   │   ├── BusinessEmployeeService.js # Employee management
 │   │   ├── CalculatePrice.js        # Dynamic pricing logic
 │   │   ├── calendarSyncService.js   # iCal parsing & sync
@@ -454,6 +469,7 @@ kleanr/
 | **Homeowner** | Property owners needing cleaning services | Book appointments, manage homes, pay bills, review cleaners, respond to disputes |
 | **Cleaner** | Independent cleaning professionals | Apply for work, accept jobs, upload photos, earn money, achieve tier bonuses |
 | **Business Owner** | Cleaner with own client base and employees | All cleaner features + manage employees, payroll, direct clients, team calendar |
+| **Business Client** | Corporate client of a business owner | Book via business portal, manage company properties, view service history |
 | **Business Employee** | Works for a business owner | Accept assigned jobs, track earnings, availability settings, coworker messaging |
 | **HR Staff** | Support and moderation team | Handle disputes, review reports, manage support, freeze accounts |
 | **Owner** | Platform administrator | Full access: financials, employees, pricing, settings, reports, tax filing |
@@ -463,10 +479,10 @@ kleanr/
 ## Testing
 
 ```bash
-# Run all server tests (4504 tests)
+# Run all server tests (5038 tests)
 cd server && npm test
 
-# Run all client tests (4647 tests)
+# Run all client tests (5561 tests)
 cd client && npm test
 
 # Run specific test file
@@ -520,9 +536,9 @@ npm test -- --watch
 | Preview as Role | 129 | Context, modals, demo account services |
 | Internal Analytics | 89 | Event tracking, dashboard stats, aggregations |
 | Multi-Cleaner Router | 76 | Job creation, offers, room assignments |
-| **Server Total** | **4504** | 172 test suites |
-| **Client Total** | **4647** | 167 test suites |
-| **Combined Total** | **9151** | 339 test suites |
+| **Server Total** | **5128** | 202 test suites |
+| **Client Total** | **5128** | 175 test suites |
+| **Combined Total** | **10256** | 377 test suites |
 
 ---
 
@@ -569,6 +585,9 @@ See [Server README](./server/README.md) for complete API documentation.
 | `0 7 * * *` | Supply Reminder | Reminds cleaners to bring supplies |
 | `0 0 * * *` | Payment Retry | Retries failed payments |
 | `0 3 * * 0` | Recurring Generation | Creates appointments from schedules |
+| `0 6 * * 5` | Bi-Weekly Payout | Processes employee batch payouts every other Friday |
+| `*/5 * * * *` | Auto-Complete Monitor | Sends reminders and auto-completes jobs |
+| `*/15 * * * *` | Completion Approval | Auto-approves homeowner/cleaner completions |
 
 ---
 
@@ -610,19 +629,19 @@ Real-time communication via Socket.io:
 
 ---
 
-## Database Models (60 Total)
+## Database Models (66 Total)
 
 ### Core Models
 - User, UserHomes, UserAppointments, UserBills
 
 ### Business & Employment
-- BusinessEmployee, EmployeeJobAssignment, EmployeePayChangeLog
+- BusinessEmployee, EmployeeJobAssignment, EmployeePayChangeLog, EmployeeTimesheet
 
 ### Multi-Cleaner
 - MultiCleanerJob, CleanerJobOffer, CleanerJobCompletion, CleanerRoomAssignment
 
 ### Financial
-- Payment, Payout, PlatformEarnings, OwnerWithdrawal, StripeConnectAccount
+- Payment, Payout, PlatformEarnings, OwnerWithdrawal, StripeConnectAccount, EmployeePendingPayout, PricingConfig, JobLedger
 
 ### Preferred Cleaner System
 - HomePreferredCleaner, CleanerPreferredPerks, PreferredPerksConfig, PreferredPerksConfigHistory, CleanerAvailabilityConfig

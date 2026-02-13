@@ -225,37 +225,6 @@ const ImportBusinessLanding = () => {
     },
   ];
 
-  const testimonials = [
-    {
-      quote:
-        "I went from chasing 20% of my payments to getting paid automatically 100% of the time. That's an extra $800/month I was leaving on the table.",
-      name: "Maria S.",
-      role: "5 years in business",
-      stat: "$800/mo recovered",
-    },
-    {
-      quote:
-        "I hired my first employee last month. Kleanr made it so easy to assign jobs and track their work. I'm finally scaling my business!",
-      name: "James T.",
-      role: "Business Owner, 3 employees",
-      stat: "3x more jobs",
-    },
-    {
-      quote:
-        "The custom checklists are game-changing. Each of my clients has different needs and now my team knows exactly what to do at each home.",
-      name: "Sarah L.",
-      role: "Owner, Sparkle Clean Co.",
-      stat: "Zero complaints",
-    },
-    {
-      quote:
-        "I used to spend Sunday nights doing invoices. Now I spend it with my family. The app does everything for me.",
-      name: "David R.",
-      role: "Solo Cleaner",
-      stat: "10+ hrs saved/week",
-    },
-  ];
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -509,50 +478,6 @@ const ImportBusinessLanding = () => {
           </View>
         </LinearGradient>
 
-        {/* Testimonials */}
-        <View style={styles.testimonialsSection}>
-          <Text style={styles.sectionLabel}>SUCCESS STORIES</Text>
-          <Text style={styles.sectionTitle}>
-            Real Results from Real Cleaners
-          </Text>
-          <Text style={styles.sectionSubtitle}>
-            See how business owners like you are growing with Kleanr
-          </Text>
-
-          {testimonials.map((testimonial, index) => (
-            <View key={index} style={styles.testimonialCard}>
-              <View style={styles.testimonialHeader}>
-                <View style={styles.quoteIcon}>
-                  <Feather
-                    name="message-circle"
-                    size={20}
-                    color={colors.primary[400]}
-                  />
-                </View>
-                {testimonial.stat && (
-                  <View style={styles.testimonialStatBadge}>
-                    <Text style={styles.testimonialStatText}>
-                      {testimonial.stat}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.testimonialQuote}>"{testimonial.quote}"</Text>
-              <View style={styles.testimonialAuthor}>
-                <View style={styles.authorAvatar}>
-                  <Text style={styles.authorInitial}>
-                    {testimonial.name[0]}
-                  </Text>
-                </View>
-                <View>
-                  <Text style={styles.authorName}>{testimonial.name}</Text>
-                  <Text style={styles.authorRole}>{testimonial.role}</Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </View>
-
         {/* Volume Discount Section */}
         <View style={styles.volumeDiscountSection}>
           <Text style={styles.sectionLabel}>VOLUME REWARDS</Text>
@@ -614,7 +539,7 @@ const ImportBusinessLanding = () => {
             <View style={styles.savingsRow}>
               <Feather name="gift" size={20} color={colors.success[600]} />
               <Text style={styles.savingsText}>
-                That's{" "}
+                That&apos;s{" "}
                 <Text style={styles.savingsAmount}>
                   ${yearlySavingsWithVolume.toLocaleString()}/year
                 </Text>{" "}
@@ -1262,72 +1187,6 @@ const styles = StyleSheet.create({
   savingsAmount: {
     fontWeight: typography.fontWeight.bold,
     color: colors.success[600],
-  },
-
-  // Testimonials Section
-  testimonialsSection: {
-    padding: spacing.xl,
-    backgroundColor: "#fff",
-  },
-  testimonialCard: {
-    backgroundColor: "#f8fafc",
-    borderRadius: radius.xl,
-    padding: spacing.xl,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  testimonialHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.md,
-  },
-  quoteIcon: {},
-  testimonialStatBadge: {
-    backgroundColor: colors.success[100],
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-  },
-  testimonialStatText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.success[700],
-  },
-  testimonialQuote: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-    lineHeight: 26,
-    fontStyle: "italic",
-    marginBottom: spacing.lg,
-  },
-  testimonialAuthor: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  authorAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary[100],
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: spacing.md,
-  },
-  authorInitial: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary[600],
-  },
-  authorName: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  authorRole: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
   },
 
   // Pricing Section

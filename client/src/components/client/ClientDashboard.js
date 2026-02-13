@@ -12,6 +12,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
+import CleanerApprovalService from "../../services/fetchRequests/CleanerApprovalService";
 import MessageService from "../../services/fetchRequests/MessageClass";
 import FetchData from "../../services/fetchRequests/fetchData";
 import NotificationsService from "../../services/fetchRequests/NotificationsService";
@@ -34,6 +35,8 @@ import DeclinedAppointmentsSection from "./DeclinedAppointmentsSection";
 import IncompleteHomeSetupBanner from "./IncompleteHomeSetupBanner";
 import PendingBookingCard from "./PendingBookingCard";
 import PendingBookingModal from "./PendingBookingModal";
+import TenantPresentAlertCard from "./TenantPresentAlertCard";
+import GuestNotLeftService from "../../services/fetchRequests/GuestNotLeftService";
 
 const { width } = Dimensions.get("window");
 
@@ -99,7 +102,7 @@ const QuickActionButton = ({ title, subtitle, onPress, icon, iconColor, bgColor,
 );
 
 // Appointment Card Component
-const AppointmentCard = ({ homes, appointment, onPress }) => {
+const AppointmentCard = ({ homes, appointment, onPress, navigate }) => {
   const appointmentDate = parseLocalDate(appointment.date);
   const today = new Date();
   const isTodayAppointment = appointmentDate.toDateString() === today.toDateString();
@@ -108,6 +111,12 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
 
   // Check if a cleaner is assigned
   const hasCleanerAssigned = appointment.employeesAssigned && appointment.employeesAssigned.length > 0;
+
+  // Multi-cleaner job info
+  const isMultiCleaner = appointment.cleanersNeeded && appointment.cleanersNeeded > 1;
+  const cleanersConfirmed = appointment.cleanersConfirmed || 0;
+  const cleanersNeeded = appointment.cleanersNeeded || 1;
+  const isFullyStaffed = cleanersConfirmed >= cleanersNeeded;
 
   const formatDateDisplay = (date) => {
     const options = { weekday: "short", month: "short", day: "numeric" };
@@ -129,7 +138,7 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
       style={({ pressed }) => [
         styles.appointmentCard,
         isTodayAppointment && styles.appointmentCardToday,
-        !hasCleanerAssigned && styles.appointmentCardNoCleanerBorder,
+        !hasCleanerAssigned && !isFullyStaffed && styles.appointmentCardNoCleanerBorder,
         pressed && styles.cardPressed,
       ]}
     >
@@ -151,19 +160,74 @@ const AppointmentCard = ({ homes, appointment, onPress }) => {
           </Text>
         )}
         {/* Cleaner assignment status */}
-        {hasCleanerAssigned ? (
-          <View style={styles.cleanerAssignedBadge}>
-            <Icon name="user" size={10} color={colors.success[600]} />
-            <Text style={styles.cleanerAssignedBadgeText}>Cleaner assigned</Text>
+        {isMultiCleaner ? (
+          /* Multi-cleaner job display */
+          <View style={styles.cleanerStatusRow}>
+            <View style={[
+              styles.cleanerAssignedBadge,
+              isFullyStaffed
+                ? styles.badgeSuccess
+                : cleanersConfirmed > 0
+                ? styles.badgePartial
+                : styles.badgeWarning
+            ]}>
+              <Icon
+                name="users"
+                size={10}
+                color={
+                  isFullyStaffed
+                    ? colors.success[600]
+                    : cleanersConfirmed > 0
+                    ? colors.primary[600]
+                    : colors.warning[600]
+                }
+              />
+              <Text style={[
+                styles.cleanerAssignedBadgeText,
+                isFullyStaffed
+                  ? styles.textSuccess
+                  : cleanersConfirmed > 0
+                  ? styles.textPartial
+                  : styles.textWarning
+              ]}>
+                {cleanersConfirmed}/{cleanersNeeded} cleaners
+              </Text>
+            </View>
+            {!isFullyStaffed && (
+              <View style={styles.largeHomeBadge}>
+                <Text style={styles.largeHomeBadgeText}>Large home</Text>
+              </View>
+            )}
           </View>
         ) : (
-          <View style={styles.noCleanerBadge}>
-            <Icon name="user-times" size={10} color={colors.warning[600]} />
-            <Text style={styles.noCleanerBadgeText}>No cleaner assigned</Text>
-          </View>
+          /* Single cleaner job display */
+          hasCleanerAssigned ? (
+            <View style={styles.cleanerAssignedBadge}>
+              <Icon name="user" size={10} color={colors.success[600]} />
+              <Text style={styles.cleanerAssignedBadgeText}>Cleaner assigned</Text>
+            </View>
+          ) : (
+            <View style={styles.noCleanerBadge}>
+              <Icon name="user-times" size={10} color={colors.warning[600]} />
+              <Text style={styles.noCleanerBadgeText}>No cleaner assigned</Text>
+            </View>
+          )
+        )}
+        {/* Pending approval requests */}
+        {appointment.pendingApprovalCount > 0 && (
+          <Pressable
+            onPress={() => navigate("/cleaner-approvals")}
+            style={styles.pendingApprovalBadge}
+          >
+            <Icon name="user-plus" size={10} color={colors.warning[600]} />
+            <Text style={styles.pendingApprovalBadgeText}>
+              {appointment.pendingApprovalCount} awaiting your approval
+            </Text>
+            <Icon name="chevron-right" size={8} color={colors.warning[500]} />
+          </Pressable>
         )}
         {/* Pending cleaner requests */}
-        {!hasCleanerAssigned && appointment.pendingRequestCount > 0 && (
+        {!hasCleanerAssigned && appointment.pendingRequestCount > 0 && !appointment.pendingApprovalCount && (
           <View style={styles.pendingRequestsBadge}>
             <Icon name="hand-paper-o" size={10} color={colors.secondary[600]} />
             <Text style={styles.pendingRequestsBadgeText}>
@@ -237,11 +301,14 @@ const ClientDashboard = ({ state, dispatch }) => {
   const [pendingBookings, setPendingBookings] = useState([]);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [pendingCleanerApprovals, setPendingCleanerApprovals] = useState([]);
+  const [tenantPresentReports, setTenantPresentReports] = useState([]);
 
   useEffect(() => {
     if (state.currentUser.token) {
       fetchDashboardData();
       fetchPendingBookings();
+      fetchTenantPresentReports();
     }
   }, [state.currentUser.token]);
 
@@ -254,6 +321,18 @@ const ClientDashboard = ({ state, dispatch }) => {
       setPendingBookings(data.appointments || []);
     } catch (error) {
       console.error("Error fetching pending bookings:", error);
+    }
+  };
+
+  // Fetch tenant present reports requiring homeowner response
+  const fetchTenantPresentReports = async () => {
+    try {
+      const result = await GuestNotLeftService.getPendingReports(state.currentUser.token);
+      if (result.success) {
+        setTenantPresentReports(result.reports || []);
+      }
+    } catch (error) {
+      console.error("Error fetching tenant present reports:", error);
     }
   };
 
@@ -287,8 +366,8 @@ const ClientDashboard = ({ state, dispatch }) => {
     setError(null);
 
     try {
-      // Fetch dashboard data, pending requests, adjustments, cleaner, and schedules in parallel
-      const [dashboardData, requestsData, adjustmentsData, cleanerData, schedulesData] = await Promise.all([
+      // Fetch dashboard data, pending requests, adjustments, cleaner, schedules, and cleaner approvals in parallel
+      const [dashboardData, requestsData, adjustmentsData, cleanerData, schedulesData, cleanerApprovalsData] = await Promise.all([
         ClientDashboardService.getDashboardSummary(state.currentUser.token),
         ClientDashboardService.getPendingRequestsForClient(
           state.currentUser.token
@@ -296,6 +375,7 @@ const ClientDashboard = ({ state, dispatch }) => {
         FetchData.getPendingAdjustments(state.currentUser.token),
         ClientDashboardService.getMyCleanerRelationship(state.currentUser.token),
         ClientDashboardService.getMyRecurringSchedules(state.currentUser.token),
+        CleanerApprovalService.getPendingRequests(state.currentUser.token),
       ]);
 
       if (dashboardData.user) {
@@ -337,6 +417,11 @@ const ClientDashboard = ({ state, dispatch }) => {
       // Set recurring schedules
       if (schedulesData.schedules) {
         setRecurringSchedules(schedulesData.schedules);
+      }
+
+      // Set pending cleaner approvals
+      if (cleanerApprovalsData.requests) {
+        setPendingCleanerApprovals(cleanerApprovalsData.requests);
       }
     } catch (err) {
       console.error("[ClientDashboard] Error fetching data:", err);
@@ -503,6 +588,20 @@ const ClientDashboard = ({ state, dispatch }) => {
         />
       ))}
 
+      {/* Tenant Present Alert - urgent action required */}
+      {tenantPresentReports.map(report => (
+        <TenantPresentAlertCard
+          key={report.id}
+          report={report}
+          token={state.currentUser.token}
+          onResolved={() => fetchTenantPresentReports()}
+          onRefresh={() => {
+            fetchDashboardData(true);
+            fetchTenantPresentReports();
+          }}
+        />
+      ))}
+
       {/* Pending Bookings - Appointments awaiting client approval */}
       {pendingBookings.length > 0 && (
         <View style={styles.pendingBookingsSection}>
@@ -545,6 +644,32 @@ const ClientDashboard = ({ state, dispatch }) => {
         }}
         onActionComplete={handleBookingAction}
       />
+
+      {/* Pending Cleaner Approvals Banner */}
+      {pendingCleanerApprovals.length > 0 && (
+        <Pressable
+          style={styles.cleanerApprovalBanner}
+          onPress={() => navigate("/cleaner-approvals")}
+        >
+          <View style={styles.cleanerApprovalBannerIcon}>
+            <Icon name="users" size={20} color={colors.primary[600]} />
+          </View>
+          <View style={styles.cleanerApprovalBannerContent}>
+            <Text style={styles.cleanerApprovalBannerTitle}>
+              {pendingCleanerApprovals.length === 1
+                ? "1 Cleaner Awaiting Approval"
+                : `${pendingCleanerApprovals.length} Cleaners Awaiting Approval`}
+            </Text>
+            <Text style={styles.cleanerApprovalBannerSubtitle}>
+              Cleaners want to join your team cleaning. Tap to review.
+            </Text>
+          </View>
+          <View style={styles.cleanerApprovalBannerAction}>
+            <Text style={styles.cleanerApprovalBannerActionText}>Review</Text>
+            <Icon name="chevron-right" size={12} color={colors.primary[600]} />
+          </View>
+        </Pressable>
+      )}
 
       {/* Today's Cleaning - Show if there's an appointment today */}
       {todaysAppointment && (
@@ -695,7 +820,11 @@ const ClientDashboard = ({ state, dispatch }) => {
       {/* Pending Reviews Section */}
       {pendingReviews.length > 0 && (
         <View style={styles.section}>
-          <SectionHeader title="Pending Reviews" />
+          <SectionHeader
+            title="Pending Reviews"
+            actionText={pendingReviews.length > 2 ? "See All" : null}
+            onPress={() => navigate("/pending-reviews")}
+          />
           <View style={styles.pendingReviewsCard}>
             <View style={styles.pendingReviewsHeader}>
               <Icon name="star" size={16} color={colors.warning[500]} />
@@ -707,7 +836,7 @@ const ClientDashboard = ({ state, dispatch }) => {
               Share your feedback about your recent cleanings
             </Text>
             <View style={styles.pendingReviewsList}>
-              {pendingReviews.slice(0, 3).map((apt) => {
+              {pendingReviews.slice(0, 2).map((apt) => {
                 const home = homes.find((h) => Number(h.id) === Number(apt.homeId));
                 return (
                   <TodaysCleaningCard
@@ -739,6 +868,7 @@ const ClientDashboard = ({ state, dispatch }) => {
                 homes={homes}
                 appointment={apt}
                 onPress={() => navigate("/appointments")}
+                navigate={navigate}
               />
             ))}
           </View>
@@ -1260,6 +1390,61 @@ const styles = StyleSheet.create({
     color: colors.secondary[700],
     fontWeight: typography.fontWeight.medium,
   },
+  // Multi-cleaner styles
+  cleanerStatusRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  badgeSuccess: {
+    backgroundColor: colors.success[50],
+  },
+  badgePartial: {
+    backgroundColor: colors.primary[50],
+  },
+  badgeWarning: {
+    backgroundColor: colors.warning[50],
+  },
+  textSuccess: {
+    color: colors.success[700],
+  },
+  textPartial: {
+    color: colors.primary[700],
+  },
+  textWarning: {
+    color: colors.warning[700],
+  },
+  largeHomeBadge: {
+    backgroundColor: colors.neutral[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  largeHomeBadgeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  pendingApprovalBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    marginTop: spacing.xs,
+    alignSelf: "flex-start",
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  pendingApprovalBadgeText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[700],
+    fontWeight: typography.fontWeight.semibold,
+  },
   appointmentPriceContainer: {
     position: "absolute",
     right: 0,
@@ -1648,6 +1833,58 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.warning[700],
+  },
+
+  // Cleaner Approval Banner
+  cleanerApprovalBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    ...shadows.sm,
+  },
+  cleanerApprovalBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  cleanerApprovalBannerContent: {
+    flex: 1,
+  },
+  cleanerApprovalBannerTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[800],
+    marginBottom: 2,
+  },
+  cleanerApprovalBannerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    lineHeight: 18,
+  },
+  cleanerApprovalBannerAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  cleanerApprovalBannerActionText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
   },
 
   bottomPadding: {

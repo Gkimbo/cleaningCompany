@@ -3,8 +3,36 @@ import { API_BASE } from "../config";
 const baseURL = API_BASE.replace("/api/v1", "");
 
 class TaxService {
+  // ============================================================================
+  // CLEANER/EMPLOYEE TAX ENDPOINTS (Stripe-based)
+  // ============================================================================
+
   /**
-   * Get tax summary for a cleaner (contractor)
+   * Get earnings summary for a cleaner/employee
+   * Returns earnings from Payment records for a tax year
+   */
+  static async getEarnings(token, taxYear) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/tax/earnings/${taxYear}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { error: true, ...errorData };
+      }
+      return await response.json();
+    } catch (error) {
+      return { error: true, message: error.message };
+    }
+  }
+
+  /**
+   * Get tax summary for a cleaner (contractor) - alias for getEarnings
    */
   static async getCleanerTaxSummary(token, taxYear) {
     try {
@@ -27,11 +55,12 @@ class TaxService {
   }
 
   /**
-   * Get tax info (W-9 data) for a cleaner
+   * Get Stripe Express Dashboard link for accessing tax forms (1099)
+   * Cleaners access their 1099 forms through the Stripe Dashboard
    */
-  static async getTaxInfo(token) {
+  static async getDashboardLink(token) {
     try {
-      const response = await fetch(`${baseURL}/api/v1/tax/info`, {
+      const response = await fetch(`${baseURL}/api/v1/tax/dashboard-link`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -47,17 +76,15 @@ class TaxService {
   }
 
   /**
-   * Save or update tax info (W-9 data)
+   * Get Stripe account tax status
+   * Returns whether the user's Stripe account is set up for tax reporting
    */
-  static async saveTaxInfo(token, taxInfo) {
+  static async getTaxStatus(token) {
     try {
-      const response = await fetch(`${baseURL}/api/v1/tax/info`, {
-        method: "POST",
+      const response = await fetch(`${baseURL}/api/v1/tax/status`, {
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(taxInfo),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -69,52 +96,9 @@ class TaxService {
     }
   }
 
-  /**
-   * Get 1099-NEC documents for a cleaner
-   */
-  static async get1099Documents(token, taxYear) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/tax/contractor/1099-nec/${taxYear}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { error: true, ...errorData };
-      }
-      return await response.json();
-    } catch (error) {
-      return { error: true, message: error.message };
-    }
-  }
-
-  /**
-   * Get payment history for a user (homeowner)
-   */
-  static async getPaymentHistory(token, taxYear) {
-    try {
-      const response = await fetch(
-        `${baseURL}/api/v1/tax/payment-history/${taxYear}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        return { error: true, ...errorData };
-      }
-      return await response.json();
-    } catch (error) {
-      return { error: true, message: error.message };
-    }
-  }
+  // ============================================================================
+  // PLATFORM TAX ENDPOINTS (Business Owner's Own Taxes)
+  // ============================================================================
 
   /**
    * Get platform income summary (for owner/company)

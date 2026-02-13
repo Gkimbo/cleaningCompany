@@ -458,4 +458,278 @@ describe("ConflictService", () => {
       expect(result.success).toBe(true);
     });
   });
+
+  // ==================
+  // Support Ticket Tests
+  // ==================
+
+  describe("createSupportTicket", () => {
+    const ticketData = {
+      category: "account_issue",
+      description: "User having login issues",
+      priority: "normal",
+      conversationId: 5,
+      subjectUserId: 10,
+      subjectType: "homeowner",
+    };
+
+    it("should create support ticket successfully", async () => {
+      const mockResponse = {
+        success: true,
+        ticket: {
+          id: 1,
+          caseNumber: "SUP-000001",
+          status: "submitted",
+          priority: "normal",
+        },
+      };
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse),
+      });
+
+      const result = await ConflictService.createSupportTicket(mockToken, ticketData);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/conflicts/support/create"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${mockToken}`,
+          }),
+        })
+      );
+      expect(result.success).toBe(true);
+      expect(result.ticket.caseNumber).toBe("SUP-000001");
+    });
+
+    it("should send all ticket data in request body", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, ticket: { id: 1 } }),
+      });
+
+      await ConflictService.createSupportTicket(mockToken, ticketData);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: JSON.stringify(ticketData),
+        })
+      );
+    });
+
+    it("should handle all valid categories", async () => {
+      const categories = [
+        "account_issue",
+        "behavior_concern",
+        "service_complaint",
+        "billing_question",
+        "technical_issue",
+        "policy_violation",
+        "other",
+      ];
+
+      for (const category of categories) {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, ticket: { id: 1 } }),
+        });
+
+        await ConflictService.createSupportTicket(mockToken, { ...ticketData, category });
+
+        expect(global.fetch).toHaveBeenLastCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            body: expect.stringContaining(category),
+          })
+        );
+      }
+    });
+
+    it("should handle all valid priorities", async () => {
+      const priorities = ["normal", "high", "urgent"];
+
+      for (const priority of priorities) {
+        global.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, ticket: { id: 1 } }),
+        });
+
+        await ConflictService.createSupportTicket(mockToken, { ...ticketData, priority });
+
+        expect(global.fetch).toHaveBeenLastCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            body: expect.stringContaining(priority),
+          })
+        );
+      }
+    });
+
+    it("should handle validation error", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({ error: "Category and description are required" }),
+      });
+
+      const result = await ConflictService.createSupportTicket(mockToken, {});
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Category and description are required");
+    });
+
+    it("should handle network error", async () => {
+      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await ConflictService.createSupportTicket(mockToken, ticketData);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+  });
+
+  describe("getLinkedConversation", () => {
+    it("should fetch linked conversation messages", async () => {
+      const mockMessages = [
+        { id: 1, content: "Hello", sender: { firstName: "John" } },
+        { id: 2, content: "Hi there", sender: { firstName: "Jane" } },
+      ];
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          messages: mockMessages,
+          conversationId: 5,
+        }),
+      });
+
+      const result = await ConflictService.getLinkedConversation(mockToken, 1);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/conflicts/support/1/conversation"),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${mockToken}`,
+          }),
+        })
+      );
+      expect(result.success).toBe(true);
+      expect(result.messages).toHaveLength(2);
+      expect(result.conversationId).toBe(5);
+    });
+
+    it("should handle empty messages for ticket without conversation", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          messages: [],
+          conversationId: null,
+        }),
+      });
+
+      const result = await ConflictService.getLinkedConversation(mockToken, 1);
+
+      expect(result.success).toBe(true);
+      expect(result.messages).toHaveLength(0);
+      expect(result.conversationId).toBeNull();
+    });
+
+    it("should handle ticket not found", async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        json: () => Promise.resolve({ error: "Support ticket not found" }),
+      });
+
+      const result = await ConflictService.getLinkedConversation(mockToken, 999);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Support ticket not found");
+    });
+
+    it("should handle network error", async () => {
+      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await ConflictService.getLinkedConversation(mockToken, 1);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
+  });
+
+  describe("getQueue with support filter", () => {
+    it("should filter queue by support case type", async () => {
+      const mockCases = [
+        { id: 1, caseType: "support", caseNumber: "SUP-000001" },
+        { id: 2, caseType: "support", caseNumber: "SUP-000002" },
+      ];
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, cases: mockCases, total: 2 }),
+      });
+
+      await ConflictService.getQueue(mockToken, { caseType: "support" });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("caseType=support"),
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe("getCase for support type", () => {
+    it("should fetch support ticket case details", async () => {
+      const mockCase = {
+        id: 1,
+        caseNumber: "SUP-000001",
+        category: "account_issue",
+        description: "User having login issues",
+        status: "submitted",
+        conversationId: 5,
+      };
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, case: mockCase }),
+      });
+
+      const result = await ConflictService.getCase(mockToken, "support", 1);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/conflicts/support/1"),
+        expect.any(Object)
+      );
+      expect(result.success).toBe(true);
+      expect(result.case.caseNumber).toBe("SUP-000001");
+      expect(result.case.category).toBe("account_issue");
+    });
+  });
+
+  describe("getStats including support tickets", () => {
+    it("should return support ticket stats in queue stats", async () => {
+      const mockStats = {
+        success: true,
+        totalPending: 15,
+        appeals: { total: 5, urgent: 2 },
+        adjustments: { total: 3 },
+        payments: { total: 4 },
+        support: { total: 3, urgent: 1 },
+      };
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockStats),
+      });
+
+      const result = await ConflictService.getStats(mockToken);
+
+      expect(result.support).toBeDefined();
+      expect(result.support.total).toBe(3);
+      expect(result.support.urgent).toBe(1);
+    });
+  });
 });

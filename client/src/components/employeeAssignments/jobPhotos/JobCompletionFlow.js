@@ -21,6 +21,13 @@ import AnalyticsService from "../../../services/AnalyticsService";
 
 const baseURL = API_BASE.replace("/api/v1", "");
 
+// Photo requirement modes from job flow settings
+const PHOTO_REQUIREMENT = {
+  REQUIRED: "required",
+  OPTIONAL: "optional",
+  HIDDEN: "hidden",
+};
+
 const STEPS = {
   BEFORE_PHOTOS: "before_photos",
   CLEANING: "cleaning",
@@ -53,10 +60,58 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
     completed: 0,
     total: 0,
   });
+  const [flowSettings, setFlowSettings] = useState(null);
+  const [flowSettingsLoading, setFlowSettingsLoading] = useState(true);
   const isCompletedRef = useRef(false);
 
   // Check if current user is the business owner (preferred cleaner) for this home
   const isBusinessOwner = home?.preferredCleanerId === currentUser?.id;
+
+  // Determine photo requirement based on flow settings
+  const getPhotoRequirement = () => {
+    if (flowSettings?.photoRequirement) {
+      return flowSettings.photoRequirement;
+    }
+    // Default: business owners can skip, others must take photos
+    return isBusinessOwner ? PHOTO_REQUIREMENT.OPTIONAL : PHOTO_REQUIREMENT.REQUIRED;
+  };
+
+  const photoRequirement = getPhotoRequirement();
+  const canSkipPhotos = photoRequirement === PHOTO_REQUIREMENT.OPTIONAL || photoRequirement === PHOTO_REQUIREMENT.HIDDEN;
+  const photosHidden = photoRequirement === PHOTO_REQUIREMENT.HIDDEN;
+
+  // Fetch flow settings on mount
+  useEffect(() => {
+    const fetchFlowSettings = async () => {
+      try {
+        // Fetch flow settings for this appointment
+        const response = await fetch(
+          `${baseURL}/api/v1/job-photos/${appointment.id}/flow-settings`,
+          {
+            headers: {
+              Authorization: `Bearer ${currentUser.token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setFlowSettings(data);
+
+          // If photos are hidden, skip directly to cleaning step
+          if (data.photoRequirement === PHOTO_REQUIREMENT.HIDDEN) {
+            setCurrentStep(STEPS.CLEANING);
+          }
+        }
+      } catch (error) {
+        console.log("No flow settings found, using defaults:", error.message);
+      } finally {
+        setFlowSettingsLoading(false);
+      }
+    };
+
+    fetchFlowSettings();
+  }, [appointment.id, currentUser.token]);
 
   // Track job completion flow start and abandonment
   useEffect(() => {
@@ -241,54 +296,69 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
   };
 
   const renderStepIndicator = () => {
-    const steps = [
-      { key: STEPS.BEFORE_PHOTOS, label: "Before" },
-      { key: STEPS.CLEANING, label: "Clean" },
-      { key: STEPS.AFTER_PHOTOS, label: "After" },
-      { key: STEPS.PASSES, label: "Passes" },
-      { key: STEPS.REVIEW, label: "Complete" },
-    ];
+    // Build steps based on photo requirement
+    let steps = [];
+    if (!photosHidden) {
+      steps.push({ key: STEPS.BEFORE_PHOTOS, label: "Before" });
+    }
+    steps.push({ key: STEPS.CLEANING, label: "Clean" });
+    if (!photosHidden) {
+      steps.push({ key: STEPS.AFTER_PHOTOS, label: "After" });
+      steps.push({ key: STEPS.PASSES, label: "Passes" });
+    }
+    steps.push({ key: STEPS.REVIEW, label: "Done" });
 
     const currentIndex = steps.findIndex((s) => s.key === currentStep);
 
     return (
       <View style={styles.stepIndicator}>
-        {steps.map((step, index) => (
-          <View key={step.key} style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepCircle,
-                index <= currentIndex && styles.stepCircleActive,
-                index < currentIndex && styles.stepCircleCompleted,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.stepNumber,
-                  index <= currentIndex && styles.stepNumberActive,
-                ]}
-              >
-                {index < currentIndex ? "✓" : index + 1}
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.stepLabel,
-                index <= currentIndex && styles.stepLabelActive,
-              ]}
-            >
-              {step.label}
-            </Text>
-            {index < steps.length - 1 && (
-              <View
-                style={[
-                  styles.stepLine,
-                  index < currentIndex && styles.stepLineActive,
-                ]}
-              />
-            )}
-          </View>
-        ))}
+        <View style={styles.stepProgressBar}>
+          <View
+            style={[
+              styles.stepProgressFill,
+              { width: `${((currentIndex) / (steps.length - 1)) * 100}%` }
+            ]}
+          />
+        </View>
+        <View style={styles.stepsRow}>
+          {steps.map((step, index) => {
+            const isCompleted = index < currentIndex;
+            const isCurrent = index === currentIndex;
+            const isUpcoming = index > currentIndex;
+
+            return (
+              <View key={step.key} style={styles.stepItem}>
+                <View
+                  style={[
+                    styles.stepCircle,
+                    isCompleted && styles.stepCircleCompleted,
+                    isCurrent && styles.stepCircleActive,
+                    isUpcoming && styles.stepCircleUpcoming,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.stepNumber,
+                      (isCompleted || isCurrent) && styles.stepNumberActive,
+                    ]}
+                  >
+                    {isCompleted ? "✓" : index + 1}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.stepLabel,
+                    isCompleted && styles.stepLabelCompleted,
+                    isCurrent && styles.stepLabelActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {step.label}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
       </View>
     );
   };
@@ -301,11 +371,12 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         appointmentId={appointment.id}
         onChecklistComplete={handleChecklistComplete}
         onProgressUpdate={handleChecklistProgress}
+        customChecklist={flowSettings?.checklist}
       />
-      {isBusinessOwner && (
+      {(isBusinessOwner || canSkipPhotos) && (
         <TouchableOpacity
           style={styles.skipButton}
-          onPress={() => setCurrentStep(STEPS.AFTER_PHOTOS)}
+          onPress={() => setCurrentStep(photosHidden ? STEPS.REVIEW : STEPS.AFTER_PHOTOS)}
         >
           <Text style={styles.skipButtonText}>Skip Checklist</Text>
         </TouchableOpacity>
@@ -447,21 +518,22 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
     );
   };
 
-  const statusBarHeight = Platform.OS === 'ios' ? 50 : StatusBar.currentHeight || 0;
+  const statusBarHeight = Platform.OS === 'ios' ? 54 : StatusBar.currentHeight || 24;
 
   return (
-    <View style={[styles.container, { paddingTop: statusBarHeight }]}>
-      <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Job Completion</Text>
-        <View style={styles.headerSpacer} />
+    <View style={styles.container}>
+      <View style={[styles.topSection, { paddingTop: statusBarHeight }]}>
+        <View style={styles.headerBar}>
+          <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
+            <Text style={styles.cancelButtonText}>← Exit</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Job Completion</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        {renderStepIndicator()}
       </View>
 
-      {renderStepIndicator()}
-
-      {currentStep === STEPS.BEFORE_PHOTOS && (
+      {currentStep === STEPS.BEFORE_PHOTOS && !photosHidden && (
         <View style={{ flex: 1 }}>
           <JobPhotoCapture
             appointmentId={appointment.id}
@@ -470,7 +542,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
             onPhotosUpdated={checkPhotoStatus}
             onComplete={handleBeforePhotosComplete}
           />
-          {isBusinessOwner && (
+          {canSkipPhotos && (
             <TouchableOpacity
               style={styles.skipButton}
               onPress={() => setCurrentStep(STEPS.CLEANING)}
@@ -483,7 +555,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
 
       {currentStep === STEPS.CLEANING && renderCleaningStep()}
 
-      {currentStep === STEPS.AFTER_PHOTOS && (
+      {currentStep === STEPS.AFTER_PHOTOS && !photosHidden && (
         <View style={{ flex: 1 }}>
           <JobPhotoCapture
             appointmentId={appointment.id}
@@ -492,7 +564,7 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
             onPhotosUpdated={checkPhotoStatus}
             onComplete={handleAfterPhotosComplete}
           />
-          {isBusinessOwner && (
+          {canSkipPhotos && (
             <TouchableOpacity
               style={styles.skipButton}
               onPress={() => setCurrentStep(STEPS.PASSES)}
@@ -503,14 +575,14 @@ const JobCompletionFlow = ({ appointment, home, onJobCompleted, onCancel }) => {
         </View>
       )}
 
-      {currentStep === STEPS.PASSES && (
+      {currentStep === STEPS.PASSES && !photosHidden && (
         <View style={{ flex: 1 }}>
           <PassVerificationCapture
             appointmentId={appointment.id}
             onPhotosUpdated={checkPhotoStatus}
             onComplete={handlePassesComplete}
           />
-          {isBusinessOwner && (
+          {canSkipPhotos && (
             <TouchableOpacity
               style={styles.skipButton}
               onPress={() => {

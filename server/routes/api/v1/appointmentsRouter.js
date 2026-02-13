@@ -1,5 +1,6 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
+const models = require("../../../models");
 const {
   User,
   UserAppointments,
@@ -15,7 +16,9 @@ const {
   CleanerClient,
   HomePreferredCleaner,
   EmployeeJobAssignment,
-} = require("../../../models");
+  PreferredPerksConfig,
+  MultiCleanerJob,
+} = models;
 const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const calculatePrice = require("../../../services/CalculatePrice");
@@ -94,6 +97,7 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       assignedToBusinessEmployee: false, // Exclude business-assigned jobs from marketplace
       userId: { [Op.in]: matchingUserIds }, // Filter by demo status match
       wasCancelled: false, // Exclude cancelled appointments
+      isDemoAppointment: isCleanerDemo, // Demo cleaners see demo appointments, real cleaners see real appointments
     };
 
     // If cleaner doesn't have early access, filter out jobs in early access period
@@ -128,8 +132,36 @@ appointmentRouter.get("/unassigned", async (req, res) => {
       where: whereClause,
     });
 
+    // Get homes where this cleaner is preferred
+    const preferredHomeRecords = await HomePreferredCleaner.findAll({
+      where: { cleanerId },
+      attributes: ["homeId"],
+    });
+    const cleanerPreferredHomeIds = new Set(preferredHomeRecords.map((ph) => ph.homeId));
+
+    // Get homes that have usePreferredCleaners enabled
+    const homeIds = [...new Set(userAppointments.map((a) => a.homeId))];
+    const homesWithPreferredOnly = await UserHomes.findAll({
+      where: {
+        id: { [Op.in]: homeIds },
+        usePreferredCleaners: true,
+      },
+      attributes: ["id"],
+    });
+    const preferredOnlyHomeIds = new Set(homesWithPreferredOnly.map((h) => h.id));
+
+    // Filter appointments: exclude those from "preferred only" homes where cleaner is not preferred
+    const filteredAppointments = userAppointments.filter((appt) => {
+      // If home has usePreferredCleaners enabled, cleaner must be in the preferred list
+      if (preferredOnlyHomeIds.has(appt.homeId)) {
+        return cleanerPreferredHomeIds.has(appt.homeId);
+      }
+      // Otherwise, all cleaners can see this appointment
+      return true;
+    });
+
     // Add early access indicator to serialized appointments
-    const serializedAppointments = AppointmentSerializer.serializeArray(userAppointments).map(appt => ({
+    const serializedAppointments = AppointmentSerializer.serializeArray(filteredAppointments).map(appt => ({
       ...appt,
       isEarlyAccess: appt.earlyAccessUntil && new Date(appt.earlyAccessUntil) > new Date(),
     }));
@@ -182,6 +214,11 @@ appointmentRouter.get("/unassigned/:id", async (req, res) => {
 
     // Prevent demo/real cross-access
     if (isCleanerDemo !== isHomeownerDemo) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    // Also check the appointment's demo flag
+    if (userAppointments.isDemoAppointment !== isCleanerDemo) {
       return res.status(403).json({ error: "Access denied" });
     }
 
@@ -830,7 +867,7 @@ appointmentRouter.get("/pending-approval", async (req, res) => {
         {
           model: User,
           as: "bookedByCleaner",
-          attributes: ["id", "firstName", "lastName", "profilePhoto"],
+          attributes: ["id", "firstName", "lastName"],
         },
       ],
       order: [["expiresAt", "ASC"]],
@@ -918,7 +955,12 @@ appointmentRouter.post("/", async (req, res) => {
   }
 
   // Verify user has a payment method set up
+  let isDemoUser = false;
   try {
+    if (!token) {
+      console.error("[Appointments] No token provided");
+      return res.status(401).json({ error: "No authentication token provided" });
+    }
     const decodedToken = jwt.verify(token, secretKey);
     const userId = decodedToken.userId;
     const user = await User.findByPk(userId);
@@ -927,13 +969,17 @@ appointmentRouter.post("/", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Check if this is a demo account
+    isDemoUser = user.isDemoAccount === true;
+
     if (!user.hasPaymentMethod) {
       return res.status(403).json({
         error: "Payment method required. Please add a payment method before booking appointments."
       });
     }
   } catch (tokenError) {
-    return res.status(401).json({ error: "Invalid or expired token" });
+    console.error("[Appointments] Token verification failed:", tokenError.name, "-", tokenError.message);
+    return res.status(401).json({ error: "Invalid or expired token. Please log out and log back in." });
   }
 
   try {
@@ -949,7 +995,7 @@ appointmentRouter.post("/", async (req, res) => {
     // Check if home has a preferred cleaner (business owner relationship)
     // Only use preferred cleaner logic if the toggle is enabled
     let cleanerClientRelation = null;
-    const preferredCleanerId = usePreferredCleaners ? home.dataValues.preferredCleanerId : null;
+    let preferredCleanerId = usePreferredCleaners ? home.dataValues.preferredCleanerId : null;
     if (preferredCleanerId) {
       cleanerClientRelation = await CleanerClient.findOne({
         where: {
@@ -958,6 +1004,21 @@ appointmentRouter.post("/", async (req, res) => {
           status: "active",
         },
       });
+    }
+
+    // If no home-level preferred cleaner, check if user is a client of a business owner
+    // This handles business clients who book appointments - routes to their business owner
+    if (!preferredCleanerId) {
+      const userCleanerClient = await CleanerClient.findOne({
+        where: {
+          clientId: userId,
+          status: "active",
+        },
+      });
+      if (userCleanerClient) {
+        preferredCleanerId = userCleanerClient.cleanerId;
+        cleanerClientRelation = userCleanerClient;
+      }
     }
 
     for (const date of dateArray) {
@@ -1062,6 +1123,17 @@ appointmentRouter.post("/", async (req, res) => {
           paid = false
         }
 
+        // Get time window - prefer appointment-specific, fall back to home default
+        const timeWindow = date.timeWindow || homeBeingScheduled.dataValues.timeToBeCompleted || "anytime";
+
+        // Calculate cleaners needed based on home size AND time constraints
+        const { getCleanersNeeded } = require("../../../config/businessConfig");
+        const cleanersNeeded = getCleanersNeeded(
+          homeBeingScheduled.dataValues.numBeds,
+          homeBeingScheduled.dataValues.numBaths,
+          timeWindow
+        );
+
         const newAppointment = await UserAppointments.create({
           userId,
           homeId,
@@ -1074,8 +1146,8 @@ appointmentRouter.post("/", async (req, res) => {
           keyLocation,
           completed: false,
           hasBeenAssigned: false,
-          empoyeesNeeded: homeBeingScheduled.dataValues.cleanersNeeded,
-          timeToBeCompleted: homeBeingScheduled.dataValues.timeToBeCompleted,
+          empoyeesNeeded: cleanersNeeded,
+          timeToBeCompleted: timeWindow,
           sheetConfigurations: date.sheetConfigurations || null,
           towelConfigurations: date.towelConfigurations || null,
           // Discount incentive fields
@@ -1087,45 +1159,35 @@ appointmentRouter.post("/", async (req, res) => {
           lastMinuteFeeApplied: date.lastMinuteFeeApplied || null,
           // Early access for platinum cleaners
           earlyAccessUntil,
+          // Demo appointment flag - never show on marketplace
+          isDemoAppointment: isDemoUser,
+          // Business owner booking - routes to business owner's job list
+          bookedByCleanerId: date.preferredCleanerId || null,
         });
         const appointmentId = newAppointment.dataValues.id;
 
-        // If this is a preferred cleaner appointment, notify the cleaner
+        // If this is a business client appointment, notify the business owner
+        // via in-app notification, push notification, and email
         if (date.preferredCleanerId) {
           try {
-            const cleaner = await User.findByPk(date.preferredCleanerId);
             const client = await User.findByPk(userId);
+            const clientName = `${EncryptionService.decrypt(client.dataValues.firstName)} ${EncryptionService.decrypt(client.dataValues.lastName)}`;
             const homeAddress = `${EncryptionService.decrypt(homeBeingScheduled.dataValues.address)}, ${EncryptionService.decrypt(homeBeingScheduled.dataValues.city)}`;
-            const formattedDate = new Date(date.date).toLocaleDateString("en-US", {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
+
+            // Send in-app, push, and email notifications to business owner
+            await NotificationService.notifyClientBookedAppointment({
+              businessOwnerId: date.preferredCleanerId,
+              clientId: userId,
+              clientName,
+              appointmentId,
+              appointmentDate: date.date,
+              homeAddress,
+              price: date.price,
             });
 
-            // Send push notification to cleaner
-            if (cleaner && cleaner.dataValues.expoPushToken) {
-              await PushNotification.sendPushNotification(
-                cleaner.dataValues.expoPushToken,
-                "New Client Appointment",
-                `${EncryptionService.decrypt(client.dataValues.firstName)} booked a cleaning for ${formattedDate}. Tap to accept or decline.`,
-                { type: "client_appointment_request", appointmentId }
-              );
-            }
-
-            // Send email notification to cleaner
-            if (cleaner && cleaner.dataValues.email) {
-              await Email.sendNewClientAppointmentEmail(
-                EncryptionService.decrypt(cleaner.dataValues.email),
-                EncryptionService.decrypt(cleaner.dataValues.firstName),
-                `${EncryptionService.decrypt(client.dataValues.firstName)} ${EncryptionService.decrypt(client.dataValues.lastName)}`,
-                date.date,
-                homeAddress,
-                date.price,
-                appointmentId
-              );
-            }
+            console.log(`[Appointment] Notified business owner ${date.preferredCleanerId} about client booking ${appointmentId}`);
           } catch (notifyErr) {
-            console.error("Error notifying preferred cleaner:", notifyErr);
+            console.error("Error notifying business owner:", notifyErr);
           }
         }
 
@@ -1347,6 +1409,30 @@ appointmentRouter.patch("/:id/linens", async (req, res) => {
   }
 });
 
+// NOTE: /id/:id must be defined BEFORE /:id to prevent route interception
+appointmentRouter.delete("/id/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const appointmentToDelete = await UserAppointments.findOne({
+      where: { id: id },
+    });
+
+    const connectionsToDelete = await UserCleanerAppointments.destroy({
+      where: { appointmentId: id },
+    });
+
+    const deletedAppointmentInfo = await UserAppointments.destroy({
+      where: { id: id },
+    });
+
+    return res.status(201).json({ message: "Appointment Deleted" });
+  } catch (error) {
+    console.error(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+// CATCH-ALL: /:id must be last among DELETE routes to avoid intercepting specific routes
 appointmentRouter.delete("/:id", async (req, res) => {
   const { id } = req.params;
   const { fee, user } = req.body;
@@ -1397,28 +1483,6 @@ appointmentRouter.delete("/:id", async (req, res) => {
         });
       }
     }
-
-    const connectionsToDelete = await UserCleanerAppointments.destroy({
-      where: { appointmentId: id },
-    });
-
-    const deletedAppointmentInfo = await UserAppointments.destroy({
-      where: { id: id },
-    });
-
-    return res.status(201).json({ message: "Appointment Deleted" });
-  } catch (error) {
-    console.error(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-});
-
-appointmentRouter.delete("/id/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    const appointmentToDelete = await UserAppointments.findOne({
-      where: { id: id },
-    });
 
     const connectionsToDelete = await UserCleanerAppointments.destroy({
       where: { appointmentId: id },
@@ -2029,8 +2093,60 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
     }
 
     if (approve) {
-      // Block if a cleaner is already assigned
+      // If a cleaner is already assigned, return 409 Conflict with comparison data
       if (appointment.dataValues.hasBeenAssigned) {
+        // Get existing cleaner assignment
+        const existingAssignment = await UserCleanerAppointments.findOne({
+          where: { appointmentId: appointment.dataValues.id },
+        });
+
+        if (existingAssignment) {
+          // Get details of existing cleaner
+          const existingCleaner = await User.findByPk(existingAssignment.employeeId, {
+            attributes: ["id", "username", "completedJobs"],
+          });
+
+          // Get details of new cleaner (from the pending request)
+          const newCleaner = await User.findByPk(request.dataValues.employeeId, {
+            attributes: ["id", "username", "completedJobs"],
+          });
+
+          // Calculate average ratings for both cleaners
+          const [existingCleanerReviews, newCleanerReviews] = await Promise.all([
+            UserReviews.findAll({ where: { cleanerId: existingCleaner.id } }),
+            UserReviews.findAll({ where: { cleanerId: newCleaner.id } }),
+          ]);
+
+          const existingAvgRating = existingCleanerReviews.length > 0
+            ? existingCleanerReviews.reduce((sum, r) => sum + parseFloat(r.review || 0), 0) / existingCleanerReviews.length
+            : 0;
+          const newAvgRating = newCleanerReviews.length > 0
+            ? newCleanerReviews.reduce((sum, r) => sum + parseFloat(r.review || 0), 0) / newCleanerReviews.length
+            : 0;
+
+          return res.status(409).json({
+            error: "cleaner_conflict",
+            message: "Another cleaner is already assigned to this appointment",
+            existingCleaner: {
+              id: existingCleaner.id,
+              username: existingCleaner.username,
+              avgRating: parseFloat(existingAvgRating.toFixed(1)),
+              completedJobs: existingCleaner.completedJobs || 0,
+              reviewCount: existingCleanerReviews.length,
+            },
+            newCleaner: {
+              id: newCleaner.id,
+              username: newCleaner.username,
+              avgRating: parseFloat(newAvgRating.toFixed(1)),
+              completedJobs: newCleaner.completedJobs || 0,
+              reviewCount: newCleanerReviews.length,
+            },
+            appointmentId: appointment.dataValues.id,
+            requestId: requestId,
+          });
+        }
+
+        // Fallback if no assignment found (shouldn't happen)
         return res.status(400).json({
           error: "A cleaner is already assigned to this appointment. Remove them first to approve another.",
         });
@@ -2329,17 +2445,50 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
       // Update the approved request status to "approved"
       await request.update({ status: "approved" });
 
-      // Set all other pending requests for this appointment to "onHold"
-      await UserPendingRequests.update(
-        { status: "onHold" },
-        {
-          where: {
-            appointmentId: request.dataValues.appointmentId,
-            status: "pending",
-            id: { [Op.ne]: request.id },
-          },
+      // Get all other pending requests for this appointment to notify and delete
+      const otherPendingRequests = await UserPendingRequests.findAll({
+        where: {
+          appointmentId: request.dataValues.appointmentId,
+          id: { [Op.ne]: request.id },
+        },
+      });
+
+      // Notify and delete each denied request
+      for (const pendingRequest of otherPendingRequests) {
+        const deniedCleaner = await User.findByPk(pendingRequest.employeeId);
+        if (deniedCleaner) {
+          // Add in-app notification
+          const deniedCleanerNotifications = deniedCleaner.dataValues.notifications || [];
+          deniedCleanerNotifications.unshift(
+            `Your cleaning request for ${formattedDate} was not approved. The homeowner chose another cleaner. Check out other available appointments!`
+          );
+          await deniedCleaner.update({ notifications: deniedCleanerNotifications.slice(0, 50) });
+
+          // Send push notification
+          if (deniedCleaner.dataValues.expoPushToken) {
+            await PushNotification.sendPushRequestDenied(
+              deniedCleaner.dataValues.expoPushToken,
+              deniedCleaner.dataValues.username,
+              appointment.dataValues.date
+            );
+          }
+
+          // Send email notification
+          await Email.sendRequestDenied(
+            EncryptionService.decrypt(deniedCleaner.dataValues.email),
+            deniedCleaner.dataValues.username,
+            appointment.dataValues.date
+          );
         }
-      );
+      }
+
+      // Delete all other pending requests (the approved one stays)
+      await UserPendingRequests.destroy({
+        where: {
+          appointmentId: request.dataValues.appointmentId,
+          id: { [Op.ne]: request.id },
+        },
+      });
 
       return res.status(200).json({ message: "Cleaner assigned successfully" });
     } else {
@@ -2348,6 +2497,199 @@ appointmentRouter.patch("/approve-request", async (req, res) => {
     }
   } catch (error) {
     console.error(error);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Switch cleaner endpoint - replaces existing assigned cleaner with a new one
+appointmentRouter.post("/switch-cleaner", async (req, res) => {
+  const { appointmentId, newCleanerId, requestId } = req.body;
+  const transaction = await models.sequelize.transaction();
+
+  try {
+    // 1. Get appointment and verify it exists
+    const appointment = await UserAppointments.findByPk(appointmentId, { transaction });
+    if (!appointment) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // 2. Get existing cleaner assignment
+    const existingAssignment = await UserCleanerAppointments.findOne({
+      where: { appointmentId },
+      transaction,
+    });
+    if (!existingAssignment) {
+      await transaction.rollback();
+      return res.status(400).json({ error: "No cleaner is currently assigned to this appointment" });
+    }
+
+    const oldCleanerId = existingAssignment.employeeId;
+
+    // 3. Get both cleaners for notifications
+    const [oldCleaner, newCleaner, homeowner, home] = await Promise.all([
+      User.findByPk(oldCleanerId, { transaction }),
+      User.findByPk(newCleanerId, { transaction }),
+      User.findByPk(appointment.dataValues.userId, { transaction }),
+      UserHomes.findByPk(appointment.dataValues.homeId, { transaction }),
+    ]);
+
+    if (!newCleaner) {
+      await transaction.rollback();
+      return res.status(404).json({ error: "New cleaner not found" });
+    }
+
+    // 4. Remove old cleaner assignment
+    await existingAssignment.destroy({ transaction });
+
+    // 5. Remove old payout record
+    await Payout.destroy({
+      where: { appointmentId, cleanerId: oldCleanerId },
+      transaction,
+    });
+
+    // 6. Remove old employee job assignment if exists
+    await EmployeeJobAssignment.destroy({
+      where: { appointmentId, businessOwnerId: oldCleanerId },
+      transaction,
+    });
+
+    // 7. Create new cleaner assignment
+    await UserCleanerAppointments.create({
+      employeeId: newCleanerId,
+      appointmentId,
+    }, { transaction });
+
+    // 8. Update appointment
+    await appointment.update({
+      employeesAssigned: [String(newCleanerId)],
+      bookedByCleanerId: newCleaner.isBusinessOwner ? newCleanerId : null,
+    }, { transaction });
+
+    // 9. Create new payout record
+    const pricingConfig = await getPricingConfig();
+    const { platform: platformConfig } = pricingConfig;
+
+    const payoutPrice = appointment.dataValues.discountApplied && appointment.dataValues.originalPrice
+      ? parseFloat(appointment.dataValues.originalPrice)
+      : parseFloat(appointment.dataValues.price);
+    const priceInCents = Math.round(payoutPrice * 100);
+
+    const feeResult = await IncentiveService.calculateCleanerFee(
+      newCleanerId,
+      priceInCents,
+      platformConfig.feePercent
+    );
+
+    await Payout.create({
+      appointmentId,
+      cleanerId: newCleanerId,
+      grossAmount: priceInCents,
+      platformFee: feeResult.platformFee,
+      netAmount: feeResult.netAmount,
+      status: appointment.dataValues.paymentStatus === "captured" ? "held" : "pending",
+      incentiveApplied: feeResult.incentiveApplied,
+      originalPlatformFee: feeResult.originalPlatformFee,
+    }, { transaction });
+
+    // 10. Create self-assignment for business owner if applicable
+    if (newCleaner.isBusinessOwner) {
+      await EmployeeJobAssignment.create({
+        appointmentId,
+        businessOwnerId: newCleanerId,
+        employeeId: null,
+        isSelfAssignment: true,
+        status: "assigned",
+        assignedBy: newCleanerId,
+        payAmount: feeResult.netAmount,
+        payType: "flat_rate",
+      }, { transaction });
+    }
+
+    // 11. Delete ALL pending requests for this appointment
+    await UserPendingRequests.destroy({
+      where: { appointmentId },
+      transaction,
+    });
+
+    await transaction.commit();
+
+    // 12. Send notifications (outside transaction)
+    const formattedDate = new Date(appointment.dataValues.date).toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const address = home ? {
+      street: home.dataValues.address,
+      city: home.dataValues.city,
+      state: home.dataValues.state,
+      zipcode: home.dataValues.zipcode,
+    } : {};
+
+    // Notify old cleaner they were replaced
+    if (oldCleaner) {
+      const oldCleanerNotifications = oldCleaner.dataValues.notifications || [];
+      oldCleanerNotifications.unshift(
+        `Your assignment for ${formattedDate} at ${home?.dataValues.address || "a location"} has been reassigned to another cleaner.`
+      );
+      await oldCleaner.update({ notifications: oldCleanerNotifications.slice(0, 50) });
+
+      if (oldCleaner.dataValues.expoPushToken) {
+        await PushNotification.sendPushNotification(
+          oldCleaner.dataValues.expoPushToken,
+          "Assignment Changed",
+          `Your cleaning appointment for ${formattedDate} has been reassigned to another cleaner.`
+        );
+      }
+
+      await Email.sendGenericNotification(
+        EncryptionService.decrypt(oldCleaner.dataValues.email),
+        oldCleaner.dataValues.username,
+        "Assignment Changed",
+        `Your cleaning appointment for ${formattedDate} has been reassigned to another cleaner. Please check the marketplace for other available appointments.`
+      );
+    }
+
+    // Notify new cleaner they were approved
+    if (newCleaner && homeowner && home) {
+      const linensConfig = {
+        bringSheets: appointment.dataValues.bringSheets,
+        bringTowels: appointment.dataValues.bringTowels,
+        sheetConfigurations: appointment.dataValues.sheetConfigurations,
+        towelConfigurations: appointment.dataValues.towelConfigurations,
+      };
+      await Email.sendRequestApproved(
+        EncryptionService.decrypt(newCleaner.dataValues.email),
+        newCleaner.dataValues.username,
+        homeowner.dataValues.username,
+        address,
+        appointment.dataValues.date,
+        linensConfig
+      );
+
+      if (newCleaner.dataValues.expoPushToken) {
+        await PushNotification.sendPushRequestApproved(
+          newCleaner.dataValues.expoPushToken,
+          newCleaner.dataValues.username,
+          homeowner.dataValues.username,
+          appointment.dataValues.date,
+          address
+        );
+      }
+
+      const newCleanerNotifications = newCleaner.dataValues.notifications || [];
+      newCleanerNotifications.unshift(
+        `Your cleaning request for ${formattedDate} at ${home.dataValues.address} has been approved!`
+      );
+      await newCleaner.update({ notifications: newCleanerNotifications.slice(0, 50) });
+    }
+
+    return res.status(200).json({ message: "Cleaner switched successfully" });
+  } catch (error) {
+    await transaction.rollback();
+    console.error("Error switching cleaner:", error);
     return res.status(500).json({ error: "Server error" });
   }
 });
@@ -3696,7 +4038,26 @@ appointmentRouter.patch("/:id", async (req, res) => {
         contact,
       });
     }
-    return res.status(200).json({ user: userInfo });
+
+    // Map empoyeesNeeded to cleanersNeeded for client compatibility
+    const responseData = userInfo.dataValues || userInfo;
+
+    // Get cleanersConfirmed from MultiCleanerJob if it exists
+    let cleanersConfirmed = 0;
+    if (responseData.multiCleanerJobId) {
+      const multiCleanerJob = await MultiCleanerJob.findByPk(responseData.multiCleanerJobId);
+      if (multiCleanerJob) {
+        cleanersConfirmed = multiCleanerJob.cleanersConfirmed || 0;
+      }
+    }
+
+    const mappedResponse = {
+      ...responseData,
+      cleanersNeeded: responseData.empoyeesNeeded,
+      cleanersConfirmed,
+    };
+
+    return res.status(200).json({ user: mappedResponse });
   } catch (error) {
     console.error(error);
 
@@ -3987,6 +4348,230 @@ appointmentRouter.post("/:id/rebook", async (req, res) => {
   } catch (error) {
     console.error("Error rebooking appointment:", error);
     res.status(500).json({ error: "Failed to create rebooking" });
+  }
+});
+
+/**
+ * POST /:id/decline-response
+ * Client responds to business owner's decline
+ * action: "cancel" | "marketplace"
+ */
+appointmentRouter.post("/:id/decline-response", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body;
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "Authorization required" });
+    }
+
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    if (!action || !["cancel", "marketplace"].includes(action)) {
+      return res.status(400).json({ error: "Invalid action. Must be 'cancel' or 'marketplace'" });
+    }
+
+    // Find the appointment
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id,
+        userId,
+        businessOwnerDeclined: true,
+      },
+      include: [
+        { model: UserHomes, as: "home" },
+        { model: User, as: "bookedByCleaner" },
+      ],
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found or not eligible for this action"
+      });
+    }
+
+    const client = await User.findByPk(userId);
+    const clientName = `${EncryptionService.decrypt(client.firstName)} ${EncryptionService.decrypt(client.lastName)}`;
+
+    if (action === "cancel") {
+      // Cancel the appointment
+      await appointment.update({
+        wasCancelled: true,
+        cancellationReason: "Client cancelled after business owner declined",
+        cancellationMethod: "app",
+      });
+
+      // Notify business owner
+      await NotificationService.notifyClientCancelledAfterDecline({
+        businessOwnerId: appointment.bookedByCleanerId,
+        clientId: userId,
+        clientName,
+        appointmentId: appointment.id,
+        appointmentDate: appointment.date,
+      });
+
+      console.log(`[DeclineResponse] Client ${userId} cancelled appointment ${id}`);
+
+      return res.json({
+        success: true,
+        action: "cancelled",
+        message: "Appointment has been cancelled.",
+      });
+    }
+
+    if (action === "marketplace") {
+      // Check if home has required details
+      const home = appointment.home;
+      const missingFields = [];
+
+      if (!home.numBeds) missingFields.push("numBeds");
+      if (!home.numBaths) missingFields.push("numBaths");
+      if (!home.timeToBeCompleted) missingFields.push("timeToBeCompleted");
+
+      if (missingFields.length > 0) {
+        return res.json({
+          success: true,
+          action: "needs_home_details",
+          needsHomeDetails: true,
+          missingFields,
+          homeId: home.id,
+          message: "Please provide home details to calculate marketplace pricing.",
+        });
+      }
+
+      // Calculate marketplace price
+      const marketplacePrice = await calculatePrice(
+        appointment.bringSheets || "no",
+        appointment.bringTowels || "no",
+        home.numBeds,
+        home.numBaths,
+        home.timeToBeCompleted,
+        appointment.sheetConfigurations || home.bedConfigurations,
+        appointment.towelConfigurations || home.bathroomConfigurations
+      );
+
+      return res.json({
+        success: true,
+        action: "confirm_marketplace",
+        confirmRequired: true,
+        currentPrice: parseFloat(appointment.price),
+        marketplacePrice,
+        homeId: home.id,
+        message: "Please confirm to open this appointment to the marketplace.",
+      });
+    }
+  } catch (error) {
+    console.error("Error processing decline response:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /:id/confirm-marketplace
+ * Client confirms opening appointment to marketplace after business owner declined
+ */
+appointmentRouter.post("/:id/confirm-marketplace", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "Authorization required" });
+    }
+
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    // Find the appointment
+    const appointment = await UserAppointments.findOne({
+      where: {
+        id,
+        userId,
+        businessOwnerDeclined: true,
+        openToMarket: false,
+        wasCancelled: false,
+      },
+      include: [
+        { model: UserHomes, as: "home" },
+      ],
+    });
+
+    if (!appointment) {
+      return res.status(404).json({
+        error: "Appointment not found or not eligible for marketplace"
+      });
+    }
+
+    const home = appointment.home;
+
+    // Verify home has required details
+    if (!home.numBeds || !home.numBaths || !home.timeToBeCompleted) {
+      return res.status(400).json({
+        error: "Home details incomplete. Please update your home information first."
+      });
+    }
+
+    // Calculate final marketplace price
+    const marketplacePrice = await calculatePrice(
+      appointment.bringSheets || "no",
+      appointment.bringTowels || "no",
+      home.numBeds,
+      home.numBaths,
+      home.timeToBeCompleted,
+      appointment.sheetConfigurations || home.bedConfigurations,
+      appointment.towelConfigurations || home.bathroomConfigurations
+    );
+
+    const businessOwnerId = appointment.bookedByCleanerId;
+
+    // Update appointment to open to marketplace
+    await appointment.update({
+      openToMarket: true,
+      openedToMarketAt: new Date(),
+      businessOwnerPrice: appointment.price, // Save original business owner price
+      price: marketplacePrice.toString(),
+      bookedByCleanerId: null, // Remove business owner link
+      hasBeenAssigned: false,
+      employeesAssigned: [],
+    });
+
+    // Get client info for notification
+    const client = await User.findByPk(userId);
+    const clientName = `${EncryptionService.decrypt(client.firstName)} ${EncryptionService.decrypt(client.lastName)}`;
+
+    // Notify business owner
+    await NotificationService.notifyClientOpenedToMarketplace({
+      businessOwnerId,
+      clientId: userId,
+      clientName,
+      appointmentId: appointment.id,
+      appointmentDate: appointment.date,
+    });
+
+    // Mark related notifications as actioned
+    await Notification.update(
+      { isRead: true, actionRequired: false },
+      {
+        where: {
+          relatedAppointmentId: appointment.id,
+          type: "business_owner_declined",
+          userId,
+        },
+      }
+    );
+
+    console.log(`[ConfirmMarketplace] Client ${userId} opened appointment ${id} to marketplace at $${marketplacePrice}`);
+
+    res.json({
+      success: true,
+      message: "Your appointment is now open to the marketplace. Cleaners will be able to see and claim it.",
+      marketplacePrice,
+    });
+  } catch (error) {
+    console.error("Error confirming marketplace:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 

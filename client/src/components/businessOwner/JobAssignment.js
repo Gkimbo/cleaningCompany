@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigate } from "react-router-native";
+import { useNavigate, useLocation } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
 import { usePricing } from "../../context/PricingContext";
@@ -53,9 +53,9 @@ const UnassignedJobCard = ({ job, onAssign }) => {
     <View style={styles.jobCard}>
       <View style={styles.jobCardHeader}>
         <View style={styles.jobDateBadge}>
-          <Text style={styles.jobDateDay}>{new Date(job.date).getDate()}</Text>
+          <Text style={styles.jobDateDay}>{new Date(job.date + "T00:00:00").getDate()}</Text>
           <Text style={styles.jobDateMonth}>
-            {new Date(job.date).toLocaleDateString("en-US", { month: "short" })}
+            {new Date(job.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
           </Text>
         </View>
         <View style={styles.jobInfo}>
@@ -95,21 +95,136 @@ const UnassignedJobCard = ({ job, onAssign }) => {
 const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, platformFeePercent }) => {
   const statusColors = STATUS_COLORS[assignment.status] || STATUS_COLORS.assigned;
 
+  // Round to nearest 0.5 hour increment
+  const roundToHalfHour = (hours) => Math.ceil(hours * 2) / 2;
+
   // Calculate financials
   const jobPrice = assignment.appointment?.price || assignment.appointment?.totalPrice || 0;
   const employeePay = assignment.payAmount || 0;
   const platformFee = Math.round(jobPrice * (platformFeePercent / 100));
-  const profit = jobPrice - platformFee - employeePay;
+
+  // Check if owner is also assigned (from allAssignments array)
+  const allAssignments = assignment.allAssignments || [];
+  const ownerAssignment = allAssignments.find((a) => a.isSelfAssignment);
+  const employeeAssignments = allAssignments.filter((a) => !a.isSelfAssignment);
+  const hasOwnerAndEmployees = ownerAssignment && employeeAssignments.length > 0;
+  const totalAssigned = assignment.assignedCount || allAssignments.length || 1;
+  const isMultiCleaner = totalAssigned > 1;
+  const ownerIsAssigned = ownerAssignment || assignment.isSelfAssignment;
+
+  // Calculate adjusted duration for multi-cleaner jobs
+  const baseDuration = assignment.appointment?.duration || 2;
+  const adjustedDuration = isMultiCleaner ? roundToHalfHour(baseDuration / totalAssigned) : baseDuration;
+
+  // Build assignee display text
+  const getAssigneeDisplay = () => {
+    if (assignment.isSelfAssignment && !hasOwnerAndEmployees) {
+      return "You";
+    }
+    if (hasOwnerAndEmployees) {
+      if (employeeAssignments.length === 1) {
+        const emp = employeeAssignments[0].employee;
+        return `You + ${emp?.firstName || "1 employee"}`;
+      }
+      return `You + ${employeeAssignments.length} employees`;
+    }
+    if (totalAssigned > 1) {
+      return `${totalAssigned} cleaners`;
+    }
+    return `${assignment.employee?.firstName || ""} ${assignment.employee?.lastName || ""}`.trim();
+  };
+
+  // Calculate total employee pay for multi-assignment jobs
+  const getTotalEmployeePay = () => {
+    if (allAssignments.length > 1) {
+      return allAssignments.reduce((sum, a) => sum + (a.payAmount || 0), 0);
+    }
+    return employeePay;
+  };
+
+  const totalEmployeePay = getTotalEmployeePay();
+  const adjustedProfit = jobPrice - platformFee - totalEmployeePay;
 
   return (
-    <Pressable style={styles.jobCard} onPress={onViewDetails}>
+    <Pressable
+      style={[
+        styles.jobCard,
+        ownerIsAssigned && styles.jobCardSelfAssigned,
+        isMultiCleaner && styles.jobCardMulti,
+      ]}
+      onPress={onViewDetails}
+    >
+      {/* Multi-cleaner header banner */}
+      {isMultiCleaner && (
+        <View style={[
+          styles.multiCleanerBanner,
+          ownerIsAssigned && styles.multiCleanerBannerOwner,
+        ]}>
+          {/* Team members list */}
+          <View style={styles.multiCleanerTeam}>
+            {ownerIsAssigned && (
+              <View style={styles.teamMember}>
+                <View style={styles.teamMemberAvatarOwner}>
+                  <Icon name="star" size={10} color={colors.warning[600]} />
+                </View>
+                <Text style={styles.teamMemberNameOwner}>You</Text>
+              </View>
+            )}
+            {employeeAssignments.map((emp, idx) => (
+              <View key={emp.id || idx} style={styles.teamMember}>
+                <View style={styles.teamMemberAvatar}>
+                  <Text style={styles.teamMemberAvatarText}>
+                    {(emp.employee?.firstName?.[0] || "E").toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.teamMemberInfo}>
+                  <Text style={styles.teamMemberName}>
+                    {emp.employee?.firstName || "Employee"}
+                  </Text>
+                  {emp.payAmount > 0 && (
+                    <Text style={styles.teamMemberPay}>
+                      ${(emp.payAmount / 100).toFixed(0)}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            ))}
+            {/* Show count badge if more than 2 employees */}
+            {!ownerIsAssigned && employeeAssignments.length === 0 && totalAssigned > 1 && (
+              <View style={styles.teamMember}>
+                <View style={styles.teamMemberAvatar}>
+                  <Icon name="users" size={10} color={colors.primary[600]} />
+                </View>
+                <Text style={styles.teamMemberName}>{totalAssigned} cleaners</Text>
+              </View>
+            )}
+          </View>
+          {/* Duration badge */}
+          <View style={styles.multiCleanerBannerRight}>
+            <Icon name="clock-o" size={11} color={colors.success[600]} />
+            <Text style={styles.multiCleanerDuration}>
+              {adjustedDuration}hr each
+            </Text>
+          </View>
+        </View>
+      )}
+
       <View style={styles.jobCardHeader}>
-        <View style={styles.jobDateBadge}>
-          <Text style={styles.jobDateDay}>
-            {new Date(assignment.appointment?.date).getDate()}
+        <View style={[
+          styles.jobDateBadge,
+          ownerIsAssigned && styles.jobDateBadgeSelf,
+        ]}>
+          <Text style={[
+            styles.jobDateDay,
+            ownerIsAssigned && styles.jobDateDaySelf,
+          ]}>
+            {new Date(assignment.appointment?.date + "T00:00:00").getDate()}
           </Text>
-          <Text style={styles.jobDateMonth}>
-            {new Date(assignment.appointment?.date).toLocaleDateString("en-US", {
+          <Text style={[
+            styles.jobDateMonth,
+            ownerIsAssigned && styles.jobDateMonthSelf,
+          ]}>
+            {new Date(assignment.appointment?.date + "T00:00:00").toLocaleDateString("en-US", {
               month: "short",
             })}
           </Text>
@@ -118,29 +233,56 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
           <Text style={styles.jobClient}>
             {assignment.appointment?.clientName || "Client"}
           </Text>
-          <Text style={styles.jobAssignee}>
-            {assignment.isSelfAssignment
-              ? "You (Self-assigned)"
-              : `${assignment.employee?.firstName || ""} ${assignment.employee?.lastName || ""}`}
-          </Text>
-          <View style={styles.financialInfo}>
-            <Text style={styles.jobPriceLabel}>
-              Job: ${(jobPrice / 100).toFixed(0)}
-            </Text>
-            <Text style={styles.feeLabel}>
-              Fee: ${(platformFee / 100).toFixed(0)}
-            </Text>
-            {!assignment.isSelfAssignment && (
-              <Text style={styles.employeePayLabel}>
-                Pay: ${(employeePay / 100).toFixed(0)}
+          {/* Single cleaner assignee display */}
+          {!isMultiCleaner && (
+            <View style={styles.assigneeRow}>
+              {ownerIsAssigned && (
+                <View style={styles.ownerBadgeSmall}>
+                  <Icon name="star" size={8} color={colors.warning[600]} />
+                </View>
+              )}
+              <Text style={[
+                styles.jobAssignee,
+                ownerIsAssigned && styles.jobAssigneeSelf,
+              ]}>
+                {getAssigneeDisplay()}
               </Text>
+              <Text style={styles.jobDuration}>
+                · {baseDuration}hr
+              </Text>
+            </View>
+          )}
+          {/* Financial summary row */}
+          <View style={styles.financialRow}>
+            <View style={styles.financialItem}>
+              <Text style={styles.financialItemLabel}>Job</Text>
+              <Text style={styles.financialItemValue}>${(jobPrice / 100).toFixed(0)}</Text>
+            </View>
+            <View style={styles.financialDivider} />
+            {totalEmployeePay > 0 && (
+              <>
+                <View style={styles.financialItem}>
+                  <Text style={styles.financialItemLabel}>Pay</Text>
+                  <Text style={[styles.financialItemValue, styles.financialItemPay]}>
+                    -${(totalEmployeePay / 100).toFixed(0)}
+                  </Text>
+                </View>
+                <View style={styles.financialDivider} />
+              </>
             )}
-            <Text style={[styles.profitLabel, profit < 0 && styles.profitNegative]}>
-              You: ${(profit / 100).toFixed(0)}
-            </Text>
+            <View style={styles.financialItem}>
+              <Text style={styles.financialItemLabel}>Profit</Text>
+              <Text style={[
+                styles.financialItemValue,
+                styles.financialItemProfit,
+                adjustedProfit < 0 && styles.financialItemLoss,
+              ]}>
+                ${(adjustedProfit / 100).toFixed(0)}
+              </Text>
+            </View>
           </View>
         </View>
-        <View>
+        <View style={styles.jobCardRight}>
           <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
             <Text style={[styles.statusText, { color: statusColors.text }]}>
               {assignment.status}
@@ -148,21 +290,25 @@ const AssignedJobCard = ({ assignment, onReassign, onUnassign, onViewDetails, pl
           </View>
         </View>
       </View>
-      {assignment.status === "assigned" && !assignment.isSelfAssignment && (
+      {assignment.status === "assigned" && (
         <View style={styles.jobCardActions}>
           <Pressable
-            style={styles.reassignButton}
+            style={[styles.reassignButton, ownerIsAssigned && styles.reassignButtonOwner]}
             onPress={onReassign}
           >
-            <Icon name="exchange" size={14} color={colors.primary[600]} />
-            <Text style={styles.reassignButtonText}>Reassign</Text>
+            <Icon name="user-plus" size={13} color={ownerIsAssigned ? colors.warning[700] : colors.primary[600]} />
+            <Text style={[styles.reassignButtonText, ownerIsAssigned && styles.reassignButtonTextOwner]}>
+              {isMultiCleaner ? "Edit Team" : (assignment.isSelfAssignment ? "Add Help" : "Reassign")}
+            </Text>
           </Pressable>
           <Pressable
             style={styles.unassignButton}
             onPress={onUnassign}
           >
             <Icon name="times" size={14} color={colors.error[600]} />
-            <Text style={styles.unassignButtonText}>Unassign</Text>
+            <Text style={styles.unassignButtonText}>
+              {isMultiCleaner ? "Remove All" : "Remove"}
+            </Text>
           </Pressable>
         </View>
       )}
@@ -181,38 +327,38 @@ const AssignModal = ({
   isSelfAssign,
 }) => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [payAmount, setPayAmount] = useState("");
-  const [payType, setPayType] = useState("flat_rate");
-  const [showFinancials, setShowFinancials] = useState(false);
-  const [isUsingDefaultPay, setIsUsingDefaultPay] = useState(false);
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
+  const [includeSelf, setIncludeSelf] = useState(false); // Business owner included in multi-select
   const { pricing } = usePricing();
+
+  // Business owner "employee" object for display purposes
+  const businessOwnerOption = {
+    id: "self",
+    firstName: "You",
+    lastName: "(Owner)",
+    payType: "none",
+    isSelf: true,
+  };
 
   // Get platform fee from config (default 10%)
   const platformFeePercent = (pricing?.platform?.businessOwnerFeePercent || 0.10) * 100;
 
-  // Calculate default pay based on employee's pay type
-  const calculateDefaultPay = (employee, jobPrice) => {
-    if (!employee) return null;
+  // Calculate pay based on employee's pay type
+  const calculateEmployeePay = (employee, jobPrice, duration) => {
+    if (!employee) return { amount: 0, payType: "flat_rate", rateDisplay: null, totalDisplay: null };
 
     const empPayType = employee.payType || "per_job";
+    const jobDuration = duration || 2; // Use passed duration or default to 2
 
     switch (empPayType) {
       case "hourly":
-        // For hourly, show estimated pay (will be calculated at completion)
-        // Use 2 hours as default estimate
         const hourlyRate = employee.defaultHourlyRate || 0;
         return {
-          amount: hourlyRate * 2, // 2 hour estimate
+          amount: hourlyRate * jobDuration,
           payType: "hourly",
-          note: `$${(hourlyRate / 100).toFixed(2)}/hr (2hr estimate)`,
-        };
-      case "per_job":
-      case "flat_rate":
-        const jobRate = employee.defaultJobRate || 0;
-        return {
-          amount: jobRate,
-          payType: "flat_rate",
-          note: jobRate > 0 ? `Default: $${(jobRate / 100).toFixed(2)}/job` : null,
+          rateDisplay: `$${(hourlyRate / 100).toFixed(0)}/hr`,
+          totalDisplay: `$${((hourlyRate * jobDuration) / 100).toFixed(2)}`,
         };
       case "percentage":
         const percentage = parseFloat(employee.payRate) || 0;
@@ -220,325 +366,538 @@ const AssignModal = ({
         return {
           amount: calculatedPay,
           payType: "percentage",
-          note: `${percentage}% of job price`,
+          rateDisplay: `${percentage}%`,
+          totalDisplay: `$${(calculatedPay / 100).toFixed(2)}`,
         };
+      case "per_job":
+      case "flat_rate":
       default:
-        return null;
+        const jobRate = employee.defaultJobRate || 0;
+        return {
+          amount: jobRate,
+          payType: "flat_rate",
+          rateDisplay: "Flat",
+          totalDisplay: `$${(jobRate / 100).toFixed(2)}`,
+        };
     }
   };
 
-  // Set initial pay amount when modal opens (use suggestion if no employee selected yet)
-  useEffect(() => {
-    if (job && visible && !selectedEmployee) {
-      const suggestions = BusinessOwnerService.suggestPayAmounts(job.totalPrice || 0);
-      setPayAmount((suggestions.margin35.payAmount / 100).toFixed(2));
-      setIsUsingDefaultPay(false);
-    }
-  }, [job, visible]);
+  // Calculate pay with adjusted hours for multi-select
+  const calculateEmployeePayWithAdjustedHours = (employee, jobPriceVal, hours) => {
+    if (!employee) return { amount: 0, payType: "flat_rate", rateDisplay: null, totalDisplay: null };
 
-  // Update pay when employee is selected
-  useEffect(() => {
-    if (selectedEmployee && job) {
-      const defaultPay = calculateDefaultPay(selectedEmployee, job.totalPrice);
-      if (defaultPay && defaultPay.amount > 0) {
-        setPayAmount((defaultPay.amount / 100).toFixed(2));
-        setPayType(defaultPay.payType);
-        setIsUsingDefaultPay(true);
-      } else {
-        // Fallback to suggested pay if no default set
-        const suggestions = BusinessOwnerService.suggestPayAmounts(job.totalPrice || 0);
-        setPayAmount((suggestions.margin35.payAmount / 100).toFixed(2));
-        setPayType("flat_rate");
-        setIsUsingDefaultPay(false);
-      }
+    const empPayType = employee.payType || "per_job";
+
+    switch (empPayType) {
+      case "hourly":
+        const hourlyRate = employee.defaultHourlyRate || 0;
+        return {
+          amount: Math.round(hourlyRate * hours),
+          payType: "hourly",
+          rateDisplay: `$${(hourlyRate / 100).toFixed(0)}/hr`,
+          totalDisplay: `$${((hourlyRate * hours) / 100).toFixed(2)}`,
+          hours: hours,
+        };
+      case "percentage":
+        const percentage = parseFloat(employee.payRate) || 0;
+        const calculatedPay = Math.round((percentage / 100) * (jobPriceVal || 0));
+        return {
+          amount: calculatedPay,
+          payType: "percentage",
+          rateDisplay: `${percentage}%`,
+          totalDisplay: `$${(calculatedPay / 100).toFixed(2)}`,
+        };
+      case "per_job":
+      case "flat_rate":
+      default:
+        const jobRate = employee.defaultJobRate || 0;
+        return {
+          amount: jobRate,
+          payType: "flat_rate",
+          rateDisplay: "Flat",
+          totalDisplay: `$${(jobRate / 100).toFixed(2)}`,
+        };
     }
-  }, [selectedEmployee, job]);
+  };
 
   const handleSubmit = () => {
-    if (!isSelfAssign && !selectedEmployee) return;
-    onSubmit({
-      appointmentId: job.id,
-      employeeId: isSelfAssign ? null : selectedEmployee.id,
-      payAmount: Math.round(parseFloat(payAmount) * 100),
-      payType,
-      isSelfAssign,
-    });
+    if (isSelfAssign) {
+      onSubmit({
+        appointmentId: job.id,
+        employeeId: null,
+        payAmount: 0,
+        payType: "flat_rate",
+        isSelfAssign: true,
+      });
+      return;
+    }
+
+    if (isMultiSelect) {
+      if (selectedEmployees.length === 0 && !includeSelf) return;
+      // Calculate adjusted duration based on number of cleaners (employees + owner)
+      // Round up to nearest 0.5 hour increment
+      const roundHalfHour = (hours) => Math.ceil(hours * 2) / 2;
+      const jobBaseDuration = job?.duration || 2;
+      const cleanerCount = selectedEmployees.length + (includeSelf ? 1 : 0);
+      const rawDuration = cleanerCount > 1 ? jobBaseDuration / cleanerCount : jobBaseDuration;
+      const adjDuration = roundHalfHour(rawDuration);
+
+      // Build assignments array for multi-select (with adjusted hours for hourly employees)
+      const assignments = selectedEmployees.map((emp) => {
+        const payInfo = calculateEmployeePayWithAdjustedHours(emp, job?.totalPrice, adjDuration);
+        return {
+          appointmentId: job.id,
+          employeeId: emp.id,
+          payAmount: payInfo.amount,
+          payType: payInfo.payType,
+          isSelfAssign: false,
+        };
+      });
+
+      // Add self-assignment if business owner is included
+      if (includeSelf) {
+        assignments.push({
+          appointmentId: job.id,
+          employeeId: null,
+          payAmount: 0,
+          payType: "none",
+          isSelfAssign: true,
+        });
+      }
+
+      onSubmit(assignments, true); // true indicates multi-select
+    } else {
+      if (!selectedEmployee) return;
+      const payInfo = calculateEmployeePay(selectedEmployee, job?.totalPrice, job?.duration);
+      onSubmit({
+        appointmentId: job.id,
+        employeeId: selectedEmployee.id,
+        payAmount: payInfo.amount,
+        payType: payInfo.payType,
+        isSelfAssign: false,
+      });
+    }
   };
 
   const handleClose = () => {
     setSelectedEmployee(null);
-    setPayAmount("");
-    setPayType("flat_rate");
-    setShowFinancials(false);
+    setSelectedEmployees([]);
+    setIsMultiSelect(false);
+    setIncludeSelf(false);
     onClose();
   };
 
-  const financials = job
-    ? BusinessOwnerService.calculateJobFinancials(
-        job.totalPrice || 0,
-        Math.round(parseFloat(payAmount || 0) * 100),
-        platformFeePercent
-      )
-    : null;
+  const toggleEmployeeSelection = (emp) => {
+    if (emp.isSelf) {
+      setIncludeSelf(!includeSelf);
+      return;
+    }
+    setSelectedEmployees((prev) => {
+      const isSelected = prev.some((e) => e.id === emp.id);
+      if (isSelected) {
+        return prev.filter((e) => e.id !== emp.id);
+      } else {
+        return [...prev, emp];
+      }
+    });
+  };
+
+  const handleMultiSelectToggle = () => {
+    setIsMultiSelect(!isMultiSelect);
+    // Clear selections when toggling
+    setSelectedEmployee(null);
+    setSelectedEmployees([]);
+    setIncludeSelf(false);
+  };
+
+  // Calculate financials for selected employee(s)
+  const jobPrice = job?.totalPrice || 0;
+  const platformFee = Math.round(jobPrice * (platformFeePercent / 100));
+  const baseDuration = job?.duration || 2; // Default 2 hours
+
+  // Round up to nearest 0.5 hour increment
+  const roundToHalfHour = (hours) => Math.ceil(hours * 2) / 2;
+
+  // Calculate adjusted duration based on number of cleaners (employees + owner if included)
+  const totalCleaners = isMultiSelect
+    ? selectedEmployees.length + (includeSelf ? 1 : 0)
+    : 1;
+  const rawAdjustedDuration = totalCleaners > 1 ? baseDuration / totalCleaners : baseDuration;
+  const adjustedDuration = roundToHalfHour(rawAdjustedDuration);
+
+  const selectedPayInfo = calculateEmployeePay(selectedEmployee, jobPrice, baseDuration);
+
+  // Calculate total pay for multi-select (with adjusted hours for hourly employees)
+  // Business owner (includeSelf) doesn't get paid
+  const multiSelectTotalPay = selectedEmployees.reduce((total, emp) => {
+    const payInfo = calculateEmployeePayWithAdjustedHours(emp, jobPrice, adjustedDuration);
+    return total + payInfo.amount;
+  }, 0);
+
+  const profit = isMultiSelect
+    ? jobPrice - platformFee - multiSelectTotalPay
+    : jobPrice - platformFee - selectedPayInfo.amount;
 
   if (!job) return null;
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {isSelfAssign ? "Self-Assign Job" : "Assign Employee"}
-            </Text>
-            <Pressable onPress={handleClose}>
-              <Icon name="times" size={24} color={colors.neutral[500]} />
+        <View style={styles.assignModalContent}>
+          {/* Header */}
+          <View style={styles.assignModalHeader}>
+            <View style={styles.assignModalHeaderIcon}>
+              <Icon name={isSelfAssign ? "user" : "user-plus"} size={18} color={colors.primary[500]} />
+            </View>
+            <View style={styles.assignModalHeaderText}>
+              <Text style={styles.assignModalTitle}>
+                {isSelfAssign ? "Self-Assign Job" : "Assign Employee"}
+              </Text>
+              <Text style={styles.assignModalSubtitle}>
+                {job.clientName || "Client"} · ${((job.totalPrice || 0) / 100).toFixed(0)}
+              </Text>
+            </View>
+            <Pressable style={styles.assignModalClose} onPress={handleClose}>
+              <Icon name="times" size={16} color={colors.neutral[400]} />
             </Pressable>
           </View>
 
-          <ScrollView style={styles.modalBody}>
-            {/* Job Details */}
-            <View style={styles.jobSummary}>
-              <Text style={styles.jobSummaryTitle}>
-                {job.clientName || "Client"} - {job.address || "No address"}
-              </Text>
-              <Text style={styles.jobSummaryDate}>
-                {new Date(job.date).toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </Text>
-              <Text style={styles.jobSummaryPrice}>
-                Customer Pays: ${((job.totalPrice || 0) / 100).toFixed(2)}
-              </Text>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.assignModalBody}
+          >
+            {/* Job Summary Card */}
+            <View style={styles.assignJobCard}>
+              <View style={styles.assignJobCardDate}>
+                <Text style={styles.assignJobCardDay}>
+                  {new Date(job.date + "T00:00:00").getDate()}
+                </Text>
+                <Text style={styles.assignJobCardMonth}>
+                  {new Date(job.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                </Text>
+              </View>
+              <View style={styles.assignJobCardInfo}>
+                <Text style={styles.assignJobCardClient}>{job.clientName || "Client"}</Text>
+                <Text style={styles.assignJobCardAddress} numberOfLines={1}>{job.address || "No address"}</Text>
+                <Text style={styles.assignJobCardTime}>
+                  {job.startTime ? `${parseInt(job.startTime.split(":")[0]) > 12 ? parseInt(job.startTime.split(":")[0]) - 12 : job.startTime.split(":")[0]}:${job.startTime.split(":")[1]} ${parseInt(job.startTime.split(":")[0]) >= 12 ? "PM" : "AM"}` : "Time TBD"}
+                </Text>
+              </View>
+              <View style={styles.assignJobCardPrice}>
+                <Text style={styles.assignJobCardPriceAmount}>${((job.totalPrice || 0) / 100).toFixed(0)}</Text>
+                <Text style={styles.assignJobCardPriceLabel}>Job Price</Text>
+              </View>
             </View>
 
-            {/* Employee Selection (if not self-assign) */}
-            {!isSelfAssign && (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Select Employee</Text>
-                <ScrollView style={styles.employeeList} horizontal={false}>
-                  {employees.map((emp) => (
-                    <Pressable
-                      key={emp.id}
-                      style={[
-                        styles.employeeOption,
-                        selectedEmployee?.id === emp.id && styles.employeeOptionSelected,
-                      ]}
-                      onPress={() => setSelectedEmployee(emp)}
-                    >
-                      <View style={styles.employeeOptionAvatar}>
-                        <Text style={styles.employeeOptionAvatarText}>
-                          {(emp.firstName?.[0] || "E").toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.employeeOptionInfo}>
-                        <Text style={styles.employeeOptionName}>
-                          {emp.firstName} {emp.lastName}
-                        </Text>
-                        <Text style={styles.employeeOptionRate}>
-                          {emp.payType === "hourly" && emp.defaultHourlyRate
-                            ? `$${(emp.defaultHourlyRate / 100).toFixed(2)}/hr`
-                            : emp.payType === "percentage" && emp.payRate
-                            ? `${parseFloat(emp.payRate)}% of job`
-                            : emp.defaultJobRate
-                            ? `$${(emp.defaultJobRate / 100).toFixed(2)}/job`
-                            : "No default rate set"}
-                        </Text>
-                      </View>
-                      {selectedEmployee?.id === emp.id && (
-                        <Icon name="check" size={16} color={colors.primary[600]} />
-                      )}
-                    </Pressable>
-                  ))}
-                </ScrollView>
+            {/* Self Assign Info */}
+            {isSelfAssign && (
+              <View style={styles.selfAssignCard}>
+                <Icon name="info-circle" size={18} color={colors.primary[500]} />
+                <View style={styles.selfAssignCardText}>
+                  <Text style={styles.selfAssignCardTitle}>You'll clean this job</Text>
+                  <Text style={styles.selfAssignCardDesc}>
+                    No employee pay will be recorded. You keep 100% minus platform fee.
+                  </Text>
+                </View>
               </View>
             )}
 
-            {/* Pay Amount (skip for self-assign) */}
+            {/* Employee Selection (if not self-assign) */}
             {!isSelfAssign && (
               <>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Pay Amount</Text>
-                  {/* Show default pay info when employee selected */}
-                  {selectedEmployee && isUsingDefaultPay && (
-                    <View style={styles.defaultPayNote}>
-                      <Icon name="info-circle" size={12} color={colors.primary[600]} />
-                      <Text style={styles.defaultPayNoteText}>
-                        Using {selectedEmployee.firstName}'s default{" "}
-                        {selectedEmployee.payType === "hourly"
-                          ? "hourly rate (2hr estimate)"
-                          : selectedEmployee.payType === "percentage"
-                          ? `${parseFloat(selectedEmployee.payRate)}% rate`
-                          : "job rate"}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={styles.payInputRow}>
-                    <Text style={styles.currencySymbol}>$</Text>
-                    <TextInput
-                      style={styles.payInput}
-                      value={payAmount}
-                      onChangeText={(val) => {
-                        setPayAmount(val);
-                        setIsUsingDefaultPay(false); // Mark as overridden when manually changed
-                      }}
-                      keyboardType="decimal-pad"
-                      placeholder="0.00"
-                    />
-                  </View>
-                  {/* Quick suggestions */}
-                  <Text style={styles.suggestionsLabel}>Quick suggestions:</Text>
-                  <View style={styles.paySuggestions}>
-                    {job &&
-                      Object.entries(
-                        BusinessOwnerService.suggestPayAmounts(job.totalPrice || 0)
-                      ).map(([key, value]) => (
-                        <Pressable
-                          key={key}
-                          style={styles.paySuggestion}
-                          onPress={() => {
-                            setPayAmount((value.payAmount / 100).toFixed(2));
-                            setIsUsingDefaultPay(false);
-                          }}
-                        >
-                          <Text style={styles.paySuggestionAmount}>{value.formatted}</Text>
-                          <Text style={styles.paySuggestionLabel}>{value.label}</Text>
-                        </Pressable>
-                      ))}
-                  </View>
-                </View>
-
-                {/* Pay Type */}
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Pay Type</Text>
-                  <View style={styles.payTypeRow}>
-                    <Pressable
-                      style={[
-                        styles.payTypeOption,
-                        payType === "flat_rate" && styles.payTypeOptionSelected,
-                      ]}
-                      onPress={() => setPayType("flat_rate")}
-                    >
-                      <Text
-                        style={[
-                          styles.payTypeText,
-                          payType === "flat_rate" && styles.payTypeTextSelected,
-                        ]}
-                      >
-                        Flat Rate
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.payTypeOption,
-                        payType === "hourly" && styles.payTypeOptionSelected,
-                      ]}
-                      onPress={() => setPayType("hourly")}
-                    >
-                      <Text
-                        style={[
-                          styles.payTypeText,
-                          payType === "hourly" && styles.payTypeTextSelected,
-                        ]}
-                      >
-                        Hourly
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {/* Financial Breakdown */}
+                {/* Multi-select toggle */}
                 <Pressable
-                  style={styles.financialsToggle}
-                  onPress={() => setShowFinancials(!showFinancials)}
+                  style={styles.multiSelectToggle}
+                  onPress={handleMultiSelectToggle}
                 >
-                  <Text style={styles.financialsToggleText}>
-                    {showFinancials ? "Hide" : "Show"} Financial Breakdown
-                  </Text>
-                  <Icon
-                    name={showFinancials ? "chevron-up" : "chevron-down"}
-                    size={12}
-                    color={colors.primary[600]}
-                  />
+                  <View style={[
+                    styles.multiSelectCheckbox,
+                    isMultiSelect && styles.multiSelectCheckboxActive,
+                  ]}>
+                    {isMultiSelect && <Icon name="check" size={10} color="#fff" />}
+                  </View>
+                  <Text style={styles.multiSelectLabel}>Assign multiple employees</Text>
                 </Pressable>
 
-                {showFinancials && financials && (
-                  <View style={styles.financialsCard}>
-                    <View style={styles.financialRow}>
-                      <Text style={styles.financialLabel}>Customer Pays</Text>
-                      <Text style={styles.financialValue}>
-                        {financials.formatted.customerPays}
+                {/* Time savings indicator for multiple cleaners */}
+                {isMultiSelect && totalCleaners >= 2 && (
+                  <View style={styles.timeSavingsCard}>
+                    <Icon name="clock-o" size={16} color={colors.success[600]} />
+                    <View style={styles.timeSavingsText}>
+                      <Text style={styles.timeSavingsTitle}>
+                        Faster completion with {totalCleaners} cleaners
+                      </Text>
+                      <Text style={styles.timeSavingsDesc}>
+                        {baseDuration} hr job → {adjustedDuration.toFixed(1)} hr per cleaner
                       </Text>
                     </View>
-                    <View style={styles.financialRow}>
-                      <Text style={styles.financialLabel}>Platform Fee ({platformFeePercent}%)</Text>
-                      <Text style={[styles.financialValue, { color: colors.error[600] }]}>
-                        -{financials.formatted.platformFee}
-                      </Text>
-                    </View>
-                    <View style={styles.financialRow}>
-                      <Text style={styles.financialLabel}>Employee Pay</Text>
-                      <Text style={[styles.financialValue, { color: colors.error[600] }]}>
-                        -{financials.formatted.employeePay}
-                      </Text>
-                    </View>
-                    <View style={[styles.financialRow, styles.financialRowTotal]}>
-                      <Text style={styles.financialLabelTotal}>Your Profit</Text>
-                      <Text
-                        style={[
-                          styles.financialValueTotal,
-                          financials.businessOwnerProfit < 0 && { color: colors.error[600] },
-                        ]}
-                      >
-                        {financials.formatted.businessOwnerProfit}
-                      </Text>
-                    </View>
-                    <Text style={styles.financialMargin}>
-                      Profit Margin: {financials.formatted.profitMargin}
-                    </Text>
-                    {financials.warnings.map((warning, i) => (
-                      <View key={i} style={styles.warningBadge}>
-                        <Icon name="exclamation-triangle" size={12} color={colors.warning[700]} />
-                        <Text style={styles.warningText}>{warning.message}</Text>
+                  </View>
+                )}
+
+                <Text style={styles.assignSectionLabel}>
+                  {isMultiSelect
+                    ? `Select Team Members (${totalCleaners} selected)`
+                    : "Select Team Member"}
+                </Text>
+                <View style={styles.assignEmployeeList}>
+                  {/* Business Owner option - only in multi-select mode */}
+                  {isMultiSelect && (
+                    <Pressable
+                      style={[
+                        styles.assignEmployeeCard,
+                        styles.assignEmployeeCardOwner,
+                        includeSelf && styles.assignEmployeeCardSelected,
+                      ]}
+                      onPress={() => toggleEmployeeSelection(businessOwnerOption)}
+                    >
+                      <View style={[
+                        styles.assignEmployeeCheckbox,
+                        includeSelf && styles.assignEmployeeCheckboxSelected,
+                      ]}>
+                        {includeSelf && <Icon name="check" size={10} color="#fff" />}
                       </View>
-                    ))}
+                      <View style={[
+                        styles.assignEmployeeAvatar,
+                        styles.assignEmployeeAvatarOwner,
+                        includeSelf && styles.assignEmployeeAvatarSelected,
+                      ]}>
+                        <Icon name="star" size={16} color={includeSelf ? "#fff" : colors.warning[600]} />
+                      </View>
+                      <View style={styles.assignEmployeeInfo}>
+                        <Text style={styles.assignEmployeeName}>
+                          You (Owner)
+                        </Text>
+                        <View style={styles.assignEmployeePayRow}>
+                          <Text style={styles.assignEmployeeRate}>No pay deduction</Text>
+                          <View style={styles.assignEmployeePayDot} />
+                          <Text style={[styles.assignEmployeeTotal, { color: colors.success[600] }]}>Keep profits</Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                  )}
+
+                  {employees.map((emp) => {
+                    const isSelected = isMultiSelect
+                      ? selectedEmployees.some((e) => e.id === emp.id)
+                      : selectedEmployee?.id === emp.id;
+                    // Use adjusted hours for pay calculation when multiple cleaners selected
+                    const useAdjustedHours = isMultiSelect && totalCleaners >= 2;
+                    const payInfo = useAdjustedHours
+                      ? calculateEmployeePayWithAdjustedHours(emp, jobPrice, adjustedDuration)
+                      : calculateEmployeePay(emp, jobPrice, baseDuration);
+                    const isHourlyWithAdjustment = useAdjustedHours && emp.payType === "hourly";
+                    return (
+                      <Pressable
+                        key={emp.id}
+                        style={[
+                          styles.assignEmployeeCard,
+                          isSelected && styles.assignEmployeeCardSelected,
+                        ]}
+                        onPress={() => {
+                          if (isMultiSelect) {
+                            toggleEmployeeSelection(emp);
+                          } else {
+                            setSelectedEmployee(emp);
+                          }
+                        }}
+                      >
+                        <View style={[
+                          isMultiSelect ? styles.assignEmployeeCheckbox : styles.assignEmployeeRadio,
+                          isSelected && (isMultiSelect ? styles.assignEmployeeCheckboxSelected : styles.assignEmployeeRadioSelected),
+                        ]}>
+                          {isSelected && <Icon name="check" size={10} color="#fff" />}
+                        </View>
+                        <View style={[
+                          styles.assignEmployeeAvatar,
+                          isSelected && styles.assignEmployeeAvatarSelected,
+                        ]}>
+                          <Text style={[
+                            styles.assignEmployeeAvatarText,
+                            isSelected && styles.assignEmployeeAvatarTextSelected,
+                          ]}>
+                            {(emp.firstName?.[0] || "E").toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={styles.assignEmployeeInfo}>
+                          <Text style={styles.assignEmployeeName}>
+                            {emp.firstName} {emp.lastName}
+                          </Text>
+                          <View style={styles.assignEmployeePayRow}>
+                            <Text style={styles.assignEmployeeRate}>
+                              {payInfo.rateDisplay}
+                              {isHourlyWithAdjustment && (
+                                <Text style={styles.adjustedHoursNote}> × {adjustedDuration.toFixed(1)}hr</Text>
+                              )}
+                            </Text>
+                            <View style={styles.assignEmployeePayDot} />
+                            <Text style={styles.assignEmployeeTotal}>{payInfo.totalDisplay}</Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {/* Financial Preview - Single Select */}
+                {!isMultiSelect && selectedEmployee && (
+                  <View style={styles.assignFinancialCard}>
+                    <View style={styles.assignFinancialHeader}>
+                      <Icon name="calculator" size={14} color={colors.primary[500]} />
+                      <Text style={styles.assignFinancialTitle}>Financial Breakdown</Text>
+                    </View>
+                    <View style={styles.assignFinancialBody}>
+                      <View style={styles.assignFinancialRow}>
+                        <Text style={styles.assignFinancialLabel}>Job Price</Text>
+                        <Text style={styles.assignFinancialValue}>${(jobPrice / 100).toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.assignFinancialRow}>
+                        <Text style={styles.assignFinancialLabel}>Platform Fee ({platformFeePercent}%)</Text>
+                        <Text style={[styles.assignFinancialValue, styles.assignFinancialDeduct]}>
+                          -${(platformFee / 100).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.assignFinancialRow}>
+                        <Text style={styles.assignFinancialLabel}>{selectedEmployee.firstName}'s Pay</Text>
+                        <Text style={[styles.assignFinancialValue, styles.assignFinancialDeduct]}>
+                          -${(selectedPayInfo.amount / 100).toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.assignFinancialFooter}>
+                      <Text style={styles.assignFinancialProfitLabel}>Your Profit</Text>
+                      <Text style={[
+                        styles.assignFinancialProfitValue,
+                        profit >= 0 ? styles.profitPositive : styles.profitNegative,
+                      ]}>
+                        ${(profit / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Financial Preview - Multi Select */}
+                {isMultiSelect && (selectedEmployees.length > 0 || includeSelf) && (
+                  <View style={styles.assignFinancialCard}>
+                    <View style={styles.assignFinancialHeader}>
+                      <Icon name="calculator" size={14} color={colors.primary[500]} />
+                      <Text style={styles.assignFinancialTitle}>
+                        Financial Breakdown ({totalCleaners} cleaner{totalCleaners !== 1 ? "s" : ""})
+                      </Text>
+                    </View>
+                    <View style={styles.assignFinancialBody}>
+                      <View style={styles.assignFinancialRow}>
+                        <Text style={styles.assignFinancialLabel}>Job Price</Text>
+                        <Text style={styles.assignFinancialValue}>${(jobPrice / 100).toFixed(2)}</Text>
+                      </View>
+                      <View style={styles.assignFinancialRow}>
+                        <Text style={styles.assignFinancialLabel}>Platform Fee ({platformFeePercent}%)</Text>
+                        <Text style={[styles.assignFinancialValue, styles.assignFinancialDeduct]}>
+                          -${(platformFee / 100).toFixed(2)}
+                        </Text>
+                      </View>
+                      {/* Show owner if included */}
+                      {includeSelf && (
+                        <View style={styles.assignFinancialRow}>
+                          <Text style={styles.assignFinancialLabel}>
+                            Your Pay (Owner)
+                          </Text>
+                          <Text style={[styles.assignFinancialValue, { color: colors.success[600] }]}>
+                            $0.00
+                          </Text>
+                        </View>
+                      )}
+                      {selectedEmployees.map((emp) => {
+                        const empPayInfo = calculateEmployeePayWithAdjustedHours(emp, jobPrice, adjustedDuration);
+                        return (
+                          <View key={emp.id} style={styles.assignFinancialRow}>
+                            <Text style={styles.assignFinancialLabel}>
+                              {emp.firstName}'s Pay
+                              {empPayInfo.payType === "hourly" && totalCleaners >= 2 && (
+                                <Text style={styles.adjustedHoursNote}> ({adjustedDuration.toFixed(1)} hr)</Text>
+                              )}
+                            </Text>
+                            <Text style={[styles.assignFinancialValue, styles.assignFinancialDeduct]}>
+                              -${(empPayInfo.amount / 100).toFixed(2)}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                    <View style={styles.assignFinancialFooter}>
+                      <Text style={styles.assignFinancialProfitLabel}>Your Profit</Text>
+                      <Text style={[
+                        styles.assignFinancialProfitValue,
+                        profit >= 0 ? styles.profitPositive : styles.profitNegative,
+                      ]}>
+                        ${(profit / 100).toFixed(2)}
+                      </Text>
+                    </View>
                   </View>
                 )}
               </>
             )}
 
+            {/* Self-assign Financial Preview */}
             {isSelfAssign && (
-              <View style={styles.selfAssignInfo}>
-                <Icon name="info-circle" size={20} color={colors.primary[600]} />
-                <Text style={styles.selfAssignInfoText}>
-                  Self-assigning this job means you'll clean it yourself. The job will be tracked
-                  with $0 payroll for analytics purposes.
-                </Text>
+              <View style={styles.assignFinancialCard}>
+                <View style={styles.assignFinancialHeader}>
+                  <Icon name="calculator" size={14} color={colors.primary[500]} />
+                  <Text style={styles.assignFinancialTitle}>Your Earnings</Text>
+                </View>
+                <View style={styles.assignFinancialBody}>
+                  <View style={styles.assignFinancialRow}>
+                    <Text style={styles.assignFinancialLabel}>Job Price</Text>
+                    <Text style={styles.assignFinancialValue}>${(jobPrice / 100).toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.assignFinancialRow}>
+                    <Text style={styles.assignFinancialLabel}>Platform Fee ({platformFeePercent}%)</Text>
+                    <Text style={[styles.assignFinancialValue, styles.assignFinancialDeduct]}>
+                      -${(platformFee / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.assignFinancialFooter}>
+                  <Text style={styles.assignFinancialProfitLabel}>You Keep</Text>
+                  <Text style={[styles.assignFinancialProfitValue, styles.profitPositive]}>
+                    ${((jobPrice - platformFee) / 100).toFixed(2)}
+                  </Text>
+                </View>
               </View>
             )}
           </ScrollView>
 
-          <View style={styles.modalFooter}>
-            <Pressable style={styles.cancelButton} onPress={handleClose}>
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+          {/* Footer */}
+          <View style={styles.assignModalFooter}>
+            <Pressable style={styles.assignCancelButton} onPress={handleClose}>
+              <Text style={styles.assignCancelButtonText}>Cancel</Text>
             </Pressable>
             <Pressable
               style={[
-                styles.submitButton,
-                (!isSelfAssign && !selectedEmployee) && styles.submitButtonDisabled,
-                isSubmitting && styles.submitButtonDisabled,
+                styles.assignConfirmButton,
+                (!isSelfAssign && !isMultiSelect && !selectedEmployee) && styles.assignConfirmButtonDisabled,
+                (!isSelfAssign && isMultiSelect && totalCleaners === 0) && styles.assignConfirmButtonDisabled,
+                isSubmitting && styles.assignConfirmButtonDisabled,
               ]}
               onPress={handleSubmit}
-              disabled={(!isSelfAssign && !selectedEmployee) || isSubmitting}
+              disabled={
+                (!isSelfAssign && !isMultiSelect && !selectedEmployee) ||
+                (!isSelfAssign && isMultiSelect && totalCleaners === 0) ||
+                isSubmitting
+              }
             >
               {isSubmitting ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.submitButtonText}>
-                  {isSelfAssign ? "Self-Assign" : "Assign"}
-                </Text>
+                <>
+                  <Icon name="check" size={14} color="#fff" />
+                  <Text style={styles.assignConfirmButtonText}>
+                    {isSelfAssign
+                      ? "Assign to Me"
+                      : isMultiSelect
+                        ? `Assign ${totalCleaners} Cleaner${totalCleaners !== 1 ? "s" : ""}`
+                        : `Assign ${selectedEmployee?.firstName || ""}`}
+                  </Text>
+                </>
               )}
             </Pressable>
           </View>
@@ -551,6 +910,7 @@ const AssignModal = ({
 // Main Component
 const JobAssignment = ({ state }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { pricing } = usePricing();
   const platformFeePercent = (pricing?.platform?.businessOwnerFeePercent || 0.10) * 100;
   const [loading, setLoading] = useState(true);
@@ -566,9 +926,17 @@ const JobAssignment = ({ state }) => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [isSelfAssign, setIsSelfAssign] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoOpenProcessed, setAutoOpenProcessed] = useState(false);
 
   // View toggle
   const [viewMode, setViewMode] = useState("unassigned"); // 'unassigned' | 'assigned'
+
+  // Deduplicate assignments by appointmentId for display count
+  const uniqueAssignmentCount = new Set(assignments.map(a => a.appointmentId)).size;
+
+  // Parse jobId from URL query params
+  const searchParams = new URLSearchParams(location.search);
+  const jobIdFromUrl = searchParams.get("jobId");
 
   const fetchData = async (isRefresh = false) => {
     if (isRefresh) {
@@ -604,6 +972,19 @@ const JobAssignment = ({ state }) => {
     fetchData();
   }, []);
 
+  // Auto-open assign modal if jobId is in URL (from notification)
+  useEffect(() => {
+    if (!autoOpenProcessed && jobIdFromUrl && unassignedJobs.length > 0 && !loading) {
+      const targetJob = unassignedJobs.find((job) => job.id === parseInt(jobIdFromUrl, 10));
+      if (targetJob) {
+        setSelectedJob(targetJob);
+        setIsSelfAssign(false);
+        setShowAssignModal(true);
+      }
+      setAutoOpenProcessed(true);
+    }
+  }, [jobIdFromUrl, unassignedJobs, loading, autoOpenProcessed]);
+
   const onRefresh = useCallback(() => {
     fetchData(true);
   }, [state.currentUser.token]);
@@ -614,33 +995,70 @@ const JobAssignment = ({ state }) => {
     setShowAssignModal(true);
   };
 
-  const handleAssignSubmit = async (data) => {
+  const handleAssignSubmit = async (data, isMultiAssign = false) => {
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
 
     try {
-      let result;
-      if (data.isSelfAssign) {
-        result = await BusinessOwnerService.selfAssign(
-          state.currentUser.token,
-          data.appointmentId
-        );
-      } else {
-        result = await BusinessOwnerService.assignEmployee(state.currentUser.token, {
-          appointmentId: data.appointmentId,
-          employeeId: data.employeeId,
-          payAmount: data.payAmount,
-          payType: data.payType,
-        });
-      }
+      if (isMultiAssign && Array.isArray(data)) {
+        // Handle multiple cleaner assignments (employees + optional self)
+        const results = [];
+        for (const assignment of data) {
+          let result;
+          if (assignment.isSelfAssign) {
+            // Self-assign for business owner
+            result = await BusinessOwnerService.selfAssign(
+              state.currentUser.token,
+              assignment.appointmentId
+            );
+          } else {
+            // Regular employee assignment
+            result = await BusinessOwnerService.assignEmployee(state.currentUser.token, {
+              appointmentId: assignment.appointmentId,
+              employeeId: assignment.employeeId,
+              payAmount: assignment.payAmount,
+              payType: assignment.payType,
+            });
+          }
+          results.push(result);
+        }
 
-      if (result.success) {
-        setSuccess("Job assigned successfully!");
-        setShowAssignModal(false);
-        fetchData();
+        const allSuccess = results.every((r) => r.success);
+        const successCount = results.filter((r) => r.success).length;
+
+        if (allSuccess) {
+          setSuccess(`${successCount} cleaner${successCount !== 1 ? "s" : ""} assigned successfully!`);
+          setShowAssignModal(false);
+          fetchData();
+        } else {
+          setError(`Assigned ${successCount} of ${data.length} cleaners. Some assignments failed.`);
+          fetchData();
+        }
       } else {
-        setError(result.error);
+        // Handle single assignment
+        let result;
+        if (data.isSelfAssign) {
+          result = await BusinessOwnerService.selfAssign(
+            state.currentUser.token,
+            data.appointmentId
+          );
+        } else {
+          result = await BusinessOwnerService.assignEmployee(state.currentUser.token, {
+            appointmentId: data.appointmentId,
+            employeeId: data.employeeId,
+            payAmount: data.payAmount,
+            payType: data.payType,
+          });
+        }
+
+        if (result.success) {
+          setSuccess("Job assigned successfully!");
+          setShowAssignModal(false);
+          fetchData();
+        } else {
+          setError(result.error);
+        }
       }
     } catch (err) {
       setError("Failed to assign job. Please try again.");
@@ -654,16 +1072,30 @@ const JobAssignment = ({ state }) => {
     setSuccess(null);
 
     try {
-      const result = await BusinessOwnerService.unassignJob(
-        state.currentUser.token,
-        assignment.id
+      // Get all assignment IDs for this appointment (for multi-cleaner jobs)
+      const allAssignments = assignment.allAssignments || [];
+      const assignmentIds = allAssignments.length > 0
+        ? allAssignments.map(a => a.id)
+        : [assignment.id];
+
+      // Unassign all cleaners from this job
+      const results = await Promise.all(
+        assignmentIds.map(id =>
+          BusinessOwnerService.unassignJob(state.currentUser.token, id)
+        )
       );
 
-      if (result.success) {
-        setSuccess("Job unassigned successfully");
+      const allSuccess = results.every(r => r.success);
+      if (allSuccess) {
+        setSuccess(assignmentIds.length > 1
+          ? `All ${assignmentIds.length} cleaners removed from job`
+          : "Job unassigned successfully"
+        );
         fetchData();
       } else {
-        setError(result.error);
+        const failedCount = results.filter(r => !r.success).length;
+        setError(`Failed to remove ${failedCount} cleaner(s)`);
+        fetchData(); // Still refresh to show current state
       }
     } catch (err) {
       setError("Failed to unassign job. Please try again.");
@@ -728,7 +1160,7 @@ const JobAssignment = ({ state }) => {
               viewMode === "assigned" && styles.toggleButtonTextActive,
             ]}
           >
-            Assigned ({assignments.length})
+            Assigned ({uniqueAssignmentCount})
           </Text>
         </Pressable>
       </View>
@@ -764,13 +1196,16 @@ const JobAssignment = ({ state }) => {
               </Text>
             </View>
           ) : (
-            unassignedJobs.map((job) => (
-              <UnassignedJobCard
-                key={job.id}
-                job={job}
-                onAssign={handleAssign}
-              />
-            ))
+            // Sort unassigned jobs by date (soonest first)
+            [...unassignedJobs]
+              .sort((a, b) => new Date(a.date) - new Date(b.date))
+              .map((job) => (
+                <UnassignedJobCard
+                  key={job.id}
+                  job={job}
+                  onAssign={handleAssign}
+                />
+              ))
           )
         ) : assignments.length === 0 ? (
           <View style={styles.emptyState}>
@@ -781,22 +1216,34 @@ const JobAssignment = ({ state }) => {
             </Text>
           </View>
         ) : (
-          assignments.map((assignment) => (
-            <AssignedJobCard
-              key={assignment.id}
-              assignment={assignment}
-              platformFeePercent={platformFeePercent}
-              onReassign={() => {
-                setSelectedJob(assignment.appointment);
-                setIsSelfAssign(false);
-                setShowAssignModal(true);
-              }}
-              onUnassign={() => handleUnassign(assignment)}
-              onViewDetails={() =>
-                navigate(`/business-owner/assignments/${assignment.id}`)
+          // Deduplicate assignments by appointmentId and sort by date (soonest first)
+          Object.values(
+            assignments.reduce((acc, assignment) => {
+              const apptId = assignment.appointmentId;
+              // Keep the first assignment for each appointment (it has allAssignments)
+              if (!acc[apptId]) {
+                acc[apptId] = assignment;
               }
-            />
-          ))
+              return acc;
+            }, {})
+          )
+            .sort((a, b) => new Date(a.appointment?.date) - new Date(b.appointment?.date))
+            .map((assignment) => (
+              <AssignedJobCard
+                key={assignment.appointmentId}
+                assignment={assignment}
+                platformFeePercent={platformFeePercent}
+                onReassign={() => {
+                  setSelectedJob(assignment.appointment);
+                  setIsSelfAssign(false);
+                  setShowAssignModal(true);
+                }}
+                onUnassign={() => handleUnassign(assignment)}
+                onViewDetails={() =>
+                  navigate(`/business-owner/assignments/${assignment.id}`)
+                }
+              />
+            ))
         )}
       </ScrollView>
 
@@ -883,118 +1330,278 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   jobCard: {
     backgroundColor: colors.background.primary,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.sm,
+    borderRadius: radius["2xl"],
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
   },
   jobCardHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   jobDateBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.lg,
+    width: 56,
+    height: 56,
+    borderRadius: radius.xl,
     backgroundColor: colors.primary[50],
     justifyContent: "center",
     alignItems: "center",
   },
   jobDateDay: {
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.primary[700],
+    lineHeight: 24,
   },
   jobDateMonth: {
     fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],
     textTransform: "uppercase",
+    marginTop: 2,
   },
   jobInfo: {
     flex: 1,
-    marginLeft: spacing.md,
+    marginLeft: spacing.lg,
   },
   jobClient: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
   },
   jobAddress: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-    marginTop: 2,
+    marginTop: 4,
   },
   jobTime: {
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
-    marginTop: 2,
+    marginTop: 4,
+  },
+  jobPrice: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    marginLeft: spacing.md,
+    paddingLeft: spacing.md,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.neutral[100],
+  },
+  jobPriceAmount: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
   },
   jobAssignee: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-    marginTop: 2,
   },
-  jobPay: {
-    fontSize: typography.fontSize.xs,
-    color: colors.success[600],
-    marginTop: 2,
+  jobAssigneeSelf: {
+    color: colors.warning[700],
+    fontWeight: typography.fontWeight.medium,
   },
-  financialInfo: {
+  assigneeRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.xs,
-    gap: spacing.sm,
+    marginTop: 6,
+    gap: 6,
   },
-  jobPriceLabel: {
-    fontSize: typography.fontSize.xs,
+  ownerBadgeSmall: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  jobDuration: {
+    fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
+    marginLeft: 4,
+    fontWeight: typography.fontWeight.medium,
   },
-  feeLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.neutral[400],
+  jobCardSelfAssigned: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[400],
   },
-  employeePayLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.warning[600],
+  jobCardMulti: {
+    paddingTop: 0,
   },
-  profitLabel: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.success[600],
+  multiCleanerBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginHorizontal: -spacing.xl,
+    marginBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary[100],
   },
-  profitNegative: {
-    color: colors.error[600],
+  multiCleanerBannerOwner: {
+    backgroundColor: colors.warning[50],
+    borderBottomColor: colors.warning[100],
   },
-  jobPrice: {
-    alignItems: "flex-end",
+  multiCleanerTeam: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    flex: 1,
   },
-  jobPriceAmount: {
-    fontSize: typography.fontSize.lg,
+  teamMember: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  teamMemberAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  teamMemberAvatarOwner: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  teamMemberAvatarText: {
+    fontSize: 11,
     fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  teamMemberInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  teamMemberName: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
     color: colors.text.primary,
   },
-  statusBadge: {
-    paddingVertical: spacing.xs,
+  teamMemberNameOwner: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  teamMemberPay: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[600],
+    backgroundColor: colors.warning[50],
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+  },
+  multiCleanerBannerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.success[50],
     paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  multiCleanerDuration: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+  },
+  jobDateBadgeSelf: {
+    backgroundColor: colors.warning[100],
+    borderWidth: 2,
+    borderColor: colors.warning[200],
+  },
+  jobDateDaySelf: {
+    color: colors.warning[700],
+  },
+  jobDateMonthSelf: {
+    color: colors.warning[600],
+  },
+  financialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    gap: spacing.md,
+  },
+  financialItem: {
+    alignItems: "center",
+    paddingHorizontal: spacing.xs,
+  },
+  financialItemLabel: {
+    fontSize: 11,
+    color: colors.text.tertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    fontWeight: typography.fontWeight.medium,
+  },
+  financialItemValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginTop: 4,
+  },
+  financialItemPay: {
+    color: colors.warning[600],
+  },
+  financialItemProfit: {
+    color: colors.success[600],
+  },
+  financialItemLoss: {
+    color: colors.error[600],
+  },
+  financialDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.neutral[200],
+  },
+  jobCardRight: {
+    alignItems: "flex-end",
+    marginLeft: spacing.md,
+  },
+  reassignButtonOwner: {
+    backgroundColor: colors.warning[50],
+    borderColor: colors.warning[200],
+  },
+  reassignButtonTextOwner: {
+    color: colors.warning[700],
+  },
+  statusBadge: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.full,
   },
   statusText: {
     fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     textTransform: "capitalize",
   },
   jobCardActions: {
     flexDirection: "row",
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   assignButton: {
     flex: 1,
@@ -1002,7 +1609,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.primary[50],
     borderWidth: 1,
     borderColor: colors.primary[200],
@@ -1010,7 +1618,7 @@ const styles = StyleSheet.create({
   assignButtonText: {
     marginLeft: spacing.sm,
     color: colors.primary[700],
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.sm,
   },
   selfAssignButton: {
@@ -1019,7 +1627,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.secondary[50],
     borderWidth: 1,
     borderColor: colors.secondary[200],
@@ -1027,7 +1636,7 @@ const styles = StyleSheet.create({
   selfAssignButtonText: {
     marginLeft: spacing.sm,
     color: colors.secondary[700],
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.sm,
   },
   reassignButton: {
@@ -1035,13 +1644,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
   },
   reassignButtonText: {
-    marginLeft: spacing.xs,
+    marginLeft: spacing.sm,
     color: colors.primary[700],
+    fontWeight: typography.fontWeight.medium,
     fontSize: typography.fontSize.sm,
   },
   unassignButton: {
@@ -1049,13 +1662,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[200],
   },
   unassignButtonText: {
-    marginLeft: spacing.xs,
+    marginLeft: spacing.sm,
     color: colors.error[700],
+    fontWeight: typography.fontWeight.medium,
     fontSize: typography.fontSize.sm,
   },
   emptyState: {
@@ -1407,6 +2024,400 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: "#fff",
     fontWeight: typography.fontWeight.semibold,
+  },
+
+  // New Assign Modal Styles
+  assignModalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: radius["2xl"],
+    borderTopRightRadius: radius["2xl"],
+    maxHeight: "90%",
+  },
+  assignModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  assignModalHeaderIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  assignModalHeaderText: {
+    flex: 1,
+  },
+  assignModalTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  assignModalSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  assignModalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.neutral[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  assignModalBody: {
+    padding: spacing.lg,
+  },
+  assignJobCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  assignJobCardDate: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[500],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  assignJobCardDay: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: "#fff",
+  },
+  assignJobCardMonth: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.semibold,
+    color: "rgba(255,255,255,0.8)",
+    textTransform: "uppercase",
+  },
+  assignJobCardInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  assignJobCardClient: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  assignJobCardAddress: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  assignJobCardTime: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  assignJobCardPrice: {
+    alignItems: "flex-end",
+  },
+  assignJobCardPriceAmount: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  assignJobCardPriceLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  selfAssignCard: {
+    flexDirection: "row",
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  selfAssignCardText: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  selfAssignCardTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  selfAssignCardDesc: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[600],
+    marginTop: 2,
+  },
+  assignSectionLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  assignEmployeeList: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  assignEmployeeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  assignEmployeeCardSelected: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[500],
+  },
+  assignEmployeeCardOwner: {
+    backgroundColor: colors.warning[50],
+    borderColor: colors.warning[200],
+    borderWidth: 1,
+  },
+  assignEmployeeAvatarOwner: {
+    backgroundColor: colors.warning[100],
+  },
+  assignEmployeeRadio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.neutral[300],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  assignEmployeeRadioSelected: {
+    backgroundColor: colors.primary[500],
+    borderColor: colors.primary[500],
+  },
+  assignEmployeeCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.neutral[300],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  assignEmployeeCheckboxSelected: {
+    backgroundColor: colors.primary[500],
+    borderColor: colors.primary[500],
+  },
+  multiSelectToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+  },
+  multiSelectCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.neutral[300],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  multiSelectCheckboxActive: {
+    backgroundColor: colors.primary[500],
+    borderColor: colors.primary[500],
+  },
+  multiSelectLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  timeSavingsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  timeSavingsText: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  timeSavingsTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+  },
+  timeSavingsDesc: {
+    fontSize: typography.fontSize.xs,
+    color: colors.success[600],
+    marginTop: 2,
+  },
+  adjustedHoursNote: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.normal,
+  },
+  assignEmployeeAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.neutral[200],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  assignEmployeeAvatarSelected: {
+    backgroundColor: colors.primary[500],
+  },
+  assignEmployeeAvatarText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[600],
+  },
+  assignEmployeeAvatarTextSelected: {
+    color: "#fff",
+  },
+  assignEmployeeInfo: {
+    flex: 1,
+  },
+  assignEmployeeName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  assignEmployeePayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  assignEmployeeRate: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  assignEmployeePayDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.neutral[300],
+    marginHorizontal: spacing.xs,
+  },
+  assignEmployeeTotal: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  assignFinancialCard: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    overflow: "hidden",
+  },
+  assignFinancialHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: colors.primary[50],
+    gap: spacing.sm,
+  },
+  assignFinancialTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  assignFinancialBody: {
+    padding: spacing.md,
+  },
+  assignFinancialRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.xs,
+  },
+  assignFinancialLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  assignFinancialValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  assignFinancialDeduct: {
+    color: colors.error[500],
+  },
+  assignFinancialFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+  },
+  assignFinancialProfitLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  assignFinancialProfitValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+  },
+  profitPositive: {
+    color: colors.success[600],
+  },
+  profitNegative: {
+    color: colors.error[600],
+  },
+  assignModalFooter: {
+    flexDirection: "row",
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    gap: spacing.md,
+  },
+  assignCancelButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[100],
+    alignItems: "center",
+  },
+  assignCancelButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  assignConfirmButton: {
+    flex: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary[500],
+    gap: spacing.sm,
+  },
+  assignConfirmButtonDisabled: {
+    backgroundColor: colors.neutral[300],
+  },
+  assignConfirmButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: "#fff",
   },
 });
 

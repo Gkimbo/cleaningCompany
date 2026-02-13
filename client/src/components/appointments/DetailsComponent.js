@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState, useCallback } from "react";
+import { ActivityIndicator, Alert, Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate, useParams } from "react-router-native";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
+import CleanerApprovalService from "../../services/fetchRequests/CleanerApprovalService";
 import CalendarComponent from "../calender/CalendarComponent";
 import { API_BASE } from "../../services/config";
 import { usePricing } from "../../context/PricingContext";
@@ -17,6 +18,9 @@ const DetailsComponent = ({ state, dispatch }) => {
   const [redirect, setRedirect] = useState(false);
   const [hasPaymentMethod, setHasPaymentMethod] = useState(null);
   const [checkingPayment, setCheckingPayment] = useState(true);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
+  const [loadingApprovals, setLoadingApprovals] = useState(true);
+  const [processingApprovalId, setProcessingApprovalId] = useState(null);
   const navigate = useNavigate();
 
   // Get pricing from database
@@ -47,6 +51,120 @@ const DetailsComponent = ({ state, dispatch }) => {
     };
     checkPaymentMethod();
   }, [state.currentUser?.token]);
+
+  // Fetch pending cleaner approval requests for this home
+  const fetchPendingApprovals = useCallback(async () => {
+    if (!state.currentUser?.token || !id) {
+      setLoadingApprovals(false);
+      return;
+    }
+    try {
+      const result = await CleanerApprovalService.getPendingRequests(state.currentUser.token);
+      // Filter to only show requests for this home
+      const homeId = Number(id);
+      const filtered = (result.requests || []).filter((r) => r.homeId === homeId);
+      setPendingApprovals(filtered);
+    } catch (err) {
+      console.error("Error fetching pending approvals:", err);
+    } finally {
+      setLoadingApprovals(false);
+    }
+  }, [state.currentUser?.token, id]);
+
+  useEffect(() => {
+    fetchPendingApprovals();
+  }, [fetchPendingApprovals]);
+
+  const handleApproveRequest = async (requestId, cleanerName) => {
+    Alert.alert(
+      "Approve Cleaner",
+      `Are you sure you want to approve ${cleanerName} to join your cleaning job?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Approve",
+          onPress: async () => {
+            setProcessingApprovalId(requestId);
+            try {
+              const result = await CleanerApprovalService.approveRequest(
+                state.currentUser.token,
+                requestId
+              );
+              if (result.success) {
+                setPendingApprovals((prev) => prev.filter((r) => r.id !== requestId));
+                Alert.alert("Success", "Cleaner has been approved and assigned.");
+              } else {
+                Alert.alert("Error", result.error || "Failed to approve request");
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to approve request");
+            } finally {
+              setProcessingApprovalId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeclineRequest = async (requestId, cleanerName) => {
+    Alert.alert(
+      "Decline Cleaner",
+      `Are you sure you want to decline ${cleanerName}'s request?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: async () => {
+            setProcessingApprovalId(requestId);
+            try {
+              const result = await CleanerApprovalService.declineRequest(
+                state.currentUser.token,
+                requestId
+              );
+              if (result.success) {
+                setPendingApprovals((prev) => prev.filter((r) => r.id !== requestId));
+                Alert.alert("Done", "Request has been declined.");
+              } else {
+                Alert.alert("Error", result.error || "Failed to decline request");
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to decline request");
+            } finally {
+              setProcessingApprovalId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const formatApprovalDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const formatTimeRemaining = (expiresAt) => {
+    if (!expiresAt) return "";
+    const now = new Date();
+    const expires = new Date(expiresAt);
+    const diffMs = expires - now;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    if (diffHours > 24) {
+      const days = Math.floor(diffHours / 24);
+      return `${days}d left`;
+    }
+    if (diffHours > 0) return `${diffHours}h ${diffMins}m left`;
+    if (diffMins > 0) return `${diffMins}m left`;
+    return "Expiring soon";
+  };
 
   const onAppointmentDelete = async (date, cancellationFee) => {
     if (!homeDetails) return;
@@ -99,7 +217,7 @@ const DetailsComponent = ({ state, dispatch }) => {
       keyLocation: homeDetails.keyLocation,
     };
     const response = await Appointment.addAppointmentToDb(infoObject);
-    if (response) {
+    if (response.success) {
       const stateApp = datesOfCleaning.map((app) => ({ ...app, homeId: homeDetails.id }));
       let apptTotal = 0;
       datesOfCleaning.forEach((date) => {
@@ -108,6 +226,9 @@ const DetailsComponent = ({ state, dispatch }) => {
       dispatch({ type: "ADD_BILL", payload: apptTotal });
       dispatch({ type: "ADD_DATES", payload: stateApp });
       navigate("/list-of-homes");
+    } else {
+      console.error("Failed to save appointment:", response.error);
+      alert(response.error || "Failed to save appointment. Please try again.");
     }
   };
 
@@ -366,6 +487,73 @@ const DetailsComponent = ({ state, dispatch }) => {
             <Text style={styles.paymentWarningButtonText}>Set Up</Text>
             <Icon name="arrow-right" size={12} color="#fff" />
           </Pressable>
+        </View>
+      )}
+
+      {/* Pending Cleaner Approvals */}
+      {pendingApprovals.length > 0 && (
+        <View style={styles.approvalSection}>
+          <View style={styles.sectionHeader}>
+            <Icon name="user-plus" size={14} color="#f59e0b" />
+            <Text style={styles.sectionTitle}>Pending Cleaner Requests</Text>
+            <View style={styles.approvalBadge}>
+              <Text style={styles.approvalBadgeText}>{pendingApprovals.length}</Text>
+            </View>
+          </View>
+          {pendingApprovals.map((request) => (
+            <View key={request.id} style={styles.approvalCard}>
+              <View style={styles.approvalHeader}>
+                <View style={styles.cleanerAvatarSmall}>
+                  <Text style={styles.cleanerInitialsSmall}>
+                    {request.cleanerFirstName?.charAt(0) || "?"}
+                  </Text>
+                </View>
+                <View style={styles.approvalInfo}>
+                  <Text style={styles.approvalCleanerName}>{request.cleanerName}</Text>
+                  <Text style={styles.approvalSubtext}>
+                    For {formatApprovalDate(request.appointmentDate)}
+                  </Text>
+                </View>
+                <View style={styles.approvalTimeBadge}>
+                  <Icon name="clock-o" size={10} color="#f59e0b" />
+                  <Text style={styles.approvalTimeText}>{formatTimeRemaining(request.expiresAt)}</Text>
+                </View>
+              </View>
+              <View style={styles.approvalActions}>
+                <Pressable
+                  style={[styles.declineBtn, processingApprovalId === request.id && styles.btnDisabled]}
+                  onPress={() => handleDeclineRequest(request.id, request.cleanerName)}
+                  disabled={processingApprovalId === request.id}
+                >
+                  {processingApprovalId === request.id ? (
+                    <ActivityIndicator size="small" color="#ef4444" />
+                  ) : (
+                    <>
+                      <Icon name="times" size={12} color="#ef4444" />
+                      <Text style={styles.declineBtnText}>Decline</Text>
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  style={[styles.approveBtn, processingApprovalId === request.id && styles.btnDisabled]}
+                  onPress={() => handleApproveRequest(request.id, request.cleanerName)}
+                  disabled={processingApprovalId === request.id}
+                >
+                  {processingApprovalId === request.id ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Icon name="check" size={12} color="#fff" />
+                      <Text style={styles.approveBtnText}>Approve</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          ))}
+          <Text style={styles.approvalNote}>
+            If you don't respond, cleaners will be auto-approved when the timer expires.
+          </Text>
         </View>
       )}
 
@@ -864,6 +1052,130 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#fff",
+  },
+
+  // Pending Approvals Section
+  approvalSection: {
+    backgroundColor: "#fff",
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#fcd34d",
+    backgroundColor: "#fffbeb",
+  },
+  approvalBadge: {
+    backgroundColor: "#f59e0b",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: "auto",
+  },
+  approvalBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  approvalCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  approvalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  cleanerAvatarSmall: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#6366f1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cleanerInitialsSmall: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  approvalInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  approvalCleanerName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1f2937",
+  },
+  approvalSubtext: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 1,
+  },
+  approvalTimeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  approvalTimeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#d97706",
+  },
+  approvalActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  declineBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fef2f2",
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  declineBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#ef4444",
+  },
+  approveBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#10b981",
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  approveBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  approvalNote: {
+    fontSize: 11,
+    color: "#92400e",
+    textAlign: "center",
+    marginTop: 4,
+    fontStyle: "italic",
   },
 });
 

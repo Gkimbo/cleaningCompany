@@ -90,31 +90,132 @@ const JobCard = ({ job, onAssign, onViewDetails }) => {
     return `${h > 12 ? h - 12 : h}:${minutes} ${h >= 12 ? "PM" : "AM"}`;
   };
 
+  // Round to nearest 0.5 hour increment
+  const roundToHalfHour = (hours) => Math.ceil(hours * 2) / 2;
+
   const isAssigned = job.isAssigned;
   const statusColor = isAssigned
     ? STATUS_COLORS[job.status] || STATUS_COLORS.assigned
     : STATUS_COLORS.unassigned;
 
+  // Multi-cleaner info - only trust allAssignments array for accurate cleaner count
+  const allAssignments = job.allAssignments || [];
+  const ownerAssignment = allAssignments.find(a => a.isSelfAssignment);
+  const employeeAssignments = allAssignments.filter(a => !a.isSelfAssignment);
+  const ownerIsAssigned = ownerAssignment || job.isSelfAssignment;
+
+  // Calculate total cleaners - only use allAssignments.length for accurate count
+  // Don't rely on assignedCount alone as it may be stale
+  const totalCleaners = allAssignments.length > 0
+    ? allAssignments.length
+    : (isAssigned ? 1 : 0);
+  const isMultiCleaner = totalCleaners > 1 && allAssignments.length > 1;
+
+  // Calculate adjusted duration for multi-cleaner jobs
+  const baseDuration = job.duration || 2;
+  const adjustedDuration = isMultiCleaner ? roundToHalfHour(baseDuration / totalCleaners) : baseDuration;
+
+  // Build cleaner display
+  const getCleanerDisplay = () => {
+    if (!isAssigned) return null;
+    if (ownerIsAssigned && employeeAssignments.length > 0) {
+      if (employeeAssignments.length === 1) {
+        return `You + ${employeeAssignments[0].employee?.firstName || "1 employee"}`;
+      }
+      return `You + ${employeeAssignments.length} employees`;
+    }
+    if (ownerIsAssigned) {
+      return "You (Self)";
+    }
+    if (totalCleaners > 1 && allAssignments.length > 0) {
+      return `${totalCleaners} cleaners`;
+    }
+    return job.employeeName || "Assigned";
+  };
+
   return (
-    <Pressable style={styles.jobCard} onPress={onViewDetails}>
-      <View style={[styles.jobStatusBar, { backgroundColor: statusColor }]} />
+    <Pressable
+      style={[
+        styles.jobCard,
+        ownerIsAssigned && styles.jobCardSelfAssigned,
+      ]}
+      onPress={onViewDetails}
+    >
+      <View style={[
+        styles.jobStatusBar,
+        { backgroundColor: ownerIsAssigned ? colors.warning[500] : statusColor },
+      ]} />
       <View style={styles.jobCardContent}>
         <View style={styles.jobCardHeader}>
           <Text style={styles.jobCardTime}>{formatTime(job.startTime)}</Text>
-          <View style={[styles.jobStatusBadge, { backgroundColor: statusColor + "20" }]}>
-            <Text style={[styles.jobStatusText, { color: statusColor }]}>
-              {isAssigned ? job.status : "Unassigned"}
-            </Text>
+          <View style={styles.jobCardHeaderRight}>
+            {isMultiCleaner && (
+              <View style={styles.durationBadge}>
+                <Icon name="clock-o" size={10} color={colors.success[600]} />
+                <Text style={styles.durationBadgeText}>{adjustedDuration}hr each</Text>
+              </View>
+            )}
+            <View style={[styles.jobStatusBadge, { backgroundColor: statusColor + "20" }]}>
+              <Text style={[styles.jobStatusText, { color: statusColor }]}>
+                {isAssigned ? job.status : "Unassigned"}
+              </Text>
+            </View>
           </View>
         </View>
         <Text style={styles.jobCardClient}>{job.clientName || "Client"}</Text>
         <Text style={styles.jobCardAddress} numberOfLines={1}>
           {job.address || "No address"}
         </Text>
-        {isAssigned && job.employeeName && (
-          <View style={styles.jobCardAssignee}>
-            <Icon name="user" size={12} color={colors.primary[600]} />
-            <Text style={styles.jobCardAssigneeText}>{job.employeeName}</Text>
+        {isAssigned && (
+          <View style={styles.jobCardAssigneeSection}>
+            {/* Show all cleaners for multi-cleaner jobs */}
+            {isMultiCleaner && allAssignments.length > 0 ? (
+              <View style={styles.cleanersList}>
+                {ownerIsAssigned && (
+                  <View style={styles.cleanerChip}>
+                    <View style={styles.cleanerChipAvatarOwner}>
+                      <Icon name="star" size={8} color={colors.warning[600]} />
+                    </View>
+                    <Text style={styles.cleanerChipTextOwner}>You</Text>
+                  </View>
+                )}
+                {employeeAssignments.slice(0, 3).map((a, idx) => (
+                  <View key={a.id || idx} style={styles.cleanerChip}>
+                    <View style={styles.cleanerChipAvatar}>
+                      <Text style={styles.cleanerChipAvatarText}>
+                        {(a.employee?.firstName?.[0] || "E").toUpperCase()}
+                      </Text>
+                    </View>
+                    <Text style={styles.cleanerChipText}>
+                      {a.employee?.firstName || "Employee"}
+                    </Text>
+                    {a.payAmount > 0 && (
+                      <Text style={styles.cleanerChipPay}>
+                        ${(a.payAmount / 100).toFixed(0)}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+                {employeeAssignments.length > 3 && (
+                  <Text style={styles.moreCleanersText}>
+                    +{employeeAssignments.length - 3} more
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.jobCardAssignee}>
+                {ownerIsAssigned && (
+                  <Icon name="star" size={12} color={colors.warning[600]} style={{ marginRight: 4 }} />
+                )}
+                <Icon name="user" size={12} color={ownerIsAssigned ? colors.warning[600] : colors.primary[600]} />
+                <Text style={[
+                  styles.jobCardAssigneeText,
+                  ownerIsAssigned && styles.jobCardAssigneeTextOwner,
+                ]}>
+                  {getCleanerDisplay()}
+                </Text>
+              </View>
+            )}
           </View>
         )}
         <View style={styles.jobCardFooter}>
@@ -126,6 +227,12 @@ const JobCard = ({ job, onAssign, onViewDetails }) => {
               <Icon name="user-plus" size={14} color={colors.primary[600]} />
               <Text style={styles.assignQuickButtonText}>Assign</Text>
             </Pressable>
+          )}
+          {isMultiCleaner && (
+            <View style={styles.cleanerCountBadge}>
+              <Icon name="users" size={10} color={colors.neutral[500]} />
+              <Text style={styles.cleanerCountText}>{totalCleaners}</Text>
+            </View>
           )}
         </View>
       </View>
@@ -218,23 +325,54 @@ const BusinessOwnerCalendar = ({ state }) => {
         jobsByDate[dateKey].push({ ...job, isAssigned: false });
       });
 
-      // Add assigned jobs
+      // Deduplicate assignments by appointmentId (for multi-cleaner jobs)
+      const assignmentsByAppointment = {};
       (calendarResult.assignments || []).forEach((assignment) => {
+        const apptId = assignment.appointmentId;
+        if (!assignmentsByAppointment[apptId]) {
+          assignmentsByAppointment[apptId] = assignment;
+        }
+      });
+
+      // Add assigned jobs (deduplicated)
+      Object.values(assignmentsByAppointment).forEach((assignment) => {
         const dateKey = assignment.appointment?.date?.split("T")[0];
         if (!dateKey) return;
         if (!jobsByDate[dateKey]) jobsByDate[dateKey] = [];
+
+        // Get all cleaners info
+        const allAssignments = assignment.allAssignments || [];
+        const ownerAssignment = allAssignments.find(a => a.isSelfAssignment);
+        const employeeAssignments = allAssignments.filter(a => !a.isSelfAssignment);
+
+        // Build employee name display
+        let employeeName = "";
+        if (ownerAssignment && employeeAssignments.length > 0) {
+          employeeName = employeeAssignments.length === 1
+            ? `You + ${employeeAssignments[0].employee?.firstName || "1 employee"}`
+            : `You + ${employeeAssignments.length} employees`;
+        } else if (assignment.isSelfAssignment || ownerAssignment) {
+          employeeName = "You (Self)";
+        } else if (allAssignments.length > 1) {
+          employeeName = `${allAssignments.length} cleaners`;
+        } else {
+          employeeName = `${assignment.employee?.firstName || ""} ${assignment.employee?.lastName || ""}`.trim();
+        }
+
         jobsByDate[dateKey].push({
           ...assignment.appointment,
           id: assignment.appointment?.id,
+          appointmentId: assignment.appointmentId,
           assignmentId: assignment.id,
           isAssigned: true,
           status: assignment.status,
           employeeId: assignment.businessEmployeeId,
-          employeeName: assignment.isSelfAssignment
-            ? "You (Self)"
-            : `${assignment.employee?.firstName || ""} ${assignment.employee?.lastName || ""}`.trim(),
+          employeeName,
           payAmount: assignment.payAmount,
           isSelfAssignment: assignment.isSelfAssignment,
+          // Multi-cleaner data
+          allAssignments,
+          assignedCount: assignment.assignedCount || allAssignments.length || 1,
         });
       });
 
@@ -857,15 +995,111 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: 2,
   },
+  jobCardSelfAssigned: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[400],
+  },
+  jobCardHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  durationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    gap: 3,
+  },
+  durationBadgeText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[700],
+  },
+  jobCardAssigneeSection: {
+    marginTop: spacing.xs,
+  },
   jobCardAssignee: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.xs,
   },
   jobCardAssigneeText: {
     marginLeft: spacing.xs,
     fontSize: typography.fontSize.sm,
     color: colors.primary[600],
+  },
+  jobCardAssigneeTextOwner: {
+    color: colors.warning[700],
+  },
+  cleanersList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  cleanerChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[100],
+    paddingVertical: 3,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  cleanerChipAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cleanerChipAvatarOwner: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cleanerChipAvatarText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  cleanerChipText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.primary,
+  },
+  cleanerChipTextOwner: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  cleanerChipPay: {
+    fontSize: 10,
+    color: colors.warning[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  moreCleanersText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    alignSelf: "center",
+  },
+  cleanerCountBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  cleanerCountText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[600],
   },
   jobCardFooter: {
     flexDirection: "row",

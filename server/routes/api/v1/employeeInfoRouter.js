@@ -37,7 +37,12 @@ employeeInfoRouter.get("/", async (req, res) => {
         },
       ],
     });
-    const appointmentIds = employee.dataValues.cleanerAppointments.map(
+
+    if (!employee) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    const appointmentIds = (employee.dataValues.cleanerAppointments || []).map(
       (appointment) => appointment.appointmentId
     );
     const appointments = await UserAppointments.findAll({
@@ -122,22 +127,7 @@ employeeInfoRouter.get("/", async (req, res) => {
   }
 });
 
-employeeInfoRouter.get("/home/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    let home = await UserHomes.findOne({
-      where: {
-        id,
-      },
-    });
-
-    return res.status(200).json({ home });
-  } catch (error) {
-    console.log(error);
-    return res.status(401).json({ error: "Invalid or expired token" });
-  }
-});
-
+// Note: /home/LL/:id must come BEFORE /home/:id to avoid route interception
 employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
   const { id } = req.params;
   try {
@@ -161,6 +151,22 @@ employeeInfoRouter.get("/home/LL/:id", async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(401).json({ error: "Error fetching coordinates" });
+  }
+});
+
+employeeInfoRouter.get("/home/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    let home = await UserHomes.findOne({
+      where: {
+        id,
+      },
+    });
+
+    return res.status(200).json({ home });
+  } catch (error) {
+    console.log(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
 });
 
@@ -244,6 +250,32 @@ employeeInfoRouter.post("/shifts", async (req, res) => {
     return res.status(201).json({ user });
   } catch (error) {
     console.log(error);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
+
+/**
+ * GET /bonuses - Get bonuses received by the employee
+ */
+employeeInfoRouter.get("/bonuses", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
+
+  try {
+    const decodedToken = jwt.verify(token, secretKey);
+    const userId = decodedToken.userId;
+
+    const EmployeeBonusService = require("../../../services/EmployeeBonusService");
+    const bonuses = await EmployeeBonusService.getBonusesForEmployee(userId, {
+      limit: parseInt(req.query.limit) || 50,
+      includePending: req.query.includePending === "true",
+    });
+
+    res.json(bonuses);
+  } catch (error) {
+    console.error("Error fetching employee bonuses:", error);
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 });

@@ -22,7 +22,7 @@ jest.mock("../../models", () => ({
   },
   UserHomes: {
     findOne: jest.fn(),
-    findAll: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
     findByPk: jest.fn(),
   },
   UserBills: {
@@ -57,9 +57,10 @@ jest.mock("../../models", () => ({
   },
   HomePreferredCleaner: {
     findOne: jest.fn(),
-    findAll: jest.fn(),
+    findAll: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     destroy: jest.fn(),
+    count: jest.fn().mockResolvedValue(0),
   },
   CleanerClient: {
     findOne: jest.fn(),
@@ -74,6 +75,25 @@ jest.mock("../../models", () => ({
       completionRequiresPhotos: false,
     }),
   },
+  PreferredPerksConfig: {
+    getActive: jest.fn().mockResolvedValue({
+      earlyAccessMinutes: 60,
+      tierBronzeHomes: 3,
+      tierSilverHomes: 5,
+      tierGoldHomes: 10,
+    }),
+    findOne: jest.fn().mockResolvedValue({
+      earlyAccessMinutes: 60,
+      tierBronzeHomes: 3,
+      tierSilverHomes: 5,
+      tierGoldHomes: 10,
+    }),
+  },
+  CleanerPreferredPerks: {
+    findOne: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
 }));
 
 // Mock services
@@ -83,6 +103,22 @@ jest.mock("../../services/UserInfoClass", () => ({
   editTowelsInDB: jest.fn().mockResolvedValue({ success: true }),
   editCodeKeyInDB: jest.fn().mockResolvedValue({ success: true }),
   editAppointmentLinensInDB: jest.fn(),
+}));
+
+// Mock PreferredCleanerPerksService to avoid complex model dependencies
+jest.mock("../../services/PreferredCleanerPerksService", () => ({
+  getCleanerPerks: jest.fn().mockResolvedValue({
+    tierLevel: "none",
+    preferredHomeCount: 0,
+    earlyAccess: false,
+    bonusPercent: 0,
+  }),
+  recalculateTier: jest.fn().mockResolvedValue({
+    tierLevel: "none",
+    preferredHomeCount: 0,
+    earlyAccess: false,
+    bonusPercent: 0,
+  }),
 }));
 
 const mockCalculatePrice = jest.fn(() => 150);
@@ -167,6 +203,7 @@ jest.mock("../../config/businessConfig", () => ({
       extras: { bringSheets: 1000, bringTowels: 500 },
     },
   }),
+  getCleanersNeeded: jest.fn().mockReturnValue(1),
 }));
 
 const {
@@ -347,6 +384,7 @@ describe("Appointment Routes", () => {
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
         userId: 10,
+        isDemoAppointment: false, // Must match cleaner's isDemoAccount
         dataValues: {
           id: 1,
           userId: 10,
@@ -450,6 +488,7 @@ describe("Appointment Routes", () => {
       UserAppointments.findOne.mockResolvedValue({
         id: 1,
         userId: 100,
+        isDemoAppointment: true, // Must match cleaner's isDemoAccount
         dataValues: { id: 1, userId: 100, date: "2025-01-15", price: "150" },
       });
 
@@ -1578,7 +1617,10 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock the update for setting other requests to onHold
+      // Mock findAll for getting other pending requests to delete
+      UserPendingRequests.findAll.mockResolvedValue([]);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      // Mock the update for setting other requests to onHold (legacy)
       UserPendingRequests.update.mockResolvedValue([0]);
 
       UserCleanerAppointments.create.mockResolvedValue({ id: 1 });
@@ -1597,8 +1639,13 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock User.findByPk - first for payment intent check (no stripeCustomerId), then cleaner, then homeowner
+      // Mock User.findByPk - cleanerUser check, then payment intent user, then cleaner, then homeowner
       User.findByPk
+        .mockResolvedValueOnce({
+          // For cleanerUser check (isBusinessOwner) - not a business owner
+          id: 2,
+          isBusinessOwner: false,
+        })
         .mockResolvedValueOnce({
           // For payment intent creation check - no stripeCustomerId so it skips
           id: 1,
@@ -1667,7 +1714,10 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock the update for setting other requests to onHold
+      // Mock findAll for getting other pending requests to delete
+      UserPendingRequests.findAll.mockResolvedValue([]);
+      UserPendingRequests.destroy.mockResolvedValue(0);
+      // Mock the update for setting other requests to onHold (legacy)
       UserPendingRequests.update.mockResolvedValue([0]);
 
       UserCleanerAppointments.create.mockResolvedValue({ id: 1 });
@@ -1686,8 +1736,13 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
-      // Mock User.findByPk - first for payment intent check (no stripeCustomerId), then cleaner, then homeowner
+      // Mock User.findByPk - cleanerUser check, then payment intent user, then cleaner, then homeowner
       User.findByPk
+        .mockResolvedValueOnce({
+          // For cleanerUser check (isBusinessOwner) - not a business owner
+          id: 2,
+          isBusinessOwner: false,
+        })
         .mockResolvedValueOnce({
           // For payment intent creation check - no stripeCustomerId so it skips
           id: 1,
@@ -1739,7 +1794,7 @@ describe("Appointment Routes", () => {
       expect(createCall.netAmount).toBe(18000);
     });
 
-    it("should block approval if cleaner already assigned", async () => {
+    it("should return 409 conflict with cleaner comparison when cleaner already assigned", async () => {
       UserPendingRequests.findOne.mockResolvedValue({
         id: 1,
         dataValues: { id: 1, employeeId: 3, appointmentId: 1 },
@@ -1762,12 +1817,40 @@ describe("Appointment Routes", () => {
         update: jest.fn().mockResolvedValue(true),
       });
 
+      // Mock the existing cleaner assignment
+      UserCleanerAppointments.findOne.mockResolvedValue({
+        employeeId: 2,
+      });
+
+      // Mock User.findByPk for existing and new cleaner
+      User.findByPk
+        .mockResolvedValueOnce({
+          id: 2,
+          username: "existingCleaner",
+          completedJobs: 10,
+        })
+        .mockResolvedValueOnce({
+          id: 3,
+          username: "newCleaner",
+          completedJobs: 5,
+        });
+
+      // Mock reviews for both cleaners
+      UserReviews.findAll
+        .mockResolvedValueOnce([{ review: 4.5 }]) // existing cleaner reviews
+        .mockResolvedValueOnce([{ review: 5.0 }]); // new cleaner reviews
+
       const res = await request(app)
         .patch("/api/v1/appointments/approve-request")
         .send({ requestId: 1, approve: true });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe("A cleaner is already assigned to this appointment. Remove them first to approve another.");
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe("cleaner_conflict");
+      expect(res.body.message).toBe("Another cleaner is already assigned to this appointment");
+      expect(res.body.existingCleaner).toBeDefined();
+      expect(res.body.newCleaner).toBeDefined();
+      expect(res.body.existingCleaner.id).toBe(2);
+      expect(res.body.newCleaner.id).toBe(3);
     });
 
     it("should return 404 if request not found", async () => {

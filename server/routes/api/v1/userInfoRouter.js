@@ -9,10 +9,15 @@ const {
   UserBills,
   UserReviews,
   UserPendingRequests,
+  MultiCleanerJob,
+  CleanerJoinRequest,
+  CleanerJobCompletion,
+  NewHomeRequest,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
 const HomeSerializer = require("../../../serializers/homesSerializer");
+const NewHomeRequestService = require("../../../services/NewHomeRequestService");
 const {
   isInServiceArea,
   getCleanersNeeded,
@@ -77,12 +82,98 @@ userInfoRouter.get("/", async (req, res) => {
       pendingRequestCounts[req.appointmentId] = (pendingRequestCounts[req.appointmentId] || 0) + 1;
     });
 
-    // Add hasClientReview and pendingRequestCount to each appointment
-    const appointmentsWithReviewStatus = user.appointments.map((apt) => ({
-      ...apt.dataValues,
-      hasClientReview: reviewedAppointmentIds.has(apt.id),
-      pendingRequestCount: pendingRequestCounts[apt.id] || 0,
-    }));
+    // Get multi-cleaner job data for appointments
+    const multiCleanerJobs = await MultiCleanerJob.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+      },
+      attributes: ["id", "appointmentId", "totalCleanersRequired", "cleanersConfirmed", "status"],
+    });
+
+    // Map multi-cleaner job data by appointment ID
+    const multiCleanerJobsByAppointment = {};
+    multiCleanerJobs.forEach((job) => {
+      multiCleanerJobsByAppointment[job.appointmentId] = {
+        multiCleanerJobId: job.id,
+        cleanersNeeded: job.totalCleanersRequired,
+        cleanersConfirmed: job.cleanersConfirmed,
+        multiCleanerStatus: job.status,
+      };
+    });
+
+    // Get pending approval requests (cleaner join requests awaiting homeowner approval)
+    const pendingApprovalRequests = await CleanerJoinRequest.findAll({
+      where: {
+        appointmentId: { [Op.in]: appointmentIds },
+        status: "pending",
+      },
+      attributes: ["appointmentId"],
+    });
+
+    // Count pending approval requests per appointment
+    const pendingApprovalCounts = {};
+    pendingApprovalRequests.forEach((req) => {
+      pendingApprovalCounts[req.appointmentId] = (pendingApprovalCounts[req.appointmentId] || 0) + 1;
+    });
+
+    // Get multi-cleaner job completion status for appointments
+    const multiCleanerAppointmentIds = user.appointments
+      .filter((apt) => apt.isMultiCleanerJob)
+      .map((apt) => apt.id);
+
+    const cleanerJobCompletions = multiCleanerAppointmentIds.length > 0
+      ? await CleanerJobCompletion.findAll({
+          where: {
+            appointmentId: { [Op.in]: multiCleanerAppointmentIds },
+            status: { [Op.notIn]: ["dropped_out", "no_show"] },
+          },
+          attributes: ["appointmentId", "cleanerId", "completionStatus", "completionSubmittedAt"],
+        })
+      : [];
+
+    // Group completions by appointment ID
+    const completionsByAppointment = {};
+    cleanerJobCompletions.forEach((completion) => {
+      if (!completionsByAppointment[completion.appointmentId]) {
+        completionsByAppointment[completion.appointmentId] = [];
+      }
+      completionsByAppointment[completion.appointmentId].push(completion);
+    });
+
+    // Add hasClientReview, pendingRequestCount, and multi-cleaner data to each appointment
+    const appointmentsWithReviewStatus = user.appointments.map((apt) => {
+      const mcJob = multiCleanerJobsByAppointment[apt.id];
+      const employeesCount = apt.employeesAssigned ? apt.employeesAssigned.length : 0;
+      // Use appointment's empoyeesNeeded (calculated at booking with time window factored in)
+      // Fall back to 1 if not set
+      const appointmentNeeds = apt.empoyeesNeeded || 1;
+
+      // Get multi-cleaner completion status
+      const completions = completionsByAppointment[apt.id] || [];
+      const pendingCompletionApprovals = completions.filter(
+        (c) => c.completionStatus === "submitted"
+      ).length;
+      const completedCleaners = completions.filter(
+        (c) => c.completionStatus === "approved" || c.completionStatus === "auto_approved"
+      ).length;
+      const hasSubmittedCompletions = pendingCompletionApprovals > 0;
+
+      return {
+        ...apt.dataValues,
+        hasClientReview: reviewedAppointmentIds.has(apt.id),
+        pendingRequestCount: pendingRequestCounts[apt.id] || 0,
+        pendingApprovalCount: pendingApprovalCounts[apt.id] || 0,
+        // If there's a MultiCleanerJob record, use that data; otherwise use appointment's empoyeesNeeded
+        cleanersNeeded: mcJob ? mcJob.cleanersNeeded : appointmentNeeds,
+        cleanersConfirmed: mcJob ? mcJob.cleanersConfirmed : employeesCount,
+        multiCleanerJobId: mcJob ? mcJob.multiCleanerJobId : null,
+        multiCleanerStatus: mcJob ? mcJob.multiCleanerStatus : null,
+        // Multi-cleaner completion status
+        pendingCompletionApprovals,
+        completedCleaners,
+        hasSubmittedCompletions,
+      };
+    });
 
     // Replace appointments with enriched data
     const userData = {
@@ -235,6 +326,26 @@ userInfoRouter.post("/home", async (req, res) => {
     // Serialize the home to ensure consistent structure with fetched homes
     const serializedHome = HomeSerializer.serializeOne(newHome);
 
+    // Check if this client has existing business owner relationships
+    // If so, create new home requests for them
+    let newHomeRequests = [];
+    try {
+      const io = req.app.get("io");
+      newHomeRequests = await NewHomeRequestService.createRequestsForNewHome(
+        newHome.id,
+        userId,
+        io
+      );
+      if (newHomeRequests.length > 0) {
+        console.log(
+          `[userInfoRouter] Created ${newHomeRequests.length} new home request(s) for home ${newHome.id}`
+        );
+      }
+    } catch (requestError) {
+      // Don't fail the home creation if request creation fails
+      console.error("[userInfoRouter] Error creating new home requests:", requestError);
+    }
+
     return res.status(201).json({
       user,
       home: serializedHome,
@@ -242,6 +353,7 @@ userInfoRouter.post("/home", async (req, res) => {
       serviceAreaMessage: outsideServiceArea
         ? "This home is outside our current service area. It has been saved to your profile, but you won't be able to book appointments until we expand to this area."
         : null,
+      newHomeRequestsSent: newHomeRequests.length,
     });
   } catch (error) {
     console.log(error);
@@ -548,6 +660,26 @@ userInfoRouter.delete("/home", async (req, res) => {
     });
 
     await UserAppointments.destroy({
+      where: {
+        homeId: id,
+      },
+    });
+
+    // Cancel any pending NewHomeRequests for this home
+    const pendingRequests = await NewHomeRequest.findAll({
+      where: {
+        homeId: id,
+        status: "pending",
+      },
+    });
+
+    for (const request of pendingRequests) {
+      await request.cancel();
+      console.log(`[userInfoRouter] Cancelled pending NewHomeRequest ${request.id} for deleted home ${id}`);
+    }
+
+    // Also delete any non-pending requests (accepted, declined, expired)
+    await NewHomeRequest.destroy({
       where: {
         homeId: id,
       },

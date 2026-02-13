@@ -173,7 +173,7 @@ describe("ClientCard - Pricing Features", () => {
     });
 
     it("should revert price on cancel", () => {
-      const { getByText, getByDisplayValue } = render(
+      const { getByText, getByDisplayValue, UNSAFE_getAllByType } = render(
         <ClientCard
           client={mockActiveClient}
           onPress={mockOnPress}
@@ -188,8 +188,11 @@ describe("ClientCard - Pricing Features", () => {
       const input = getByDisplayValue("175");
       fireEvent.changeText(input, "999");
 
-      // Trigger blur which calls cancel
-      fireEvent(input, "blur", { stopPropagation: jest.fn() });
+      // Find the cancel button (the "x" icon) and press it
+      // In edit mode, there are check and x icons - x is the second one
+      const featherIcons = UNSAFE_getAllByType("Feather");
+      const cancelIcon = featherIcons.find(icon => icon.props.name === "x");
+      fireEvent(cancelIcon.parent, "press", { stopPropagation: jest.fn() });
 
       // Should no longer be in edit mode, should show original price
       expect(getByText("175")).toBeTruthy();

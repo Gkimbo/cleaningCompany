@@ -407,7 +407,7 @@ class PreferredCleanerService {
    * @returns {Object} Result with updated appointment
    */
   static async acceptAppointment(appointmentId, cleanerId, models) {
-    const { UserAppointments, UserHomes, User, UserCleanerAppointments } = models;
+    const { UserAppointments, UserHomes, User, UserCleanerAppointments, UserPendingRequests } = models;
 
     // Find the appointment with home details
     const appointment = await UserAppointments.findByPk(appointmentId, {
@@ -446,6 +446,67 @@ class PreferredCleanerService {
       appointmentId: appointment.id,
       employeeId: cleanerId,
     });
+
+    // Clean up any pending requests from other cleaners and notify them
+    if (UserPendingRequests) {
+      try {
+        const pendingRequests = await UserPendingRequests.findAll({
+          where: { appointmentId: appointment.id },
+        });
+
+        const formattedDate = this.formatDate(appointment.date);
+        const homeAddress = `${decryptHomeField(appointment.home.address)}, ${decryptHomeField(appointment.home.city)}`;
+
+        for (const request of pendingRequests) {
+          const deniedCleaner = await User.findByPk(request.employeeId);
+          if (deniedCleaner) {
+            // Add in-app notification
+            const deniedCleanerNotifications = deniedCleaner.notifications || [];
+            deniedCleanerNotifications.unshift(
+              `Your cleaning request for ${formattedDate} was not approved. The homeowner's preferred cleaner is handling this job.`
+            );
+            await deniedCleaner.update({ notifications: deniedCleanerNotifications.slice(0, 50) });
+
+            // Send push notification
+            if (deniedCleaner.expoPushToken) {
+              try {
+                await PushNotification.sendPushNotification(
+                  deniedCleaner.expoPushToken,
+                  "Request Not Approved",
+                  `Your cleaning request for ${formattedDate} was not approved.`
+                );
+              } catch (pushErr) {
+                console.error(`Error sending push to denied cleaner ${deniedCleaner.id}:`, pushErr);
+              }
+            }
+
+            // Send email notification
+            if (deniedCleaner.email) {
+              try {
+                const Email = require("./sendNotifications/EmailClass");
+                await Email.sendRequestDenied(
+                  EncryptionService.decrypt(deniedCleaner.email),
+                  deniedCleaner.username || EncryptionService.decrypt(deniedCleaner.firstName),
+                  appointment.date
+                );
+              } catch (emailErr) {
+                console.error(`Error sending email to denied cleaner ${deniedCleaner.id}:`, emailErr);
+              }
+            }
+          }
+        }
+
+        // Delete all pending requests for this appointment
+        await UserPendingRequests.destroy({
+          where: { appointmentId: appointment.id },
+        });
+
+        console.log(`[PreferredCleaner] Cleaned up ${pendingRequests.length} pending requests for appointment ${appointmentId}`);
+      } catch (cleanupErr) {
+        console.error("Error cleaning up pending requests:", cleanupErr);
+        // Don't fail the accept if cleanup fails
+      }
+    }
 
     // Notify the client
     const client = appointment.user;

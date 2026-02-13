@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-4647_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5128_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -21,7 +21,7 @@ The Kleanr mobile app is a React Native application built with Expo that provide
 
 **Key Features:**
 - Full offline-first architecture with background sync
-- Multi-user role support (6 user types)
+- Multi-user role support (7 user types including Business Client)
 - Real-time messaging with WebSocket
 - Stripe payment integration with Apple Pay/Google Pay
 - iCal calendar sync for vacation rentals
@@ -30,6 +30,10 @@ The Kleanr mobile app is a React Native application built with Expo that provide
 - Conflict Resolution Center for HR staff
 - Cancellation Appeals system with 72-hour window
 - Preview as Role for platform owners
+- Employee timesheet management and hours tracking
+- Transit time calculation between jobs
+- Bi-weekly batch payouts for employees with pending earnings display
+- Database-driven pricing configuration
 
 ---
 
@@ -116,9 +120,11 @@ export const API_BASE = "http://localhost:3000/api/v1";
 #### Business Owners
 - Employee invitation & management
 - Team calendar view
-- Job assignment to employees
+- Job assignment to employees with transit time
 - Payroll tracking (hourly/flat rate)
+- **Timesheet management** with hours tracking
 - **My Clients page** with full client management
+- **Business Client portal** for corporate clients
 - Client invitation via email with home details
 - Book appointments for clients directly
 - Custom per-home pricing with platform alignment
@@ -133,8 +139,11 @@ export const API_BASE = "http://localhost:3000/api/v1";
 #### Business Employees
 - Personal job dashboard
 - Assigned job list & calendar
-- Earnings tracking
+- **Bi-weekly payouts** with pending earnings display
+- **Pay types**: Hourly, percentage, or flat per-job rate
+- Earnings tracking with next payout date
 - Availability settings
+- **Timesheet submission** with hours logging
 - Photo & checklist workflow
 - Coworker messaging
 - Job completion with pay tracking
@@ -199,6 +208,10 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Cancellation Appeals** | Submit appeals within 72 hours, HR review within 48-hour SLA, penalty waiver and refund options |
 | **Preview as Role** | Platform owners can preview app as Cleaner, Homeowner, Business Owner, or Employee using demo accounts |
 | **Internal Analytics** | Platform metrics dashboard: flow abandonment funnels, job duration stats, offline usage monitoring, dispute/pay override frequency |
+| **Transit Time** | Automatic calculation of travel time between jobs for scheduling optimization. Displays estimated arrival times and prevents overbooking. |
+| **Employee Timesheets** | Track and submit hours worked per job. Business owners can review and approve timesheets with payroll integration. |
+| **Bi-Weekly Payouts** | Employees view pending earnings and next payout date. Business owners see payroll summary and can trigger early payouts. Supports hourly, percentage, and flat pay types. |
+| **Database Pricing** | All platform fees configured via database. Displays accurate fee breakdowns in earnings and payout screens. |
 
 ---
 
@@ -229,6 +242,7 @@ client/
 │   │   │   ├── JobAssignment.js
 │   │   │   ├── FinancialsScreen.js
 │   │   │   ├── PayrollScreen.js
+│   │   │   ├── TimesheetManagement.js
 │   │   │   └── BusinessOwnerCalendar.js
 │   │   ├── calendarSync/         # iCal integration
 │   │   ├── cleaner/              # Cleaner dashboard
@@ -330,7 +344,9 @@ client/
 │       │   ├── ConflictService.js
 │       │   ├── AppealService.js
 │       │   ├── DemoAccountService.js
-│       │   └── AnalyticsService.js
+│       │   ├── AnalyticsService.js
+│       │   ├── TimesheetService.js
+│       │   └── TransitTimeService.js
 │       │
 │       ├── offline/              # Offline sync system
 │       │   ├── OfflineManager.js
@@ -564,6 +580,23 @@ AnalyticsService.trackOfflineStart();
 
 // Fetch dashboard stats (owner only)
 const stats = await AnalyticsService.fetchDashboardStats(token, startDate, endDate);
+```
+
+### PendingPayoutService
+
+```javascript
+import PendingPayoutService from './services/fetchRequests/PendingPayoutService';
+
+// Get employee's pending earnings
+const pending = await PendingPayoutService.getPendingEarnings(token);
+// Returns: { pendingAmount, nextPayoutDate, jobs: [...] }
+
+// Get business owner's payroll summary
+const payroll = await PendingPayoutService.getPendingPayroll(token);
+// Returns: { totalPending, byEmployee: [...], nextPayoutDate }
+
+// Trigger early payout for employee (business owner only)
+await PendingPayoutService.triggerEarlyPayout(token, employeeId);
 ```
 
 ### OfflineManager
@@ -815,7 +848,10 @@ npm test -- CleaningChecklist.test.js
 | PreviewAsRole | 41 | PreviewContext, modals, DemoAccountService |
 | InternalAnalytics | 28 | Dashboard, flow tracking, stats display |
 | MultiCleaner | 76 | Multi-cleaner job management, offers, room assignments |
-| **Total** | **4647** | 167 test suites |
+| Employee Timesheets | 24 | Timesheet submission, approval, hours tracking |
+| Transit Time | 18 | Distance calculation, scheduling optimization |
+| Bi-Weekly Payouts | 24 | Pending earnings display, payout date calculation |
+| **Total** | **5128** | 175 test suites |
 
 ---
 

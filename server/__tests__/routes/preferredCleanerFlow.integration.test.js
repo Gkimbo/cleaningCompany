@@ -30,6 +30,11 @@ jest.mock("../../services/ReviewsClass", () => ({
   getPendingReviewsForUser: jest.fn().mockResolvedValue([]),
 }));
 
+// Mock PreferredCleanerService to allow preferred cleaner creation
+jest.mock("../../services/PreferredCleanerService", () => ({
+  isBusinessCleanerForHome: jest.fn().mockResolvedValue(false),
+}));
+
 // Mock Stripe
 jest.mock("stripe", () => {
   return jest.fn().mockImplementation(() => ({
@@ -98,6 +103,11 @@ jest.mock("../../models", () => {
           });
         }
         return Promise.resolve(null);
+      }),
+      count: jest.fn().mockImplementation(({ where }) => {
+        // Homeowner (userId 1) has homes, cleaner (userId 100) does not
+        const userId = where?.userId;
+        return Promise.resolve(userId === 1 ? 1 : 0);
       }),
     },
     UserAppointments: {

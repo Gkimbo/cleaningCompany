@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import ClientDashboardService from "../../services/fetchRequests/ClientDashboardService";
+import CleanerApprovalService from "../../services/fetchRequests/CleanerApprovalService";
 import FetchData from "../../services/fetchRequests/fetchData";
 import {
   colors,
@@ -21,15 +22,21 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import CleanerConflictModal from "../reviews/CleanerConflictModal";
 
 const ClientRequestsList = ({ state, dispatch }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [requestsByHome, setRequestsByHome] = useState([]);
+  const [multiCleanerRequests, setMultiCleanerRequests] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [processingRequest, setProcessingRequest] = useState(null);
   const [expandedHomes, setExpandedHomes] = useState({});
+  const [expandedMultiCleaner, setExpandedMultiCleaner] = useState(true);
+  const [conflictData, setConflictData] = useState(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictContext, setConflictContext] = useState(null);
 
   const toggleHomeExpanded = (homeId) => {
     setExpandedHomes((prev) => ({
@@ -83,11 +90,19 @@ const ClientRequestsList = ({ state, dispatch }) => {
     }
 
     try {
-      const data = await ClientDashboardService.getPendingRequestsForClient(
-        state.currentUser.token
-      );
-      setRequestsByHome(data.requestsByHome || []);
-      setTotalCount(data.totalCount || 0);
+      // Fetch both solo and multi-cleaner requests in parallel
+      const [soloData, multiCleanerData] = await Promise.all([
+        ClientDashboardService.getPendingRequestsForClient(state.currentUser.token),
+        CleanerApprovalService.getPendingRequests(state.currentUser.token),
+      ]);
+
+      setRequestsByHome(soloData.requestsByHome || []);
+      setMultiCleanerRequests(multiCleanerData.requests || []);
+
+      // Total count includes both types
+      const soloCount = soloData.totalCount || 0;
+      const multiCleanerCount = (multiCleanerData.requests || []).length;
+      setTotalCount(soloCount + multiCleanerCount);
     } catch (error) {
       console.error("Error fetching requests:", error);
     } finally {
@@ -107,7 +122,17 @@ const ClientRequestsList = ({ state, dispatch }) => {
   const handleApprove = async (requestId, cleanerId, appointmentId, cleanerName) => {
     setProcessingRequest(requestId);
     try {
-      await FetchData.approveRequest(requestId, true);
+      const result = await FetchData.approveRequest(requestId, true);
+
+      // Check if it's a conflict response
+      if (result && result.conflict) {
+        setConflictData(result);
+        setConflictContext({ requestId, cleanerId, appointmentId, cleanerName });
+        setShowConflictModal(true);
+        setProcessingRequest(null);
+        return;
+      }
+
       // Remove the request from local state
       setRequestsByHome((prev) =>
         prev
@@ -147,7 +172,96 @@ const ClientRequestsList = ({ state, dispatch }) => {
       );
     } catch (error) {
       console.error("Error approving request:", error);
-      Alert.alert("Error", "Failed to approve the request. Please try again.");
+      Alert.alert("Error", error.message || "Failed to approve the request. Please try again.");
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
+
+  const handleKeepCurrent = async () => {
+    if (!conflictContext) return;
+    setProcessingRequest(conflictContext.requestId);
+    try {
+      await FetchData.denyRequest(conflictContext.cleanerId, conflictContext.appointmentId);
+      setShowConflictModal(false);
+      setConflictData(null);
+
+      // Remove the request from local state
+      setRequestsByHome((prev) =>
+        prev
+          .map((homeGroup) => ({
+            ...homeGroup,
+            requests: homeGroup.requests.filter(
+              (r) => r.request.id !== conflictContext.requestId
+            ),
+          }))
+          .filter((homeGroup) => homeGroup.requests.length > 0)
+      );
+      setTotalCount((prev) => prev - 1);
+
+      if (dispatch) {
+        dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      }
+
+      setConflictContext(null);
+      Alert.alert("Request Denied", "You've kept the current cleaner. This request has been denied.");
+    } catch (error) {
+      console.error("Error denying request:", error);
+      Alert.alert("Error", error.message || "Failed to deny the request.");
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
+
+  const handleSwitchCleaner = async () => {
+    if (!conflictContext || !conflictData) return;
+    setProcessingRequest(conflictContext.requestId);
+    try {
+      await FetchData.switchCleaner(
+        conflictContext.appointmentId,
+        conflictContext.cleanerId,
+        conflictContext.requestId
+      );
+      setShowConflictModal(false);
+      setConflictData(null);
+
+      // Remove ALL requests for this appointment from local state (they're all cleaned up)
+      setRequestsByHome((prev) =>
+        prev
+          .map((homeGroup) => ({
+            ...homeGroup,
+            requests: homeGroup.requests.filter(
+              (r) => r.appointment.id !== conflictContext.appointmentId
+            ),
+          }))
+          .filter((homeGroup) => homeGroup.requests.length > 0)
+      );
+      setTotalCount((prev) => Math.max(0, prev - 1));
+
+      if (dispatch) {
+        dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+      }
+
+      // Refresh appointments in global state
+      try {
+        const dashboardData = await ClientDashboardService.getDashboardSummary(
+          state.currentUser.token
+        );
+        if (dashboardData.user?.appointments && dispatch) {
+          dispatch({
+            type: "USER_APPOINTMENTS",
+            payload: dashboardData.user.appointments,
+          });
+        }
+      } catch (refreshError) {
+        console.warn("Failed to refresh appointments:", refreshError);
+      }
+
+      setConflictContext(null);
+      Alert.alert("Success", `${conflictContext.cleanerName || "The cleaner"} has been assigned. The previous cleaner has been notified.`);
+    } catch (error) {
+      console.error("Error switching cleaner:", error);
+      Alert.alert("Error", error.message || "Failed to switch cleaner.");
     } finally {
       setProcessingRequest(null);
     }
@@ -197,6 +311,57 @@ const ClientRequestsList = ({ state, dispatch }) => {
         cleanerId,
       },
     });
+  };
+
+  // Multi-cleaner request handlers
+  const handleApproveMultiCleaner = async (requestId, cleanerName) => {
+    setProcessingRequest(requestId);
+    try {
+      const result = await CleanerApprovalService.approveRequest(
+        state.currentUser.token,
+        requestId
+      );
+      if (result.success) {
+        setMultiCleanerRequests((prev) => prev.filter((r) => r.id !== requestId));
+        setTotalCount((prev) => prev - 1);
+        if (dispatch) {
+          dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+        }
+        Alert.alert("Success", `${cleanerName} has been approved for your team cleaning job.`);
+      } else {
+        Alert.alert("Error", result.error || "Failed to approve request");
+      }
+    } catch (error) {
+      console.error("Error approving multi-cleaner request:", error);
+      Alert.alert("Error", "Failed to approve request. Please try again.");
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
+
+  const handleDeclineMultiCleaner = async (requestId, cleanerName) => {
+    setProcessingRequest(requestId);
+    try {
+      const result = await CleanerApprovalService.declineRequest(
+        state.currentUser.token,
+        requestId
+      );
+      if (result.success) {
+        setMultiCleanerRequests((prev) => prev.filter((r) => r.id !== requestId));
+        setTotalCount((prev) => prev - 1);
+        if (dispatch) {
+          dispatch({ type: "DECREMENT_PENDING_CLEANER_REQUESTS" });
+        }
+        Alert.alert("Done", `${cleanerName}'s request has been declined.`);
+      } else {
+        Alert.alert("Error", result.error || "Failed to decline request");
+      }
+    } catch (error) {
+      console.error("Error declining multi-cleaner request:", error);
+      Alert.alert("Error", "Failed to decline request. Please try again.");
+    } finally {
+      setProcessingRequest(null);
+    }
   };
 
   const formatDate = (dateString) => {
@@ -494,7 +659,118 @@ const ClientRequestsList = ({ state, dispatch }) => {
             })}
           </View>
         );})
-      ) : (
+      ) : null}
+
+      {/* Multi-Cleaner Requests Section */}
+      {multiCleanerRequests.length > 0 && (
+        <View style={styles.homeSection}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.homeHeader,
+              styles.homeHeaderClickable,
+              styles.teamCleaningHeader,
+              pressed && styles.homeHeaderPressed,
+            ]}
+            onPress={() => setExpandedMultiCleaner(!expandedMultiCleaner)}
+          >
+            <Icon name="users" size={16} color={colors.secondary[600]} />
+            <Text style={[styles.homeName, styles.teamCleaningTitle]}>
+              Team Cleaning Requests
+            </Text>
+            <View style={[styles.requestCountBadge, styles.teamBadge]}>
+              <Text style={styles.requestCountText}>
+                {multiCleanerRequests.length}
+              </Text>
+            </View>
+            <Icon
+              name={expandedMultiCleaner ? "chevron-up" : "chevron-down"}
+              size={14}
+              color={colors.text.tertiary}
+              style={styles.expandIcon}
+            />
+          </Pressable>
+
+          {expandedMultiCleaner && multiCleanerRequests.map((request) => {
+            const isProcessing = processingRequest === request.id;
+
+            return (
+              <View key={request.id} style={[styles.requestCard, styles.teamRequestCard]}>
+                {/* Team Badge */}
+                <View style={styles.teamJobBadge}>
+                  <Icon name="users" size={10} color={colors.secondary[700]} />
+                  <Text style={styles.teamJobBadgeText}>Team Cleaning</Text>
+                </View>
+
+                {/* Date Badge */}
+                <View style={styles.dateBadge}>
+                  <Icon name="calendar" size={12} color={colors.primary[600]} />
+                  <Text style={styles.dateText}>
+                    {formatDate(request.appointmentDate)}
+                  </Text>
+                </View>
+
+                {/* Cleaner Info */}
+                <View style={styles.cleanerInfo}>
+                  <View style={styles.avatarContainer}>
+                    <Text style={styles.avatarText}>
+                      {request.cleanerFirstName?.charAt(0)?.toUpperCase() || "?"}
+                    </Text>
+                  </View>
+                  <View style={styles.cleanerDetails}>
+                    <Text style={styles.cleanerName}>{request.cleanerName}</Text>
+                    <Text style={styles.requestSubtitle}>Wants to join your team cleaning</Text>
+                  </View>
+                </View>
+
+                {/* Home Address */}
+                {request.homeAddress && (
+                  <View style={styles.homeAddressRow}>
+                    <Icon name="map-marker" size={12} color={colors.text.secondary} />
+                    <Text style={styles.homeAddressText} numberOfLines={1}>
+                      {request.homeAddress}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Action Buttons */}
+                <View style={styles.actionButtons}>
+                  <Pressable
+                    style={[styles.actionButton, styles.approveButton]}
+                    onPress={() => handleApproveMultiCleaner(request.id, request.cleanerName)}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <ActivityIndicator size="small" color={colors.neutral[0]} />
+                    ) : (
+                      <>
+                        <Icon name="check" size={14} color={colors.neutral[0]} />
+                        <Text style={styles.approveButtonText}>Approve</Text>
+                      </>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    style={[styles.actionButton, styles.denyButton]}
+                    onPress={() => handleDeclineMultiCleaner(request.id, request.cleanerName)}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <ActivityIndicator size="small" color={colors.neutral[0]} />
+                    ) : (
+                      <>
+                        <Icon name="times" size={14} color={colors.neutral[0]} />
+                        <Text style={styles.denyButtonText}>Decline</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Empty State - Show only when both are empty */}
+      {requestsByHome.length === 0 && multiCleanerRequests.length === 0 && (
         <View style={styles.emptyState}>
           <View style={styles.emptyIcon}>
             <Icon name="inbox" size={40} color={colors.primary[300]} />
@@ -511,6 +787,21 @@ const ClientRequestsList = ({ state, dispatch }) => {
       )}
 
       <View style={styles.bottomSpacer} />
+
+      {/* Cleaner Conflict Modal */}
+      <CleanerConflictModal
+        visible={showConflictModal}
+        onClose={() => {
+          setShowConflictModal(false);
+          setConflictData(null);
+          setConflictContext(null);
+        }}
+        existingCleaner={conflictData?.existingCleaner}
+        newCleaner={conflictData?.newCleaner}
+        onKeepCurrent={handleKeepCurrent}
+        onSwitch={handleSwitchCleaner}
+        loading={!!processingRequest}
+      />
     </ScrollView>
   );
 };
@@ -868,6 +1159,55 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: spacing["4xl"],
+  },
+
+  // Team Cleaning Request Styles
+  teamCleaningHeader: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.secondary[500],
+  },
+  teamCleaningTitle: {
+    color: colors.secondary[700],
+  },
+  teamBadge: {
+    backgroundColor: colors.secondary[600],
+  },
+  teamRequestCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.secondary[300],
+  },
+  teamJobBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.secondary[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    alignSelf: "flex-start",
+    marginBottom: spacing.sm,
+  },
+  teamJobBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.secondary[700],
+  },
+  requestSubtitle: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  homeAddressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    paddingLeft: 56,
+  },
+  homeAddressText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    flex: 1,
   },
 });
 

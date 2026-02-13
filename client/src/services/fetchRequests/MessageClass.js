@@ -329,6 +329,87 @@ class MessageService {
     }
   }
 
+  // =====================================
+  // BUSINESS OWNER - EMPLOYEE MESSAGING
+  // =====================================
+
+  /**
+   * Get list of employees for business owner messaging
+   */
+  static async getBusinessEmployees(token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/business-employees`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch employees");
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching business employees:", error);
+      return { error: error.message, employees: [] };
+    }
+  }
+
+  /**
+   * Create or get a 1-on-1 conversation with an employee
+   */
+  static async createEmployeeConversation(employeeId, token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/employee-conversation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ employeeId }),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create conversation");
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error creating employee conversation:", error);
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Create a group conversation with multiple employees
+   */
+  static async createEmployeeGroupConversation(employeeIds, title, token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/employee-group-conversation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ employeeIds, title }),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create group");
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error creating employee group conversation:", error);
+      return { error: error.message };
+    }
+  }
+
   /**
    * Get all internal (owner-HR) conversations
    */

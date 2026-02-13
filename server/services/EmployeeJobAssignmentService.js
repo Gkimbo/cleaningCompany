@@ -13,6 +13,8 @@ const {
   User,
   CleanerClient,
   AppointmentJobFlow,
+  MultiCleanerJob,
+  Notification,
   sequelize,
 } = require("../models");
 const MarketplaceJobRequirementsService = require("./MarketplaceJobRequirementsService");
@@ -50,6 +52,67 @@ class EmployeeJobAssignmentService {
   }
 
   /**
+   * Estimate job duration based on home size
+   * @param {number} numBeds - Number of bedrooms
+   * @param {number} numBaths - Number of bathrooms
+   * @param {number} numCleaners - Number of cleaners assigned (default 1)
+   * @returns {number} Estimated hours per cleaner
+   */
+  static estimateJobDuration(numBeds = 2, numBaths = 1, numCleaners = 1) {
+    // Base time + time per bedroom + time per bathroom
+    const baseHours = 1;
+    const hoursPerBed = 0.25;
+    const hoursPerBath = 0.5;
+
+    const rawTotalHours = baseHours + (numBeds * hoursPerBed) + (numBaths * hoursPerBath);
+    // Round total to nearest 0.5 before dividing by cleaners
+    const totalHours = Math.round(rawTotalHours * 2) / 2;
+
+    // Divide by number of cleaners (minimum 1 hour per person)
+    const hoursPerCleaner = Math.max(1, totalHours / Math.max(1, numCleaners));
+
+    // Round to nearest 0.5
+    return Math.round(hoursPerCleaner * 2) / 2;
+  }
+
+  /**
+   * Calculate employee pay based on their default rate settings and job price
+   * @param {Object} employee - BusinessEmployee record
+   * @param {number} jobPriceInCents - Job price in cents
+   * @param {number} [estimatedHours] - Estimated hours for hourly employees
+   * @returns {Object} { payAmount, payType, estimatedHours } - Pay amount in cents and type
+   */
+  static calculateEmployeePay(employee, jobPriceInCents, estimatedHours = 2) {
+    if (!employee) {
+      return { payAmount: 0, payType: "flat_rate", estimatedHours: 0 };
+    }
+
+    const payType = employee.payType || "hourly";
+
+    switch (payType) {
+      case "percentage":
+        // Pay is a percentage of the job price
+        const percentRate = parseFloat(employee.payRate) || 0;
+        const percentPay = Math.round((jobPriceInCents * percentRate) / 100);
+        return { payAmount: Math.floor(percentPay), payType: "percentage", estimatedHours };
+
+      case "flat":
+      case "per_job":
+      case "flat_rate":
+        // Flat rate per job
+        const flatRate = Math.floor(employee.defaultJobRate || 0);
+        return { payAmount: flatRate, payType: "flat_rate", estimatedHours };
+
+      case "hourly":
+      default:
+        // Hourly rate * estimated hours
+        const hourlyRate = employee.defaultHourlyRate || 0;
+        const hourlyPay = Math.round(hourlyRate * estimatedHours);
+        return { payAmount: Math.floor(hourlyPay), payType: "hourly", estimatedHours };
+    }
+  }
+
+  /**
    * Assign an employee to a job
    * @param {number} businessOwnerId - ID of the business owner
    * @param {Object} assignmentData - Assignment details
@@ -59,7 +122,7 @@ class EmployeeJobAssignmentService {
    * @param {string} [assignmentData.payType] - 'flat_rate' or 'hourly'
    * @returns {Promise<Object>} Created assignment
    */
-  static async assignEmployeeToJob(businessOwnerId, assignmentData) {
+  static async assignEmployeeToJob(businessOwnerId, assignmentData, io = null) {
     const { employeeId, appointmentId, payAmount, payType = "flat_rate" } = assignmentData;
 
     // Verify employee belongs to this business owner
@@ -90,17 +153,30 @@ class EmployeeJobAssignmentService {
       throw new Error("Appointment not found");
     }
 
-    // Check if this appointment is already assigned to an employee
-    const existingAssignment = await EmployeeJobAssignment.findOne({
+    // Prevent duplicate employee assignment (same employee twice)
+    const duplicateAssignment = await EmployeeJobAssignment.findOne({
       where: {
         appointmentId,
-        businessOwnerId,
-        status: { [Op.notIn]: ["cancelled", "no_show"] },
+        businessEmployeeId: employeeId,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
       },
     });
 
-    if (existingAssignment) {
-      throw new Error("This appointment is already assigned to an employee");
+    if (duplicateAssignment) {
+      throw new Error("This employee is already assigned to this job");
+    }
+
+    // For marketplace multi-cleaner jobs, enforce cleaner count limit
+    if (appointment.isMultiCleanerJob && appointment.multiCleanerJobId) {
+      const multiCleanerJob = await MultiCleanerJob.findByPk(appointment.multiCleanerJobId);
+      if (multiCleanerJob) {
+        const currentCount = await EmployeeJobAssignment.count({
+          where: { appointmentId, status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] } },
+        });
+        if (currentCount >= multiCleanerJob.totalCleanersRequired) {
+          throw new Error(`This job requires exactly ${multiCleanerJob.totalCleanersRequired} cleaners`);
+        }
+      }
     }
 
     // Resolve the job flow for this appointment
@@ -160,6 +236,9 @@ class EmployeeJobAssignmentService {
     });
 
     // Send notification to the employee (after transaction completes)
+    // NOTE: We intentionally do NOT notify the homeowner when employees are assigned/unassigned.
+    // The homeowner is only notified if the business owner fully declines/cancels the appointment
+    // (handled via NotificationService.notifyBusinessOwnerDeclined).
     try {
       // Get the employee's user record for notification
       const employeeUser = await User.findByPk(employee.userId);
@@ -190,6 +269,31 @@ class EmployeeJobAssignmentService {
       console.error("[EmployeeJobAssignmentService] Failed to send job assignment notification:", notificationError);
     }
 
+    // Delete any unassigned reminder notifications for this appointment
+    // These should be removed from the notification list since someone is now assigned
+    try {
+      await Notification.destroy({
+        where: {
+          relatedAppointmentId: appointmentId,
+          type: "unassigned_reminder_bo",
+        },
+      });
+
+      // Emit socket event to update badge count in real-time
+      if (io) {
+        const [unreadCount, actionRequiredCount] = await Promise.all([
+          Notification.getUnreadCount(businessOwnerId),
+          Notification.getActionRequiredCount(businessOwnerId),
+        ]);
+        io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+          unreadCount,
+          actionRequiredCount,
+        });
+      }
+    } catch (clearError) {
+      console.error("[EmployeeJobAssignmentService] Failed to clear unassigned reminder notifications:", clearError);
+    }
+
     return assignment;
   }
 
@@ -197,9 +301,10 @@ class EmployeeJobAssignmentService {
    * Assign business owner to their own job (self-assignment)
    * @param {number} businessOwnerId - ID of the business owner
    * @param {number} appointmentId - Appointment ID
+   * @param {Object} io - Socket.io instance for real-time updates
    * @returns {Promise<Object>} Created assignment
    */
-  static async assignSelfToJob(businessOwnerId, appointmentId) {
+  static async assignSelfToJob(businessOwnerId, appointmentId, io = null) {
     // Verify business owner
     const businessOwner = await User.findByPk(businessOwnerId);
     if (!businessOwner || !businessOwner.isBusinessOwner) {
@@ -212,17 +317,18 @@ class EmployeeJobAssignmentService {
       throw new Error("Appointment not found");
     }
 
-    // Check if already assigned
-    const existingAssignment = await EmployeeJobAssignment.findOne({
+    // Check if business owner already self-assigned to this job
+    const existingSelfAssignment = await EmployeeJobAssignment.findOne({
       where: {
         appointmentId,
         businessOwnerId,
-        status: { [Op.notIn]: ["cancelled", "no_show"] },
+        isSelfAssignment: true,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
       },
     });
 
-    if (existingAssignment) {
-      throw new Error("This appointment is already assigned");
+    if (existingSelfAssignment) {
+      throw new Error("You are already assigned to this job");
     }
 
     // Resolve the job flow for this appointment
@@ -280,16 +386,45 @@ class EmployeeJobAssignmentService {
       return newAssignment;
     });
 
+    // Delete any unassigned reminder notifications for this appointment
+    // These should be removed from the notification list since someone is now assigned
+    try {
+      await Notification.destroy({
+        where: {
+          relatedAppointmentId: appointmentId,
+          type: "unassigned_reminder_bo",
+        },
+      });
+
+      // Emit socket event to update badge count in real-time
+      if (io) {
+        const [unreadCount, actionRequiredCount] = await Promise.all([
+          Notification.getUnreadCount(businessOwnerId),
+          Notification.getActionRequiredCount(businessOwnerId),
+        ]);
+        io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+          unreadCount,
+          actionRequiredCount,
+        });
+      }
+    } catch (clearError) {
+      console.error("[EmployeeJobAssignmentService] Failed to clear unassigned reminder notifications:", clearError);
+    }
+
     return assignment;
   }
 
   /**
    * Unassign an employee from a job
+   * NOTE: This method intentionally does NOT notify the homeowner.
+   * Employee rearrangements are internal to the business owner's operations.
+   * The homeowner is only notified if the appointment is fully cancelled/declined.
    * @param {number} assignmentId - Assignment ID
    * @param {number} businessOwnerId - ID of the business owner
+   * @param {Object} io - Socket.io instance for real-time updates
    * @returns {Promise<void>}
    */
-  static async unassignFromJob(assignmentId, businessOwnerId) {
+  static async unassignFromJob(assignmentId, businessOwnerId, io = null) {
     const assignment = await EmployeeJobAssignment.findOne({
       where: {
         id: assignmentId,
@@ -302,25 +437,169 @@ class EmployeeJobAssignmentService {
       throw new Error("Assignment not found or cannot be unassigned");
     }
 
+    // Check how many other employees are assigned to this job
+    const otherAssignments = await EmployeeJobAssignment.count({
+      where: {
+        appointmentId: assignment.appointmentId,
+        id: { [Op.ne]: assignmentId },
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      },
+    });
+
     await sequelize.transaction(async (t) => {
-      // Update the appointment
+      // Only update the appointment if this is the last employee
+      if (otherAssignments === 0) {
+        await UserAppointments.update(
+          {
+            assignedToBusinessEmployee: false,
+            businessEmployeeAssignmentId: null,
+          },
+          {
+            where: { id: assignment.appointmentId },
+            transaction: t,
+          }
+        );
+      }
+
+      // Mark the assignment as unassigned (so it can be found for unassigned jobs query)
+      await assignment.update({ status: "unassigned" }, { transaction: t });
+    });
+
+    // If the job is now fully unassigned and within 4 days, create a reminder notification
+    if (otherAssignments === 0) {
+      try {
+        const appointment = await UserAppointments.findByPk(assignment.appointmentId, {
+          include: [{ model: User, as: "user" }],
+        });
+
+        if (appointment && !appointment.completed && !appointment.wasCancelled) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          // Parse as local time by appending T00:00:00 to avoid UTC interpretation
+          const appointmentDate = new Date(appointment.date + "T00:00:00");
+          const daysUntil = Math.round((appointmentDate - today) / (1000 * 60 * 60 * 24));
+
+          // Only create notification if appointment is within 4 days
+          if (daysUntil >= 0 && daysUntil <= 4) {
+            // Get client name
+            let clientName = "Client";
+            if (appointment.user) {
+              const firstName = appointment.user.firstName
+                ? EncryptionService.decrypt(appointment.user.firstName)
+                : "";
+              const lastName = appointment.user.lastName
+                ? EncryptionService.decrypt(appointment.user.lastName)
+                : "";
+              clientName = `${firstName} ${lastName}`.trim() || "Client";
+            }
+
+            // Create the notification (this also emits socket event via NotificationService)
+            await NotificationService.notifyUnassignedAppointmentReminder({
+              businessOwnerId,
+              appointmentId: appointment.id,
+              appointmentDate: appointment.date,
+              clientName,
+              daysUntil,
+              reminderCount: 1,
+              io,
+            });
+          }
+        }
+      } catch (notifyError) {
+        console.error("[EmployeeJobAssignmentService] Failed to create unassigned reminder:", notifyError);
+      }
+    }
+
+    return { remainingAssignments: otherAssignments };
+  }
+
+  /**
+   * Bulk unassign all cleaners from a job (for multi-cleaner jobs)
+   * Handles everything in a single transaction to avoid race conditions
+   * @param {number} appointmentId - The appointment to unassign all cleaners from
+   * @param {number} businessOwnerId - ID of the business owner
+   * @param {Object} io - Socket.io instance for notifications
+   * @returns {Promise<Object>} Result with count of removed assignments
+   */
+  static async bulkUnassignFromJob(appointmentId, businessOwnerId, io = null) {
+    // Find all active assignments for this appointment
+    const assignments = await EmployeeJobAssignment.findAll({
+      where: {
+        appointmentId,
+        businessOwnerId,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      },
+    });
+
+    if (assignments.length === 0) {
+      throw new Error("No active assignments found for this job");
+    }
+
+    await sequelize.transaction(async (t) => {
+      // Update the appointment to mark as unassigned
       await UserAppointments.update(
         {
           assignedToBusinessEmployee: false,
           businessEmployeeAssignmentId: null,
         },
         {
-          where: { id: assignment.appointmentId },
+          where: { id: appointmentId },
           transaction: t,
         }
       );
 
-      // Update assignment status
-      await assignment.update(
-        { status: "cancelled" },
-        { transaction: t }
+      // Mark all assignments as unassigned
+      await EmployeeJobAssignment.update(
+        { status: "unassigned" },
+        {
+          where: {
+            id: { [Op.in]: assignments.map((a) => a.id) },
+          },
+          transaction: t,
+        }
       );
     });
+
+    // Create notification if job is within 4 days
+    try {
+      const appointment = await UserAppointments.findByPk(appointmentId, {
+        include: [{ model: User, as: "user" }],
+      });
+
+      if (appointment && !appointment.completed && !appointment.wasCancelled) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const appointmentDate = new Date(appointment.date + "T00:00:00");
+        const daysUntil = Math.round((appointmentDate - today) / (1000 * 60 * 60 * 24));
+
+        if (daysUntil >= 0 && daysUntil <= 4) {
+          let clientName = "Client";
+          if (appointment.user) {
+            const firstName = appointment.user.firstName
+              ? EncryptionService.decrypt(appointment.user.firstName)
+              : "";
+            const lastName = appointment.user.lastName
+              ? EncryptionService.decrypt(appointment.user.lastName)
+              : "";
+            clientName = `${firstName} ${lastName}`.trim() || "Client";
+          }
+
+          await NotificationService.notifyUnassignedAppointmentReminder({
+            businessOwnerId,
+            appointmentId: appointment.id,
+            appointmentDate: appointment.date,
+            clientName,
+            daysUntil,
+            reminderCount: 1,
+            io,
+          });
+        }
+      }
+    } catch (notifyError) {
+      console.error("[EmployeeJobAssignmentService] Failed to create unassigned reminder:", notifyError);
+    }
+
+    return { removedCount: assignments.length };
   }
 
   /**
@@ -328,7 +607,7 @@ class EmployeeJobAssignmentService {
    * @param {number} assignmentId - Current assignment ID
    * @param {number} newEmployeeId - New BusinessEmployee ID
    * @param {number} businessOwnerId - ID of the business owner
-   * @returns {Promise<Object>} New assignment
+   * @returns {Promise<Object>} Updated assignment
    */
   static async reassignJob(assignmentId, newEmployeeId, businessOwnerId) {
     const currentAssignment = await EmployeeJobAssignment.findOne({
@@ -337,11 +616,15 @@ class EmployeeJobAssignmentService {
         businessOwnerId,
         status: "assigned",
       },
+      include: [{ model: BusinessEmployee, as: "employee" }],
     });
 
     if (!currentAssignment) {
       throw new Error("Assignment not found or cannot be reassigned");
     }
+
+    const oldEmployee = currentAssignment.employee;
+    const oldEmployeeId = currentAssignment.businessEmployeeId;
 
     // Verify new employee
     const newEmployee = await BusinessEmployee.findOne({
@@ -356,49 +639,80 @@ class EmployeeJobAssignmentService {
       throw new Error("New employee not found or not active");
     }
 
-    // Transaction to cancel old and create new
-    const newAssignment = await sequelize.transaction(async (t) => {
-      // Cancel old assignment
-      await currentAssignment.update(
-        { status: "cancelled" },
-        { transaction: t }
-      );
+    // Check if trying to reassign to the same employee
+    if (oldEmployeeId === newEmployeeId) {
+      throw new Error("Employee is already assigned to this job");
+    }
 
-      // Create new assignment
-      const assignment = await EmployeeJobAssignment.create(
+    // Get appointment to calculate pay based on job price and home size
+    const appointment = await UserAppointments.findByPk(currentAssignment.appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+
+    // Get home size for duration estimation
+    const numBeds = appointment?.home?.numBeds || 2;
+    const numBaths = appointment?.home?.numBaths || 1;
+
+    // Count all active assignments for this job (including this one)
+    const totalCleaners = await EmployeeJobAssignment.count({
+      where: {
+        appointmentId: currentAssignment.appointmentId,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      },
+    });
+
+    // Estimate hours based on home size and number of cleaners
+    const estimatedHours = this.estimateJobDuration(numBeds, numBaths, totalCleaners);
+
+    // Calculate pay for the new employee based on their default rates
+    const jobPriceInCents = appointment?.price ? Math.round(parseFloat(appointment.price) * 100) : 0;
+
+    const { payAmount: calculatedPay, payType: calculatedPayType } = this.calculateEmployeePay(
+      newEmployee,
+      jobPriceInCents,
+      estimatedHours
+    );
+
+    const previousPayAmount = currentAssignment.payAmount;
+
+    // Update the existing assignment (patch instead of cancel + create)
+    await sequelize.transaction(async (t) => {
+      // Log the pay change for audit trail
+      await EmployeePayChangeLog.create(
         {
-          businessEmployeeId: newEmployeeId,
-          appointmentId: currentAssignment.appointmentId,
+          employeeJobAssignmentId: assignmentId,
           businessOwnerId,
-          assignedAt: new Date(),
-          assignedBy: businessOwnerId,
-          status: "assigned",
-          payAmount: currentAssignment.payAmount,
-          payType: currentAssignment.payType,
-          isSelfAssignment: false,
+          previousPayAmount,
+          newPayAmount: calculatedPay,
+          reason: `Reassigned from ${oldEmployee?.firstName || 'Unknown'} to ${newEmployee.firstName}`,
+          changedAt: new Date(),
+          changedBy: businessOwnerId,
         },
         { transaction: t }
       );
 
-      // Update appointment
-      await UserAppointments.update(
-        { businessEmployeeAssignmentId: assignment.id },
+      // Update the assignment with new employee and pay
+      await currentAssignment.update(
         {
-          where: { id: currentAssignment.appointmentId },
-          transaction: t,
-        }
+          businessEmployeeId: newEmployeeId,
+          payAmount: calculatedPay,
+          payType: calculatedPayType,
+          assignedAt: new Date(), // Reset assignment time
+        },
+        { transaction: t }
       );
+    });
 
-      return assignment;
+    // Reload the assignment with updated data
+    await currentAssignment.reload({
+      include: [{ model: BusinessEmployee, as: "employee" }],
     });
 
     // Send notifications after transaction completes
+    // NOTE: We intentionally only notify employees (new and old), NOT the homeowner.
+    // Employee rearrangements are internal to the business owner's operations.
+    // The homeowner is only notified if the appointment is fully cancelled/declined.
     try {
-      // Get appointment details
-      const appointment = await UserAppointments.findByPk(currentAssignment.appointmentId, {
-        include: [{ model: UserHomes, as: "home" }],
-      });
-
       // Get client info
       const client = await User.findByPk(appointment?.userId);
 
@@ -415,13 +729,12 @@ class EmployeeJobAssignmentService {
           appointmentDate: appointment?.date,
           clientName: client ? `${client.firstName || ""} ${client.lastName || ""}`.trim() : "Client",
           address: appointment?.home?.address || "Address on file",
-          payAmount: currentAssignment.payAmount,
+          payAmount: calculatedPay,
           businessName: businessOwner?.businessName || "Your employer",
         });
       }
 
       // Notify old employee about being unassigned (if they had a user account)
-      const oldEmployee = await BusinessEmployee.findByPk(currentAssignment.businessEmployeeId);
       if (oldEmployee?.userId) {
         await NotificationService.notifyEmployeeJobReassigned({
           employeeUserId: oldEmployee.userId,
@@ -433,7 +746,7 @@ class EmployeeJobAssignmentService {
       console.error("[EmployeeJobAssignmentService] Failed to send reassignment notifications:", notificationError);
     }
 
-    return newAssignment;
+    return currentAssignment;
   }
 
   /**
@@ -498,6 +811,93 @@ class EmployeeJobAssignmentService {
     );
 
     return assignment.reload();
+  }
+
+  /**
+   * Recalculate pay for an assignment based on home size and employee's default rates
+   * @param {number} assignmentId - Assignment ID
+   * @param {number} businessOwnerId - Business owner ID
+   * @returns {Promise<Object>} Updated assignment with new calculated pay
+   */
+  static async recalculatePay(assignmentId, businessOwnerId) {
+    const assignment = await EmployeeJobAssignment.findOne({
+      where: {
+        id: assignmentId,
+        businessOwnerId,
+        status: { [Op.notIn]: ["paid", "paid_outside_platform"] },
+      },
+      include: [
+        { model: BusinessEmployee, as: "employee" },
+      ],
+    });
+
+    if (!assignment) {
+      throw new Error("Assignment not found or already paid");
+    }
+
+    // Get appointment with home details
+    const appointment = await UserAppointments.findByPk(assignment.appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+
+    if (!appointment) {
+      throw new Error("Appointment not found");
+    }
+
+    // Count total active assignments for this job
+    const totalAssignments = await EmployeeJobAssignment.count({
+      where: {
+        appointmentId: assignment.appointmentId,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      },
+    });
+
+    // Get home size
+    const numBeds = appointment.home?.numBeds || 2;
+    const numBaths = appointment.home?.numBaths || 1;
+
+    // Calculate estimated hours based on home size and number of cleaners
+    const estimatedHours = this.estimateJobDuration(numBeds, numBaths, totalAssignments);
+
+    // Calculate pay based on employee's default rates
+    const jobPriceInCents = appointment.price ? Math.round(parseFloat(appointment.price) * 100) : 0;
+    const { payAmount: newPayAmount, payType: newPayType } = this.calculateEmployeePay(
+      assignment.employee,
+      jobPriceInCents,
+      estimatedHours
+    );
+
+    const previousPayAmount = assignment.payAmount;
+
+    await sequelize.transaction(async (t) => {
+      // Log the change
+      await EmployeePayChangeLog.create(
+        {
+          employeeJobAssignmentId: assignmentId,
+          businessOwnerId,
+          previousPayAmount,
+          newPayAmount,
+          reason: `Recalculated: ${numBeds}bd/${numBaths}ba, ${totalAssignments} cleaner(s), ${estimatedHours}hrs`,
+          changedAt: new Date(),
+          changedBy: businessOwnerId,
+        },
+        { transaction: t }
+      );
+
+      // Update the assignment with new pay and correct payType
+      await assignment.update(
+        {
+          payAmount: newPayAmount,
+          payType: newPayType,
+          payAdjustmentReason: `Recalculated based on home size`,
+        },
+        { transaction: t }
+      );
+    });
+
+    return assignment.reload({
+      include: [{ model: BusinessEmployee, as: "employee" }],
+    });
   }
 
   /**
@@ -595,11 +995,33 @@ class EmployeeJobAssignmentService {
   }
 
   /**
+   * Check if all employees have completed their assignments for an appointment
+   * @param {number} appointmentId - Appointment ID
+   * @returns {Promise<Object>} Completion status
+   */
+  static async checkAllEmployeesCompleted(appointmentId) {
+    const assignments = await EmployeeJobAssignment.findAll({
+      where: {
+        appointmentId,
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
+      },
+    });
+
+    const completed = assignments.filter((a) => a.status === "completed");
+
+    return {
+      allCompleted: completed.length === assignments.length && assignments.length > 0,
+      totalAssigned: assignments.length,
+      completedCount: completed.length,
+    };
+  }
+
+  /**
    * Complete a job (employee action)
    * @param {number} assignmentId - Assignment ID
    * @param {number} employeeUserId - User ID of the employee
    * @param {number} [hoursWorked] - Hours worked (for hourly jobs)
-   * @returns {Promise<Object>} Updated assignment
+   * @returns {Promise<Object>} Updated assignment with jobFullyCompleted flag
    */
   static async completeJob(assignmentId, employeeUserId, hoursWorked = null) {
     // Find employee record for this user
@@ -690,13 +1112,22 @@ class EmployeeJobAssignmentService {
 
     await assignment.update(updateData);
 
-    // Also mark appointment as completed
-    await UserAppointments.update(
-      { completed: true },
-      { where: { id: assignment.appointmentId } }
-    );
+    // Check if all employees have completed their assignments
+    const completionStatus = await this.checkAllEmployeesCompleted(assignment.appointmentId);
 
-    return assignment;
+    // Only mark appointment as completed when ALL employees are done
+    if (completionStatus.allCompleted) {
+      await UserAppointments.update(
+        { completed: true },
+        { where: { id: assignment.appointmentId } }
+      );
+    }
+
+    return {
+      assignment,
+      jobFullyCompleted: completionStatus.allCompleted,
+      completionStatus,
+    };
   }
 
   /**
@@ -866,15 +1297,19 @@ class EmployeeJobAssignmentService {
           model: BusinessEmployee,
           as: "employee",
           attributes: ["id", "firstName", "lastName"],
+          required: false, // Allow self-assignments (null businessEmployeeId)
         },
         {
           model: UserAppointments,
           as: "appointment",
+          required: true,
           where: {
             date: {
               [Op.gte]: startDate,
               [Op.lte]: endDate,
             },
+            wasCancelled: { [Op.ne]: true },
+            completed: { [Op.ne]: true },
           },
           include: [
             {
@@ -959,7 +1394,7 @@ class EmployeeJobAssignmentService {
     // Only show assignments that are not cancelled or no_show
     const where = {
       businessEmployeeId: employee.id,
-      status: { [Op.notIn]: ["cancelled", "no_show"] },
+      status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
     };
     if (status) {
       where.status = status;
@@ -1306,6 +1741,228 @@ class EmployeeJobAssignmentService {
       dailyBreakdown,
       weeklyTotals,
     };
+  }
+
+  /**
+   * Get employee workload data for fair job distribution
+   * @param {number} businessOwnerId - ID of the business owner
+   * @returns {Promise<Object>} Workload data with employee metrics and team averages
+   */
+  static async getEmployeeWorkloadData(businessOwnerId) {
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+
+    // Calculate date ranges
+    const dayOfWeek = now.getDay();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - dayOfWeek);
+    const weekStartStr = weekStart.toISOString().split("T")[0];
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthStartStr = monthStart.toISOString().split("T")[0];
+
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const yearStartStr = yearStart.toISOString().split("T")[0];
+
+    // Get all active employees with their employment start date
+    const employees = await BusinessEmployee.findAll({
+      where: {
+        businessOwnerId,
+        status: "active",
+      },
+      attributes: ["id", "firstName", "lastName", "userId", "acceptedAt", "createdAt"],
+      order: [["firstName", "ASC"]],
+    });
+
+    if (employees.length === 0) {
+      return {
+        employees: [],
+        teamAverage: { hoursPerWeek: 0, hoursThisWeek: 0 },
+        unassignedJobCount: 0,
+      };
+    }
+
+    // Get all completed assignments for these employees
+    const employeeIds = employees.map((e) => e.id);
+    const allAssignments = await EmployeeJobAssignment.findAll({
+      where: {
+        businessOwnerId,
+        businessEmployeeId: { [Op.in]: employeeIds },
+        status: "completed",
+        isSelfAssignment: false,
+      },
+      include: [
+        {
+          model: UserAppointments,
+          as: "appointment",
+          attributes: ["id", "date"],
+        },
+      ],
+    });
+
+    // Calculate metrics for each employee
+    const employeeMetrics = employees.map((employee) => {
+      const employedSince = employee.acceptedAt || employee.createdAt;
+      const employmentDays = Math.floor((now - new Date(employedSince)) / (1000 * 60 * 60 * 24));
+      const employmentWeeks = Math.max(1, Math.floor(employmentDays / 7));
+
+      // Filter assignments for this employee
+      const empAssignments = allAssignments.filter(
+        (a) => a.businessEmployeeId === employee.id
+      );
+
+      // Calculate hours for different periods
+      let hoursThisWeek = 0;
+      let hoursThisMonth = 0;
+      let hoursThisYear = 0;
+      let hoursAllTime = 0;
+      let jobsThisWeek = 0;
+      let jobsThisMonth = 0;
+      let jobsAllTime = 0;
+
+      empAssignments.forEach((assignment) => {
+        const hours = parseFloat(assignment.hoursWorked) || 0;
+        const jobDate = assignment.appointment?.date;
+
+        hoursAllTime += hours;
+        jobsAllTime++;
+
+        if (jobDate >= weekStartStr && jobDate <= today) {
+          hoursThisWeek += hours;
+          jobsThisWeek++;
+        }
+        if (jobDate >= monthStartStr && jobDate <= today) {
+          hoursThisMonth += hours;
+          jobsThisMonth++;
+        }
+        if (jobDate >= yearStartStr && jobDate <= today) {
+          hoursThisYear += hours;
+        }
+      });
+
+      const avgHoursPerWeek = hoursAllTime / employmentWeeks;
+
+      return {
+        id: employee.id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        userId: employee.userId,
+        employedSince,
+        employmentDays,
+        employmentWeeks,
+        isNew: employmentDays < 7,
+        hours: {
+          thisWeek: parseFloat(hoursThisWeek.toFixed(1)),
+          thisMonth: parseFloat(hoursThisMonth.toFixed(1)),
+          thisYear: parseFloat(hoursThisYear.toFixed(1)),
+          allTime: parseFloat(hoursAllTime.toFixed(1)),
+        },
+        avgHoursPerWeek: parseFloat(avgHoursPerWeek.toFixed(1)),
+        jobs: {
+          thisWeek: jobsThisWeek,
+          thisMonth: jobsThisMonth,
+          allTime: jobsAllTime,
+        },
+        workloadPercent: 0, // Will be calculated after team average
+      };
+    });
+
+    // Calculate team averages
+    const totalWeeklyHours = employeeMetrics.reduce((sum, e) => sum + e.hours.thisWeek, 0);
+    const activeEmployeeCount = employeeMetrics.length;
+    const teamAvgHoursThisWeek = activeEmployeeCount > 0 ? totalWeeklyHours / activeEmployeeCount : 0;
+
+    const totalAvgHoursPerWeek = employeeMetrics.reduce((sum, e) => sum + e.avgHoursPerWeek, 0);
+    const teamAvgHoursPerWeek = activeEmployeeCount > 0 ? totalAvgHoursPerWeek / activeEmployeeCount : 0;
+
+    // Calculate workload percentage for each employee (relative to team average this week)
+    employeeMetrics.forEach((emp) => {
+      if (teamAvgHoursThisWeek > 0) {
+        emp.workloadPercent = Math.round((emp.hours.thisWeek / teamAvgHoursThisWeek) * 100);
+      } else if (emp.hours.thisWeek > 0) {
+        emp.workloadPercent = 100; // If no team average but employee has hours
+      } else {
+        emp.workloadPercent = 0;
+      }
+    });
+
+    // Get unassigned jobs count (upcoming jobs not assigned to any employee)
+    const unassignedJobs = await UserAppointments.findAll({
+      where: {
+        date: { [Op.gte]: today },
+        completed: false,
+        assignedToBusinessEmployee: false,
+      },
+      include: [
+        {
+          model: CleanerClient,
+          as: "cleanerClient",
+          where: { cleanerId: businessOwnerId },
+          required: true,
+        },
+      ],
+    });
+
+    return {
+      employees: employeeMetrics,
+      teamAverage: {
+        hoursPerWeek: parseFloat(teamAvgHoursPerWeek.toFixed(1)),
+        hoursThisWeek: parseFloat(teamAvgHoursThisWeek.toFixed(1)),
+      },
+      unassignedJobCount: unassignedJobs.length,
+    };
+  }
+
+  /**
+   * Get unassigned jobs for a business owner
+   * @param {number} businessOwnerId - ID of the business owner
+   * @returns {Promise<Array>} Array of unassigned appointments
+   */
+  static async getUnassignedJobs(businessOwnerId) {
+    const today = new Date().toISOString().split("T")[0];
+
+    const unassignedJobs = await UserAppointments.findAll({
+      where: {
+        date: { [Op.gte]: today },
+        completed: false,
+        assignedToBusinessEmployee: false,
+      },
+      include: [
+        {
+          model: CleanerClient,
+          as: "cleanerClient",
+          where: { cleanerId: businessOwnerId },
+          required: true,
+          include: [
+            {
+              model: User,
+              as: "client",
+              attributes: ["id", "firstName", "lastName"],
+            },
+          ],
+        },
+        {
+          model: UserHomes,
+          as: "home",
+          attributes: ["id", "address", "numBeds", "numBaths"],
+        },
+      ],
+      order: [["date", "ASC"], ["startTime", "ASC"]],
+    });
+
+    return unassignedJobs.map((job) => ({
+      id: job.id,
+      date: job.date,
+      startTime: job.startTime,
+      endTime: job.endTime,
+      price: job.price,
+      clientName: job.cleanerClient?.client
+        ? `${job.cleanerClient.client.firstName || ""} ${job.cleanerClient.client.lastName || ""}`.trim()
+        : "Client",
+      address: job.home?.address || "Address on file",
+      numBeds: job.home?.numBeds,
+      numBaths: job.home?.numBaths,
+    }));
   }
 
   /**

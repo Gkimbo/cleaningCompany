@@ -89,13 +89,33 @@ const EmployeeCard = ({ employee, onEdit, onTerminate, onResendInvite, onReactiv
           <Text style={styles.payInfoLabel}>Pay:</Text>
           <Text style={styles.payInfoValue}>{formatPayInfo()}</Text>
         </View>
-        {employee.payType && (
-          <View style={styles.payTypeBadge}>
-            <Text style={styles.payTypeBadgeText}>
-              {PAY_TYPE_LABELS[employee.payType] || employee.payType}
-            </Text>
-          </View>
-        )}
+        <View style={styles.payInfoBadges}>
+          {employee.payType && (
+            <View style={styles.payTypeBadge}>
+              <Text style={styles.payTypeBadgeText}>
+                {PAY_TYPE_LABELS[employee.payType] || employee.payType}
+              </Text>
+            </View>
+          )}
+          {employee.paymentMethod === "stripe_connect" && (
+            <View style={[
+              styles.payoutMethodBadge,
+              employee.stripeConnectOnboarded ? styles.payoutMethodBadgeActive : styles.payoutMethodBadgePending
+            ]}>
+              <Icon
+                name={employee.stripeConnectOnboarded ? "credit-card" : "clock-o"}
+                size={10}
+                color={employee.stripeConnectOnboarded ? colors.success[600] : colors.warning[600]}
+              />
+              <Text style={[
+                styles.payoutMethodBadgeText,
+                employee.stripeConnectOnboarded ? styles.payoutMethodTextActive : styles.payoutMethodTextPending
+              ]}>
+                {employee.stripeConnectOnboarded ? "Direct Pay" : "Pending"}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Stats Row */}
@@ -166,11 +186,14 @@ const EmployeeCard = ({ employee, onEdit, onTerminate, onResendInvite, onReactiv
 };
 
 // Quick Edit Modal - for editing pay settings directly
-const QuickEditModal = ({ visible, employee, onClose, onSave, isSubmitting }) => {
+const QuickEditModal = ({ visible, employee, onClose, onSave, isSubmitting, token }) => {
   const [payType, setPayType] = useState("hourly");
   const [hourlyRate, setHourlyRate] = useState("");
   const [jobRate, setJobRate] = useState("");
   const [percentageRate, setPercentageRate] = useState("");
+  const [directPayoutEnabled, setDirectPayoutEnabled] = useState(false);
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [loadingStripeStatus, setLoadingStripeStatus] = useState(false);
 
   useEffect(() => {
     if (employee) {
@@ -178,8 +201,24 @@ const QuickEditModal = ({ visible, employee, onClose, onSave, isSubmitting }) =>
       setHourlyRate(employee.defaultHourlyRate ? (employee.defaultHourlyRate / 100).toString() : "");
       setJobRate(employee.defaultJobRate ? (employee.defaultJobRate / 100).toString() : "");
       setPercentageRate(employee.payRate ? employee.payRate.toString() : "");
+      setDirectPayoutEnabled(employee.paymentMethod === "stripe_connect");
+      // Fetch Stripe status when modal opens
+      fetchStripeStatus();
     }
   }, [employee]);
+
+  const fetchStripeStatus = async () => {
+    if (!employee || !token) return;
+    setLoadingStripeStatus(true);
+    try {
+      const status = await BusinessOwnerService.getEmployeeStripeStatus(token, employee.id);
+      setStripeStatus(status);
+    } catch (err) {
+      console.error("Error fetching Stripe status:", err);
+    } finally {
+      setLoadingStripeStatus(false);
+    }
+  };
 
   const handleSave = () => {
     const data = {
@@ -187,8 +226,13 @@ const QuickEditModal = ({ visible, employee, onClose, onSave, isSubmitting }) =>
       defaultHourlyRate: payType === "hourly" ? Math.round(parseFloat(hourlyRate || 0) * 100) : null,
       defaultJobRate: payType === "per_job" ? Math.round(parseFloat(jobRate || 0) * 100) : null,
       payRate: payType === "percentage" ? parseFloat(percentageRate || 0) : null,
+      paymentMethod: directPayoutEnabled ? "stripe_connect" : "direct_payment",
     };
     onSave(employee.id, data);
+  };
+
+  const handleDirectPayoutToggle = (value) => {
+    setDirectPayoutEnabled(value);
   };
 
   if (!employee) return null;
@@ -333,6 +377,75 @@ const QuickEditModal = ({ visible, employee, onClose, onSave, isSubmitting }) =>
               </View>
             )}
           </View>
+
+          {/* Direct Payout Section */}
+          {employee.status === "active" && (
+            <View style={styles.directPayoutSection}>
+              <View style={styles.sectionHeader}>
+                <Icon name="credit-card" size={16} color={colors.primary[600]} />
+                <Text style={styles.sectionTitle}>Direct Payout</Text>
+              </View>
+
+              <View style={styles.directPayoutToggleRow}>
+                <View style={styles.directPayoutInfo}>
+                  <Text style={styles.directPayoutLabel}>Pay through app</Text>
+                  <Text style={styles.directPayoutDesc}>
+                    Employee receives their share directly via Stripe
+                  </Text>
+                </View>
+                <Switch
+                  value={directPayoutEnabled}
+                  onValueChange={handleDirectPayoutToggle}
+                  trackColor={{ false: colors.neutral[300], true: colors.primary[400] }}
+                  thumbColor={directPayoutEnabled ? colors.primary[600] : colors.neutral[100]}
+                />
+              </View>
+
+              {directPayoutEnabled && (
+                <View style={styles.stripeStatusBox}>
+                  {loadingStripeStatus ? (
+                    <View style={styles.stripeStatusLoading}>
+                      <ActivityIndicator size="small" color={colors.primary[500]} />
+                      <Text style={styles.stripeStatusLoadingText}>Checking Stripe status...</Text>
+                    </View>
+                  ) : stripeStatus?.onboarded ? (
+                    <View style={styles.stripeStatusReady}>
+                      <View style={styles.stripeStatusIconReady}>
+                        <Icon name="check-circle" size={20} color={colors.success[600]} />
+                      </View>
+                      <View style={styles.stripeStatusContent}>
+                        <Text style={styles.stripeStatusReadyTitle}>Stripe Connected</Text>
+                        <Text style={styles.stripeStatusReadyDesc}>
+                          Ready to receive direct payouts
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.stripeStatusPending}>
+                      <View style={styles.stripeStatusIconPending}>
+                        <Icon name="clock-o" size={20} color={colors.warning[600]} />
+                      </View>
+                      <View style={styles.stripeStatusContent}>
+                        <Text style={styles.stripeStatusPendingTitle}>Awaiting Setup</Text>
+                        <Text style={styles.stripeStatusPendingDesc}>
+                          Employee will see a prompt to connect their bank account
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {!directPayoutEnabled && (
+                <View style={styles.manualPayNote}>
+                  <Icon name="info-circle" size={14} color={colors.neutral[500]} />
+                  <Text style={styles.manualPayNoteText}>
+                    You'll pay this employee outside the app (cash, check, etc.)
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Footer */}
           <View style={styles.quickEditFooter}>
@@ -896,31 +1009,39 @@ const EmployeeManagement = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Team</Text>
-          <View style={styles.headerStats}>
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatValue}>{activeCount}</Text>
-              <Text style={styles.headerStatLabel}>Active</Text>
-            </View>
-            <View style={styles.headerStatDivider} />
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatValue}>{pendingCount}</Text>
-              <Text style={styles.headerStatLabel}>Pending</Text>
-            </View>
-            <View style={styles.headerStatDivider} />
-            <View style={styles.headerStat}>
-              <Text style={styles.headerStatValue}>{totalCount}</Text>
-              <Text style={styles.headerStatLabel}>Total</Text>
-            </View>
+        {/* Top Row - Back button and Add button */}
+        <View style={styles.headerTopRow}>
+          <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+            <Icon name="arrow-left" size={16} color="#fff" />
+          </Pressable>
+          <Pressable
+            style={styles.addButton}
+            onPress={() => setShowInviteModal(true)}
+          >
+            <Icon name="user-plus" size={18} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* Title */}
+        <Text style={styles.title}>Your Team</Text>
+
+        {/* Stats Row */}
+        <View style={styles.headerStats}>
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatValue}>{activeCount}</Text>
+            <Text style={styles.headerStatLabel}>Active</Text>
+          </View>
+          <View style={styles.headerStatDivider} />
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatValue}>{pendingCount}</Text>
+            <Text style={styles.headerStatLabel}>Pending</Text>
+          </View>
+          <View style={styles.headerStatDivider} />
+          <View style={styles.headerStat}>
+            <Text style={styles.headerStatValue}>{totalCount}</Text>
+            <Text style={styles.headerStatLabel}>Total</Text>
           </View>
         </View>
-        <Pressable
-          style={styles.addButton}
-          onPress={() => setShowInviteModal(true)}
-        >
-          <Icon name="user-plus" size={22} color={colors.primary[600]} />
-        </Pressable>
       </View>
 
       {/* Filter Pills */}
@@ -1034,6 +1155,7 @@ const EmployeeManagement = ({ state }) => {
           }}
           onSave={handleQuickEditSave}
           isSubmitting={isSubmitting}
+          token={state.currentUser.token}
         />
       )}
 
@@ -1059,9 +1181,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
     paddingHorizontal: spacing.lg,
     paddingTop: spacing["4xl"],
     paddingBottom: spacing.xl,
@@ -1069,8 +1188,27 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius["2xl"],
     borderBottomRightRadius: radius["2xl"],
   },
-  headerContent: {
-    flex: 1,
+  headerTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
     fontSize: typography.fontSize["3xl"],
@@ -1109,15 +1247,6 @@ const styles = StyleSheet.create({
     height: 28,
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     marginHorizontal: spacing.xs,
-  },
-  addButton: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.full,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    ...shadows.lg,
   },
   addButtonIcon: {
     color: colors.primary[600],
@@ -1259,6 +1388,11 @@ const styles = StyleSheet.create({
     color: colors.success[700],
     marginLeft: spacing.xs,
   },
+  payInfoBadges: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
   payTypeBadge: {
     backgroundColor: colors.primary[50],
     paddingVertical: spacing.sm,
@@ -1273,6 +1407,35 @@ const styles = StyleSheet.create({
     color: colors.primary[600],
     textTransform: "uppercase",
     letterSpacing: 0.5,
+  },
+  payoutMethodBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: 4,
+  },
+  payoutMethodBadgeActive: {
+    backgroundColor: colors.success[50],
+    borderColor: colors.success[100],
+  },
+  payoutMethodBadgePending: {
+    backgroundColor: colors.warning[50],
+    borderColor: colors.warning[100],
+  },
+  payoutMethodBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  payoutMethodTextActive: {
+    color: colors.success[600],
+  },
+  payoutMethodTextPending: {
+    color: colors.warning[600],
   },
   statsRow: {
     flexDirection: "row",
@@ -1819,6 +1982,136 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     marginTop: spacing.md,
     lineHeight: 18,
+  },
+  // Direct Payout Section Styles
+  directPayoutSection: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  directPayoutToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.lg,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
+  directPayoutInfo: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  directPayoutLabel: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  directPayoutDesc: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginTop: 4,
+  },
+  stripeStatusBox: {
+    marginTop: spacing.md,
+  },
+  stripeStatusLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  stripeStatusLoadingText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  stripeStatusReady: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.lg,
+    backgroundColor: colors.success[50],
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.success[100],
+  },
+  stripeStatusIconReady: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.success[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  stripeStatusContent: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  stripeStatusReadyTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
+  },
+  stripeStatusReadyDesc: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    marginTop: 2,
+  },
+  stripeStatusPending: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.lg,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.warning[100],
+  },
+  stripeStatusIconPending: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  stripeStatusPendingTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.warning[700],
+  },
+  stripeStatusPendingDesc: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[600],
+    marginTop: 2,
+  },
+  stripeOnboardBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[600],
+    borderRadius: radius.lg,
+    gap: spacing.xs,
+  },
+  stripeOnboardBtnText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: "#fff",
+  },
+  manualPayNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  manualPayNoteText: {
+    flex: 1,
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
   },
   quickEditFooter: {
     flexDirection: "row",

@@ -10,7 +10,30 @@ const moment = require("moment");
 const CancellationAuditService = require("./CancellationAuditService");
 const JobLedgerService = require("./JobLedgerService");
 const AnalyticsService = require("./AnalyticsService");
+const EncryptionService = require("./EncryptionService");
 const Stripe = require("stripe");
+
+// Helper to decrypt user PII fields
+const decryptUserPII = (user) => {
+	if (!user) return null;
+	return {
+		id: user.id,
+		firstName: user.firstName ? EncryptionService.decrypt(user.firstName) : null,
+		lastName: user.lastName ? EncryptionService.decrypt(user.lastName) : null,
+		email: user.email ? EncryptionService.decrypt(user.email) : null,
+		phone: user.phone ? EncryptionService.decrypt(user.phone) : null,
+		type: user.type,
+		scrutinyLevel: user.appealScrutinyLevel,
+	};
+};
+
+// Helper to format user name from decrypted PII
+const formatUserName = (user) => {
+	if (!user) return null;
+	const firstName = user.firstName ? EncryptionService.decrypt(user.firstName) : "";
+	const lastName = user.lastName ? EncryptionService.decrypt(user.lastName) : "";
+	return `${firstName} ${lastName}`.trim() || null;
+};
 
 class ConflictResolutionService {
 	/**
@@ -32,6 +55,7 @@ class ConflictResolutionService {
 			search,
 			limit = 50,
 			offset = 0,
+			includeDemoData = false,
 		} = options;
 
 		const results = [];
@@ -42,7 +66,7 @@ class ConflictResolutionService {
 			if (status) {
 				appealWhere.status = status;
 			} else {
-				appealWhere.status = ["submitted", "under_review", "awaiting_documents", "escalated"];
+				appealWhere.status = { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] };
 			}
 			if (priority) appealWhere.priority = priority;
 			if (assignedTo) appealWhere.assignedTo = assignedTo;
@@ -53,9 +77,11 @@ class ConflictResolutionService {
 					{
 						model: UserAppointments,
 						as: "appointment",
-						attributes: ["id", "date", "userId", "price"],
+						attributes: ["id", "date", "userId", "price", "isDemoAppointment"],
+						where: includeDemoData ? {} : { isDemoAppointment: { [require("sequelize").Op.ne]: true } },
+						required: true,
 						include: [
-							{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone"] },
+							{ model: User, as: "bookedByCleaner", attributes: ["id", "firstName", "lastName", "email", "phone"] },
 						],
 					},
 					{ model: User, as: "appealer", attributes: ["id", "firstName", "lastName", "email", "phone", "type", "appealScrutinyLevel"] },
@@ -72,7 +98,7 @@ class ConflictResolutionService {
 				results.push({
 					id: appeal.id,
 					caseType: "appeal",
-					caseNumber: `APL-${appeal.id.toString().padStart(6, "0")}`,
+					caseNumber: appeal.caseNumber || `APL-${appeal.id.toString().padStart(6, "0")}`,
 					appointmentId: appeal.appointmentId,
 					appointmentDate: appeal.appointment?.date?.toISOString() || null,
 					status: appeal.status,
@@ -86,30 +112,183 @@ class ConflictResolutionService {
 					timeUntilSLA: appeal.getTimeUntilSLA?.() || null,
 					homeowner: appeal.appealer?.type === "homeowner" ? {
 						id: appeal.appealer.id,
-						name: `${appeal.appealer.firstName} ${appeal.appealer.lastName}`,
-						email: appeal.appealer.email,
-						phone: appeal.appealer.phone,
+						name: formatUserName(appeal.appealer),
+						email: appeal.appealer.email ? EncryptionService.decrypt(appeal.appealer.email) : null,
+						phone: appeal.appealer.phone ? EncryptionService.decrypt(appeal.appealer.phone) : null,
 						scrutinyLevel: appeal.appealer.appealScrutinyLevel,
 					} : null,
 					cleaner: appeal.appealer?.type === "cleaner" ? {
 						id: appeal.appealer.id,
-						name: `${appeal.appealer.firstName} ${appeal.appealer.lastName}`,
-						email: appeal.appealer.email,
-						phone: appeal.appealer.phone,
-					} : (appeal.appointment?.cleaner ? {
-						id: appeal.appointment.cleaner.id,
-						name: `${appeal.appointment.cleaner.firstName} ${appeal.appointment.cleaner.lastName}`,
-						email: appeal.appointment.cleaner.email,
-						phone: appeal.appointment.cleaner.phone,
+						name: formatUserName(appeal.appealer),
+						email: appeal.appealer.email ? EncryptionService.decrypt(appeal.appealer.email) : null,
+						phone: appeal.appealer.phone ? EncryptionService.decrypt(appeal.appealer.phone) : null,
+					} : (appeal.appointment?.bookedByCleaner ? {
+						id: appeal.appointment.bookedByCleaner.id,
+						name: formatUserName(appeal.appointment.bookedByCleaner),
+						email: appeal.appointment.bookedByCleaner.email ? EncryptionService.decrypt(appeal.appointment.bookedByCleaner.email) : null,
+						phone: appeal.appointment.bookedByCleaner.phone ? EncryptionService.decrypt(appeal.appointment.bookedByCleaner.phone) : null,
 					} : null),
 					assignedTo: appeal.assignee ? {
 						id: appeal.assignee.id,
-						name: `${appeal.assignee.firstName} ${appeal.assignee.lastName}`,
+						name: formatUserName(appeal.assignee),
 					} : null,
 					financialImpact: {
 						penaltyAmount: appeal.originalPenaltyAmount,
 						refundWithheld: appeal.originalRefundWithheld,
 					},
+				});
+			});
+		}
+
+		// Get payment disputes if not filtered to other types only
+		if (!caseType || caseType === "payment") {
+			const { PaymentDispute, Payout } = require("../models");
+
+			const paymentWhere = {};
+			if (status) {
+				paymentWhere.status = status;
+			} else {
+				paymentWhere.status = { [Op.in]: ["submitted", "under_review"] };
+			}
+			if (priority) paymentWhere.priority = priority;
+			if (assignedTo) paymentWhere.assignedTo = assignedTo;
+
+			const paymentDisputes = await PaymentDispute.findAll({
+				where: paymentWhere,
+				include: [
+					{
+						model: UserAppointments,
+						as: "appointment",
+						attributes: ["id", "date", "userId", "price", "isDemoAppointment"],
+						where: includeDemoData ? {} : { isDemoAppointment: { [require("sequelize").Op.ne]: true } },
+						required: true,
+						include: [
+							{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone"] },
+						],
+					},
+					{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone"] },
+					{ model: User, as: "assignee", attributes: ["id", "firstName", "lastName"] },
+					{ model: Payout, as: "payout", attributes: ["id", "netAmount", "status"] },
+				],
+				order: [
+					["priority", "DESC"],
+					["slaDeadline", "ASC"],
+					["submittedAt", "ASC"],
+				],
+			});
+
+			paymentDisputes.forEach(dispute => {
+				const isPastSLA = dispute.slaDeadline && new Date() > new Date(dispute.slaDeadline) && dispute.isOpen();
+				results.push({
+					id: dispute.id,
+					caseType: "payment",
+					caseNumber: dispute.caseNumber || `PD-${dispute.id.toString().padStart(6, "0")}`,
+					appointmentId: dispute.appointmentId,
+					appointmentDate: dispute.appointment?.date?.toISOString() || null,
+					status: dispute.status,
+					priority: dispute.priority,
+					category: dispute.issueType,
+					severity: dispute.priority === "urgent" ? "high" : "medium",
+					description: dispute.description,
+					submittedAt: dispute.submittedAt?.toISOString() || null,
+					slaDeadline: dispute.slaDeadline?.toISOString() || null,
+					isPastSLA,
+					timeUntilSLA: dispute.slaDeadline ? Math.max(0, Math.floor((new Date(dispute.slaDeadline).getTime() - Date.now()) / 1000)) : null,
+					homeowner: dispute.appointment?.user ? {
+						id: dispute.appointment.user.id,
+						name: formatUserName(dispute.appointment.user),
+						email: dispute.appointment.user.email ? EncryptionService.decrypt(dispute.appointment.user.email) : null,
+						phone: dispute.appointment.user.phone ? EncryptionService.decrypt(dispute.appointment.user.phone) : null,
+					} : null,
+					cleaner: dispute.cleaner ? {
+						id: dispute.cleaner.id,
+						name: formatUserName(dispute.cleaner),
+						email: dispute.cleaner.email ? EncryptionService.decrypt(dispute.cleaner.email) : null,
+						phone: dispute.cleaner.phone ? EncryptionService.decrypt(dispute.cleaner.phone) : null,
+					} : null,
+					assignedTo: dispute.assignee ? {
+						id: dispute.assignee.id,
+						name: formatUserName(dispute.assignee),
+					} : null,
+					financialImpact: {
+						expectedAmount: dispute.expectedAmount,
+						receivedAmount: dispute.receivedAmount,
+						payoutAmount: dispute.payout?.netAmount || null,
+					},
+				});
+			});
+		}
+
+		// Get support tickets if not filtered to other types only
+		if (!caseType || caseType === "support") {
+			const { SupportTicket, Conversation } = require("../models");
+
+			const supportWhere = {};
+			if (status) {
+				supportWhere.status = status;
+			} else {
+				supportWhere.status = { [Op.in]: ["submitted", "under_review", "pending_info"] };
+			}
+			if (priority) supportWhere.priority = priority;
+			if (assignedTo) supportWhere.assignedTo = assignedTo;
+
+			const supportTickets = await SupportTicket.findAll({
+				where: supportWhere,
+				include: [
+					{
+						model: User,
+						as: "reporter",
+						attributes: ["id", "firstName", "lastName", "isDemoAccount"],
+						where: includeDemoData ? {} : { isDemoAccount: { [require("sequelize").Op.ne]: true } },
+						required: true,
+					},
+					{ model: User, as: "subject", attributes: ["id", "firstName", "lastName", "email", "phone", "type"] },
+					{ model: User, as: "assignee", attributes: ["id", "firstName", "lastName"] },
+					{ model: Conversation, as: "conversation", attributes: ["id", "title"] },
+				],
+				order: [
+					["priority", "DESC"],
+					["slaDeadline", "ASC"],
+					["submittedAt", "ASC"],
+				],
+			});
+
+			supportTickets.forEach(ticket => {
+				const isPastSLA = ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline) && ticket.isOpen();
+				results.push({
+					id: ticket.id,
+					caseType: "support",
+					caseNumber: ticket.caseNumber || `ST-${ticket.id.toString().padStart(6, "0")}`,
+					appointmentId: null, // Support tickets may not have an appointment
+					appointmentDate: null,
+					status: ticket.status,
+					priority: ticket.priority,
+					category: ticket.category,
+					severity: ticket.priority === "urgent" ? "high" : "medium",
+					description: ticket.description,
+					submittedAt: ticket.submittedAt?.toISOString() || null,
+					slaDeadline: ticket.slaDeadline?.toISOString() || null,
+					isPastSLA,
+					timeUntilSLA: ticket.slaDeadline ? Math.max(0, Math.floor((new Date(ticket.slaDeadline).getTime() - Date.now()) / 1000)) : null,
+					homeowner: ticket.subject?.type === "homeowner" ? {
+						id: ticket.subject.id,
+						name: `${ticket.subject.firstName} ${ticket.subject.lastName}`,
+						email: ticket.subject.email,
+						phone: ticket.subject.phone,
+					} : null,
+					cleaner: ticket.subject?.type === "cleaner" ? {
+						id: ticket.subject.id,
+						name: `${ticket.subject.firstName} ${ticket.subject.lastName}`,
+						email: ticket.subject.email,
+						phone: ticket.subject.phone,
+					} : null,
+					assignedTo: ticket.assignee ? {
+						id: ticket.assignee.id,
+						name: `${ticket.assignee.firstName} ${ticket.assignee.lastName}`,
+					} : null,
+					financialImpact: null, // Support tickets typically don't have direct financial impact
+					hasLinkedConversation: !!ticket.conversationId,
+					conversationTitle: ticket.conversation?.title || null,
 				});
 			});
 		}
@@ -124,9 +303,12 @@ class ConflictResolutionService {
 					approved: ["approved", "owner_approved"],
 					denied: ["denied", "owner_denied"],
 				};
-				adjustmentWhere.status = statusMap[status] || status;
+				// Use Op.in if status maps to an array, otherwise use direct value
+				adjustmentWhere.status = statusMap[status]
+					? { [Op.in]: statusMap[status] }
+					: status;
 			} else {
-				adjustmentWhere.status = ["pending_homeowner", "pending_owner"];
+				adjustmentWhere.status = { [Op.in]: ["pending_homeowner", "pending_owner"] };
 			}
 
 			const adjustments = await HomeSizeAdjustmentRequest.findAll({
@@ -135,7 +317,9 @@ class ConflictResolutionService {
 					{
 						model: UserAppointments,
 						as: "appointment",
-						attributes: ["id", "date", "userId", "price"],
+						attributes: ["id", "date", "userId", "price", "isDemoAppointment"],
+						where: includeDemoData ? {} : { isDemoAppointment: { [require("sequelize").Op.ne]: true } },
+						required: true,
 					},
 					{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone"] },
 					{ model: User, as: "homeowner", attributes: ["id", "firstName", "lastName", "email", "phone"] },
@@ -152,7 +336,7 @@ class ConflictResolutionService {
 				results.push({
 					id: adj.id,
 					caseType: "adjustment",
-					caseNumber: `ADJ-${adj.id.toString().padStart(6, "0")}`,
+					caseNumber: adj.caseNumber || `ADJ-${adj.id.toString().padStart(6, "0")}`,
 					appointmentId: adj.appointmentId,
 					appointmentDate: adj.appointment?.date?.toISOString() || null,
 					status: adj.status,
@@ -201,15 +385,28 @@ class ConflictResolutionService {
 			return new Date(a.slaDeadline || 0) - new Date(b.slaDeadline || 0);
 		});
 
-		// Apply search filter
+		// Apply search filter (enhanced with email, phone, user ID)
 		let filtered = results;
 		if (search) {
 			const searchLower = search.toLowerCase();
+			const searchDigits = search.replace(/\D/g, ""); // For phone search
 			filtered = results.filter(r =>
-				r.caseNumber.toLowerCase().includes(searchLower) ||
+				// Case number
+				r.caseNumber?.toLowerCase().includes(searchLower) ||
+				// Names
 				r.homeowner?.name?.toLowerCase().includes(searchLower) ||
 				r.cleaner?.name?.toLowerCase().includes(searchLower) ||
-				r.description?.toLowerCase().includes(searchLower)
+				// Description
+				r.description?.toLowerCase().includes(searchLower) ||
+				// Email search
+				r.homeowner?.email?.toLowerCase().includes(searchLower) ||
+				r.cleaner?.email?.toLowerCase().includes(searchLower) ||
+				// Phone search (match digits)
+				(searchDigits.length >= 4 && r.homeowner?.phone?.includes(searchDigits)) ||
+				(searchDigits.length >= 4 && r.cleaner?.phone?.includes(searchDigits)) ||
+				// User ID search
+				r.homeowner?.id?.toString() === search ||
+				r.cleaner?.id?.toString() === search
 			);
 		}
 
@@ -233,6 +430,10 @@ class ConflictResolutionService {
 			return this.getAppealCase(caseId);
 		} else if (caseType === "adjustment") {
 			return this.getAdjustmentCase(caseId);
+		} else if (caseType === "payment") {
+			return this.getPaymentDisputeCase(caseId);
+		} else if (caseType === "support") {
+			return this.getSupportTicketCase(caseId);
 		}
 		throw new Error("Invalid case type");
 	}
@@ -254,9 +455,9 @@ class ConflictResolutionService {
 					model: UserAppointments,
 					as: "appointment",
 					include: [
-						{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeAccountId"] },
-						{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeCustomerId"] },
-						{ model: UserHomes, as: "home", attributes: ["id", "address", "numBeds", "numBaths", "homeSize"] },
+						{ model: User, as: "bookedByCleaner", attributes: ["id", "firstName", "lastName", "email", "phone"] },
+						{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone", "stripeCustomerId"] },
+						{ model: UserHomes, as: "home", attributes: ["id", "address", "numBeds", "numBaths"] },
 					],
 				},
 				{ model: User, as: "appealer", attributes: ["id", "firstName", "lastName", "email", "phone", "type", "appealScrutinyLevel", "appealScrutinyReason", "appealStats", "appealPatterns"] },
@@ -275,7 +476,7 @@ class ConflictResolutionService {
 		return {
 			id: appeal.id,
 			caseType: "appeal",
-			caseNumber: `APL-${appeal.id.toString().padStart(6, "0")}`,
+			caseNumber: appeal.caseNumber || `APL-${appeal.id.toString().padStart(6, "0")}`,
 
 			// Status & Priority
 			status: appeal.status,
@@ -329,16 +530,13 @@ class ConflictResolutionService {
 				name: appointment?.user ? `${appointment.user.firstName} ${appointment.user.lastName}` : null,
 				email: appointment?.user?.email,
 				phone: appointment?.user?.phone,
-				profileImage: appointment?.user?.profileImage,
 				stripeCustomerId: appointment?.user?.stripeCustomerId,
 			},
 			cleaner: {
-				id: appointment?.cleaner?.id,
-				name: appointment?.cleaner ? `${appointment.cleaner.firstName} ${appointment.cleaner.lastName}` : null,
-				email: appointment?.cleaner?.email,
-				phone: appointment?.cleaner?.phone,
-				profileImage: appointment?.cleaner?.profileImage,
-				stripeAccountId: appointment?.cleaner?.stripeAccountId,
+				id: appointment?.bookedByCleaner?.id,
+				name: appointment?.bookedByCleaner ? `${appointment.bookedByCleaner.firstName} ${appointment.bookedByCleaner.lastName}` : null,
+				email: appointment?.bookedByCleaner?.email,
+				phone: appointment?.bookedByCleaner?.phone,
 			},
 			assignedTo: appeal.assignee ? {
 				id: appeal.assignee.id,
@@ -353,7 +551,7 @@ class ConflictResolutionService {
 			// Appointment Context
 			appointment: appointment ? {
 				id: appointment.id,
-				date: appointment.date?.toISOString() || null,
+				date: appointment.date ? (typeof appointment.date === 'string' ? appointment.date : appointment.date.toISOString()) : null,
 				price: appointment.price,
 				paymentIntentId: appointment.paymentIntentId,
 				paymentStatus: appointment.paymentStatus,
@@ -394,7 +592,7 @@ class ConflictResolutionService {
 					include: [
 						{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeAccountId"] },
 						{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeCustomerId"] },
-						{ model: UserHomes, as: "home", attributes: ["id", "address", "numBeds", "numBaths", "homeSize"] },
+						{ model: UserHomes, as: "home", attributes: ["id", "address", "numBeds", "numBaths"] },
 					],
 				},
 				{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage"] },
@@ -414,7 +612,7 @@ class ConflictResolutionService {
 		return {
 			id: adjustment.id,
 			caseType: "adjustment",
-			caseNumber: `ADJ-${adjustment.id.toString().padStart(6, "0")}`,
+			caseNumber: adjustment.caseNumber || `ADJ-${adjustment.id.toString().padStart(6, "0")}`,
 
 			// Status & Priority
 			status: adjustment.status,
@@ -489,7 +687,7 @@ class ConflictResolutionService {
 			// Appointment Context
 			appointment: appointment ? {
 				id: appointment.id,
-				date: appointment.date?.toISOString() || null,
+				date: appointment.date ? (typeof appointment.date === 'string' ? appointment.date : appointment.date.toISOString()) : null,
 				price: appointment.price,
 				paymentIntentId: appointment.paymentIntentId,
 				paymentStatus: appointment.paymentStatus,
@@ -503,6 +701,266 @@ class ConflictResolutionService {
 					homeSize: appointment.home.homeSize,
 				} : null,
 			} : null,
+		};
+	}
+
+	/**
+	 * Get payment dispute case details
+	 */
+	static async getPaymentDisputeCase(disputeId) {
+		const {
+			PaymentDispute,
+			Payout,
+			UserAppointments,
+			User,
+			UserHomes,
+		} = require("../models");
+
+		const dispute = await PaymentDispute.findByPk(disputeId, {
+			include: [
+				{
+					model: UserAppointments,
+					as: "appointment",
+					include: [
+						{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeAccountId"] },
+						{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage"] },
+						{ model: UserHomes, as: "home", attributes: ["id", "address", "numBeds", "numBaths"] },
+					],
+				},
+				{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeAccountId"] },
+				{ model: User, as: "assignee", attributes: ["id", "firstName", "lastName", "email"] },
+				{ model: User, as: "reviewer", attributes: ["id", "firstName", "lastName"] },
+				{ model: Payout, as: "payout" },
+			],
+		});
+
+		if (!dispute) {
+			throw new Error("Payment dispute not found");
+		}
+
+		const appointment = dispute.appointment;
+		const isPastSLA = dispute.slaDeadline && new Date() > new Date(dispute.slaDeadline) && dispute.isOpen();
+
+		return {
+			id: dispute.id,
+			caseType: "payment",
+			caseNumber: dispute.caseNumber || `PD-${dispute.id.toString().padStart(6, "0")}`,
+
+			// Status & Priority
+			status: dispute.status,
+			priority: dispute.priority,
+			slaDeadline: dispute.slaDeadline?.toISOString() || null,
+			isPastSLA,
+			timeUntilSLA: dispute.slaDeadline ? Math.max(0, Math.floor((new Date(dispute.slaDeadline).getTime() - Date.now()) / 1000)) : null,
+
+			// Dispute Details
+			category: dispute.issueType,
+			severity: dispute.priority === "urgent" ? "high" : "medium",
+			description: dispute.description,
+			issueType: dispute.issueType,
+
+			// Financial Impact
+			financialImpact: {
+				expectedAmount: dispute.expectedAmount,
+				receivedAmount: dispute.receivedAmount,
+				payoutAmount: dispute.payout?.netAmount || null,
+				payoutStatus: dispute.payout?.status || null,
+			},
+
+			// Payout details
+			payout: dispute.payout ? {
+				id: dispute.payout.id,
+				netAmount: dispute.payout.netAmount,
+				grossAmount: dispute.payout.grossAmount,
+				platformFee: dispute.payout.platformFee,
+				status: dispute.payout.status,
+				stripeTransferId: dispute.payout.stripeTransferId,
+				completedAt: dispute.payout.completedAt?.toISOString() || null,
+			} : null,
+
+			// Resolution
+			resolution: dispute.resolution || null,
+			resolutionNotes: dispute.resolutionNotes,
+
+			// Timestamps
+			submittedAt: dispute.submittedAt?.toISOString() || null,
+			assignedAt: dispute.assignedAt?.toISOString() || null,
+			reviewedAt: dispute.reviewedAt?.toISOString() || null,
+			closedAt: dispute.closedAt?.toISOString() || null,
+
+			// Parties
+			homeowner: appointment?.user ? {
+				id: appointment.user.id,
+				name: `${appointment.user.firstName} ${appointment.user.lastName}`,
+				email: appointment.user.email,
+				phone: appointment.user.phone,
+				profileImage: appointment.user.profileImage,
+			} : null,
+			cleaner: dispute.cleaner ? {
+				id: dispute.cleaner.id,
+				name: `${dispute.cleaner.firstName} ${dispute.cleaner.lastName}`,
+				email: dispute.cleaner.email,
+				phone: dispute.cleaner.phone,
+				profileImage: dispute.cleaner.profileImage,
+				stripeAccountId: dispute.cleaner.stripeAccountId,
+			} : null,
+			assignedTo: dispute.assignee ? {
+				id: dispute.assignee.id,
+				name: `${dispute.assignee.firstName} ${dispute.assignee.lastName}`,
+				email: dispute.assignee.email,
+			} : null,
+			reviewedBy: dispute.reviewer ? {
+				id: dispute.reviewer.id,
+				name: `${dispute.reviewer.firstName} ${dispute.reviewer.lastName}`,
+			} : null,
+
+			// Appointment Context
+			appointment: appointment ? {
+				id: appointment.id,
+				date: appointment.date ? (typeof appointment.date === 'string' ? appointment.date : appointment.date.toISOString()) : null,
+				price: appointment.price,
+				paymentIntentId: appointment.paymentIntentId,
+				paymentStatus: appointment.paymentStatus,
+				completed: appointment.completed,
+				home: appointment.home ? {
+					id: appointment.home.id,
+					address: appointment.home.address,
+					numBeds: appointment.home.numBeds,
+					numBaths: appointment.home.numBaths,
+				} : null,
+			} : null,
+		};
+	}
+
+	/**
+	 * Get support ticket case details
+	 */
+	static async getSupportTicketCase(ticketId) {
+		const {
+			SupportTicket,
+			Conversation,
+			Message,
+			User,
+		} = require("../models");
+
+		const ticket = await SupportTicket.findByPk(ticketId, {
+			include: [
+				{ model: User, as: "reporter", attributes: ["id", "firstName", "lastName", "email", "type"] },
+				{ model: User, as: "subject", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "type"] },
+				{ model: User, as: "assignee", attributes: ["id", "firstName", "lastName", "email"] },
+				{ model: User, as: "reviewer", attributes: ["id", "firstName", "lastName"] },
+				{ model: Conversation, as: "conversation", attributes: ["id", "title", "conversationType"] },
+			],
+		});
+
+		if (!ticket) {
+			throw new Error("Support ticket not found");
+		}
+
+		const isPastSLA = ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline) && ticket.isOpen();
+
+		// Get linked conversation messages if present
+		let linkedMessages = [];
+		if (ticket.conversationId) {
+			const messages = await Message.findAll({
+				where: { conversationId: ticket.conversationId },
+				include: [
+					{ model: User, as: "sender", attributes: ["id", "firstName", "lastName", "type", "profileImage"] },
+				],
+				order: [["createdAt", "ASC"]],
+				limit: 50, // Limit for performance
+			});
+
+			linkedMessages = messages.map(m => ({
+				id: m.id,
+				content: m.content,
+				messageType: m.messageType,
+				createdAt: m.createdAt?.toISOString() || null,
+				sender: m.sender ? {
+					id: m.sender.id,
+					name: `${m.sender.firstName} ${m.sender.lastName}`,
+					type: m.sender.type,
+					profileImage: m.sender.profileImage,
+				} : null,
+			}));
+		}
+
+		return {
+			id: ticket.id,
+			caseType: "support",
+			caseNumber: ticket.caseNumber || `ST-${ticket.id.toString().padStart(6, "0")}`,
+
+			// Status & Priority
+			status: ticket.status,
+			priority: ticket.priority,
+			slaDeadline: ticket.slaDeadline?.toISOString() || null,
+			isPastSLA,
+			timeUntilSLA: ticket.slaDeadline ? Math.max(0, Math.floor((new Date(ticket.slaDeadline).getTime() - Date.now()) / 1000)) : null,
+
+			// Ticket Details
+			category: ticket.category,
+			subjectType: ticket.subjectType,
+			description: ticket.description,
+
+			// Resolution
+			resolution: ticket.resolution || null,
+			resolutionNotes: ticket.resolutionNotes,
+
+			// Timestamps
+			submittedAt: ticket.submittedAt?.toISOString() || null,
+			assignedAt: ticket.assignedAt?.toISOString() || null,
+			reviewedAt: ticket.reviewedAt?.toISOString() || null,
+			closedAt: ticket.closedAt?.toISOString() || null,
+
+			// Reporter (HR/owner who created the ticket)
+			reporter: ticket.reporter ? {
+				id: ticket.reporter.id,
+				name: `${ticket.reporter.firstName} ${ticket.reporter.lastName}`,
+				email: ticket.reporter.email,
+				type: ticket.reporter.type,
+			} : null,
+
+			// Subject (user the ticket is about)
+			subject: ticket.subject ? {
+				id: ticket.subject.id,
+				name: `${ticket.subject.firstName} ${ticket.subject.lastName}`,
+				email: ticket.subject.email,
+				phone: ticket.subject.phone,
+				type: ticket.subject.type,
+				profileImage: ticket.subject.profileImage,
+			} : null,
+
+			// For compatibility with existing UI
+			homeowner: ticket.subject?.type === "homeowner" ? {
+				id: ticket.subject.id,
+				name: `${ticket.subject.firstName} ${ticket.subject.lastName}`,
+				email: ticket.subject.email,
+				phone: ticket.subject.phone,
+				profileImage: ticket.subject.profileImage,
+			} : null,
+			cleaner: ticket.subject?.type === "cleaner" ? {
+				id: ticket.subject.id,
+				name: `${ticket.subject.firstName} ${ticket.subject.lastName}`,
+				email: ticket.subject.email,
+				phone: ticket.subject.phone,
+				profileImage: ticket.subject.profileImage,
+			} : null,
+
+			assignedTo: ticket.assignee ? {
+				id: ticket.assignee.id,
+				name: `${ticket.assignee.firstName} ${ticket.assignee.lastName}`,
+				email: ticket.assignee.email,
+			} : null,
+			reviewedBy: ticket.reviewer ? {
+				id: ticket.reviewer.id,
+				name: `${ticket.reviewer.firstName} ${ticket.reviewer.lastName}`,
+			} : null,
+
+			// Linked conversation
+			hasLinkedConversation: !!ticket.conversationId,
+			conversationId: ticket.conversationId,
+			conversationTitle: ticket.conversation?.title || null,
+			linkedMessages,
 		};
 	}
 
@@ -674,21 +1132,50 @@ class ConflictResolutionService {
 	 */
 	static async processRefund(options) {
 		const { caseId, caseType, amount, reason, reviewerId, req } = options;
-		const { UserAppointments, User } = require("../models");
+		const { UserAppointments, User, sequelize } = require("../models");
 
 		const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
+		// Initialize variables for error handling context
+		let appointmentId = null;
+		let caseData = null;
+
 		// Get case and appointment
-		const caseData = await this.getConflictCase(caseId, caseType);
+		caseData = await this.getConflictCase(caseId, caseType);
 		if (!caseData.appointment?.paymentIntentId) {
 			throw new Error("No payment intent found for this appointment");
 		}
 
-		const appointmentId = caseData.appointment.id;
+		appointmentId = caseData.appointment.id;
 		const paymentIntentId = caseData.appointment.paymentIntentId;
 
+		// Use transaction with row-level lock to prevent race conditions
+		const transaction = await sequelize.transaction();
+
 		try {
-			// Create Stripe refund
+			// Lock the appointment row and get fresh data
+			const appointment = await UserAppointments.findByPk(appointmentId, {
+				lock: transaction.LOCK.UPDATE,
+				transaction,
+			});
+
+			if (!appointment) {
+				await transaction.rollback();
+				throw new Error("Appointment not found");
+			}
+
+			// Validate refund amount against current state (with lock held)
+			const originalAmount = (appointment.price || 0) * 100;
+			const alreadyRefunded = appointment.refundAmount || 0;
+			const maxRefundable = Math.max(0, originalAmount - alreadyRefunded);
+
+			if (amount > maxRefundable) {
+				await transaction.rollback();
+				throw new Error(`Refund amount exceeds maximum refundable. Max: ${maxRefundable / 100}`);
+			}
+
+			// Create Stripe refund with idempotency key to prevent duplicates
+			const idempotencyKey = `refund-${caseType}-${caseId}-${appointmentId}-${amount}-${reviewerId}`;
 			const refund = await stripe.refunds.create({
 				payment_intent: paymentIntentId,
 				amount: amount,
@@ -699,16 +1186,21 @@ class ConflictResolutionService {
 					reason,
 					reviewerId: reviewerId?.toString(),
 				},
+			}, {
+				idempotencyKey,
 			});
 
-			// Update appointment
-			await UserAppointments.update(
+			// Update appointment within the same transaction
+			await appointment.update(
 				{
-					refundAmount: (caseData.appointment.refundAmount || 0) + amount,
+					refundAmount: alreadyRefunded + amount,
 					lastRefundAt: new Date(),
 				},
-				{ where: { id: appointmentId } }
+				{ transaction }
 			);
+
+			// Commit transaction
+			await transaction.commit();
 
 			// Log audit event
 			await CancellationAuditService.log({
@@ -723,6 +1215,7 @@ class ConflictResolutionService {
 					stripeRefundId: refund.id,
 					caseType,
 					caseId,
+					caseNumber: caseData.caseNumber,
 				},
 				req,
 			});
@@ -748,6 +1241,11 @@ class ConflictResolutionService {
 			};
 
 		} catch (error) {
+			// Rollback transaction if still active
+			if (transaction && !transaction.finished) {
+				await transaction.rollback();
+			}
+
 			// Log failed attempt
 			await CancellationAuditService.log({
 				appointmentId,
@@ -759,6 +1257,9 @@ class ConflictResolutionService {
 					amount,
 					reason,
 					error: error.message,
+					caseType,
+					caseId,
+					caseNumber: caseData?.caseNumber,
 				},
 				req,
 			});
@@ -778,7 +1279,14 @@ class ConflictResolutionService {
 
 		// Get case data
 		const caseData = await this.getConflictCase(caseId, caseType);
-		const cleanerStripeAccountId = caseData.cleaner?.stripeAccountId;
+
+		// Validate cleaner exists and has Stripe account
+		if (!caseData.cleaner) {
+			throw new Error("No cleaner found for this case");
+		}
+
+		const cleanerId = caseData.cleaner.id;
+		const cleanerStripeAccountId = caseData.cleaner.stripeAccountId;
 
 		if (!cleanerStripeAccountId) {
 			throw new Error("Cleaner does not have a Stripe account connected");
@@ -787,7 +1295,8 @@ class ConflictResolutionService {
 		const appointmentId = caseData.appointment?.id;
 
 		try {
-			// Create Stripe transfer to cleaner's connected account
+			// Create Stripe transfer with idempotency key to prevent duplicates
+			const idempotencyKey = `payout-${caseType}-${caseId}-${cleanerId}-${amount}-${reviewerId}`;
 			const transfer = await stripe.transfers.create({
 				amount: amount,
 				currency: "usd",
@@ -798,7 +1307,10 @@ class ConflictResolutionService {
 					reason,
 					reviewerId: reviewerId?.toString(),
 					appointmentId: appointmentId?.toString(),
+					cleanerId: cleanerId?.toString(),
 				},
+			}, {
+				idempotencyKey,
 			});
 
 			// Log audit event
@@ -809,12 +1321,13 @@ class ConflictResolutionService {
 				actorId: reviewerId,
 				actorType: "hr",
 				eventData: {
-					cleanerId: caseData.cleaner.id,
+					cleanerId,
 					amount,
 					reason,
 					stripeTransferId: transfer.id,
 					caseType,
 					caseId,
+					caseNumber: caseData?.caseNumber,
 				},
 				req,
 			});
@@ -825,7 +1338,7 @@ class ConflictResolutionService {
 				caseId,
 				caseType,
 				{
-					cleanerId: caseData.cleaner.id,
+					cleanerId,
 					amount,
 					reason,
 					stripeTransferId: transfer.id,
@@ -853,6 +1366,9 @@ class ConflictResolutionService {
 					amount,
 					reason,
 					error: error.message,
+					caseType,
+					caseId,
+					caseNumber: caseData.caseNumber,
 				},
 				req,
 			});
@@ -866,14 +1382,16 @@ class ConflictResolutionService {
 	 */
 	static async addNote(options) {
 		const { caseId, caseType, note, reviewerId, req } = options;
-		const { CancellationAppeal, HomeSizeAdjustmentRequest } = require("../models");
+		const { CancellationAppeal, HomeSizeAdjustmentRequest, PaymentDispute, SupportTicket } = require("../models");
 
 		let appointmentId;
+		let caseNumber;
 
 		if (caseType === "appeal") {
 			const appeal = await CancellationAppeal.findByPk(caseId);
 			if (!appeal) throw new Error("Appeal not found");
 			appointmentId = appeal.appointmentId;
+			caseNumber = appeal.caseNumber;
 
 			// Update last activity
 			await appeal.update({ lastActivityAt: new Date() });
@@ -882,6 +1400,7 @@ class ConflictResolutionService {
 			const adjustment = await HomeSizeAdjustmentRequest.findByPk(caseId);
 			if (!adjustment) throw new Error("Adjustment not found");
 			appointmentId = adjustment.appointmentId;
+			caseNumber = adjustment.caseNumber;
 
 			// Append to owner note
 			const existingNote = adjustment.ownerNote || "";
@@ -890,6 +1409,34 @@ class ConflictResolutionService {
 				? `${existingNote}\n\n[${timestamp}] ${note}`
 				: `[${timestamp}] ${note}`;
 			await adjustment.update({ ownerNote: newNote });
+
+		} else if (caseType === "payment") {
+			const dispute = await PaymentDispute.findByPk(caseId);
+			if (!dispute) throw new Error("Payment dispute not found");
+			appointmentId = dispute.appointmentId;
+			caseNumber = dispute.caseNumber;
+
+			// Append to resolution notes
+			const existingNote = dispute.resolutionNotes || "";
+			const timestamp = moment().format("YYYY-MM-DD HH:mm");
+			const newNote = existingNote
+				? `${existingNote}\n\n[${timestamp}] ${note}`
+				: `[${timestamp}] ${note}`;
+			await dispute.update({ resolutionNotes: newNote });
+
+		} else if (caseType === "support") {
+			const ticket = await SupportTicket.findByPk(caseId);
+			if (!ticket) throw new Error("Support ticket not found");
+			appointmentId = null; // Support tickets don't have appointments
+			caseNumber = ticket.caseNumber;
+
+			// Append to resolution notes
+			const existingNote = ticket.resolutionNotes || "";
+			const timestamp = moment().format("YYYY-MM-DD HH:mm");
+			const newNote = existingNote
+				? `${existingNote}\n\n[${timestamp}] ${note}`
+				: `[${timestamp}] ${note}`;
+			await ticket.update({ resolutionNotes: newNote });
 		}
 
 		// Log audit event
@@ -903,6 +1450,7 @@ class ConflictResolutionService {
 				action: "note_added",
 				note,
 				caseType,
+				caseNumber,
 			},
 			req,
 		});
@@ -928,6 +1476,10 @@ class ConflictResolutionService {
 			return this.resolveAppeal(caseId, decision, resolution, notes, reviewerId, req);
 		} else if (caseType === "adjustment") {
 			return this.resolveAdjustment(caseId, decision, resolution, notes, reviewerId, req);
+		} else if (caseType === "payment") {
+			return this.resolvePaymentDispute(caseId, decision, resolution, notes, reviewerId, req);
+		} else if (caseType === "support") {
+			return this.resolveSupportTicket(caseId, decision, resolution, notes, reviewerId, req);
 		}
 
 		throw new Error("Invalid case type");
@@ -984,6 +1536,7 @@ class ConflictResolutionService {
 				eventData: {
 					caseType: "adjustment",
 					caseId: adjustmentId,
+					caseNumber: adjustment.caseNumber,
 					decision,
 					resolution,
 					notes,
@@ -996,6 +1549,127 @@ class ConflictResolutionService {
 			return {
 				success: true,
 				status: newStatus,
+				caseNumber: adjustment.caseNumber,
+			};
+
+		} catch (error) {
+			await transaction.rollback();
+			throw error;
+		}
+	}
+
+	/**
+	 * Resolve a payment dispute case
+	 */
+	static async resolvePaymentDispute(disputeId, decision, resolution, notes, reviewerId, req) {
+		const { PaymentDispute, sequelize } = require("../models");
+
+		const transaction = await sequelize.transaction();
+
+		try {
+			const dispute = await PaymentDispute.findByPk(disputeId, { transaction });
+
+			if (!dispute) {
+				throw new Error("Payment dispute not found");
+			}
+
+			// Determine new status based on decision
+			const newStatus = decision === "approve" ? "resolved" : "denied";
+
+			await dispute.update({
+				status: newStatus,
+				resolutionNotes: notes,
+				resolution: resolution || {},
+				reviewedBy: reviewerId,
+				reviewedAt: new Date(),
+				closedAt: new Date(),
+			}, { transaction });
+
+			await transaction.commit();
+
+			// Log audit event
+			await CancellationAuditService.log({
+				appointmentId: dispute.appointmentId,
+				eventType: "appeal_resolved",
+				actorId: reviewerId,
+				actorType: "hr",
+				eventData: {
+					caseType: "payment",
+					caseId: disputeId,
+					caseNumber: dispute.caseNumber,
+					decision,
+					resolution,
+					notes,
+				},
+				previousState: { status: dispute.status },
+				newState: { status: newStatus },
+				req,
+			});
+
+			return {
+				success: true,
+				status: newStatus,
+				caseNumber: dispute.caseNumber,
+			};
+
+		} catch (error) {
+			await transaction.rollback();
+			throw error;
+		}
+	}
+
+	/**
+	 * Resolve a support ticket case
+	 */
+	static async resolveSupportTicket(ticketId, decision, resolution, notes, reviewerId, req) {
+		const { SupportTicket, sequelize } = require("../models");
+
+		const transaction = await sequelize.transaction();
+
+		try {
+			const ticket = await SupportTicket.findByPk(ticketId, { transaction });
+
+			if (!ticket) {
+				throw new Error("Support ticket not found");
+			}
+
+			// Determine new status based on decision
+			const newStatus = decision === "approve" || decision === "resolved" ? "resolved" : "closed";
+
+			await ticket.update({
+				status: newStatus,
+				resolutionNotes: notes,
+				resolution: resolution || {},
+				reviewedBy: reviewerId,
+				reviewedAt: new Date(),
+				closedAt: new Date(),
+			}, { transaction });
+
+			await transaction.commit();
+
+			// Log audit event
+			await CancellationAuditService.log({
+				appointmentId: null,
+				eventType: "appeal_resolved",
+				actorId: reviewerId,
+				actorType: "hr",
+				eventData: {
+					caseType: "support",
+					caseId: ticketId,
+					caseNumber: ticket.caseNumber,
+					decision,
+					resolution,
+					notes,
+				},
+				previousState: { status: ticket.status },
+				newState: { status: newStatus },
+				req,
+			});
+
+			return {
+				success: true,
+				status: newStatus,
+				caseNumber: ticket.caseNumber,
 			};
 
 		} catch (error) {
@@ -1007,11 +1681,30 @@ class ConflictResolutionService {
 	/**
 	 * Get queue statistics
 	 */
-	static async getQueueStats() {
-		const { CancellationAppeal, HomeSizeAdjustmentRequest } = require("../models");
+	static async getQueueStats(options = {}) {
+		const { CancellationAppeal, HomeSizeAdjustmentRequest, PaymentDispute, SupportTicket, UserAppointments, User } = require("../models");
 		const { Op } = require("sequelize");
+		const { includeDemoData = false } = options;
 
 		const now = new Date();
+
+		// Build appointment filter for non-demo data
+		const appointmentInclude = includeDemoData ? [] : [{
+			model: UserAppointments,
+			as: "appointment",
+			where: { isDemoAppointment: { [Op.ne]: true } },
+			required: true,
+			attributes: [],
+		}];
+
+		// Build reporter filter for support tickets (non-demo reporters)
+		const reporterInclude = includeDemoData ? [] : [{
+			model: User,
+			as: "reporter",
+			where: { isDemoAccount: { [Op.ne]: true } },
+			required: true,
+			attributes: [],
+		}];
 
 		const [
 			appealsPending,
@@ -1020,41 +1713,73 @@ class ConflictResolutionService {
 			appealsResolvedThisWeek,
 			adjustmentsPending,
 			adjustmentsPastExpiry,
+			paymentDisputesPending,
+			paymentDisputesPastSLA,
+			supportTicketsPending,
+			supportTicketsPastSLA,
 		] = await Promise.all([
 			CancellationAppeal.count({
 				where: { status: ["submitted", "under_review", "awaiting_documents", "escalated"] },
+				include: appointmentInclude,
 			}),
 			CancellationAppeal.count({
 				where: {
 					status: ["submitted", "under_review", "awaiting_documents"],
 					slaDeadline: { [Op.lt]: now },
 				},
+				include: appointmentInclude,
 			}),
 			CancellationAppeal.count({
 				where: {
 					status: ["submitted", "under_review", "awaiting_documents", "escalated"],
 					priority: "urgent",
 				},
+				include: appointmentInclude,
 			}),
 			CancellationAppeal.count({
 				where: {
 					status: ["approved", "partially_approved", "denied"],
 					closedAt: { [Op.gte]: moment().subtract(7, "days").toDate() },
 				},
+				include: appointmentInclude,
 			}),
 			HomeSizeAdjustmentRequest.count({
 				where: { status: ["pending_homeowner", "pending_owner"] },
+				include: appointmentInclude,
 			}),
 			HomeSizeAdjustmentRequest.count({
 				where: {
 					status: ["pending_homeowner", "pending_owner"],
 					expiresAt: { [Op.lt]: now },
 				},
+				include: appointmentInclude,
+			}),
+			PaymentDispute.count({
+				where: { status: ["submitted", "under_review"] },
+				include: appointmentInclude,
+			}),
+			PaymentDispute.count({
+				where: {
+					status: ["submitted", "under_review"],
+					slaDeadline: { [Op.lt]: now },
+				},
+				include: appointmentInclude,
+			}),
+			SupportTicket.count({
+				where: { status: ["submitted", "under_review", "pending_info"] },
+				include: reporterInclude,
+			}),
+			SupportTicket.count({
+				where: {
+					status: ["submitted", "under_review", "pending_info"],
+					slaDeadline: { [Op.lt]: now },
+				},
+				include: reporterInclude,
 			}),
 		]);
 
 		return {
-			totalPending: appealsPending + adjustmentsPending,
+			totalPending: appealsPending + adjustmentsPending + paymentDisputesPending + supportTicketsPending,
 			appeals: {
 				pending: appealsPending,
 				pastSLA: appealsPastSLA,
@@ -1065,7 +1790,15 @@ class ConflictResolutionService {
 				pending: adjustmentsPending,
 				pastExpiry: adjustmentsPastExpiry,
 			},
-			slaBreachCount: appealsPastSLA + adjustmentsPastExpiry,
+			paymentDisputes: {
+				pending: paymentDisputesPending,
+				pastSLA: paymentDisputesPastSLA,
+			},
+			supportTickets: {
+				pending: supportTicketsPending,
+				pastSLA: supportTicketsPastSLA,
+			},
+			slaBreachCount: appealsPastSLA + adjustmentsPastExpiry + paymentDisputesPastSLA + supportTicketsPastSLA,
 		};
 	}
 
@@ -1073,7 +1806,7 @@ class ConflictResolutionService {
 	 * Assign a case to a reviewer
 	 */
 	static async assignCase(caseId, caseType, assigneeId, assignerId, req) {
-		const { CancellationAppeal, HomeSizeAdjustmentRequest, User } = require("../models");
+		const { CancellationAppeal, HomeSizeAdjustmentRequest, PaymentDispute, SupportTicket, User } = require("../models");
 
 		// Validate assignee
 		const assignee = await User.findByPk(assigneeId);
@@ -1082,11 +1815,13 @@ class ConflictResolutionService {
 		}
 
 		let appointmentId;
+		let caseNumber;
 
 		if (caseType === "appeal") {
 			const appeal = await CancellationAppeal.findByPk(caseId);
 			if (!appeal) throw new Error("Appeal not found");
 			appointmentId = appeal.appointmentId;
+			caseNumber = appeal.caseNumber;
 
 			await appeal.update({
 				assignedTo: assigneeId,
@@ -1099,9 +1834,34 @@ class ConflictResolutionService {
 			const adjustment = await HomeSizeAdjustmentRequest.findByPk(caseId);
 			if (!adjustment) throw new Error("Adjustment not found");
 			appointmentId = adjustment.appointmentId;
+			caseNumber = adjustment.caseNumber;
 
 			await adjustment.update({
 				ownerId: assigneeId,
+			});
+
+		} else if (caseType === "payment") {
+			const dispute = await PaymentDispute.findByPk(caseId);
+			if (!dispute) throw new Error("Payment dispute not found");
+			appointmentId = dispute.appointmentId;
+			caseNumber = dispute.caseNumber;
+
+			await dispute.update({
+				assignedTo: assigneeId,
+				assignedAt: new Date(),
+				status: dispute.status === "submitted" ? "under_review" : dispute.status,
+			});
+
+		} else if (caseType === "support") {
+			const ticket = await SupportTicket.findByPk(caseId);
+			if (!ticket) throw new Error("Support ticket not found");
+			appointmentId = null; // Support tickets don't have appointments
+			caseNumber = ticket.caseNumber;
+
+			await ticket.update({
+				assignedTo: assigneeId,
+				assignedAt: new Date(),
+				status: ticket.status === "submitted" ? "under_review" : ticket.status,
 			});
 		}
 
@@ -1116,11 +1876,351 @@ class ConflictResolutionService {
 				assigneeId,
 				caseType,
 				caseId,
+				caseNumber,
 			},
 			req,
 		});
 
 		return { success: true };
+	}
+
+	/**
+	 * Lookup case by case number (exact match)
+	 */
+	static async lookupByCaseNumber(caseNumber, options = {}) {
+		const { includeDemoData = false } = options;
+		const {
+			CancellationAppeal,
+			HomeSizeAdjustmentRequest,
+			PaymentDispute,
+			SupportTicket,
+			UserAppointments,
+			User,
+		} = require("../models");
+		const { Op } = require("sequelize");
+
+		// Determine type from prefix
+		const prefix = caseNumber.split("-")[0].toUpperCase();
+		const typeMap = {
+			APL: { model: CancellationAppeal, type: "appeal" },
+			ADJ: { model: HomeSizeAdjustmentRequest, type: "adjustment" },
+			PD: { model: PaymentDispute, type: "payment" },
+			ST: { model: SupportTicket, type: "support" },
+		};
+
+		const config = typeMap[prefix];
+
+		// Build include for demo filtering
+		const getAppointmentInclude = (type) => {
+			if (includeDemoData || type === "support") return [];
+			return [{
+				model: UserAppointments,
+				as: "appointment",
+				where: { isDemoAppointment: { [Op.ne]: true } },
+				required: true,
+				attributes: [],
+			}];
+		};
+
+		const getReporterInclude = () => {
+			if (includeDemoData) return [];
+			return [{
+				model: User,
+				as: "reporter",
+				where: { isDemoAccount: { [Op.ne]: true } },
+				required: true,
+				attributes: [],
+			}];
+		};
+
+		if (!config) {
+			// Try all models if prefix not recognized
+			for (const [, c] of Object.entries(typeMap)) {
+				const include = c.type === "support" ? getReporterInclude() : getAppointmentInclude(c.type);
+				const result = await c.model.findOne({ where: { caseNumber }, include });
+				if (result) {
+					return this.getConflictCase(result.id, c.type);
+				}
+			}
+			return null;
+		}
+
+		const include = config.type === "support" ? getReporterInclude() : getAppointmentInclude(config.type);
+		const result = await config.model.findOne({ where: { caseNumber }, include });
+		if (!result) return null;
+
+		return this.getConflictCase(result.id, config.type);
+	}
+
+	/**
+	 * Get all cases for a specific user
+	 */
+	static async getCasesForUser(userId, options = {}) {
+		const { includeResolved = false, includeDemoData = false } = options;
+		const {
+			CancellationAppeal,
+			HomeSizeAdjustmentRequest,
+			PaymentDispute,
+			SupportTicket,
+			UserAppointments,
+			User,
+		} = require("../models");
+		const { Op } = require("sequelize");
+
+		const cases = [];
+
+		// Get user info
+		const user = await User.findByPk(userId, {
+			attributes: ["id", "firstName", "lastName", "email", "phone", "type", "isDemoAccount"],
+		});
+
+		if (!user) {
+			throw new Error("User not found");
+		}
+
+		// If user is a demo account and we're not including demo data, return empty
+		if (user.isDemoAccount && !includeDemoData) {
+			return cases;
+		}
+
+		// Build appointment include for demo filtering
+		const appointmentInclude = includeDemoData ? [] : [{
+			model: UserAppointments,
+			as: "appointment",
+			where: { isDemoAppointment: { [Op.ne]: true } },
+			required: true,
+			attributes: [],
+		}];
+
+		// Appeals where user is appealer
+		const appealWhere = {
+			appealerId: userId,
+			...(includeResolved
+				? {}
+				: { status: { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] } }),
+		};
+
+		const appeals = await CancellationAppeal.findAll({
+			where: appealWhere,
+			include: appointmentInclude,
+			order: [["submittedAt", "DESC"]],
+		});
+
+		appeals.forEach((a) => {
+			cases.push({
+				id: a.id,
+				caseType: "appeal",
+				caseNumber: a.caseNumber,
+				status: a.status,
+				priority: a.priority,
+				submittedAt: a.submittedAt,
+				description: a.description?.substring(0, 100) + (a.description?.length > 100 ? "..." : ""),
+			});
+		});
+
+		// Get user's appointments for other case types (excluding demo if needed)
+		const appointmentWhere = { [Op.or]: [{ userId }, { bookedByCleanerId: userId }] };
+		if (!includeDemoData) {
+			appointmentWhere.isDemoAppointment = { [Op.ne]: true };
+		}
+		const userAppointments = await UserAppointments.findAll({
+			where: appointmentWhere,
+			attributes: ["id"],
+		});
+		const appointmentIds = userAppointments.map((a) => a.id);
+
+		// Adjustments
+		if (appointmentIds.length > 0) {
+			const adjustments = await HomeSizeAdjustmentRequest.findAll({
+				where: {
+					[Op.or]: [
+						{ homeownerId: userId },
+						{ cleanerId: userId },
+						{ appointmentId: { [Op.in]: appointmentIds } },
+					],
+					...(includeResolved ? {} : { status: { [Op.in]: ["pending_homeowner", "pending_owner"] } }),
+				},
+				include: appointmentInclude,
+				order: [["createdAt", "DESC"]],
+			});
+
+			adjustments.forEach((a) => {
+				cases.push({
+					id: a.id,
+					caseType: "adjustment",
+					caseNumber: a.caseNumber,
+					status: a.status,
+					priority: "normal",
+					submittedAt: a.createdAt,
+					description: a.cleanerNote?.substring(0, 100) || "Home size adjustment",
+				});
+			});
+		}
+
+		// Payment disputes (cleaner only)
+		const disputes = await PaymentDispute.findAll({
+			where: {
+				cleanerId: userId,
+				...(includeResolved ? {} : { status: { [Op.in]: ["submitted", "under_review"] } }),
+			},
+			include: appointmentInclude,
+			order: [["submittedAt", "DESC"]],
+		});
+
+		disputes.forEach((d) => {
+			cases.push({
+				id: d.id,
+				caseType: "payment",
+				caseNumber: d.caseNumber,
+				status: d.status,
+				priority: d.priority,
+				submittedAt: d.submittedAt,
+				description: d.description?.substring(0, 100) + (d.description?.length > 100 ? "..." : ""),
+			});
+		});
+
+		// Support tickets
+		const tickets = await SupportTicket.findAll({
+			where: {
+				subjectUserId: userId,
+				...(includeResolved ? {} : { status: { [Op.in]: ["submitted", "under_review", "pending_info"] } }),
+			},
+			order: [["submittedAt", "DESC"]],
+		});
+
+		tickets.forEach((t) => {
+			cases.push({
+				id: t.id,
+				caseType: "support",
+				caseNumber: t.caseNumber,
+				status: t.status,
+				priority: t.priority,
+				submittedAt: t.submittedAt,
+				description: t.description?.substring(0, 100) + (t.description?.length > 100 ? "..." : ""),
+			});
+		});
+
+		// Sort by submittedAt descending
+		cases.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+		return cases;
+	}
+
+	/**
+	 * Search for user by email/phone and get their cases
+	 */
+	static async searchUserAndCases(options) {
+		const { User } = require("../models");
+		const { Op } = require("sequelize");
+
+		const { email, phone, query, includeDemoData = false } = options;
+		let users = [];
+
+		// Filter to exclude demo accounts if not including demo data
+		const demoFilter = includeDemoData ? {} : { isDemoAccount: { [Op.ne]: true } };
+
+		if (email) {
+			// Search by email (case-insensitive)
+			users = await User.findAll({
+				where: {
+					email: { [Op.iLike]: email.toLowerCase().trim() },
+					...demoFilter,
+				},
+				attributes: ["id", "firstName", "lastName", "email", "phone", "type"],
+			});
+		} else if (phone) {
+			// Search by phone (normalize by removing non-digits)
+			const normalizedPhone = phone.replace(/\D/g, "");
+			if (normalizedPhone.length >= 7) {
+				users = await User.findAll({
+					where: {
+						phone: { [Op.like]: `%${normalizedPhone.slice(-10)}%` },
+						...demoFilter,
+					},
+					attributes: ["id", "firstName", "lastName", "email", "phone", "type"],
+				});
+			}
+		} else if (query) {
+			// Try to determine if it's an ID, email, or phone
+			const trimmedQuery = query.trim();
+
+			if (/^\d+$/.test(trimmedQuery)) {
+				// Numeric - treat as user ID
+				const user = await User.findOne({
+					where: { id: parseInt(trimmedQuery), ...demoFilter },
+					attributes: ["id", "firstName", "lastName", "email", "phone", "type"],
+				});
+				if (user) users = [user];
+			} else if (trimmedQuery.includes("@")) {
+				// Email
+				users = await User.findAll({
+					where: {
+						email: { [Op.iLike]: trimmedQuery.toLowerCase() },
+						...demoFilter,
+					},
+					attributes: ["id", "firstName", "lastName", "email", "phone", "type"],
+				});
+			} else {
+				// Try as phone
+				const normalizedPhone = trimmedQuery.replace(/\D/g, "");
+				if (normalizedPhone.length >= 7) {
+					users = await User.findAll({
+						where: {
+							phone: { [Op.like]: `%${normalizedPhone.slice(-10)}%` },
+							...demoFilter,
+						},
+						attributes: ["id", "firstName", "lastName", "email", "phone", "type"],
+					});
+				}
+
+				// If no results, try name search
+				if (users.length === 0) {
+					users = await User.findAll({
+						where: {
+							[Op.or]: [
+								{ firstName: { [Op.iLike]: `%${trimmedQuery}%` } },
+								{ lastName: { [Op.iLike]: `%${trimmedQuery}%` } },
+							],
+							...demoFilter,
+						},
+						attributes: ["id", "firstName", "lastName", "email", "phone", "type"],
+						limit: 10,
+					});
+				}
+			}
+		}
+
+		if (users.length === 0) {
+			return { users: [], results: [], totalCases: 0 };
+		}
+
+		// Get cases for all found users
+		const allResults = [];
+		let totalCases = 0;
+
+		for (const user of users) {
+			const userCases = await this.getCasesForUser(user.id, { includeResolved: true, includeDemoData });
+			totalCases += userCases.length;
+
+			allResults.push({
+				user: {
+					id: user.id,
+					firstName: user.firstName,
+					lastName: user.lastName,
+					email: user.email,
+					phone: user.phone,
+					type: user.type,
+				},
+				cases: userCases,
+				caseCount: userCases.length,
+			});
+		}
+
+		return {
+			users: allResults.map((r) => r.user),
+			results: allResults,
+			totalCases,
+		};
 	}
 }
 

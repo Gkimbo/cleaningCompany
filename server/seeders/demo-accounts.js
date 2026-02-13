@@ -35,6 +35,8 @@ const {
 	Payout,
 	CancellationAppeal,
 	HomeSizeAdjustmentRequest,
+	PaymentDispute,
+	SupportTicket,
 	CancellationAuditLog,
 	BusinessVolumeStats,
 	HomePreferredCleaner,
@@ -68,6 +70,7 @@ const DEMO_ACCOUNTS = {
 		lastName: "Homeowner",
 		type: null, // null = homeowner
 		isBusinessOwner: false,
+		hasPaymentMethod: true,
 	},
 	businessOwner: {
 		username: "demo_business_owner",
@@ -152,6 +155,18 @@ function getFutureDate(daysFromNow) {
 function getPastDate(daysAgo) {
 	const date = new Date();
 	date.setDate(date.getDate() - daysAgo);
+	return date.toISOString().split("T")[0];
+}
+
+// Helper to generate dates within the current month (for volume-based demos)
+function getCurrentMonthDate(dayOfMonth) {
+	const now = new Date();
+	const year = now.getFullYear();
+	const month = now.getMonth();
+	// Clamp day to valid range (1 to current day of month)
+	const maxDay = now.getDate();
+	const day = Math.max(1, Math.min(dayOfMonth, maxDay));
+	const date = new Date(year, month, day);
 	return date.toISOString().split("T")[0];
 }
 
@@ -342,6 +357,12 @@ async function createDemoAccounts() {
 			limit: 1,
 		});
 
+		// Towel configuration for review appointments (3 bed, 2 bath home)
+		const reviewApptTowelConfigs = [
+			{ bathroomNumber: 1, towels: 2, faceCloths: 2 },
+			{ bathroomNumber: 2, towels: 2, faceCloths: 1 },
+		];
+
 		const cleanerReviewAppointmentIds = [];
 		if (homeownerHomes.length > 0) {
 			for (let i = 0; i < reviewRatings.length; i++) {
@@ -358,7 +379,7 @@ async function createDemoAccounts() {
 						userId: createdAccounts.homeowner.id,
 						homeId: homeownerHomes[0].id,
 						date: pastDate,
-						price: "18000", // $180 in cents
+						price: "180", // $180
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -368,8 +389,10 @@ async function createDemoAccounts() {
 						empoyeesNeeded: 1,
 						timeToBeCompleted: "3",
 						paymentStatus: "paid",
-						amountPaid: 18000,
+						amountPaid: 180,
 						completionStatus: "approved",
+						isDemoAppointment: true,
+						towelConfigurations: JSON.stringify(reviewApptTowelConfigs),
 					});
 				}
 				cleanerReviewAppointmentIds.push(appt.id);
@@ -537,6 +560,7 @@ async function createDemoAccounts() {
 					isMultiCleanerJob: true,
 					sheetConfigurations: JSON.stringify(mansionSheetConfigs),
 					towelConfigurations: JSON.stringify(mansionTowelConfigs),
+					isDemoAppointment: true,
 				});
 				console.log("  - Created multi-cleaner appointment with price: $" + mansionPriceDollars);
 			} else {
@@ -678,49 +702,69 @@ async function createDemoAccounts() {
 	if (createdAccounts.homeowner) {
 		console.log("\n--- Creating Demo Homeowner Data ---");
 
-		// Create 2 homes
+		// Create 3 homes with real Boston-area addresses
 		console.log("Creating homes for demo homeowner...");
 		const homesData = [
 			{
-				nickName: "Main Residence",
-				address: "123 Demo Street",
-				city: "Demo City",
-				state: "CA",
-				zipcode: "90210",
-				numBeds: "3",
-				numBaths: "2",
-				numHalfBaths: "1",
-				sqft: 2200,
+				nickName: "Beacon Hill Condo",
+				address: "74 Charles Street",
+				city: "Boston",
+				state: "MA",
+				zipcode: "02114",
+				numBeds: "2",
+				numBaths: "1",
+				numHalfBaths: "0",
+				sqft: 1200,
 				hasGate: false,
 				hasDog: true,
 				dogName: "Buddy",
 				hasCat: false,
-				accessNotes: "Ring doorbell, key under the mat if no answer.",
-				latitude: 34.0901,
-				longitude: -118.4065,
-				contact: "555-123-4567",
-				timeToBeCompleted: "3",
+				accessNotes: "Ring doorbell, key under the mat if no answer. 3rd floor unit.",
+				latitude: 42.3588,
+				longitude: -71.0707,
+				contact: "617-555-1234",
+				timeToBeCompleted: "2",
 			},
 			{
-				nickName: "Beach House",
-				address: "456 Ocean Drive",
-				city: "Malibu",
-				state: "CA",
-				zipcode: "90265",
+				nickName: "Back Bay Brownstone",
+				address: "238 Newbury Street",
+				city: "Boston",
+				state: "MA",
+				zipcode: "02116",
 				numBeds: "3",
 				numBaths: "2",
-				numHalfBaths: "0",
-				sqft: 1800,
+				numHalfBaths: "1",
+				sqft: 2400,
 				hasGate: true,
-				gateCode: "1234",
+				gateCode: "4521",
 				hasDog: false,
 				hasCat: true,
 				catName: "Whiskers",
-				accessNotes: "Use gate code. Alarm code is 5678.",
-				latitude: 34.0259,
-				longitude: -118.7798,
-				contact: "555-987-6543",
-				timeToBeCompleted: "2.5",
+				accessNotes: "Enter through side gate. Alarm code is 7890#.",
+				latitude: 42.3502,
+				longitude: -71.0838,
+				contact: "617-555-5678",
+				timeToBeCompleted: "3",
+			},
+			{
+				nickName: "Cambridge Victorian",
+				address: "45 Brattle Street",
+				city: "Cambridge",
+				state: "MA",
+				zipcode: "02138",
+				numBeds: "4",
+				numBaths: "2",
+				numHalfBaths: "1",
+				sqft: 2800,
+				hasGate: false,
+				hasDog: true,
+				dogName: "Max",
+				hasCat: false,
+				accessNotes: "Lockbox code 1357. Please remove shoes at entry.",
+				latitude: 42.3736,
+				longitude: -71.1217,
+				contact: "617-555-9012",
+				timeToBeCompleted: "3.5",
 			},
 		];
 
@@ -750,12 +794,19 @@ async function createDemoAccounts() {
 		console.log("Creating past appointments for demo homeowner...");
 		if (createdHomes.length > 0 && createdAccounts.cleaner) {
 			// Calculate price for 3 bed, 2 bath home with towels only
+			// Towel configuration for 2 bathrooms
+			const pastApptTowelConfigs = [
+				{ bathroomNumber: 1, towels: 3, faceCloths: 2 },
+				{ bathroomNumber: 2, towels: 2, faceCloths: 1 },
+			];
+
 			const pastApptPrice = calculateAppointmentPrice({
 				numBeds: 3,
 				numBaths: 2,
 				bringSheets: "no",
 				bringTowels: "yes",
-			}) * 100; // Convert to cents
+				towelConfigs: pastApptTowelConfigs,
+			}); // Price in dollars
 
 			for (let i = 1; i <= 5; i++) {
 				try {
@@ -781,6 +832,8 @@ async function createDemoAccounts() {
 							paymentStatus: "paid",
 							amountPaid: pastApptPrice,
 							completionStatus: "approved",
+							isDemoAppointment: true,
+							towelConfigurations: JSON.stringify(pastApptTowelConfigs),
 						});
 					}
 
@@ -803,7 +856,7 @@ async function createDemoAccounts() {
 					// Ignore duplicates
 				}
 			}
-			console.log("  - Created 5 past completed appointments (3 bed, 2 bath @ $" + (pastApptPrice / 100) + ")");
+			console.log("  - Created 5 past completed appointments (3 bed, 2 bath @ $" + pastApptPrice + ")");
 		}
 
 		// Create 3 upcoming appointments
@@ -838,7 +891,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.homeowner.id,
 							homeId: home.id,
 							date: futureDate,
-							price: String(price * 100), // Convert dollars to cents
+							price: String(price), // Price in dollars
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -852,6 +905,7 @@ async function createDemoAccounts() {
 							// Add detailed configurations
 							sheetConfigurations: sheetConfigs ? JSON.stringify(sheetConfigs) : null,
 							towelConfigurations: JSON.stringify(towelConfigs),
+							isDemoAppointment: true,
 						});
 					}
 
@@ -876,6 +930,258 @@ async function createDemoAccounts() {
 			}
 			console.log("  - Created 3 upcoming appointments with cleaner assignments");
 		}
+
+		// Create 3 TODAY appointments for demo cleaner (one per home)
+		// These will show up in TodaysJobsList with navigation between them
+		console.log("Creating today's appointments for demo cleaner...");
+		if (createdHomes.length >= 3 && createdAccounts.cleaner) {
+			const todayDate = getFutureDate(0); // Today
+			const timeWindows = ["9am-12pm", "12pm-3pm", "3pm-6pm"];
+
+			for (let i = 0; i < 3; i++) {
+				try {
+					const home = createdHomes[i];
+					const numBeds = parseInt(home.numBeds) || 2;
+					const numBaths = parseInt(home.numBaths) || 1;
+					const numHalfBaths = parseInt(home.numHalfBaths) || 0;
+
+					// Vary linens per appointment for demo variety
+					const bringSheets = i === 1 ? "yes" : "no"; // Only middle job needs sheets
+					const bringTowels = i !== 2 ? "yes" : "no"; // Last job no towels
+					const sheetConfigs = bringSheets === "yes" ? generateSheetConfigurations(numBeds) : null;
+					const towelConfigs = bringTowels === "yes" ? generateTowelConfigurations(numBaths) : null;
+
+					const price = calculateAppointmentPrice({
+						numBeds,
+						numBaths,
+						numHalfBaths,
+						bringSheets,
+						bringTowels,
+						sheetConfigs,
+						towelConfigs,
+					});
+
+					// Check if appointment already exists for this home on today
+					let appt = await UserAppointments.findOne({
+						where: {
+							userId: createdAccounts.homeowner.id,
+							homeId: home.id,
+							date: todayDate,
+						},
+					});
+
+					if (!appt) {
+						appt = await UserAppointments.create({
+							userId: createdAccounts.homeowner.id,
+							homeId: home.id,
+							date: todayDate,
+							price: String(price), // Price in dollars
+							paid: false,
+							bringTowels,
+							bringSheets,
+							completed: false,
+							hasBeenAssigned: true,
+							employeesAssigned: [createdAccounts.cleaner.id.toString()],
+							empoyeesNeeded: 1,
+							timeToBeCompleted: timeWindows[i],
+							paymentStatus: "pending",
+							amountPaid: 0,
+							sheetConfigurations: sheetConfigs ? JSON.stringify(sheetConfigs) : null,
+							towelConfigurations: towelConfigs ? JSON.stringify(towelConfigs) : null,
+							isDemoAppointment: true,
+						});
+						console.log(`  - Created today's appointment for ${home.nickName} ($${price})`);
+					} else {
+						// Update existing appointment to ensure it's assigned to cleaner
+						await appt.update({
+							hasBeenAssigned: true,
+							employeesAssigned: [createdAccounts.cleaner.id.toString()],
+							timeToBeCompleted: timeWindows[i],
+						});
+						console.log(`  - Updated existing today's appointment for ${home.nickName}`);
+					}
+
+					// Ensure UserCleanerAppointments record exists so cleaner can see the job
+					const existingCleanerAppt = await UserCleanerAppointments.findOne({
+						where: {
+							employeeId: createdAccounts.cleaner.id,
+							appointmentId: appt.id,
+						},
+					});
+					if (!existingCleanerAppt) {
+						await UserCleanerAppointments.create({
+							employeeId: createdAccounts.cleaner.id,
+							appointmentId: appt.id,
+						});
+					}
+				} catch (error) {
+					console.error(`  - Error creating today's appointment:`, error.message);
+				}
+			}
+			console.log("  - Created 3 today's appointments for demo cleaner (testing job navigation)");
+		}
+
+		// Create 15 marketplace jobs for demo homeowner (2 bed, 2 bath) - UNASSIGNED
+		// These will appear on the demo marketplace for demo cleaners
+		// Jobs on the same date are for different homes
+		console.log("Creating marketplace jobs for demo homeowner (2 bed, 2 bath)...");
+
+		// Create 3 different 2bed/2bath homes for the demo homeowner (Boston area)
+		const marketplaceHomeConfigs = [
+			{ nickName: "Downtown Apartment", address: "101 Tremont Street", city: "Boston", state: "MA", zipcode: "02108", contact: "617-555-0123", latitude: 42.3554, longitude: -71.0640 },
+			{ nickName: "Riverside Condo", address: "55 Memorial Drive", city: "Cambridge", state: "MA", zipcode: "02139", contact: "617-555-0124", latitude: 42.3540, longitude: -71.1045 },
+			{ nickName: "Brookline Studio", address: "1280 Beacon Street", city: "Brookline", state: "MA", zipcode: "02446", contact: "617-555-0125", latitude: 42.3420, longitude: -71.1212 },
+		];
+
+		const marketplaceHomes = [];
+		for (const config of marketplaceHomeConfigs) {
+			let home = await UserHomes.findOne({
+				where: {
+					userId: createdAccounts.homeowner.id,
+					nickName: config.nickName,
+				},
+			});
+
+			if (!home) {
+				home = await UserHomes.create({
+					userId: createdAccounts.homeowner.id,
+					nickName: config.nickName,
+					address: config.address,
+					city: config.city,
+					state: config.state,
+					zipcode: config.zipcode,
+					numBeds: "2",
+					numBaths: "2",
+					sheetsProvided: "no",
+					towelsProvided: "yes",
+					timeToBeCompleted: "2",
+					cleanersNeeded: 1,
+					contact: config.contact,
+					latitude: config.latitude,
+					longitude: config.longitude,
+				});
+				console.log(`  - Created home: ${config.nickName}`);
+			}
+			marketplaceHomes.push(home);
+		}
+
+		// Create 15 unassigned marketplace appointments spread across months
+		// Jobs on the same date use different homes (rotating through the 3 homes)
+		// Format: [daysFromNow, homeIndex]
+		const marketplaceJobs = [
+			{ days: 3, homeIndex: 0 },   // Day 3 - Home 1
+			{ days: 3, homeIndex: 1 },   // Day 3 - Home 2
+			{ days: 3, homeIndex: 2 },   // Day 3 - Home 3
+			{ days: 7, homeIndex: 0 },   // Day 7
+			{ days: 10, homeIndex: 1 },  // Day 10
+			{ days: 14, homeIndex: 0 },  // Day 14 - Home 1
+			{ days: 14, homeIndex: 1 },  // Day 14 - Home 2
+			{ days: 14, homeIndex: 2 },  // Day 14 - Home 3
+			{ days: 21, homeIndex: 0 },  // Day 21
+			{ days: 28, homeIndex: 1 },  // Day 28
+			{ days: 35, homeIndex: 0 },  // Day 35 - Home 1
+			{ days: 35, homeIndex: 1 },  // Day 35 - Home 2
+			{ days: 35, homeIndex: 2 },  // Day 35 - Home 3
+			{ days: 42, homeIndex: 0 },  // Day 42
+			{ days: 56, homeIndex: 1 },  // Day 56
+		];
+
+		// Check how many unassigned marketplace appointments exist for demo homeowner
+		const existingMarketAppts = await UserAppointments.count({
+			where: {
+				userId: createdAccounts.homeowner.id,
+				hasBeenAssigned: false,
+				isDemoAppointment: true,
+			},
+		});
+
+		let marketJobsCreated = 0;
+		if (existingMarketAppts < 15) {
+			// Delete existing unassigned demo appointments for all marketplace homes
+			if (existingMarketAppts > 0) {
+				await UserAppointments.destroy({
+					where: {
+						userId: createdAccounts.homeowner.id,
+						hasBeenAssigned: false,
+						isDemoAppointment: true,
+					},
+				});
+				console.log(`  - Cleared ${existingMarketAppts} existing marketplace appointments`);
+			}
+
+			// Create all 15 marketplace appointments
+			// Each home can only have 1 cleaning per day
+			for (let i = 0; i < marketplaceJobs.length; i++) {
+				try {
+					const job = marketplaceJobs[i];
+					const jobDate = getFutureDate(job.days);
+					const home = marketplaceHomes[job.homeIndex];
+
+					// Check if this home already has an appointment on this date
+					const existingApptForHomeOnDate = await UserAppointments.findOne({
+						where: {
+							homeId: home.id,
+							date: jobDate,
+						},
+					});
+
+					if (existingApptForHomeOnDate) {
+						console.log(`  - Skipping: ${home.nickName} already has a cleaning on ${jobDate}`);
+						continue;
+					}
+
+					// Determine if linens are needed
+					const bringSheets = i % 3 === 0 ? "yes" : "no";
+					const bringTowels = "yes";
+
+					// Generate configurations for 2 bed, 2 bath homes
+					const sheetConfigs = bringSheets === "yes" ? [
+						{ bedNumber: 1, size: "queen", needsSheets: true },
+						{ bedNumber: 2, size: "full", needsSheets: true },
+					] : null;
+
+					const towelConfigs = [
+						{ bathroomNumber: 1, towels: 2, faceCloths: 2 },
+						{ bathroomNumber: 2, towels: 2, faceCloths: 1 },
+					];
+
+					const price = calculateAppointmentPrice({
+						numBeds: 2,
+						numBaths: 2,
+						bringSheets,
+						bringTowels,
+						sheetConfigs,
+						towelConfigs,
+					});
+
+					await UserAppointments.create({
+						userId: createdAccounts.homeowner.id,
+						homeId: home.id,
+						date: jobDate,
+						price: String(price), // Price in dollars
+						paid: false,
+						bringTowels,
+						bringSheets,
+						completed: false,
+						hasBeenAssigned: false, // UNASSIGNED - available on marketplace
+						employeesAssigned: [],
+						empoyeesNeeded: 1,
+						timeToBeCompleted: "2",
+						paymentStatus: "pending",
+						isDemoAppointment: true,
+						// Add detailed linen configurations
+						sheetConfigurations: sheetConfigs ? JSON.stringify(sheetConfigs) : null,
+						towelConfigurations: JSON.stringify(towelConfigs),
+					});
+					marketJobsCreated++;
+				} catch (error) {
+					console.error(`  - Error creating marketplace job ${i}:`, error.message);
+				}
+			}
+		} else {
+			console.log(`  - Marketplace appointments already exist (${existingMarketAppts}), skipping`);
+		}
+		console.log(`  - Created ${marketJobsCreated} marketplace jobs across 3 homes (2 bed, 2 bath, unassigned)`);
 
 		// Create bill balance ($150)
 		console.log("Setting up bill for demo homeowner...");
@@ -1054,6 +1360,8 @@ async function createDemoAccounts() {
 						sqft: 1500 + (i * 200),
 						contact: `555-${String(100 + i).padStart(3, '0')}-0000`,
 						timeToBeCompleted: String(2 + (i % 2)),
+						latitude: 34.0901 + (i * 0.005),
+						longitude: -118.4065 + (i * 0.005),
 					});
 				}
 
@@ -1185,7 +1493,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: jobDate,
-							price: String(price),
+							price: String(price), // Price in dollars
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1197,6 +1505,7 @@ async function createDemoAccounts() {
 							paymentStatus: "pending",
 							sheetConfigurations: sheetConfigs,
 							towelConfigurations: towelConfigs,
+							isDemoAppointment: true,
 						});
 					}
 
@@ -1307,25 +1616,51 @@ async function createDemoAccounts() {
 			console.error(`  - Error creating home:`, error.message);
 		}
 
-		// Link business client to business owner
+		// Link business client to business owner (with home)
 		console.log("Linking business client to demo business owner...");
 		try {
-			const existingClient = await CleanerClient.findOne({
+			// Check for existing relationship with this specific home
+			const existingClientWithHome = await CleanerClient.findOne({
 				where: {
 					cleanerId: createdAccounts.businessOwner.id,
 					clientId: createdAccounts.businessClient.id,
+					homeId: clientHome?.id,
 				},
 			});
 
-			if (!existingClient) {
-				await CleanerClient.create({
-					cleanerId: createdAccounts.businessOwner.id,
-					clientId: createdAccounts.businessClient.id,
-					status: "active",
-					preferredDays: JSON.stringify(["Tuesday", "Friday"]),
-					notes: "VIP client - prefers morning appointments, eco-friendly products only",
+			if (!existingClientWithHome && clientHome) {
+				// Check if there's an old record without a homeId that we should update
+				const existingClientWithoutHome = await CleanerClient.findOne({
+					where: {
+						cleanerId: createdAccounts.businessOwner.id,
+						clientId: createdAccounts.businessClient.id,
+						homeId: null,
+					},
 				});
-				console.log("  - Linked as client of Demo Business Owner");
+
+				if (existingClientWithoutHome) {
+					// Update the existing record to include the homeId
+					await existingClientWithoutHome.update({ homeId: clientHome.id });
+					console.log("  - Updated existing client link to include home");
+				} else {
+					// Create new record with homeId
+					await CleanerClient.create({
+						cleanerId: createdAccounts.businessOwner.id,
+						clientId: createdAccounts.businessClient.id,
+						homeId: clientHome.id, // Link to the specific home
+						status: "active",
+						inviteToken: "demo-business-client-" + Date.now(),
+						invitedEmail: "demo_business_client@example.com",
+						invitedName: "Demo Business Client",
+						invitedAt: new Date(),
+						acceptedAt: new Date(),
+						preferredDays: JSON.stringify(["Tuesday", "Friday"]),
+						notes: "VIP client - prefers morning appointments, eco-friendly products only",
+					});
+					console.log("  - Linked as client of Demo Business Owner (with home)");
+				}
+			} else {
+				console.log("  - Already linked to Demo Business Owner with this home");
 			}
 		} catch (error) {
 			console.error("  - Error linking client:", error.message);
@@ -1347,7 +1682,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.businessClient.id,
 							homeId: clientHome.id,
 							date: pastDate,
-							price: "16000", // $160 in cents
+							price: "160", // $160
 							paid: true,
 							bringTowels: "yes",
 							bringSheets: "no",
@@ -1357,9 +1692,10 @@ async function createDemoAccounts() {
 							empoyeesNeeded: 1,
 							timeToBeCompleted: "2.5",
 							paymentStatus: "paid",
-							amountPaid: 16000,
+							amountPaid: 160,
 							completionStatus: "approved",
 							bookedByCleanerId: createdAccounts.businessOwner.id,
+							isDemoAppointment: true,
 						});
 
 						// Create job assignment for past appointments
@@ -1418,7 +1754,7 @@ async function createDemoAccounts() {
 							userId: createdAccounts.businessClient.id,
 							homeId: clientHome.id,
 							date: futureDate,
-							price: String(price),
+							price: String(price), // Price in dollars
 							paid: false,
 							bringTowels,
 							bringSheets,
@@ -1432,6 +1768,7 @@ async function createDemoAccounts() {
 							bookedByCleanerId: createdAccounts.businessOwner.id,
 							sheetConfigurations: sheetConfigs,
 							towelConfigurations: towelConfigs,
+							isDemoAppointment: true,
 						});
 
 						// Create job assignment for upcoming appointments
@@ -1541,7 +1878,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(3),
-					price: "18000", // $180 in cents
+					price: "180", // $180
 					paid: false,
 					bringTowels: "yes",
 					bringSheets: "no",
@@ -1557,6 +1894,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-001",
 					hasActiveAppeal: true,
+					isDemoAppointment: true,
 				});
 
 				// Create the appeal
@@ -1617,7 +1955,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(5),
-					price: "18000", // $180 in cents
+					price: "180", // $180
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -1633,6 +1971,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-002",
 					hasActiveAppeal: true,
+					isDemoAppointment: true,
 				});
 
 				const appeal2 = await CancellationAppeal.create({
@@ -1671,7 +2010,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(14),
-					price: "18000", // $180 in cents
+					price: "180", // $180
 					paid: false,
 					bringTowels: "yes",
 					bringSheets: "yes",
@@ -1687,6 +2026,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-003",
 					hasActiveAppeal: false,
+					isDemoAppointment: true,
 				});
 
 				const appeal3 = await CancellationAppeal.create({
@@ -1731,7 +2071,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(7),
-					price: "20000", // $200 in cents
+					price: "200", // $200
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -1747,6 +2087,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-004",
 					hasActiveAppeal: true,
+					isDemoAppointment: true,
 				});
 
 				const appeal4 = await CancellationAppeal.create({
@@ -1785,7 +2126,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(2),
-					price: "15000", // $150 for 3 bed/2 bath in cents
+					price: "150", // $150 for 3 bed/2 bath
 					paid: true,
 					bringTowels: "yes",
 					bringSheets: "no",
@@ -1795,8 +2136,9 @@ async function createDemoAccounts() {
 					empoyeesNeeded: 1,
 					timeToBeCompleted: "3",
 					paymentStatus: "paid",
-					amountPaid: 15000,
+					amountPaid: 150,
 					completionStatus: "approved",
+					isDemoAppointment: true,
 				});
 
 				await HomeSizeAdjustmentRequest.create({
@@ -1829,7 +2171,7 @@ async function createDemoAccounts() {
 					userId: demoHomeowner.id,
 					homeId: homeownerHome.id,
 					date: getPastDate(21),
-					price: "18000", // $180 in cents
+					price: "180", // $180
 					paid: false,
 					bringTowels: "no",
 					bringSheets: "no",
@@ -1845,6 +2187,7 @@ async function createDemoAccounts() {
 					cancellationConfirmedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
 					cancellationConfirmationId: "CXL-DEMO-006",
 					hasActiveAppeal: false,
+					isDemoAppointment: true,
 				});
 
 				const appeal6 = await CancellationAppeal.create({
@@ -1878,6 +2221,167 @@ async function createDemoAccounts() {
 				console.log("  - Created denied appeal (historical reference)");
 			} catch (error) {
 				console.error("  - Error creating Scenario 6:", error.message);
+			}
+
+			// ===== SCENARIO 7: Payment Dispute - Wrong Amount =====
+			console.log("Creating Scenario 7: Payment Dispute (Wrong Amount)...");
+			try {
+				// Create a completed appointment for the dispute
+				const paidAppt = await UserAppointments.create({
+					userId: demoHomeowner.id,
+					homeId: homeownerHome.id,
+					date: getPastDate(3),
+					price: "220", // $220
+					paid: true,
+					bringTowels: "yes",
+					bringSheets: "yes",
+					completed: true,
+					hasBeenAssigned: true,
+					employeesAssigned: [demoCleaner.id.toString()],
+					empoyeesNeeded: 1,
+					timeToBeCompleted: "4",
+					paymentStatus: "paid",
+					amountPaid: 220,
+					completionStatus: "approved",
+					isDemoAppointment: true,
+				});
+
+				await PaymentDispute.create({
+					appointmentId: paidAppt.id,
+					cleanerId: demoCleaner.id,
+					issueType: "wrong_amount",
+					expectedAmount: 22000, // $220
+					receivedAmount: 17600, // $176 (only 80% received)
+					description: "I was supposed to receive $220 for a 4-hour cleaning job (5 bed/3 bath home with extras). My payout shows only $176 which is only 80% of the job. The homeowner confirmed they paid the full amount. Please investigate why I didn't receive my full earnings.",
+					status: "under_review",
+					priority: "high",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+					slaDeadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+				});
+
+				console.log("  - Created payment dispute (wrong_amount, under_review)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 7:", error.message);
+			}
+
+			// ===== SCENARIO 8: Payment Dispute - Missing Payout (Resolved) =====
+			console.log("Creating Scenario 8: Payment Dispute (Missing Payout - Resolved)...");
+			try {
+				const missingPayoutAppt = await UserAppointments.create({
+					userId: demoHomeowner.id,
+					homeId: homeownerHome.id,
+					date: getPastDate(10),
+					price: "180", // $180
+					paid: true,
+					bringTowels: "no",
+					bringSheets: "no",
+					completed: true,
+					hasBeenAssigned: true,
+					employeesAssigned: [demoCleaner.id.toString()],
+					empoyeesNeeded: 1,
+					timeToBeCompleted: "3",
+					paymentStatus: "paid",
+					amountPaid: 180,
+					completionStatus: "approved",
+					isDemoAppointment: true,
+				});
+
+				await PaymentDispute.create({
+					appointmentId: missingPayoutAppt.id,
+					cleanerId: demoCleaner.id,
+					issueType: "missing_payout",
+					expectedAmount: 18000,
+					receivedAmount: 0,
+					description: "I completed this job 10 days ago but never received payment. The homeowner says they paid through the app. My Stripe account is properly connected and verified.",
+					status: "resolved",
+					priority: "urgent",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+					reviewedBy: demoHR.id,
+					reviewedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+					resolution: { amountPaid: 180, paidVia: "manual_transfer", stripeTransferId: "tr_demo_123" },
+					resolutionNotes: "Stripe webhook failed to process. Manual transfer completed to cleaner's account.",
+					slaDeadline: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+					closedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+				});
+
+				console.log("  - Created payment dispute (missing_payout, resolved)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 8:", error.message);
+			}
+
+			// ===== SCENARIO 9: Support Ticket - Service Complaint =====
+			console.log("Creating Scenario 9: Support Ticket (Service Complaint)...");
+			try {
+				await SupportTicket.create({
+					reporterId: demoHR.id,
+					subjectUserId: demoCleaner.id,
+					subjectType: "cleaner",
+					category: "service_complaint",
+					description: "Homeowner called to report that the cleaner arrived 45 minutes late to their appointment and left 30 minutes early. The homeowner says several rooms were not cleaned. This is the second complaint about timeliness for this cleaner.",
+					status: "under_review",
+					priority: "high",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(),
+					slaDeadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(),
+				});
+
+				console.log("  - Created support ticket (service_complaint, under_review)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 9:", error.message);
+			}
+
+			// ===== SCENARIO 10: Support Ticket - Billing Question (Resolved) =====
+			console.log("Creating Scenario 10: Support Ticket (Billing Question - Resolved)...");
+			try {
+				await SupportTicket.create({
+					reporterId: demoHR.id,
+					subjectUserId: demoHomeowner.id,
+					subjectType: "homeowner",
+					category: "billing_question",
+					description: "Homeowner called asking why they were charged twice for the same cleaning. Review found duplicate charge due to network timeout. Refund processed.",
+					status: "resolved",
+					priority: "normal",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+					reviewedBy: demoHR.id,
+					reviewedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+					resolution: { refundAmount: 15000, refundReason: "duplicate_charge", stripeRefundId: "re_demo_456" },
+					resolutionNotes: "Duplicate charge confirmed. Full refund of $150 processed to customer's original payment method.",
+					slaDeadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+					closedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+				});
+
+				console.log("  - Created support ticket (billing_question, resolved)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 10:", error.message);
+			}
+
+			// ===== SCENARIO 11: Support Ticket - Policy Violation (Pending Info) =====
+			console.log("Creating Scenario 11: Support Ticket (Policy Violation)...");
+			try {
+				await SupportTicket.create({
+					reporterId: demoHR.id,
+					subjectUserId: demoCleaner.id,
+					subjectType: "cleaner",
+					category: "policy_violation",
+					description: "Multiple homeowners have reported that cleaner is soliciting direct bookings outside of the platform. Cleaner allegedly left business cards and offered 20% discount for booking directly. Awaiting cleaner's response to allegations.",
+					status: "pending_info",
+					priority: "urgent",
+					assignedTo: demoHR.id,
+					assignedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+					slaDeadline: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
+					submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+				});
+
+				console.log("  - Created support ticket (policy_violation, pending_info)");
+			} catch (error) {
+				console.error("  - Error creating Scenario 11:", error.message);
 			}
 		}
 
@@ -1987,12 +2491,14 @@ async function createDemoAccounts() {
 		const createdClients = [];
 		for (let i = 0; i < 100; i++) {
 			try {
+				const clientUsername = `lb_client_${i + 1}`;
 				const clientEmail = `lb_client_${i + 1}@sparkle.demo`;
-				let clientUser = await User.findOne({ where: { email: clientEmail } });
+				// Search by username since email may be encrypted
+				let clientUser = await User.findOne({ where: { username: clientUsername } });
 
 				if (!clientUser) {
 					clientUser = await User.create({
-						username: `lb_client_${i + 1}`,
+						username: clientUsername,
 						email: clientEmail,
 						firstName: clientFirstNames[i],
 						lastName: clientLastNames[i],
@@ -2005,6 +2511,15 @@ async function createDemoAccounts() {
 					// Create a home for each client with varied sizes
 					const bedrooms = 2 + (i % 4); // 2-5 bedrooms
 					const bathrooms = 1 + (i % 3); // 1-3 bathrooms
+					// Coordinates for various LA area cities
+					const cityCoords = [
+						{ lat: 34.0901, lng: -118.4065 }, // Beverly Hills
+						{ lat: 34.0195, lng: -118.4912 }, // Santa Monica
+						{ lat: 34.1478, lng: -118.1445 }, // Pasadena
+						{ lat: 34.1425, lng: -118.2551 }, // Glendale
+						{ lat: 34.1808, lng: -118.3090 }, // Burbank
+					];
+					const coords = cityCoords[i % 5];
 					await UserHomes.create({
 						userId: clientUser.id,
 						nickName: `${clientFirstNames[i]}'s Home`,
@@ -2018,30 +2533,37 @@ async function createDemoAccounts() {
 						sqft: 1500 + (i * 30),
 						contact: `555-${String(200 + i).padStart(3, '0')}-0000`,
 						timeToBeCompleted: String(2 + (bedrooms > 3 ? 1 : 0)),
+						latitude: coords.lat + (i * 0.002),
+						longitude: coords.lng + (i * 0.002),
 					});
 				}
+
+				// Push client to array before linking (so we have them even if linking fails)
+				createdClients.push(clientUser);
 
 				// Link as cleaner client
-				const existingClient = await CleanerClient.findOne({
-					where: {
-						cleanerId: largeBizOwner.id,
-						clientId: clientUser.id,
-					},
-				});
-
-				if (!existingClient) {
-					await CleanerClient.create({
-						cleanerId: largeBizOwner.id,
-						clientId: clientUser.id,
-						status: "active",
-						preferredDays: JSON.stringify(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][i % 5]),
-						notes: `Regular client #${i + 1} - ${["weekly", "biweekly", "monthly"][i % 3]} service`,
+				try {
+					const existingClient = await CleanerClient.findOne({
+						where: {
+							cleanerId: largeBizOwner.id,
+							clientId: clientUser.id,
+						},
 					});
-				}
 
-				createdClients.push(clientUser);
+					if (!existingClient) {
+						await CleanerClient.create({
+							cleanerId: largeBizOwner.id,
+							clientId: clientUser.id,
+							status: "active",
+							preferredDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][i % 5],
+							notes: `Regular client #${i + 1} - ${["weekly", "biweekly", "monthly"][i % 3]} service`,
+						});
+					}
+				} catch (linkError) {
+					// Ignore linking errors
+				}
 			} catch (error) {
-				// Ignore duplicates
+				// Ignore errors
 			}
 		}
 		console.log("  - Created 100 clients for large business");
@@ -2149,7 +2671,7 @@ async function createDemoAccounts() {
 						userId: createdClients[i].id,
 						homeId: clientHome.id,
 						date: pastDate,
-						price: String((180 + (i * 10)) * 100), // Convert dollars to cents
+						price: String(180 + (i * 10)), // Price in dollars
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -2159,9 +2681,10 @@ async function createDemoAccounts() {
 						empoyeesNeeded: 1,
 						timeToBeCompleted: "3",
 						paymentStatus: "paid",
-						amountPaid: (180 + (i * 10)) * 100,
+						amountPaid: 180 + (i * 10),
 						completionStatus: "approved",
 						bookedByCleanerId: largeBizOwner.id,
+						isDemoAppointment: true,
 					});
 				}
 
@@ -2192,11 +2715,92 @@ async function createDemoAccounts() {
 		}
 		console.log("  - Created 10 sample reviews");
 
+		// Create 70 completed appointments to qualify as large business
+		console.log("Creating 70 completed appointments for large business...");
+		let completedJobsCreated = 0;
+
+		// First update any existing demo appointments to be in current month
+		const existingDemoApptsList = await UserAppointments.findAll({
+			where: {
+				bookedByCleanerId: largeBizOwner.id,
+				isDemoAppointment: true,
+				completed: true,
+			},
+		});
+
+		// Update existing appointments to current month dates
+		for (let i = 0; i < existingDemoApptsList.length; i++) {
+			const dayOfMonth = (i % 8) + 1;
+			const newDate = getCurrentMonthDate(dayOfMonth);
+			await existingDemoApptsList[i].update({ date: newDate });
+		}
+		if (existingDemoApptsList.length > 0) {
+			console.log(`  - Updated ${existingDemoApptsList.length} existing appointments to current month`);
+		}
+
+		// Only create if we need more
+		const appointmentsNeeded = Math.max(0, 70 - existingDemoApptsList.length);
+
+		for (let i = 10; i < 10 + appointmentsNeeded && i < createdClients.length; i++) {
+			try {
+				const clientHome = await UserHomes.findOne({
+					where: { userId: createdClients[i].id },
+				});
+
+				if (!clientHome) continue;
+
+				// Create a completed appointment within the current month
+				// Spread across days 1 to today to ensure all 70 are in current month
+				const dayOfMonth = (i % 8) + 1; // Days 1-8 of current month
+				const pastDate = getCurrentMonthDate(dayOfMonth);
+				const price = 150 + (i * 5); // Price in dollars
+
+				await UserAppointments.create({
+					userId: createdClients[i].id,
+					homeId: clientHome.id,
+					date: pastDate,
+					price: String(price),
+					paid: true,
+					bringTowels: i % 2 === 0 ? "yes" : "no",
+					bringSheets: i % 3 === 0 ? "yes" : "no",
+					completed: true,
+					hasBeenAssigned: true,
+					employeesAssigned: [largeBizOwner.id.toString()],
+					empoyeesNeeded: 1,
+					timeToBeCompleted: String(2 + (i % 3)),
+					paymentStatus: "paid",
+					amountPaid: price,
+					completionStatus: "approved",
+					bookedByCleanerId: largeBizOwner.id,
+					isDemoAppointment: true,
+				});
+				completedJobsCreated++;
+			} catch (error) {
+				// Ignore errors
+			}
+		}
+		console.log(`  - Created ${completedJobsCreated} additional completed appointments`);
+
 		// Update the business owner stats
 		await largeBizOwner.update({
 			avgRating: 4.95,
 			totalReviews: 250, // Shows historical review count
 		});
+
+		// Set BusinessVolumeStats to 70 for current month (qualifies for large business tier)
+		const now = new Date();
+		const currentMonth = now.getMonth() + 1;
+		const currentYear = now.getFullYear();
+
+		await BusinessVolumeStats.upsert({
+			businessOwnerId: largeBizOwner.id,
+			month: currentMonth,
+			year: currentYear,
+			completedCleanings: 70,
+			totalRevenue: 70 * 150 * 100, // 70 jobs at $150 avg
+			lastUpdatedAt: now,
+		});
+		console.log("  - Set BusinessVolumeStats to 70 cleanings for current month");
 
 		console.log("  - Large business owner setup complete (qualifies for 7% platform fee)");
 	}
@@ -2259,6 +2863,15 @@ async function createDemoAccounts() {
 					// Create a home for each
 					const bedrooms = 2 + (i % 4);
 					const bathrooms = 1 + (i % 3);
+					// Coordinates for various LA area cities
+					const prefCityCoords = [
+						{ lat: 34.0522, lng: -118.2437 }, // Los Angeles
+						{ lat: 34.1478, lng: -118.1445 }, // Pasadena
+						{ lat: 34.0195, lng: -118.4912 }, // Santa Monica
+						{ lat: 34.1425, lng: -118.2551 }, // Glendale
+						{ lat: 34.1808, lng: -118.3090 }, // Burbank
+					];
+					const prefCoords = prefCityCoords[i % 5];
 					const home = await UserHomes.create({
 						userId: homeowner.id,
 						nickName: `${preferredHomeownerNames[i].first}'s Residence`,
@@ -2273,6 +2886,8 @@ async function createDemoAccounts() {
 						usePreferredCleaners: true,
 						contact: `555-${String(300 + i).padStart(3, '0')}-0000`,
 						timeToBeCompleted: String(2 + (bedrooms > 3 ? 1 : 0)),
+						latitude: prefCoords.lat + (i * 0.003),
+						longitude: prefCoords.lng + (i * 0.003),
 					});
 
 					createdPreferredHomes.push(home);
@@ -2293,7 +2908,7 @@ async function createDemoAccounts() {
 						userId: homeowner.id,
 						homeId: home.id,
 						date: pastDate,
-						price: String((160 + (i * 5)) * 100), // Convert dollars to cents
+						price: String(160 + (i * 5)), // Price in dollars
 						paid: true,
 						bringTowels: "yes",
 						bringSheets: "no",
@@ -2303,8 +2918,9 @@ async function createDemoAccounts() {
 						empoyeesNeeded: 1,
 						timeToBeCompleted: "3",
 						paymentStatus: "paid",
-						amountPaid: (160 + (i * 5)) * 100,
+						amountPaid: 160 + (i * 5),
 						completionStatus: "approved",
+						isDemoAppointment: true,
 					});
 
 					// Create a review from this homeowner
@@ -2408,7 +3024,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: pastDate,
-							price: String((160 + (i * 10)) * 100), // Convert dollars to cents
+							price: String(160 + (i * 10)), // Price in dollars
 							paid: true,
 							bringTowels: "yes",
 							bringSheets: i % 2 === 0 ? "yes" : "no",
@@ -2418,8 +3034,9 @@ async function createDemoAccounts() {
 							empoyeesNeeded: 1,
 							timeToBeCompleted: "3",
 							paymentStatus: "paid",
-							amountPaid: (160 + (i * 10)) * 100,
+							amountPaid: 160 + (i * 10),
 							completionStatus: "approved",
+							isDemoAppointment: true,
 						});
 					}
 				} catch (error) {
@@ -2445,7 +3062,7 @@ async function createDemoAccounts() {
 							userId: home.userId,
 							homeId: home.id,
 							date: futureDate,
-							price: String((160 + (i * 10)) * 100), // Convert dollars to cents
+							price: String(160 + (i * 10)), // Price in dollars
 							paid: false,
 							bringTowels: "yes",
 							bringSheets: i === 0 ? "yes" : "no",
@@ -2458,6 +3075,7 @@ async function createDemoAccounts() {
 							// Add detailed configurations
 							sheetConfigurations: i === 0 ? generateSheetConfigurations(numBeds) : null,
 							towelConfigurations: generateTowelConfigurations(numBaths),
+							isDemoAppointment: true,
 						});
 					}
 				} catch (error) {

@@ -19,6 +19,19 @@ import {
   typography,
   shadows,
 } from "../../services/styles/theme";
+import ExportModal from "./ExportModal";
+import TaxFormsSection from "../tax/TaxFormsSection";
+import {
+  generateCSV,
+  generatePDF,
+  generateFinancialSummaryHTML,
+  generatePayrollByEmployeeHTML,
+  generateEmployeeEarningsHTML,
+  generatePayrollSummaryHTML,
+  prepareFinancialSummaryCSV,
+  preparePayrollByEmployeeCSV,
+  prepareEmployeeEarningsCSV,
+} from "../../services/exportService";
 
 // Period Selector Component
 const PeriodSelector = ({ value, onChange }) => {
@@ -144,6 +157,10 @@ const FinancialsScreen = ({ state }) => {
   const [employeeEarnings, setEmployeeEarnings] = useState([]);
   const [error, setError] = useState(null);
 
+  // Export modal state
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [exportType, setExportType] = useState(null);
+
   const fetchData = async (isRefresh = false) => {
     if (isRefresh) {
       setRefreshing(true);
@@ -212,9 +229,102 @@ const FinancialsScreen = ({ state }) => {
     return `$${(cents / 100).toFixed(2)}`;
   };
 
-  const handleExport = async (type) => {
-    // TODO: Implement export functionality
-    alert(`Export ${type} - Coming soon!`);
+  // Get period label for exports
+  const getPeriodLabel = () => {
+    const periodLabels = {
+      week: "This Week",
+      month: "This Month",
+      quarter: "This Quarter",
+      year: "This Year",
+    };
+    return periodLabels[period] || period;
+  };
+
+  const handleExport = (type) => {
+    setExportType(type);
+    setExportModalVisible(true);
+  };
+
+  const performExport = async (format, year = null) => {
+    try {
+      const token = state.currentUser?.token;
+
+      // Handle tax document exports (annual data)
+      if (exportType === "employee-earnings" || exportType === "payroll-summary") {
+        if (!year) {
+          return { success: false, error: "Please select a year" };
+        }
+
+        const taxData = await BusinessOwnerService.getTaxExport(token, year);
+        if (taxData.error) {
+          return { success: false, error: taxData.error };
+        }
+
+        if (exportType === "employee-earnings") {
+          if (format === "csv") {
+            const csvData = prepareEmployeeEarningsCSV(taxData.employeeBreakdown || [], year);
+            return await generateCSV(csvData, `employee-earnings-${year}`);
+          } else {
+            const html = generateEmployeeEarningsHTML(
+              taxData.employeeBreakdown || [],
+              year,
+              "Your Business"
+            );
+            return await generatePDF(html, `employee-earnings-${year}`);
+          }
+        } else {
+          // payroll-summary
+          if (format === "csv") {
+            const csvData = prepareFinancialSummaryCSV(taxData.financials || {});
+            return await generateCSV(csvData, `payroll-summary-${year}`);
+          } else {
+            const html = generatePayrollSummaryHTML(
+              {
+                ...taxData.financials,
+                employeeCount: taxData.summary?.totalEmployees || 0,
+              },
+              year,
+              "Your Business"
+            );
+            return await generatePDF(html, `payroll-summary-${year}`);
+          }
+        }
+      }
+
+      // Handle period-based exports
+      if (exportType === "summary") {
+        if (format === "csv") {
+          const csvData = prepareFinancialSummaryCSV(financials || {});
+          return await generateCSV(csvData, `financial-summary-${period}`);
+        } else {
+          const html = generateFinancialSummaryHTML(
+            financials || {},
+            getPeriodLabel(),
+            "Your Business"
+          );
+          return await generatePDF(html, `financial-summary-${period}`);
+        }
+      }
+
+      if (exportType === "payroll") {
+        if (format === "csv") {
+          const csvData = preparePayrollByEmployeeCSV(employeeEarnings || []);
+          return await generateCSV(csvData, `payroll-by-employee-${period}`);
+        } else {
+          const html = generatePayrollByEmployeeHTML(
+            employeeEarnings || [],
+            getPeriodLabel(),
+            "Your Business"
+          );
+          return await generatePDF(html, `payroll-by-employee-${period}`);
+        }
+      }
+
+      return { success: false, error: "Unknown export type" };
+    } catch (err) {
+      console.error("Export error:", err);
+      return { success: false, error: err.message || "Export failed" };
+    }
   };
 
   if (loading) {
@@ -232,7 +342,7 @@ const FinancialsScreen = ({ state }) => {
     totalPayroll = 0,
     stripeFees = 0,
     netProfit = 0,
-    jobCount = 0,
+    jobCount: _jobCount = 0,
     completedJobs = 0,
     pendingPayroll = 0,
   } = financials || {};
@@ -370,47 +480,30 @@ const FinancialsScreen = ({ state }) => {
 
         {/* Tax Documents Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tax Documents</Text>
-          <View style={styles.taxCard}>
-            <View style={styles.taxInfo}>
-              <Icon name="file-text-o" size={24} color={colors.primary[600]} />
-              <View style={styles.taxContent}>
-                <Text style={styles.taxTitle}>Year-End Tax Documents</Text>
-                <Text style={styles.taxDescription}>
-                  Download payroll summaries and employee earnings reports for tax filing.
-                </Text>
-              </View>
-            </View>
-            <View style={styles.taxActions}>
-              <Pressable
-                style={styles.taxButton}
-                onPress={() => handleExport("employee-earnings")}
-              >
-                <Icon name="download" size={14} color={colors.primary[600]} />
-                <Text style={styles.taxButtonText}>Employee Earnings</Text>
-              </Pressable>
-              <Pressable
-                style={styles.taxButton}
-                onPress={() => handleExport("payroll-summary")}
-              >
-                <Icon name="download" size={14} color={colors.primary[600]} />
-                <Text style={styles.taxButtonText}>Payroll Summary</Text>
-              </Pressable>
-            </View>
-          </View>
+          <TaxFormsSection state={state} />
         </View>
 
         {/* Info Card */}
         <View style={styles.infoCard}>
           <Icon name="info-circle" size={20} color={colors.primary[600]} />
           <Text style={styles.infoText}>
-            Platform fees are currently {platformFeePercent}%. You'll receive a 1099-K
+            Platform fees are currently {platformFeePercent}%. You will receive a 1099-K
             from Stripe at year end based on your total earnings.
           </Text>
         </View>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      {/* Export Modal */}
+      <ExportModal
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+        exportType={exportType}
+        onExport={performExport}
+        showYearSelector={exportType === "employee-earnings" || exportType === "payroll-summary"}
+        periodLabel={getPeriodLabel()}
+      />
     </View>
   );
 };
@@ -699,51 +792,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-  },
-  taxCard: {
-    backgroundColor: colors.background.primary,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    ...shadows.sm,
-  },
-  taxInfo: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: spacing.md,
-  },
-  taxContent: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  taxTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-  },
-  taxDescription: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-    lineHeight: 20,
-  },
-  taxActions: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  taxButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary[50],
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    gap: spacing.xs,
-  },
-  taxButtonText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[600],
-    fontWeight: typography.fontWeight.medium,
   },
   infoCard: {
     flexDirection: "row",

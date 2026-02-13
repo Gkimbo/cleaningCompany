@@ -146,11 +146,11 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.INTEGER,
 			allowNull: true,
 		},
-		// Toggle for preferred cleaners feature (when false, all cleaners can request jobs)
+		// Toggle for preferred cleaners feature (when true, only preferred cleaners can request jobs)
 		usePreferredCleaners: {
 			type: DataTypes.BOOLEAN,
 			allowNull: false,
-			defaultValue: true,
+			defaultValue: false,
 		},
 		// Tracks whether home setup is complete (false for homes created via invitation)
 		isSetupComplete: {
@@ -167,6 +167,25 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.JSONB,
 			allowNull: true,
 			// [{type: 'bedroom', label: 'Master Bedroom', squareFt: 300}, ...]
+		},
+		// Tenant present tracking
+		tenantPresentIncidentCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Number of tenant present incidents at this home",
+		},
+		lastTenantPresentIncidentAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When last tenant present incident occurred",
+		},
+		// Marketplace visibility for homes declined by business owner
+		isMarketplaceEnabled: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "When true, this home is visible on marketplace for cleaners to pick up jobs",
 		},
 	});
 

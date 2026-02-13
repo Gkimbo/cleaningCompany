@@ -216,7 +216,7 @@ const EmployeeCalendar = ({ state }) => {
   // Get jobs for a specific date
   const getJobsForDate = useCallback((date) => {
     return jobs.filter(job => {
-      const jobDate = new Date(job.appointment?.date);
+      const jobDate = new Date(job.appointment?.date + "T00:00:00");
       return jobDate.toDateString() === date.toDateString();
     });
   }, [jobs]);
@@ -277,7 +277,7 @@ const EmployeeCalendar = ({ state }) => {
 
   // Get all jobs for current month for stats
   const monthJobs = jobs.filter(job => {
-    const jobDate = new Date(job.appointment?.date);
+    const jobDate = new Date(job.appointment?.date + "T00:00:00");
     return jobDate.getMonth() === currentMonth.getMonth() &&
            jobDate.getFullYear() === currentMonth.getFullYear();
   });

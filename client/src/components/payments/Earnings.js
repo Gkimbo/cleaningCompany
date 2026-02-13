@@ -38,8 +38,10 @@ const Earnings = ({ state, dispatch }) => {
     bonusPayoutCount: 0,
     currentTier: null,
   });
+  const [employeeBonuses, setEmployeeBonuses] = useState([]);
   const [accountStatus, setAccountStatus] = useState(null);
   const [assignedAppointments, setAssignedAppointments] = useState([]);
+  const [confirmedMultiCleanerJobs, setConfirmedMultiCleanerJobs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -93,6 +95,21 @@ const Earnings = ({ state, dispatch }) => {
     }
   };
 
+  const fetchEmployeeBonuses = async () => {
+    if (!state?.currentUser?.token) return;
+    try {
+      const response = await FetchData.get(
+        "/api/v1/employee-info/bonuses",
+        state.currentUser.token
+      );
+      if (!response.error) {
+        setEmployeeBonuses(response.bonuses || []);
+      }
+    } catch (err) {
+      console.error("Error fetching employee bonuses:", err);
+    }
+  };
+
   const fetchAccountStatus = async () => {
     if (!state?.currentUser?.id) return;
     try {
@@ -132,9 +149,28 @@ const Earnings = ({ state, dispatch }) => {
     }
   };
 
+  const fetchConfirmedMultiCleanerJobs = async () => {
+    if (!state?.currentUser?.token) return;
+    try {
+      const response = await FetchData.getMyConfirmedMultiCleanerJobs(state.currentUser.token);
+      if (!response.error) {
+        setConfirmedMultiCleanerJobs(response.jobs || []);
+      }
+    } catch (err) {
+      console.error("Error fetching confirmed multi-cleaner jobs:", err);
+    }
+  };
+
   const loadData = async () => {
     setIsLoading(true);
-    await Promise.all([fetchEarnings(), fetchAccountStatus(), fetchAssignedAppointments(), fetchBonusTotals()]);
+    await Promise.all([
+      fetchEarnings(),
+      fetchAccountStatus(),
+      fetchAssignedAppointments(),
+      fetchConfirmedMultiCleanerJobs(),
+      fetchBonusTotals(),
+      fetchEmployeeBonuses(),
+    ]);
     setIsLoading(false);
   };
 
@@ -253,15 +289,34 @@ const Earnings = ({ state, dispatch }) => {
     return cleanerShare.toFixed(2);
   };
 
+  // Get appointment IDs that are multi-cleaner jobs to avoid duplicates
+  const multiCleanerAppointmentIds = new Set(
+    confirmedMultiCleanerJobs.map((job) => job.appointmentId)
+  );
+
+  // Combine solo appointments and confirmed multi-cleaner jobs
+  // Filter out appointments that are already in confirmedMultiCleanerJobs to avoid duplicates
+  const allAssignments = [
+    ...assignedAppointments
+      .filter((appt) => !multiCleanerAppointmentIds.has(appt.id))
+      .map((appt) => ({ ...appt, jobType: "solo" })),
+    ...confirmedMultiCleanerJobs.map((job) => ({ ...job, jobType: "team" })),
+  ].sort((a, b) => {
+    const dateA = new Date(a.date + "T00:00:00");
+    const dateB = new Date(b.date + "T00:00:00");
+    return dateA - dateB;
+  });
+
   const calculatePotentialEarnings = () => {
-    return assignedAppointments
+    return allAssignments
       .filter((appt) => !appt.completed)
       .reduce((total, appt) => {
-        // For multi-cleaner jobs, use totalCleanersRequired (not employeesAssigned.length)
-        const numCleaners = appt.isMultiCleanerJob
-          ? (appt.multiCleanerJob?.totalCleanersRequired || appt.employeesAssigned?.length || 1)
+        // For multi-cleaner jobs, use totalCleanersRequired
+        const isTeamJob = appt.jobType === "team" || appt.isMultiCleanerJob;
+        const numCleaners = isTeamJob
+          ? (appt.multiCleanerJob?.totalCleanersRequired || appt.totalCleanersRequired || appt.employeesAssigned?.length || 1)
           : (appt.employeesAssigned?.length || 1);
-        const share = parseFloat(calculateCleanerShare(appt.price, numCleaners, appt.isMultiCleanerJob));
+        const share = parseFloat(calculateCleanerShare(appt.price, numCleaners, isTeamJob));
         return total + share;
       }, 0)
       .toFixed(2);
@@ -342,8 +397,8 @@ const Earnings = ({ state, dispatch }) => {
           <Text style={styles.statLabel}>Upcoming</Text>
           <Text style={styles.statValue}>${calculatePotentialEarnings()}</Text>
           <Text style={styles.statSubtext}>
-            {assignedAppointments.filter((a) => !a.completed).length} pending{" "}
-            {assignedAppointments.filter((a) => !a.completed).length === 1 ? "job" : "jobs"}
+            {allAssignments.filter((a) => !a.completed).length} pending{" "}
+            {allAssignments.filter((a) => !a.completed).length === 1 ? "job" : "jobs"}
           </Text>
         </View>
       </View>
@@ -373,6 +428,74 @@ const Earnings = ({ state, dispatch }) => {
         </View>
       )}
 
+      {/* Employee Bonuses from Business Owner - Only show if they have received bonuses */}
+      {employeeBonuses.length > 0 && (
+        <View style={styles.employeeBonusSection}>
+          <View style={styles.employeeBonusSectionHeader}>
+            <View style={styles.employeeBonusIconContainer}>
+              <Feather name="gift" size={20} color={colors.warning[600]} />
+            </View>
+            <View style={styles.employeeBonusSectionTitleContainer}>
+              <Text style={styles.employeeBonusSectionTitle}>Bonuses from Your Employer</Text>
+              <Text style={styles.employeeBonusSectionSubtitle}>
+                {employeeBonuses.filter(b => b.status === "paid").length} received
+              </Text>
+            </View>
+            <Text style={styles.employeeBonusTotalAmount}>
+              ${(employeeBonuses.filter(b => b.status === "paid").reduce((sum, b) => sum + (b.amount || 0), 0) / 100).toFixed(2)}
+            </Text>
+          </View>
+
+          {/* Pending Bonuses */}
+          {employeeBonuses.filter(b => b.status === "pending").length > 0 && (
+            <View style={styles.pendingBonusAlert}>
+              <Feather name="clock" size={14} color={colors.warning[700]} />
+              <Text style={styles.pendingBonusAlertText}>
+                ${(employeeBonuses.filter(b => b.status === "pending").reduce((sum, b) => sum + (b.amount || 0), 0) / 100).toFixed(2)} pending
+              </Text>
+            </View>
+          )}
+
+          {/* Bonus List */}
+          <View style={styles.employeeBonusList}>
+            {employeeBonuses.slice(0, 5).map((bonus) => (
+              <View key={bonus.id} style={styles.employeeBonusItem}>
+                <View style={styles.employeeBonusItemLeft}>
+                  <View style={[
+                    styles.employeeBonusStatusDot,
+                    bonus.status === "paid" ? styles.bonusStatusPaid : styles.bonusStatusPending
+                  ]} />
+                  <View style={styles.employeeBonusItemInfo}>
+                    <Text style={styles.employeeBonusItemAmount}>
+                      ${((bonus.amount || 0) / 100).toFixed(2)}
+                    </Text>
+                    {bonus.reason && (
+                      <Text style={styles.employeeBonusItemReason} numberOfLines={1}>
+                        {bonus.reason}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <View style={styles.employeeBonusItemRight}>
+                  <Text style={[
+                    styles.employeeBonusItemStatus,
+                    bonus.status === "paid" ? styles.bonusStatusTextPaid : styles.bonusStatusTextPending
+                  ]}>
+                    {bonus.status === "paid" ? "Received" : "Pending"}
+                  </Text>
+                  <Text style={styles.employeeBonusItemDate}>
+                    {new Date(bonus.status === "paid" ? bonus.paidAt : bonus.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
       {/* Earnings Chart */}
       <View style={styles.chartContainer}>
         <EarningsChart
@@ -395,12 +518,12 @@ const Earnings = ({ state, dispatch }) => {
           <Text style={styles.sectionTitle}>Your Assignments</Text>
           <View style={styles.sectionBadge}>
             <Text style={styles.sectionBadgeText}>
-              {assignedAppointments.length}
+              {allAssignments.length}
             </Text>
           </View>
         </View>
 
-        {assignedAppointments.length === 0 ? (
+        {allAssignments.length === 0 ? (
           <View style={styles.emptyState}>
             <Feather name="calendar" size={48} color={colors.neutral[300]} />
             <Text style={styles.emptyStateText}>No assignments yet</Text>
@@ -409,23 +532,36 @@ const Earnings = ({ state, dispatch }) => {
             </Text>
           </View>
         ) : (
-          assignedAppointments.map((appt) => {
+          allAssignments.map((appt) => {
             const status = getStatusBadge(appt);
+            const isTeamJob = appt.jobType === "team" || appt.isMultiCleanerJob;
             // For multi-cleaner jobs, use totalCleanersRequired (not employeesAssigned.length)
-            const numCleaners = appt.isMultiCleanerJob
-              ? (appt.multiCleanerJob?.totalCleanersRequired || appt.employeesAssigned?.length || 1)
+            const numCleaners = isTeamJob
+              ? (appt.multiCleanerJob?.totalCleanersRequired || appt.totalCleanersRequired || appt.employeesAssigned?.length || 1)
               : (appt.employeesAssigned?.length || 1);
-            const yourShare = calculateCleanerShare(appt.price, numCleaners, appt.isMultiCleanerJob);
+            const yourShare = calculateCleanerShare(appt.price, numCleaners, isTeamJob);
             const isToday = isAppointmentToday(appt);
+            const uniqueKey = appt.jobType === "team" ? `team-${appt.completionId}` : `solo-${appt.id}`;
 
             return (
               <View
-                key={appt.id}
-                style={[styles.appointmentCard, isToday && styles.appointmentCardToday]}
+                key={uniqueKey}
+                style={[
+                  styles.appointmentCard,
+                  isToday && styles.appointmentCardToday,
+                  isTeamJob && styles.appointmentCardTeam,
+                ]}
               >
                 {isToday && (
                   <View style={styles.todayBadge}>
                     <Text style={styles.todayBadgeText}>TODAY</Text>
+                  </View>
+                )}
+
+                {isTeamJob && (
+                  <View style={styles.teamBadge}>
+                    <Feather name="users" size={10} color={colors.primary[700]} />
+                    <Text style={styles.teamBadgeText}>Team</Text>
                   </View>
                 )}
 
@@ -438,6 +574,12 @@ const Earnings = ({ state, dispatch }) => {
                         day: "numeric",
                       })}
                     </Text>
+                    {/* Show location for team jobs */}
+                    {isTeamJob && appt.city && (
+                      <Text style={styles.appointmentLocation}>
+                        {appt.city}, {appt.state}
+                      </Text>
+                    )}
                     <View style={[styles.statusBadge, styles[`statusBadge_${status.type}`]]}>
                       <Text style={[styles.statusBadgeText, styles[`statusBadgeText_${status.type}`]]}>
                         {status.text}
@@ -450,14 +592,14 @@ const Earnings = ({ state, dispatch }) => {
                   </View>
                 </View>
 
-                {(numCleaners > 1 || appt.isMultiCleanerJob) && (
+                {(numCleaners > 1 || isTeamJob) && (
                   <Text style={styles.splitInfo}>
-                    {appt.isMultiCleanerJob ? "Team Clean: " : ""}Split between {numCleaners} cleaners (Total: ${appt.price})
+                    {isTeamJob ? "Team Clean: " : ""}Split between {numCleaners} cleaners (Total: ${((parseFloat(appt.price) || 0) * (1 - (isTeamJob ? multiCleanerFeePercent : regularFeePercent))).toFixed(2)})
                   </Text>
                 )}
 
-                {/* Action Buttons */}
-                {appt.paid && !appt.completed && isToday && (
+                {/* Action Buttons - only for solo jobs for now */}
+                {!isTeamJob && appt.paid && !appt.completed && isToday && (
                   <View style={styles.actionButtonContainer}>
                     {jobStatuses[appt.id]?.started ? (
                       <Pressable
@@ -828,6 +970,31 @@ const styles = StyleSheet.create({
     borderColor: colors.primary[300],
     backgroundColor: colors.primary[50],
   },
+  appointmentCardTeam: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary[500],
+  },
+  teamBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primary[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  teamBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  appointmentLocation: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
   todayBadge: {
     position: "absolute",
     top: -spacing.sm,
@@ -943,6 +1110,123 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: spacing.sm,
     textDecorationLine: "underline",
+  },
+
+  // Employee Bonus Section
+  employeeBonusSection: {
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  employeeBonusSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  employeeBonusIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning[100],
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+  },
+  employeeBonusSectionTitleContainer: {
+    flex: 1,
+  },
+  employeeBonusSectionTitle: {
+    color: colors.warning[800],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  employeeBonusSectionSubtitle: {
+    color: colors.warning[600],
+    fontSize: typography.fontSize.xs,
+    marginTop: 2,
+  },
+  employeeBonusTotalAmount: {
+    color: colors.warning[700],
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  pendingBonusAlert: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[100],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  pendingBonusAlertText: {
+    color: colors.warning[700],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  employeeBonusList: {
+    marginTop: spacing.md,
+  },
+  employeeBonusItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    marginTop: spacing.sm,
+  },
+  employeeBonusItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  employeeBonusStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
+    marginRight: spacing.sm,
+  },
+  bonusStatusPaid: {
+    backgroundColor: colors.success[500],
+  },
+  bonusStatusPending: {
+    backgroundColor: colors.warning[500],
+  },
+  employeeBonusItemInfo: {
+    flex: 1,
+  },
+  employeeBonusItemAmount: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  employeeBonusItemReason: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  employeeBonusItemRight: {
+    alignItems: "flex-end",
+  },
+  employeeBonusItemStatus: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  bonusStatusTextPaid: {
+    color: colors.success[600],
+  },
+  bonusStatusTextPending: {
+    color: colors.warning[600],
+  },
+  employeeBonusItemDate: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginTop: 2,
   },
 });
 

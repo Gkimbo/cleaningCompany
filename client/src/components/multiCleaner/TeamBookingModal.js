@@ -25,6 +25,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import FetchData from "../../services/fetchRequests/fetchData";
+import { usePricing } from "../../context/PricingContext";
 
 const TeamBookingModal = ({
   visible,
@@ -39,6 +40,10 @@ const TeamBookingModal = ({
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [teamData, setTeamData] = useState(null);
   const [error, setError] = useState(null);
+
+  // Get platform fee from pricing context
+  const { pricing } = usePricing();
+  const platformFeePercent = pricing?.platform?.feePercent || 0.1;
 
   const slotsToFill = job?.remainingSlots || job?.totalCleanersRequired || 2;
 
@@ -171,40 +176,95 @@ const TeamBookingModal = ({
 
   const perCleanerEarnings = job.perCleanerEarnings || job.earningsPerCleaner || job.estimatedEarnings || 0;
   const totalJobPrice = job.totalJobPrice || 0;
-  const estimatedHours = job.estimatedMinutes ? job.estimatedMinutes / 60 : null;
+  const totalCleaners = slotsToFill;
+  // Total job time divided by number of cleaners = hours per cleaner
+  const totalJobMinutes = job.estimatedMinutes || job.totalEstimatedMinutes || 0;
+  const hoursPerCleaner = totalJobMinutes ? (totalJobMinutes / 60) / totalCleaners : null;
 
-  // Calculate employee costs based on selected employees and their hourly rates
+  // Calculate employee costs based on selected employees and their pay type
   const calculateProfitBreakdown = () => {
+    // Calculate platform fee
+    const platformFee = totalJobPrice * platformFeePercent;
+    const netAfterPlatformFee = totalJobPrice - platformFee;
+
+    // Per-cleaner share of net earnings (used for percentage pay type)
+    const perCleanerShare = netAfterPlatformFee / totalCleaners;
+
     let totalEmployeeCost = 0;
     const employeeBreakdown = [];
 
-    // Calculate cost for selected employees
+    // Calculate cost for selected employees (not including self)
     for (const empId of selectedEmployees) {
       const emp = teamData?.employees?.find((e) => e.id === empId);
-      if (emp && emp.hourlyRate && estimatedHours) {
-        const cost = emp.hourlyRate * estimatedHours;
+      if (!emp) continue;
+
+      const payType = emp.payType || "hourly";
+      let cost = 0;
+      let payDescription = "";
+      let hasValidPay = false;
+
+      if (payType === "hourly" && emp.hourlyRate && hoursPerCleaner) {
+        // Hourly: rate × hours (rounded up to nearest 0.5 hours)
+        const roundedHours = Math.ceil(hoursPerCleaner * 2) / 2;
+        cost = emp.hourlyRate * roundedHours;
+        payDescription = `$${emp.hourlyRate}/hr × ${roundedHours.toFixed(1)}hrs`;
+        hasValidPay = true;
+      } else if (payType === "per_job" && emp.jobRate) {
+        // Flat rate per job
+        cost = emp.jobRate;
+        payDescription = `$${emp.jobRate.toFixed(2)} flat rate`;
+        hasValidPay = true;
+      } else if (payType === "percentage" && emp.payPercent) {
+        // Percentage of per-cleaner share
+        cost = perCleanerShare * emp.payPercent;
+        payDescription = `${(emp.payPercent * 100).toFixed(0)}% of $${perCleanerShare.toFixed(2)}`;
+        hasValidPay = true;
+      }
+
+      if (hasValidPay) {
         totalEmployeeCost += cost;
         employeeBreakdown.push({
+          id: emp.id,
           name: `${emp.firstName} ${emp.lastName}`,
-          hourlyRate: emp.hourlyRate,
-          hours: estimatedHours,
+          payType,
+          payDescription,
           cost,
+        });
+      } else {
+        // Employee without valid pay configuration
+        employeeBreakdown.push({
+          id: emp.id,
+          name: `${emp.firstName} ${emp.lastName}`,
+          payType,
+          payDescription: null,
+          cost: 0,
+          noRate: true,
         });
       }
     }
 
-    const businessOwnerProfit = totalJobPrice - totalEmployeeCost;
+    // Business owner profit = Net after platform fee - employee costs
+    const businessOwnerProfit = netAfterPlatformFee - totalEmployeeCost;
 
-    // Only show breakdown if we have valid calculation data
-    const hasEmployeesWithRates = employeeBreakdown.length > 0;
+    // Check if we have enough data to show the breakdown
+    const hasSelectedMembers = selectedEmployees.length > 0 || includeSelf;
+    const hasEmployeesWithRates = employeeBreakdown.some(e => !e.noRate);
+    const hasMissingRates = employeeBreakdown.some(e => e.noRate);
 
     return {
       totalJobPrice,
+      platformFee,
+      platformFeePercent,
+      netAfterPlatformFee,
+      perCleanerShare,
       totalEmployeeCost,
       businessOwnerProfit,
       employeeBreakdown,
-      hasValidCalculation: estimatedHours && hasEmployeesWithRates,
-      missingRates: selectedEmployees.length > 0 && !hasEmployeesWithRates,
+      hoursPerCleaner,
+      totalCleaners,
+      hasValidCalculation: hasSelectedMembers && totalJobPrice > 0,
+      hasEmployeesWithRates,
+      hasMissingRates,
     };
   };
 
@@ -254,22 +314,113 @@ const TeamBookingModal = ({
                   </View>
                 </View>
 
-                {/* Total Job Price */}
-                <View style={styles.totalPriceBox}>
-                  <Text style={styles.totalPriceLabel}>Total Job Price</Text>
-                  <Text style={styles.totalPriceAmount}>{formatPrice(job.totalJobPrice)}</Text>
-                </View>
+                {/* Profit Breakdown */}
+                {profitBreakdown.hasValidCalculation && (
+                  <View style={styles.profitCard}>
+                    {/* Full Appointment Price */}
+                    <View style={styles.profitRow}>
+                      <View style={styles.profitLabelRow}>
+                        <Feather name="dollar-sign" size={14} color={colors.success[600]} />
+                        <Text style={styles.profitLabel}>Appointment Price</Text>
+                      </View>
+                      <Text style={styles.profitValue}>{formatPrice(profitBreakdown.totalJobPrice)}</Text>
+                    </View>
 
-                {/* Per Cleaner Breakdown */}
-                <View style={styles.earningsBox}>
-                  <Text style={styles.earningsLabel}>Your payout per cleaner</Text>
-                  <Text style={styles.earningsAmount}>{formatPrice(perCleanerEarnings)}</Text>
-                  {slotsToFill > 1 && (
-                    <Text style={styles.totalPayoutHint}>
-                      Total team payout: {formatPrice(perCleanerEarnings * slotsToFill)}
+                    {/* Platform Fee */}
+                    <View style={styles.profitDivider} />
+                    <View style={styles.profitRow}>
+                      <View style={styles.profitLabelRow}>
+                        <Feather name="percent" size={14} color={colors.warning[600]} />
+                        <Text style={styles.profitLabel}>
+                          Platform Fee ({(profitBreakdown.platformFeePercent * 100).toFixed(0)}%)
+                        </Text>
+                      </View>
+                      <Text style={[styles.profitValue, styles.profitValueNegative]}>
+                        -{formatPrice(profitBreakdown.platformFee)}
+                      </Text>
+                    </View>
+
+                    {/* Net After Platform Fee */}
+                    <View style={styles.profitRow}>
+                      <View style={styles.profitLabelRow}>
+                        <Feather name="arrow-right" size={14} color={colors.neutral[500]} />
+                        <Text style={styles.profitLabelSubtotal}>Net Earnings</Text>
+                      </View>
+                      <Text style={styles.profitValueSubtotal}>
+                        {formatPrice(profitBreakdown.netAfterPlatformFee)}
+                      </Text>
+                    </View>
+
+                    {/* Employee Costs - only show if there are employees selected */}
+                    {profitBreakdown.employeeBreakdown.length > 0 && (
+                      <>
+                        <View style={styles.profitDivider} />
+                        <View style={styles.profitRow}>
+                          <View style={styles.profitLabelRow}>
+                            <Feather name="users" size={14} color={colors.warning[600]} />
+                            <Text style={styles.profitLabel}>Employee Pay</Text>
+                          </View>
+                          <Text style={[styles.profitValue, styles.profitValueNegative]}>
+                            -{formatPrice(profitBreakdown.totalEmployeeCost)}
+                          </Text>
+                        </View>
+
+                        {/* Employee breakdown details */}
+                        {profitBreakdown.employeeBreakdown.map((emp) => (
+                          <View key={emp.id} style={styles.employeeCostRow}>
+                            <Text style={styles.employeeCostName}>{emp.name}</Text>
+                            {emp.noRate ? (
+                              <Text style={styles.employeeCostNoRate}>No pay rate set</Text>
+                            ) : (
+                              <Text style={styles.employeeCostCalc}>
+                                {emp.payDescription} = {formatPrice(emp.cost)}
+                              </Text>
+                            )}
+                          </View>
+                        ))}
+                      </>
+                    )}
+
+                    {/* Your Profit */}
+                    <View style={styles.profitDivider} />
+                    <View style={styles.profitRowTotal}>
+                      <View style={styles.profitLabelRow}>
+                        <Feather name="trending-up" size={16} color={colors.primary[600]} />
+                        <Text style={styles.profitLabelTotal}>Your Profit</Text>
+                      </View>
+                      <Text style={[
+                        styles.profitValueTotal,
+                        profitBreakdown.businessOwnerProfit < 0 && styles.profitValueNegative
+                      ]}>
+                        {formatPrice(profitBreakdown.businessOwnerProfit)}
+                      </Text>
+                    </View>
+
+                    {/* Include self note */}
+                    {includeSelf && (
+                      <Text style={styles.selfIncludedNote}>
+                        Includes your own work on this job
+                      </Text>
+                    )}
+
+                    {/* Estimated time note */}
+                    {profitBreakdown.hoursPerCleaner && (
+                      <Text style={styles.estimatedTimeNote}>
+                        Est. {profitBreakdown.hoursPerCleaner.toFixed(1)} hrs per cleaner ({profitBreakdown.totalCleaners} cleaners)
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {/* No hourly rate warning */}
+                {profitBreakdown.hasMissingRates && (
+                  <View style={styles.noRateWarning}>
+                    <Feather name="info" size={14} color={colors.neutral[500]} />
+                    <Text style={styles.noRateWarningText}>
+                      Some employees don't have hourly rates set
                     </Text>
-                  )}
-                </View>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -370,12 +521,29 @@ const TeamBookingModal = ({
                             {emp.firstName} {emp.lastName}
                           </Text>
                           <View style={styles.employeeMetaRow}>
-                            {emp.hourlyRate ? (
-                              <View style={styles.hourlyRateBadge}>
-                                <Feather name="dollar-sign" size={10} color={colors.primary[600]} />
-                                <Text style={styles.hourlyRateText}>{emp.hourlyRate}/hr</Text>
+                            {/* Pay rate badge - show for all pay types */}
+                            {(emp.payType === "hourly" || !emp.payType) && emp.hourlyRate ? (
+                              <View style={styles.payRateBadge}>
+                                <Feather name="clock" size={10} color={colors.primary[600]} />
+                                <Text style={styles.payRateText}>${emp.hourlyRate}/hr</Text>
                               </View>
-                            ) : null}
+                            ) : emp.payType === "per_job" && emp.jobRate ? (
+                              <View style={styles.payRateBadge}>
+                                <Feather name="briefcase" size={10} color={colors.primary[600]} />
+                                <Text style={styles.payRateText}>${emp.jobRate} flat</Text>
+                              </View>
+                            ) : emp.payType === "percentage" && emp.payPercent ? (
+                              <View style={styles.payRateBadge}>
+                                <Feather name="percent" size={10} color={colors.primary[600]} />
+                                <Text style={styles.payRateText}>{(emp.payPercent * 100).toFixed(0)}% portion</Text>
+                              </View>
+                            ) : (
+                              <View style={[styles.payRateBadge, styles.payRateBadgeWarning]}>
+                                <Feather name="alert-circle" size={10} color={colors.warning[600]} />
+                                <Text style={styles.payRateTextWarning}>No rate set</Text>
+                              </View>
+                            )}
+                            {/* Availability badge */}
                             {!emp.isAvailable && emp.unavailableReason ? (
                               <View style={styles.unavailableBadge}>
                                 <Feather
@@ -416,78 +584,6 @@ const TeamBookingModal = ({
                 })
               )}
             </View>
-
-            {/* Profit Breakdown - shows when employees are selected */}
-            {profitBreakdown.hasValidCalculation && (
-              <View style={styles.profitSection}>
-                <Text style={styles.profitSectionTitle}>Your Profit Breakdown</Text>
-
-                <View style={styles.profitCard}>
-                  {/* Total Job Earnings */}
-                  <View style={styles.profitRow}>
-                    <View style={styles.profitLabelRow}>
-                      <Feather name="dollar-sign" size={14} color={colors.success[600]} />
-                      <Text style={styles.profitLabel}>Total Job Earnings</Text>
-                    </View>
-                    <Text style={styles.profitValue}>{formatPrice(profitBreakdown.totalJobPrice)}</Text>
-                  </View>
-
-                  {/* Employee Costs */}
-                  <View style={styles.profitDivider} />
-                  <View style={styles.profitRow}>
-                    <View style={styles.profitLabelRow}>
-                      <Feather name="users" size={14} color={colors.warning[600]} />
-                      <Text style={styles.profitLabel}>Employee Costs</Text>
-                    </View>
-                    <Text style={[styles.profitValue, styles.profitValueNegative]}>
-                      -{formatPrice(profitBreakdown.totalEmployeeCost)}
-                    </Text>
-                  </View>
-
-                  {/* Employee breakdown details */}
-                  {profitBreakdown.employeeBreakdown.map((emp, index) => (
-                    <View key={index} style={styles.employeeCostRow}>
-                      <Text style={styles.employeeCostName}>{emp.name}</Text>
-                      <Text style={styles.employeeCostCalc}>
-                        ${emp.hourlyRate}/hr × {emp.hours.toFixed(1)}hrs = {formatPrice(emp.cost)}
-                      </Text>
-                    </View>
-                  ))}
-
-                  {/* Your Profit */}
-                  <View style={styles.profitDivider} />
-                  <View style={styles.profitRowTotal}>
-                    <View style={styles.profitLabelRow}>
-                      <Feather name="trending-up" size={16} color={colors.primary[600]} />
-                      <Text style={styles.profitLabelTotal}>Your Profit</Text>
-                    </View>
-                    <Text style={[
-                      styles.profitValueTotal,
-                      profitBreakdown.businessOwnerProfit < 0 && styles.profitValueNegative
-                    ]}>
-                      {formatPrice(profitBreakdown.businessOwnerProfit)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Estimated time note */}
-                {estimatedHours && (
-                  <Text style={styles.estimatedTimeNote}>
-                    Based on estimated job time of {estimatedHours.toFixed(1)} hours
-                  </Text>
-                )}
-              </View>
-            )}
-
-            {/* No hourly rate warning */}
-            {profitBreakdown.missingRates && (
-              <View style={styles.noRateWarning}>
-                <Feather name="info" size={14} color={colors.neutral[500]} />
-                <Text style={styles.noRateWarningText}>
-                  Set hourly rates for your employees to see profit breakdown
-                </Text>
-              </View>
-            )}
 
             {/* Error Message */}
             {error && (
@@ -811,19 +907,27 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: 4,
   },
-  hourlyRateBadge: {
+  payRateBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.primary[50],
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: radius.full,
-    gap: 2,
+    gap: 4,
   },
-  hourlyRateText: {
+  payRateBadgeWarning: {
+    backgroundColor: colors.warning[50],
+  },
+  payRateText: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
+  },
+  payRateTextWarning: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
   },
   checkbox: {
     width: 24,
@@ -957,6 +1061,28 @@ const styles = StyleSheet.create({
   employeeCostCalc: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
+  },
+  employeeCostNoRate: {
+    fontSize: typography.fontSize.xs,
+    color: colors.warning[600],
+    fontStyle: "italic",
+  },
+  profitLabelSubtotal: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  profitValueSubtotal: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  selfIncludedNote: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    textAlign: "center",
+    marginTop: spacing.md,
+    fontStyle: "italic",
   },
   estimatedTimeNote: {
     fontSize: typography.fontSize.xs,

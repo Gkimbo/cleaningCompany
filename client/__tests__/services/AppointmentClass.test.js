@@ -42,7 +42,8 @@ describe("Appointment Service", () => {
           body: JSON.stringify(validAppointmentData),
         })
       );
-      expect(result).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.data.appointments).toHaveLength(1);
     });
 
     it("should return error data on 400 response", async () => {
@@ -56,19 +57,22 @@ describe("Appointment Service", () => {
 
       const result = await Appointment.addAppointmentToDb(validAppointmentData);
 
-      expect(result).toEqual(errorResponse);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Invalid date format");
     });
 
-    it("should throw error on server error", async () => {
+    it("should return error on server error", async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
         statusText: "Internal Server Error",
+        json: async () => ({}),
       });
 
       const result = await Appointment.addAppointmentToDb(validAppointmentData);
 
-      expect(result).toBeInstanceOf(Error);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("500");
     });
 
     it("should handle network error", async () => {
@@ -76,7 +80,8 @@ describe("Appointment Service", () => {
 
       const result = await Appointment.addAppointmentToDb(validAppointmentData);
 
-      expect(result).toBeInstanceOf(Error);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Network error");
     });
 
     it("should create multiple appointments in batch", async () => {
@@ -98,7 +103,8 @@ describe("Appointment Service", () => {
 
       const result = await Appointment.addAppointmentToDb(batchData);
 
-      expect(result).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.data.appointments).toHaveLength(3);
     });
   });
 

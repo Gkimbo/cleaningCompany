@@ -59,6 +59,11 @@ const mockCleanerJobCompletion = {
   update: jest.fn(),
 };
 
+const mockUserCleanerAppointments = {
+  create: jest.fn(),
+  findOrCreate: jest.fn().mockResolvedValue([{ id: 1 }, true]),
+};
+
 const mockPricingConfigModel = {
   getActive: jest.fn().mockResolvedValue({
     autoCompleteHoursAfterEnd: 4,
@@ -76,6 +81,7 @@ jest.mock("../../models", () => ({
   CleanerRoomAssignment: mockCleanerRoomAssignment,
   CleanerJobOffer: mockCleanerJobOffer,
   CleanerJobCompletion: mockCleanerJobCompletion,
+  UserCleanerAppointments: mockUserCleanerAppointments,
   PricingConfig: mockPricingConfigModel,
 }));
 
@@ -1008,7 +1014,7 @@ describe("MultiCleanerService", () => {
       expect(NotificationService.createNotification).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: 101,
-          type: "cleaner_dropout",
+          type: "cleaner_dropout_solo_offer", // Solo offer when 1 cleaner remains
         })
       );
     });

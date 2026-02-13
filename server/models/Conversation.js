@@ -19,9 +19,25 @@ module.exports = (sequelize, DataTypes) => {
       onDelete: "SET NULL",
     },
     conversationType: {
-      type: DataTypes.ENUM("appointment", "broadcast", "support", "internal", "cleaner-client"),
+      type: DataTypes.ENUM(
+        "appointment",
+        "broadcast",
+        "support",
+        "internal",
+        "cleaner-client",
+        "business_employee",
+        "employee_group",
+        "employee_broadcast",
+        "employee_peer",
+        "job_chat"
+      ),
       allowNull: false,
       defaultValue: "appointment",
+    },
+    relatedEntityId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Generic foreign key for related entities (e.g., BusinessEmployee ID for business_employee conversations)",
     },
     title: {
       type: DataTypes.STRING,

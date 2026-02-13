@@ -478,6 +478,38 @@ class AppointmentJobFlowService {
   }
 
   /**
+   * Get flow details for an appointment (for marketplace cleaners/business owners)
+   * @param {number} appointmentId - The appointment ID
+   * @returns {Object|null} Flow information or null if no custom flow
+   */
+  static async getFlowDetailsForAppointment(appointmentId) {
+    const jobFlow = await this.getJobFlowByAppointmentId(appointmentId);
+
+    if (!jobFlow) {
+      return null;
+    }
+
+    // Load the custom flow if present
+    if (jobFlow.customJobFlowId) {
+      await jobFlow.reload({
+        include: [{ model: CustomJobFlow, as: "customFlow" }],
+      });
+    }
+
+    return {
+      hasJobFlow: true,
+      appointmentJobFlowId: jobFlow.id,
+      isMarketplaceFlow: jobFlow.isMarketplaceFlow(),
+      photoRequirement: jobFlow.photoRequirement === "platform_required" ? "required" : jobFlow.photoRequirement,
+      requiresPhotos: jobFlow.requiresPhotos(),
+      photosHidden: jobFlow.photosHidden(),
+      hasChecklist: jobFlow.hasChecklist(),
+      checklist: jobFlow.checklistSnapshotData,
+      jobNotes: jobFlow.customFlow?.jobNotes || null,
+    };
+  }
+
+  /**
    * Get full flow details for employee view
    * @param {number} assignmentId - The EmployeeJobAssignment ID
    * @returns {Object} Complete flow information

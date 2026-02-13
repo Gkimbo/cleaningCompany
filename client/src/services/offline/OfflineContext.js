@@ -192,11 +192,24 @@ export function OfflineProvider({ children }) {
   return <OfflineContext.Provider value={value}>{children}</OfflineContext.Provider>;
 }
 
+// Default values when provider is not available (assumes online)
+const DEFAULT_OFFLINE_CONTEXT = {
+  isOnline: true,
+  isOffline: false,
+  networkStatus: "online",
+  syncStatus: "idle",
+  pendingSyncCount: 0,
+  updateSyncStatus: () => {},
+  queueOperation: async () => {},
+  processQueue: async () => {},
+};
+
 // Hook to use offline context
 export function useOffline() {
   const context = useContext(OfflineContext);
+  // Return default values if provider is not available (graceful degradation)
   if (!context) {
-    throw new Error("useOffline must be used within an OfflineProvider");
+    return DEFAULT_OFFLINE_CONTEXT;
   }
   return context;
 }

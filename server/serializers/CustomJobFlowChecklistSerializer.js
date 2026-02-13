@@ -24,6 +24,9 @@ class CustomJobFlowChecklistSerializer {
       forkedFromPlatformVersion: data.forkedFromPlatformVersion,
       isForkedFromPlatform: data.forkedFromPlatformVersion != null,
       snapshotData: data.snapshotData,
+      // Convenience fields for frontend
+      sections: data.snapshotData?.sections || [],
+      sectionNames: data.snapshotData?.sections?.map((s) => s.title) || [],
       itemCount: this.getItemCount(data.snapshotData),
       sectionCount: data.snapshotData?.sections?.length || 0,
       createdAt: data.createdAt,

@@ -1,8 +1,17 @@
-// Set SESSION_SECRET before importing router
-process.env.SESSION_SECRET = process.env.SESSION_SECRET || "test_secret";
-
 const express = require("express");
 const request = require("supertest");
+
+// Mock jsonwebtoken before it's required by the router
+jest.mock("jsonwebtoken", () => ({
+  verify: jest.fn((token) => {
+    if (token === "valid_token") {
+      return { userId: 1 };
+    }
+    throw new Error("Invalid token");
+  }),
+  sign: jest.fn(() => "valid_token"),
+}));
+
 const jwt = require("jsonwebtoken");
 
 // Mock models
@@ -26,6 +35,12 @@ jest.mock("../../models", () => ({
     findAll: jest.fn().mockResolvedValue([]),
   },
   UserPendingRequests: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  MultiCleanerJob: {
+    findAll: jest.fn().mockResolvedValue([]),
+  },
+  CleanerJoinRequest: {
     findAll: jest.fn().mockResolvedValue([]),
   },
   Op: {
@@ -71,8 +86,7 @@ app.use(express.json());
 app.use("/api/v1/user-info", userInfoRouter);
 
 describe("User Info Router", () => {
-  const secretKey = process.env.SESSION_SECRET || "test_secret";
-  const userToken = jwt.sign({ userId: 1 }, secretKey);
+  const userToken = "valid_token";
 
   beforeEach(() => {
     jest.clearAllMocks();

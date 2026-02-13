@@ -10,6 +10,12 @@ jest.mock("@react-navigation/native", () => ({
   }),
 }));
 
+// Mock react-router-native
+const mockNavigate = jest.fn();
+jest.mock("react-router-native", () => ({
+  useNavigate: () => mockNavigate,
+}));
+
 // Mock AuthContext
 jest.mock("../../../src/services/AuthContext", () => {
   const React = require("react");

@@ -34,7 +34,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: "assigned",
-      comment: "assigned, started, completed, cancelled, no_show",
+      comment: "assigned, started, completed, cancelled, no_show, unassigned",
     },
 
     // Pay for this specific job
@@ -127,7 +127,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(30),
       allowNull: false,
       defaultValue: "pending",
-      comment: "pending, processing, paid, paid_outside_platform",
+      comment: "pending, pending_batch, processing, paid, paid_outside_platform",
+    },
+    pendingPayoutId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Reference to EmployeePendingPayout for bi-weekly batched payouts",
     },
     paidOutsidePlatformAt: {
       type: DataTypes.DATE,
@@ -136,6 +141,29 @@ module.exports = (sequelize, DataTypes) => {
     paidOutsidePlatformNote: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+
+    // Direct employee payout tracking
+    employeeStripeTransferId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Stripe transfer ID if employee received direct payout",
+    },
+    employeePaidAmount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Amount paid directly to employee via Stripe (in cents)",
+    },
+    businessOwnerPaidAmount: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Amount paid to business owner after employee split (in cents)",
+    },
+    payoutMethod: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: "business_owner",
+      comment: "How payout was handled: business_owner, direct_to_employee, split, or business_owner_fallback",
     },
 
     // Job Flow reference
@@ -269,6 +297,10 @@ module.exports = (sequelize, DataTypes) => {
     EmployeeJobAssignment.belongsTo(models.Payout, {
       foreignKey: "payoutId",
       as: "payout",
+    });
+    EmployeeJobAssignment.belongsTo(models.EmployeePendingPayout, {
+      foreignKey: "pendingPayoutId",
+      as: "pendingPayout",
     });
     EmployeeJobAssignment.hasMany(models.EmployeePayChangeLog, {
       foreignKey: "employeeJobAssignmentId",

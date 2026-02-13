@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -26,6 +27,165 @@ import ClientCard from "./ClientCard";
 import InviteClientModal from "./InviteClientModal";
 import BookForClientModal from "./BookForClientModal";
 import SetupRecurringModal from "./SetupRecurringModal";
+import { usePricing } from "../../context/PricingContext";
+
+// Home Picker Modal Component
+const HomePickerModal = ({ visible, onClose, homes, onSelectHome, actionType }) => {
+  if (!visible) return null;
+
+  const actionLabel = actionType === "recurring" ? "Set Up Recurring" : "Book";
+  const actionIcon = actionType === "recurring" ? "repeat" : "calendar";
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <Pressable style={homePickerStyles.overlay} onPress={onClose}>
+        <View style={homePickerStyles.container}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={homePickerStyles.content}>
+              <View style={homePickerStyles.header}>
+                <View style={homePickerStyles.headerIcon}>
+                  <Feather name={actionIcon} size={20} color={colors.primary[600]} />
+                </View>
+                <Text style={homePickerStyles.title}>Select a Home</Text>
+                <Pressable style={homePickerStyles.closeButton} onPress={onClose}>
+                  <Feather name="x" size={20} color={colors.neutral[500]} />
+                </Pressable>
+              </View>
+              <Text style={homePickerStyles.subtitle}>
+                Which home would you like to {actionType === "recurring" ? "set up recurring for" : "book"}?
+              </Text>
+              <View style={homePickerStyles.homesList}>
+                {homes.map((home, index) => (
+                  <Pressable
+                    key={home.id || index}
+                    style={({ pressed }) => [
+                      homePickerStyles.homeOption,
+                      pressed && homePickerStyles.homeOptionPressed,
+                    ]}
+                    onPress={() => onSelectHome(home)}
+                  >
+                    <View style={homePickerStyles.homeIconContainer}>
+                      <Feather name="home" size={18} color={colors.primary[600]} />
+                    </View>
+                    <View style={homePickerStyles.homeInfo}>
+                      <Text style={homePickerStyles.homeName}>
+                        Home {index + 1}{home.nickName ? `: ${home.nickName}` : ""}
+                      </Text>
+                      <Text style={homePickerStyles.homeAddress} numberOfLines={1}>
+                        {home.address ? `${home.address}, ${home.city}` : "No address"}
+                      </Text>
+                      <Text style={homePickerStyles.homeDetails}>
+                        {home.numBeds || 1} bed • {home.numBaths || 1} bath
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+};
+
+const homePickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  container: {
+    width: "100%",
+    maxWidth: 400,
+  },
+  content: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    ...shadows.lg,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  headerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  title: {
+    flex: 1,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[900],
+  },
+  closeButton: {
+    padding: spacing.xs,
+  },
+  subtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  homesList: {
+    padding: spacing.md,
+  },
+  homeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+  },
+  homeOptionPressed: {
+    backgroundColor: colors.neutral[100],
+  },
+  homeIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  homeInfo: {
+    flex: 1,
+  },
+  homeName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[900],
+    marginBottom: 2,
+  },
+  homeAddress: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
+    marginBottom: 2,
+  },
+  homeDetails: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[500],
+  },
+});
 
 // Payment Setup Banner Component
 const PaymentSetupBanner = ({ onPress }) => (
@@ -54,6 +214,7 @@ const PaymentSetupBanner = ({ onPress }) => (
 
 const MyClientsPage = ({ state }) => {
   const navigate = useNavigate();
+  const { pricing } = usePricing();
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,9 +224,41 @@ const MyClientsPage = ({ state }) => {
   const [selectedClientForBooking, setSelectedClientForBooking] = useState(null);
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [selectedClientForRecurring, setSelectedClientForRecurring] = useState(null);
+  const [selectedHomeForAction, setSelectedHomeForAction] = useState(null);
+  const [showHomePicker, setShowHomePicker] = useState(false);
+  const [homePickerActionType, setHomePickerActionType] = useState(null); // 'book' or 'recurring'
+  const [pendingClient, setPendingClient] = useState(null);
 
   // Stripe account status for payment setup banner
   const [showPaymentBanner, setShowPaymentBanner] = useState(false);
+
+  // Calculate platform price for a client based on their home's beds/baths
+  const calculatePlatformPrice = useCallback((client) => {
+    if (!pricing?.basePrice) return null;
+
+    // Use invitedBeds/invitedBaths for pending clients, or home data for active clients
+    const beds = client.invitedBeds || client.home?.numBeds;
+    const baths = client.invitedBaths || client.home?.numBaths;
+
+    if (!beds || !baths) return null;
+
+    const numBeds = parseInt(beds) || 1;
+    const numBaths = parseFloat(baths) || 1;
+
+    const basePrice = pricing.basePrice || 150;
+    const extraBedBathFee = pricing.extraBedBathFee || 50;
+    const halfBathFee = pricing.halfBathFee || 25;
+
+    const extraBeds = Math.max(0, numBeds - 1);
+    const fullBaths = Math.floor(numBaths);
+    const halfBaths = numBaths % 1 >= 0.5 ? 1 : 0;
+    const extraFullBaths = Math.max(0, fullBaths - 1);
+
+    return basePrice +
+           (extraBeds * extraBedBathFee) +
+           (extraFullBaths * extraBedBathFee) +
+           (halfBaths * halfBathFee);
+  }, [pricing]);
 
   const fetchClients = useCallback(async () => {
     if (!state?.currentUser?.token) return;
@@ -76,7 +269,50 @@ const MyClientsPage = ({ state }) => {
         state.currentUser.token,
         status
       );
-      setClients(data.clients || []);
+      const rawClients = data.clients || [];
+
+      // Group clients by clientId to deduplicate (same client with multiple homes)
+      const clientMap = new Map();
+      for (const record of rawClients) {
+        const clientId = record.client?.id;
+
+        // Include defaultPrice and cleanerClientId with the home data
+        const homeWithPrice = record.home ? {
+          ...record.home,
+          defaultPrice: record.defaultPrice,
+          cleanerClientId: record.id,
+        } : null;
+
+        if (!clientId) {
+          // If no client linked yet (pending invite), keep as separate entry
+          clientMap.set(`pending-${record.id}`, {
+            ...record,
+            homes: homeWithPrice ? [homeWithPrice] : [],
+          });
+          continue;
+        }
+
+        if (clientMap.has(clientId)) {
+          // Add this home to existing client entry
+          const existing = clientMap.get(clientId);
+          if (homeWithPrice) {
+            existing.homes.push(homeWithPrice);
+          }
+          // Keep the most recent nextAppointment
+          if (record.nextAppointment && (!existing.nextAppointment ||
+              new Date(record.nextAppointment.date) < new Date(existing.nextAppointment.date))) {
+            existing.nextAppointment = record.nextAppointment;
+          }
+        } else {
+          // First time seeing this client
+          clientMap.set(clientId, {
+            ...record,
+            homes: homeWithPrice ? [homeWithPrice] : [],
+          });
+        }
+      }
+
+      setClients(Array.from(clientMap.values()));
     } catch (error) {
       console.error("Error fetching clients:", error);
       Alert.alert("Error", "Failed to load clients");
@@ -202,26 +438,74 @@ const MyClientsPage = ({ state }) => {
   };
 
   const handleBookCleaning = (client) => {
-    setSelectedClientForBooking(client);
-    setShowBookingModal(true);
+    // Check if client has multiple homes
+    if (client.homes && client.homes.length > 1) {
+      setPendingClient(client);
+      setHomePickerActionType("book");
+      setShowHomePicker(true);
+    } else {
+      // Single home or no homes - proceed directly
+      const clientWithUser = {
+        ...client,
+        client: client.client || { firstName: client.invitedName?.split(' ')[0], lastName: client.invitedName?.split(' ').slice(1).join(' ') },
+      };
+      setSelectedClientForBooking(clientWithUser);
+      setSelectedHomeForAction(client.homes?.[0] || client.home || null);
+      setShowBookingModal(true);
+    }
   };
 
   const handleBookingSuccess = () => {
     setShowBookingModal(false);
     setSelectedClientForBooking(null);
+    setSelectedHomeForAction(null);
     // Optionally refresh clients to update any state
     fetchClients();
   };
 
   const handleSetupRecurring = (client) => {
-    setSelectedClientForRecurring(client);
-    setShowRecurringModal(true);
+    // Check if client has multiple homes
+    if (client.homes && client.homes.length > 1) {
+      setPendingClient(client);
+      setHomePickerActionType("recurring");
+      setShowHomePicker(true);
+    } else {
+      // Single home or no homes - proceed directly
+      const clientWithUser = {
+        ...client,
+        client: client.client || { firstName: client.invitedName?.split(' ')[0], lastName: client.invitedName?.split(' ').slice(1).join(' ') },
+      };
+      setSelectedClientForRecurring(clientWithUser);
+      setSelectedHomeForAction(client.homes?.[0] || client.home || null);
+      setShowRecurringModal(true);
+    }
   };
 
   const handleRecurringSuccess = () => {
     setShowRecurringModal(false);
     setSelectedClientForRecurring(null);
+    setSelectedHomeForAction(null);
     fetchClients();
+  };
+
+  const handleHomeSelected = (home) => {
+    setShowHomePicker(false);
+    const clientWithUser = {
+      ...pendingClient,
+      client: pendingClient.client || { firstName: pendingClient.invitedName?.split(' ')[0], lastName: pendingClient.invitedName?.split(' ').slice(1).join(' ') },
+    };
+    setSelectedHomeForAction(home);
+
+    if (homePickerActionType === "book") {
+      setSelectedClientForBooking(clientWithUser);
+      setShowBookingModal(true);
+    } else if (homePickerActionType === "recurring") {
+      setSelectedClientForRecurring(clientWithUser);
+      setShowRecurringModal(true);
+    }
+
+    setPendingClient(null);
+    setHomePickerActionType(null);
   };
 
   const handlePriceUpdate = async (clientId, newPrice) => {
@@ -273,6 +557,9 @@ const MyClientsPage = ({ state }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
+          <Icon name="arrow-left" size={18} color={colors.text.primary} />
+        </Pressable>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>My Clients</Text>
           <Text style={styles.headerSubtitle}>
@@ -418,6 +705,7 @@ const MyClientsPage = ({ state }) => {
               onSetupRecurring={handleSetupRecurring}
               onMessage={handleMessageClient}
               onPriceUpdate={handlePriceUpdate}
+              platformPrice={calculatePlatformPrice(client)}
             />
           ))
         )}
@@ -431,16 +719,32 @@ const MyClientsPage = ({ state }) => {
         token={state?.currentUser?.token}
       />
 
+      {/* Home Picker Modal */}
+      <HomePickerModal
+        visible={showHomePicker}
+        onClose={() => {
+          setShowHomePicker(false);
+          setPendingClient(null);
+          setHomePickerActionType(null);
+        }}
+        homes={pendingClient?.homes || []}
+        onSelectHome={handleHomeSelected}
+        actionType={homePickerActionType}
+      />
+
       {/* Booking Modal */}
       <BookForClientModal
         visible={showBookingModal}
         onClose={() => {
           setShowBookingModal(false);
           setSelectedClientForBooking(null);
+          setSelectedHomeForAction(null);
         }}
         onSuccess={handleBookingSuccess}
         client={selectedClientForBooking}
         token={state?.currentUser?.token}
+        homes={selectedClientForBooking?.homes || []}
+        selectedHome={selectedHomeForAction}
       />
 
       {/* Recurring Schedule Modal */}
@@ -449,10 +753,12 @@ const MyClientsPage = ({ state }) => {
         onClose={() => {
           setShowRecurringModal(false);
           setSelectedClientForRecurring(null);
+          setSelectedHomeForAction(null);
         }}
         onSuccess={handleRecurringSuccess}
         client={selectedClientForRecurring}
         token={state?.currentUser?.token}
+        selectedHome={selectedHomeForAction}
       />
     </View>
   );
@@ -484,6 +790,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[200],
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
   },
   headerContent: {
     flex: 1,

@@ -14,6 +14,8 @@ const {
   User,
   UserHomes,
   PricingConfig,
+  EmployeeJobAssignment,
+  BusinessEmployee,
 } = require("../../models");
 const NotificationService = require("../NotificationService");
 const EncryptionService = require("../EncryptionService");
@@ -146,6 +148,64 @@ async function processAutoApprovalsSingleCleaner(io = null) {
           }
         }
 
+        // Notify business owner if an employee completed this job
+        try {
+          const employeeAssignment = await EmployeeJobAssignment.findOne({
+            where: {
+              appointmentId: appointment.id,
+              isSelfAssignment: false,
+            },
+            include: [{
+              model: BusinessEmployee,
+              as: "employee",
+              attributes: ["id", "userId"],
+              include: [{
+                model: User,
+                as: "user",
+                attributes: ["id", "firstName"],
+              }],
+            }],
+          });
+
+          if (employeeAssignment && employeeAssignment.businessOwnerId) {
+            const businessOwner = await User.findByPk(employeeAssignment.businessOwnerId);
+
+            if (businessOwner) {
+              const employeeName = employeeAssignment.employee?.user?.firstName
+                ? EncryptionService.decrypt(employeeAssignment.employee.user.firstName)
+                : "Your employee";
+              const clientName = appointment.user
+                ? EncryptionService.decrypt(appointment.user.firstName)
+                : "your client";
+
+              // In-app notification for business owner
+              await NotificationService.createNotification(
+                businessOwner.id,
+                `${employeeName}'s job for ${clientName} on ${appointment.date} was auto-approved. Payment sent.`
+              );
+
+              // Push notification to business owner
+              if (businessOwner.expoPushToken) {
+                await PushNotification.sendPushNotification(
+                  businessOwner.expoPushToken,
+                  "Job Auto-Approved",
+                  `${employeeName}'s cleaning for ${clientName} was approved. Payment sent.`,
+                  { appointmentId: appointment.id, type: "employee_job_approved" }
+                );
+              }
+
+              console.log(
+                `[CompletionApprovalMonitor] Business owner ${businessOwner.id} notified of employee job auto-approval`
+              );
+            }
+          }
+        } catch (businessNotificationError) {
+          console.error(
+            `[CompletionApprovalMonitor] Error notifying business owner:`,
+            businessNotificationError
+          );
+        }
+
         processed++;
         console.log(
           `[CompletionApprovalMonitor] Auto-approved single-cleaner appointment ${appointment.id}`
@@ -225,6 +285,20 @@ async function processAutoApprovalsMultiCleaner(io = null) {
           completedAt: now,
         });
 
+        // Process payout for this cleaner
+        try {
+          const { processMultiCleanerPayoutForCleaner } = require("./payoutHelpers");
+          await processMultiCleanerPayoutForCleaner(appointment, completion.cleanerId);
+          console.log(
+            `[CompletionApprovalMonitor] Payout processed for cleaner ${completion.cleanerId} on appointment ${appointment.id}`
+          );
+        } catch (payoutError) {
+          console.error(
+            `[CompletionApprovalMonitor] Payout error for cleaner ${completion.cleanerId}:`,
+            payoutError
+          );
+        }
+
         const cleanerFirstName = cleaner
           ? EncryptionService.decrypt(cleaner.firstName)
           : "Cleaner";
@@ -296,6 +370,9 @@ async function processAutoApprovalsMultiCleaner(io = null) {
             );
           }
         }
+
+        // Check if all cleaners in this job are now approved - if so, mark parent appointment as completed
+        await checkAndUpdateParentAppointmentCompletion(appointment.id);
 
         processed++;
         console.log(
@@ -376,6 +453,56 @@ function startCompletionApprovalMonitor(io = null, intervalMs = 15 * 60 * 1000) 
   }, intervalMs);
 
   return intervalId;
+}
+
+/**
+ * Check if all cleaners in a multi-cleaner job have been approved
+ * If so, mark the parent appointment as completed
+ */
+async function checkAndUpdateParentAppointmentCompletion(appointmentId) {
+  const { Op } = require("sequelize");
+
+  try {
+    const appointment = await UserAppointments.findByPk(appointmentId);
+
+    if (!appointment || !appointment.isMultiCleanerJob) {
+      return false;
+    }
+
+    // Get all completion records for this appointment (excluding dropped/no-show)
+    const completions = await CleanerJobCompletion.findAll({
+      where: {
+        appointmentId,
+        status: { [Op.notIn]: ["dropped_out", "no_show"] },
+      },
+    });
+
+    if (completions.length === 0) {
+      return false;
+    }
+
+    // Check if all active cleaners have been approved (approved or auto_approved)
+    const allApproved = completions.every(
+      (c) => c.completionStatus === "approved" || c.completionStatus === "auto_approved"
+    );
+
+    if (allApproved && !appointment.completed) {
+      // All cleaners are done - mark parent appointment as completed
+      await appointment.update({
+        completed: true,
+        completionStatus: "auto_approved",
+        completionApprovedAt: new Date(),
+      });
+
+      console.log(`[CompletionApprovalMonitor] All cleaners approved for multi-cleaner appointment ${appointmentId} - marked as completed`);
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error(`[CompletionApprovalMonitor] Error checking parent appointment completion for ${appointmentId}:`, error);
+    return false;
+  }
 }
 
 module.exports = {

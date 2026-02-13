@@ -194,6 +194,82 @@ class ConflictService {
       }
     );
   }
+
+  // ==================
+  // Support Tickets
+  // ==================
+
+  /**
+   * Create a new support ticket
+   */
+  static async createSupportTicket(token, ticketData) {
+    return this.fetchWithAuth(
+      `${baseURL}/api/v1/conflicts/support/create`,
+      token,
+      {
+        method: "POST",
+        body: JSON.stringify(ticketData),
+      }
+    );
+  }
+
+  /**
+   * Get linked conversation messages for a support ticket
+   */
+  static async getLinkedConversation(token, ticketId) {
+    return this.fetchWithAuth(
+      `${baseURL}/api/v1/conflicts/support/${ticketId}/conversation`,
+      token
+    );
+  }
+
+  // ==================
+  // Lookup & Search
+  // ==================
+
+  /**
+   * Get refund info for a case (original amount, already refunded, max refundable)
+   */
+  static async getRefundInfo(token, caseType, caseId) {
+    return this.fetchWithAuth(
+      `${baseURL}/api/v1/conflicts/${caseType}/${caseId}/refund-info`,
+      token
+    );
+  }
+
+  /**
+   * Quick lookup by case number (APL-xxx, ADJ-xxx, PD-xxx, ST-xxx)
+   */
+  static async lookupByNumber(token, caseNumber) {
+    return this.fetchWithAuth(
+      `${baseURL}/api/v1/conflicts/lookup/${encodeURIComponent(caseNumber)}`,
+      token
+    );
+  }
+
+  /**
+   * Get all cases for a specific user
+   */
+  static async getUserCases(token, userId, includeResolved = false) {
+    const params = new URLSearchParams();
+    if (includeResolved) params.append("includeResolved", "true");
+
+    const queryString = params.toString();
+    return this.fetchWithAuth(
+      `${baseURL}/api/v1/conflicts/user/${userId}/cases${queryString ? `?${queryString}` : ""}`,
+      token
+    );
+  }
+
+  /**
+   * Search for a user and get their cases (by email, phone, or ID)
+   */
+  static async searchUserCases(token, query) {
+    return this.fetchWithAuth(
+      `${baseURL}/api/v1/conflicts/user/search?query=${encodeURIComponent(query)}`,
+      token
+    );
+  }
 }
 
 export default ConflictService;

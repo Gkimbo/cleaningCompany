@@ -75,6 +75,7 @@ import ArchivedCleanings from "../src/components/client/ArchivedCleanings";
 import ClientReviews from "../src/components/client/ClientReviews";
 import CompleteHomeSetupWizard from "../src/components/client/CompleteHomeSetupWizard";
 import AcceptInvitationScreen from "../src/components/client/AcceptInvitationScreen";
+import PendingCleanerApprovals from "../src/components/client/PendingCleanerApprovals";
 
 // Employee components
 import AcceptEmployeeInvitationScreen from "../src/components/employee/AcceptEmployeeInvitationScreen";
@@ -115,10 +116,12 @@ import SuspiciousReportsPage from "../src/components/hr/SuspiciousReportsPage";
 import {
   ConflictResolutionCenter,
   ConflictCaseView,
+  UserCasesView,
 } from "../src/components/conflicts";
 
 // Notifications
 import NotificationsScreen from "../src/components/notifications/NotificationsScreen";
+import NotificationDetailScreen from "../src/components/notifications/NotificationDetailScreen";
 
 // Pricing Context
 import { PricingProvider } from "../src/context/PricingContext";
@@ -145,6 +148,12 @@ import {
   AssignmentDetail,
   TimesheetScreen,
   EmployeeHoursScreen,
+  BusinessOwnerJobDetails,
+  BusinessOwnerMyJobs,
+  BusinessOwnerAllJobs,
+  JobFlowsList,
+  FlowDetailScreen,
+  FlowAssignmentsScreen,
 } from "../src/components/businessOwner";
 
 // Business Employee components
@@ -551,12 +560,12 @@ export default function App() {
                 element={<ConversationList />}
               />
               <Route
-                path="/messages/:conversationId"
-                element={<ChatScreen />}
-              />
-              <Route
                 path="/messages/broadcast"
                 element={<BroadcastForm state={state} />}
+              />
+              <Route
+                path="/messages/:conversationId"
+                element={<ChatScreen />}
               />
               {/* Account Settings */}
               <Route
@@ -577,6 +586,11 @@ export default function App() {
               <Route
                 path="/client-reviews"
                 element={<ClientReviews state={state} />}
+              />
+              {/* Pending Cleaner Approvals */}
+              <Route
+                path="/cleaner-approvals"
+                element={<PendingCleanerApprovals />}
               />
               {/* Owner Terms Editor */}
               <Route
@@ -634,6 +648,10 @@ export default function App() {
                 element={<ConflictResolutionCenter state={state} />}
               />
               <Route
+                path="/conflicts/user-cases"
+                element={<UserCasesView state={state} />}
+              />
+              <Route
                 path="/conflicts/:caseType/:caseId"
                 element={<ConflictCaseView state={state} />}
               />
@@ -641,6 +659,10 @@ export default function App() {
               <Route
                 path="/notifications"
                 element={<NotificationsScreen />}
+              />
+              <Route
+                path="/notifications/:id"
+                element={<NotificationDetailScreen />}
               />
               {/* Business Owner routes */}
               <Route
@@ -694,6 +716,31 @@ export default function App() {
               <Route
                 path="/business-owner/assignments/:assignmentId"
                 element={<AssignmentDetail state={state} />}
+              />
+              <Route
+                path="/business-owner/my-jobs"
+                element={<BusinessOwnerMyJobs state={state} />}
+              />
+              <Route
+                path="/business-owner/all-jobs"
+                element={<BusinessOwnerAllJobs state={state} />}
+              />
+              <Route
+                path="/business-owner/job/:appointmentId"
+                element={<BusinessOwnerJobDetails state={state} />}
+              />
+              {/* Job Flows */}
+              <Route
+                path="/job-flows"
+                element={<JobFlowsList state={state} />}
+              />
+              <Route
+                path="/job-flows/assignments"
+                element={<FlowAssignmentsScreen state={state} />}
+              />
+              <Route
+                path="/job-flows/:flowId"
+                element={<FlowDetailScreen state={state} />}
               />
               {/* Business Employee routes */}
               <Route

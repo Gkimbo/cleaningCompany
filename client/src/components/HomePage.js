@@ -374,27 +374,6 @@ const HomePage = ({ state, dispatch }) => {
     },
   ];
 
-  const testimonials = [
-    {
-      text: "I switched from a property manager and save $4,800/year. The cleaning quality is actually better and I have full control over my rental.",
-      author: "Sarah M.",
-      role: "Airbnb Superhost, 3 properties",
-      stat: "$4,800/yr saved",
-    },
-    {
-      text: "My reviews went from 4.6 to 4.9 stars after switching to professional cleaners. The ROI is incredible - more 5-star reviews means more bookings.",
-      author: "Michael R.",
-      role: "VRBO Host",
-      stat: "+0.3 star rating",
-    },
-    {
-      text: "Last-minute booking? No problem. I can schedule a same-day cleaning and know my place will be spotless. Game changer for my business.",
-      author: "Jennifer L.",
-      role: "Vacation Rental Owner",
-      stat: "Same-day cleanings",
-    },
-  ];
-
   const FeatureIcon = ({ icon }) => {
     const iconMap = {
       calendar: "📅",
@@ -458,7 +437,7 @@ const HomePage = ({ state, dispatch }) => {
               lineHeight: 30,
             }}
           >
-            That means you'll get
+            That means you&apos;ll get
           </Text>
           {"\n"}5-Star Reviews.
         </Text>
@@ -1049,133 +1028,6 @@ const HomePage = ({ state, dispatch }) => {
         </View>
       </View>
 
-      {/* Testimonials */}
-      <View
-        style={{ paddingHorizontal: spacing.lg, marginTop: spacing["3xl"] }}
-      >
-        <Text
-          style={{
-            fontSize: typography.fontSize.xs,
-            fontWeight: typography.fontWeight.bold,
-            color: colors.primary[600],
-            letterSpacing: 1.5,
-            textAlign: "center",
-            marginBottom: spacing.sm,
-          }}
-        >
-          SUCCESS STORIES
-        </Text>
-        <Text
-          style={{
-            fontSize: responsive(22, 26, 30),
-            fontWeight: typography.fontWeight.bold,
-            color: colors.text.primary,
-            textAlign: "center",
-            marginBottom: spacing["2xl"],
-          }}
-        >
-          Hosts Who Made the Switch
-        </Text>
-
-        {testimonials.map((testimonial, index) => (
-          <View
-            key={index}
-            style={{
-              backgroundColor: colors.neutral[50],
-              borderRadius: radius.xl,
-              padding: spacing.xl,
-              marginBottom: spacing.lg,
-              borderWidth: 1,
-              borderColor: colors.border.light,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: spacing.md,
-              }}
-            >
-              <Text style={{ fontSize: 24 }}>💬</Text>
-              {testimonial.stat && (
-                <View
-                  style={{
-                    backgroundColor: colors.primary[600],
-                    paddingHorizontal: spacing.md,
-                    paddingVertical: spacing.xs,
-                    borderRadius: radius.full,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: typography.fontSize.sm,
-                      fontWeight: typography.fontWeight.bold,
-                      color: colors.neutral[0],
-                    }}
-                  >
-                    {testimonial.stat}
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text
-              style={{
-                fontSize: typography.fontSize.base,
-                color: colors.text.primary,
-                lineHeight: 24,
-                fontStyle: "italic",
-                marginBottom: spacing.lg,
-              }}
-            >
-              "{testimonial.text}"
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  backgroundColor: colors.primary[100],
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: spacing.md,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: typography.fontSize.lg,
-                    fontWeight: typography.fontWeight.bold,
-                    color: colors.primary[600],
-                  }}
-                >
-                  {testimonial.author[0]}
-                </Text>
-              </View>
-              <View>
-                <Text
-                  style={{
-                    fontSize: typography.fontSize.sm,
-                    fontWeight: typography.fontWeight.semibold,
-                    color: colors.text.primary,
-                  }}
-                >
-                  {testimonial.author}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: typography.fontSize.xs,
-                    color: colors.text.tertiary,
-                  }}
-                >
-                  {testimonial.role}
-                </Text>
-              </View>
-            </View>
-          </View>
-        ))}
-      </View>
-
       {/* Guarantee Section */}
       <View
         style={{
@@ -1227,7 +1079,7 @@ const HomePage = ({ state, dispatch }) => {
             lineHeight: 22,
           }}
         >
-          We provide the peace of mind you're looking for with reliable,
+          We provide the peace of mind you&apos;re looking for with reliable,
           detail-driven turnover cleanings performed by friendly, trustworthy
           professionals. Our Worry-Free Guarantee reflects our commitment to
           going the extra mile so your rental always feels welcoming and

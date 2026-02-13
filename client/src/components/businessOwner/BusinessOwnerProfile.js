@@ -9,7 +9,7 @@ import {
   Pressable,
   Image,
 } from "react-native";
-import { useNavigate } from "react-router-native";
+import { useNavigate, useLocation } from "react-router-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, typography, shadows } from "../../services/styles/theme";
@@ -22,14 +22,17 @@ import MyClientsSection from "./profile/MyClientsSection";
 import PayrollSection from "./profile/PayrollSection";
 import ClientPaymentsSection from "./profile/ClientPaymentsSection";
 import MarketplaceCleanerView from "./profile/MarketplaceCleanerView";
+import JobFlowsSection from "./profile/JobFlowsSection";
 
 const MODE_STORAGE_KEY = "@business_owner_mode";
 
 const BusinessOwnerProfile = ({ state }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [mode, setMode] = useState("business");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [dashboardData, setDashboardData] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [pendingPayouts, setPendingPayouts] = useState([]);
@@ -91,8 +94,17 @@ const BusinessOwnerProfile = ({ state }) => {
     fetchData();
   }, [fetchData]);
 
+  // Refetch when navigating back to this screen
+  useEffect(() => {
+    if (!loading) {
+      setRefreshTrigger(prev => prev + 1);
+      fetchData();
+    }
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
+    setRefreshTrigger(prev => prev + 1);
     fetchData();
   }, [fetchData]);
 
@@ -181,7 +193,10 @@ const BusinessOwnerProfile = ({ state }) => {
             />
 
             {/* My Clients Section */}
-            <MyClientsSection state={state} />
+            <MyClientsSection state={state} refreshTrigger={refreshTrigger} />
+
+            {/* Job Flows Section */}
+            <JobFlowsSection state={state} />
 
             {/* Payroll Section */}
             <PayrollSection

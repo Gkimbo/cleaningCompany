@@ -56,8 +56,17 @@ class AppointmentSerializer {
 			"multiCleanerJobId",
 			"multiCleanerJob",
 			"cleanerRoomAssignments",
+			"cleanersNeeded",
+			"cleanersConfirmed",
+			"multiCleanerStatus",
 			// Pending request count (for homeowners to see cleaner requests)
-			"pendingRequestCount"
+			"pendingRequestCount",
+			// Pending approval count (cleaner join requests awaiting homeowner approval)
+			"pendingApprovalCount",
+			// Completion status fields
+			"completionStatus",
+			"completionSubmittedAt",
+			"autoApprovalExpiresAt"
 		];
 		const serializedAppointment = appointmentArray.map((appointment) => {
 			const newAppointment = {};
@@ -106,8 +115,17 @@ class AppointmentSerializer {
 			"multiCleanerJobId",
 			"multiCleanerJob",
 			"cleanerRoomAssignments",
+			"cleanersNeeded",
+			"cleanersConfirmed",
+			"multiCleanerStatus",
 			// Pending request count (for homeowners to see cleaner requests)
-			"pendingRequestCount"
+			"pendingRequestCount",
+			// Pending approval count (cleaner join requests awaiting homeowner approval)
+			"pendingApprovalCount",
+			// Completion status fields
+			"completionStatus",
+			"completionSubmittedAt",
+			"autoApprovalExpiresAt"
 		];
 		const newAppointment = {};
 		// Handle both Sequelize instances and plain objects
@@ -147,6 +165,9 @@ class AppointmentSerializer {
 						soloAllowed,
 						numBeds,
 						numBaths,
+						// Include home location for distance calculations
+						latitude: home.latitude,
+						longitude: home.longitude,
 					};
 				}
 

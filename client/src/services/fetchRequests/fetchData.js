@@ -562,55 +562,80 @@ class FetchData {
   }
 
   static async approveRequest(requestId, approve) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/appointments/approve-request",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            requestId,
-            approve,
-          }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to delete");
+    const response = await fetch(
+      baseURL + "/api/v1/appointments/approve-request",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requestId,
+          approve,
+        }),
       }
-      const responseData = await response.json();
-      return true;
-    } catch (error) {
-      return error;
+    );
+
+    // Handle 409 Conflict - another cleaner already assigned
+    if (response.status === 409) {
+      const conflictData = await response.json();
+      return { conflict: true, ...conflictData };
     }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to approve request");
+    }
+    const responseData = await response.json();
+    return responseData;
+  }
+
+  static async switchCleaner(appointmentId, newCleanerId, requestId) {
+    const response = await fetch(
+      baseURL + "/api/v1/appointments/switch-cleaner",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          appointmentId,
+          newCleanerId,
+          requestId,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to switch cleaner");
+    }
+
+    const responseData = await response.json();
+    return responseData;
   }
 
   static async denyRequest(id, appointmentId) {
-    try {
-      const response = await fetch(
-        baseURL + "/api/v1/appointments/deny-request",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id,
-            appointmentId,
-          }),
-        }
-      );
-      if (!response.ok) {
-        throw new Error("Failed to delete");
+    const response = await fetch(
+      baseURL + "/api/v1/appointments/deny-request",
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id,
+          appointmentId,
+        }),
       }
-
-      const responseData = await response.json();
-      console.log(responseData);
-      return true;
-    } catch (error) {
-      return error;
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to deny request");
     }
+
+    const responseData = await response.json();
+    return responseData;
   }
 
   static async undoRequest(id, appointmentId) {
@@ -1274,6 +1299,83 @@ class FetchData {
     } catch (error) {
       console.error("Error joining multi-cleaner job:", error);
       return { error: "Failed to join job" };
+    }
+  }
+
+  // Get cleaner's pending multi-cleaner job requests
+  static async getMyMultiCleanerRequests(token) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/cleaner-approval/my-requests",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch requests" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching multi-cleaner requests:", error);
+      return { error: "Failed to fetch requests" };
+    }
+  }
+
+  // Get cleaner's confirmed multi-cleaner jobs (jobs they've been approved for)
+  static async getMyConfirmedMultiCleanerJobs(token) {
+    try {
+      const response = await fetch(
+        baseURL + "/api/v1/multi-cleaner/my-confirmed-jobs",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to fetch confirmed jobs" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error fetching confirmed multi-cleaner jobs:", error);
+      return { error: "Failed to fetch confirmed jobs" };
+    }
+  }
+
+  // Cancel a pending multi-cleaner job request
+  static async cancelMultiCleanerRequest(requestId, token) {
+    try {
+      const response = await fetch(
+        baseURL + `/api/v1/cleaner-approval/${requestId}/cancel`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        return { error: responseData.error || "Failed to cancel request" };
+      }
+
+      return responseData;
+    } catch (error) {
+      console.error("Error cancelling multi-cleaner request:", error);
+      return { error: "Failed to cancel request" };
     }
   }
 }

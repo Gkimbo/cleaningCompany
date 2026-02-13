@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-4504_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5128_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -23,6 +23,7 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 **Key Capabilities:**
 - Multi-tenant cleaning service marketplace with offline support
 - Business owner onboarding with employee management and payroll
+- **Business client portal** for corporate clients
 - Multi-cleaner job support for large homes with room assignments
 - Real-time messaging with suspicious content detection
 - Dynamic pricing with incentive and referral programs
@@ -42,6 +43,11 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - **Cancellation Audit Logging** for compliance tracking
 - **Preview as Role** for platform owners to test any user experience
 - **Internal Analytics** for tracking flow abandonment, job duration, offline usage, disputes, and pay overrides
+- **Employee timesheets** with hours tracking and approval workflow
+- **Transit time calculation** between jobs for scheduling optimization
+- **Bi-weekly batch payouts** for employees (every other Friday)
+- **Database-driven pricing** with owner-configurable fees via PricingConfig
+- **Employee pay types** supporting hourly, percentage, and flat/per-job rates
 
 ---
 
@@ -146,6 +152,7 @@ API_NINJA_API_KEY=your_api_ninja_key
 | **Homeowner/Client** | Book cleanings, manage homes, pay bills, leave reviews |
 | **Cleaner** | Apply for platform work, accept jobs, earn money, achieve tier bonuses |
 | **Business Owner** | Cleaner who can onboard clients and manage employees with payroll |
+| **Business Client** | Corporate client of a business owner, book via business portal |
 | **Business Employee** | Works for a business owner, accepts assigned jobs, tracks earnings |
 | **HR Staff** | Handle disputes, review suspicious activity reports, manage support |
 | **Owner** | Platform administrator with full access to all features |
@@ -192,11 +199,15 @@ Business owners can hire and manage employees:
 - **Job Type Restrictions**: Limit employees to specific job types
 - **Max Daily Jobs**: Configure maximum jobs per employee per day
 - **Payment Methods**: Stripe Connect or direct payment from owner
-- **Hourly vs Flat Rate**: Flexible pay structure per employee
-- **Job Assignment**: Assign specific jobs to employees
+- **Pay Types**: Hourly rate, percentage of job, or flat per-job rate
+- **Bi-Weekly Payouts**: Employees paid every other Friday (business owner paid immediately)
+- **Early Payout**: Business owners can trigger early payout for employees
+- **Termination Payout**: Employees paid immediately upon termination
+- **Job Assignment**: Assign specific jobs to employees with transit time
 - **Self-Assignment**: Business owners can assign jobs to themselves
 - **Marketplace Pickup**: Allow employees to pick up open marketplace jobs
 - **Pay Tracking**: Track pay per job with audit trail
+- **Timesheet Management**: Track employee hours with approval workflow
 - **Earnings Dashboard**: Employees view their earnings history
 - **Coworker Messaging**: Team communication channels
 
@@ -380,7 +391,7 @@ Handle situations when guests haven't left by checkout time:
 - **Payment Retry**: Automatic retry of failed payments
 - **Overdue Reminders**: Configurable reminder frequency
 
-**Pricing Configuration:**
+**Pricing Configuration (Database-Driven via PricingConfig):**
 - Base price per cleaning
 - Per bedroom fee
 - Per bathroom fee
@@ -393,6 +404,14 @@ Handle situations when guests haven't left by checkout time:
 - Refund percentage
 - Last-minute booking fee (appointments within 48 hours)
 - Large business volume-based fees (for 50+ jobs/month)
+
+**Platform Fee Structure (Owner Configurable):**
+- `platformFeePercent`: 10% - Standard marketplace cleaner fee
+- `businessOwnerFeePercent`: 10% - Business owner employee fee
+- `largeBusinessFeePercent`: 7% - High-volume business owners (50+ jobs/month)
+- `multiCleanerPlatformFeePercent`: 13% - Multi-cleaner job assignments
+- `incentiveRefundPercent`: 10% - Incentive cancellation refunds
+- `incentiveCleanerPercent`: 40% - Cleaner portion on incentive cancellation
 
 ### Reviews & Ratings
 
@@ -911,11 +930,31 @@ Handle situations when guests haven't left by checkout time:
 | `GET` | `/api/v1/analytics/disputes` | Get dispute frequency | Owner |
 | `GET` | `/api/v1/analytics/pay-overrides` | Get pay override statistics | Owner |
 
+### Employee Timesheets
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/timesheets` | Get all timesheets for business | Business Owner |
+| `GET` | `/api/v1/timesheets/my` | Get employee's own timesheets | Employee |
+| `POST` | `/api/v1/timesheets` | Submit timesheet entry | Employee |
+| `PATCH` | `/api/v1/timesheets/:id` | Update timesheet entry | Employee |
+| `POST` | `/api/v1/timesheets/:id/approve` | Approve timesheet | Business Owner |
+| `POST` | `/api/v1/timesheets/:id/reject` | Reject timesheet with reason | Business Owner |
+| `GET` | `/api/v1/timesheets/summary` | Get hours summary for date range | Business Owner |
+
+### Transit Time
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/transit/calculate` | Calculate transit time between locations | Yes |
+| `GET` | `/api/v1/transit/schedule/:employeeId` | Get employee schedule with transit times | Business Owner |
+| `POST` | `/api/v1/transit/optimize` | Optimize job order for minimum transit | Business Owner |
+
 ---
 
 ## Database
 
-### Models (60 Total)
+### Models (66 Total)
 
 #### Core Models
 
@@ -933,8 +972,10 @@ Handle situations when guests haven't left by checkout time:
 | Model | Description |
 |-------|-------------|
 | `BusinessEmployee` | Employees of business owners with availability and pay settings |
-| `EmployeeJobAssignment` | Job assignments to employees with pay tracking |
+| `EmployeeJobAssignment` | Job assignments to employees with pay tracking and transit time |
 | `EmployeePayChangeLog` | Audit trail for pay rate changes |
+| `EmployeeTimesheet` | Employee timesheet entries with hours worked and approval status |
+| `EmployeePendingPayout` | Pending employee earnings awaiting bi-weekly payout |
 | `CleanerClient` | Business owner to client relationships with invitation flow |
 
 #### Multi-Cleaner Models
@@ -965,7 +1006,7 @@ Handle situations when guests haven't left by checkout time:
 | `PlatformEarnings` | Aggregated platform earnings |
 | `OwnerWithdrawal` | Platform owner withdrawal requests |
 | `StripeConnectAccount` | Stripe Connect account status tracking |
-| `PricingConfig` | Platform pricing configuration |
+| `PricingConfig` | Platform pricing and fee configuration (owner-configurable) |
 
 #### Communication Models
 
@@ -1476,6 +1517,84 @@ const disputeStats = await AnalyticsService.getDisputeStats(startDate, endDate);
 const overrideStats = await AnalyticsService.getPayOverrideStats(startDate, endDate);
 ```
 
+### TimesheetService
+
+Employee timesheet management:
+
+```javascript
+const TimesheetService = require('./services/TimesheetService');
+
+// Submit timesheet entry
+const entry = await TimesheetService.submitTimesheet({
+  employeeId,
+  assignmentId,
+  hoursWorked: 3.5,
+  date: '2026-02-10',
+  notes: 'Extra cleaning required'
+});
+
+// Get timesheets for business owner
+const timesheets = await TimesheetService.getTimesheetsForBusiness(businessOwnerId, {
+  startDate, endDate, status: 'pending'
+});
+
+// Approve timesheet
+await TimesheetService.approveTimesheet(timesheetId, businessOwnerId);
+
+// Get hours summary
+const summary = await TimesheetService.getHoursSummary(businessOwnerId, startDate, endDate);
+```
+
+### EmployeeBatchPayoutService
+
+Bi-weekly batch payout processing for employees:
+
+```javascript
+const EmployeeBatchPayoutService = require('./services/EmployeeBatchPayoutService');
+
+// Get next payout date (every other Friday)
+const nextPayoutDate = EmployeeBatchPayoutService.getNextPayoutDate();
+
+// Queue employee payout when job completes
+await EmployeeBatchPayoutService.createPendingPayout(assignment, amount, appointment);
+
+// Get pending earnings for employee dashboard
+const pending = await EmployeeBatchPayoutService.getPendingEarningsForEmployee(employeeId);
+
+// Get pending payroll for business owner
+const payroll = await EmployeeBatchPayoutService.getPendingPayrollForBusiness(ownerId);
+
+// Process all due payouts (called by cron every other Friday)
+await EmployeeBatchPayoutService.processBiWeeklyPayouts();
+
+// Pay immediately on termination
+await EmployeeBatchPayoutService.processTerminationPayout(employeeId);
+
+// Business owner triggers early payout
+await EmployeeBatchPayoutService.processEarlyPayout(employeeId, ownerId);
+```
+
+### TransitTimeService
+
+Calculate travel time between job locations:
+
+```javascript
+const TransitTimeService = require('./services/TransitTimeService');
+
+// Calculate transit time between two locations
+const transit = await TransitTimeService.calculateTransitTime(
+  { lat: 40.7128, lng: -74.0060 },  // From location
+  { lat: 40.7589, lng: -73.9851 }   // To location
+);
+// Returns: { distanceMiles: 3.2, durationMinutes: 15, trafficAdjusted: true }
+
+// Get optimized schedule for employee
+const schedule = await TransitTimeService.getScheduleWithTransit(employeeId, date);
+
+// Optimize job order for minimum travel
+const optimized = await TransitTimeService.optimizeJobOrder(jobIds);
+```
+
 ---
 
 ## Cron Jobs
@@ -1490,6 +1609,9 @@ const overrideStats = await AnalyticsService.getPayOverrideStats(startDate, endD
 | `0 1 * * *` | Calendar Sync | Syncs all active iCal calendars |
 | `0 3 * * 0` | Recurring Generation | Generates appointments from recurring schedules |
 | `0 7 * * *` | Supply Reminder | Reminds cleaners to bring supplies for today's appointments |
+| `0 6 * * 5` | Bi-Weekly Payout | Processes employee batch payouts (every other Friday) |
+| `*/5 * * * *` | Auto-Complete Monitor | Sends reminders and auto-completes jobs past scheduled time |
+| `*/15 * * * *` | Completion Approval | Auto-approves homeowner/cleaner completion after timeout |
 
 ### Cron Job Details
 
@@ -1506,6 +1628,23 @@ const overrideStats = await AnalyticsService.getPayOverrideStats(startDate, endD
 **Multi-Cleaner Offer Expiration** (`MultiCleanerOfferExpiration.js`)
 - Expires job offers that haven't been accepted
 - Frees up slots for new offers
+
+**Bi-Weekly Payout Job** (`BiWeeklyPayoutJob.js`)
+- Runs every Friday at 6 AM UTC
+- Checks if it's a "payout Friday" (every other Friday)
+- Processes all pending employee payouts
+- Transfers funds via Stripe Connect to employee bank accounts
+- Marks payouts as completed with transaction IDs
+
+**Auto-Complete Monitor** (`AutoCompleteMonitor.js`)
+- Sends reminder when cleaner forgets to mark job complete
+- Auto-completes jobs after configured hours past scheduled end time
+- Configurable time windows: "anytime", "10-3", "11-4", "12-2"
+- Minimum on-site time verification
+
+**Completion Approval Monitor** (`CompletionApprovalMonitor.js`)
+- Auto-approves homeowner after 24 hours if not manually approved
+- Auto-approves cleaner after 48 hours if homeowner approved
 
 ---
 
@@ -1540,7 +1679,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (4504 tests across 172 test suites)
+# Run all tests (5038 tests across 178 test suites)
 npm test
 
 # Run specific test file
@@ -1592,7 +1731,11 @@ npm test -- --watch
 | Demo Accounts | 88 | Router, service, preview sessions |
 | Internal Analytics | 89 | Event tracking, dashboard stats, aggregations |
 | Multi-Cleaner Router | 76 | Job creation, offers, room assignments, completions |
-| **Total** | **4504** | 172 test suites |
+| Employee Timesheets | 45 | Timesheet submission, approval, hours tracking |
+| Transit Time | 28 | Distance calculation, scheduling optimization |
+| Business Client | 35 | Business client portal, corporate bookings |
+| Bi-Weekly Payouts | 34 | Employee batch payout processing |
+| **Total** | **5128** | 202 test suites |
 
 ---
 

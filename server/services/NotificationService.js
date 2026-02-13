@@ -1,4 +1,5 @@
 const { Notification, User } = require("../models");
+const { Op } = require("sequelize");
 const PushNotification = require("./sendNotifications/PushNotificationClass");
 const Email = require("./sendNotifications/EmailClass");
 
@@ -119,9 +120,12 @@ class NotificationService {
           },
         });
 
-        // Also emit unread count update
-        const unreadCount = await Notification.getUnreadCount(userId);
-        io.to(`user_${userId}`).emit("notification_count_update", { unreadCount });
+        // Also emit unread count update (include actionRequiredCount for badge persistence)
+        const [unreadCount, actionRequiredCount] = await Promise.all([
+          Notification.getUnreadCount(userId),
+          Notification.getActionRequiredCount(userId),
+        ]);
+        io.to(`user_${userId}`).emit("notification_count_update", { unreadCount, actionRequiredCount });
       }
 
       // 5. Send email if user has notifications enabled and emailOptions provided
@@ -286,6 +290,143 @@ class NotificationService {
         sendFunction: Email.sendBookingExpiredEmail,
         args: [appointmentDate, clientName],
       },
+      io,
+    });
+  }
+
+  /**
+   * Notify business owner that their client booked a new appointment
+   */
+  static async notifyClientBookedAppointment({
+    businessOwnerId,
+    clientId,
+    clientName,
+    appointmentId,
+    appointmentDate,
+    homeAddress,
+    price,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "client_booked_appointment",
+      title: "New Client Appointment",
+      body: `${clientName} booked a cleaning for ${formatDate(appointmentDate)}. Tap to view and assign.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientId,
+        clientName,
+        homeAddress,
+        price,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendNewClientAppointmentEmail,
+        args: [appointmentDate, clientName, homeAddress, price, appointmentId],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Notify client that business owner declined their appointment
+   * Client can choose to cancel or open to marketplace
+   */
+  static async notifyBusinessOwnerDeclined({
+    clientId,
+    businessOwnerId,
+    businessOwnerName,
+    appointmentId,
+    appointmentDate,
+    reason,
+    io = null,
+  }) {
+    const reasonText = reason ? ` Reason: ${reason}` : "";
+
+    return this.notifyUser({
+      userId: clientId,
+      type: "business_owner_declined",
+      title: "Appointment Update",
+      body: `${businessOwnerName} is unable to clean on ${formatDate(appointmentDate)}. Tap to choose what to do next.${reasonText}`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        businessOwnerId,
+        businessOwnerName,
+        reason,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendBusinessOwnerDeclinedEmail,
+        args: [appointmentDate, businessOwnerName, reason],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Notify business owner that client chose to open appointment to marketplace
+   */
+  static async notifyClientOpenedToMarketplace({
+    businessOwnerId,
+    clientId,
+    clientName,
+    appointmentId,
+    appointmentDate,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "client_opened_to_marketplace",
+      title: "Client Found Alternative",
+      body: `${clientName} has opened their ${formatDate(appointmentDate)} appointment to the marketplace.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientId,
+        clientName,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
+      io,
+    });
+  }
+
+  /**
+   * Notify business owner that client cancelled after decline
+   */
+  static async notifyClientCancelledAfterDecline({
+    businessOwnerId,
+    clientId,
+    clientName,
+    appointmentId,
+    appointmentDate,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "client_cancelled_after_decline",
+      title: "Appointment Cancelled",
+      body: `${clientName} has cancelled their ${formatDate(appointmentDate)} appointment.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientId,
+        clientName,
+      },
+      actionRequired: false,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: false,
       io,
     });
   }
@@ -777,6 +918,368 @@ class NotificationService {
       sendEmail: false,
       io,
     });
+  }
+
+  /**
+   * Notify client when cleaner changes their cleaning price
+   */
+  static async notifyPriceChange({
+    clientId,
+    cleanerId,
+    cleanerName,
+    businessName,
+    oldPrice,
+    newPrice,
+    homeAddress,
+    io = null,
+  }) {
+    try {
+      const client = await User.findByPk(clientId);
+      if (!client) {
+        console.error(`[NotificationService] Client ${clientId} not found for price change notification`);
+        return { success: false, error: "Client not found" };
+      }
+
+      const clientName = client.firstName || "there";
+      const displayName = businessName || cleanerName;
+      const oldPriceDisplay = `$${parseFloat(oldPrice || 0).toFixed(0)}`;
+      const newPriceDisplay = `$${parseFloat(newPrice || 0).toFixed(0)}`;
+
+      // 1. Create in-app notification
+      const notification = await this.createNotification({
+        userId: clientId,
+        type: "price_change",
+        title: "Cleaning Price Updated",
+        body: `${displayName} updated your cleaning price from ${oldPriceDisplay} to ${newPriceDisplay}`,
+        data: {
+          cleanerId,
+          oldPrice,
+          newPrice,
+          homeAddress,
+        },
+        actionRequired: false,
+      });
+
+      // 2. Send push notification if client has token
+      if (client.expoPushToken) {
+        await PushNotification.sendPushNotification(
+          client.expoPushToken,
+          "Cleaning Price Updated",
+          `Your cleaning price has been updated to ${newPriceDisplay}`,
+          { type: "price_change", cleanerId }
+        );
+      }
+
+      // 3. Send email notification
+      if (client.email) {
+        await Email.sendPriceChangeNotification({
+          clientEmail: client.email,
+          clientName,
+          cleanerName,
+          businessName,
+          oldPrice,
+          newPrice,
+          homeAddress,
+        });
+      }
+
+      // 4. Emit socket event for real-time update
+      if (io) {
+        io.to(`user_${clientId}`).emit("notification", {
+          type: "price_change",
+          notification,
+        });
+        // Update unread count
+        const unreadCount = await Notification.count({
+          where: { userId: clientId, read: false },
+        });
+        io.to(`user_${clientId}`).emit("unreadNotifications", unreadCount);
+      }
+
+      console.log(`[NotificationService] Price change notification sent to client ${clientId}`);
+      return { success: true, notification };
+    } catch (error) {
+      console.error("[NotificationService] Price change notification error:", error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // =====================================
+  // Business Owner Reminders
+  // =====================================
+
+  /**
+   * Notify business owner about an unassigned appointment
+   * Sent daily starting 4 days before the appointment
+   * @param {Object} params - Notification parameters
+   * @param {number} params.businessOwnerId - Business owner's user ID
+   * @param {number} params.appointmentId - Appointment ID
+   * @param {string} params.appointmentDate - Appointment date
+   * @param {string} params.clientName - Client's name
+   * @param {number} params.daysUntil - Days until the appointment
+   * @param {number} params.reminderCount - How many reminders have been sent
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyUnassignedAppointmentReminder({
+    businessOwnerId,
+    appointmentId,
+    appointmentDate,
+    clientName,
+    daysUntil,
+    reminderCount,
+    io = null,
+  }) {
+    // Determine urgency level for title
+    const isUrgent = daysUntil <= 1;
+    const isWarning = daysUntil <= 2;
+    const urgencyPrefix = isUrgent ? "URGENT: " : isWarning ? "Reminder: " : "";
+    const daysText = daysUntil === 0 ? "today" : daysUntil === 1 ? "tomorrow" : `in ${daysUntil} days`;
+
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "unassigned_reminder_bo",
+      title: `${urgencyPrefix}Unassigned Appointment`,
+      body: `${clientName}'s cleaning ${daysText} needs someone assigned. Tap to assign.`,
+      data: {
+        appointmentId,
+        appointmentDate,
+        clientName,
+        daysUntil,
+        reminderCount,
+      },
+      actionRequired: true,
+      relatedAppointmentId: appointmentId,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendUnassignedReminderToBo,
+        args: [appointmentDate, clientName, daysUntil, reminderCount],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Find an active (non-expired) notification of a specific type
+   * @param {number} userId - User ID
+   * @param {string} type - Notification type
+   * @param {number} appointmentId - Related appointment ID
+   * @returns {Promise<Object|null>} Active notification or null
+   */
+  static async findActiveNotification(userId, type, appointmentId) {
+    if (!userId) return null;
+
+    const now = new Date();
+    const notification = await Notification.findOne({
+      where: {
+        userId,
+        type,
+        [Op.or]: [
+          { expiresAt: null },
+          { expiresAt: { [Op.gt]: now } },
+        ],
+      },
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Check if notification data matches the appointment
+    if (notification && notification.data) {
+      const data = typeof notification.data === "string"
+        ? JSON.parse(notification.data)
+        : notification.data;
+      if (data.appointmentId === appointmentId) {
+        return notification;
+      }
+    }
+
+    return null;
+  }
+
+  // =====================================
+  // New Home Request Notifications
+  // =====================================
+
+  /**
+   * Notify business owner that an existing client added a new home
+   * @param {Object} params
+   * @param {number} params.businessOwnerId - Business owner's user ID
+   * @param {number} params.clientId - Client's user ID
+   * @param {string} params.clientName - Client's name
+   * @param {number} params.homeId - New home's ID
+   * @param {string} params.homeAddress - Home address
+   * @param {number} params.calculatedPrice - Auto-calculated price
+   * @param {number} params.numBeds - Number of bedrooms
+   * @param {number} params.numBaths - Number of bathrooms
+   * @param {number} params.requestId - NewHomeRequest ID
+   * @param {boolean} params.isReRequest - Whether this is a re-request
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyNewHomeRequest({
+    businessOwnerId,
+    clientId,
+    clientName,
+    homeId,
+    homeAddress,
+    calculatedPrice,
+    numBeds,
+    numBaths,
+    requestId,
+    isReRequest = false,
+    io = null,
+  }) {
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 48);
+
+    const title = isReRequest ? "New Home Request (Again)" : "New Home Request";
+    const body = `${clientName} added a new home and is asking if you can clean it. ${numBeds} bed, ${numBaths} bath at $${calculatedPrice}.`;
+
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "new_home_request",
+      title,
+      body,
+      data: {
+        requestId,
+        clientId,
+        clientName,
+        homeId,
+        homeAddress,
+        calculatedPrice,
+        numBeds,
+        numBaths,
+        isReRequest,
+      },
+      actionRequired: true,
+      expiresAt,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendNewHomeRequestEmail,
+        args: [clientName, homeAddress, calculatedPrice, numBeds, numBaths],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Notify client that business owner accepted their new home
+   * @param {Object} params
+   * @param {number} params.clientId - Client's user ID
+   * @param {number} params.businessOwnerId - Business owner's user ID
+   * @param {string} params.businessOwnerName - Business owner's name
+   * @param {number} params.homeId - Home's ID
+   * @param {string} params.homeAddress - Home address
+   * @param {number} params.price - Agreed price
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyNewHomeAccepted({
+    clientId,
+    businessOwnerId,
+    businessOwnerName,
+    homeId,
+    homeAddress,
+    price,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: clientId,
+      type: "new_home_accepted",
+      title: "New Home Accepted!",
+      body: `${businessOwnerName} will clean your new home at ${homeAddress} for $${price} per cleaning.`,
+      data: {
+        businessOwnerId,
+        businessOwnerName,
+        homeId,
+        homeAddress,
+        price,
+      },
+      actionRequired: false,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendNewHomeAcceptedEmail,
+        args: [businessOwnerName, homeAddress, price],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Notify client that business owner declined their new home
+   * @param {Object} params
+   * @param {number} params.clientId - Client's user ID
+   * @param {number} params.businessOwnerId - Business owner's user ID
+   * @param {string} params.businessOwnerName - Business owner's name
+   * @param {number} params.homeId - Home's ID
+   * @param {string} params.homeAddress - Home address
+   * @param {string} params.reason - Decline reason (optional)
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyNewHomeDeclined({
+    clientId,
+    businessOwnerId,
+    businessOwnerName,
+    homeId,
+    homeAddress,
+    reason = null,
+    io = null,
+  }) {
+    const reasonText = reason ? ` Reason: ${reason}` : "";
+
+    return this.notifyUser({
+      userId: clientId,
+      type: "new_home_declined",
+      title: "New Home Request Declined",
+      body: `${businessOwnerName} is unable to clean your home at ${homeAddress}.${reasonText} You can list it on the marketplace or request again later.`,
+      data: {
+        businessOwnerId,
+        businessOwnerName,
+        homeId,
+        homeAddress,
+        reason,
+      },
+      actionRequired: false,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendNewHomeDeclinedEmail,
+        args: [businessOwnerName, homeAddress, reason],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Find an expired notification of a specific type
+   * @param {number} userId - User ID
+   * @param {string} type - Notification type
+   * @param {number} appointmentId - Related appointment ID
+   * @returns {Promise<Object|null>} Expired notification or null
+   */
+  static async findExpiredNotification(userId, type, appointmentId) {
+    if (!userId) return null;
+
+    const now = new Date();
+    const notification = await Notification.findOne({
+      where: {
+        userId,
+        type,
+        expiresAt: { [Op.lt]: now },
+      },
+      order: [["createdAt", "DESC"]],
+    });
+
+    // Check if notification data matches the appointment
+    if (notification && notification.data) {
+      const data = typeof notification.data === "string"
+        ? JSON.parse(notification.data)
+        : notification.data;
+      if (data.appointmentId === appointmentId) {
+        return notification;
+      }
+    }
+
+    return null;
   }
 }
 

@@ -130,48 +130,50 @@ describe("JobCompletionFlow Component", () => {
     global.fetch = jest.fn();
   });
 
+  // Helper to mock both flow-settings and status fetch calls
+  const mockBothFetches = (statusData, flowSettingsData = {}) => {
+    global.fetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(flowSettingsData),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(statusData),
+      });
+  };
+
   describe("Initial Rendering", () => {
     it("should render the job completion flow container", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
       const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
       expect(getByText("Job Completion")).toBeTruthy();
     });
 
-    it("should render step indicator with all four steps", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-      });
+    it("should render step indicator with all five steps", async () => {
+      mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
       const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
       expect(getByText("Before")).toBeTruthy();
       expect(getByText("Clean")).toBeTruthy();
       expect(getByText("After")).toBeTruthy();
-      expect(getByText("Complete")).toBeTruthy();
+      expect(getByText("Passes")).toBeTruthy();
+      expect(getByText("Done")).toBeTruthy();
     });
 
     it("should render cancel button", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
       const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
-      expect(getByText("Cancel")).toBeTruthy();
+      expect(getByText("← Exit")).toBeTruthy();
     });
 
     it("should start on before photos step when no photos exist", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
       const { getByTestId } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
@@ -183,10 +185,7 @@ describe("JobCompletionFlow Component", () => {
 
   describe("Photo Status Checking", () => {
     it("should check photo status on mount", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
       renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
@@ -203,10 +202,7 @@ describe("JobCompletionFlow Component", () => {
     });
 
     it("should auto-advance to cleaning step when before photos exist", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: true, hasAfterPhotos: false });
 
       const { getByTestId } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
@@ -217,6 +213,10 @@ describe("JobCompletionFlow Component", () => {
 
     it("should auto-advance to review step when all photos exist", async () => {
       global.fetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({}), // flow-settings
+        })
         .mockResolvedValueOnce({
           ok: true,
           // Component requires hasPassesPhotos to auto-advance to review
@@ -235,10 +235,7 @@ describe("JobCompletionFlow Component", () => {
     });
 
     it("should auto-advance to passes step when before and after photos exist", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: false });
 
       const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
@@ -251,6 +248,10 @@ describe("JobCompletionFlow Component", () => {
   describe("Step Navigation", () => {
     it("should advance from before photos to cleaning when before photos completed", async () => {
       global.fetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({}), // flow-settings
+        })
         .mockResolvedValueOnce({
           ok: true,
           json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
@@ -279,10 +280,7 @@ describe("JobCompletionFlow Component", () => {
     });
 
     it("should advance from cleaning to after photos when checklist completed", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: true, hasAfterPhotos: false });
 
       const { getByTestId, queryByTestId } = renderWithContext(
         <JobCompletionFlow {...defaultProps} />
@@ -304,10 +302,7 @@ describe("JobCompletionFlow Component", () => {
 
     it("should advance from after photos to passes when after photos completed", async () => {
       // Start at cleaning step
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: true, hasAfterPhotos: false });
 
       const { getByTestId, getByText } = renderWithContext(
         <JobCompletionFlow {...defaultProps} />
@@ -342,6 +337,10 @@ describe("JobCompletionFlow Component", () => {
   describe("Review Step", () => {
     beforeEach(() => {
       global.fetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({}), // flow-settings
+        })
         .mockResolvedValueOnce({
           ok: true,
           // Include hasPassesPhotos to auto-advance to review step
@@ -732,14 +731,11 @@ describe("JobCompletionFlow Component", () => {
 
   describe("Cancel Functionality", () => {
     it("should call onCancel when cancel button is pressed", async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-      });
+      mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
       const { getByText } = renderWithContext(<JobCompletionFlow {...defaultProps} />);
 
-      fireEvent.press(getByText("Cancel"));
+      fireEvent.press(getByText("← Exit"));
 
       expect(mockOnCancel).toHaveBeenCalled();
     });
@@ -750,6 +746,10 @@ describe("JobCompletionFlow Component", () => {
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
+          json: () => Promise.resolve({}), // flow-settings
+        })
+        .mockResolvedValueOnce({
+          ok: true,
           json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
         })
         .mockResolvedValueOnce({
@@ -758,6 +758,7 @@ describe("JobCompletionFlow Component", () => {
             Promise.resolve({
               beforePhotos: [{ id: 1, photoData: "data:image/jpeg;base64,abc", room: "Kitchen" }],
               afterPhotos: [{ id: 2, photoData: "data:image/jpeg;base64,xyz", room: "Kitchen" }],
+              passesPhotos: [],
             }),
         });
 
@@ -780,11 +781,15 @@ describe("JobCompletionFlow Component", () => {
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
+          json: () => Promise.resolve({}), // flow-settings
+        })
+        .mockResolvedValueOnce({
+          ok: true,
           json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: true, hasPassesPhotos: true }),
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [] }),
+          json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [], passesPhotos: [] }),
         });
 
       const appointmentWithDifferentPrice = { ...mockAppointment, price: 200 };
@@ -833,10 +838,7 @@ describe("JobCompletionFlow Component", () => {
 
     describe("Skip Buttons Visibility", () => {
       it("should show Skip Before Photos button for business owner", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-        });
+        mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
         const { getByText } = renderWithContext(
           <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
@@ -848,10 +850,7 @@ describe("JobCompletionFlow Component", () => {
       });
 
       it("should NOT show Skip Before Photos button for regular cleaner", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-        });
+        mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
         const { queryByText } = renderWithContext(
           <JobCompletionFlow {...defaultProps} home={mockHomeWithoutBusinessOwner} />
@@ -863,10 +862,7 @@ describe("JobCompletionFlow Component", () => {
       });
 
       it("should NOT show skip button when home has no preferred cleaner", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-        });
+        mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
         const { queryByText } = renderWithContext(
           <JobCompletionFlow {...defaultProps} home={mockHomeWithNoPreferred} />
@@ -878,10 +874,7 @@ describe("JobCompletionFlow Component", () => {
       });
 
       it("should show Skip Checklist button for business owner on cleaning step", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
-        });
+        mockBothFetches({ hasBeforePhotos: true, hasAfterPhotos: false });
 
         const { getByText } = renderWithContext(
           <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
@@ -893,10 +886,7 @@ describe("JobCompletionFlow Component", () => {
       });
 
       it("should NOT show Skip Checklist button for regular cleaner on cleaning step", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
-        });
+        mockBothFetches({ hasBeforePhotos: true, hasAfterPhotos: false });
 
         const { queryByText, getByTestId } = renderWithContext(
           <JobCompletionFlow {...defaultProps} home={mockHomeWithoutBusinessOwner} />
@@ -911,10 +901,7 @@ describe("JobCompletionFlow Component", () => {
 
     describe("Skip Button Navigation", () => {
       it("should advance to cleaning step when Skip Before Photos is pressed", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
-        });
+        mockBothFetches({ hasBeforePhotos: false, hasAfterPhotos: false });
 
         const { getByText, getByTestId, queryByTestId } = renderWithContext(
           <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
@@ -935,10 +922,7 @@ describe("JobCompletionFlow Component", () => {
       });
 
       it("should advance to after photos step when Skip Checklist is pressed", async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ hasBeforePhotos: true, hasAfterPhotos: false }),
-        });
+        mockBothFetches({ hasBeforePhotos: true, hasAfterPhotos: false });
 
         const { getByText, getByTestId, queryByTestId } = renderWithContext(
           <JobCompletionFlow {...defaultProps} home={mockHomeWithBusinessOwner} />
@@ -963,11 +947,15 @@ describe("JobCompletionFlow Component", () => {
         global.fetch
           .mockResolvedValueOnce({
             ok: true,
+            json: () => Promise.resolve({}), // flow-settings
+          })
+          .mockResolvedValueOnce({
+            ok: true,
             json: () => Promise.resolve({ hasBeforePhotos: false, hasAfterPhotos: false }),
           })
           .mockResolvedValueOnce({
             ok: true,
-            json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [] }),
+            json: () => Promise.resolve({ beforePhotos: [], afterPhotos: [], passesPhotos: [] }),
           });
 
         const { getByText, getByTestId, queryByTestId } = renderWithContext(

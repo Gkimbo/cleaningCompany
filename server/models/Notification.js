@@ -38,6 +38,44 @@ module.exports = (sequelize, DataTypes) => {
             "guest_not_left_escalation",
             "guest_not_left_expired",
             "last_minute_urgent",
+            // Cleaner approval notifications
+            "cleaner_join_request",
+            "join_request_approved",
+            "join_request_declined",
+            "join_request_auto_approved",
+            "cleaner_auto_approved",
+            // Business owner client notifications
+            "client_booked",
+            "business_owner_declined",
+            "client_opened_to_marketplace",
+            "client_cancelled_after_decline",
+            // Home size adjustment notifications
+            "adjustment_expired",
+            "adjustment_expired_review",
+            "adjustment_disputed",
+            // Multi-cleaner job notifications
+            "multi_cleaner_offer",
+            "multi_cleaner_slot_filled",
+            "multi_cleaner_urgent",
+            "cleaner_dropout",
+            "solo_completion_offer",
+            "partial_completion",
+            // Business employee notifications
+            "employee_job_assigned",
+            "employee_job_reassigned",
+            "employee_pay_changed",
+            "employee_accepted_invite",
+            "employee_started_job",
+            "employee_completed_job",
+            // Client notifications
+            "client_booked_appointment",
+            "price_change",
+            // Business owner reminders
+            "unassigned_reminder_bo",
+            // New home request notifications (client adds home, BO accepts/declines)
+            "new_home_request",
+            "new_home_accepted",
+            "new_home_declined",
           ],
         ],
       },
@@ -91,12 +129,13 @@ module.exports = (sequelize, DataTypes) => {
   };
 
   // Class method to get action-required count for a user
+  // Note: Counts ALL action-required notifications regardless of read status
+  // Badge persists until the action is resolved (e.g., appointment assigned)
   Notification.getActionRequiredCount = async function (userId) {
     return await this.count({
       where: {
         userId,
         actionRequired: true,
-        isRead: false,
       },
     });
   };

@@ -18,6 +18,7 @@ import { UserContext } from "../../context/UserContext";
 import MessageService from "../../services/fetchRequests/MessageClass";
 import { useSocket } from "../../services/SocketContext";
 import MessageBubble from "./MessageBubble";
+import CreateSupportTicketModal from "../conflicts/modals/CreateSupportTicketModal";
 import {
   colors,
   spacing,
@@ -48,6 +49,7 @@ const ChatScreen = () => {
   const [messages, setMessages] = useState([]);
   const [showEditTitle, setShowEditTitle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
 
   const fetchMessages = useCallback(async () => {
     if (!state.currentUser?.token || !conversationId) return;
@@ -269,6 +271,29 @@ const ChatScreen = () => {
     return isOwnerOrHR && isInternal;
   };
 
+  // Check if user can create a ticket from this conversation
+  const canCreateTicket = () => {
+    const isOwnerOrHR = state.account === "owner" || state.account === "humanResources";
+    const isSupport = conversation?.conversationType === "support";
+    return isOwnerOrHR && isSupport;
+  };
+
+  // Get the subject user (non-HR/owner participant) for ticket creation
+  const getSubjectUser = () => {
+    if (!conversation?.participants) return null;
+    const subject = conversation.participants.find(
+      (p) => p.user && !["owner", "humanResources"].includes(p.user.type)
+    );
+    if (subject?.user) {
+      return {
+        id: subject.userId,
+        name: `${subject.user.firstName || ""} ${subject.user.lastName || ""}`.trim() || subject.user.username,
+        type: subject.user.type === "cleaner" ? "cleaner" : "homeowner",
+      };
+    }
+    return null;
+  };
+
   const getDisplayName = (user) => {
     if (!user) return "Unknown";
     return user.username || "Unknown";
@@ -437,6 +462,16 @@ const ChatScreen = () => {
             <Text style={styles.headerSubtitle}>{getConversationSubtitle()}</Text>
           )}
         </View>
+
+        {/* Create Ticket button for HR/owners on support conversations */}
+        {canCreateTicket() && (
+          <Pressable
+            style={styles.createTicketButton}
+            onPress={() => setShowCreateTicketModal(true)}
+          >
+            <Icon name="flag" size={18} color={colors.warning[600]} />
+          </Pressable>
+        )}
       </View>
 
       {/* Edit Title Modal */}
@@ -570,6 +605,20 @@ const ChatScreen = () => {
           </View>
         )
       )}
+
+      {/* Create Support Ticket Modal */}
+      <CreateSupportTicketModal
+        visible={showCreateTicketModal}
+        onClose={() => setShowCreateTicketModal(false)}
+        onSuccess={() => {
+          setShowCreateTicketModal(false);
+          Alert.alert("Success", "Support ticket created successfully");
+        }}
+        conversationId={parseInt(conversationId)}
+        conversationTitle={getConversationTitle()}
+        subjectUser={getSubjectUser()}
+        token={state.currentUser?.token}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -625,6 +674,12 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
     marginTop: 2,
+  },
+  createTicketButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    marginLeft: spacing.sm,
   },
   // Messages List
   messagesList: {

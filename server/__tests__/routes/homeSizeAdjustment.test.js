@@ -35,7 +35,34 @@ jest.mock("../../services/sendNotifications/EmailClass", () => ({
   sendAdjustmentApproved: jest.fn().mockResolvedValue(true),
   sendAdjustmentNeedsOwnerReview: jest.fn().mockResolvedValue(true),
   sendAdjustmentResolved: jest.fn().mockResolvedValue(true),
+  sendAdjustmentDisputedEmail: jest.fn().mockResolvedValue(true),
 }));
+
+// Mock NotificationService
+jest.mock("../../services/NotificationService", () => ({
+  notifyUser: jest.fn().mockResolvedValue({ id: 1 }),
+}));
+
+// Mock Stripe
+const mockStripe = {
+  customers: {
+    retrieve: jest.fn(),
+  },
+  paymentIntents: {
+    create: jest.fn(),
+  },
+};
+jest.mock("stripe", () => {
+  return jest.fn(() => mockStripe);
+});
+
+// Mock recordPaymentTransaction
+jest.mock("../../routes/api/v1/paymentRouter", () => ({
+  recordPaymentTransaction: jest.fn().mockResolvedValue({ id: 1 }),
+}));
+
+const NotificationService = require("../../services/NotificationService");
+const { recordPaymentTransaction } = require("../../routes/api/v1/paymentRouter");
 
 // Mock Push notification service
 jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
@@ -861,6 +888,347 @@ describe("HomeSizeAdjustment Router", () => {
       // Should contain both old and new notes
       expect(updateCall.ownerPrivateNotes).toContain(existingNote);
       expect(updateCall.ownerPrivateNotes).toContain("HOME SIZE DISCREPANCY");
+    });
+  });
+
+  describe("POST /:id/homeowner-response - Stripe Charge", () => {
+    it("should charge homeowner via Stripe when approving with price difference > 0", async () => {
+      const token = generateToken(1);
+
+      const mockHomeowner = createMockUser({
+        id: 1,
+        stripeCustomerId: "cus_test123",
+      });
+      const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
+      const mockRequest = createMockRequest({ priceDifference: 50.0 });
+      const mockHome = createMockHome();
+      const mockAppointment = createMockAppointment();
+
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockHomeowner);
+        if (id === 2) return Promise.resolve(mockCleaner);
+      });
+      HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      mockStripe.customers.retrieve.mockResolvedValue({
+        invoice_settings: { default_payment_method: "pm_test123" },
+      });
+      mockStripe.paymentIntents.create.mockResolvedValue({
+        id: "pi_test123",
+        status: "succeeded",
+      });
+
+      const res = await request(app)
+        .post("/api/v1/home-size-adjustment/1/homeowner-response")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ approve: true });
+
+      expect(res.status).toBe(200);
+      expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000, // 50.00 * 100 cents
+          currency: "usd",
+          customer: "cus_test123",
+          payment_method: "pm_test123",
+          confirm: true,
+          off_session: true,
+        })
+      );
+      expect(recordPaymentTransaction).toHaveBeenCalled();
+    });
+
+    it("should mark charge as failed when homeowner has no stripeCustomerId", async () => {
+      const token = generateToken(1);
+
+      const mockHomeowner = createMockUser({
+        id: 1,
+        stripeCustomerId: null, // No Stripe customer
+      });
+      const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
+      const mockRequest = createMockRequest({ priceDifference: 50.0 });
+      const mockHome = createMockHome();
+      const mockAppointment = createMockAppointment();
+
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockHomeowner);
+        if (id === 2) return Promise.resolve(mockCleaner);
+      });
+      HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      const res = await request(app)
+        .post("/api/v1/home-size-adjustment/1/homeowner-response")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ approve: true });
+
+      expect(res.status).toBe(200);
+      // Stripe should not be called
+      expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
+      // Request should be updated with chargeStatus: "failed"
+      expect(mockRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chargeStatus: "failed",
+        })
+      );
+    });
+
+    it("should mark charge as failed when homeowner has no payment method", async () => {
+      const token = generateToken(1);
+
+      const mockHomeowner = createMockUser({
+        id: 1,
+        stripeCustomerId: "cus_test123",
+      });
+      const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
+      const mockRequest = createMockRequest({ priceDifference: 50.0 });
+      const mockHome = createMockHome();
+      const mockAppointment = createMockAppointment();
+
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockHomeowner);
+        if (id === 2) return Promise.resolve(mockCleaner);
+      });
+      HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      mockStripe.customers.retrieve.mockResolvedValue({
+        invoice_settings: { default_payment_method: null },
+        default_source: null,
+      });
+
+      const res = await request(app)
+        .post("/api/v1/home-size-adjustment/1/homeowner-response")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ approve: true });
+
+      expect(res.status).toBe(200);
+      expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
+      expect(mockRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chargeStatus: "failed",
+        })
+      );
+    });
+
+    it("should not attempt Stripe charge when priceDifference is 0", async () => {
+      const token = generateToken(1);
+
+      const mockHomeowner = createMockUser({
+        id: 1,
+        stripeCustomerId: "cus_test123",
+      });
+      const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
+      const mockRequest = createMockRequest({ priceDifference: 0 });
+      const mockHome = createMockHome();
+      const mockAppointment = createMockAppointment();
+
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockHomeowner);
+        if (id === 2) return Promise.resolve(mockCleaner);
+      });
+      HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      const res = await request(app)
+        .post("/api/v1/home-size-adjustment/1/homeowner-response")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ approve: true });
+
+      expect(res.status).toBe(200);
+      expect(mockStripe.customers.retrieve).not.toHaveBeenCalled();
+      expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /:id/homeowner-response - Cleaner Dispute Notification", () => {
+    it("should notify cleaner when homeowner disputes the claim", async () => {
+      const token = generateToken(1);
+
+      const mockHomeowner = createMockUser({ id: 1 });
+      const mockCleaner = createMockUser({ id: 2, type: "cleaner", email: "cleaner@test.com" });
+      const mockRequest = createMockRequest();
+      const mockHome = createMockHome();
+      const mockAppointment = createMockAppointment();
+      const mockOwners = [createMockUser({ id: 3, type: "owner" })];
+
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockHomeowner);
+        if (id === 2) return Promise.resolve(mockCleaner);
+      });
+      User.findAll.mockResolvedValue(mockOwners);
+      HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+      const res = await request(app)
+        .post("/api/v1/home-size-adjustment/1/homeowner-response")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          approve: false,
+          reason: "The home size is correct",
+        });
+
+      expect(res.status).toBe(200);
+      // Should notify cleaner about the dispute
+      expect(NotificationService.notifyUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 2,
+          type: "adjustment_disputed",
+          title: "Home Size Claim Disputed",
+        })
+      );
+    });
+
+    it("should include dispute reason in notification data", async () => {
+      const token = generateToken(1);
+
+      const mockHomeowner = createMockUser({ id: 1 });
+      const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
+      const mockRequest = createMockRequest();
+      const mockHome = createMockHome();
+      const mockAppointment = createMockAppointment();
+      const mockOwners = [createMockUser({ id: 3, type: "owner" })];
+
+      User.findByPk.mockImplementation((id) => {
+        if (id === 1) return Promise.resolve(mockHomeowner);
+        if (id === 2) return Promise.resolve(mockCleaner);
+      });
+      User.findAll.mockResolvedValue(mockOwners);
+      HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+      const disputeReason = "I measured and it's definitely 3 beds";
+
+      await request(app)
+        .post("/api/v1/home-size-adjustment/1/homeowner-response")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          approve: false,
+          reason: disputeReason,
+        });
+
+      expect(NotificationService.notifyUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            disputeReason: disputeReason,
+          }),
+        })
+      );
+    });
+  });
+
+  describe("POST /:id/owner-resolve - Stripe Charge", () => {
+    it("should charge homeowner via Stripe when owner approves with price difference > 0", async () => {
+      const token = generateToken(3);
+
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
+      const mockHomeowner = createMockUser({
+        id: 1,
+        stripeCustomerId: "cus_homeowner123",
+      });
+      const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
+      const mockRequest = createMockRequest({
+        status: "pending_owner",
+      });
+      const mockHome = createMockHome();
+      // Set appointment price to 150, calculatePrice returns 200, so priceDiff = 50
+      const mockAppointment = createMockAppointment({ price: "150.00" });
+
+      User.findByPk.mockImplementation((id) => {
+        if (id === 3) return Promise.resolve(mockOwner);
+        if (id === 1) return Promise.resolve(mockHomeowner);
+        if (id === 2) return Promise.resolve(mockCleaner);
+      });
+      HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      // calculatePrice returns 200, appointment.price is 150, so priceDiff = 50
+      calculatePrice.mockResolvedValue(200);
+
+      mockStripe.customers.retrieve.mockResolvedValue({
+        invoice_settings: { default_payment_method: "pm_owner_test" },
+      });
+      mockStripe.paymentIntents.create.mockResolvedValue({
+        id: "pi_owner_test",
+        status: "succeeded",
+      });
+
+      const res = await request(app)
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ approve: true, ownerNote: "Photos confirm larger size" });
+
+      expect(res.status).toBe(200);
+      // priceDiff = 200 - 150 = 50, amount = 50 * 100 = 5000 cents
+      expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          customer: "cus_homeowner123",
+        })
+      );
+      expect(recordPaymentTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "charge",
+          status: "succeeded",
+          amount: 5000,
+        })
+      );
+    });
+
+    it("should handle Stripe error gracefully", async () => {
+      const token = generateToken(3);
+
+      const mockOwner = createMockUser({ id: 3, type: "owner" });
+      const mockHomeowner = createMockUser({
+        id: 1,
+        stripeCustomerId: "cus_homeowner123",
+      });
+      const mockCleaner = createMockUser({ id: 2, type: "cleaner" });
+      const mockRequest = createMockRequest({
+        status: "pending_owner",
+      });
+      const mockHome = createMockHome();
+      const mockAppointment = createMockAppointment({ price: "150.00" });
+
+      User.findByPk.mockImplementation((id) => {
+        if (id === 3) return Promise.resolve(mockOwner);
+        if (id === 1) return Promise.resolve(mockHomeowner);
+        if (id === 2) return Promise.resolve(mockCleaner);
+      });
+      HomeSizeAdjustmentRequest.findByPk.mockResolvedValue(mockRequest);
+      UserHomes.findByPk.mockResolvedValue(mockHome);
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      mockStripe.customers.retrieve.mockResolvedValue({
+        invoice_settings: { default_payment_method: "pm_test" },
+      });
+      mockStripe.paymentIntents.create.mockRejectedValue(new Error("Card declined"));
+
+      const res = await request(app)
+        .post("/api/v1/home-size-adjustment/1/owner-resolve")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ approve: true, ownerNote: "Approved" });
+
+      // Should still succeed but mark charge as failed
+      expect(res.status).toBe(200);
+      expect(mockRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chargeStatus: "failed",
+        })
+      );
     });
   });
 });

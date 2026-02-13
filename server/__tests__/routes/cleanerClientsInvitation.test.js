@@ -467,7 +467,7 @@ describe("Cleaner Clients Router - Invitation Flow", () => {
 
       User.findByPk.mockResolvedValue({
         id: clientId,
-        type: "homeowner",
+        type: null, // Homeowners have type: null in this codebase
       });
 
       const mockCleanerClient = {
@@ -504,7 +504,7 @@ describe("Cleaner Clients Router - Invitation Flow", () => {
 
       User.findByPk.mockResolvedValue({
         id: clientId,
-        type: "homeowner",
+        type: null, // Homeowners have type: null in this codebase
       });
 
       CleanerClient.findOne.mockResolvedValue(null);

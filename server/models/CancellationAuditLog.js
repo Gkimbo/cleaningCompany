@@ -196,9 +196,15 @@ module.exports = (sequelize, DataTypes) => {
 		}
 
 		if (query) {
+			// Sanitize query length to prevent DoS
+			const sanitizedQuery = String(query).slice(0, 500);
 			where[sequelize.Sequelize.Op.or] = [
-				{ searchText: { [sequelize.Sequelize.Op.iLike]: `%${query}%` } },
-				sequelize.literal(`"eventData"::text ILIKE '%${query.replace(/'/g, "''")}%'`),
+				{ searchText: { [sequelize.Sequelize.Op.iLike]: `%${sanitizedQuery}%` } },
+				// Use Sequelize's where/cast for safe parameterized JSONB text search
+				sequelize.where(
+					sequelize.cast(sequelize.col("eventData"), "TEXT"),
+					{ [sequelize.Sequelize.Op.iLike]: `%${sanitizedQuery}%` }
+				),
 			];
 		}
 

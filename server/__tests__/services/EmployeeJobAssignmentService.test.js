@@ -56,6 +56,7 @@ jest.mock("../../models", () => {
       findOne: jest.fn(),
       findAll: jest.fn(),
       create: jest.fn(),
+      count: jest.fn(),
     },
     EmployeePayChangeLog: {
       create: jest.fn(),
@@ -440,6 +441,11 @@ describe("EmployeeJobAssignmentService", () => {
   });
 
   describe("completeJob", () => {
+    beforeEach(() => {
+      // Mock findAll for checkAllEmployeesCompleted - return completed assignment by default
+      EmployeeJobAssignment.findAll.mockResolvedValue([{ id: 1, status: "completed" }]);
+    });
+
     it("should validate marketplace requirements before completing", async () => {
       const mockEmployee = { id: 1, defaultHourlyRate: 1500 };
       BusinessEmployee.findOne.mockResolvedValue(mockEmployee);
@@ -936,7 +942,9 @@ describe("EmployeeJobAssignmentService", () => {
       status: "assigned",
       payAmount: 5000,
       payType: "flat_rate",
+      employee: { id: 2, userId: 8, firstName: "Old", lastName: "Employee" },
       update: jest.fn(),
+      reload: jest.fn().mockResolvedValue(true),
     };
 
     const mockNewEmployee = {
@@ -952,6 +960,7 @@ describe("EmployeeJobAssignmentService", () => {
       jest.clearAllMocks();
       NotificationService.notifyEmployeeJobAssigned.mockResolvedValue({});
       NotificationService.notifyEmployeeJobReassigned.mockResolvedValue({});
+      EmployeeJobAssignment.count.mockResolvedValue(1);
     });
 
     it("should notify new employee when job is reassigned", async () => {

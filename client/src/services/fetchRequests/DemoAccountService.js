@@ -179,9 +179,10 @@ class DemoAccountService {
 	/**
 	 * Reset all demo data back to original seeder state
 	 * @param {string} token - Owner's auth token (can be demo account token during preview)
-	 * @returns {Object} { success, message, deleted, created }
+	 * @param {string} currentRole - Current preview role (optional, used to get new session after reset)
+	 * @returns {Object} { success, message, deleted, created, newSession }
 	 */
-	static async resetDemoData(token) {
+	static async resetDemoData(token, currentRole = null) {
 		try {
 			const response = await fetch(`${API_BASE}/demo-accounts/reset`, {
 				method: "POST",
@@ -189,6 +190,7 @@ class DemoAccountService {
 					Authorization: `Bearer ${token}`,
 					"Content-Type": "application/json",
 				},
+				body: JSON.stringify({ currentRole }),
 			});
 
 			const data = await response.json();

@@ -26,8 +26,8 @@ import {
 } from "../../services/styles/theme";
 import TaxFormsSection from "../tax/TaxFormsSection";
 import ReviewsOverview from "../reviews/ReviewsOverview";
-import TodaysAppointment from "../employeeAssignments/tiles/TodaysAppointment";
 import NextAppointmentPreview from "../employeeAssignments/tiles/NextAppointmentPreview";
+import TodaysJobsList from "./TodaysJobsList";
 import JobCompletionFlow from "../employeeAssignments/jobPhotos/JobCompletionFlow";
 import ClientAppointmentsSection from "./ClientAppointmentsSection";
 import { usePricing } from "../../context/PricingContext";
@@ -121,6 +121,24 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
+// Format time constraint for display: "10-3" → "10am - 3pm"
+const formatTimeConstraint = (timeToBeCompleted) => {
+  if (!timeToBeCompleted || timeToBeCompleted.toLowerCase() === "anytime") {
+    return "Anytime";
+  }
+
+  // Match pattern like "10-3" or "10am-3pm"
+  const match = timeToBeCompleted.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+  if (!match) return timeToBeCompleted;
+
+  const startHour = parseInt(match[1], 10);
+  const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+  const endHour = parseInt(match[3], 10);
+  const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+
+  return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+};
+
 // Parse end time from format like "10am-3pm" → 15 (3pm in 24hr)
 const parseEndTime = (timeToBeCompleted) => {
   if (!timeToBeCompleted || timeToBeCompleted === "anytime") {
@@ -211,6 +229,13 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
   const isTomorrow = appointmentDate.toDateString() === tomorrow.toDateString();
   const isMultiCleaner = appointment.isMultiCleanerJob;
   const multiCleanerJob = appointment.multiCleanerJob;
+  const isTeamJob = appointment.jobType === "team";
+
+  // Use inline data for team jobs, otherwise use home prop
+  const displayCity = appointment.city || home?.city;
+  const displayState = appointment.state || home?.state;
+  const displayBeds = appointment.numBeds || home?.numBeds;
+  const displayBaths = appointment.numBaths || home?.numBaths;
 
   const formatDate = (date) => {
     if (isToday) return "Today";
@@ -220,14 +245,14 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
   };
 
   // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
-  const platformFeePercent = isMultiCleaner
+  const platformFeePercent = (isMultiCleaner || isTeamJob)
     ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
     : (pricing?.platform?.feePercent || 0.1);
   const cleanerSharePercent = 1 - platformFeePercent;
 
   const totalPrice = Number(appointment.price);
   // For multi-cleaner jobs, calculate payout based on number of cleaners
-  const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.employeesAssigned?.length || 1;
+  const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1;
   const payout = (totalPrice / numCleaners) * cleanerSharePercent;
 
   return (
@@ -236,7 +261,7 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
       style={({ pressed }) => [
         styles.appointmentCard,
         isToday && styles.appointmentCardToday,
-        isMultiCleaner && styles.appointmentCardMultiCleaner,
+        (isMultiCleaner || isTeamJob) && styles.appointmentCardMultiCleaner,
         pressed && styles.cardPressed,
       ]}
     >
@@ -246,7 +271,7 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
             {formatDate(appointmentDate)}
           </Text>
         </View>
-        {isMultiCleaner && (
+        {(isMultiCleaner || isTeamJob) && (
           <View style={styles.teamBadge}>
             <Icon name="users" size={10} color={colors.primary[700]} />
             <Text style={styles.teamBadgeText}>Team</Text>
@@ -255,18 +280,18 @@ const UpcomingAppointmentCard = ({ appointment, home, onPress, pricing }) => {
       </View>
       <View style={styles.appointmentDetails}>
         <Text style={styles.appointmentHome} numberOfLines={1}>
-          {home?.city || "Loading..."}, {home?.state || ""}
+          {displayCity || "Loading..."}, {displayState || ""}
         </Text>
         <Text style={styles.appointmentInfo}>
-          {home?.numBeds || "?"} bed | {home?.numBaths || "?"} bath
+          {displayBeds || "?"} bed | {displayBaths || "?"} bath
         </Text>
-        {isMultiCleaner && multiCleanerJob && (
+        {(isMultiCleaner || isTeamJob) && (multiCleanerJob || appointment.totalCleanersRequired) && (
           <View style={styles.multiCleanerInfo}>
             <Icon name="user" size={10} color={colors.primary[600]} />
             <Text style={styles.multiCleanerText}>
-              {multiCleanerJob.cleanersConfirmed}/{multiCleanerJob.totalCleanersRequired} cleaners confirmed
+              {multiCleanerJob?.cleanersConfirmed || appointment.cleanersConfirmed}/{multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired} cleaners confirmed
             </Text>
-            {multiCleanerJob.cleanersConfirmed < multiCleanerJob.totalCleanersRequired && (
+            {(multiCleanerJob?.cleanersConfirmed || appointment.cleanersConfirmed) < (multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired) && (
               <View style={styles.multiCleanerWarning}>
                 <Icon name="clock-o" size={10} color={colors.warning[600]} />
                 <Text style={styles.multiCleanerWarningText}>Filling</Text>
@@ -301,6 +326,18 @@ const PendingRequestCard = ({ request, onPress, distance }) => {
     return date.toLocaleDateString("en-US", options);
   };
 
+  const getRelativeTime = (date) => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "today";
+    if (diffDays === 1) return "tomorrow";
+    if (diffDays < 0) return `${Math.abs(diffDays)} days ago`;
+    return `in ${diffDays} days`;
+  };
+
   const formatDistance = (km) => {
     if (km === null || km === undefined) return null;
     const miles = km * 0.621371;
@@ -308,6 +345,7 @@ const PendingRequestCard = ({ request, onPress, distance }) => {
   };
 
   const distanceText = formatDistance(distance);
+  const relativeTime = getRelativeTime(appointmentDate);
 
   return (
     <Pressable
@@ -318,7 +356,10 @@ const PendingRequestCard = ({ request, onPress, distance }) => {
       ]}
     >
       <View style={styles.requestInfo}>
-        <Text style={styles.requestDate}>{formatDate(appointmentDate)}</Text>
+        <View style={styles.requestDateRow}>
+          <Text style={styles.requestDate}>{formatDate(appointmentDate)}</Text>
+          <Text style={styles.requestRelativeTime}>{relativeTime}</Text>
+        </View>
         <Text style={styles.requestLocation}>
           {home ? `${home.city}, ${home.state}` : "Loading..."}
         </Text>
@@ -365,13 +406,44 @@ const CleanerDashboard = ({ state, dispatch }) => {
   // Preferred cleaner perk status
   const [perkStatus, setPerkStatus] = useState(null);
 
+  // Multi-cleaner requests
+  const [pendingMultiCleanerRequests, setPendingMultiCleanerRequests] = useState([]);
+  // Confirmed multi-cleaner jobs (jobs the cleaner has been approved for)
+  const [confirmedMultiCleanerJobs, setConfirmedMultiCleanerJobs] = useState([]);
+
   useEffect(() => {
     if (state.currentUser.token) {
       fetchDashboardData();
       fetchStripeAccountStatus();
       fetchPerkStatus();
+      fetchMultiCleanerRequests();
+      fetchConfirmedMultiCleanerJobs();
     }
   }, [state.currentUser.token]);
+
+  // Fetch multi-cleaner requests
+  const fetchMultiCleanerRequests = async () => {
+    try {
+      const response = await FetchData.getMyMultiCleanerRequests(state.currentUser.token);
+      if (!response.error) {
+        setPendingMultiCleanerRequests(response.requests || []);
+      }
+    } catch (error) {
+      console.log("[CleanerDashboard] Error fetching multi-cleaner requests:", error.message);
+    }
+  };
+
+  // Fetch confirmed multi-cleaner jobs
+  const fetchConfirmedMultiCleanerJobs = async () => {
+    try {
+      const response = await FetchData.getMyConfirmedMultiCleanerJobs(state.currentUser.token);
+      if (!response.error) {
+        setConfirmedMultiCleanerJobs(response.jobs || []);
+      }
+    } catch (error) {
+      console.log("[CleanerDashboard] Error fetching confirmed multi-cleaner jobs:", error.message);
+    }
+  };
 
   // Fetch preferred cleaner perk status
   const fetchPerkStatus = async () => {
@@ -573,6 +645,8 @@ const CleanerDashboard = ({ state, dispatch }) => {
     fetchDashboardData(true);
     fetchStripeAccountStatus();
     fetchPerkStatus();
+    fetchMultiCleanerRequests();
+    fetchConfirmedMultiCleanerJobs();
   }, [state.currentUser.token]);
 
   const getGreeting = () => {
@@ -587,8 +661,22 @@ const CleanerDashboard = ({ state, dispatch }) => {
     return new Date().toLocaleDateString("en-US", options);
   };
 
-  // Sort appointments by date
-  const sortedAppointments = [...appointments].sort(
+  // Get appointment IDs that are multi-cleaner jobs to avoid duplicates
+  const multiCleanerAppointmentIds = new Set(
+    confirmedMultiCleanerJobs.map((job) => job.appointmentId)
+  );
+
+  // Combine solo appointments with confirmed multi-cleaner jobs
+  // Filter out appointments that are already in confirmedMultiCleanerJobs to avoid duplicates
+  const allJobs = [
+    ...appointments
+      .filter((apt) => !multiCleanerAppointmentIds.has(apt.id))
+      .map((apt) => ({ ...apt, jobType: "solo" })),
+    ...confirmedMultiCleanerJobs.map((job) => ({ ...job, jobType: "team" })),
+  ];
+
+  // Sort all jobs by date
+  const sortedAppointments = [...allJobs].sort(
     (a, b) => parseLocalDate(a.date) - parseLocalDate(b.date)
   );
 
@@ -612,18 +700,19 @@ const CleanerDashboard = ({ state, dispatch }) => {
   // Get first 3 for display in the list
   const upcomingAppointments = allUpcomingAppointments.slice(0, 3);
 
-  // Get completed appointments count
+  // Get completed appointments count (solo jobs only - team completions are tracked separately)
   const completedCount = appointments.filter((apt) => apt.completed).length;
 
   // Calculate expected payout (accounting for split between multiple cleaners)
   const expectedPayout = sortedAppointments
     .filter((apt) => !apt.completed && parseLocalDate(apt.date) >= today)
     .reduce((sum, apt) => {
-      // For multi-cleaner jobs, use totalCleanersRequired from multiCleanerJob
+      // For multi-cleaner jobs, use totalCleanersRequired from multiCleanerJob or appointment
       // Otherwise fall back to employeesAssigned length
-      const numCleaners = apt.multiCleanerJob?.totalCleanersRequired || apt.employeesAssigned?.length || 1;
+      const isTeamJob = apt.jobType === "team" || apt.isMultiCleanerJob;
+      const numCleaners = apt.multiCleanerJob?.totalCleanersRequired || apt.totalCleanersRequired || apt.employeesAssigned?.length || 1;
       // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
-      const feePercent = apt.isMultiCleanerJob
+      const feePercent = isTeamJob
         ? (pricing?.platform?.multiCleanerPlatformFeePercent || 0.13)
         : (pricing?.platform?.feePercent || 0.1);
       const sharePercent = 1 - feePercent;
@@ -774,7 +863,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
           />
           <StatCard
             title="Pending"
-            value={pendingRequests.length}
+            value={pendingRequests.length + pendingMultiCleanerRequests.length}
             subtitle="requests"
             color={colors.warning[500]}
             onPress={() => navigate("/my-requests")}
@@ -790,16 +879,13 @@ const CleanerDashboard = ({ state, dispatch }) => {
         {/* Today's Appointments */}
         {todaysAppointments.length > 0 && (
           <View style={styles.section}>
-            <SectionHeader title={`Today's Jobs (${todaysAppointments.length})`} />
-            {todaysAppointments.map((appointment) => (
-              <TodaysAppointment
-                key={appointment.id}
-                appointment={appointment}
-                onJobCompleted={handleJobCompleted}
-                onJobUnstarted={handleJobUnstarted}
-                token={state.currentUser.token}
-              />
-            ))}
+            <TodaysJobsList
+              appointments={todaysAppointments}
+              homeDetails={homeDetails}
+              onJobCompleted={handleJobCompleted}
+              onJobUnstarted={handleJobUnstarted}
+              token={state.currentUser.token}
+            />
           </View>
         )}
 
@@ -845,7 +931,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
             <View style={styles.appointmentsList}>
               {upcomingAppointments.map((apt, index) => (
                 <UpcomingAppointmentCard
-                  key={apt.id || index}
+                  key={apt.jobType === "team" ? `team-${apt.completionId}` : `solo-${apt.id || index}`}
                   appointment={apt}
                   home={homeDetails[apt.homeId]}
                   onPress={() => navigate("/employee-assignments")}
@@ -857,7 +943,7 @@ const CleanerDashboard = ({ state, dispatch }) => {
         )}
 
         {/* Pending Requests Section */}
-        {pendingRequests.length > 0 && (
+        {(pendingRequests.length > 0 || pendingMultiCleanerRequests.length > 0) && (
           <View style={styles.section}>
             <SectionHeader
               title="Pending Requests"
@@ -865,27 +951,95 @@ const CleanerDashboard = ({ state, dispatch }) => {
               actionText="View All"
             />
             <View style={styles.requestsList}>
-              {pendingRequests.slice(0, 3).map((request, index) => {
-                // Calculate distance for this request
-                let distance = null;
-                const loc = requestLocations[request.homeId];
-                if (userLocation && loc) {
-                  distance = haversineDistance(
-                    userLocation.latitude,
-                    userLocation.longitude,
-                    loc.latitude,
-                    loc.longitude
-                  );
-                }
-                return (
-                  <PendingRequestCard
-                    key={request.id || index}
-                    request={request}
-                    distance={distance}
-                    onPress={() => navigate("/my-requests")}
-                  />
-                );
-              })}
+              {/* Combine and sort all requests by date */}
+              {[
+                ...pendingRequests.map((r) => ({ ...r, type: "solo", sortDate: new Date(r.date + "T00:00:00") })),
+                ...pendingMultiCleanerRequests.map((r) => ({ ...r, type: "team", sortDate: new Date(r.appointment?.date + "T00:00:00") })),
+              ]
+                .sort((a, b) => a.sortDate - b.sortDate)
+                .slice(0, 3)
+                .map((request) => {
+                  if (request.type === "team") {
+                    return (
+                      <Pressable
+                        key={`mc-${request.id}`}
+                        style={({ pressed }) => [
+                          styles.teamRequestCard,
+                          pressed && styles.cardPressed,
+                        ]}
+                        onPress={() => navigate("/my-requests")}
+                      >
+                        <View style={styles.teamRequestHeader}>
+                          <View style={styles.teamBadgeSmall}>
+                            <Icon name="users" size={10} color={colors.primary[700]} />
+                            <Text style={styles.teamBadgeSmallText}>Team</Text>
+                          </View>
+                          <View style={styles.requestBadge}>
+                            <Text style={styles.requestBadgeText}>Pending</Text>
+                          </View>
+                        </View>
+                        <View style={styles.teamRequestDateRow}>
+                          <Text style={styles.teamRequestDatePrimary}>
+                            {new Date(request.appointment?.date + "T00:00:00").toLocaleDateString("en-US", {
+                              weekday: "short",
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </Text>
+                          <Text style={styles.teamRequestRelativeTime}>
+                            {(() => {
+                              const apptDate = new Date(request.appointment?.date + "T00:00:00");
+                              const now = new Date();
+                              now.setHours(0, 0, 0, 0);
+                              const diffDays = Math.ceil((apptDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                              if (diffDays === 0) return "today";
+                              if (diffDays === 1) return "tomorrow";
+                              if (diffDays < 0) return `${Math.abs(diffDays)} days ago`;
+                              return `in ${diffDays} days`;
+                            })()}
+                          </Text>
+                        </View>
+                        <Text style={styles.teamRequestLocation}>
+                          {request.appointment?.home?.city}, {request.appointment?.home?.state}
+                        </Text>
+                        <View style={styles.teamRequestInfo}>
+                          <Text style={styles.teamRequestEarnings}>
+                            ${(((Number(request.appointment?.price) || 0) * cleanerSharePercent) / (request.multiCleanerJob?.totalCleanersRequired || 2)).toFixed(0)}
+                          </Text>
+                        </View>
+                        {request.appointment?.timeToBeCompleted &&
+                         request.appointment.timeToBeCompleted.toLowerCase() !== "anytime" && (
+                          <View style={styles.timeConstraintRow}>
+                            <Icon name="clock-o" size={10} color={colors.warning[600]} />
+                            <Text style={styles.timeConstraintText}>
+                              Complete by {formatTimeConstraint(request.appointment.timeToBeCompleted)}
+                            </Text>
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  } else {
+                    // Solo request
+                    let distance = null;
+                    const loc = requestLocations[request.homeId];
+                    if (userLocation && loc) {
+                      distance = haversineDistance(
+                        userLocation.latitude,
+                        userLocation.longitude,
+                        loc.latitude,
+                        loc.longitude
+                      );
+                    }
+                    return (
+                      <PendingRequestCard
+                        key={request.id}
+                        request={request}
+                        distance={distance}
+                        onPress={() => navigate("/my-requests")}
+                      />
+                    );
+                  }
+                })}
             </View>
           </View>
         )}
@@ -1248,14 +1402,24 @@ const styles = StyleSheet.create({
   requestInfo: {
     flex: 1,
   },
+  requestDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
   requestDate: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
   },
-  requestLocation: {
+  requestRelativeTime: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  requestLocation: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
     marginTop: 2,
   },
   requestDetails: {
@@ -1287,6 +1451,87 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
+  },
+
+  // Team Request Card
+  teamRequestCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+    ...shadows.sm,
+  },
+  teamRequestHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  teamBadgeSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[100],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    gap: 4,
+  },
+  teamBadgeSmallText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  teamRequestLocation: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  teamRequestInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  teamRequestDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  teamRequestDate: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  teamRequestDatePrimary: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  teamRequestRelativeTime: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.medium,
+  },
+  teamRequestEarnings: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  timeConstraintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
+    marginTop: spacing.xs,
+    gap: 4,
+    alignSelf: "flex-start",
+  },
+  timeConstraintText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
   },
   requestBadgeText: {
     fontSize: typography.fontSize.xs,

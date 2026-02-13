@@ -92,11 +92,23 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.JSON,
 			allowNull: true,
 		},
-		// Track if unassigned warning notification has been sent
+		// Track if unassigned warning notification has been sent (to homeowner)
 		unassignedWarningSent: {
 			type: DataTypes.BOOLEAN,
 			allowNull: false,
 			defaultValue: false,
+		},
+		// Track business owner reminder notifications for unassigned appointments
+		businessOwnerRemindersSent: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Count of unassigned appointment reminders sent to business owner",
+		},
+		lastBusinessOwnerReminderAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When the last business owner reminder was sent",
 		},
 		// Track if payment capture has failed (needs manual retry)
 		paymentCaptureFailed: {
@@ -165,6 +177,20 @@ module.exports = (sequelize, DataTypes) => {
 		},
 		openedToMarketAt: {
 			type: DataTypes.DATE,
+			allowNull: true,
+		},
+		// Business owner decline flow fields (when BO can't assign anyone)
+		businessOwnerDeclined: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+		},
+		businessOwnerDeclinedAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+		},
+		businessOwnerDeclineReason: {
+			type: DataTypes.TEXT,
 			allowNull: true,
 		},
 		// Backup cleaner notification fields
@@ -364,6 +390,17 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "Who/what initiated the cancellation",
 		},
+		cancellationCategory: {
+			type: DataTypes.STRING(50),
+			allowNull: true,
+			comment: "Category: tenant_present, emergency, weather, etc.",
+		},
+		reviewsBlocked: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "Whether reviews are blocked (e.g., tenant present cancellation)",
+		},
 		hasActiveAppeal: {
 			type: DataTypes.BOOLEAN,
 			allowNull: false,
@@ -417,6 +454,13 @@ module.exports = (sequelize, DataTypes) => {
 			type: DataTypes.DATE,
 			allowNull: true,
 			comment: "When first before photo was uploaded (job start time)",
+		},
+		// Demo appointment flag - never show on marketplace
+		isDemoAppointment: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "True if created by demo account - excluded from marketplace",
 		},
 	});
 

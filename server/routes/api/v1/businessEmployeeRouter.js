@@ -7,6 +7,7 @@ const EmployeeJobAssignmentService = require("../../../services/EmployeeJobAssig
 const MarketplaceJobRequirementsService = require("../../../services/MarketplaceJobRequirementsService");
 const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
 const GuestNotLeftService = require("../../../services/GuestNotLeftService");
+const EmployeeStripeConnectService = require("../../../services/EmployeeStripeConnectService");
 const BusinessEmployeeSerializer = require("../../../serializers/BusinessEmployeeSerializer");
 const EmployeeJobAssignmentSerializer = require("../../../serializers/EmployeeJobAssignmentSerializer");
 const { BusinessEmployee, EmployeeJobAssignment, User, JobPhoto, AppointmentJobFlow, sequelize } = require("../../../models");
@@ -212,7 +213,7 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
         id: assignmentId,
         businessEmployeeId: employeeId,
         // Only show jobs in valid states
-        status: { [Op.notIn]: ["cancelled", "no_show"] },
+        status: { [Op.notIn]: ["cancelled", "no_show", "unassigned"] },
       },
       include: [
         {
@@ -317,7 +318,7 @@ router.get("/my-jobs/:assignmentId", async (req, res) => {
       where: {
         appointmentId: assignment.appointmentId,
         businessEmployeeId: { [Op.ne]: req.employeeRecord.id }, // Exclude current employee
-        status: { [Op.notIn]: ["cancelled"] }, // Exclude cancelled assignments
+        status: { [Op.notIn]: ["cancelled", "unassigned"] }, // Exclude cancelled/unassigned
       },
       include: [
         {
@@ -407,6 +408,42 @@ router.get("/my-jobs/:assignmentId/guest-not-left-status", async (req, res) => {
 });
 
 /**
+ * GET /my-jobs/:assignmentId/flow - Get the job flow details for this assignment
+ * Returns photo requirement, checklist, and job notes based on assigned flow
+ */
+router.get("/my-jobs/:assignmentId/flow", async (req, res) => {
+  try {
+    const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
+    const { EmployeeJobAssignment } = require("../../../models");
+
+    const assignmentId = parseInt(req.params.assignmentId);
+    const employeeId = req.employeeRecord.id;
+
+    // Verify the assignment belongs to this employee
+    const assignment = await EmployeeJobAssignment.findOne({
+      where: {
+        id: assignmentId,
+        businessEmployeeId: employeeId,
+      },
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: "Job not found" });
+    }
+
+    // Get flow details for this assignment
+    const flowDetails = await AppointmentJobFlowService.getFlowDetailsForEmployee(
+      assignmentId
+    );
+
+    res.json(flowDetails);
+  } catch (error) {
+    console.error("Error fetching job flow:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /my-jobs/:assignmentId/start - Start a job
  * Accepts optional GPS coordinates and requires manual confirmation
  */
@@ -428,7 +465,10 @@ router.post("/my-jobs/:assignmentId/start", async (req, res) => {
       { latitude, longitude }
     );
 
-    res.json({ message: "Job started", assignment });
+    res.json({
+      message: "Job started",
+      assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment),
+    });
   } catch (error) {
     console.error("Error starting job:", error);
     res.status(400).json({ error: error.message });
@@ -448,7 +488,10 @@ router.post("/my-jobs/:assignmentId/complete", async (req, res) => {
       hoursWorked
     );
 
-    res.json({ message: "Job completed", assignment });
+    res.json({
+      message: "Job completed",
+      assignment: EmployeeJobAssignmentSerializer.serializeOne(assignment),
+    });
   } catch (error) {
     console.error("Error completing job:", error);
     res.status(400).json({ error: error.message });
@@ -526,6 +569,30 @@ router.get("/my-earnings", async (req, res) => {
 });
 
 /**
+ * GET /pending-earnings - Get pending bi-weekly payout summary
+ *
+ * Returns earnings that are waiting for the next bi-weekly payout.
+ * Employees are paid every other Friday.
+ */
+router.get("/pending-earnings", async (req, res) => {
+  try {
+    const EmployeeBatchPayoutService = require("../../../services/EmployeeBatchPayoutService");
+
+    const pendingEarnings = await EmployeeBatchPayoutService.getPendingEarningsForEmployee(
+      req.employeeRecord.id
+    );
+
+    res.json({
+      success: true,
+      ...pendingEarnings,
+    });
+  } catch (error) {
+    console.error("Error fetching pending earnings:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /my-profile - Get employee profile
  */
 router.get("/my-profile", async (req, res) => {
@@ -554,20 +621,140 @@ router.get("/my-profile", async (req, res) => {
 // =====================================
 
 /**
+ * Helper to get base URL for Stripe callbacks
+ */
+const getBaseUrl = (req) => {
+  if (process.env.STRIPE_REDIRECT_BASE_URL) {
+    return process.env.STRIPE_REDIRECT_BASE_URL;
+  }
+  const protocol = req.secure || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+  return `${protocol}://${req.get("host")}`;
+};
+
+/**
  * POST /stripe-connect/onboard - Start Stripe Connect onboarding
+ *
+ * Creates a Stripe Connect account for the employee and returns an onboarding link.
+ * Employees need to complete Stripe onboarding to receive direct payouts.
  */
 router.post("/stripe-connect/onboard", async (req, res) => {
   try {
-    if (req.employeeRecord.paymentMethod !== "stripe_connect") {
-      return res.status(400).json({ error: "This employee is not set up for Stripe payments" });
+    const { personalInfo } = req.body;
+    const businessEmployeeId = req.employeeRecord.id;
+
+    // Check if business owner has enabled direct employee payouts
+    const businessOwner = await User.findByPk(req.employeeRecord.businessOwnerId);
+    if (!businessOwner) {
+      return res.status(404).json({ error: "Business owner not found" });
     }
 
-    // TODO: Implement Stripe Connect onboarding for employees
-    // This would create a connected account and return an onboarding link
-    res.status(501).json({ error: "Stripe Connect onboarding not yet implemented" });
+    if (businessOwner.employeePayoutMethod !== "direct_to_employees") {
+      return res.status(400).json({
+        error: "Your employer has not enabled direct employee payouts",
+        code: "DIRECT_PAYOUTS_DISABLED",
+      });
+    }
+
+    // Create Stripe account if not exists
+    const createResult = await EmployeeStripeConnectService.createConnectedAccount(
+      businessEmployeeId,
+      personalInfo
+    );
+
+    // Generate onboarding link
+    const baseUrl = getBaseUrl(req);
+    const linkResult = await EmployeeStripeConnectService.generateOnboardingLink(
+      businessEmployeeId,
+      baseUrl
+    );
+
+    if (linkResult.alreadyOnboarded) {
+      return res.json({
+        success: true,
+        alreadyOnboarded: true,
+        stripeAccountId: createResult.stripeAccountId,
+        message: "Your Stripe account is already set up for payouts",
+      });
+    }
+
+    res.json({
+      success: true,
+      stripeAccountId: createResult.stripeAccountId,
+      onboardingUrl: linkResult.onboardingUrl,
+      onboardingExpiresAt: linkResult.onboardingExpiresAt,
+    });
   } catch (error) {
     console.error("Error starting Stripe onboarding:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /stripe-connect/onboarding-complete - Callback after Stripe onboarding
+ *
+ * Called by Stripe after employee completes onboarding.
+ * Redirects to app with success/failure status.
+ */
+router.get("/stripe-connect/onboarding-complete", async (req, res) => {
+  const { employeeId } = req.query;
+
+  try {
+    if (!employeeId) {
+      return res.redirect("keanr://stripe-onboarding?status=error&message=Missing+employee+ID");
+    }
+
+    const result = await EmployeeStripeConnectService.completeOnboarding(
+      parseInt(employeeId)
+    );
+
+    if (result.onboarded && result.payoutsEnabled) {
+      return res.redirect(
+        `keanr://stripe-onboarding?status=success&payoutsEnabled=true`
+      );
+    } else {
+      return res.redirect(
+        `keanr://stripe-onboarding?status=incomplete&payoutsEnabled=false`
+      );
+    }
+  } catch (error) {
+    console.error("Error completing Stripe onboarding:", error);
+    return res.redirect(
+      `keanr://stripe-onboarding?status=error&message=${encodeURIComponent(error.message)}`
+    );
+  }
+});
+
+/**
+ * GET /stripe-connect/onboarding-refresh - Refresh onboarding link
+ *
+ * Called when onboarding link expires or user navigates away.
+ * Generates a new onboarding link.
+ */
+router.get("/stripe-connect/onboarding-refresh", async (req, res) => {
+  const { employeeId } = req.query;
+
+  try {
+    if (!employeeId) {
+      return res.status(400).json({ error: "Missing employee ID" });
+    }
+
+    const baseUrl = getBaseUrl(req);
+    const linkResult = await EmployeeStripeConnectService.generateOnboardingLink(
+      parseInt(employeeId),
+      baseUrl
+    );
+
+    if (linkResult.alreadyOnboarded) {
+      return res.redirect("keanr://stripe-onboarding?status=already-complete");
+    }
+
+    // Redirect to the new onboarding URL
+    return res.redirect(linkResult.onboardingUrl);
+  } catch (error) {
+    console.error("Error refreshing Stripe onboarding:", error);
+    return res.redirect(
+      `keanr://stripe-onboarding?status=error&message=${encodeURIComponent(error.message)}`
+    );
   }
 });
 
@@ -576,13 +763,39 @@ router.post("/stripe-connect/onboard", async (req, res) => {
  */
 router.get("/stripe-connect/status", async (req, res) => {
   try {
+    const status = await EmployeeStripeConnectService.checkOnboardingStatus(
+      req.employeeRecord.id
+    );
+
     res.json({
       paymentMethod: req.employeeRecord.paymentMethod,
-      stripeConnectOnboarded: req.employeeRecord.stripeConnectOnboarded,
-      stripeAccountId: req.employeeRecord.stripeConnectAccountId || null,
+      ...status,
     });
   } catch (error) {
     console.error("Error checking Stripe status:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /stripe-connect/dashboard - Get link to Stripe Express Dashboard
+ */
+router.get("/stripe-connect/dashboard", async (req, res) => {
+  try {
+    if (!req.employeeRecord.stripeConnectAccountId) {
+      return res.status(400).json({
+        error: "No Stripe account set up",
+        code: "NO_STRIPE_ACCOUNT",
+      });
+    }
+
+    const result = await EmployeeStripeConnectService.generateDashboardLink(
+      req.employeeRecord.id
+    );
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error generating dashboard link:", error);
     res.status(500).json({ error: error.message });
   }
 });

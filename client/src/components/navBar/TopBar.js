@@ -42,6 +42,7 @@ import AccountSettingsButton from "./AccountSettingsButton";
 import RecommendedSuppliesButton from "./RecommendedSuppliesButton";
 import ArchiveButton from "./ArchiveButton";
 import ReviewsButton from "./ReviewsButton";
+import PendingReviewsButton from "./PendingReviewsButton";
 import ReferralsButton from "./ReferralsButton";
 import MyReferralsButton from "./MyReferralsButton";
 import ChecklistEditorButton from "./ChecklistEditorButton";
@@ -70,6 +71,7 @@ const TopBar = ({ dispatch, state }) => {
   const [importBusinessRedirect, setImportBusinessRedirect] = useState(false);
   const [referralsEnabled, setReferralsEnabled] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [pendingReviews, setPendingReviews] = useState(0);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
 
   // Use global state for pending applications and cleaner requests
@@ -120,6 +122,36 @@ const TopBar = ({ dispatch, state }) => {
     const interval = setInterval(fetchPendingCleanerRequests, 60000);
     return () => clearInterval(interval);
   }, [state.account, state.currentUser.token, dispatch]);
+
+  // Fetch pending reviews count for homeowners/clients
+  useEffect(() => {
+    const fetchPendingReviews = async () => {
+      // Fetch for regular users (clients/homeowners) and cleaners
+      if (state.currentUser.token) {
+        try {
+          const response = await fetch(
+            `${require("../../services/config").API_BASE}/reviews/pending`,
+            {
+              headers: {
+                Authorization: `Bearer ${state.currentUser.token}`,
+              },
+            }
+          );
+          const data = await response.json();
+          if (response.ok) {
+            setPendingReviews(data.pendingReviews?.length || 0);
+          }
+        } catch (error) {
+          console.error("Error fetching pending reviews:", error);
+        }
+      }
+    };
+    fetchPendingReviews();
+
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchPendingReviews, 60000);
+    return () => clearInterval(interval);
+  }, [state.currentUser.token]);
 
   // Fetch referral programs status to determine if referrals button should be shown
   useEffect(() => {
@@ -320,8 +352,8 @@ const TopBar = ({ dispatch, state }) => {
                   >
                     <Feather name="users" size={20} color="white" />
                     <View style={styles.badge}>
-                      <Text style={styles.badgeText}>
-                        {pendingApplications > 9 ? "9+" : pendingApplications}
+                      <Text style={pendingApplications > 9 ? styles.badgeTextSmall : styles.badgeText}>
+                        {pendingApplications > 99 ? "99+" : pendingApplications}
                       </Text>
                     </View>
                   </Pressable>
@@ -337,9 +369,9 @@ const TopBar = ({ dispatch, state }) => {
                 >
                   <Feather name="user-check" size={20} color="white" />
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {pendingCleanerRequests > 9
-                        ? "9+"
+                    <Text style={pendingCleanerRequests > 9 ? styles.badgeTextSmall : styles.badgeText}>
+                      {pendingCleanerRequests > 99
+                        ? "99+"
                         : pendingCleanerRequests}
                     </Text>
                   </View>
@@ -354,10 +386,10 @@ const TopBar = ({ dispatch, state }) => {
                 onPress={() => navigate("/notifications")}
               >
                 <Feather name="bell" size={20} color="white" />
-                {unreadNotifications > 0 && (
+                {(unreadNotifications + pendingReviews) > 0 && (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                    <Text style={(unreadNotifications + pendingReviews) > 9 ? styles.badgeTextSmall : styles.badgeText}>
+                      {(unreadNotifications + pendingReviews) > 99 ? "99+" : (unreadNotifications + pendingReviews)}
                     </Text>
                   </View>
                 )}
@@ -414,18 +446,25 @@ const TopBar = ({ dispatch, state }) => {
                           </>
                         ) : state.account === "cleaner" ? (
                           <>
-                            {/* Search Jobs always at the top for all cleaners */}
-                            <ChooseNewJobButton closeModal={closeModal} />
-                            <EmployeeAssignmentsButton
-                              closeModal={closeModal}
-                            />
+                            {/* Search Jobs, My Jobs, Earnings only for non-business-owner cleaners */}
+                            {!state.isBusinessOwner && (
+                              <>
+                                <ChooseNewJobButton closeModal={closeModal} />
+                                <EmployeeAssignmentsButton
+                                  closeModal={closeModal}
+                                />
+                              </>
+                            )}
                             <MyRequestsButton closeModal={closeModal} />
                             {/* My Clients only for business owner cleaners */}
                             {state.isBusinessOwner && (
                               <MyClientsButton closeModal={closeModal} />
                             )}
                             {/* <EmployeeShiftButton closeModal={closeModal} /> */}
-                            <EarningsButton closeModal={closeModal} />
+                            {/* Earnings only for non-business-owner cleaners */}
+                            {!state.isBusinessOwner && (
+                              <EarningsButton closeModal={closeModal} />
+                            )}
                             {state.isBusinessOwner && (
                               <CalculatorButton closeModal={closeModal} />
                             )}
@@ -448,6 +487,7 @@ const TopBar = ({ dispatch, state }) => {
                             <ScheduleCleaningButton closeModal={closeModal} />
                             <MyHomesButton closeModal={closeModal} />
                             <BillButton closeModal={closeModal} />
+                            <PendingReviewsButton closeModal={closeModal} />
                             <ReviewsButton closeModal={closeModal} />
                             <ArchiveButton closeModal={closeModal} />
                             {referralsEnabled && (
@@ -635,22 +675,32 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: "absolute",
-    top: -4,
-    right: -4,
+    top: -5,
+    right: -5,
     backgroundColor: colors.error[500],
-    borderRadius: 10,
+    borderRadius: 9,
     minWidth: 18,
-    height: 18,
+    minHeight: 18,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
     borderWidth: 2,
     borderColor: colors.neutral[800],
   },
   badgeText: {
     color: colors.neutral[0],
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
+    lineHeight: 14,
+    textAlign: "center",
+  },
+  badgeTextSmall: {
+    color: colors.neutral[0],
+    fontSize: 8,
+    fontWeight: "700",
+    lineHeight: 10,
+    textAlign: "center",
   },
 
   // Auth buttons (Sign In / Sign Up / Become Cleaner)

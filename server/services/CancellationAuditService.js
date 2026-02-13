@@ -98,9 +98,15 @@ class CancellationAuditService {
 		}
 
 		if (query) {
+			// Sanitize query length to prevent DoS
+			const sanitizedQuery = String(query).slice(0, 500);
 			where[Op.or] = [
-				{ searchText: { [Op.iLike]: `%${query}%` } },
-				sequelize.literal(`"eventData"::text ILIKE '%${query.replace(/'/g, "''")}%'`),
+				{ searchText: { [Op.iLike]: `%${sanitizedQuery}%` } },
+				// Use Sequelize's where/cast for safe parameterized JSONB text search
+				sequelize.where(
+					sequelize.cast(sequelize.col("eventData"), "TEXT"),
+					{ [Op.iLike]: `%${sanitizedQuery}%` }
+				),
 			];
 		}
 
@@ -412,7 +418,7 @@ class CancellationAuditService {
 	/**
 	 * Log appeal resolved
 	 */
-	static async logAppealResolved(appointmentId, appealId, reviewerId, decision, resolution, req) {
+	static async logAppealResolved(appointmentId, appealId, reviewerId, decision, resolution, req, caseNumber = null) {
 		return this.log({
 			appointmentId,
 			appealId,
@@ -422,6 +428,7 @@ class CancellationAuditService {
 			eventData: {
 				decision,
 				resolution,
+				caseNumber,
 			},
 			req,
 		});

@@ -772,6 +772,30 @@ class PushNotification {
       partialPayment,
     });
   }
+
+  // ==========================================
+  // PAYMENT DISPUTE NOTIFICATIONS
+  // ==========================================
+
+  // 53. Payment dispute submitted (to HR/Owner)
+  static async sendPushPaymentDispute(expoPushToken, staffName, cleanerName, issueType, priority, disputeId) {
+    const issueLabels = {
+      missing_payout: "Missing Payment",
+      wrong_amount: "Incorrect Amount",
+      delayed_payout: "Delayed Payment",
+    };
+    const priorityLabel = priority === "high" ? "🔴 " : "";
+    const title = `${priorityLabel}Payment Dispute #${disputeId}`;
+    const body = `${cleanerName} reported: ${issueLabels[issueType] || issueType}. Please review in Conflict Resolution Center.`;
+
+    return this.sendPushNotification(expoPushToken, title, body, {
+      type: "payment_dispute_submitted",
+      disputeId: String(disputeId),
+      issueType,
+      priority,
+      actionRequired: true,
+    });
+  }
 }
 
 module.exports = PushNotification;

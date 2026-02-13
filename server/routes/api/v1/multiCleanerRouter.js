@@ -23,6 +23,7 @@ const MultiCleanerService = require("../../../services/MultiCleanerService");
 const RoomAssignmentService = require("../../../services/RoomAssignmentService");
 const MultiCleanerPricingService = require("../../../services/MultiCleanerPricingService");
 const NotificationService = require("../../../services/NotificationService");
+const CleanerApprovalService = require("../../../services/CleanerApprovalService");
 const { cancelEdgeCaseAppointment } = require("../../../services/cron/MultiCleanerFillMonitor");
 const Email = require("../../../services/sendNotifications/EmailClass");
 const EncryptionService = require("../../../services/EncryptionService");
@@ -50,6 +51,93 @@ const verifyToken = (req, res, next) => {
 
 // Apply token verification to all routes
 multiCleanerRouter.use(verifyToken);
+
+/**
+ * GET /my-confirmed-jobs
+ * Get all confirmed multi-cleaner jobs for the authenticated cleaner
+ * Returns jobs where the cleaner has been approved/confirmed to clean
+ */
+multiCleanerRouter.get("/my-confirmed-jobs", async (req, res) => {
+  try {
+    const cleanerId = req.userId;
+
+    // Find all CleanerJobCompletion records for this cleaner
+    // that are assigned (not dropped out or no-show) and the appointment is not completed
+    const completions = await CleanerJobCompletion.findAll({
+      where: {
+        cleanerId,
+        status: {
+          [Op.notIn]: ["dropped_out", "no_show"],
+        },
+      },
+      include: [
+        {
+          model: MultiCleanerJob,
+          as: "multiCleanerJob",
+          required: true,
+          include: [
+            {
+              model: UserAppointments,
+              as: "appointment",
+              where: {
+                completed: false,
+              },
+              include: [
+                {
+                  model: UserHomes,
+                  as: "home",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      order: [[{ model: MultiCleanerJob, as: "multiCleanerJob" }, { model: UserAppointments, as: "appointment" }, "date", "ASC"]],
+    });
+
+    // Transform to a format similar to regular appointments
+    const confirmedJobs = completions.map((completion) => {
+      const job = completion.multiCleanerJob;
+      const appointment = job.appointment;
+      const home = appointment.home;
+
+      return {
+        id: completion.id,
+        completionId: completion.id,
+        multiCleanerJobId: job.id,
+        appointmentId: appointment.id,
+        date: appointment.date,
+        price: appointment.price,
+        isMultiCleanerJob: true,
+        status: completion.status,
+        completionStatus: completion.completionStatus,
+        // Home details (decrypted)
+        homeId: home?.id,
+        homeNickName: home?.nickName,
+        city: home ? EncryptionService.decrypt(home.city) : null,
+        state: home ? EncryptionService.decrypt(home.state) : null,
+        address: home ? EncryptionService.decrypt(home.address) : null,
+        numBeds: home?.numBeds,
+        numBaths: home?.numBaths,
+        latitude: home?.latitude,
+        longitude: home?.longitude,
+        // Appointment details
+        bringTowels: appointment.bringTowels,
+        bringSheets: appointment.bringSheets,
+        timeToBeCompleted: appointment.timeToBeCompleted,
+        completed: appointment.completed,
+        // Multi-cleaner specific
+        totalCleanersRequired: job.totalCleanersRequired,
+        cleanersConfirmed: job.cleanersConfirmed,
+      };
+    });
+
+    return res.status(200).json({ jobs: confirmedJobs });
+  } catch (error) {
+    console.error("Error fetching confirmed multi-cleaner jobs:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
 
 /**
  * GET /check/:appointmentId
@@ -189,7 +277,8 @@ multiCleanerRouter.get("/offers", async (req, res) => {
     // Filter by demo status - demo cleaners only see demo homeowner jobs
     const filteredOpenJobs = openJobs.filter((job) => {
       const isHomeownerDemo = job.appointment?.user?.isDemoAccount === true;
-      return isCleanerDemo === isHomeownerDemo;
+      const isAppointmentDemo = job.appointment?.isDemoAppointment === true;
+      return isCleanerDemo === isHomeownerDemo && isCleanerDemo === isAppointmentDemo;
     });
 
     // Find edge large home appointments that don't have a multi-cleaner job yet
@@ -200,6 +289,7 @@ multiCleanerRouter.get("/offers", async (req, res) => {
         hasBeenAssigned: false,
         isMultiCleanerJob: { [Op.or]: [false, null] },
         date: { [Op.gte]: now },
+        isDemoAppointment: isCleanerDemo, // Demo cleaners see demo appointments only
       },
       include: [
         { model: UserHomes, as: "home" },
@@ -254,16 +344,21 @@ multiCleanerRouter.get("/offers", async (req, res) => {
       attributes: ["multiCleanerJobId"],
     }).then((completions) => completions.map((c) => c.multiCleanerJobId));
 
+    // Get job IDs where cleaner has pending join requests
+    const pendingRequestJobIds = await CleanerApprovalService.getPendingJobIdsForCleaner(cleanerId);
+
+    // Filter out jobs that cleaner already has offers for, is assigned to, or has pending requests
     const availableJobs = [...filteredOpenJobs, ...edgeLargeHomeJobs].filter(
       (job) =>
         !existingOfferJobIds.includes(job.id) &&
-        !assignedJobIds.includes(job.id)
+        !assignedJobIds.includes(job.id) &&
+        !pendingRequestJobIds.includes(job.id)
     );
 
     // Serialize with decrypted home data
-    return res.status(200).json(
-      MultiCleanerJobSerializer.serializeOffersResponse(offers, availableJobs)
-    );
+    const response = MultiCleanerJobSerializer.serializeOffersResponse(offers, availableJobs);
+    response.pendingRequestJobIds = pendingRequestJobIds;
+    return res.status(200).json(response);
   } catch (error) {
     console.error("Error fetching offers:", error);
     return res.status(500).json({ error: error.message });
@@ -479,7 +574,8 @@ multiCleanerRouter.post("/offers/:offerId/decline", async (req, res) => {
 
 /**
  * POST /join/:multiCleanerJobId
- * Join an open multi-cleaner job directly
+ * Request to join an open multi-cleaner job
+ * Preferred cleaners are auto-approved; others require homeowner approval
  */
 multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
   try {
@@ -528,14 +624,25 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
 
     const roomAssignmentIds = unassignedRooms.map((r) => r.id);
 
-    // Fill the slot
-    await MultiCleanerService.fillSlot(
+    // Use approval service - auto-approves preferred cleaners, creates request for others
+    const result = await CleanerApprovalService.requestToJoin(
       parseInt(multiCleanerJobId),
       cleanerId,
       roomAssignmentIds
     );
 
-    // Create cleaner-appointment assignment
+    if (result.status === "pending") {
+      // Non-preferred cleaner - request sent to homeowner
+      return res.status(202).json({
+        success: true,
+        status: "pending_approval",
+        joinRequestId: result.joinRequestId,
+        expiresAt: result.expiresAt,
+        message: result.message,
+      });
+    }
+
+    // Preferred cleaner - auto-approved, create cleaner-appointment assignment
     await UserCleanerAppointments.create({
       appointmentId: job.appointmentId,
       employeeId: cleanerId,
@@ -560,6 +667,9 @@ multiCleanerRouter.post("/join/:multiCleanerJobId", async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      status: "approved",
+      autoApproved: result.autoApproved,
+      isPreferred: result.isPreferred,
       job: MultiCleanerJobSerializer.serializeOne(updatedJob),
       assignedRooms: roomAssignmentIds.length,
       estimatedEarnings: earnings,
@@ -963,6 +1073,150 @@ multiCleanerRouter.post("/:appointmentId/accept-solo", async (req, res) => {
 });
 
 /**
+ * POST /:appointmentId/decline-solo
+ * Cleaner declines to complete solo - notifies homeowner
+ */
+multiCleanerRouter.post("/:appointmentId/decline-solo", async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const { reason } = req.body;
+    const cleanerId = req.userId;
+
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: MultiCleanerJob, as: "multiCleanerJob" }],
+    });
+
+    if (!appointment?.multiCleanerJob) {
+      return res.status(404).json({ error: "Multi-cleaner job not found" });
+    }
+
+    const job = appointment.multiCleanerJob;
+
+    // Verify cleaner is assigned to this job
+    const completion = await CleanerJobCompletion.findOne({
+      where: {
+        multiCleanerJobId: job.id,
+        cleanerId,
+        status: { [Op.notIn]: ["dropped_out", "no_show"] },
+      },
+    });
+
+    if (!completion) {
+      return res.status(403).json({ error: "You are not assigned to this job" });
+    }
+
+    // Handle the decline
+    const result = await MultiCleanerService.handleSoloDecline(
+      job.id,
+      cleanerId,
+      reason
+    );
+
+    // Remove from cleaner-appointment assignments
+    await UserCleanerAppointments.destroy({
+      where: { appointmentId: parseInt(appointmentId), employeeId: cleanerId },
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error declining solo:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /:appointmentId/accept-extra-work
+ * Cleaner accepts extra work (additional rooms) after a co-cleaner dropout
+ */
+multiCleanerRouter.post("/:appointmentId/accept-extra-work", async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const cleanerId = req.userId;
+
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: MultiCleanerJob, as: "multiCleanerJob" }],
+    });
+
+    if (!appointment?.multiCleanerJob) {
+      return res.status(404).json({ error: "Multi-cleaner job not found" });
+    }
+
+    const job = appointment.multiCleanerJob;
+
+    // Verify cleaner is assigned to this job
+    const completion = await CleanerJobCompletion.findOne({
+      where: {
+        multiCleanerJobId: job.id,
+        cleanerId,
+        status: { [Op.notIn]: ["dropped_out", "no_show"] },
+      },
+    });
+
+    if (!completion) {
+      return res.status(403).json({ error: "You are not assigned to this job" });
+    }
+
+    const result = await MultiCleanerService.handleAcceptExtraWork(job.id, cleanerId);
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error accepting extra work:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /:appointmentId/decline-extra-work
+ * Cleaner declines extra work - releases them from the job
+ */
+multiCleanerRouter.post("/:appointmentId/decline-extra-work", async (req, res) => {
+  try {
+    const { appointmentId } = req.params;
+    const { reason } = req.body;
+    const cleanerId = req.userId;
+
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: MultiCleanerJob, as: "multiCleanerJob" }],
+    });
+
+    if (!appointment?.multiCleanerJob) {
+      return res.status(404).json({ error: "Multi-cleaner job not found" });
+    }
+
+    const job = appointment.multiCleanerJob;
+
+    // Verify cleaner is assigned to this job
+    const completion = await CleanerJobCompletion.findOne({
+      where: {
+        multiCleanerJobId: job.id,
+        cleanerId,
+        status: { [Op.notIn]: ["dropped_out", "no_show"] },
+      },
+    });
+
+    if (!completion) {
+      return res.status(403).json({ error: "You are not assigned to this job" });
+    }
+
+    const result = await MultiCleanerService.handleDeclineExtraWork(
+      job.id,
+      cleanerId,
+      reason
+    );
+
+    // Remove from cleaner-appointment assignments
+    await UserCleanerAppointments.destroy({
+      where: { appointmentId: parseInt(appointmentId), employeeId: cleanerId },
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error declining extra work:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * GET /:appointmentId/cleaners
  * Homeowner views assigned cleaners and their progress
  */
@@ -1019,8 +1273,83 @@ multiCleanerRouter.post("/:appointmentId/homeowner-response", async (req, res) =
 
     switch (response) {
       case "proceed_with_one":
-        // Proceed with single cleaner
+        // Proceed with single cleaner - notify them and offer solo completion for full pay
         await appointment.update({ homeownerSoloWarningAcknowledged: true });
+
+        if (multiCleanerJob) {
+          // Find remaining active cleaner(s)
+          const remainingCompletions = await CleanerJobCompletion.findAll({
+            where: {
+              multiCleanerJobId: multiCleanerJob.id,
+              status: { [Op.notIn]: ["dropped_out", "no_show"] },
+            },
+            include: [{ model: User, as: "cleaner" }],
+          });
+
+          // If only one cleaner remains, offer them solo completion for full pay
+          if (remainingCompletions.length === 1) {
+            const remainingCleaner = remainingCompletions[0];
+
+            // Rebalance rooms to assign all unassigned rooms to the remaining cleaner
+            await RoomAssignmentService.rebalanceAfterDropout(multiCleanerJob.id);
+
+            // Offer solo completion with full pay notification
+            const soloOffer = await MultiCleanerService.offerSoloCompletion(
+              multiCleanerJob.id,
+              remainingCleaner.cleanerId
+            );
+
+            return res.status(200).json({
+              success: true,
+              message: "Remaining cleaner has been notified and offered solo completion for full pay",
+              soloOfferSent: true,
+              remainingCleanerId: remainingCleaner.cleanerId,
+              fullEarnings: soloOffer.fullEarnings,
+            });
+          } else if (remainingCompletions.length > 1) {
+            // Multiple cleaners still assigned - offer them extra work with increased pay
+            const originalRequired = multiCleanerJob.totalCleanersRequired;
+            const shortfall = originalRequired - remainingCompletions.length;
+
+            if (shortfall > 0) {
+              // There's a shortfall - offer extra work to remaining cleaners
+              const extraWorkResult = await MultiCleanerService.offerExtraWorkToRemainingCleaners(
+                multiCleanerJob.id
+              );
+
+              return res.status(200).json({
+                success: true,
+                message: `${remainingCompletions.length} cleaners have been offered extra rooms with increased pay`,
+                extraWorkOffersSent: true,
+                remainingCleaners: remainingCompletions.length,
+                originalRequired,
+                shortfall,
+                offers: extraWorkResult.offersSent,
+              });
+            } else {
+              // No shortfall - just confirm they can proceed
+              for (const completion of remainingCompletions) {
+                await NotificationService.createNotification({
+                  userId: completion.cleanerId,
+                  type: "proceed_confirmed",
+                  title: "Cleaning confirmed",
+                  body: `The homeowner has confirmed the cleaning will proceed. Please complete your assigned rooms.`,
+                  data: {
+                    appointmentId: appointment.id,
+                    multiCleanerJobId: multiCleanerJob.id,
+                  },
+                });
+              }
+
+              return res.status(200).json({
+                success: true,
+                message: "Appointment will proceed with available cleaners",
+                cleanersNotified: remainingCompletions.length,
+              });
+            }
+          }
+        }
+
         return res.status(200).json({
           success: true,
           message: "Appointment will proceed with available cleaner(s)",

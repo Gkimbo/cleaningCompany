@@ -67,6 +67,26 @@ class NotificationsService {
   }
 
   /**
+   * Get a single notification by ID
+   * @param {string} token - Auth token
+   * @param {number} notificationId - Notification ID
+   * @returns {Object} { notification }
+   */
+  static async getNotificationById(token, notificationId) {
+    try {
+      const response = await fetch(`${API_BASE}/notifications/${notificationId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching notification:", error);
+      return { notification: null };
+    }
+  }
+
+  /**
    * Mark a notification as read
    * @param {string} token - Auth token
    * @param {number} notificationId - Notification ID
@@ -242,6 +262,122 @@ class NotificationsService {
     } catch (error) {
       console.error("Error fetching pending bookings:", error);
       return { pendingBookings: [] };
+    }
+  }
+
+  // =====================================
+  // New Home Request Methods
+  // =====================================
+
+  /**
+   * Accept a new home request (business owner only)
+   * @param {string} token - Auth token
+   * @param {number} requestId - NewHomeRequest ID
+   * @returns {Object} { success, message, request, cleanerClient }
+   */
+  static async acceptNewHomeRequest(token, requestId) {
+    try {
+      const response = await fetch(`${API_BASE}/new-home-requests/${requestId}/accept`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error accepting new home request:", error);
+      return { success: false, error: "Failed to accept request" };
+    }
+  }
+
+  /**
+   * Decline a new home request (business owner only)
+   * @param {string} token - Auth token
+   * @param {number} requestId - NewHomeRequest ID
+   * @param {string} reason - Optional decline reason
+   * @returns {Object} { success, message, request }
+   */
+  static async declineNewHomeRequest(token, requestId, reason = null) {
+    try {
+      const response = await fetch(`${API_BASE}/new-home-requests/${requestId}/decline`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason }),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error declining new home request:", error);
+      return { success: false, error: "Failed to decline request" };
+    }
+  }
+
+  /**
+   * Get new home request status for a home (client only)
+   * @param {string} token - Auth token
+   * @param {number} homeId - Home ID
+   * @returns {Object} { success, requests, isMarketplaceEnabled }
+   */
+  static async getNewHomeRequestStatus(token, homeId) {
+    try {
+      const response = await fetch(`${API_BASE}/new-home-requests/${homeId}/status`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching new home request status:", error);
+      return { success: false, requests: [], isMarketplaceEnabled: false };
+    }
+  }
+
+  /**
+   * Toggle marketplace visibility for a home (client only)
+   * @param {string} token - Auth token
+   * @param {number} homeId - Home ID
+   * @param {boolean} enabled - Whether to enable marketplace
+   * @returns {Object} { success, message, isMarketplaceEnabled }
+   */
+  static async toggleHomeMarketplace(token, homeId, enabled) {
+    try {
+      const response = await fetch(`${API_BASE}/new-home-requests/${homeId}/marketplace`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ enabled }),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error toggling marketplace:", error);
+      return { success: false, error: "Failed to update marketplace setting" };
+    }
+  }
+
+  /**
+   * Re-request cleaning for a declined home (client only)
+   * @param {string} token - Auth token
+   * @param {number} requestId - NewHomeRequest ID
+   * @returns {Object} { success, message, request }
+   */
+  static async requestAgain(token, requestId) {
+    try {
+      const response = await fetch(`${API_BASE}/new-home-requests/${requestId}/request-again`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("Error re-requesting:", error);
+      return { success: false, error: "Failed to send request" };
     }
   }
 }

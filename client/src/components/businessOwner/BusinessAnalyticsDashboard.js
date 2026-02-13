@@ -11,6 +11,7 @@ import {
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import BusinessOwnerService from "../../services/fetchRequests/BusinessOwnerService";
+import GiveBonusModal from "./GiveBonusModal";
 import {
   colors,
   spacing,
@@ -54,31 +55,283 @@ const PremiumLock = ({ onPress, cleaningsNeeded }) => (
   </Pressable>
 );
 
-// Employee Performance Row
-const EmployeeRow = ({ employee, rank }) => (
-  <View style={styles.employeeRow}>
-    <View style={styles.employeeRank}>
-      <Text style={styles.employeeRankText}>{rank}</Text>
-    </View>
-    <View style={styles.employeeInfo}>
-      <Text style={styles.employeeName}>{employee.name}</Text>
-      <Text style={styles.employeeStats}>
-        {employee.jobsCompleted} jobs | {employee.totalRevenueFormatted}
-      </Text>
-    </View>
-    <View style={styles.employeeMetrics}>
-      {employee.avgRating && (
-        <View style={styles.ratingBadge}>
-          <Icon name="star" size={12} color={colors.warning[500]} />
-          <Text style={styles.ratingText}>{employee.avgRating.toFixed(1)}</Text>
+// Enhanced Employee Performance Card
+const EmployeePerformanceCard = ({ employee, rank, isTopPerformer, onBonusPress }) => {
+  const getRankStyle = () => {
+    if (rank === 1) return { bg: colors.warning[100], color: colors.warning[600], icon: "trophy" };
+    if (rank === 2) return { bg: colors.neutral[200], color: colors.neutral[600], icon: "star" };
+    if (rank === 3) return { bg: colors.warning[50], color: colors.warning[500], icon: "certificate" };
+    return { bg: colors.primary[100], color: colors.primary[600], icon: null };
+  };
+
+  const rankStyle = getRankStyle();
+  const completionRate = employee.completionRate || 0;
+
+  return (
+    <View style={[
+      styles.performerCard,
+      isTopPerformer && styles.topPerformerCard
+    ]}>
+      {isTopPerformer && (
+        <View style={styles.topPerformerBadge}>
+          <Icon name="star" size={10} color={colors.neutral[0]} />
+          <Text style={styles.topPerformerBadgeText}>TOP PERFORMER</Text>
         </View>
       )}
-      <Text style={styles.completionRate}>{employee.completionRate}%</Text>
-    </View>
-  </View>
-);
+      <View style={styles.performerHeader}>
+        <View style={[styles.performerRank, { backgroundColor: rankStyle.bg }]}>
+          {rankStyle.icon ? (
+            <Icon name={rankStyle.icon} size={16} color={rankStyle.color} />
+          ) : (
+            <Text style={[styles.performerRankText, { color: rankStyle.color }]}>{rank}</Text>
+          )}
+        </View>
+        <View style={styles.performerInfo}>
+          <Text style={styles.performerName}>{employee.name}</Text>
+          <Text style={styles.performerRole}>
+            {employee.jobsCompleted} jobs completed
+          </Text>
+        </View>
+        {employee.avgRating > 0 && (
+          <View style={styles.performerRating}>
+            <Icon name="star" size={14} color={colors.warning[500]} />
+            <Text style={styles.performerRatingText}>{employee.avgRating.toFixed(1)}</Text>
+          </View>
+        )}
+        {onBonusPress && (
+          <Pressable
+            style={styles.bonusButton}
+            onPress={() => onBonusPress(employee)}
+          >
+            <Icon name="gift" size={14} color={colors.warning[600]} />
+          </Pressable>
+        )}
+      </View>
 
-// Client Row
+      <View style={styles.performerStats}>
+        <View style={styles.performerStatItem}>
+          <Text style={styles.performerStatLabel}>Revenue</Text>
+          <Text style={styles.performerStatValue}>{employee.totalRevenueFormatted}</Text>
+        </View>
+        <View style={styles.performerStatDivider} />
+        <View style={styles.performerStatItem}>
+          <Text style={styles.performerStatLabel}>Completion</Text>
+          <View style={styles.completionBarContainer}>
+            <View style={styles.completionBarBg}>
+              <View style={[
+                styles.completionBarFill,
+                { width: `${completionRate}%` },
+                completionRate >= 95 && styles.completionBarExcellent,
+                completionRate >= 80 && completionRate < 95 && styles.completionBarGood,
+                completionRate < 80 && styles.completionBarNeedsWork,
+              ]} />
+            </View>
+            <Text style={styles.completionBarText}>{completionRate}%</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// Team Stats Summary
+const TeamStatsSummary = ({ employees }) => {
+  if (!employees || employees.length === 0) return null;
+
+  const totalRevenue = employees.reduce((sum, emp) => {
+    const revenue = parseFloat(emp.totalRevenueFormatted?.replace(/[$,]/g, '') || 0);
+    return sum + revenue;
+  }, 0);
+
+  const avgRating = employees.reduce((sum, emp) => sum + (emp.avgRating || 0), 0) / employees.length;
+  const totalJobs = employees.reduce((sum, emp) => sum + (emp.jobsCompleted || 0), 0);
+  const avgCompletion = employees.reduce((sum, emp) => sum + (emp.completionRate || 0), 0) / employees.length;
+
+  return (
+    <View style={styles.teamStatsSummary}>
+      <View style={styles.teamStatItem}>
+        <Icon name="users" size={16} color={colors.primary[500]} />
+        <Text style={styles.teamStatValue}>{employees.length}</Text>
+        <Text style={styles.teamStatLabel}>Team Size</Text>
+      </View>
+      <View style={styles.teamStatItem}>
+        <Icon name="check-circle" size={16} color={colors.success[500]} />
+        <Text style={styles.teamStatValue}>{totalJobs}</Text>
+        <Text style={styles.teamStatLabel}>Total Jobs</Text>
+      </View>
+      <View style={styles.teamStatItem}>
+        <Icon name="star" size={16} color={colors.warning[500]} />
+        <Text style={styles.teamStatValue}>{avgRating.toFixed(1)}</Text>
+        <Text style={styles.teamStatLabel}>Avg Rating</Text>
+      </View>
+      <View style={styles.teamStatItem}>
+        <Icon name="dollar" size={16} color={colors.success[500]} />
+        <Text style={styles.teamStatValue}>${totalRevenue.toLocaleString()}</Text>
+        <Text style={styles.teamStatLabel}>Revenue</Text>
+      </View>
+    </View>
+  );
+};
+
+// Client Stats Summary
+const ClientStatsSummary = ({ clients }) => {
+  if (!clients) return null;
+
+  const totalRevenue = clients.topClients?.reduce((sum, c) => {
+    const revenue = parseFloat(c.totalRevenueFormatted?.replace(/[$,]/g, '') || 0);
+    return sum + revenue;
+  }, 0) || 0;
+
+  const avgBookings = clients.topClients?.length > 0
+    ? Math.round(clients.topClients.reduce((sum, c) => sum + (c.bookingCount || 0), 0) / clients.topClients.length)
+    : 0;
+
+  return (
+    <View style={styles.clientStatsSummary}>
+      <View style={styles.clientStatItem}>
+        <Icon name="users" size={16} color={colors.primary[500]} />
+        <Text style={styles.clientStatValue}>{clients.totalClients || 0}</Text>
+        <Text style={styles.clientStatLabel}>Clients</Text>
+      </View>
+      <View style={styles.clientStatItem}>
+        <Icon name="user-plus" size={16} color={colors.success[500]} />
+        <Text style={styles.clientStatValue}>{clients.newClientsThisMonth || 0}</Text>
+        <Text style={styles.clientStatLabel}>New</Text>
+      </View>
+      <View style={styles.clientStatItem}>
+        <Icon name="refresh" size={16} color={colors.secondary[500]} />
+        <Text style={styles.clientStatValue}>{clients.metrics?.retentionRate || 0}%</Text>
+        <Text style={styles.clientStatLabel}>Retention</Text>
+      </View>
+      <View style={styles.clientStatItem}>
+        <Icon name="dollar" size={16} color={colors.warning[500]} />
+        <Text style={styles.clientStatValue}>${totalRevenue.toLocaleString()}</Text>
+        <Text style={styles.clientStatLabel}>Revenue</Text>
+      </View>
+    </View>
+  );
+};
+
+// Enhanced Client Card
+const ClientInsightCard = ({ client, rank, isTopClient, isAtRisk }) => {
+  const getRankStyle = () => {
+    if (rank === 1) return { bg: colors.warning[100], color: colors.warning[600], icon: "star" };
+    if (rank === 2) return { bg: colors.neutral[200], color: colors.neutral[600], icon: "star-o" };
+    if (rank === 3) return { bg: colors.warning[50], color: colors.warning[500], icon: "star-o" };
+    return { bg: colors.primary[100], color: colors.primary[600], icon: null };
+  };
+
+  const rankStyle = getRankStyle();
+  const bookingCount = client.bookingCount || 0;
+
+  // Calculate loyalty tier based on bookings
+  const getLoyaltyTier = () => {
+    if (bookingCount >= 20) return { label: "VIP", color: colors.warning[600], bg: colors.warning[100] };
+    if (bookingCount >= 10) return { label: "Loyal", color: colors.success[600], bg: colors.success[100] };
+    if (bookingCount >= 5) return { label: "Regular", color: colors.primary[600], bg: colors.primary[100] };
+    return null;
+  };
+
+  const loyaltyTier = getLoyaltyTier();
+
+  return (
+    <View style={[
+      styles.clientInsightCard,
+      isTopClient && styles.topClientCard,
+      isAtRisk && styles.atRiskClientCard
+    ]}>
+      {isTopClient && rank === 1 && (
+        <View style={styles.topClientBadge}>
+          <Icon name="star" size={10} color={colors.neutral[0]} />
+          <Text style={styles.topClientBadgeText}>TOP CLIENT</Text>
+        </View>
+      )}
+      {isAtRisk && (
+        <View style={styles.atRiskClientBadge}>
+          <Icon name="exclamation-triangle" size={10} color={colors.neutral[0]} />
+          <Text style={styles.atRiskClientBadgeText}>AT RISK</Text>
+        </View>
+      )}
+      <View style={styles.clientInsightHeader}>
+        {rank && !isAtRisk && (
+          <View style={[styles.clientRank, { backgroundColor: rankStyle.bg }]}>
+            {rankStyle.icon ? (
+              <Icon name={rankStyle.icon} size={14} color={rankStyle.color} />
+            ) : (
+              <Text style={[styles.clientRankText, { color: rankStyle.color }]}>{rank}</Text>
+            )}
+          </View>
+        )}
+        {isAtRisk && (
+          <View style={[styles.clientRank, { backgroundColor: colors.warning[100] }]}>
+            <Icon name="exclamation" size={14} color={colors.warning[600]} />
+          </View>
+        )}
+        <View style={styles.clientInsightInfo}>
+          <Text style={styles.clientInsightName}>{client.name}</Text>
+          <Text style={styles.clientInsightSubtext}>
+            {bookingCount} booking{bookingCount !== 1 ? 's' : ''} total
+          </Text>
+        </View>
+        {loyaltyTier && !isAtRisk && (
+          <View style={[styles.loyaltyBadge, { backgroundColor: loyaltyTier.bg }]}>
+            <Text style={[styles.loyaltyBadgeText, { color: loyaltyTier.color }]}>
+              {loyaltyTier.label}
+            </Text>
+          </View>
+        )}
+        {isAtRisk && client.daysSinceLastBooking && (
+          <View style={styles.daysBadge}>
+            <Text style={styles.daysBadgeText}>{client.daysSinceLastBooking}d ago</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.clientInsightStats}>
+        <View style={styles.clientInsightStatItem}>
+          <Text style={styles.clientInsightStatLabel}>Revenue</Text>
+          <Text style={[
+            styles.clientInsightStatValue,
+            isAtRisk && styles.clientInsightStatValueMuted
+          ]}>
+            {client.totalRevenueFormatted || '$0'}
+          </Text>
+        </View>
+        <View style={styles.clientInsightStatDivider} />
+        <View style={styles.clientInsightStatItem}>
+          <Text style={styles.clientInsightStatLabel}>Avg Value</Text>
+          <Text style={[
+            styles.clientInsightStatValue,
+            isAtRisk && styles.clientInsightStatValueMuted
+          ]}>
+            {client.avgBookingValueFormatted || (client.totalRevenueFormatted && client.bookingCount > 0
+              ? `$${Math.round(parseFloat(client.totalRevenueFormatted.replace(/[$,]/g, '')) / client.bookingCount)}`
+              : '$0'
+            )}
+          </Text>
+        </View>
+        {!isAtRisk && client.bookingCount > 0 && (
+          <>
+            <View style={styles.clientInsightStatDivider} />
+            <View style={styles.clientInsightStatItem}>
+              <Text style={styles.clientInsightStatLabel}>Frequency</Text>
+              <View style={styles.frequencyIndicator}>
+                {[...Array(Math.min(bookingCount >= 10 ? 5 : Math.ceil(bookingCount / 2), 5))].map((_, i) => (
+                  <View key={i} style={[
+                    styles.frequencyDot,
+                    i < Math.min(Math.ceil(bookingCount / 4), 5) && styles.frequencyDotFilled
+                  ]} />
+                ))}
+              </View>
+            </View>
+          </>
+        )}
+      </View>
+    </View>
+  );
+};
+
+// Simple Client Row (for compact lists)
 const ClientRow = ({ client, isAtRisk }) => (
   <View style={[styles.clientRow, isAtRisk && styles.clientRowAtRisk]}>
     <View style={styles.clientInfo}>
@@ -219,6 +472,24 @@ const BusinessAnalyticsDashboard = ({ state }) => {
   const [analytics, setAnalytics] = useState(null);
   const [error, setError] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState("thisMonth");
+  const [bonusModalVisible, setBonusModalVisible] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+
+  const handleBonusPress = (employee) => {
+    setSelectedEmployee(employee);
+    setBonusModalVisible(true);
+  };
+
+  const handleBonusSubmit = async (bonusData) => {
+    const result = await BusinessOwnerService.createBonus(
+      state.currentUser.token,
+      bonusData
+    );
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    return result;
+  };
 
   const fetchAnalytics = async (isRefresh = false) => {
     if (isRefresh) {
@@ -264,45 +535,161 @@ const BusinessAnalyticsDashboard = ({ state }) => {
   const cleaningsNeeded = access?.qualification?.cleaningsNeeded || 0;
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
-      {/* Header */}
+    <View style={styles.container}>
+      {/* Fixed Header */}
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => navigate(-1)}>
           <Icon name="arrow-left" size={18} color={colors.text.primary} />
         </Pressable>
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Business Analytics</Text>
-          <View style={[styles.tierBadge, isPremium ? styles.tierPremium : styles.tierStandard]}>
-            <Icon name={isPremium ? "diamond" : "bar-chart"} size={12} color={isPremium ? colors.warning[600] : colors.neutral[600]} />
-            <Text style={[styles.tierText, isPremium ? styles.tierTextPremium : styles.tierTextStandard]}>
-              {isPremium ? "Premium" : "Standard"}
-            </Text>
-          </View>
+        <Text style={styles.title}>Analytics</Text>
+        <View style={[styles.tierBadge, isPremium ? styles.tierPremium : styles.tierStandard]}>
+          <Icon name={isPremium ? "diamond" : "bar-chart"} size={12} color={isPremium ? colors.warning[600] : colors.neutral[600]} />
+          <Text style={[styles.tierText, isPremium ? styles.tierTextPremium : styles.tierTextStandard]}>
+            {isPremium ? "Premium" : "Standard"}
+          </Text>
         </View>
       </View>
 
-      {/* Tier Progress (if not premium) */}
-      {!isPremium && (
-        <View style={styles.tierProgress}>
-          <Text style={styles.tierProgressText}>
-            {access?.qualification?.currentCleanings || 0} / {access?.qualification?.threshold || 50} jobs this month
-          </Text>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${Math.min(((access?.qualification?.currentCleanings || 0) / (access?.qualification?.threshold || 50)) * 100, 100)}%`,
-                },
-              ]}
-            />
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+
+      {/* Elite Partner Status Section */}
+      {isPremium ? (
+        <View style={styles.largeBusinessBanner}>
+          <View style={styles.largeBusinessBannerHeader}>
+            <View style={styles.largeBusinessTrophyContainer}>
+              <Icon name="trophy" size={28} color={colors.warning[500]} />
+            </View>
+            <View style={styles.largeBusinessBannerTitleContainer}>
+              <Text style={styles.largeBusinessBannerTitle}>You're an Elite Partner!</Text>
+              <Text style={styles.largeBusinessBannerSubtitle}>
+                {access?.qualification?.currentCleanings || 0} cleanings this month
+              </Text>
+            </View>
           </View>
-          <Text style={styles.tierProgressHint}>
-            Complete {cleaningsNeeded} more jobs to unlock premium analytics
+          <Text style={styles.largeBusinessBannerMessage}>
+            Amazing work! You've unlocked our best rates and premium features.
           </Text>
+          <View style={styles.largeBusinessPerksRow}>
+            <View style={styles.largeBizPerkCard}>
+              <Icon name="percent" size={16} color={colors.success[600]} />
+              <Text style={styles.largeBizPerkValue}>7%</Text>
+              <Text style={styles.largeBizPerkLabel}>Platform Fee</Text>
+            </View>
+            <View style={styles.largeBizPerkCard}>
+              <Icon name="line-chart" size={16} color={colors.primary[600]} />
+              <Text style={styles.largeBizPerkValue}>Premium</Text>
+              <Text style={styles.largeBizPerkLabel}>Analytics</Text>
+            </View>
+            <View style={styles.largeBizPerkCard}>
+              <Icon name="headphones" size={16} color={colors.secondary[600]} />
+              <Text style={styles.largeBizPerkValue}>Priority</Text>
+              <Text style={styles.largeBizPerkLabel}>Support</Text>
+            </View>
+          </View>
+        </View>
+      ) : (
+        (() => {
+          const currentCleanings = access?.qualification?.currentCleanings || 0;
+          const threshold = access?.qualification?.threshold || 70;
+          const progressPercent = Math.min((currentCleanings / threshold) * 100, 100);
+          const isHalfway = currentCleanings >= threshold / 2;
+
+          return (
+            <View style={styles.elitePartnerPromo}>
+              <View style={styles.elitePartnerPromoHeader}>
+                <View style={styles.elitePartnerPromoIconWrapper}>
+                  <Icon name="rocket" size={24} color={colors.warning[600]} />
+                </View>
+                <View style={styles.elitePartnerPromoTitleSection}>
+                  <Text style={styles.elitePartnerPromoTitle}>Become an Elite Partner</Text>
+                  {isHalfway && (
+                    <Text style={styles.elitePartnerPromoSubtitle}>
+                      You&apos;re making great progress!
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.elitePartnerPromoProgress}>
+                <View style={styles.elitePartnerPromoProgressBar}>
+                  <View
+                    style={[
+                      styles.elitePartnerPromoProgressFill,
+                      { width: `${progressPercent}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.elitePartnerPromoProgressText}>
+                  {currentCleanings} / {threshold} cleanings this month
+                </Text>
+              </View>
+
+              <Text style={styles.elitePartnerPromoUnlock}>
+                Complete {cleaningsNeeded} more to unlock:
+              </Text>
+
+              <View style={styles.elitePartnerPromoBenefits}>
+                <View style={styles.elitePartnerPromoBenefitRow}>
+                  <Icon name="percent" size={12} color={colors.success[600]} />
+                  <Text style={styles.elitePartnerPromoBenefitText}>Reduced 7% platform fee</Text>
+                </View>
+                <View style={styles.elitePartnerPromoBenefitRow}>
+                  <Icon name="line-chart" size={12} color={colors.primary[600]} />
+                  <Text style={styles.elitePartnerPromoBenefitText}>Premium analytics</Text>
+                </View>
+                <View style={styles.elitePartnerPromoBenefitRow}>
+                  <Icon name="headphones" size={12} color={colors.secondary[600]} />
+                  <Text style={styles.elitePartnerPromoBenefitText}>Priority support</Text>
+                </View>
+              </View>
+            </View>
+          );
+        })()
+      )}
+
+      {/* Monthly Performance Tracker */}
+      {access?.monthlyHistory && access.monthlyHistory.length > 0 && (
+        <View style={styles.monthlyTrackerSection}>
+          <SectionHeader title="Monthly Performance" icon="calendar" />
+          <View style={styles.monthlyTrackerCard}>
+            {access.monthlyHistory.slice(0, 4).map((month, index) => (
+              <View key={`${month.year}-${month.month}`} style={styles.monthlyTrackerRow}>
+                <Text style={styles.monthlyTrackerMonth}>
+                  {month.monthName} {month.year}
+                </Text>
+                <View style={styles.monthlyTrackerBarContainer}>
+                  {month.qualified ? (
+                    <View style={styles.monthlyTrackerBarQualified}>
+                      <Text style={styles.monthlyTrackerBarQualifiedText}>QUALIFIED</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.monthlyTrackerBarProgress}>
+                      <View
+                        style={[
+                          styles.monthlyTrackerBarFill,
+                          { width: `${month.progress}%` },
+                        ]}
+                      />
+                    </View>
+                  )}
+                </View>
+                <View style={styles.monthlyTrackerStats}>
+                  {month.qualified && (
+                    <Icon name="check-circle" size={14} color={colors.success[500]} style={{ marginRight: 4 }} />
+                  )}
+                  <Text style={[
+                    styles.monthlyTrackerCleanings,
+                    month.qualified && styles.monthlyTrackerCleaningsQualified
+                  ]}>
+                    {month.cleanings}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
         </View>
       )}
 
@@ -434,7 +821,7 @@ const BusinessAnalyticsDashboard = ({ state }) => {
             <View style={styles.breakdownRow}>
               <View style={styles.breakdownLabelRow}>
                 <Icon name="minus-circle" size={12} color={colors.error[400]} />
-                <Text style={styles.breakdownLabel}>Platform Fee ({financials?.feeTier?.feePercent || 0}%)</Text>
+                <Text style={styles.breakdownLabel}>Platform Fee ({Math.round(financials?.feeTier?.feePercent || 0)}%)</Text>
               </View>
               <Text style={[styles.breakdownValue, styles.breakdownNegative]}>
                 -{financials?.periods?.[selectedPeriod]?.platformFeesFormatted || "$0.00"}
@@ -618,13 +1005,13 @@ const BusinessAnalyticsDashboard = ({ state }) => {
                   styles.tierBadgeText,
                   financials?.feeTier?.current === "large_business" ? styles.tierBadgeTextPremium : styles.tierBadgeTextStandard
                 ]}>
-                  {financials?.feeTier?.current === "large_business" ? "Large Business" : "Business Owner"}
+                  {financials?.feeTier?.current === "large_business" ? "Elite Partner" : "Business Owner"}
                 </Text>
               </View>
-              <Text style={styles.feeRateText}>{financials?.feeTier?.feePercent || 0}% platform fee</Text>
+              <Text style={styles.feeRateText}>{Math.round(financials?.feeTier?.feePercent || 0)}% platform fee</Text>
             </View>
             {financials?.feeTier?.cleaningsToQualify > 0 && (
-              <View style={styles.tierProgress}>
+              <View style={styles.feeTierProgressContainer}>
                 <View style={styles.tierProgressBar}>
                   <View
                     style={[
@@ -657,69 +1044,124 @@ const BusinessAnalyticsDashboard = ({ state }) => {
 
       {/* Employee Performance (Premium) */}
       <View style={styles.section}>
-        <SectionHeader title="Top Performers" icon="trophy" isPremium isLocked={!isPremium} />
-        <View style={styles.sectionCard}>
-          {!isPremium ? (
+        <SectionHeader title="Team Performance" icon="trophy" isPremium isLocked={!isPremium} />
+        {!isPremium ? (
+          <View style={styles.sectionCard}>
             <PremiumLock cleaningsNeeded={cleaningsNeeded} />
-          ) : employees?.employees?.length > 0 ? (
-            employees.employees.slice(0, 5).map((emp, index) => (
-              <EmployeeRow key={emp.employeeId} employee={emp} rank={index + 1} />
-            ))
-          ) : (
+          </View>
+        ) : employees?.employees?.length > 0 ? (
+          <>
+            <TeamStatsSummary employees={employees.employees} />
+            <View style={styles.topPerformersHeader}>
+              <Text style={styles.topPerformersTitle}>Top Performers</Text>
+              <Text style={styles.topPerformersSubtitle}>This month's leaders</Text>
+            </View>
+            {employees.employees.slice(0, 5).map((emp, index) => (
+              <EmployeePerformanceCard
+                key={emp.businessEmployeeId}
+                employee={emp}
+                rank={index + 1}
+                isTopPerformer={index === 0}
+                onBonusPress={emp.employeeId ? handleBonusPress : null}
+              />
+            ))}
+          </>
+        ) : (
+          <View style={styles.sectionCard}>
             <View style={styles.emptyState}>
+              <Icon name="users" size={32} color={colors.neutral[300]} />
               <Text style={styles.emptyStateText}>No employee data available</Text>
             </View>
-          )}
-        </View>
+          </View>
+        )}
       </View>
 
       {/* Client Insights (Premium) */}
       <View style={styles.section}>
-        <SectionHeader title="Client Insights" icon="users" isPremium isLocked={!isPremium} />
-        <View style={styles.sectionCard}>
-          {!isPremium ? (
+        <SectionHeader title="Client Insights" icon="heart" isPremium isLocked={!isPremium} />
+        {!isPremium ? (
+          <View style={styles.sectionCard}>
             <PremiumLock cleaningsNeeded={cleaningsNeeded} />
-          ) : (
-            <>
-              <View style={styles.clientMetrics}>
-                <View style={styles.clientMetric}>
-                  <Text style={styles.clientMetricValue}>{clients?.totalClients || 0}</Text>
-                  <Text style={styles.clientMetricLabel}>Total Clients</Text>
+          </View>
+        ) : (
+          <>
+            <ClientStatsSummary clients={clients} />
+
+            {/* At-Risk Clients Section */}
+            {clients?.atRiskClients?.length > 0 && (
+              <View style={styles.clientInsightSection}>
+                <View style={styles.clientInsightSectionHeader}>
+                  <View style={styles.clientInsightSectionTitleRow}>
+                    <Icon name="exclamation-triangle" size={14} color={colors.warning[600]} />
+                    <Text style={styles.clientInsightSectionTitle}>Needs Attention</Text>
+                  </View>
+                  <View style={styles.atRiskCountBadge}>
+                    <Text style={styles.atRiskCountText}>{clients.atRiskCount || clients.atRiskClients.length}</Text>
+                  </View>
                 </View>
-                <View style={styles.clientMetric}>
-                  <Text style={styles.clientMetricValue}>{clients?.newClientsThisMonth || 0}</Text>
-                  <Text style={styles.clientMetricLabel}>New This Month</Text>
+                <Text style={styles.clientInsightSectionSubtitle}>
+                  Clients who haven't booked recently
+                </Text>
+                {clients.atRiskClients.slice(0, 3).map((client, index) => (
+                  <ClientInsightCard
+                    key={client.clientId}
+                    client={client}
+                    isAtRisk
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* Top Clients Section */}
+            {clients?.topClients?.length > 0 && (
+              <View style={styles.clientInsightSection}>
+                <View style={styles.clientInsightSectionHeader}>
+                  <View style={styles.clientInsightSectionTitleRow}>
+                    <Icon name="diamond" size={14} color={colors.primary[600]} />
+                    <Text style={styles.clientInsightSectionTitle}>Top Clients</Text>
+                  </View>
                 </View>
-                <View style={styles.clientMetric}>
-                  <Text style={styles.clientMetricValue}>{clients?.metrics?.retentionRate || 0}%</Text>
-                  <Text style={styles.clientMetricLabel}>Retention Rate</Text>
+                <Text style={styles.clientInsightSectionSubtitle}>
+                  Your most valuable clients by revenue
+                </Text>
+                {clients.topClients.slice(0, 5).map((client, index) => (
+                  <ClientInsightCard
+                    key={client.clientId}
+                    client={client}
+                    rank={index + 1}
+                    isTopClient={index === 0}
+                  />
+                ))}
+              </View>
+            )}
+
+            {/* Empty State */}
+            {(!clients?.topClients?.length && !clients?.atRiskClients?.length) && (
+              <View style={styles.sectionCard}>
+                <View style={styles.emptyState}>
+                  <Icon name="users" size={32} color={colors.neutral[300]} />
+                  <Text style={styles.emptyStateText}>No client data available yet</Text>
                 </View>
               </View>
-
-              {clients?.atRiskClients?.length > 0 && (
-                <View style={styles.atRiskSection}>
-                  <Text style={styles.atRiskTitle}>At-Risk Clients ({clients.atRiskCount})</Text>
-                  {clients.atRiskClients.slice(0, 3).map((client) => (
-                    <ClientRow key={client.clientId} client={client} isAtRisk />
-                  ))}
-                </View>
-              )}
-
-              {clients?.topClients?.length > 0 && (
-                <View style={styles.topClientsSection}>
-                  <Text style={styles.topClientsTitle}>Top Clients</Text>
-                  {clients.topClients.slice(0, 3).map((client) => (
-                    <ClientRow key={client.clientId} client={client} />
-                  ))}
-                </View>
-              )}
-            </>
-          )}
-        </View>
+            )}
+          </>
+        )}
       </View>
 
-      <View style={styles.bottomPadding} />
-    </ScrollView>
+        <View style={styles.bottomPadding} />
+      </ScrollView>
+
+      {/* Give Bonus Modal */}
+      <GiveBonusModal
+        visible={bonusModalVisible}
+        onClose={() => {
+          setBonusModalVisible(false);
+          setSelectedEmployee(null);
+        }}
+        employee={selectedEmployee}
+        onSubmit={handleBonusSubmit}
+      />
+    </View>
   );
 };
 
@@ -742,25 +1184,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.md,
+    backgroundColor: colors.background.primary,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.light,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: radius.full,
-    backgroundColor: colors.background.primary,
+    backgroundColor: colors.neutral[100],
     justifyContent: "center",
     alignItems: "center",
-    ...shadows.sm,
-  },
-  headerContent: {
-    flex: 1,
-    marginLeft: spacing.md,
   },
   title: {
-    fontSize: typography.fontSize["2xl"],
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
@@ -770,8 +1211,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.full,
-    alignSelf: "flex-start",
-    marginTop: spacing.xs,
+    gap: 4,
+  },
+  scrollView: {
+    flex: 1,
   },
   tierPremium: {
     backgroundColor: colors.warning[100],
@@ -782,7 +1225,6 @@ const styles = StyleSheet.create({
   tierText: {
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
-    marginLeft: 4,
   },
   tierTextPremium: {
     color: colors.warning[700],
@@ -1181,6 +1623,178 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     marginTop: 2,
+  },
+  // Enhanced Team Performance Styles
+  teamStatsSummary: {
+    flexDirection: "row",
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    justifyContent: "space-around",
+  },
+  teamStatItem: {
+    alignItems: "center",
+    gap: spacing.xxs,
+  },
+  teamStatValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  teamStatLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  topPerformersHeader: {
+    marginBottom: spacing.md,
+  },
+  topPerformersTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  topPerformersSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  performerCard: {
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadows.sm,
+  },
+  topPerformerCard: {
+    borderWidth: 2,
+    borderColor: colors.warning[300],
+    backgroundColor: colors.warning[50],
+  },
+  topPerformerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.warning[500],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginBottom: spacing.sm,
+    gap: 4,
+  },
+  topPerformerBadgeText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+    letterSpacing: 0.5,
+  },
+  performerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  performerRank: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.lg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  performerRankText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
+  performerInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  performerName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  performerRole: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  performerRating: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  performerRatingText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.warning[700],
+  },
+  performerStats: {
+    flexDirection: "row",
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  performerStatItem: {
+    flex: 1,
+  },
+  performerStatDivider: {
+    width: 1,
+    backgroundColor: colors.neutral[200],
+    marginHorizontal: spacing.md,
+  },
+  performerStatLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xxs,
+  },
+  performerStatValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  completionBarContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  completionBarBg: {
+    flex: 1,
+    height: 8,
+    backgroundColor: colors.neutral[200],
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  completionBarFill: {
+    height: "100%",
+    borderRadius: radius.full,
+  },
+  completionBarExcellent: {
+    backgroundColor: colors.success[500],
+  },
+  completionBarGood: {
+    backgroundColor: colors.primary[500],
+  },
+  completionBarNeedsWork: {
+    backgroundColor: colors.warning[500],
+  },
+  completionBarText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    minWidth: 36,
+  },
+  bonusButton: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: spacing.sm,
   },
   clientMetrics: {
     flexDirection: "row",
@@ -1659,7 +2273,7 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontWeight: typography.fontWeight.medium,
   },
-  tierProgress: {
+  feeTierProgressContainer: {
     gap: spacing.xs,
   },
   tierProgressBar: {
@@ -1685,8 +2299,440 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
   },
+  // Elite Partner Banner Styles
+  largeBusinessBanner: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.success[50],
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  largeBusinessBannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  largeBusinessTrophyContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.full,
+    backgroundColor: colors.warning[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  largeBusinessBannerTitleContainer: {
+    flex: 1,
+  },
+  largeBusinessBannerTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
+  },
+  largeBusinessBannerSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    marginTop: 2,
+  },
+  largeBusinessBannerMessage: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  largeBusinessPerksRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  largeBizPerkCard: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+    padding: spacing.sm,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    ...shadows.sm,
+  },
+  largeBizPerkValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginTop: spacing.xs,
+  },
+  largeBizPerkLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  // Elite Partner Promo Styles (non-qualified users)
+  elitePartnerPromo: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    ...shadows.sm,
+  },
+  elitePartnerPromoHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: spacing.md,
+  },
+  elitePartnerPromoIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.lg,
+    backgroundColor: colors.warning[50],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  elitePartnerPromoTitleSection: {
+    flex: 1,
+  },
+  elitePartnerPromoTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  elitePartnerPromoSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.medium,
+    marginTop: spacing.xxs,
+  },
+  elitePartnerPromoProgress: {
+    marginBottom: spacing.md,
+  },
+  elitePartnerPromoProgressBar: {
+    height: 10,
+    backgroundColor: colors.neutral[200],
+    borderRadius: radius.full,
+    overflow: "hidden",
+    marginBottom: spacing.xs,
+  },
+  elitePartnerPromoProgressFill: {
+    height: "100%",
+    backgroundColor: colors.warning[500],
+    borderRadius: radius.full,
+  },
+  elitePartnerPromoProgressText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  elitePartnerPromoUnlock: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  elitePartnerPromoBenefits: {
+    gap: spacing.xs,
+  },
+  elitePartnerPromoBenefitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  elitePartnerPromoBenefitText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+  },
+  // Enhanced Tier Progress Styles
+  tierProgressHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  tierProgressTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  tierProgressSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  tierProgressBenefits: {
+    marginTop: spacing.sm,
+    gap: spacing.xxs,
+  },
+  tierBenefitItem: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  // Monthly Tracker Styles
+  monthlyTrackerSection: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  monthlyTrackerCard: {
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    ...shadows.sm,
+  },
+  monthlyTrackerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  monthlyTrackerMonth: {
+    width: 70,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  monthlyTrackerBarContainer: {
+    flex: 1,
+    marginHorizontal: spacing.sm,
+  },
+  monthlyTrackerBarQualified: {
+    height: 24,
+    backgroundColor: colors.success[500],
+    borderRadius: radius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  monthlyTrackerBarQualifiedText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+    letterSpacing: 1,
+  },
+  monthlyTrackerBarProgress: {
+    height: 24,
+    backgroundColor: colors.neutral[200],
+    borderRadius: radius.md,
+    overflow: "hidden",
+  },
+  monthlyTrackerBarFill: {
+    height: "100%",
+    backgroundColor: colors.primary[400],
+    borderRadius: radius.md,
+  },
+  monthlyTrackerStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: 50,
+    justifyContent: "flex-end",
+  },
+  monthlyTrackerCleanings: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.secondary,
+  },
+  monthlyTrackerCleaningsQualified: {
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.bold,
+  },
   bottomPadding: {
     height: spacing["4xl"],
+  },
+  // Enhanced Client Insights Styles
+  clientStatsSummary: {
+    flexDirection: "row",
+    backgroundColor: colors.secondary[50],
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    justifyContent: "space-around",
+  },
+  clientStatItem: {
+    alignItems: "center",
+    gap: spacing.xxs,
+  },
+  clientStatValue: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  clientStatLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+  },
+  clientInsightSection: {
+    marginBottom: spacing.lg,
+  },
+  clientInsightSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xxs,
+  },
+  clientInsightSectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  clientInsightSectionTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  clientInsightSectionSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginBottom: spacing.md,
+  },
+  atRiskCountBadge: {
+    backgroundColor: colors.warning[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.full,
+  },
+  atRiskCountText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.warning[700],
+  },
+  clientInsightCard: {
+    backgroundColor: colors.background.primary,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadows.sm,
+  },
+  topClientCard: {
+    borderWidth: 2,
+    borderColor: colors.primary[300],
+    backgroundColor: colors.primary[50],
+  },
+  atRiskClientCard: {
+    borderWidth: 1,
+    borderColor: colors.warning[300],
+    backgroundColor: colors.warning[50],
+  },
+  topClientBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginBottom: spacing.sm,
+    gap: 4,
+  },
+  topClientBadgeText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+    letterSpacing: 0.5,
+  },
+  atRiskClientBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.warning[500],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginBottom: spacing.sm,
+    gap: 4,
+  },
+  atRiskClientBadgeText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+    letterSpacing: 0.5,
+  },
+  clientInsightHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  clientRank: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.lg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  clientRankText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
+  clientInsightInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  clientInsightName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  clientInsightSubtext: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  loyaltyBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.full,
+  },
+  loyaltyBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+  },
+  daysBadge: {
+    backgroundColor: colors.warning[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    borderRadius: radius.full,
+  },
+  daysBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  clientInsightStats: {
+    flexDirection: "row",
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  clientInsightStatItem: {
+    flex: 1,
+  },
+  clientInsightStatDivider: {
+    width: 1,
+    backgroundColor: colors.neutral[200],
+    marginHorizontal: spacing.md,
+  },
+  clientInsightStatLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xxs,
+  },
+  clientInsightStatValue: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  clientInsightStatValueMuted: {
+    color: colors.text.secondary,
+  },
+  frequencyIndicator: {
+    flexDirection: "row",
+    gap: 4,
+    marginTop: spacing.xxs,
+  },
+  frequencyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[200],
+  },
+  frequencyDotFilled: {
+    backgroundColor: colors.success[500],
   },
 });
 

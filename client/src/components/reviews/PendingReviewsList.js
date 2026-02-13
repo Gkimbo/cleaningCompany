@@ -21,6 +21,7 @@ import {
 } from "../../services/styles/theme";
 import { API_BASE } from "../../services/config";
 import MultiAspectReviewForm from "./MultiAspectReviewForm";
+import PhotoComparisonModal from "../conflicts/modals/PhotoComparisonModal";
 
 const PendingReviewsList = ({ state }) => {
   const navigate = useNavigate();
@@ -29,9 +30,14 @@ const PendingReviewsList = ({ state }) => {
   const [pendingReviews, setPendingReviews] = useState([]);
   const [selectedReview, setSelectedReview] = useState(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showPhotosModal, setShowPhotosModal] = useState(false);
+  const [photos, setPhotos] = useState({ before: [], after: [] });
+  const [photosLoading, setPhotosLoading] = useState(false);
 
-  const userRole = state?.currentUser?.role || "client";
-  const isHomeowner = userRole === "client" || userRole === "homeowner";
+  // Use state.account to determine user type (cleaner, client, owner, etc.)
+  const accountType = state?.account || "client";
+  const isCleaner = accountType === "cleaner" || accountType === "employee";
+  const isHomeowner = !isCleaner; // Homeowners, owners, HR all review cleaners
 
   const fetchPendingReviews = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -100,18 +106,58 @@ const PendingReviewsList = ({ state }) => {
       return {
         userId: cleaner?.id,
         name: cleaner?.firstName
-          ? `${cleaner.firstName} ${cleaner.lastName || ""}`
+          ? `${cleaner.firstName} ${cleaner.lastName || ""}`.trim()
           : cleaner?.username || "Cleaner",
         reviewType: "homeowner_to_cleaner",
       };
     } else {
-      // Cleaner reviewing homeowner (we need to get the home owner)
+      // Cleaner reviewing homeowner - use homeowner data from API
+      const homeowner = pendingReview.homeowner;
+      const homeownerName = homeowner?.firstName
+        ? `${homeowner.firstName} ${homeowner.lastName || ""}`.trim()
+        : homeowner?.username || pendingReview.home?.nickName || "Homeowner";
+
       return {
-        userId: pendingReview.home?.ownerId,
-        name: pendingReview.home?.nickName || "Homeowner",
+        userId: homeowner?.id || pendingReview.home?.ownerId,
+        name: homeownerName,
         reviewType: "cleaner_to_homeowner",
       };
     }
+  };
+
+  const fetchPhotos = async (appointmentId) => {
+    setPhotosLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE}/job-photos/${appointmentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${state.currentUser.token}`,
+          },
+        }
+      );
+      const data = await response.json();
+
+      if (data.error) {
+        console.error("Error fetching photos:", data.error);
+        setPhotos({ before: [], after: [] });
+      } else {
+        setPhotos({
+          before: data.beforePhotos || [],
+          after: data.afterPhotos || [],
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching photos:", err);
+      setPhotos({ before: [], after: [] });
+    } finally {
+      setPhotosLoading(false);
+    }
+  };
+
+  const handleViewPhotos = (pendingReview) => {
+    setShowPhotosModal(true);
+    fetchPhotos(pendingReview.appointmentId);
   };
 
   if (loading) {
@@ -182,45 +228,56 @@ const PendingReviewsList = ({ state }) => {
               {pendingReviews.map((pending) => {
                 const reviewee = getRevieweeInfo(pending);
                 return (
-                  <Pressable
-                    key={pending.appointmentId}
-                    style={styles.pendingCard}
-                    onPress={() => handleStartReview(pending)}
-                  >
-                    <View style={styles.pendingHeader}>
-                      <View style={styles.dateContainer}>
-                        <Icon name="calendar" size={12} color={colors.primary[600]} />
-                        <Text style={styles.dateText}>{formatDate(pending.date)}</Text>
+                  <View key={pending.appointmentId} style={styles.pendingCard}>
+                    <Pressable onPress={() => handleStartReview(pending)}>
+                      <View style={styles.pendingHeader}>
+                        <View style={styles.dateContainer}>
+                          <Icon name="calendar" size={12} color={colors.primary[600]} />
+                          <Text style={styles.dateText}>{formatDate(pending.date)}</Text>
+                        </View>
+                        <View style={styles.reviewBadge}>
+                          <Icon name="star-o" size={10} color={colors.warning[600]} />
+                          <Text style={styles.reviewBadgeText}>Review</Text>
+                        </View>
                       </View>
-                      <View style={styles.reviewBadge}>
-                        <Icon name="star-o" size={10} color={colors.warning[600]} />
-                        <Text style={styles.reviewBadgeText}>Review</Text>
-                      </View>
-                    </View>
 
-                    <View style={styles.pendingContent}>
-                      <View style={styles.avatarContainer}>
-                        <Text style={styles.avatarText}>
-                          {reviewee.name.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.pendingDetails}>
-                        <Text style={styles.pendingName}>{reviewee.name}</Text>
-                        {pending.home && (
-                          <Text style={styles.pendingLocation}>
-                            {pending.home.nickName || pending.home.city}
+                      <View style={styles.pendingContent}>
+                        <View style={styles.avatarContainer}>
+                          <Text style={styles.avatarText}>
+                            {reviewee.name.charAt(0).toUpperCase()}
                           </Text>
-                        )}
+                        </View>
+                        <View style={styles.pendingDetails}>
+                          <Text style={styles.pendingName}>{reviewee.name}</Text>
+                          {pending.home && (
+                            <Text style={styles.pendingLocation}>
+                              {isCleaner
+                                ? `Job at ${pending.home.nickName || pending.home.city}`
+                                : pending.home.nickName || pending.home.city}
+                            </Text>
+                          )}
+                        </View>
+                        <Icon name="chevron-right" size={16} color={colors.text.tertiary} />
                       </View>
-                      <Icon name="chevron-right" size={16} color={colors.text.tertiary} />
-                    </View>
+                    </Pressable>
 
                     <View style={styles.pendingFooter}>
-                      <Text style={styles.pendingHint}>
-                        Tap to leave your review
-                      </Text>
+                      <Pressable
+                        style={styles.viewPhotosButton}
+                        onPress={() => handleViewPhotos(pending)}
+                      >
+                        <Icon name="camera" size={14} color={colors.primary[600]} />
+                        <Text style={styles.viewPhotosText}>View Before & After Photos</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.reviewButton}
+                        onPress={() => handleStartReview(pending)}
+                      >
+                        <Icon name="star" size={14} color={colors.neutral[0]} />
+                        <Text style={styles.reviewButtonText}>Leave Review</Text>
+                      </Pressable>
                     </View>
-                  </Pressable>
+                  </View>
                 );
               })}
             </View>
@@ -246,8 +303,9 @@ const PendingReviewsList = ({ state }) => {
             </View>
             <Text style={styles.emptyTitle}>All Caught Up!</Text>
             <Text style={styles.emptyText}>
-              You don't have any pending reviews. After your next completed
-              appointment, you'll be able to leave a review here.
+              {isCleaner
+                ? "You don't have any pending reviews. After your next completed job, you'll be able to leave a review for the homeowner here."
+                : "You don't have any pending reviews. After your next completed appointment, you'll be able to leave a review here."}
             </Text>
             <Pressable style={styles.homeButton} onPress={() => navigate("/")}>
               <Text style={styles.homeButtonText}>Back to Dashboard</Text>
@@ -291,6 +349,25 @@ const PendingReviewsList = ({ state }) => {
           )}
         </View>
       </Modal>
+
+      {/* Photo Comparison Modal */}
+      <PhotoComparisonModal
+        visible={showPhotosModal}
+        onClose={() => {
+          setShowPhotosModal(false);
+          setPhotos({ before: [], after: [] });
+        }}
+        beforePhotos={photos.before}
+        afterPhotos={photos.after}
+      />
+
+      {/* Loading overlay for photos */}
+      {photosLoading && showPhotosModal && (
+        <View style={styles.photosLoadingOverlay}>
+          <ActivityIndicator size="large" color={colors.neutral[0]} />
+          <Text style={styles.photosLoadingText}>Loading photos...</Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -500,11 +577,37 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
+    gap: spacing.sm,
   },
-  pendingHint: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-    textAlign: "center",
+  viewPhotosButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  viewPhotosText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[600],
+  },
+  reviewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  reviewButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
   },
 
   // Double-blind Card
@@ -601,6 +704,24 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: spacing["4xl"],
+  },
+
+  // Photo loading overlay
+  photosLoadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  photosLoadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[0],
   },
 });
 

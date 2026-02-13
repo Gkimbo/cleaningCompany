@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,6 +21,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
+import { usePricing } from "../../context/PricingContext";
 
 const FREQUENCY_OPTIONS = [
   { value: "weekly", label: "Weekly" },
@@ -30,6 +31,7 @@ const FREQUENCY_OPTIONS = [
 ];
 
 const InviteClientModal = ({ visible, onClose, onSuccess, token }) => {
+  const { pricing } = usePricing();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -55,6 +57,35 @@ const InviteClientModal = ({ visible, onClose, onSuccess, token }) => {
     // Clear error when user types
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
+    }
+  };
+
+  // Calculate platform price based on beds/baths
+  const platformPrice = useMemo(() => {
+    if (!formData.beds || !formData.baths) return null;
+    if (!pricing?.basePrice) return null;
+
+    const numBeds = parseInt(formData.beds) || 1;
+    const numBaths = parseFloat(formData.baths) || 1;
+
+    const basePrice = pricing.basePrice || 150;
+    const extraBedBathFee = pricing.extraBedBathFee || 50;
+    const halfBathFee = pricing.halfBathFee || 25;
+
+    const extraBeds = Math.max(0, numBeds - 1);
+    const fullBaths = Math.floor(numBaths);
+    const halfBaths = numBaths % 1 >= 0.5 ? 1 : 0;
+    const extraFullBaths = Math.max(0, fullBaths - 1);
+
+    return basePrice +
+           (extraBeds * extraBedBathFee) +
+           (extraFullBaths * extraBedBathFee) +
+           (halfBaths * halfBathFee);
+  }, [formData.beds, formData.baths, pricing]);
+
+  const handleUsePlatformPrice = () => {
+    if (platformPrice) {
+      updateField("price", platformPrice.toString());
     }
   };
 
@@ -165,7 +196,7 @@ const InviteClientModal = ({ visible, onClose, onSuccess, token }) => {
         <Text style={styles.stepTitle}>Client Information</Text>
       </View>
       <Text style={styles.stepSubtitle}>
-        Enter your client's contact details to send them an invitation.
+        Enter your client&apos;s contact details to send them an invitation.
       </Text>
 
       <View style={styles.formGroup}>
@@ -334,6 +365,38 @@ const InviteClientModal = ({ visible, onClose, onSuccess, token }) => {
 
       <View style={styles.formGroup}>
         <Text style={styles.label}>Price per Cleaning</Text>
+
+        {/* Platform Price Suggestion */}
+        {platformPrice ? (
+          <View style={styles.platformPriceSuggestion}>
+            <View style={styles.platformPriceInfo}>
+              <Feather name="trending-up" size={16} color={colors.primary[600]} />
+              <Text style={styles.platformPriceText}>
+                Platform suggestion: <Text style={styles.platformPriceAmount}>${platformPrice}</Text>
+              </Text>
+              <Text style={styles.platformPriceContext}>
+                ({formData.beds} bed, {formData.baths} bath)
+              </Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.usePlatformButton,
+                pressed && styles.usePlatformButtonPressed,
+              ]}
+              onPress={handleUsePlatformPrice}
+            >
+              <Text style={styles.usePlatformButtonText}>Use This Price</Text>
+            </Pressable>
+          </View>
+        ) : formData.beds || formData.baths ? null : (
+          <View style={styles.platformPriceHint}>
+            <Feather name="info" size={14} color={colors.neutral[400]} />
+            <Text style={styles.platformPriceHintText}>
+              Add beds/baths in Step 2 for price suggestion
+            </Text>
+          </View>
+        )}
+
         <View style={styles.priceInputContainer}>
           <Text style={styles.pricePrefix}>$</Text>
           <TextInput
@@ -671,6 +734,61 @@ const styles = StyleSheet.create({
   },
   priceInput: {
     flex: 1,
+  },
+
+  // Platform Price Suggestion
+  platformPriceSuggestion: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  platformPriceInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  platformPriceText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.primary[700],
+  },
+  platformPriceAmount: {
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[700],
+  },
+  platformPriceContext: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[500],
+  },
+  usePlatformButton: {
+    backgroundColor: colors.primary[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    alignSelf: "flex-start",
+  },
+  usePlatformButtonPressed: {
+    backgroundColor: colors.primary[700],
+  },
+  usePlatformButtonText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+  platformPriceHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  platformPriceHintText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[400],
+    fontStyle: "italic",
   },
 
   // Frequency Options

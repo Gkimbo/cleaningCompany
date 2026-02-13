@@ -109,6 +109,29 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       allowNull: true,
     },
+    // Business review fields (for dual review system)
+    businessOwnerId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "The business owner who owns the reviewed employee",
+    },
+    isBusinessReview: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "True if this is a copy created for the business profile",
+    },
+    sourceReviewId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: "Links to the original employee review (for business copies)",
+    },
+    isEmployeeReviewCopy: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "True if this is a copy created for an employee's profile from a multi-employee job",
+    },
   });
 
   UserReviews.associate = (models) => {
@@ -123,6 +146,19 @@ module.exports = (sequelize, DataTypes) => {
     UserReviews.belongsTo(models.UserAppointments, {
       foreignKey: "appointmentId",
       as: "appointment",
+    });
+    // Business review relationships
+    UserReviews.belongsTo(models.User, {
+      foreignKey: "businessOwnerId",
+      as: "businessOwner",
+    });
+    UserReviews.belongsTo(UserReviews, {
+      foreignKey: "sourceReviewId",
+      as: "sourceReview",
+    });
+    UserReviews.hasOne(UserReviews, {
+      foreignKey: "sourceReviewId",
+      as: "businessCopy",
     });
   };
 

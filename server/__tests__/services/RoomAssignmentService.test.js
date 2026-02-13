@@ -637,7 +637,7 @@ describe("RoomAssignmentService", () => {
 
       const result = await RoomAssignmentService.rebalanceAfterDropout(10);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ rebalanced: false, reason: "no_cleaners", assignments: [] });
     });
 
     it("should return empty array if no unassigned rooms", async () => {
@@ -650,7 +650,7 @@ describe("RoomAssignmentService", () => {
 
       const result = await RoomAssignmentService.rebalanceAfterDropout(10);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ rebalanced: false, reason: "no_unassigned_rooms", assignments: [] });
     });
 
     it("should assign all rooms to remaining cleaner if solo", async () => {
@@ -697,7 +697,10 @@ describe("RoomAssignmentService", () => {
 
       const result = await RoomAssignmentService.rebalanceAfterDropout(10);
 
-      expect(result).toEqual(mockUpdatedAssignments);
+      expect(result.rebalanced).toBe(true);
+      expect(result.assignments).toEqual(mockUpdatedAssignments);
+      expect(result.unassignedCount).toBe(2);
+      expect(result.remainingCleaners).toBe(1);
     });
   });
 

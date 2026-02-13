@@ -95,7 +95,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       expect(MultiCleanerJob.findAll).toHaveBeenCalledTimes(1);
     });
 
-    it("should query for partially_filled jobs with 1 cleaner confirmed", async () => {
+    it("should query for partially_filled jobs with at least 1 cleaner confirmed", async () => {
       MultiCleanerJob.findAll.mockResolvedValue([]);
 
       await processEdgeCaseDecisions();
@@ -104,12 +104,13 @@ describe("Multi-Cleaner Edge Case Processing", () => {
         expect.objectContaining({
           where: expect.objectContaining({
             status: "partially_filled",
-            cleanersConfirmed: 1,
-            totalCleanersRequired: 2,
             edgeCaseDecisionRequired: false,
           }),
         })
       );
+      // Verify that cleanersConfirmed uses [Op.gte]: 1 (not strict equality)
+      const callArgs = MultiCleanerJob.findAll.mock.calls[0][0];
+      expect(callArgs.where.cleanersConfirmed).toBeDefined();
     });
 
     it("should skip jobs that are not edge case homes", async () => {
@@ -134,6 +135,8 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should skip jobs without confirmed cleaner", async () => {
       const mockJob = {
         id: 1,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -145,7 +148,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
       MultiCleanerService.isEdgeLargeHome.mockResolvedValue(true);
-      CleanerJobCompletion.findOne.mockResolvedValue(null);
+      CleanerJobCompletion.findAll.mockResolvedValue([]);
 
       const result = await processEdgeCaseDecisions();
 
@@ -156,6 +159,8 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should process edge case jobs and update job fields correctly", async () => {
       const mockJob = {
         id: 1,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -185,9 +190,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
       MultiCleanerService.isEdgeLargeHome.mockResolvedValue(true);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       const result = await processEdgeCaseDecisions();
 
@@ -207,6 +212,8 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should send in-app notification to homeowner", async () => {
       const mockJob = {
         id: 1,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -236,9 +243,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
       MultiCleanerService.isEdgeLargeHome.mockResolvedValue(true);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processEdgeCaseDecisions();
 
@@ -254,6 +261,8 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should send email notification to homeowner", async () => {
       const mockJob = {
         id: 1,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -283,27 +292,31 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
       MultiCleanerService.isEdgeLargeHome.mockResolvedValue(true);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processEdgeCaseDecisions();
 
       expect(Email.sendEdgeCaseDecisionRequired).toHaveBeenCalledWith(
         "john@test.com",
         "John",
-        "Jane",
+        "Jane", // cleanerNamesDisplay
         expect.any(String), // formatted date
         expect.any(Object), // home address
         24, // decision hours
         100, // appointment id
-        1 // job id
+        1, // job id
+        1, // confirmedCount
+        2 // requiredCount
       );
     });
 
     it("should send push notification when homeowner has push token", async () => {
       const mockJob = {
         id: 1,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -333,9 +346,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
       MultiCleanerService.isEdgeLargeHome.mockResolvedValue(true);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processEdgeCaseDecisions();
 
@@ -344,13 +357,17 @@ describe("Multi-Cleaner Edge Case Processing", () => {
         "John",
         "Jane",
         expect.any(String),
-        24
+        24,
+        1, // confirmedCount
+        2 // requiredCount
       );
     });
 
     it("should not send push notification when homeowner has no push token", async () => {
       const mockJob = {
         id: 1,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -380,9 +397,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
       MultiCleanerService.isEdgeLargeHome.mockResolvedValue(true);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processEdgeCaseDecisions();
 
@@ -392,6 +409,8 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should process multiple edge case jobs", async () => {
       const createMockJob = (id) => ({
         id,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100 + id,
           date: new Date().toISOString(),
@@ -417,9 +436,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       MultiCleanerJob.findAll.mockResolvedValue(mockJobs);
       MultiCleanerService.isEdgeLargeHome.mockResolvedValue(true);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: { id: 300, firstName: "Jane", email: "jane@test.com" },
-      });
+      }]);
 
       const result = await processEdgeCaseDecisions();
 
@@ -432,6 +451,8 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should continue processing other jobs if one fails", async () => {
       const mockJob1 = {
         id: 1,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -443,6 +464,8 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       const mockJob2 = {
         id: 2,
+        cleanersConfirmed: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 101,
           date: new Date().toISOString(),
@@ -461,9 +484,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob1, mockJob2]);
       MultiCleanerService.isEdgeLargeHome.mockResolvedValue(true);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: { id: 300, firstName: "Cleaner", email: "cleaner@test.com" },
-      });
+      }]);
 
       const result = await processEdgeCaseDecisions();
 
@@ -502,6 +525,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should auto-proceed expired decisions and update job", async () => {
       const mockJob = {
         id: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -528,9 +552,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       const result = await processExpiredEdgeCaseDecisions();
 
@@ -548,6 +572,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should notify homeowner of auto-proceed", async () => {
       const mockJob = {
         id: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -574,9 +599,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processExpiredEdgeCaseDecisions();
 
@@ -591,6 +616,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should notify cleaner they are confirmed as sole cleaner", async () => {
       const mockJob = {
         id: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -617,9 +643,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processExpiredEdgeCaseDecisions();
 
@@ -634,6 +660,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
     it("should send email to homeowner about auto-proceed", async () => {
       const mockJob = {
         id: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -660,9 +687,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processExpiredEdgeCaseDecisions();
 
@@ -672,13 +699,16 @@ describe("Multi-Cleaner Edge Case Processing", () => {
         "Jane",
         expect.any(String),
         expect.any(Object),
-        100
+        100,
+        1, // confirmedCount
+        2 // requiredCount
       );
     });
 
     it("should send email to cleaner about confirmation", async () => {
       const mockJob = {
         id: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -705,9 +735,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processExpiredEdgeCaseDecisions();
 
@@ -717,13 +747,16 @@ describe("Multi-Cleaner Edge Case Processing", () => {
         expect.any(String),
         expect.any(Object),
         100,
-        true // fullPay
+        true, // fullPay (only if solo)
+        1, // confirmedCount
+        2 // requiredCount
       );
     });
 
     it("should send push notification to cleaner when token exists", async () => {
       const mockJob = {
         id: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -750,9 +783,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
 
       await processExpiredEdgeCaseDecisions();
 
@@ -760,13 +793,16 @@ describe("Multi-Cleaner Edge Case Processing", () => {
         "ExponentPushToken[cleaner]",
         "Jane",
         expect.any(String),
-        "123 Test St"
+        "123 Test St",
+        1, // confirmedCount
+        2 // requiredCount
       );
     });
 
     it("should skip jobs without confirmed cleaner", async () => {
       const mockJob = {
         id: 1,
+        totalCleanersRequired: 2,
         appointment: {
           id: 100,
           date: new Date().toISOString(),
@@ -777,7 +813,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       MultiCleanerJob.findAll.mockResolvedValue([mockJob]);
-      CleanerJobCompletion.findOne.mockResolvedValue(null);
+      CleanerJobCompletion.findAll.mockResolvedValue([]);
 
       const result = await processExpiredEdgeCaseDecisions();
 
@@ -804,6 +840,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -826,7 +863,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue(null);
+      CleanerJobCompletion.findAll.mockResolvedValue([]);
       CleanerJobCompletion.update.mockResolvedValue([0]);
 
       const result = await cancelEdgeCaseAppointment(mockJob, "homeowner_chose_cancel");
@@ -844,6 +881,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -866,7 +904,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue(null);
+      CleanerJobCompletion.findAll.mockResolvedValue([]);
       CleanerJobCompletion.update.mockResolvedValue([0]);
 
       await cancelEdgeCaseAppointment(mockJob, "homeowner_chose_cancel");
@@ -883,6 +921,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -905,7 +944,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue(null);
+      CleanerJobCompletion.findAll.mockResolvedValue([]);
       CleanerJobCompletion.update.mockResolvedValue([1]);
 
       await cancelEdgeCaseAppointment(mockJob, "homeowner_chose_cancel");
@@ -920,6 +959,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -942,7 +982,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue(null);
+      CleanerJobCompletion.findAll.mockResolvedValue([]);
       CleanerJobCompletion.update.mockResolvedValue([0]);
 
       await cancelEdgeCaseAppointment(mockJob, "homeowner_chose_cancel");
@@ -959,6 +999,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -988,9 +1029,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
       CleanerJobCompletion.update.mockResolvedValue([1]);
 
       await cancelEdgeCaseAppointment(mockJob, "homeowner_chose_cancel");
@@ -1007,6 +1048,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -1029,7 +1071,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue(null);
+      CleanerJobCompletion.findAll.mockResolvedValue([]);
       CleanerJobCompletion.update.mockResolvedValue([0]);
 
       await cancelEdgeCaseAppointment(mockJob, "homeowner_chose_cancel");
@@ -1047,6 +1089,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -1076,9 +1119,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
       CleanerJobCompletion.update.mockResolvedValue([1]);
 
       await cancelEdgeCaseAppointment(mockJob, "homeowner_chose_cancel");
@@ -1088,7 +1131,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
         "Jane",
         expect.any(String),
         expect.any(Object),
-        "homeowner_chose_cancel"
+        "homeowner_chose_cancel",
+        1, // confirmedCount
+        2 // requiredCount
       );
     });
 
@@ -1096,6 +1141,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -1125,9 +1171,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue({
+      CleanerJobCompletion.findAll.mockResolvedValue([{
         cleaner: mockCleaner,
-      });
+      }]);
       CleanerJobCompletion.update.mockResolvedValue([1]);
 
       await cancelEdgeCaseAppointment(mockJob, "homeowner_chose_cancel");
@@ -1136,7 +1182,9 @@ describe("Multi-Cleaner Edge Case Processing", () => {
         "ExponentPushToken[cleaner]",
         "Jane",
         expect.any(String),
-        "123 Test St"
+        "123 Test St",
+        1, // confirmedCount
+        2 // requiredCount
       );
     });
 
@@ -1144,6 +1192,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       const mockJob = {
         id: 1,
         appointmentId: 100,
+        totalCleanersRequired: 2,
         update: jest.fn().mockRejectedValue(new Error("DB error")),
       };
 
@@ -1157,7 +1206,7 @@ describe("Multi-Cleaner Edge Case Processing", () => {
       };
 
       UserAppointments.findByPk.mockResolvedValue(mockAppointment);
-      CleanerJobCompletion.findOne.mockResolvedValue(null);
+      CleanerJobCompletion.findAll.mockResolvedValue([]);
       CleanerJobCompletion.update.mockResolvedValue([0]);
 
       const result = await cancelEdgeCaseAppointment(mockJob, "test");

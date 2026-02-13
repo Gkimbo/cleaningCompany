@@ -69,6 +69,9 @@ const EmployeeAssignmentTile = ({
   const [cancelLoading, setCancelLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showLinensDetails, setShowLinensDetails] = useState(false);
+  const [showLinensSection, setShowLinensSection] = useState(false);
+  const [showAccessInfo, setShowAccessInfo] = useState(false);
+  const [showAddress, setShowAddress] = useState(false);
 
   // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
   const platformFeePercent = isMultiCleanerJob
@@ -127,13 +130,13 @@ const EmployeeAssignmentTile = ({
     return appointmentDate.getTime() === today.getTime();
   };
 
-  const isWithinOneDay = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const appointmentDate = new Date(date + "T00:00:00");
-    const diffTime = appointmentDate - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 1; // Today or tomorrow
+  const isWithin48Hours = () => {
+    const now = new Date();
+    // Assume 10am start time for the appointment
+    const appointmentDate = new Date(date + "T10:00:00");
+    const diffTime = appointmentDate - now;
+    const diffHours = diffTime / (1000 * 60 * 60);
+    return diffHours <= 48 && diffHours >= 0; // Within 48 hours and not in the past
   };
 
   const formatTimeWindow = (time) => {
@@ -156,7 +159,16 @@ const EmployeeAssignmentTile = ({
 
     // Check if it's already a time range like "10-3" or "10am-3pm"
     if (time.includes("-")) {
-      return time; // Already formatted as a range
+      // Format "10-3" → "10am - 3pm"
+      const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+      if (match) {
+        const startHour = parseInt(match[1], 10);
+        const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+        const endHour = parseInt(match[3], 10);
+        const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+        return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+      }
+      return time;
     }
 
     // Check if it's a number of hours (e.g., "3", "2.5")
@@ -258,8 +270,8 @@ const EmployeeAssignmentTile = ({
           <View style={styles.headerBadges}>
             {isMultiCleanerJob && !completed && (
               <View style={styles.teamBadge}>
-                <Icon name="users" size={10} color={colors.primary[700]} />
-                <Text style={styles.teamBadgeText}>Team</Text>
+                <Icon name="users" size={11} color={colors.neutral[0]} />
+                <Text style={styles.teamBadgeText}>Team Job</Text>
               </View>
             )}
             {isEarlyAccess && !completed && (
@@ -286,28 +298,88 @@ const EmployeeAssignmentTile = ({
         {/* Multi-Cleaner Status Banner */}
         {isMultiCleanerJob && multiCleanerJob && !completed && (
           <View style={styles.multiCleanerBanner}>
-            <View style={styles.multiCleanerStats}>
-              <View style={styles.multiCleanerStat}>
-                <Icon name="users" size={14} color={colors.primary[600]} />
-                <Text style={styles.multiCleanerStatValue}>
-                  {multiCleanerJob.cleanersConfirmed}/{multiCleanerJob.totalCleanersRequired}
-                </Text>
-                <Text style={styles.multiCleanerStatLabel}>cleaners</Text>
+            {/* Team Header */}
+            <View style={styles.multiCleanerHeader}>
+              <View style={styles.multiCleanerHeaderLeft}>
+                <View style={styles.multiCleanerIconCircle}>
+                  <Icon name="users" size={16} color={colors.neutral[0]} />
+                </View>
+                <View>
+                  <Text style={styles.multiCleanerHeaderTitle}>Team Cleaning</Text>
+                  <Text style={styles.multiCleanerHeaderSubtitle}>
+                    {multiCleanerJob.totalCleanersRequired}-person job
+                  </Text>
+                </View>
               </View>
               {multiCleanerJob.cleanersConfirmed >= multiCleanerJob.totalCleanersRequired ? (
-                <View style={[styles.multiCleanerStatusBadge, styles.multiCleanerStatusFilled]}>
-                  <Icon name="check-circle" size={12} color={colors.success[600]} />
-                  <Text style={styles.multiCleanerStatusFilledText}>Team Ready</Text>
+                <View style={styles.teamReadyBadge}>
+                  <Icon name="check-circle" size={14} color={colors.success[600]} />
+                  <Text style={styles.teamReadyText}>Ready</Text>
                 </View>
               ) : (
-                <View style={[styles.multiCleanerStatusBadge, styles.multiCleanerStatusFilling]}>
-                  <Icon name="clock-o" size={12} color={colors.warning[600]} />
-                  <Text style={styles.multiCleanerStatusFillingText}>
-                    Waiting for {multiCleanerJob.totalCleanersRequired - multiCleanerJob.cleanersConfirmed} more
+                <View style={styles.teamPendingBadge}>
+                  <Icon name="clock-o" size={14} color={colors.warning[600]} />
+                  <Text style={styles.teamPendingText}>
+                    {multiCleanerJob.cleanersConfirmed}/{multiCleanerJob.totalCleanersRequired}
                   </Text>
                 </View>
               )}
             </View>
+
+            {/* Team Status Bar */}
+            <View style={styles.teamStatusBar}>
+              {Array.from({ length: multiCleanerJob.totalCleanersRequired }).map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.teamSlot,
+                    index < multiCleanerJob.cleanersConfirmed
+                      ? styles.teamSlotFilled
+                      : styles.teamSlotEmpty,
+                  ]}
+                >
+                  <Icon
+                    name={index < multiCleanerJob.cleanersConfirmed ? "user" : "user-o"}
+                    size={12}
+                    color={index < multiCleanerJob.cleanersConfirmed ? colors.success[600] : colors.neutral[400]}
+                  />
+                </View>
+              ))}
+            </View>
+
+            {/* Room Assignments */}
+            {cleanerRoomAssignments && cleanerRoomAssignments.length > 0 && (
+              <View style={styles.roomAssignmentsContainer}>
+                <View style={styles.roomAssignmentsHeader}>
+                  <Icon name="th-large" size={12} color={colors.primary[600]} />
+                  <Text style={styles.roomAssignmentsTitle}>Your Assigned Rooms</Text>
+                </View>
+                <View style={styles.roomAssignmentsList}>
+                  {cleanerRoomAssignments.map((room, index) => (
+                    <View key={index} style={styles.roomAssignmentChip}>
+                      <Icon
+                        name={room.roomType === "bedroom" ? "bed" : "bath"}
+                        size={10}
+                        color={colors.primary[700]}
+                      />
+                      <Text style={styles.roomAssignmentText}>
+                        {room.roomLabel || `${room.roomType === "bedroom" ? "Bed" : "Bath"} ${room.roomNumber}`}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Waiting message */}
+            {multiCleanerJob.cleanersConfirmed < multiCleanerJob.totalCleanersRequired && (
+              <View style={styles.waitingMessageContainer}>
+                <Icon name="info-circle" size={12} color={colors.warning[600]} />
+                <Text style={styles.waitingMessageText}>
+                  Waiting for {multiCleanerJob.totalCleanersRequired - multiCleanerJob.cleanersConfirmed} more cleaner{multiCleanerJob.totalCleanersRequired - multiCleanerJob.cleanersConfirmed > 1 ? "s" : ""} to join
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -368,8 +440,8 @@ const EmployeeAssignmentTile = ({
           )}
         </View>
 
-        {/* Prominent Linens Section - Collapsible when cleaner needs to bring linens */}
-        {assigned && (needsSheets || needsTowels) && (
+        {/* Prominent Linens Section - Collapsible when cleaner needs to bring linens (solo jobs only) */}
+        {assigned && (needsSheets || needsTowels) && !isMultiCleanerJob && (
           <View style={styles.linensCollapsibleContainer}>
             <Pressable
               style={styles.linensCollapsibleHeader}
@@ -517,122 +589,164 @@ const EmployeeAssignmentTile = ({
         {/* Expanded Details */}
         {(expandWindow || assigned) && (
           <View style={styles.expandedSection}>
-            {/* Sheets & Towels Info */}
-            <View style={styles.linensContainer}>
-              <View style={styles.linensHeader}>
-                <Icon name="th-large" size={14} color={colors.primary[600]} />
-                <Text style={styles.linensTitle}>Linens</Text>
-              </View>
-              {needsSheets || needsTowels ? (
-                <View style={styles.linensContent}>
-                  <View style={styles.bringLinensAlert}>
-                    <Icon name="exclamation-circle" size={14} color={colors.warning[600]} />
-                    <Text style={styles.bringLinensText}>You need to bring:</Text>
-                  </View>
-
-                  {/* Sheet Details */}
-                  {needsSheets && (() => {
-                    const effectiveSheets = getEffectiveSheetConfigs(sheetConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
-                    return (
-                      <View style={styles.linensSection}>
-                        <Text style={styles.linensSectionTitle}>Sheets</Text>
-                        {effectiveSheets && effectiveSheets.length > 0 ? (
-                          <View style={styles.linensItemsRow}>
-                            <View style={styles.linensDetailItem}>
-                              <Icon name="check" size={10} color={colors.warning[600]} />
-                              <Text style={styles.linensDetailText}>
-                                {formatBedSizes(effectiveSheets)}
-                              </Text>
-                            </View>
-                            {isMultiCleanerJob && cleanerRoomAssignments?.length > 0 && (
-                              <Text style={styles.linensAssignedNote}>
-                                (Your assigned bedrooms)
-                              </Text>
-                            )}
-                          </View>
-                        ) : (
-                          <View style={styles.linensItemsRow}>
-                            <View style={styles.linensDetailItem}>
-                              <Icon name="check" size={10} color={colors.warning[600]} />
-                              <Text style={styles.linensDetailText}>
-                                {home.numBeds || "All"} set{home.numBeds !== "1" ? "s" : ""} of sheets
-                              </Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })()}
-
-                  {/* Towel Details */}
-                  {needsTowels && (() => {
-                    const effectiveTowels = getEffectiveTowelConfigs(towelConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
-                    const totals = getTowelTotals(effectiveTowels);
-                    return (
-                      <View style={styles.linensSection}>
-                        <Text style={styles.linensSectionTitle}>Towels</Text>
-                        {effectiveTowels && effectiveTowels.length > 0 ? (
-                          <View style={styles.linensItemsRow}>
-                            {effectiveTowels.map((bath, index) => (
-                              <View key={index} style={styles.linensDetailItem}>
-                                <Icon name="check" size={10} color={colors.warning[600]} />
-                                <Text style={styles.linensDetailText}>
-                                  Bathroom {bath.bathroomNumber}: {bath.towels || 0} towel{(bath.towels || 0) !== 1 ? "s" : ""}, {bath.faceCloths || 0} washcloth{(bath.faceCloths || 0) !== 1 ? "s" : ""}
-                                </Text>
-                              </View>
-                            ))}
-                            <View style={styles.linensTotalRow}>
-                              <Text style={styles.linensTotalText}>
-                                Total: {totals.towels} towels, {totals.faceCloths} washcloths
-                              </Text>
-                            </View>
-                            {isMultiCleanerJob && cleanerRoomAssignments?.length > 0 && (
-                              <Text style={styles.linensAssignedNote}>
-                                (Your assigned bathrooms)
-                              </Text>
-                            )}
-                          </View>
-                        ) : (
-                          <View style={styles.linensItemsRow}>
-                            <View style={styles.linensDetailItem}>
-                              <Icon name="check" size={10} color={colors.warning[600]} />
-                              <Text style={styles.linensDetailText}>
-                                Towels for {home.numBaths || "all"} bathroom{home.numBaths !== "1" ? "s" : ""}
-                              </Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })()}
+            {/* Sheets & Towels Info - Collapsible */}
+            <View style={styles.linensContainerCollapsible}>
+              <Pressable
+                style={styles.linensHeaderCollapsible}
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setShowLinensSection(!showLinensSection);
+                }}
+              >
+                <View style={styles.linensHeaderLeft}>
+                  <Icon name="th-large" size={14} color={colors.primary[600]} />
+                  <Text style={styles.linensTitle}>Linens</Text>
+                  {(needsSheets || needsTowels) && (
+                    <View style={styles.linensBringBadge}>
+                      <Icon name="exclamation-circle" size={10} color={colors.warning[600]} />
+                      <Text style={styles.linensBringBadgeText}>Bring</Text>
+                    </View>
+                  )}
                 </View>
-              ) : (
-                <View style={styles.linensProvidedContent}>
-                  <Icon name="check-circle" size={14} color={colors.success[600]} />
-                  <Text style={styles.linensProvidedText}>
-                    Sheets and towels will be provided for {home.numBeds || "each"} bed{home.numBeds !== "1" ? "s" : ""} and {home.numBaths || "each"} bathroom{home.numBaths !== "1" ? "s" : ""}
-                  </Text>
+                <Icon
+                  name={showLinensSection ? "chevron-up" : "chevron-down"}
+                  size={14}
+                  color={colors.primary[600]}
+                />
+              </Pressable>
+
+              {showLinensSection && (
+                <View style={styles.linensContentCollapsible}>
+                  {needsSheets || needsTowels ? (
+                    <View style={styles.linensContent}>
+                      <View style={styles.bringLinensAlert}>
+                        <Icon name="exclamation-circle" size={14} color={colors.warning[600]} />
+                        <Text style={styles.bringLinensText}>You need to bring:</Text>
+                      </View>
+
+                      {/* Sheet Details */}
+                      {needsSheets && (() => {
+                        const effectiveSheets = getEffectiveSheetConfigs(sheetConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
+                        return (
+                          <View style={styles.linensSection}>
+                            <Text style={styles.linensSectionTitle}>Sheets</Text>
+                            {effectiveSheets && effectiveSheets.length > 0 ? (
+                              <View style={styles.linensItemsRow}>
+                                <View style={styles.linensDetailItem}>
+                                  <Icon name="check" size={10} color={colors.warning[600]} />
+                                  <Text style={styles.linensDetailText}>
+                                    {formatBedSizes(effectiveSheets)}
+                                  </Text>
+                                </View>
+                                {isMultiCleanerJob && cleanerRoomAssignments?.length > 0 && (
+                                  <Text style={styles.linensAssignedNote}>
+                                    (Your assigned bedrooms)
+                                  </Text>
+                                )}
+                              </View>
+                            ) : (
+                              <View style={styles.linensItemsRow}>
+                                <View style={styles.linensDetailItem}>
+                                  <Icon name="check" size={10} color={colors.warning[600]} />
+                                  <Text style={styles.linensDetailText}>
+                                    {home.numBeds || "All"} set{home.numBeds !== "1" ? "s" : ""} of sheets
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })()}
+
+                      {/* Towel Details */}
+                      {needsTowels && (() => {
+                        const effectiveTowels = getEffectiveTowelConfigs(towelConfigurations, cleanerRoomAssignments, isMultiCleanerJob);
+                        const totals = getTowelTotals(effectiveTowels);
+                        return (
+                          <View style={styles.linensSection}>
+                            <Text style={styles.linensSectionTitle}>Towels</Text>
+                            {effectiveTowels && effectiveTowels.length > 0 ? (
+                              <View style={styles.linensItemsRow}>
+                                {effectiveTowels.map((bath, index) => (
+                                  <View key={index} style={styles.linensDetailItem}>
+                                    <Icon name="check" size={10} color={colors.warning[600]} />
+                                    <Text style={styles.linensDetailText}>
+                                      Bathroom {bath.bathroomNumber}: {bath.towels || 0} towel{(bath.towels || 0) !== 1 ? "s" : ""}, {bath.faceCloths || 0} washcloth{(bath.faceCloths || 0) !== 1 ? "s" : ""}
+                                    </Text>
+                                  </View>
+                                ))}
+                                <View style={styles.linensTotalRow}>
+                                  <Text style={styles.linensTotalText}>
+                                    Total: {totals.towels} towels, {totals.faceCloths} washcloths
+                                  </Text>
+                                </View>
+                                {isMultiCleanerJob && cleanerRoomAssignments?.length > 0 && (
+                                  <Text style={styles.linensAssignedNote}>
+                                    (Your assigned bathrooms)
+                                  </Text>
+                                )}
+                              </View>
+                            ) : (
+                              <View style={styles.linensItemsRow}>
+                                <View style={styles.linensDetailItem}>
+                                  <Icon name="check" size={10} color={colors.warning[600]} />
+                                  <Text style={styles.linensDetailText}>
+                                    Towels for {home.numBaths || "all"} bathroom{home.numBaths !== "1" ? "s" : ""}
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })()}
+                    </View>
+                  ) : (
+                    <View style={styles.linensProvidedContent}>
+                      <Icon name="check-circle" size={14} color={colors.success[600]} />
+                      <Text style={styles.linensProvidedText}>
+                        Sheets and towels will be provided for {home.numBeds || "each"} bed{home.numBeds !== "1" ? "s" : ""} and {home.numBaths || "each"} bathroom{home.numBaths !== "1" ? "s" : ""}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
 
-            {/* Access Info for Assigned Jobs - Only show day before or day of */}
+            {/* Access Info for Assigned Jobs - Only show within 48 hours */}
             {assigned && !completed && (keyPadCode || keyLocation) && (
-              isWithinOneDay() ? (
-                <View style={styles.accessInfoContainer}>
-                  <Text style={styles.accessTitle}>
-                    <Icon name="key" size={12} color={colors.primary[600]} /> Access Information
-                  </Text>
-                  {keyPadCode && (
-                    <View style={styles.accessRow}>
-                      <Text style={styles.accessLabel}>Keypad Code:</Text>
-                      <Text style={styles.accessValue}>{keyPadCode}</Text>
+              isWithin48Hours() ? (
+                <View style={styles.accessInfoContainerCollapsible}>
+                  <Pressable
+                    style={styles.accessInfoHeaderCollapsible}
+                    onPress={() => {
+                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                      setShowAccessInfo(!showAccessInfo);
+                    }}
+                  >
+                    <View style={styles.accessInfoHeaderLeft}>
+                      <Icon name="key" size={14} color={colors.primary[600]} />
+                      <Text style={styles.accessInfoTitle}>Access Information</Text>
                     </View>
-                  )}
-                  {keyLocation && (
-                    <View style={styles.accessRow}>
-                      <Text style={styles.accessLabel}>Key Location:</Text>
-                      <Text style={styles.accessValue}>{keyLocation}</Text>
+                    <Icon
+                      name={showAccessInfo ? "chevron-up" : "chevron-down"}
+                      size={14}
+                      color={colors.primary[600]}
+                    />
+                  </Pressable>
+                  {showAccessInfo && (
+                    <View style={styles.accessInfoContentCollapsible}>
+                      {keyPadCode && (
+                        <View style={styles.accessRow}>
+                          <Text style={styles.accessLabel}>Keypad Code:</Text>
+                          <Text style={styles.accessValue}>{keyPadCode}</Text>
+                        </View>
+                      )}
+                      {keyLocation && (
+                        <View style={styles.accessRow}>
+                          <Text style={styles.accessLabel}>Key Location:</Text>
+                          <Text style={styles.accessValue}>{keyLocation}</Text>
+                        </View>
+                      )}
                     </View>
                   )}
                 </View>
@@ -646,17 +760,6 @@ const EmployeeAssignmentTile = ({
               )
             )}
 
-            {/* Large Home Warning */}
-            {home.cleanersNeeded > 1 && (
-              <View style={styles.warningBanner}>
-                <Icon name="exclamation-triangle" size={14} color={colors.warning[700]} />
-                <View style={styles.warningTextContainer}>
-                  <Text style={styles.warningTitle}>Large Home</Text>
-                  <Text style={styles.warningSubtext}>May need additional cleaners</Text>
-                </View>
-              </View>
-            )}
-
             {/* Address Hint */}
             {!assigned && (
               <Text style={styles.expandHint}>
@@ -664,40 +767,54 @@ const EmployeeAssignmentTile = ({
               </Text>
             )}
 
-            {/* Address for Assigned Jobs - Full address only day before or day of */}
+            {/* Address for Assigned Jobs - Full address only within 48 hours */}
             {assigned && (
-              isWithinOneDay() ? (
-                <View style={styles.addressContainer}>
-                  <Icon name="home" size={14} color={colors.text.secondary} />
-                  <Text style={styles.addressText}>
-                    {home.address}, {home.city}, {home.state} {home.zipcode}
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.addressContainer}>
-                  <Icon name="map-marker" size={14} color={colors.text.secondary} />
-                  <View style={styles.addressTextContainer}>
-                    <Text style={styles.addressText}>
-                      {home.city}, {home.state} {home.zipcode}
-                    </Text>
-                    <Text style={styles.addressHintText}>
-                      Full address available the day before your job
-                    </Text>
+              <View style={styles.addressContainerCollapsible}>
+                <Pressable
+                  style={styles.addressHeaderCollapsible}
+                  onPress={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setShowAddress(!showAddress);
+                  }}
+                >
+                  <View style={styles.addressHeaderLeft}>
+                    <Icon name="home" size={14} color={colors.text.secondary} />
+                    <Text style={styles.addressHeaderTitle}>Address</Text>
+                    {!isWithin48Hours() && (
+                      <View style={styles.addressLockedBadge}>
+                        <Icon name="lock" size={10} color={colors.text.tertiary} />
+                      </View>
+                    )}
                   </View>
-                </View>
-              )
+                  <Icon
+                    name={showAddress ? "chevron-up" : "chevron-down"}
+                    size={14}
+                    color={colors.text.secondary}
+                  />
+                </Pressable>
+                {showAddress && (
+                  <View style={styles.addressContentCollapsible}>
+                    {isWithin48Hours() ? (
+                      <Text style={styles.addressText}>
+                        {home.address}, {home.city}, {home.state} {home.zipcode}
+                      </Text>
+                    ) : (
+                      <View>
+                        <Text style={styles.addressText}>
+                          {home.city}, {home.state}
+                        </Text>
+                        <Text style={styles.addressHintText}>
+                          Full address available 2 days before
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
             )}
           </View>
         )}
 
-        {/* Expand Indicator */}
-        <View style={styles.expandIndicator}>
-          <Icon
-            name={expandWindow ? "chevron-up" : "chevron-down"}
-            size={12}
-            color={colors.text.tertiary}
-          />
-        </View>
       </Pressable>
 
       {/* Error Message */}
@@ -862,65 +979,158 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: colors.primary[100],
+    backgroundColor: colors.primary[600],
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.full,
   },
   teamBadgeText: {
     fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
   },
   multiCleanerBanner: {
     backgroundColor: colors.primary[50],
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: radius.xl,
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.primary[200],
+    overflow: "hidden",
   },
-  multiCleanerStats: {
+  multiCleanerHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    backgroundColor: colors.primary[100],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
-  multiCleanerStat: {
+  multiCleanerHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  multiCleanerStatValue: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.primary[700],
+  multiCleanerIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary[600],
+    alignItems: "center",
+    justifyContent: "center",
   },
-  multiCleanerStatLabel: {
+  multiCleanerHeaderTitle: {
     fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary[800],
+  },
+  multiCleanerHeaderSubtitle: {
+    fontSize: typography.fontSize.xs,
     color: colors.primary[600],
   },
-  multiCleanerStatusBadge: {
+  teamReadyBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
-    gap: spacing.xs,
-  },
-  multiCleanerStatusFilled: {
+    gap: 4,
     backgroundColor: colors.success[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.success[300],
   },
-  multiCleanerStatusFilledText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+  teamReadyText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
     color: colors.success[700],
   },
-  multiCleanerStatusFilling: {
+  teamPendingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     backgroundColor: colors.warning[100],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.warning[300],
   },
-  multiCleanerStatusFillingText: {
-    fontSize: typography.fontSize.sm,
+  teamPendingText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.warning[700],
+  },
+  teamStatusBar: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  teamSlot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+  },
+  teamSlotFilled: {
+    backgroundColor: colors.success[100],
+    borderColor: colors.success[400],
+  },
+  teamSlotEmpty: {
+    backgroundColor: colors.neutral[100],
+    borderColor: colors.neutral[300],
+    borderStyle: "dashed",
+  },
+  roomAssignmentsContainer: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  roomAssignmentsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  roomAssignmentsTitle: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  roomAssignmentsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.xs,
+  },
+  roomAssignmentChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.neutral[0],
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+  },
+  roomAssignmentText: {
+    fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
+    color: colors.primary[700],
+  },
+  waitingMessageContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.warning[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[200],
+  },
+  waitingMessageText: {
+    fontSize: typography.fontSize.xs,
     color: colors.warning[700],
   },
   earningsContainer: {
@@ -1150,6 +1360,45 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
+  linensContainerCollapsible: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    overflow: "hidden",
+  },
+  linensHeaderCollapsible: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.neutral[100],
+  },
+  linensHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  linensBringBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.warning[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    marginLeft: spacing.sm,
+  },
+  linensBringBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
+  },
+  linensContentCollapsible: {
+    padding: spacing.md,
+  },
   linensHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -1243,6 +1492,35 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     marginBottom: spacing.sm,
   },
+  accessInfoContainerCollapsible: {
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    overflow: "hidden",
+  },
+  accessInfoHeaderCollapsible: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[100],
+  },
+  accessInfoHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  accessInfoTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  accessInfoContentCollapsible: {
+    padding: spacing.md,
+  },
   accessTitle: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
@@ -1278,27 +1556,6 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     fontStyle: "italic",
   },
-  warningBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.warning[50],
-    padding: spacing.md,
-    borderRadius: radius.md,
-    marginBottom: spacing.sm,
-  },
-  warningTextContainer: {
-    flex: 1,
-  },
-  warningTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.warning[700],
-  },
-  warningSubtext: {
-    fontSize: typography.fontSize.xs,
-    color: colors.warning[600],
-  },
   expandHint: {
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
@@ -1311,6 +1568,37 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[50],
     padding: spacing.md,
     borderRadius: radius.md,
+  },
+  addressContainerCollapsible: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    overflow: "hidden",
+  },
+  addressHeaderCollapsible: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.neutral[100],
+  },
+  addressHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  addressHeaderTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  addressLockedBadge: {
+    marginLeft: spacing.xs,
+  },
+  addressContentCollapsible: {
+    padding: spacing.md,
   },
   addressText: {
     flex: 1,
@@ -1325,10 +1613,6 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     fontStyle: "italic",
     marginTop: 2,
-  },
-  expandIndicator: {
-    alignItems: "center",
-    marginTop: spacing.sm,
   },
   errorContainer: {
     flexDirection: "row",

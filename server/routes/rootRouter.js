@@ -10,7 +10,7 @@ const reviewsRouter = require("./api/v1/reviewsRouter");
 const paymentRouter = require("./api/v1/paymentRouter");
 const messageRouter = require("./api/v1/messageRouter");
 const stripeConnectRouter = require("./api/v1/stripeConnectRouter");
-const taxRouter = require("./api/v1/taxRouter");
+const stripeTaxRouter = require("./api/v1/stripeTaxRouter");
 const jobPhotosRouter = require("./api/v1/jobPhotosRouter");
 const calendarSyncRouter = require("./api/v1/calendarSyncRouter");
 const ownerDashboardRouter = require("./api/v1/ownerDashboardRouter");
@@ -34,9 +34,13 @@ const businessEmployeeRouter = require("./api/v1/businessEmployeeRouter");
 const completionRouter = require("./api/v1/completionRouter");
 const cancellationAppealRouter = require("./api/v1/cancellationAppealRouter");
 const conflictRouter = require("./api/v1/conflictRouter");
+const paymentDisputeRouter = require("./api/v1/paymentDisputeRouter");
 const demoAccountRouter = require("./api/v1/demoAccountRouter");
 const analyticsRouter = require("./api/v1/analyticsRouter");
 const idVerificationRouter = require("./api/v1/idVerificationRouter");
+const cleanerApprovalRouter = require("./api/v1/cleanerApprovalRouter");
+const guestNotLeftRouter = require("./api/v1/guestNotLeftRouter");
+const newHomeRequestRouter = require("./api/v1/newHomeRequestRouter");
 
 const rootRouter = new express.Router();
 
@@ -50,7 +54,7 @@ rootRouter.use("/api/v1/reviews", reviewsRouter);
 rootRouter.use("/api/v1/payments", paymentRouter);
 rootRouter.use("/api/v1/messages", messageRouter);
 rootRouter.use("/api/v1/stripe-connect", stripeConnectRouter);
-rootRouter.use("/api/v1/tax", taxRouter);
+rootRouter.use("/api/v1/tax", stripeTaxRouter);
 rootRouter.use("/api/v1/job-photos", jobPhotosRouter);
 rootRouter.use("/api/v1/calendar-sync", calendarSyncRouter);
 rootRouter.use("/api/v1/owner-dashboard", ownerDashboardRouter);
@@ -74,9 +78,13 @@ rootRouter.use("/api/v1/business-employee", businessEmployeeRouter);
 rootRouter.use("/api/v1/completion", completionRouter);
 rootRouter.use("/api/v1/appeals", cancellationAppealRouter);
 rootRouter.use("/api/v1/conflicts", conflictRouter);
+rootRouter.use("/api/v1/payment-disputes", paymentDisputeRouter);
 rootRouter.use("/api/v1/demo-accounts", demoAccountRouter);
 rootRouter.use("/api/v1/analytics", analyticsRouter);
 rootRouter.use("/api/v1/id-verification", idVerificationRouter);
+rootRouter.use("/api/v1/cleaner-approval", cleanerApprovalRouter);
+rootRouter.use("/api/v1/guest-not-left", guestNotLeftRouter);
+rootRouter.use("/api/v1/new-home-requests", newHomeRequestRouter);
 
 rootRouter.use("/", clientRouter);
 

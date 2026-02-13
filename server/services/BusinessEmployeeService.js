@@ -536,6 +536,21 @@ class BusinessEmployeeService {
       );
     }
 
+    // Process any pending bi-weekly payouts immediately
+    let terminationPayoutResult = null;
+    try {
+      const EmployeeBatchPayoutService = require("./EmployeeBatchPayoutService");
+      terminationPayoutResult = await EmployeeBatchPayoutService.processTerminationPayout(employeeId);
+      if (terminationPayoutResult?.totalAmount > 0) {
+        console.log(
+          `[BusinessEmployeeService] Processed termination payout: $${(terminationPayoutResult.totalAmount / 100).toFixed(2)} to employee ${employeeId}`
+        );
+      }
+    } catch (payoutError) {
+      // Log but don't block termination
+      console.error(`[BusinessEmployeeService] Error processing termination payout:`, payoutError);
+    }
+
     // Transaction to update both employee and user
     await sequelize.transaction(async (t) => {
       await employee.update(
@@ -559,7 +574,9 @@ class BusinessEmployeeService {
       }
     });
 
-    return employee.reload();
+    await employee.reload();
+    employee.terminationPayoutResult = terminationPayoutResult;
+    return employee;
   }
 
   /**

@@ -138,6 +138,30 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: 0,
 		},
+		// Tenant present tracking (for cleaners)
+		tenantPresentReportCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Total tenant present reports by this cleaner",
+		},
+		tenantPresentNoCleanCount: {
+			type: DataTypes.INTEGER,
+			allowNull: false,
+			defaultValue: 0,
+			comment: "Tenant present reports that ended without cleaning",
+		},
+		lastTenantPresentReportAt: {
+			type: DataTypes.DATE,
+			allowNull: true,
+			comment: "When cleaner last reported tenant present",
+		},
+		tenantReportScrutinyLevel: {
+			type: DataTypes.ENUM("none", "watch", "high_risk"),
+			allowNull: false,
+			defaultValue: "none",
+			comment: "Scrutiny level for tenant present reports",
+		},
 		failedLoginAttempts: {
 			type: DataTypes.INTEGER,
 			allowNull: false,
@@ -201,6 +225,12 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: false,
 			defaultValue: true,
 			comment: "Whether business owner opts in to marketplace highlighting",
+		},
+		employeePayoutMethod: {
+			type: DataTypes.STRING(30),
+			allowNull: false,
+			defaultValue: "all_to_owner",
+			comment: "For business owners: all_to_owner (default) or direct_to_employees",
 		},
 		businessLogo: {
 			type: DataTypes.TEXT,

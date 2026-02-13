@@ -85,8 +85,21 @@ const EmployeeJobDetail = ({ state }) => {
   const { assignmentId } = useParams();
   const [loading, setLoading] = useState(true);
   const [job, setJob] = useState(null);
+  const [flowSettings, setFlowSettings] = useState(null);
   const [error, setError] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const fetchJobFlow = async () => {
+    try {
+      const flow = await BusinessEmployeeService.getJobFlow(
+        state.currentUser.token,
+        assignmentId
+      );
+      setFlowSettings(flow);
+    } catch (err) {
+      console.error("Error fetching job flow:", err);
+    }
+  };
 
   const fetchJobDetails = async () => {
     setLoading(true);
@@ -113,6 +126,7 @@ const EmployeeJobDetail = ({ state }) => {
 
   useEffect(() => {
     fetchJobDetails();
+    fetchJobFlow();
   }, [assignmentId]);
 
   const handleStartJob = async () => {
@@ -171,10 +185,20 @@ const EmployeeJobDetail = ({ state }) => {
     );
   };
 
-  const openMaps = (address) => {
+  const openMaps = async (address) => {
     const encodedAddress = encodeURIComponent(address);
     const url = `https://maps.google.com/?q=${encodedAddress}`;
-    Linking.openURL(url);
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        // Fallback to web URL
+        await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`);
+      }
+    } catch (error) {
+      console.log("Could not open maps:", error);
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -224,7 +248,7 @@ const EmployeeJobDetail = ({ state }) => {
   const hasCoWorkers = coWorkers.length > 0;
 
   // Check if job is today
-  const isToday = new Date(appointment.date).toDateString() === new Date().toDateString();
+  const isToday = new Date(appointment.date + "T00:00:00").toDateString() === new Date().toDateString();
 
   return (
     <View style={styles.container}>
@@ -261,10 +285,10 @@ const EmployeeJobDetail = ({ state }) => {
           <View style={styles.dateTimeHeader}>
             <View style={styles.dateBadge}>
               <Text style={styles.dateBadgeDay}>
-                {new Date(appointment.date).getDate()}
+                {new Date(appointment.date + "T00:00:00").getDate()}
               </Text>
               <Text style={styles.dateBadgeMonth}>
-                {new Date(appointment.date).toLocaleDateString("en-US", { month: "short" })}
+                {new Date(appointment.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}
               </Text>
             </View>
             <View style={styles.dateTimeInfo}>
@@ -338,6 +362,17 @@ const EmployeeJobDetail = ({ state }) => {
             </View>
           )}
         </View>
+
+        {/* Job Notes Card (from flow settings) */}
+        {flowSettings?.jobNotes && (
+          <View style={styles.jobNotesCard}>
+            <View style={styles.jobNotesHeader}>
+              <Icon name="sticky-note-o" size={16} color={colors.primary[600]} />
+              <Text style={styles.cardTitle}>Instructions from Your Manager</Text>
+            </View>
+            <Text style={styles.jobNotesText}>{flowSettings.jobNotes}</Text>
+          </View>
+        )}
 
         {/* Client Card */}
         {client.firstName && (
@@ -724,6 +759,30 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.warning[800],
     lineHeight: 20,
+  },
+  jobNotesCard: {
+    backgroundColor: colors.background.primary,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+    ...shadows.sm,
+  },
+  jobNotesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  jobNotesText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: 22,
+    backgroundColor: colors.primary[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
   },
   teamHeader: {
     flexDirection: "row",

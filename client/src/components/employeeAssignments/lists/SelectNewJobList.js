@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
+  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -9,8 +10,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from "react-native";
+
+// Enable LayoutAnimation on Android
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import Icon from "react-native-vector-icons/FontAwesome";
 import { useNavigate } from "react-router-native";
 import * as Location from "expo-location";
@@ -33,6 +43,19 @@ import {
   shadows,
 } from "../../../services/styles/theme";
 import { usePricing } from "../../../context/PricingContext";
+import { calculateLinensFromRoomCounts } from "../../../utils/linensUtils";
+
+// Format time constraint for display: "10-3" → "10am - 3pm"
+const formatTimeConstraint = (time) => {
+  if (!time || time.toLowerCase() === "anytime") return "Anytime";
+  const match = time.match(/^(\d+)(am|pm)?-(\d+)(am|pm)?$/i);
+  if (!match) return time;
+  const startHour = parseInt(match[1], 10);
+  const startPeriod = match[2]?.toLowerCase() || (startHour >= 8 && startHour <= 11 ? "am" : "pm");
+  const endHour = parseInt(match[3], 10);
+  const endPeriod = match[4]?.toLowerCase() || (endHour >= 1 && endHour <= 6 ? "pm" : "am");
+  return `${startHour}${startPeriod} - ${endHour}${endPeriod}`;
+};
 
 const haversineDistance = (lat1, lon1, lat2, lon2) => {
   const toRad = (x) => (x * Math.PI) / 180;
@@ -47,8 +70,16 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 const sortOptions = [
-  { value: "distanceClosest", label: "Distance (Closest)", icon: "location-arrow" },
-  { value: "distanceFurthest", label: "Distance (Furthest)", icon: "location-arrow" },
+  {
+    value: "distanceClosest",
+    label: "Distance (Closest)",
+    icon: "location-arrow",
+  },
+  {
+    value: "distanceFurthest",
+    label: "Distance (Furthest)",
+    icon: "location-arrow",
+  },
   { value: "priceLow", label: "Price (Low to High)", icon: "dollar" },
   { value: "priceHigh", label: "Price (High to Low)", icon: "dollar" },
   { value: "dateNewest", label: "Date (Soonest)", icon: "calendar" },
@@ -57,6 +88,7 @@ const sortOptions = [
 
 const SelectNewJobList = ({ state }) => {
   const { pricing } = usePricing();
+  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
   const [allAppointments, setAllAppointments] = useState([]);
   const [allRequests, setAllRequests] = useState([]);
   const [userId, setUserId] = useState(null);
@@ -90,7 +122,11 @@ const SelectNewJobList = ({ state }) => {
 
   // Multi-cleaner jobs state
   const [multiCleanerOffers, setMultiCleanerOffers] = useState([]);
-  const [availableMultiCleanerJobs, setAvailableMultiCleanerJobs] = useState([]);
+  const [availableMultiCleanerJobs, setAvailableMultiCleanerJobs] = useState(
+    []
+  );
+  const [pendingMultiCleanerRequests, setPendingMultiCleanerRequests] =
+    useState([]);
   const [selectedMultiCleanerJob, setSelectedMultiCleanerJob] = useState(null);
   const [showMultiCleanerModal, setShowMultiCleanerModal] = useState(false);
   const [multiCleanerLoading, setMultiCleanerLoading] = useState(false);
@@ -101,6 +137,31 @@ const SelectNewJobList = ({ state }) => {
 
   // Job request loading state
   const [requestingJobId, setRequestingJobId] = useState(null);
+
+  // Section expand/collapse state (all expanded by default)
+  const [expandedSections, setExpandedSections] = useState({
+    pending: true,
+    team: true,
+    available: true,
+  });
+
+  // Track which request linens dropdowns are expanded
+  const [expandedLinens, setExpandedLinens] = useState({});
+
+  const toggleSection = useCallback((section) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  }, []);
+
+  const toggleLinens = useCallback((requestId) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedLinens((prev) => ({
+      ...prev,
+      [requestId]: !prev[requestId],
+    }));
+  }, []);
 
   const requestsAndAppointments = useMemo(() => {
     const requestsWithFlag = allRequests.map((item) => ({
@@ -114,34 +175,42 @@ const SelectNewJobList = ({ state }) => {
     return [...requestsWithFlag, ...appointmentsWithFlag];
   }, [allRequests, allAppointments]);
 
-  const fetchData = useCallback(async (isRefresh = false) => {
-    if (!isRefresh) setLoading(true);
+  const fetchData = useCallback(
+    async (isRefresh = false) => {
+      if (!isRefresh) setLoading(true);
 
-    try {
-      const [appointmentResponse, userResponse] = await Promise.all([
-        FetchData.get("/api/v1/users/appointments/employee", state.currentUser.token),
-        getCurrentUser(state.currentUser.token),
-      ]);
+      try {
+        const [appointmentResponse, userResponse] = await Promise.all([
+          FetchData.get(
+            "/api/v1/users/appointments/employee",
+            state.currentUser.token
+          ),
+          getCurrentUser(state.currentUser.token),
+        ]);
 
-      const now = new Date();
-      const isUpcoming = (item) => new Date(item.date) >= now;
+        const now = new Date();
+        const isUpcoming = (item) => new Date(item.date) >= now;
 
-      // Filter out jobs that have already been assigned to anyone (including yourself)
-      // Those should only show on the "My Jobs" page
-      const availableAppointments = (appointmentResponse.appointments || [])
-        .filter(isUpcoming)
-        .filter((appt) => !appt.hasBeenAssigned);
+        // Filter out jobs that have already been assigned to anyone (including yourself)
+        // Those should only show on the "My Jobs" page
+        const availableAppointments = (appointmentResponse.appointments || [])
+          .filter(isUpcoming)
+          .filter((appt) => !appt.hasBeenAssigned);
 
-      setAllAppointments(availableAppointments);
-      setAllRequests((appointmentResponse.requested || []).filter(isUpcoming));
-      setUserId(userResponse.user.id);
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [state.currentUser.token]);
+        setAllAppointments(availableAppointments);
+        setAllRequests(
+          (appointmentResponse.requested || []).filter(isUpcoming)
+        );
+        setUserId(userResponse.user.id);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [state.currentUser.token]
+  );
 
   useEffect(() => {
     fetchData();
@@ -151,7 +220,10 @@ const SelectNewJobList = ({ state }) => {
   useEffect(() => {
     const fetchPreferredHomes = async () => {
       try {
-        const response = await FetchData.get("/api/v1/users/preferred-homes", state.currentUser.token);
+        const response = await FetchData.get(
+          "/api/v1/users/preferred-homes",
+          state.currentUser.token
+        );
         if (response.preferredHomeIds) {
           setPreferredHomeIds(response.preferredHomeIds);
         }
@@ -165,13 +237,21 @@ const SelectNewJobList = ({ state }) => {
     }
   }, [state.currentUser.token]);
 
-  // Fetch multi-cleaner job offers
+  // Fetch multi-cleaner job offers and pending requests
   const fetchMultiCleanerJobs = useCallback(async () => {
     try {
-      const response = await FetchData.getMultiCleanerOffers(state.currentUser.token);
-      if (!response.error) {
-        setMultiCleanerOffers(response.personalOffers || []);
-        setAvailableMultiCleanerJobs(response.availableJobs || []);
+      const [offersResponse, requestsResponse] = await Promise.all([
+        FetchData.getMultiCleanerOffers(state.currentUser.token),
+        FetchData.getMyMultiCleanerRequests(state.currentUser.token),
+      ]);
+
+      if (!offersResponse.error) {
+        setMultiCleanerOffers(offersResponse.personalOffers || []);
+        setAvailableMultiCleanerJobs(offersResponse.availableJobs || []);
+      }
+
+      if (!requestsResponse.error) {
+        setPendingMultiCleanerRequests(requestsResponse.requests || []);
       }
     } catch (error) {
       console.log("Error fetching multi-cleaner jobs:", error.message);
@@ -184,18 +264,53 @@ const SelectNewJobList = ({ state }) => {
     }
   }, [fetchMultiCleanerJobs]);
 
+  // Fetch locations only for items missing inline coordinates (fallback)
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const allItems = [...allAppointments, ...allRequests];
+        // Only collect home IDs for items missing inline coordinates
+        const soloHomesNeedingFetch = [...allAppointments, ...allRequests]
+          .filter((a) => a.latitude == null || a.longitude == null)
+          .map((a) => a.homeId)
+          .filter(Boolean);
+        const multiCleanerJobHomesNeedingFetch = availableMultiCleanerJobs
+          .filter((j) => j.appointment?.home?.latitude == null || j.appointment?.home?.longitude == null)
+          .map((j) => j.homeId || j.appointment?.home?.id)
+          .filter(Boolean);
+        const pendingRequestHomesNeedingFetch = pendingMultiCleanerRequests
+          .filter((r) => r.appointment?.home?.latitude == null || r.appointment?.home?.longitude == null)
+          .map((r) => r.homeId || r.appointment?.home?.id)
+          .filter(Boolean);
+        const offerHomesNeedingFetch = multiCleanerOffers
+          .filter((o) => o.multiCleanerJob?.appointment?.home?.latitude == null || o.multiCleanerJob?.appointment?.home?.longitude == null)
+          .map(
+            (o) =>
+              o.multiCleanerJob?.homeId ||
+              o.multiCleanerJob?.appointment?.home?.id
+          )
+          .filter(Boolean);
+
         // Deduplicate homeIds to avoid redundant fetches
-        const uniqueHomeIds = [...new Set(allItems.map((a) => a.homeId))];
+        const homeIdsNeedingFetch = [
+          ...new Set([
+            ...soloHomesNeedingFetch,
+            ...multiCleanerJobHomesNeedingFetch,
+            ...pendingRequestHomesNeedingFetch,
+            ...offerHomesNeedingFetch,
+          ]),
+        ];
+
+        if (homeIdsNeedingFetch.length === 0) return;
 
         const locations = await Promise.all(
-          uniqueHomeIds.map(async (homeId) => {
+          homeIdsNeedingFetch.map(async (homeId) => {
             const response = await FetchData.getLatAndLong(homeId);
             // Validate the response has lat/long
-            if (response && typeof response.latitude === "number" && typeof response.longitude === "number") {
+            if (
+              response &&
+              typeof response.latitude === "number" &&
+              typeof response.longitude === "number"
+            ) {
               return { [homeId]: response };
             }
             return { [homeId]: null };
@@ -207,10 +322,22 @@ const SelectNewJobList = ({ state }) => {
       }
     };
 
-    if (allAppointments.length > 0 || allRequests.length > 0) {
+    if (
+      allAppointments.length > 0 ||
+      allRequests.length > 0 ||
+      availableMultiCleanerJobs.length > 0 ||
+      pendingMultiCleanerRequests.length > 0 ||
+      multiCleanerOffers.length > 0
+    ) {
       fetchLocations();
     }
-  }, [allAppointments, allRequests]);
+  }, [
+    allAppointments,
+    allRequests,
+    availableMultiCleanerJobs,
+    pendingMultiCleanerRequests,
+    multiCleanerOffers,
+  ]);
 
   useEffect(() => {
     let locationSubscription = null;
@@ -228,7 +355,11 @@ const SelectNewJobList = ({ state }) => {
         const location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
-        console.log("User location detected:", location.coords.latitude, location.coords.longitude);
+        console.log(
+          "User location detected:",
+          location.coords.latitude,
+          location.coords.longitude
+        );
         setUserLocation({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
@@ -283,11 +414,13 @@ const SelectNewJobList = ({ state }) => {
       );
 
       setHomeDetails(details);
-      const cities = [...new Set(
-        Object.values(details)
-          .map((h) => h?.city)
-          .filter(Boolean)
-      )].sort();
+      const cities = [
+        ...new Set(
+          Object.values(details)
+            .map((h) => h?.city)
+            .filter(Boolean)
+        ),
+      ].sort();
       setAvailableCities(cities);
     };
 
@@ -303,86 +436,103 @@ const SelectNewJobList = ({ state }) => {
   }, [fetchData, fetchMultiCleanerJobs]);
 
   // Handle booking request with large home check
-  const handleBookingRequest = useCallback(async (employeeId, appointmentId) => {
-    setRequestingJobId(appointmentId);
-    try {
-      // First, check if this is a large home that requires acknowledgment
-      const info = await FetchData.getBookingInfo(appointmentId, state.currentUser.token);
-
-      if (info.error) {
-        console.error("Error getting booking info:", info.error);
-        // Proceed with booking anyway if we can't get info
-        const result = await FetchData.addEmployee(employeeId, appointmentId, false);
-        if (result.success) {
-          setAllAppointments((prev) => {
-            const assigned = prev.find((a) => a.id === appointmentId);
-            if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
-            return prev.filter((a) => a.id !== appointmentId);
-          });
-          // Show success message for regular requests
-          Alert.alert(
-            "Request Sent!",
-            "Your request has been sent to the homeowner. You can view it in Pending Requests above.",
-            [{ text: "OK" }]
-          );
-        }
-        return;
-      }
-
-      if (info.multiCleanerRequired) {
-        // This home requires multiple cleaners - no solo option
-        Alert.alert(
-          "Multi-Cleaner Required",
-          `This is a large home (${info.homeInfo.numBeds} beds, ${info.homeInfo.numBaths} baths) that requires ${info.recommendedCleaners} cleaners. Solo cleaning is not available for this home.`,
-          [{ text: "OK" }]
+  const handleBookingRequest = useCallback(
+    async (employeeId, appointmentId) => {
+      setRequestingJobId(appointmentId);
+      try {
+        // First, check if this is a large home that requires acknowledgment
+        const info = await FetchData.getBookingInfo(
+          appointmentId,
+          state.currentUser.token
         );
-        return;
-      }
 
-      if (info.requiresAcknowledgment) {
-        // Show warning modal for edge large homes (solo allowed with warning)
-        setBookingInfo(info);
-        setPendingBooking({ employeeId, appointmentId });
-        setShowLargeHomeModal(true);
-      } else {
-        // Proceed directly for small homes
-        const result = await FetchData.addEmployee(employeeId, appointmentId, false);
-        if (result.success) {
-          setAllAppointments((prev) => {
-            const assigned = prev.find((a) => a.id === appointmentId);
-            if (assigned && !result.directBooking) {
-              setAllRequests((reqs) => [...reqs, assigned]);
-            }
-            return prev.filter((a) => a.id !== appointmentId);
-          });
-          // Show success message
-          if (result.directBooking) {
-            Alert.alert(
-              "Job Booked!",
-              "As a preferred cleaner, this job has been confirmed automatically. The homeowner has been notified.",
-              [{ text: "OK" }]
-            );
-          } else {
+        if (info.error) {
+          console.error("Error getting booking info:", info.error);
+          // Proceed with booking anyway if we can't get info
+          const result = await FetchData.addEmployee(
+            employeeId,
+            appointmentId,
+            false
+          );
+          if (result.success) {
+            setAllAppointments((prev) => {
+              const assigned = prev.find((a) => a.id === appointmentId);
+              if (assigned) setAllRequests((reqs) => [...reqs, assigned]);
+              return prev.filter((a) => a.id !== appointmentId);
+            });
+            // Show success message for regular requests
             Alert.alert(
               "Request Sent!",
               "Your request has been sent to the homeowner. You can view it in Pending Requests above.",
               [{ text: "OK" }]
             );
           }
-        } else if (result.requiresStripeSetup) {
-          // Show Stripe setup modal
-          setStripeSetupMessage(result.message || "You need to set up your Stripe account to receive payments before you can request appointments.");
-          setShowStripeSetupModal(true);
-        } else if (result.error) {
-          console.error("Error booking:", result.error);
+          return;
         }
+
+        if (info.multiCleanerRequired) {
+          // This home requires multiple cleaners - no solo option
+          Alert.alert(
+            "Multi-Cleaner Required",
+            `This is a large home (${info.homeInfo.numBeds} beds, ${info.homeInfo.numBaths} baths) that requires ${info.recommendedCleaners} cleaners. Solo cleaning is not available for this home.`,
+            [{ text: "OK" }]
+          );
+          return;
+        }
+
+        if (info.requiresAcknowledgment) {
+          // Show warning modal for edge large homes (solo allowed with warning)
+          setBookingInfo(info);
+          setPendingBooking({ employeeId, appointmentId });
+          setShowLargeHomeModal(true);
+        } else {
+          // Proceed directly for small homes
+          const result = await FetchData.addEmployee(
+            employeeId,
+            appointmentId,
+            false
+          );
+          if (result.success) {
+            setAllAppointments((prev) => {
+              const assigned = prev.find((a) => a.id === appointmentId);
+              if (assigned && !result.directBooking) {
+                setAllRequests((reqs) => [...reqs, assigned]);
+              }
+              return prev.filter((a) => a.id !== appointmentId);
+            });
+            // Show success message
+            if (result.directBooking) {
+              Alert.alert(
+                "Job Booked!",
+                "As a preferred cleaner, this job has been confirmed automatically. The homeowner has been notified.",
+                [{ text: "OK" }]
+              );
+            } else {
+              Alert.alert(
+                "Request Sent!",
+                "Your request has been sent to the homeowner. You can view it in Pending Requests above.",
+                [{ text: "OK" }]
+              );
+            }
+          } else if (result.requiresStripeSetup) {
+            // Show Stripe setup modal
+            setStripeSetupMessage(
+              result.message ||
+                "You need to set up your Stripe account to receive payments before you can request appointments."
+            );
+            setShowStripeSetupModal(true);
+          } else if (result.error) {
+            console.error("Error booking:", result.error);
+          }
+        }
+      } catch (err) {
+        console.error("Error handling booking request:", err);
+      } finally {
+        setRequestingJobId(null);
       }
-    } catch (err) {
-      console.error("Error handling booking request:", err);
-    } finally {
-      setRequestingJobId(null);
-    }
-  }, [state.currentUser.token]);
+    },
+    [state.currentUser.token]
+  );
 
   // Confirm booking after acknowledging large home warning
   const handleConfirmLargeHomeBooking = useCallback(async () => {
@@ -391,7 +541,11 @@ const SelectNewJobList = ({ state }) => {
     setBookingLoading(true);
     try {
       const { employeeId, appointmentId } = pendingBooking;
-      const result = await FetchData.addEmployee(employeeId, appointmentId, true);
+      const result = await FetchData.addEmployee(
+        employeeId,
+        appointmentId,
+        true
+      );
 
       if (result.success) {
         setAllAppointments((prev) => {
@@ -422,7 +576,10 @@ const SelectNewJobList = ({ state }) => {
         setShowLargeHomeModal(false);
         setBookingInfo(null);
         setPendingBooking(null);
-        setStripeSetupMessage(result.message || "You need to set up your Stripe account to receive payments before you can request appointments.");
+        setStripeSetupMessage(
+          result.message ||
+            "You need to set up your Stripe account to receive payments before you can request appointments."
+        );
         setShowStripeSetupModal(true);
       } else if (result.error) {
         console.error("Error confirming booking:", result.error);
@@ -449,26 +606,56 @@ const SelectNewJobList = ({ state }) => {
 
   const transformOfferToJobData = (offer) => {
     // Server stores earningsOffered in cents, convert to dollars for display
-    const earningsInDollars = offer.earningsOffered ? offer.earningsOffered / 100 : null;
+    const earningsInDollars = offer.earningsOffered
+      ? offer.earningsOffered / 100
+      : null;
+
+    // Calculate distance for this offer
+    // Use inline coordinates from API response, fallback to fetched locations
+    const offerHomeId =
+      offer.multiCleanerJob?.homeId ||
+      offer.multiCleanerJob?.appointment?.home?.id;
+    const inlineLat = offer.multiCleanerJob?.appointment?.home?.latitude;
+    const inlineLng = offer.multiCleanerJob?.appointment?.home?.longitude;
+    const fallbackLoc = appointmentLocations?.[offerHomeId];
+    const locLat = inlineLat ?? fallbackLoc?.latitude;
+    const locLng = inlineLng ?? fallbackLoc?.longitude;
+    let distance = null;
+    if (userLocation && locLat != null && locLng != null) {
+      distance = haversineDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        locLat,
+        locLng
+      );
+    }
 
     return {
       id: offer.multiCleanerJob?.id,
       appointmentDate: offer.multiCleanerJob?.appointment?.date,
       address: formatAddress(offer.multiCleanerJob?.appointment?.home),
+      city: offer.multiCleanerJob?.appointment?.home?.city,
+      state: offer.multiCleanerJob?.appointment?.home?.state,
       totalCleanersRequired: offer.multiCleanerJob?.totalCleanersRequired || 2,
       cleanersConfirmed: offer.multiCleanerJob?.cleanersConfirmed || 0,
       status: offer.multiCleanerJob?.status,
       earningsOffered: earningsInDollars,
       perCleanerEarnings: earningsInDollars,
+      timeToBeCompleted: offer.multiCleanerJob?.appointment?.timeToBeCompleted,
+      distance,
+      numBeds: offer.multiCleanerJob?.appointment?.home?.numBeds,
+      numBaths: offer.multiCleanerJob?.appointment?.home?.numBaths,
     };
   };
 
   const transformJobData = (job) => {
-    // Calculate per-cleaner earnings from appointment price
+    // Calculate per-cleaner earnings from appointment price (after platform fee, split by cleaners)
     const totalPrice = job.appointment?.price || 0;
     const cleanersRequired = job.totalCleanersRequired || 2;
     const cleanersConfirmed = job.cleanersConfirmed || 0;
-    const perCleanerEarnings = totalPrice > 0 ? Math.round(totalPrice / cleanersRequired) : null;
+    const cleanersTotalShare = totalPrice * cleanerSharePercent;
+    const perCleanerEarnings =
+      totalPrice > 0 ? Math.round(cleanersTotalShare / cleanersRequired) : null;
 
     // Get estimated time (totalEstimatedMinutes from job, or parse timeToBeCompleted from appointment)
     let estimatedMinutes = job.totalEstimatedMinutes;
@@ -484,11 +671,31 @@ const SelectNewJobList = ({ state }) => {
       }
     }
 
+    // Calculate distance for this job
+    // Use inline coordinates from API response, fallback to fetched locations
+    const jobHomeId = job.homeId || job.appointment?.home?.id;
+    const inlineLat = job.appointment?.home?.latitude;
+    const inlineLng = job.appointment?.home?.longitude;
+    const fallbackLoc = appointmentLocations?.[jobHomeId];
+    const locLat = inlineLat ?? fallbackLoc?.latitude;
+    const locLng = inlineLng ?? fallbackLoc?.longitude;
+    let distance = null;
+    if (userLocation && locLat != null && locLng != null) {
+      distance = haversineDistance(
+        userLocation.latitude,
+        userLocation.longitude,
+        locLat,
+        locLng
+      );
+    }
+
     return {
       id: job.id,
       appointmentId: job.appointmentId,
       appointmentDate: job.appointment?.date,
       address: formatAddress(job.appointment?.home),
+      city: job.appointment?.home?.city,
+      state: job.appointment?.home?.state,
       totalCleanersRequired: cleanersRequired,
       cleanersConfirmed,
       remainingSlots: cleanersRequired - cleanersConfirmed,
@@ -496,19 +703,27 @@ const SelectNewJobList = ({ state }) => {
       perCleanerEarnings,
       totalJobPrice: totalPrice,
       estimatedMinutes,
+      timeToBeCompleted: job.appointment?.timeToBeCompleted,
+      distance,
+      numBeds: job.appointment?.home?.numBeds,
+      numBaths: job.appointment?.home?.numBaths,
     };
   };
 
   const transformJobToOfferFormat = (job) => {
     const totalPrice = job.appointment?.price || 0;
     const cleanersRequired = job.totalCleanersRequired || 2;
-    const perCleanerEarnings = totalPrice > 0 ? Math.round(totalPrice / cleanersRequired) : null;
+    const cleanersTotalShare = totalPrice * cleanerSharePercent;
+    const perCleanerEarnings =
+      totalPrice > 0 ? Math.round(cleanersTotalShare / cleanersRequired) : null;
 
     return {
       id: job.id,
       totalCleanersRequired: cleanersRequired,
       appointmentDate: job.appointment?.date,
       address: formatAddress(job.appointment?.home),
+      city: job.appointment?.home?.city,
+      state: job.appointment?.home?.state,
       estimatedMinutes: null,
       earningsOffered: perCleanerEarnings,
       totalJobPrice: totalPrice,
@@ -516,57 +731,74 @@ const SelectNewJobList = ({ state }) => {
       percentOfWork: Math.round(100 / cleanersRequired),
       roomAssignments: [],
       expiresAt: null,
+      timeToBeCompleted: job.appointment?.timeToBeCompleted,
     };
   };
 
   // Handle accepting a multi-cleaner offer
-  const handleAcceptOffer = useCallback(async (offer) => {
-    setMultiCleanerLoading(true);
-    try {
-      const result = await FetchData.acceptMultiCleanerOffer(offer.id, state.currentUser.token);
-      if (result.error) {
-        Alert.alert("Error", result.error);
-      } else {
-        Alert.alert(
-          "Success!",
-          "You've joined this team cleaning job. Check your schedule for details.",
-          [{ text: "OK" }]
+  const handleAcceptOffer = useCallback(
+    async (offer) => {
+      setMultiCleanerLoading(true);
+      try {
+        const result = await FetchData.acceptMultiCleanerOffer(
+          offer.id,
+          state.currentUser.token
         );
-        fetchMultiCleanerJobs();
+        if (result.error) {
+          Alert.alert("Error", result.error);
+        } else {
+          Alert.alert(
+            "Success!",
+            "You've joined this team cleaning job. Check your schedule for details.",
+            [{ text: "OK" }]
+          );
+          fetchMultiCleanerJobs();
+        }
+      } catch (error) {
+        Alert.alert("Error", "Failed to accept offer. Please try again.");
+      } finally {
+        setMultiCleanerLoading(false);
       }
-    } catch (error) {
-      Alert.alert("Error", "Failed to accept offer. Please try again.");
-    } finally {
-      setMultiCleanerLoading(false);
-    }
-  }, [state.currentUser.token, fetchMultiCleanerJobs]);
+    },
+    [state.currentUser.token, fetchMultiCleanerJobs]
+  );
 
   // Handle declining a multi-cleaner offer
-  const handleDeclineOffer = useCallback(async (offer) => {
-    Alert.alert(
-      "Decline Offer",
-      "Are you sure you want to decline this team cleaning job?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Decline",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const result = await FetchData.declineMultiCleanerOffer(offer.id, "", state.currentUser.token);
-              if (result.error) {
-                Alert.alert("Error", result.error);
-              } else {
-                fetchMultiCleanerJobs();
+  const handleDeclineOffer = useCallback(
+    async (offer) => {
+      Alert.alert(
+        "Decline Offer",
+        "Are you sure you want to decline this team cleaning job?",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Decline",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                const result = await FetchData.declineMultiCleanerOffer(
+                  offer.id,
+                  "",
+                  state.currentUser.token
+                );
+                if (result.error) {
+                  Alert.alert("Error", result.error);
+                } else {
+                  fetchMultiCleanerJobs();
+                }
+              } catch (error) {
+                Alert.alert(
+                  "Error",
+                  "Failed to decline offer. Please try again."
+                );
               }
-            } catch (error) {
-              Alert.alert("Error", "Failed to decline offer. Please try again.");
-            }
+            },
           },
-        },
-      ]
-    );
-  }, [state.currentUser.token, fetchMultiCleanerJobs]);
+        ]
+      );
+    },
+    [state.currentUser.token, fetchMultiCleanerJobs]
+  );
 
   // Handle viewing an open multi-cleaner job
   const handleViewMultiCleanerJob = useCallback((job) => {
@@ -575,28 +807,45 @@ const SelectNewJobList = ({ state }) => {
   }, []);
 
   // Handle directly joining a multi-cleaner job (no modal, for edge large homes in team section)
-  const handleDirectJoinMultiCleanerJob = useCallback(async (job) => {
-    setMultiCleanerLoading(true);
-    try {
-      const result = await FetchData.joinMultiCleanerJob(job.id, state.currentUser.token);
-      if (result.error) {
-        Alert.alert("Error", result.error);
-      } else {
-        Alert.alert(
-          "Joined Team!",
-          "You've joined this cleaning team. We'll notify you when the team is complete.",
-          [{ text: "OK" }]
+  const handleDirectJoinMultiCleanerJob = useCallback(
+    async (job) => {
+      setMultiCleanerLoading(true);
+      try {
+        const result = await FetchData.joinMultiCleanerJob(
+          job.id,
+          state.currentUser.token
         );
-        // Refresh both lists
-        fetchData(true);
-        fetchMultiCleanerJobs();
+        if (result.error) {
+          Alert.alert("Error", result.error);
+        } else if (result.status === "pending_approval") {
+          // Non-preferred cleaner - request sent to homeowner
+          Alert.alert(
+            "Request Sent",
+            "Your request to join this team has been sent to the homeowner for approval. You'll be notified when they respond.",
+            [{ text: "OK" }]
+          );
+          // Refresh both lists
+          fetchData(true);
+          fetchMultiCleanerJobs();
+        } else {
+          // Preferred cleaner - auto-approved
+          Alert.alert(
+            "Joined Team!",
+            "You've joined this cleaning team. We'll notify you when the team is complete.",
+            [{ text: "OK" }]
+          );
+          // Refresh both lists
+          fetchData(true);
+          fetchMultiCleanerJobs();
+        }
+      } catch (error) {
+        Alert.alert("Error", "Failed to join job. Please try again.");
+      } finally {
+        setMultiCleanerLoading(false);
       }
-    } catch (error) {
-      Alert.alert("Error", "Failed to join job. Please try again.");
-    } finally {
-      setMultiCleanerLoading(false);
-    }
-  }, [state.currentUser.token, fetchData, fetchMultiCleanerJobs]);
+    },
+    [state.currentUser.token, fetchData, fetchMultiCleanerJobs]
+  );
 
   // Handle opening team booking modal (for business owners)
   const handleOpenTeamBooking = useCallback((job) => {
@@ -620,12 +869,26 @@ const SelectNewJobList = ({ state }) => {
 
     setMultiCleanerLoading(true);
     try {
-      const result = await FetchData.joinMultiCleanerJob(selectedMultiCleanerJob.id, state.currentUser.token);
+      const result = await FetchData.joinMultiCleanerJob(
+        selectedMultiCleanerJob.id,
+        state.currentUser.token
+      );
       if (result.error) {
         Alert.alert("Error", result.error);
-      } else {
+      } else if (result.status === "pending_approval") {
+        // Non-preferred cleaner - request sent to homeowner
         Alert.alert(
-          "Success!",
+          "Request Sent",
+          "Your request to join this team has been sent to the homeowner for approval. You'll be notified when they respond.",
+          [{ text: "OK" }]
+        );
+        setShowMultiCleanerModal(false);
+        setSelectedMultiCleanerJob(null);
+        fetchMultiCleanerJobs();
+      } else {
+        // Preferred cleaner - auto-approved
+        Alert.alert(
+          "Joined Team!",
           "You've joined this team cleaning job. Check your schedule for details.",
           [{ text: "OK" }]
         );
@@ -646,31 +909,76 @@ const SelectNewJobList = ({ state }) => {
     setSelectedMultiCleanerJob(null);
   }, []);
 
+  // Handle cancelling a multi-cleaner request
+  const handleCancelMultiCleanerRequest = useCallback(
+    (request) => {
+      Alert.alert(
+        "Cancel Request",
+        "Are you sure you want to cancel this team cleaning request?",
+        [
+          { text: "No, Keep It", style: "cancel" },
+          {
+            text: "Yes, Cancel",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                const result = await FetchData.cancelMultiCleanerRequest(
+                  request.id,
+                  state.currentUser.token
+                );
+                if (result.error) {
+                  Alert.alert("Error", result.error);
+                } else {
+                  Alert.alert(
+                    "Request Cancelled",
+                    "Your request has been cancelled."
+                  );
+                  fetchMultiCleanerJobs();
+                }
+              } catch (error) {
+                Alert.alert(
+                  "Error",
+                  "Failed to cancel request. Please try again."
+                );
+              }
+            },
+          },
+        ]
+      );
+    },
+    [state.currentUser.token, fetchMultiCleanerJobs]
+  );
+
   const sortedData = useMemo(() => {
     const processed = requestsAndAppointments.map((appointment) => {
       let distance = null;
-      const loc = appointmentLocations?.[appointment.homeId];
+      // Use inline coordinates from API response, fallback to fetched locations
+      const inlineLat = appointment.latitude;
+      const inlineLng = appointment.longitude;
+      const fallbackLoc = appointmentLocations?.[appointment.homeId];
+      const locLat = inlineLat ?? fallbackLoc?.latitude;
+      const locLng = inlineLng ?? fallbackLoc?.longitude;
       // Only calculate distance if we have valid user location and home location
       if (
         userLocation &&
         userLocation.latitude !== 0 &&
         userLocation.longitude !== 0 &&
-        loc &&
-        typeof loc.latitude === "number" &&
-        typeof loc.longitude === "number"
+        locLat != null &&
+        locLng != null
       ) {
         distance = haversineDistance(
           userLocation.latitude,
           userLocation.longitude,
-          loc.latitude,
-          loc.longitude
+          locLat,
+          locLng
         );
       }
       return { ...appointment, distance };
     });
 
     const sortFn = {
-      distanceClosest: (a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity),
+      distanceClosest: (a, b) =>
+        (a.distance ?? Infinity) - (b.distance ?? Infinity),
       distanceFurthest: (a, b) => (b.distance ?? 0) - (a.distance ?? 0),
       priceLow: (a, b) => (Number(a.price) || 0) - (Number(b.price) || 0),
       priceHigh: (a, b) => (Number(b.price) || 0) - (Number(a.price) || 0),
@@ -697,9 +1005,10 @@ const SelectNewJobList = ({ state }) => {
 
       // Distance filter (distance is in km, convert miles for comparison)
       if (filters.distance.preset !== "any" && userLocation) {
-        const maxDistMiles = filters.distance.preset === "custom"
-          ? filters.distance.customValue
-          : parseInt(filters.distance.preset);
+        const maxDistMiles =
+          filters.distance.preset === "custom"
+            ? filters.distance.customValue
+            : parseInt(filters.distance.preset);
         const distMiles = (appt.distance ?? 999) * 0.621371;
         if (distMiles > maxDistMiles) return false;
       }
@@ -729,7 +1038,7 @@ const SelectNewJobList = ({ state }) => {
         // Bathrooms filter
         const baths = parseFloat(home.numBaths) || 0;
         const halfBaths = parseFloat(home.numHalfBaths) || 0;
-        const totalBaths = baths + (halfBaths * 0.5);
+        const totalBaths = baths + halfBaths * 0.5;
         if (filters.bathrooms !== "any") {
           if (filters.bathrooms === "3+") {
             if (totalBaths < 3) return false;
@@ -743,7 +1052,10 @@ const SelectNewJobList = ({ state }) => {
       }
 
       // Time window filter
-      if (filters.timeWindow !== "any" && appt.timeToBeCompleted !== filters.timeWindow) {
+      if (
+        filters.timeWindow !== "any" &&
+        appt.timeToBeCompleted !== filters.timeWindow
+      ) {
         return false;
       }
 
@@ -756,7 +1068,14 @@ const SelectNewJobList = ({ state }) => {
 
       return true;
     });
-  }, [sortedData, homeDetails, filters, userLocation, preferredHomeIds, pricing]);
+  }, [
+    sortedData,
+    homeDetails,
+    filters,
+    userLocation,
+    preferredHomeIds,
+    pricing,
+  ]);
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {
@@ -776,7 +1095,9 @@ const SelectNewJobList = ({ state }) => {
   // Get appointment IDs that are in the multi-cleaner section to exclude from available jobs
   const multiCleanerAppointmentIds = useMemo(() => {
     const offerApptIds = multiCleanerOffers.map((o) => o.appointmentId);
-    const jobApptIds = availableMultiCleanerJobs.map((j) => j.appointment?.id).filter(Boolean);
+    const jobApptIds = availableMultiCleanerJobs
+      .map((j) => j.appointment?.id)
+      .filter(Boolean);
     return new Set([...offerApptIds, ...jobApptIds]);
   }, [multiCleanerOffers, availableMultiCleanerJobs]);
 
@@ -791,7 +1112,8 @@ const SelectNewJobList = ({ state }) => {
   });
   const requestedJobs = filteredData.filter((item) => item.isRequest);
 
-  const currentSortLabel = sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
+  const currentSortLabel =
+    sortOptions.find((o) => o.value === sortOption)?.label || "Sort";
 
   if (loading) {
     return (
@@ -811,7 +1133,10 @@ const SelectNewJobList = ({ state }) => {
           <Text style={styles.backButtonText}>Back</Text>
         </Pressable>
         <Text style={styles.title}>Find Jobs</Text>
-        <Pressable style={styles.calendarButton} onPress={() => navigate("/appointment-calender")}>
+        <Pressable
+          style={styles.calendarButton}
+          onPress={() => navigate("/appointment-calender")}
+        >
           <Icon name="calendar" size={18} color={colors.primary[600]} />
         </Pressable>
       </View>
@@ -822,7 +1147,7 @@ const SelectNewJobList = ({ state }) => {
           <Text style={styles.statValue}>{availableJobs.length}</Text>
           <Text style={styles.statLabel}>Available</Text>
         </View>
-        {(multiCleanerOffers.length + availableMultiCleanerJobs.length) > 0 && (
+        {multiCleanerOffers.length + availableMultiCleanerJobs.length > 0 && (
           <View style={[styles.statCard, styles.statCardTeam]}>
             <Text style={[styles.statValue, styles.statValueTeam]}>
               {multiCleanerOffers.length + availableMultiCleanerJobs.length}
@@ -831,12 +1156,18 @@ const SelectNewJobList = ({ state }) => {
           </View>
         )}
         <View style={[styles.statCard, styles.statCardHighlight]}>
-          <Text style={[styles.statValue, styles.statValueHighlight]}>{requestedJobs.length}</Text>
-          <Text style={[styles.statLabel, styles.statLabelHighlight]}>Requested</Text>
+          <Text style={[styles.statValue, styles.statValueHighlight]}>
+            {requestedJobs.length + pendingMultiCleanerRequests.length}
+          </Text>
+          <Text style={[styles.statLabel, styles.statLabelHighlight]}>
+            Requested
+          </Text>
         </View>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>
-            {activeFilterCount > 0 ? `${filteredData.length}/${sortedData.length}` : sortedData.length}
+            {activeFilterCount > 0
+              ? `${filteredData.length}/${sortedData.length}`
+              : sortedData.length}
           </Text>
           <Text style={styles.statLabel}>Total</Text>
         </View>
@@ -845,7 +1176,10 @@ const SelectNewJobList = ({ state }) => {
       {/* Controls Row */}
       <View style={styles.controlsRow}>
         {/* Filter Button */}
-        <Pressable style={styles.filterButton} onPress={() => setShowFilterModal(true)}>
+        <Pressable
+          style={styles.filterButton}
+          onPress={() => setShowFilterModal(true)}
+        >
           <Icon name="filter" size={14} color={colors.primary[600]} />
           <Text style={styles.filterButtonText}>Filter</Text>
           {activeFilterCount > 0 && (
@@ -856,7 +1190,10 @@ const SelectNewJobList = ({ state }) => {
         </Pressable>
 
         {/* Sort Button */}
-        <Pressable style={styles.sortButton} onPress={() => setShowSortModal(true)}>
+        <Pressable
+          style={styles.sortButton}
+          onPress={() => setShowSortModal(true)}
+        >
           <Icon name="sort" size={14} color={colors.primary[600]} />
           <Text style={styles.sortButtonText}>{currentSortLabel}</Text>
           <Icon name="angle-down" size={14} color={colors.primary[600]} />
@@ -883,11 +1220,17 @@ const SelectNewJobList = ({ state }) => {
               <Icon
                 name={activeFilterCount > 0 ? "filter" : "briefcase"}
                 size={40}
-                color={activeFilterCount > 0 ? colors.neutral[400] : colors.primary[300]}
+                color={
+                  activeFilterCount > 0
+                    ? colors.neutral[400]
+                    : colors.primary[300]
+                }
               />
             </View>
             <Text style={styles.emptyTitle}>
-              {activeFilterCount > 0 ? "No Jobs Match Your Filters" : "No Jobs Available"}
+              {activeFilterCount > 0
+                ? "No Jobs Match Your Filters"
+                : "No Jobs Available"}
             </Text>
             <Text style={styles.emptyText}>
               {activeFilterCount > 0
@@ -899,8 +1242,14 @@ const SelectNewJobList = ({ state }) => {
                 style={styles.clearFiltersButton}
                 onPress={() => setFilters(defaultFilters)}
               >
-                <Icon name="times-circle" size={14} color={colors.primary[600]} />
-                <Text style={styles.clearFiltersButtonText}>Clear All Filters</Text>
+                <Icon
+                  name="times-circle"
+                  size={14}
+                  color={colors.primary[600]}
+                />
+                <Text style={styles.clearFiltersButtonText}>
+                  Clear All Filters
+                </Text>
               </Pressable>
             ) : (
               <Pressable style={styles.refreshButton} onPress={onRefresh}>
@@ -911,130 +1260,525 @@ const SelectNewJobList = ({ state }) => {
           </View>
         ) : (
           <>
-            {/* Team Cleaning Jobs Section */}
-            {(multiCleanerOffers.length > 0 || availableMultiCleanerJobs.length > 0) && (
+            {/* Pending Requests Section */}
+            {(requestedJobs.length > 0 ||
+              pendingMultiCleanerRequests.length > 0) && (
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionTitleRow}>
-                    <View style={[styles.sectionBadge, styles.sectionBadgeTeam]}>
-                      <Icon name="users" size={12} color={colors.primary[600]} />
-                    </View>
-                    <Text style={styles.sectionTitle}>Team Cleaning Jobs</Text>
-                  </View>
-                  <Text style={styles.sectionCount}>
-                    {multiCleanerOffers.length + availableMultiCleanerJobs.length}
-                  </Text>
-                </View>
-
-                {/* Personal Offers (direct invitations) */}
-                {multiCleanerOffers.map((offer) => (
-                  <View key={`offer-${offer.id}`} style={styles.tileWrapper}>
-                    <MultiCleanerJobCard
-                      job={transformOfferToJobData(offer)}
-                      isOffer={true}
-                      expiresAt={offer.expiresAt}
-                      onAccept={() => handleAcceptOffer(offer)}
-                      onDecline={() => handleDeclineOffer(offer)}
-                      loading={multiCleanerLoading}
-                    />
-                  </View>
-                ))}
-
-                {/* Available Open Jobs - Join directly without modal */}
-                {availableMultiCleanerJobs.map((job) => (
-                  <View key={`job-${job.id}`} style={styles.tileWrapper}>
-                    <MultiCleanerJobCard
-                      job={transformJobData(job)}
-                      isOffer={false}
-                      onJoinTeam={() => handleDirectJoinMultiCleanerJob(job)}
-                      onBookWithTeam={() => handleOpenTeamBooking(job)}
-                      loading={multiCleanerLoading}
-                      isBusinessOwner={state.isBusinessOwner}
-                      hasEmployees={true}
-                    />
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* Requested Jobs Section */}
-            {requestedJobs.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
+                <Pressable
+                  style={styles.sectionHeader}
+                  onPress={() => toggleSection("pending")}
+                >
                   <View style={styles.sectionTitleRow}>
                     <View style={styles.sectionBadge}>
-                      <Icon name="clock-o" size={12} color={colors.warning[600]} />
+                      <Icon
+                        name="clock-o"
+                        size={12}
+                        color={colors.warning[600]}
+                      />
                     </View>
                     <Text style={styles.sectionTitle}>Pending Requests</Text>
                   </View>
-                  <Text style={styles.sectionCount}>{requestedJobs.length}</Text>
-                </View>
-                {requestedJobs.map((appointment) => (
-                  <View key={appointment.id} style={styles.tileWrapper}>
-                    <RequestedTile
-                      {...appointment}
-                      cleanerId={userId}
-                      removeRequest={async (employeeId, appointmentId) => {
-                        try {
-                          await FetchData.removeRequest(employeeId, appointmentId);
-                          setAllRequests((prev) => {
-                            const removed = prev.find((a) => a.id === appointmentId);
-                            if (removed) setAllAppointments((apps) => [...apps, removed]);
-                            return prev.filter((a) => a.id !== appointmentId);
-                          });
-                        } catch (err) {
-                          console.error("Error removing request:", err);
-                        }
-                      }}
+                  <View style={styles.sectionHeaderRight}>
+                    <Text style={styles.sectionCount}>
+                      {requestedJobs.length +
+                        pendingMultiCleanerRequests.length}
+                    </Text>
+                    <Icon
+                      name={
+                        expandedSections.pending ? "chevron-up" : "chevron-down"
+                      }
+                      size={14}
+                      color={colors.text.tertiary}
                     />
                   </View>
-                ))}
+                </Pressable>
+                {expandedSections.pending && (
+                  <>
+                    {/* Regular job requests */}
+                    {requestedJobs.map((appointment) => (
+                      <View key={appointment.id} style={styles.tileWrapper}>
+                        <RequestedTile
+                          {...appointment}
+                          cleanerId={userId}
+                          removeRequest={async (employeeId, appointmentId) => {
+                            try {
+                              await FetchData.removeRequest(
+                                employeeId,
+                                appointmentId
+                              );
+                              setAllRequests((prev) => {
+                                const removed = prev.find(
+                                  (a) => a.id === appointmentId
+                                );
+                                if (removed)
+                                  setAllAppointments((apps) => [
+                                    ...apps,
+                                    removed,
+                                  ]);
+                                return prev.filter(
+                                  (a) => a.id !== appointmentId
+                                );
+                              });
+                            } catch (err) {
+                              console.error("Error removing request:", err);
+                            }
+                          }}
+                        />
+                      </View>
+                    ))}
+                    {/* Multi-cleaner job requests */}
+                    {pendingMultiCleanerRequests.map((request) => {
+                      const hasTimeConstraint =
+                        request.appointment?.timeToBeCompleted &&
+                        request.appointment.timeToBeCompleted.toLowerCase() !==
+                          "anytime";
+
+                      // Calculate distance for this request
+                      // Use inline coordinates from API response, fallback to fetched locations
+                      const requestHomeId =
+                        request.homeId || request.appointment?.home?.id;
+                      const requestInlineLat = request.appointment?.home?.latitude;
+                      const requestInlineLng = request.appointment?.home?.longitude;
+                      const requestFallbackLoc = appointmentLocations?.[requestHomeId];
+                      const requestLocLat = requestInlineLat ?? requestFallbackLoc?.latitude;
+                      const requestLocLng = requestInlineLng ?? requestFallbackLoc?.longitude;
+                      let requestDistance = null;
+                      if (userLocation && requestLocLat != null && requestLocLng != null) {
+                        requestDistance = haversineDistance(
+                          userLocation.latitude,
+                          userLocation.longitude,
+                          requestLocLat,
+                          requestLocLng
+                        );
+                      }
+
+                      // Calculate per-cleaner linens based on assigned rooms
+                      // If no rooms assigned yet (pending), estimate based on total/cleaners
+                      const totalCleaners =
+                        request.multiCleanerJob?.totalCleanersRequired || 2;
+                      const totalBeds = request.appointment?.home?.numBeds || 0;
+                      const totalBaths =
+                        request.appointment?.home?.numBaths || 0;
+                      const hasAssignedRooms =
+                        (request.assignedBedrooms || 0) > 0 ||
+                        (request.assignedBathrooms || 0) > 0;
+
+                      const estimatedBedrooms = hasAssignedRooms
+                        ? request.assignedBedrooms
+                        : Math.ceil(totalBeds / totalCleaners);
+                      const estimatedBathrooms = hasAssignedRooms
+                        ? request.assignedBathrooms
+                        : Math.ceil(totalBaths / totalCleaners);
+
+                      const linensCalc = calculateLinensFromRoomCounts({
+                        assignedBedrooms: estimatedBedrooms,
+                        assignedBathrooms: estimatedBathrooms,
+                        bringSheets:
+                          request.appointment?.bringSheets?.toLowerCase() ===
+                          "yes",
+                        bringTowels:
+                          request.appointment?.bringTowels?.toLowerCase() ===
+                          "yes",
+                      });
+                      const isLinensEstimated = !hasAssignedRooms;
+                      const linensKey = `mc-${request.id}`;
+
+                      return (
+                        <View
+                          key={`mc-${request.id}`}
+                          style={styles.tileWrapper}
+                        >
+                          <View style={styles.multiCleanerRequestTile}>
+                            <View style={styles.multiCleanerRequestHeader}>
+                              <View style={styles.teamBadge}>
+                                <Icon
+                                  name="users"
+                                  size={12}
+                                  color={colors.primary[600]}
+                                />
+                                <Text style={styles.teamBadgeText}>
+                                  Team Cleaning
+                                </Text>
+                              </View>
+                              <Text style={styles.pendingBadge}>
+                                Awaiting Approval
+                              </Text>
+                            </View>
+
+                            <Text style={styles.multiCleanerRequestAddress}>
+                              {request.appointment?.home?.city},{" "}
+                              {request.appointment?.home?.state}
+                            </Text>
+                            <Text style={styles.multiCleanerRequestDate}>
+                              {new Date(
+                                request.appointment?.date + "T00:00:00"
+                              ).toLocaleDateString("en-US", {
+                                weekday: "short",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </Text>
+                            <View style={styles.multiCleanerRequestDetails}>
+                              <Text style={styles.multiCleanerRequestDetail}>
+                                {request.appointment?.home?.numBeds} bed /{" "}
+                                {request.appointment?.home?.numBaths} bath
+                              </Text>
+                              <Text style={styles.multiCleanerRequestDetail}>
+                                {request.multiCleanerJob?.cleanersConfirmed ||
+                                  0}
+                                /
+                                {request.multiCleanerJob
+                                  ?.totalCleanersRequired || 2}{" "}
+                                cleaners
+                              </Text>
+                              {requestDistance != null && (
+                                <Text style={styles.multiCleanerRequestDetail}>
+                                  {(requestDistance * 0.621371).toFixed(1)} mi
+                                  away
+                                </Text>
+                              )}
+                            </View>
+
+                            {/* Linens Dropdown - Per-cleaner linens based on assigned rooms */}
+                            {linensCalc.needsLinens && (
+                              <View style={styles.linensContainer}>
+                                <Pressable
+                                  style={styles.linensHeader}
+                                  onPress={() => toggleLinens(linensKey)}
+                                >
+                                  <View style={styles.linensHeaderLeft}>
+                                    <Icon
+                                      name="exclamation-triangle"
+                                      size={14}
+                                      color={colors.warning[600]}
+                                    />
+                                    <Text style={styles.linensHeaderText}>
+                                      Your Linens
+                                    </Text>
+                                  </View>
+                                  <Icon
+                                    name={
+                                      expandedLinens[linensKey]
+                                        ? "chevron-up"
+                                        : "chevron-down"
+                                    }
+                                    size={12}
+                                    color={colors.warning[600]}
+                                  />
+                                </Pressable>
+                                {expandedLinens[linensKey] && (
+                                  <View style={styles.linensContent}>
+                                    {linensCalc.needsSheets &&
+                                      linensCalc.sheetsText && (
+                                        <View style={styles.linenSection}>
+                                          <View style={styles.linenCategory}>
+                                            <Icon
+                                              name="bed"
+                                              size={14}
+                                              color={colors.primary[600]}
+                                            />
+                                            <Text
+                                              style={styles.linenCategoryTitle}
+                                            >
+                                              Sheets
+                                            </Text>
+                                          </View>
+                                          <Text style={styles.linenSummary}>
+                                            {linensCalc.sheetsText}
+                                          </Text>
+                                        </View>
+                                      )}
+                                    {linensCalc.needsTowels &&
+                                      linensCalc.towelsText && (
+                                        <View
+                                          style={[
+                                            styles.linenSection,
+                                            linensCalc.needsSheets &&
+                                              styles.linenSectionSpaced,
+                                          ]}
+                                        >
+                                          <View style={styles.linenCategory}>
+                                            <Icon
+                                              name="tint"
+                                              size={14}
+                                              color={colors.primary[600]}
+                                            />
+                                            <Text
+                                              style={styles.linenCategoryTitle}
+                                            >
+                                              Towels
+                                            </Text>
+                                          </View>
+                                          <Text style={styles.linenSummary}>
+                                            {linensCalc.towelsText}
+                                          </Text>
+                                        </View>
+                                      )}
+                                    <View style={styles.linenNote}>
+                                      <Icon
+                                        name="info-circle"
+                                        size={12}
+                                        color={colors.text.tertiary}
+                                      />
+                                      <Text style={styles.linenNoteText}>
+                                        {isLinensEstimated
+                                          ? `Estimated for your share (~${estimatedBedrooms} bed, ${estimatedBathrooms} bath)`
+                                          : `Based on your assigned rooms (${linensCalc.assignedBedrooms} bed, ${linensCalc.assignedBathrooms} bath)`}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                )}
+                              </View>
+                            )}
+
+                            <View style={styles.multiCleanerRequestEarnings}>
+                              <Icon
+                                name="dollar"
+                                size={12}
+                                color={colors.success[600]}
+                              />
+                              <Text
+                                style={styles.multiCleanerRequestEarningsText}
+                              >
+                                {(
+                                  ((Number(request.appointment?.price) || 0) *
+                                    cleanerSharePercent) /
+                                  (request.multiCleanerJob
+                                    ?.totalCleanersRequired || 2)
+                                ).toFixed(0)}{" "}
+                                your share
+                              </Text>
+                            </View>
+
+                            {/* Time Constraint */}
+                            {hasTimeConstraint && (
+                              <View style={styles.timeConstraintRow}>
+                                <Icon
+                                  name="clock-o"
+                                  size={12}
+                                  color={colors.warning[600]}
+                                />
+                                <Text style={styles.timeConstraintText}>
+                                  Complete by{" "}
+                                  {formatTimeConstraint(request.appointment.timeToBeCompleted)}
+                                </Text>
+                              </View>
+                            )}
+
+                            <Text style={styles.expiresText}>
+                              Expires{" "}
+                              {new Date(request.expiresAt).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </Text>
+                            {/* Request Sent badge and Cancel button */}
+                            <View style={styles.multiCleanerRequestActions}>
+                              <View style={styles.requestSentBadge}>
+                                <Icon
+                                  name="check-circle"
+                                  size={14}
+                                  color={colors.success[600]}
+                                />
+                                <Text style={styles.requestSentText}>
+                                  Request Sent
+                                </Text>
+                              </View>
+                              <Pressable
+                                style={styles.cancelRequestButton}
+                                onPress={() =>
+                                  handleCancelMultiCleanerRequest(request)
+                                }
+                              >
+                                <Icon
+                                  name="times"
+                                  size={14}
+                                  color={colors.error[600]}
+                                />
+                                <Text style={styles.cancelRequestText}>
+                                  Cancel
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+              </View>
+            )}
+
+            {/* Team Cleaning Jobs Section */}
+            {(multiCleanerOffers.length > 0 ||
+              availableMultiCleanerJobs.length > 0) && (
+              <View style={styles.section}>
+                <Pressable
+                  style={styles.sectionHeader}
+                  onPress={() => toggleSection("team")}
+                >
+                  <View style={styles.sectionTitleRow}>
+                    <View
+                      style={[styles.sectionBadge, styles.sectionBadgeTeam]}
+                    >
+                      <Icon
+                        name="users"
+                        size={12}
+                        color={colors.primary[600]}
+                      />
+                    </View>
+                    <Text style={styles.sectionTitle}>Team Cleaning Jobs</Text>
+                  </View>
+                  <View style={styles.sectionHeaderRight}>
+                    <Text style={styles.sectionCount}>
+                      {multiCleanerOffers.length +
+                        availableMultiCleanerJobs.length}
+                    </Text>
+                    <Icon
+                      name={
+                        expandedSections.team ? "chevron-up" : "chevron-down"
+                      }
+                      size={14}
+                      color={colors.text.tertiary}
+                    />
+                  </View>
+                </Pressable>
+
+                {expandedSections.team && (
+                  <>
+                    {/* Personal Offers (direct invitations) */}
+                    {multiCleanerOffers.map((offer) => {
+                      const jobData = transformOfferToJobData(offer);
+                      return (
+                        <View
+                          key={`offer-${offer.id}`}
+                          style={styles.tileWrapper}
+                        >
+                          <MultiCleanerJobCard
+                            job={jobData}
+                            isOffer={true}
+                            expiresAt={offer.expiresAt}
+                            onAccept={() => handleAcceptOffer(offer)}
+                            onDecline={() => handleDeclineOffer(offer)}
+                            loading={multiCleanerLoading}
+                            timeToBeCompleted={jobData.timeToBeCompleted}
+                          />
+                        </View>
+                      );
+                    })}
+
+                    {/* Available Open Jobs - Join directly without modal */}
+                    {availableMultiCleanerJobs.map((job) => {
+                      const jobData = transformJobData(job);
+                      return (
+                        <View key={`job-${job.id}`} style={styles.tileWrapper}>
+                          <MultiCleanerJobCard
+                            job={jobData}
+                            isOffer={false}
+                            onJoinTeam={() =>
+                              handleDirectJoinMultiCleanerJob(job)
+                            }
+                            onBookWithTeam={() => handleOpenTeamBooking(job)}
+                            loading={multiCleanerLoading}
+                            isBusinessOwner={state.isBusinessOwner}
+                            hasEmployees={true}
+                            timeToBeCompleted={jobData.timeToBeCompleted}
+                          />
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
               </View>
             )}
 
             {/* Available Jobs Section */}
             {availableJobs.length > 0 && (
               <View style={styles.section}>
-                <View style={styles.sectionHeader}>
+                <Pressable
+                  style={styles.sectionHeader}
+                  onPress={() => toggleSection("available")}
+                >
                   <View style={styles.sectionTitleRow}>
-                    <View style={[styles.sectionBadge, styles.sectionBadgeAvailable]}>
-                      <Icon name="check" size={12} color={colors.success[600]} />
+                    <View
+                      style={[
+                        styles.sectionBadge,
+                        styles.sectionBadgeAvailable,
+                      ]}
+                    >
+                      <Icon
+                        name="check"
+                        size={12}
+                        color={colors.success[600]}
+                      />
                     </View>
                     <Text style={styles.sectionTitle}>Available Jobs</Text>
                   </View>
-                  <Text style={styles.sectionCount}>{availableJobs.length}</Text>
-                </View>
-                {availableJobs.map((appointment) => (
-                  <View key={appointment.id} style={styles.tileWrapper}>
-                    <EmployeeAssignmentTile
-                      {...appointment}
-                      cleanerId={userId}
-                      assigned={appointment.employeesAssigned?.includes(String(userId)) || false}
-                      isPreferred={preferredHomeIds.includes(appointment.homeId)}
-                      isRequesting={requestingJobId === appointment.id}
-                      addEmployee={handleBookingRequest}
-                      removeEmployee={async (employeeId, appointmentId) => {
-                        try {
-                          await FetchData.removeEmployee(employeeId, appointmentId);
-                          setAllAppointments((prev) =>
-                            prev.map((a) =>
-                              a.id === appointmentId
-                                ? {
-                                    ...a,
-                                    employeesAssigned: a.employeesAssigned?.filter(
-                                      (id) => id !== String(employeeId)
-                                    ),
-                                  }
-                                : a
-                            )
-                          );
-                        } catch (err) {
-                          console.error("Error removing employee:", err);
-                        }
-                      }}
+                  <View style={styles.sectionHeaderRight}>
+                    <Text style={styles.sectionCount}>
+                      {availableJobs.length}
+                    </Text>
+                    <Icon
+                      name={
+                        expandedSections.available
+                          ? "chevron-up"
+                          : "chevron-down"
+                      }
+                      size={14}
+                      color={colors.text.tertiary}
                     />
                   </View>
-                ))}
+                </Pressable>
+                {expandedSections.available && (
+                  <>
+                    {availableJobs.map((appointment) => (
+                      <View key={appointment.id} style={styles.tileWrapper}>
+                        <EmployeeAssignmentTile
+                          {...appointment}
+                          cleanerId={userId}
+                          assigned={
+                            appointment.employeesAssigned?.includes(
+                              String(userId)
+                            ) || false
+                          }
+                          isPreferred={preferredHomeIds.includes(
+                            appointment.homeId
+                          )}
+                          isRequesting={requestingJobId === appointment.id}
+                          addEmployee={handleBookingRequest}
+                          removeEmployee={async (employeeId, appointmentId) => {
+                            try {
+                              await FetchData.removeEmployee(
+                                employeeId,
+                                appointmentId
+                              );
+                              setAllAppointments((prev) =>
+                                prev.map((a) =>
+                                  a.id === appointmentId
+                                    ? {
+                                        ...a,
+                                        employeesAssigned:
+                                          a.employeesAssigned?.filter(
+                                            (id) => id !== String(employeeId)
+                                          ),
+                                      }
+                                    : a
+                                )
+                              );
+                            } catch (err) {
+                              console.error("Error removing employee:", err);
+                            }
+                          }}
+                        />
+                      </View>
+                    ))}
+                  </>
+                )}
               </View>
             )}
           </>
@@ -1050,7 +1794,10 @@ const SelectNewJobList = ({ state }) => {
         animationType="fade"
         onRequestClose={() => setShowSortModal(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowSortModal(false)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSortModal(false)}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Sort Jobs By</Text>
@@ -1073,7 +1820,11 @@ const SelectNewJobList = ({ state }) => {
                 <Icon
                   name={option.icon}
                   size={16}
-                  color={sortOption === option.value ? colors.primary[600] : colors.text.secondary}
+                  color={
+                    sortOption === option.value
+                      ? colors.primary[600]
+                      : colors.text.secondary
+                  }
                 />
                 <Text
                   style={[
@@ -1120,8 +1871,14 @@ const SelectNewJobList = ({ state }) => {
         animationType="fade"
         onRequestClose={() => setShowStripeSetupModal(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setShowStripeSetupModal(false)}>
-          <View style={styles.stripeModalContent} onStartShouldSetResponder={() => true}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowStripeSetupModal(false)}
+        >
+          <View
+            style={styles.stripeModalContent}
+            onStartShouldSetResponder={() => true}
+          >
             <View style={styles.stripeModalIcon}>
               <Icon name="credit-card" size={32} color={colors.primary[600]} />
             </View>
@@ -1136,7 +1893,9 @@ const SelectNewJobList = ({ state }) => {
                 }}
               >
                 <Icon name="credit-card" size={16} color={colors.neutral[0]} />
-                <Text style={styles.stripeSetupButtonText}>Set Up Payments</Text>
+                <Text style={styles.stripeSetupButtonText}>
+                  Set Up Payments
+                </Text>
               </Pressable>
               <Pressable
                 style={styles.stripeCancelButton}
@@ -1152,7 +1911,11 @@ const SelectNewJobList = ({ state }) => {
       {/* Multi-Cleaner Job Modal */}
       <MultiCleanerOfferModal
         visible={showMultiCleanerModal}
-        offer={selectedMultiCleanerJob ? transformJobToOfferFormat(selectedMultiCleanerJob) : null}
+        offer={
+          selectedMultiCleanerJob
+            ? transformJobToOfferFormat(selectedMultiCleanerJob)
+            : null
+        }
         onAccept={handleJoinMultiCleanerJob}
         onDecline={handleCloseMultiCleanerModal}
         onClose={handleCloseMultiCleanerModal}
@@ -1350,6 +2113,11 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.light,
+  },
+  sectionHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   sectionTitleRow: {
     flexDirection: "row",
@@ -1565,6 +2333,209 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.medium,
     color: colors.text.secondary,
+  },
+  // Multi-cleaner request tile styles
+  multiCleanerRequestTile: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary[500],
+  },
+  multiCleanerRequestHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  teamBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  teamBadgeText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  pendingBadge: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[600],
+    backgroundColor: colors.warning[50],
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  multiCleanerRequestAddress: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: 2,
+  },
+  multiCleanerRequestDate: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+  },
+  multiCleanerRequestDetails: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  multiCleanerRequestDetail: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+  },
+  multiCleanerRequestEarnings: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  multiCleanerRequestEarningsText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  expiresText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontStyle: "italic",
+  },
+  // Time Constraint
+  timeConstraintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.warning[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
+    alignSelf: "flex-start",
+  },
+  timeConstraintText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.warning[700],
+  },
+  // Linens Dropdown
+  linensContainer: {
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+  },
+  linensHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  linensHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  linensHeaderText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+  },
+  linensContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[200],
+    paddingTop: spacing.sm,
+  },
+  linenSection: {
+    marginBottom: spacing.sm,
+  },
+  linenSectionSpaced: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[100],
+  },
+  linenCategory: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: 2,
+  },
+  linenCategoryTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[700],
+  },
+  linenSummary: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    paddingLeft: 22,
+    lineHeight: 20,
+  },
+  linenNote: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.warning[100],
+  },
+  linenNoteText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    flex: 1,
+    lineHeight: 16,
+  },
+  multiCleanerRequestActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  requestSentBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  requestSentText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success[600],
+  },
+  cancelRequestButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.error[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    gap: spacing.xs,
+  },
+  cancelRequestText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.error[600],
   },
 });
 

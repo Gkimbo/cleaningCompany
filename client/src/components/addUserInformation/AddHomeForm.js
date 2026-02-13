@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors, spacing, radius, typography } from "../../services/styles/theme";
 import { useNavigate } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
@@ -276,8 +277,11 @@ const AddHomeForm = ({ state, dispatch }) => {
   const handleSubmit = async () => {
     setIsLoading(true);
     try {
+      // Get token from AsyncStorage to ensure we use the current token
+      // (important for preview mode where AuthContext may have stale token)
+      const currentToken = await AsyncStorage.getItem("token");
       const submitData = {
-        user: user,
+        user: { token: currentToken || user?.token },
         home: {
           nickName: homeData.nickName,
           address: homeData.address,

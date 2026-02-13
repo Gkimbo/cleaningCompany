@@ -28,7 +28,7 @@ const TIME_WINDOWS = [
   { value: "12-2", label: "12pm - 2pm" },
 ];
 
-const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
+const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes = [], selectedHome = null }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [customPrice, setCustomPrice] = useState("");
@@ -38,27 +38,36 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
   const [platformPriceData, setPlatformPriceData] = useState(null);
   const [loadingPlatformPrice, setLoadingPlatformPrice] = useState(false);
 
+  // Use selectedHome if provided, otherwise use client.home or first home in homes array
+  const activeHome = selectedHome || client?.home || (homes.length > 0 ? homes[0] : null);
+
   // Get client display info
   const clientName = client?.client
     ? `${client.client.firstName} ${client.client.lastName}`
     : client?.invitedName || "Client";
 
-  const homeAddress = client?.home
-    ? `${client.home.address}, ${client.home.city}`
+  const homeAddress = activeHome
+    ? `${activeHome.address}, ${activeHome.city}`
     : "No address set";
 
-  const defaultPrice = client?.defaultPrice
+  // Use the selected home's defaultPrice if available, otherwise fall back to client-level price
+  const defaultPrice = activeHome?.defaultPrice
+    ? parseFloat(activeHome.defaultPrice).toFixed(0)
+    : client?.defaultPrice
     ? parseFloat(client.defaultPrice).toFixed(0)
     : null;
 
-  // Fetch platform price when modal opens
+  // Determine the correct cleanerClientId - use selected home's cleanerClientId if available
+  const cleanerClientIdForPrice = activeHome?.cleanerClientId || client?.id;
+
+  // Fetch platform price when modal opens or when active home changes
   useEffect(() => {
     const fetchPlatformPrice = async () => {
-      if (!visible || !client?.id || !token) return;
+      if (!visible || !cleanerClientIdForPrice || !token) return;
 
       setLoadingPlatformPrice(true);
       try {
-        const data = await CleanerClientService.getPlatformPrice(token, client.id);
+        const data = await CleanerClientService.getPlatformPrice(token, cleanerClientIdForPrice);
         if (!data.error) {
           setPlatformPriceData(data);
         }
@@ -70,13 +79,17 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
     };
 
     fetchPlatformPrice();
-  }, [visible, client?.id, token]);
+  }, [visible, cleanerClientIdForPrice, token]);
 
   const handleUsePlatformPrice = () => {
     if (platformPriceData?.platformPrice) {
       setCustomPrice(platformPriceData.platformPrice.toString());
     }
   };
+
+  // Today's date string for comparison (use local date, not UTC)
+  const today = new Date();
+  const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   // Generate calendar days for the current month
   const calendarData = useMemo(() => {
@@ -102,12 +115,15 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       const isPast = date < today;
-      const dateString = date.toISOString().split("T")[0];
-      days.push({ day, date: dateString, isPast });
+      // Use local date format instead of UTC
+      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const isToday = dateString === todayString;
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+      days.push({ day, date: dateString, isPast, isToday, isWeekend });
     }
 
     return days;
-  }, [currentMonth]);
+  }, [currentMonth, todayString]);
 
   const monthName = currentMonth.toLocaleDateString("en-US", {
     month: "long",
@@ -145,11 +161,17 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
       return;
     }
 
+    if (!activeHome) {
+      Alert.alert("Error", "No home selected for this booking");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const bookingData = {
         date: selectedDate,
         timeWindow,
+        homeId: activeHome.id, // Include homeId for multi-home support
       };
 
       if (customPrice && customPrice.trim()) {
@@ -248,67 +270,88 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token }) => {
                 {/* Month Navigation */}
                 <View style={styles.calendarHeader}>
                   <Pressable
-                    style={styles.monthNavButton}
+                    style={({ pressed }) => [
+                      styles.monthNavButton,
+                      pressed && styles.monthNavButtonPressed,
+                    ]}
                     onPress={goToPreviousMonth}
                   >
-                    <Feather name="chevron-left" size={20} color={colors.text.primary} />
+                    <Feather name="chevron-left" size={20} color={colors.primary[600]} />
                   </Pressable>
                   <Text style={styles.monthText}>{monthName}</Text>
                   <Pressable
-                    style={styles.monthNavButton}
+                    style={({ pressed }) => [
+                      styles.monthNavButton,
+                      pressed && styles.monthNavButtonPressed,
+                    ]}
                     onPress={goToNextMonth}
                   >
-                    <Feather name="chevron-right" size={20} color={colors.text.primary} />
+                    <Feather name="chevron-right" size={20} color={colors.primary[600]} />
                   </Pressable>
                 </View>
 
                 {/* Day Headers */}
                 <View style={styles.dayHeaders}>
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                    <Text key={day} style={styles.dayHeader}>
-                      {day}
-                    </Text>
+                  {["S", "M", "T", "W", "T", "F", "S"].map((day, idx) => (
+                    <View key={idx} style={styles.dayHeaderCell}>
+                      <Text style={[
+                        styles.dayHeader,
+                        (idx === 0 || idx === 6) && styles.dayHeaderWeekend,
+                      ]}>
+                        {day}
+                      </Text>
+                    </View>
                   ))}
                 </View>
 
                 {/* Calendar Grid */}
                 <View style={styles.calendarGrid}>
-                  {calendarData.map((item, index) => (
-                    <Pressable
-                      key={index}
-                      style={[
-                        styles.dayCell,
-                        !item.day && styles.dayCellEmpty,
-                        item.isPast && styles.dayCellPast,
-                        selectedDate === item.date && styles.dayCellSelected,
-                      ]}
-                      onPress={() => !item.isPast && handleDateSelect(item.date)}
-                      disabled={!item.day || item.isPast}
-                    >
-                      {item.day && (
-                        <Text
-                          style={[
-                            styles.dayText,
-                            item.isPast && styles.dayTextPast,
-                            selectedDate === item.date && styles.dayTextSelected,
+                  {calendarData.map((item, index) => {
+                    const isSelected = selectedDate && item.date && selectedDate === item.date;
+                    return (
+                      <View key={index} style={styles.dayCellWrapper}>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.dayCell,
+                            item.isToday && !isSelected && styles.dayCellToday,
+                            isSelected && styles.dayCellSelected,
+                            pressed && item.day && !item.isPast && styles.dayCellPressed,
                           ]}
+                          onPress={() => !item.isPast && handleDateSelect(item.date)}
+                          disabled={!item.day || item.isPast}
                         >
-                          {item.day}
-                        </Text>
-                      )}
-                    </Pressable>
-                  ))}
+                          {item.day && (
+                            <Text
+                              style={[
+                                styles.dayText,
+                                item.isPast && styles.dayTextPast,
+                                item.isWeekend && !item.isPast && !isSelected && styles.dayTextWeekend,
+                                item.isToday && !isSelected && styles.dayTextToday,
+                                isSelected && styles.dayTextSelected,
+                              ]}
+                            >
+                              {item.day}
+                            </Text>
+                          )}
+                          {item.isToday && !isSelected && (
+                            <View style={styles.todayDot} />
+                          )}
+                        </Pressable>
+                      </View>
+                    );
+                  })}
                 </View>
-              </View>
 
-              {selectedDate && (
-                <View style={styles.selectedDateBadge}>
-                  <Feather name="calendar" size={14} color={colors.primary[600]} />
-                  <Text style={styles.selectedDateText}>
-                    {formatSelectedDate(selectedDate)}
-                  </Text>
-                </View>
-              )}
+                {/* Selected Date Display */}
+                {selectedDate && (
+                  <View style={styles.selectedDateInline}>
+                    <Feather name="check-circle" size={16} color={colors.success[600]} />
+                    <Text style={styles.selectedDateInlineText}>
+                      {formatSelectedDate(selectedDate)}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             {/* Time Window */}
@@ -455,6 +498,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.neutral[0],
     borderTopLeftRadius: radius["2xl"],
     borderTopRightRadius: radius["2xl"],
+    height: "75%",
     maxHeight: "90%",
     ...shadows.xl,
   },
@@ -555,81 +599,126 @@ const styles = StyleSheet.create({
 
   // Calendar
   calendar: {
-    backgroundColor: colors.neutral[50],
+    backgroundColor: colors.neutral[0],
     borderRadius: radius.xl,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.neutral[200],
+    ...shadows.sm,
   },
   calendarHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
   },
   monthNavButton: {
-    padding: spacing.sm,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary[50],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  monthNavButtonPressed: {
+    backgroundColor: colors.primary[100],
   },
   monthText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.lg,
+    fontWeight: "700",
     color: colors.text.primary,
+    letterSpacing: 0.5,
   },
   dayHeaders: {
     flexDirection: "row",
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  dayHeaderCell: {
+    width: "14.28%",
+    alignItems: "center",
   },
   dayHeader: {
-    flex: 1,
-    textAlign: "center",
     fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: "600",
     color: colors.neutral[400],
+    textTransform: "uppercase",
+  },
+  dayHeaderWeekend: {
+    color: colors.neutral[300],
   },
   calendarGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
+    paddingTop: spacing.xs,
+  },
+  dayCellWrapper: {
+    width: "14.28%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 3,
   },
   dayCell: {
-    width: "14.28%",
-    aspectRatio: 1,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
-  dayCellEmpty: {},
-  dayCellPast: {
-    opacity: 0.3,
+  dayCellToday: {
+    borderWidth: 2,
+    borderColor: colors.primary[300],
   },
   dayCellSelected: {
     backgroundColor: colors.primary[600],
-    borderRadius: radius.full,
+    ...shadows.sm,
+  },
+  dayCellPressed: {
+    backgroundColor: colors.primary[50],
   },
   dayText: {
     fontSize: typography.fontSize.sm,
+    fontWeight: "500",
     color: colors.text.primary,
   },
   dayTextPast: {
-    color: colors.neutral[400],
+    color: colors.neutral[300],
+  },
+  dayTextWeekend: {
+    color: colors.neutral[500],
+  },
+  dayTextToday: {
+    color: colors.primary[600],
+    fontWeight: "700",
   },
   dayTextSelected: {
     color: colors.neutral[0],
-    fontWeight: typography.fontWeight.bold,
+    fontWeight: "700",
   },
-  selectedDateBadge: {
+  todayDot: {
+    position: "absolute",
+    bottom: 4,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.primary[500],
+  },
+  selectedDateInline: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     marginTop: spacing.md,
-    backgroundColor: colors.primary[50],
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.primary[200],
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
   },
-  selectedDateText: {
+  selectedDateInlineText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.primary[700],
+    fontWeight: "600",
+    color: colors.success[700],
   },
 
   // Time Window

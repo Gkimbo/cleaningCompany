@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-native";
 import { Picker } from "@react-native-picker/picker";
 import Icon from "react-native-vector-icons/FontAwesome";
 import HRDashboardService from "../../services/fetchRequests/HRDashboardService";
+import CreateSupportTicketModal from "../conflicts/modals/CreateSupportTicketModal";
 import {
   colors,
   spacing,
@@ -264,6 +265,7 @@ const HRDashboard = ({ state, dispatch }) => {
   // Detail modal state
   const [selectedDispute, setSelectedDispute] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
   const [finalBeds, setFinalBeds] = useState("");
   const [finalBaths, setFinalBaths] = useState("");
   const [finalHalfBaths, setFinalHalfBaths] = useState("");
@@ -450,6 +452,12 @@ const HRDashboard = ({ state, dispatch }) => {
             badge={quickStats?.pendingConflicts}
           />
           <QuickActionButton
+            icon="flag"
+            label="New Ticket"
+            color={colors.warning[500]}
+            onPress={() => setShowCreateTicketModal(true)}
+          />
+          <QuickActionButton
             icon="comments"
             label="Messages"
             color={colors.success[500]}
@@ -545,6 +553,17 @@ const HRDashboard = ({ state, dispatch }) => {
           ))}
         </View>
       )}
+
+      {/* Create Support Ticket Modal */}
+      <CreateSupportTicketModal
+        visible={showCreateTicketModal}
+        onClose={() => setShowCreateTicketModal(false)}
+        onSuccess={() => {
+          setShowCreateTicketModal(false);
+          fetchDashboardData(true);
+        }}
+        token={state.currentUser.token}
+      />
 
       {/* Dispute Detail Modal */}
       <Modal

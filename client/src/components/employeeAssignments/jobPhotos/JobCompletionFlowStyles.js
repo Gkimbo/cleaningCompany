@@ -7,26 +7,34 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
   },
 
+  // Top section wrapper (header + steps)
+  topSection: {
+    backgroundColor: colors.neutral[0],
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    ...shadows.md,
+    paddingBottom: spacing.md,
+  },
+
   headerBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.neutral[0],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
 
   cancelButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.error[50],
+    borderRadius: radius.md,
   },
 
   cancelButtonText: {
     color: colors.error[600],
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
   },
 
   headerTitle: {
@@ -36,47 +44,70 @@ const styles = StyleSheet.create({
   },
 
   headerSpacer: {
-    width: 60,
+    width: 50,
   },
 
-  // Step Indicator
+  // Step Indicator - redesigned
   stepIndicator: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+
+  stepProgressBar: {
+    height: 4,
+    backgroundColor: colors.neutral[200],
+    borderRadius: 2,
+    marginBottom: spacing.md,
+    overflow: "hidden",
+  },
+
+  stepProgressFill: {
+    height: "100%",
+    backgroundColor: colors.success[500],
+    borderRadius: 2,
+  },
+
+  stepsRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.neutral[0],
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.light,
+    justifyContent: "space-between",
   },
 
   stepItem: {
-    flexDirection: "row",
     alignItems: "center",
+    flex: 1,
   },
 
   stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.neutral[200],
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.neutral[100],
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.neutral[200],
   },
 
   stepCircleActive: {
     backgroundColor: colors.primary[500],
+    borderColor: colors.primary[500],
+    ...shadows.sm,
   },
 
   stepCircleCompleted: {
     backgroundColor: colors.success[500],
+    borderColor: colors.success[500],
+  },
+
+  stepCircleUpcoming: {
+    backgroundColor: colors.neutral[50],
+    borderColor: colors.neutral[200],
   },
 
   stepNumber: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.bold,
-    color: colors.text.tertiary,
+    color: colors.neutral[400],
   },
 
   stepNumberActive: {
@@ -84,25 +115,20 @@ const styles = StyleSheet.create({
   },
 
   stepLabel: {
-    fontSize: typography.fontSize.xs,
+    fontSize: 11,
     color: colors.text.tertiary,
-    marginLeft: spacing.xs,
+    marginTop: 4,
     fontWeight: typography.fontWeight.medium,
+    textAlign: "center",
   },
 
   stepLabelActive: {
     color: colors.primary[700],
+    fontWeight: typography.fontWeight.bold,
   },
 
-  stepLine: {
-    width: 24,
-    height: 2,
-    backgroundColor: colors.neutral[200],
-    marginHorizontal: spacing.sm,
-  },
-
-  stepLineActive: {
-    backgroundColor: colors.success[500],
+  stepLabelCompleted: {
+    color: colors.success[600],
   },
 
   // Cleaning Step

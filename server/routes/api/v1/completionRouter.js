@@ -19,6 +19,8 @@ const {
   PricingConfig,
   MultiCleanerJob,
   UserReviews,
+  EmployeeJobAssignment,
+  BusinessEmployee,
 } = require("../../../models");
 const NotificationService = require("../../../services/NotificationService");
 const EncryptionService = require("../../../services/EncryptionService");
@@ -30,6 +32,7 @@ const {
   getAutoCompleteConfig,
 } = require("../../../services/cron/AutoCompleteMonitor");
 const AnalyticsService = require("../../../services/AnalyticsService");
+const EmployeeDirectPayoutService = require("../../../services/EmployeeDirectPayoutService");
 
 const completionRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -482,6 +485,63 @@ completionRouter.post("/approve/:appointmentId", verifyToken, async (req, res) =
       }
     }
 
+    // Notify business owner if an employee completed this job
+    try {
+      const employeeAssignment = await EmployeeJobAssignment.findOne({
+        where: {
+          appointmentId: appointment.id,
+          isSelfAssignment: false,
+        },
+        include: [{
+          model: BusinessEmployee,
+          as: "employee",
+          attributes: ["id", "userId"],
+          include: [{
+            model: User,
+            as: "user",
+            attributes: ["id", "firstName"],
+          }],
+        }],
+      });
+
+      if (employeeAssignment && employeeAssignment.businessOwnerId) {
+        const businessOwner = await User.findByPk(employeeAssignment.businessOwnerId);
+
+        if (businessOwner) {
+          const employeeName = employeeAssignment.employee?.user?.firstName
+            ? EncryptionService.decrypt(employeeAssignment.employee.user.firstName)
+            : "Your employee";
+          const clientName = appointment.user
+            ? EncryptionService.decrypt(appointment.user.firstName)
+            : "your client";
+
+          // In-app notification for business owner
+          await NotificationService.createNotification({
+            userId: businessOwner.id,
+            type: "employee_job_approved",
+            title: "Job Approved",
+            body: `${employeeName}'s cleaning for ${clientName} was approved by the homeowner. Payment sent.`,
+            data: { appointmentId: appointment.id, employeeAssignmentId: employeeAssignment.id },
+            relatedAppointmentId: appointment.id,
+          });
+
+          // Push notification to business owner
+          if (businessOwner.expoPushToken) {
+            await PushNotification.sendPushNotification(
+              businessOwner.expoPushToken,
+              "Job Approved",
+              `${employeeName}'s cleaning for ${clientName} was approved. Payment sent.`,
+              { appointmentId: appointment.id, type: "employee_job_approved" }
+            );
+          }
+
+          console.log(`[Completion] Business owner ${businessOwner.id} notified of employee job approval`);
+        }
+      }
+    } catch (businessNotificationError) {
+      console.error(`[Completion] Error notifying business owner:`, businessNotificationError);
+    }
+
     console.log(`[Completion] Approved by homeowner for appointment ${appointmentId}`);
 
     // Track job completion analytics
@@ -549,6 +609,9 @@ async function handleMultiCleanerApprove(req, res, appointment, cleanerId) {
 
   // Process payout for this cleaner
   const payoutResults = await processMultiCleanerPayoutForCleaner(appointment, cleanerId);
+
+  // Check if all cleaners in this job are now approved - if so, mark parent appointment as completed
+  await checkAndUpdateParentAppointmentCompletion(appointment.id);
 
   // Notify cleaner
   const cleaner = await User.findByPk(cleanerId);
@@ -751,6 +814,9 @@ async function handleMultiCleanerRequestReview(req, res, appointment, cleanerId,
 
   // Process payout for this cleaner (they still get paid!)
   const payoutResults = await processMultiCleanerPayoutForCleaner(appointment, cleanerId);
+
+  // Check if all cleaners in this job are now approved - if so, mark parent appointment as completed
+  await checkAndUpdateParentAppointmentCompletion(appointment.id);
 
   // Notify cleaner (don't mention concerns)
   const cleaner = await User.findByPk(cleanerId);
@@ -1091,13 +1157,15 @@ async function processPayoutAfterApproval(appointment) {
 
 /**
  * Process payout for a specific cleaner in a multi-cleaner job
+ * Handles both marketplace cleaners and business employees
  */
 async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
   try {
-    const { Payout, StripeConnectAccount, MultiCleanerJob, CleanerRoomAssignment } = require("../../../models");
+    const { Payout, StripeConnectAccount, MultiCleanerJob, CleanerRoomAssignment, EmployeeJobAssignment, BusinessEmployee } = require("../../../models");
     const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
     const { getPricingConfig } = require("../../../config/businessConfig");
     const MultiCleanerPricingService = require("../../../services/MultiCleanerPricingService");
+    const BusinessVolumeService = require("../../../services/BusinessVolumeService");
 
     const multiCleanerJob = await MultiCleanerJob.findByPk(appointment.multiCleanerJobId);
     if (!multiCleanerJob) {
@@ -1112,14 +1180,65 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
       },
     });
 
-    // Calculate this cleaner's share
+    // Check if this cleaner is a business employee for this job
+    let isBusinessEmployee = false;
+    let businessOwnerId = null;
+    let payoutRecipientId = cleanerId;
+
+    const employeeAssignment = await EmployeeJobAssignment.findOne({
+      where: { appointmentId: appointment.id },
+      include: [{
+        model: BusinessEmployee,
+        as: "employee",
+        where: { userId: cleanerId },
+        required: true,
+      }],
+    });
+
+    if (employeeAssignment) {
+      isBusinessEmployee = true;
+      businessOwnerId = employeeAssignment.businessOwnerId;
+      payoutRecipientId = businessOwnerId; // Default: route payout to business owner
+      console.log(`[Completion] Cleaner ${cleanerId} is business employee of owner ${businessOwnerId}`);
+
+      // Check if direct employee payouts are enabled
+      const directPayoutEnabled = await EmployeeDirectPayoutService.isDirectPayoutEnabled(businessOwnerId);
+      if (directPayoutEnabled) {
+        const eligibility = await EmployeeDirectPayoutService.canEmployeeReceiveDirectPayout(employeeAssignment);
+        if (eligibility.canReceive) {
+          console.log(`[Completion] Direct employee payout enabled for cleaner ${cleanerId}`);
+          employeeAssignment.useDirectPayout = true;
+          employeeAssignment.employeeStripeAccount = eligibility.stripeAccountId;
+        }
+      }
+    }
+
+    // Get pricing config and determine applicable fee
     const pricing = await getPricingConfig();
+    let applicableFeePercent;
+
+    if (isBusinessEmployee) {
+      // Check if business qualifies for large business discount
+      const qualification = await BusinessVolumeService.qualifiesForLargeBusinessFee(businessOwnerId);
+      if (qualification.qualifies) {
+        applicableFeePercent = pricing?.platform?.largeBusinessFeePercent || 0.07;
+      } else {
+        applicableFeePercent = pricing?.platform?.businessOwnerFeePercent || 0.10;
+      }
+      console.log(`[Completion] Using business owner fee: ${applicableFeePercent * 100}%`);
+    }
+
+    // Calculate this cleaner's share with appropriate fee
     const cleanerShare = await MultiCleanerPricingService.calculateCleanerShare(
       appointment,
       multiCleanerJob,
       cleanerId,
       roomAssignments,
-      pricing
+      pricing,
+      isBusinessEmployee ? {
+        isBusinessEmployee: true,
+        businessOwnerFeePercent: applicableFeePercent,
+      } : {}
     );
 
     // Get or create payout record
@@ -1131,16 +1250,18 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
       return { cleanerId, status: "already_paid" };
     }
 
-    // Get cleaner's Stripe Connect account
+    // Get the payout recipient's Stripe Connect account
     const connectAccount = await StripeConnectAccount.findOne({
-      where: { userId: cleanerId },
+      where: { userId: payoutRecipientId },
     });
 
     if (!connectAccount || !connectAccount.payoutsEnabled) {
       return {
         cleanerId,
         status: "skipped",
-        reason: "Cleaner has not completed Stripe onboarding",
+        reason: isBusinessEmployee
+          ? "Business owner has not completed Stripe onboarding"
+          : "Cleaner has not completed Stripe onboarding",
       };
     }
 
@@ -1159,6 +1280,7 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
         status: "processing",
         paymentCapturedAt: new Date(),
         transferInitiatedAt: new Date(),
+        payoutType: isBusinessEmployee ? "business_employee" : "marketplace",
       });
     } else {
       await payout.update({
@@ -1167,6 +1289,7 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
         netAmount,
         status: "processing",
         transferInitiatedAt: new Date(),
+        payoutType: isBusinessEmployee ? "business_employee" : "marketplace",
       });
     }
 
@@ -1181,7 +1304,49 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
       }
     }
 
-    // Create Stripe Transfer
+    // Check if we should use direct employee payout (split between employee and owner)
+    if (isBusinessEmployee && employeeAssignment?.useDirectPayout) {
+      console.log(`[Completion] Processing split payout for employee ${cleanerId}`);
+
+      const splitResult = await EmployeeDirectPayoutService.processSplitPayout(
+        appointment,
+        employeeAssignment,
+        netAmount,
+        chargeId,
+        payout
+      );
+
+      if (splitResult.payoutMethod === "split" || splitResult.payoutMethod === "direct_to_employee") {
+        // Update payout record with the business owner's portion
+        await payout.update({
+          stripeTransferId: splitResult.businessOwnerPayout?.transferId || splitResult.employeePayout?.transferId,
+          status: "completed",
+          transferCompletedAt: new Date(),
+        });
+
+        // Update CleanerJobCompletion
+        await CleanerJobCompletion.update(
+          { payoutId: payout.id },
+          { where: { appointmentId: appointment.id, cleanerId } }
+        );
+
+        return {
+          cleanerId,
+          status: "success",
+          transferId: splitResult.businessOwnerPayout?.transferId || splitResult.employeePayout?.transferId,
+          isBusinessEmployee,
+          payoutRecipientId,
+          directPayout: true,
+          employeeTransferId: splitResult.employeePayout?.transferId,
+          employeeAmount: splitResult.employeePayout?.amount,
+          businessOwnerAmount: splitResult.businessOwnerPayout?.amount,
+        };
+      }
+      // Fall through to normal payout if split failed
+      console.log(`[Completion] Split payout failed (${splitResult.fallbackReason}), falling back to business owner`);
+    }
+
+    // Create Stripe Transfer (standard flow - all to business owner or marketplace cleaner)
     const transferParams = {
       amount: netAmount,
       currency: "usd",
@@ -1191,6 +1356,11 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
         cleanerId: cleanerId.toString(),
         payoutId: payout.id.toString(),
         multiCleanerJobId: multiCleanerJob.id.toString(),
+        ...(isBusinessEmployee && {
+          isBusinessEmployee: "true",
+          businessOwnerId: businessOwnerId.toString(),
+          payoutRecipientId: payoutRecipientId.toString(),
+        }),
       },
     };
 
@@ -1212,10 +1382,75 @@ async function processMultiCleanerPayoutForCleaner(appointment, cleanerId) {
       { where: { appointmentId: appointment.id, cleanerId } }
     );
 
-    return { cleanerId, status: "success", transferId: transfer.id };
+    // Update EmployeeJobAssignment payout status if business employee
+    if (isBusinessEmployee && employeeAssignment) {
+      await employeeAssignment.update({
+        payoutStatus: "paid",
+        payoutMethod: "business_owner",
+        businessOwnerPaidAmount: netAmount,
+      });
+    }
+
+    return {
+      cleanerId,
+      status: "success",
+      transferId: transfer.id,
+      isBusinessEmployee,
+      payoutRecipientId,
+    };
   } catch (error) {
     console.error(`[Completion] Multi-cleaner payout error for cleaner ${cleanerId}:`, error);
     return { cleanerId, status: "error", error: error.message };
+  }
+}
+
+/**
+ * Check if all cleaners in a multi-cleaner job have been approved
+ * If so, mark the parent appointment as completed
+ */
+async function checkAndUpdateParentAppointmentCompletion(appointmentId) {
+  try {
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: MultiCleanerJob, as: "multiCleanerJob" }],
+    });
+
+    if (!appointment || !appointment.isMultiCleanerJob) {
+      return false;
+    }
+
+    // Get all completion records for this appointment
+    const completions = await CleanerJobCompletion.findAll({
+      where: {
+        appointmentId,
+        status: { [require("sequelize").Op.notIn]: ["dropped_out", "no_show"] },
+      },
+    });
+
+    if (completions.length === 0) {
+      return false;
+    }
+
+    // Check if all active cleaners have been approved (approved or auto_approved)
+    const allApproved = completions.every(
+      (c) => c.completionStatus === "approved" || c.completionStatus === "auto_approved"
+    );
+
+    if (allApproved && !appointment.completed) {
+      // All cleaners are done - mark parent appointment as completed
+      await appointment.update({
+        completed: true,
+        completionStatus: "approved",
+        completionApprovedAt: new Date(),
+      });
+
+      console.log(`[Completion] All cleaners approved for multi-cleaner appointment ${appointmentId} - marked as completed`);
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error(`[Completion] Error checking parent appointment completion for ${appointmentId}:`, error);
+    return false;
   }
 }
 

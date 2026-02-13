@@ -175,13 +175,59 @@ function isInServiceArea(city, state, zipcode) {
 }
 
 /**
- * Helper function to get number of cleaners needed
- * All homes require exactly 1 cleaner regardless of size
- * @param {number} numBeds - Number of bedrooms (unused)
- * @param {number} numBaths - Number of bathrooms (unused)
- * @returns {number} Number of cleaners needed (always 1)
+ * Helper function to get number of cleaners needed based on home size and time constraints
+ * @param {number} numBeds - Number of bedrooms
+ * @param {number} numBaths - Number of bathrooms
+ * @param {string} timeWindow - Time window constraint (optional): "anytime", "10-3", "11-4", "12-2"
+ * @returns {number} Number of cleaners needed
  */
-function getCleanersNeeded(numBeds, numBaths) {
+function getCleanersNeeded(numBeds, numBaths, timeWindow = null) {
+  const beds = parseInt(numBeds) || 0;
+  const baths = parseInt(numBaths) || 0;
+
+  // Determine time constraint level
+  // Tight windows need more cleaners to finish on time
+  const isTightWindow = timeWindow === "12-2";
+  const isFlexibleWindow = !timeWindow || timeWindow === "anytime";
+
+  if (isFlexibleWindow) {
+    // Flexible timing - can handle larger homes with fewer cleaners
+    // Very large homes: 6+ beds OR 6+ baths = 3 cleaners
+    if (beds >= 6 || baths >= 6) {
+      return 3;
+    }
+    // Large homes: 4+ beds OR 4+ baths = 2 cleaners
+    if (beds >= 4 || baths >= 4) {
+      return 2;
+    }
+    // Standard homes: 1 cleaner
+    return 1;
+  }
+
+  if (isTightWindow) {
+    // Tight time constraint - need more help to finish on time
+    // Large homes: 4+ beds OR 3+ baths = 3 cleaners
+    if (beds >= 4 || baths >= 3) {
+      return 3;
+    }
+    // Medium homes: 3+ beds OR 2+ baths = 2 cleaners
+    if (beds >= 3 || baths >= 2) {
+      return 2;
+    }
+    // Small homes: 1 cleaner
+    return 1;
+  }
+
+  // Medium time windows ("10-3", "11-4") - standard thresholds
+  // Very large homes: 5+ beds OR 4+ baths = 3 cleaners
+  if (beds >= 5 || baths >= 4) {
+    return 3;
+  }
+  // Large homes: 4+ beds OR 3+ baths = 2 cleaners
+  if (beds >= 4 || baths >= 3) {
+    return 2;
+  }
+  // Standard homes: 1 cleaner
   return 1;
 }
 

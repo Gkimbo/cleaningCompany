@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -10,7 +11,9 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { API_BASE } from "../../services/config";
 import { usePricing } from "../../context/PricingContext";
+import FetchData from "../../services/fetchRequests/fetchData";
 import PaymentTimelineDisplay from "./PaymentTimelineDisplay";
+import PaymentDisputeModal from "./PaymentDisputeModal";
 import {
   colors,
   spacing,
@@ -21,8 +24,11 @@ import {
 
 const PayoutHistory = ({ state, dispatch }) => {
   const { pricing } = usePricing();
-  const cleanerSharePercent = 1 - (pricing?.platform?.feePercent || 0.1);
+  const regularFeePercent = pricing?.platform?.feePercent || 0.1;
+  const multiCleanerFeePercent = pricing?.platform?.multiCleanerPlatformFeePercent || 0.13;
+  const cleanerSharePercent = 1 - regularFeePercent;
   const [payouts, setPayouts] = useState([]);
+  const [confirmedMultiCleanerJobs, setConfirmedMultiCleanerJobs] = useState([]);
   const [totals, setTotals] = useState({
     totalPaidDollars: "0.00",
     pendingAmountDollars: "0.00",
@@ -32,48 +38,90 @@ const PayoutHistory = ({ state, dispatch }) => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+  const [selectedPayout, setSelectedPayout] = useState(null);
 
-  const calculateCleanerShare = (price, numCleaners = 1) => {
+  const calculateCleanerShare = (price, numCleaners = 1, isMultiCleanerJob = false) => {
     const gross = parseFloat(price) || 0;
     const perCleaner = gross / numCleaners;
-    return perCleaner * cleanerSharePercent;
+    const feePercent = isMultiCleanerJob ? multiCleanerFeePercent : regularFeePercent;
+    const sharePercent = 1 - feePercent;
+    return perCleaner * sharePercent;
   };
 
-  const calculatePotentialEarnings = () => {
+  const calculatePotentialEarnings = (multiCleanerJobs = []) => {
     const userId = String(state?.currentUser?.id);
     const appointments = state?.appointments || [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const upcomingAssigned = appointments.filter((appt) => {
+    // Get appointment IDs that are multi-cleaner jobs to avoid duplicates
+    const multiCleanerAppointmentIds = new Set(
+      multiCleanerJobs.map((job) => job.appointmentId)
+    );
+
+    // Solo appointments where cleaner is assigned (excluding multi-cleaner jobs)
+    const upcomingSoloAssigned = appointments.filter((appt) => {
       const appointmentDate = new Date(appt.date + "T00:00:00");
       return (
         appointmentDate > today &&
         !appt.completed &&
         appt.employeesAssigned &&
-        appt.employeesAssigned.includes(userId)
+        appt.employeesAssigned.includes(userId) &&
+        !multiCleanerAppointmentIds.has(appt.id)
       );
     });
 
-    const total = upcomingAssigned.reduce((sum, appt) => {
+    // Multi-cleaner jobs (already filtered to this cleaner's confirmed jobs)
+    const upcomingMultiCleaner = multiCleanerJobs.filter((job) => {
+      const jobDate = new Date(job.date + "T00:00:00");
+      return jobDate > today && !job.completed;
+    });
+
+    // Calculate solo earnings
+    const soloTotal = upcomingSoloAssigned.reduce((sum, appt) => {
       const numCleaners = appt.employeesAssigned?.length || 1;
-      return sum + calculateCleanerShare(appt.price, numCleaners);
+      return sum + calculateCleanerShare(appt.price, numCleaners, false);
+    }, 0);
+
+    // Calculate multi-cleaner earnings
+    const multiCleanerTotal = upcomingMultiCleaner.reduce((sum, job) => {
+      const numCleaners = job.totalCleanersRequired || 2;
+      return sum + calculateCleanerShare(job.price, numCleaners, true);
     }, 0);
 
     return {
-      amount: total.toFixed(2),
-      count: upcomingAssigned.length,
+      amount: (soloTotal + multiCleanerTotal).toFixed(2),
+      count: upcomingSoloAssigned.length + upcomingMultiCleaner.length,
     };
+  };
+
+  const fetchConfirmedMultiCleanerJobs = async () => {
+    if (!state?.currentUser?.token) return [];
+    try {
+      const response = await FetchData.getMyConfirmedMultiCleanerJobs(state.currentUser.token);
+      if (!response.error) {
+        return response.jobs || [];
+      }
+    } catch (err) {
+      console.error("Error fetching confirmed multi-cleaner jobs:", err);
+    }
+    return [];
   };
 
   const fetchPayouts = async () => {
     if (!state?.currentUser?.id) return;
     try {
-      const res = await fetch(
-        `${API_BASE}/stripe-connect/payouts/${state.currentUser.id}`
-      );
-      const data = await res.json();
-      if (res.ok) {
+      // Fetch both payouts and confirmed multi-cleaner jobs
+      const [payoutRes, multiCleanerJobs] = await Promise.all([
+        fetch(`${API_BASE}/stripe-connect/payouts/${state.currentUser.id}`),
+        fetchConfirmedMultiCleanerJobs(),
+      ]);
+
+      setConfirmedMultiCleanerJobs(multiCleanerJobs);
+
+      const data = await payoutRes.json();
+      if (payoutRes.ok) {
         const allPayouts = data.payouts || [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -98,7 +146,7 @@ const PayoutHistory = ({ state, dispatch }) => {
           (sum, p) => sum + (p.preferredBonusApplied ? (p.preferredBonusAmount || 0) : 0),
           0
         );
-        const potentialEarnings = calculatePotentialEarnings();
+        const potentialEarnings = calculatePotentialEarnings(multiCleanerJobs);
 
         setPayouts(pastPayouts);
         setTotals({
@@ -348,11 +396,53 @@ const PayoutHistory = ({ state, dispatch }) => {
                     </Text>
                   </View>
                 )}
+
+                {/* Report Issue Button */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.reportIssueButton,
+                    pressed && styles.reportIssueButtonPressed,
+                  ]}
+                  onPress={() => {
+                    setSelectedPayout(payout);
+                    setShowDisputeModal(true);
+                  }}
+                >
+                  <Feather name="flag" size={14} color={colors.text.tertiary} />
+                  <Text style={styles.reportIssueText}>Report an issue</Text>
+                </Pressable>
               </View>
             );
           })
         )}
+
+        {/* Missing Payment Link */}
+        <Pressable
+          style={styles.missingPaymentLink}
+          onPress={() => {
+            setSelectedPayout(null);
+            setShowDisputeModal(true);
+          }}
+        >
+          <Feather name="help-circle" size={16} color={colors.primary[600]} />
+          <Text style={styles.missingPaymentText}>Missing a payment?</Text>
+        </Pressable>
       </View>
+
+      {/* Payment Dispute Modal */}
+      <PaymentDisputeModal
+        visible={showDisputeModal}
+        onClose={() => {
+          setShowDisputeModal(false);
+          setSelectedPayout(null);
+        }}
+        onSuccess={() => {
+          onRefresh();
+        }}
+        payout={selectedPayout}
+        appointment={selectedPayout ? { id: selectedPayout.appointmentId, date: selectedPayout.appointmentDate } : null}
+        token={state?.currentUser?.token}
+      />
     </ScrollView>
   );
 };
@@ -734,6 +824,40 @@ const styles = StyleSheet.create({
   heldNoteText: {
     color: colors.primary[600],
     fontSize: typography.fontSize.xs,
+  },
+
+  // Report Issue Button
+  reportIssueButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+  },
+  reportIssueButtonPressed: {
+    opacity: 0.7,
+  },
+  reportIssueText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.xs,
+  },
+
+  // Missing Payment Link
+  missingPaymentLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    marginTop: spacing.md,
+  },
+  missingPaymentText: {
+    color: colors.primary[600],
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
 });
 

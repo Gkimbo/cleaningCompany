@@ -287,4 +287,63 @@ jobPhotosRouter.delete("/:photoId", authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * Get flow settings for an appointment
+ * Returns photo requirements and custom checklist if configured
+ * GET /api/v1/job-photos/:appointmentId/flow-settings
+ */
+jobPhotosRouter.get("/:appointmentId/flow-settings", authenticateToken, async (req, res) => {
+  const { appointmentId } = req.params;
+  const cleanerId = req.user.userId;
+
+  try {
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [
+        {
+          model: require("../../../models").UserHomes,
+          as: "home",
+          attributes: ["id", "preferredCleanerId"],
+        },
+      ],
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: "Appointment not found" });
+    }
+
+    // Verify cleaner is assigned
+    const cleanerIdStr = cleanerId.toString();
+    if (!appointment.employeesAssigned?.includes(cleanerIdStr)) {
+      return res.status(403).json({ error: "You are not assigned to this appointment" });
+    }
+
+    // Check if there's a job flow for this appointment
+    const AppointmentJobFlowService = require("../../../services/AppointmentJobFlowService");
+
+    // Try to get flow details - this service checks for assigned flows
+    const flowDetails = await AppointmentJobFlowService.getFlowDetailsForAppointment(appointmentId);
+
+    if (flowDetails) {
+      return res.json({
+        photoRequirement: flowDetails.photoRequirement || "required",
+        hasChecklist: flowDetails.hasChecklist || false,
+        checklist: flowDetails.checklist || null,
+        jobNotes: flowDetails.jobNotes || null,
+      });
+    }
+
+    // No custom flow, return defaults
+    const isBusinessOwner = appointment.home?.preferredCleanerId === cleanerId;
+    return res.json({
+      photoRequirement: isBusinessOwner ? "optional" : "required",
+      hasChecklist: false,
+      checklist: null,
+      jobNotes: null,
+    });
+  } catch (error) {
+    console.error("Error fetching flow settings:", error);
+    return res.status(500).json({ error: "Failed to fetch flow settings" });
+  }
+});
+
 module.exports = jobPhotosRouter;

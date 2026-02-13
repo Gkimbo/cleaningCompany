@@ -170,6 +170,29 @@ class BusinessEmployeeService {
   }
 
   /**
+   * Get job flow settings for an assignment
+   * @param {string} token - Auth token
+   * @param {number} assignmentId - Assignment ID
+   * @returns {Object} Flow settings including photoRequirement, checklist, jobNotes
+   */
+  static async getJobFlow(token, assignmentId) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/my-jobs/${assignmentId}/flow`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        return null;
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessEmployee] Error fetching job flow:", error);
+      return null;
+    }
+  }
+
+  /**
    * Start a job
    * @param {string} token - Auth token
    * @param {number} assignmentId - Assignment ID
@@ -257,6 +280,30 @@ class BusinessEmployeeService {
         period: {},
         summary: { totalEarnings: 0, jobCount: 0, paidCount: 0, pendingCount: 0, pendingAmount: 0 },
         formatted: { totalEarnings: "$0.00", pendingAmount: "$0.00" },
+      };
+    }
+  }
+
+  /**
+   * Get pending bi-weekly payout earnings for the authenticated employee
+   * @param {string} token - Auth token
+   * @returns {Object} { pendingAmount, nextPayoutDate, payouts, formatted }
+   */
+  static async getPendingEarnings(token) {
+    try {
+      const response = await fetch(`${API_BASE}/business-employee/pending-earnings`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error("[BusinessEmployee] Error fetching pending earnings:", error);
+      return {
+        pendingAmount: 0,
+        nextPayoutDate: null,
+        payouts: [],
+        formatted: { pendingAmount: "$0.00" },
       };
     }
   }

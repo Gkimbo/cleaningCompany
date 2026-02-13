@@ -15,13 +15,14 @@ import { PricingContext } from "../../../context/PricingContext";
 
 const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
   const { pricing } = useContext(PricingContext);
+  // For team jobs, use inline data from appointment; otherwise use initialHome
   const [home, setHome] = useState(initialHome || {
-    address: "",
-    city: "",
-    numBaths: "",
-    numBeds: "",
+    address: appointment.address || "",
+    city: appointment.city || "",
+    numBaths: appointment.numBaths || "",
+    numBeds: appointment.numBeds || "",
     specialNotes: "",
-    state: "",
+    state: appointment.state || "",
     zipcode: "",
   });
 
@@ -32,9 +33,9 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
 
   // Calculate estimated cleaning time based on home size and number of cleaners
   const calculateCleaningTime = () => {
-    const beds = parseFloat(home.numBeds) || 2;
-    const baths = parseFloat(home.numBaths) || 1;
-    const numCleaners = multiCleanerJob?.totalCleanersRequired || 1;
+    const beds = parseFloat(home.numBeds) || parseFloat(appointment.numBeds) || 2;
+    const baths = parseFloat(home.numBaths) || parseFloat(appointment.numBaths) || 1;
+    const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || 1;
 
     // Base time: 1 hour for 2 bed 1 bath
     const baseMinutes = 60;
@@ -63,19 +64,20 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
     }
   };
 
-  // Check if appointment is within 2 days
-  const isWithinTwoDays = () => {
-    const appointmentDate = new Date(appointment.date + "T00:00:00");
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffTime = appointmentDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 2;
+  // Check if appointment is within 48 hours
+  const isWithin48Hours = () => {
+    const now = new Date();
+    // Assume 10am start time for the appointment
+    const appointmentDate = new Date(appointment.date + "T10:00:00");
+    const diffTime = appointmentDate.getTime() - now.getTime();
+    const diffHours = diffTime / (1000 * 60 * 60);
+    return diffHours <= 48 && diffHours >= 0;
   };
 
-  const showFullAddress = isWithinTwoDays();
+  const showFullAddress = isWithin48Hours();
 
-  const isMultiCleaner = appointment.isMultiCleanerJob;
+  // Handle both solo multi-cleaner jobs and team jobs from confirmed jobs endpoint
+  const isMultiCleaner = appointment.isMultiCleanerJob || appointment.jobType === "team";
   const multiCleanerJob = appointment.multiCleanerJob;
 
   // Use multi-cleaner fee for multi-cleaner jobs, regular fee otherwise
@@ -86,19 +88,21 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
 
   const totalPrice = Number(appointment.price);
   // For multi-cleaner jobs, calculate payout based on number of cleaners
-  const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.employeesAssigned?.length || 1;
+  // Check both multiCleanerJob and direct appointment properties for team jobs
+  const numCleaners = multiCleanerJob?.totalCleanersRequired || appointment.totalCleanersRequired || appointment.employeesAssigned?.length || 1;
   const payout = (totalPrice / numCleaners) * cleanerSharePercent;
 
   useEffect(() => {
-    // Fetch home if not provided or incomplete
-    if (!initialHome || !initialHome.address) {
+    // Fetch home if not provided or incomplete, and we don't have inline data
+    const hasInlineData = appointment.city && appointment.state;
+    if (!initialHome && !hasInlineData && appointment.homeId) {
       FetchData.getHome(appointment.homeId).then((response) => {
         if (response.home) {
           setHome(response.home);
         }
       });
     }
-  }, [appointment.homeId, initialHome]);
+  }, [appointment.homeId, appointment.city, appointment.state, initialHome]);
 
   const getFullAddress = () => {
     return `${home.address}, ${home.city}, ${home.state} ${home.zipcode}`;
@@ -185,17 +189,17 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
       </View>
 
       {/* Multi-Cleaner Status Banner */}
-      {isMultiCleaner && multiCleanerJob && (
+      {isMultiCleaner && (multiCleanerJob || appointment.totalCleanersRequired) && (
         <View style={styles.multiCleanerBanner}>
           <View style={styles.multiCleanerStats}>
             <View style={styles.multiCleanerStat}>
               <Icon name="users" size={14} color={colors.primary[600]} />
               <Text style={styles.multiCleanerStatValue}>
-                {multiCleanerJob.cleanersConfirmed}/{multiCleanerJob.totalCleanersRequired}
+                {multiCleanerJob?.cleanersConfirmed ?? appointment.cleanersConfirmed}/{multiCleanerJob?.totalCleanersRequired ?? appointment.totalCleanersRequired}
               </Text>
               <Text style={styles.multiCleanerStatLabel}>cleaners</Text>
             </View>
-            {multiCleanerJob.cleanersConfirmed >= multiCleanerJob.totalCleanersRequired ? (
+            {(multiCleanerJob?.cleanersConfirmed ?? appointment.cleanersConfirmed) >= (multiCleanerJob?.totalCleanersRequired ?? appointment.totalCleanersRequired) ? (
               <View style={[styles.multiCleanerStatusBadge, styles.multiCleanerStatusFilled]}>
                 <Icon name="check-circle" size={12} color={colors.success[600]} />
                 <Text style={styles.multiCleanerStatusFilledText}>Team Ready</Text>
@@ -204,7 +208,7 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
               <View style={[styles.multiCleanerStatusBadge, styles.multiCleanerStatusFilling]}>
                 <Icon name="clock-o" size={12} color={colors.warning[600]} />
                 <Text style={styles.multiCleanerStatusFillingText}>
-                  Waiting for {multiCleanerJob.totalCleanersRequired - multiCleanerJob.cleanersConfirmed} more
+                  Waiting for {(multiCleanerJob?.totalCleanersRequired ?? appointment.totalCleanersRequired) - (multiCleanerJob?.cleanersConfirmed ?? appointment.cleanersConfirmed)} more
                 </Text>
               </View>
             )}
@@ -254,11 +258,11 @@ const NextAppointmentPreview = ({ appointment, home: initialHome }) => {
       <View style={styles.detailsGrid}>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Beds</Text>
-          <Text style={styles.detailValue}>{home.numBeds || "?"}</Text>
+          <Text style={styles.detailValue}>{home.numBeds || appointment.numBeds || "?"}</Text>
         </View>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Baths</Text>
-          <Text style={styles.detailValue}>{home.numBaths || "?"}</Text>
+          <Text style={styles.detailValue}>{home.numBaths || appointment.numBaths || "?"}</Text>
         </View>
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Payout</Text>

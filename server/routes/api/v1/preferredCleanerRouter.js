@@ -52,7 +52,16 @@ const verifyHomeowner = async (req, res, next) => {
     const decoded = jwt.verify(token, secretKey);
     const user = await User.findByPk(decoded.userId);
 
-    if (!user || user.type !== "homeowner") {
+    if (!user) {
+      return res.status(403).json({ error: "User not found" });
+    }
+
+    // Check if user is a homeowner by type OR by having homes
+    // This handles cases where type is null but user owns homes (like demo accounts)
+    const { UserHomes } = models;
+    const hasHomes = await UserHomes.count({ where: { userId: user.id } });
+
+    if (user.type === "cleaner" || (!hasHomes && user.type !== "homeowner" && user.type !== "client")) {
       return res.status(403).json({ error: "Homeowner access required" });
     }
 
@@ -358,12 +367,13 @@ preferredCleanerRouter.delete("/homes/:homeId/cleaners/:cleanerId", verifyHomeow
 /**
  * PATCH /homes/:homeId/preferred-settings
  * Toggle usePreferredCleaners for a home
+ * Requires at least 5 preferred cleaners to turn ON
  */
 preferredCleanerRouter.patch("/homes/:homeId/preferred-settings", verifyHomeowner, async (req, res) => {
   try {
     const { homeId } = req.params;
     const { usePreferredCleaners } = req.body;
-    const { UserHomes } = models;
+    const { UserHomes, HomePreferredCleaner } = models;
 
     if (typeof usePreferredCleaners !== "boolean") {
       return res.status(400).json({ error: "usePreferredCleaners must be a boolean" });
@@ -376,6 +386,21 @@ preferredCleanerRouter.patch("/homes/:homeId/preferred-settings", verifyHomeowne
 
     if (!home) {
       return res.status(404).json({ error: "Home not found" });
+    }
+
+    // If trying to turn ON, require at least 5 preferred cleaners
+    if (usePreferredCleaners === true) {
+      const preferredCount = await HomePreferredCleaner.count({
+        where: { homeId },
+      });
+
+      if (preferredCount < 5) {
+        return res.status(400).json({
+          error: `You need at least 5 preferred cleaners to enable this feature. You currently have ${preferredCount}.`,
+          preferredCount,
+          required: 5,
+        });
+      }
     }
 
     await home.update({ usePreferredCleaners });

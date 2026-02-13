@@ -11,6 +11,23 @@ jest.mock("../../services/MultiCleanerService");
 jest.mock("../../services/RoomAssignmentService");
 jest.mock("../../services/MultiCleanerPricingService");
 jest.mock("../../services/NotificationService");
+jest.mock("../../services/CleanerApprovalService", () => ({
+  getPendingJobIdsForCleaner: jest.fn().mockResolvedValue([]),
+  requestToJoin: jest.fn().mockResolvedValue({
+    status: "approved",
+    autoApproved: true,
+    completionId: 1,
+    assignedRooms: [{ id: 1 }, { id: 2 }],
+  }),
+  approveRequest: jest.fn(),
+  rejectRequest: jest.fn(),
+}));
+jest.mock("../../services/EncryptionService", () => ({
+  encryptAddress: jest.fn((addr) => addr),
+  decryptAddress: jest.fn((addr) => addr),
+  encrypt: jest.fn((val) => val),
+  decrypt: jest.fn((val) => val),
+}));
 jest.mock("../../serializers/MultiCleanerJobSerializer", () => ({
   serializeOne: jest.fn((job) => job),
   serializeMany: jest.fn((jobs) => jobs),
@@ -57,6 +74,13 @@ jest.mock("../../models", () => ({
     destroy: jest.fn(),
   },
   Payout: {},
+  Op: {
+    gt: Symbol("gt"),
+    lt: Symbol("lt"),
+    in: Symbol("in"),
+    notIn: Symbol("notIn"),
+    ne: Symbol("ne"),
+  },
 }));
 
 const {
@@ -74,6 +98,7 @@ const MultiCleanerService = require("../../services/MultiCleanerService");
 const RoomAssignmentService = require("../../services/RoomAssignmentService");
 const MultiCleanerPricingService = require("../../services/MultiCleanerPricingService");
 const NotificationService = require("../../services/NotificationService");
+const CleanerApprovalService = require("../../services/CleanerApprovalService");
 const MultiCleanerJobSerializer = require("../../serializers/MultiCleanerJobSerializer");
 
 describe("Multi-Cleaner Router", () => {
@@ -971,6 +996,81 @@ describe("Multi-Cleaner Router", () => {
   });
 
   // ============================================
+  // POST /:appointmentId/decline-solo Tests
+  // ============================================
+  describe("POST /:appointmentId/decline-solo", () => {
+    it("should decline solo completion and notify homeowner", async () => {
+      const token = jwt.sign({ userId: 100 }, secretKey);
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        multiCleanerJob: { id: 10 },
+      });
+
+      CleanerJobCompletion.findOne.mockResolvedValue({
+        id: 1,
+        cleanerId: 100,
+        status: "assigned",
+      });
+
+      MultiCleanerService.handleSoloDecline.mockResolvedValue({
+        success: true,
+        message: "Solo offer declined. Homeowner has been notified.",
+        appointmentId: 100,
+        homeownerNotified: true,
+      });
+
+      const res = await request(app)
+        .post("/api/v1/multi-cleaner/100/decline-solo")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ reason: "I have another job scheduled" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.homeownerNotified).toBe(true);
+      expect(MultiCleanerService.handleSoloDecline).toHaveBeenCalledWith(
+        10,
+        100,
+        "I have another job scheduled"
+      );
+    });
+
+    it("should return 403 if cleaner is not assigned", async () => {
+      const token = jwt.sign({ userId: 100 }, secretKey);
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        multiCleanerJob: { id: 10 },
+      });
+
+      CleanerJobCompletion.findOne.mockResolvedValue(null);
+
+      const res = await request(app)
+        .post("/api/v1/multi-cleaner/100/decline-solo")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("You are not assigned to this job");
+    });
+
+    it("should return 404 if multi-cleaner job not found", async () => {
+      const token = jwt.sign({ userId: 100 }, secretKey);
+
+      UserAppointments.findByPk.mockResolvedValue({
+        id: 100,
+        multiCleanerJob: null,
+      });
+
+      const res = await request(app)
+        .post("/api/v1/multi-cleaner/100/decline-solo")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe("Multi-cleaner job not found");
+    });
+  });
+
+  // ============================================
   // GET /:appointmentId/cleaners Tests
   // ============================================
   describe("GET /:appointmentId/cleaners", () => {
@@ -1006,13 +1106,87 @@ describe("Multi-Cleaner Router", () => {
   // POST /:appointmentId/homeowner-response Tests
   // ============================================
   describe("POST /:appointmentId/homeowner-response", () => {
-    it("should handle proceed_with_one response", async () => {
+    it("should handle proceed_with_one response with solo cleaner notification", async () => {
       const token = jwt.sign({ userId: 200 }, secretKey);
 
       const mockAppointment = {
         id: 100,
         userId: 200,
         multiCleanerJob: { id: 10 },
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+      // Mock remaining cleaner after dropout
+      CleanerJobCompletion.findAll.mockResolvedValue([
+        {
+          id: 1,
+          cleanerId: 300,
+          status: "assigned",
+          cleaner: { id: 300, firstName: "Jane" },
+        },
+      ]);
+
+      // Mock solo offer response
+      MultiCleanerService.offerSoloCompletion.mockResolvedValue({
+        fullEarnings: 15000,
+        appointment: mockAppointment,
+      });
+
+      const res = await request(app)
+        .post("/api/v1/multi-cleaner/100/homeowner-response")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ response: "proceed_with_one" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.soloOfferSent).toBe(true);
+      expect(res.body.remainingCleanerId).toBe(300);
+      expect(res.body.fullEarnings).toBe(15000);
+      expect(mockAppointment.update).toHaveBeenCalledWith({
+        homeownerSoloWarningAcknowledged: true,
+      });
+      expect(RoomAssignmentService.rebalanceAfterDropout).toHaveBeenCalledWith(10);
+      expect(MultiCleanerService.offerSoloCompletion).toHaveBeenCalledWith(10, 300);
+    });
+
+    it("should handle proceed_with_one with multiple remaining cleaners", async () => {
+      const token = jwt.sign({ userId: 200 }, secretKey);
+
+      const mockAppointment = {
+        id: 100,
+        userId: 200,
+        multiCleanerJob: { id: 10 },
+        update: jest.fn().mockResolvedValue(true),
+      };
+
+      UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+      // Mock multiple remaining cleaners
+      CleanerJobCompletion.findAll.mockResolvedValue([
+        { id: 1, cleanerId: 300, status: "assigned", cleaner: { id: 300 } },
+        { id: 2, cleanerId: 301, status: "assigned", cleaner: { id: 301 } },
+      ]);
+
+      const res = await request(app)
+        .post("/api/v1/multi-cleaner/100/homeowner-response")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ response: "proceed_with_one" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.cleanersNotified).toBe(2);
+      expect(NotificationService.createNotification).toHaveBeenCalledTimes(2);
+    });
+
+    it("should handle proceed_with_one without multi-cleaner job", async () => {
+      const token = jwt.sign({ userId: 200 }, secretKey);
+
+      const mockAppointment = {
+        id: 100,
+        userId: 200,
+        multiCleanerJob: null,
         update: jest.fn().mockResolvedValue(true),
       };
 
@@ -1608,6 +1782,140 @@ describe("Multi-Cleaner Router", () => {
 
         const res = await request(app)
           .post("/api/v1/multi-cleaner/100/accept-solo")
+          .set("Authorization", `Bearer ${token}`);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error).toBe("You are not assigned to this job");
+      });
+    });
+
+    describe("Extra Work Flow (3-cleaner dropout scenarios)", () => {
+      it("should accept extra work after co-cleaner dropout", async () => {
+        const token = jwt.sign({ userId: 100 }, secretKey);
+
+        UserAppointments.findByPk.mockResolvedValue({
+          id: 100,
+          multiCleanerJob: { id: 10 },
+        });
+
+        CleanerJobCompletion.findOne.mockResolvedValue({
+          id: 1,
+          cleanerId: 100,
+          status: "assigned",
+        });
+
+        MultiCleanerService.handleAcceptExtraWork.mockResolvedValue({
+          success: true,
+          message: "Extra work accepted! Your earnings have been updated.",
+          newEarnings: 9000,
+          extraEarnings: 3000,
+        });
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/accept-extra-work")
+          .set("Authorization", `Bearer ${token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.newEarnings).toBe(9000);
+        expect(res.body.extraEarnings).toBe(3000);
+      });
+
+      it("should decline extra work after co-cleaner dropout", async () => {
+        const token = jwt.sign({ userId: 100 }, secretKey);
+
+        UserAppointments.findByPk.mockResolvedValue({
+          id: 100,
+          multiCleanerJob: { id: 10 },
+        });
+
+        CleanerJobCompletion.findOne.mockResolvedValue({
+          id: 1,
+          cleanerId: 100,
+          status: "assigned",
+        });
+
+        MultiCleanerService.handleDeclineExtraWork.mockResolvedValue({
+          success: true,
+          message: "Extra work declined. You've been removed from the job.",
+          remainingCleaners: 1,
+        });
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/decline-extra-work")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ reason: "Too many rooms for me" });
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.remainingCleaners).toBe(1);
+        expect(MultiCleanerService.handleDeclineExtraWork).toHaveBeenCalledWith(
+          10,
+          100,
+          "Too many rooms for me"
+        );
+      });
+
+      it("should offer extra work when proceed_with_one with 2 remaining cleaners from 3", async () => {
+        const token = jwt.sign({ userId: 200 }, secretKey);
+
+        const mockMultiCleanerJob = {
+          id: 10,
+          totalCleanersRequired: 3,
+          update: jest.fn().mockResolvedValue(true),
+        };
+
+        const mockAppointment = {
+          id: 100,
+          userId: 200,
+          multiCleanerJob: mockMultiCleanerJob,
+          update: jest.fn().mockResolvedValue(true),
+        };
+
+        UserAppointments.findByPk.mockResolvedValue(mockAppointment);
+
+        // 2 remaining cleaners (1 dropped from 3)
+        CleanerJobCompletion.findAll.mockResolvedValue([
+          { id: 1, cleanerId: 300, status: "assigned", cleaner: { id: 300 } },
+          { id: 2, cleanerId: 301, status: "assigned", cleaner: { id: 301 } },
+        ]);
+
+        MultiCleanerService.offerExtraWorkToRemainingCleaners.mockResolvedValue({
+          success: true,
+          offersSent: [
+            { cleanerId: 300, roomCount: 5, earnings: 9000, extraEarnings: 3000 },
+            { cleanerId: 301, roomCount: 5, earnings: 9000, extraEarnings: 3000 },
+          ],
+          rebalanced: true,
+          remainingCleaners: 2,
+        });
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/homeowner-response")
+          .set("Authorization", `Bearer ${token}`)
+          .send({ response: "proceed_with_one" });
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.extraWorkOffersSent).toBe(true);
+        expect(res.body.remainingCleaners).toBe(2);
+        expect(res.body.originalRequired).toBe(3);
+        expect(res.body.shortfall).toBe(1);
+        expect(MultiCleanerService.offerExtraWorkToRemainingCleaners).toHaveBeenCalledWith(10);
+      });
+
+      it("should return 403 for accept-extra-work if not assigned", async () => {
+        const token = jwt.sign({ userId: 100 }, secretKey);
+
+        UserAppointments.findByPk.mockResolvedValue({
+          id: 100,
+          multiCleanerJob: { id: 10 },
+        });
+
+        CleanerJobCompletion.findOne.mockResolvedValue(null);
+
+        const res = await request(app)
+          .post("/api/v1/multi-cleaner/100/accept-extra-work")
           .set("Authorization", `Bearer ${token}`);
 
         expect(res.status).toBe(403);
