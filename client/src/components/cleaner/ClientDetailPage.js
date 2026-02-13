@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -23,6 +24,165 @@ import {
 import CleanerClientService from "../../services/fetchRequests/CleanerClientService";
 import EditClientHomeModal from "./EditClientHomeModal";
 import BookForClientModal from "./BookForClientModal";
+import SetupRecurringModal from "./SetupRecurringModal";
+
+// Home picker modal component
+const HomePickerModal = ({ visible, onClose, homes, onSelectHome, actionType }) => {
+  if (!visible) return null;
+
+  const actionLabel = actionType === "recurring" ? "Set Up Recurring" : "Book";
+  const actionIcon = actionType === "recurring" ? "repeat" : "calendar";
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <Pressable style={homePickerStyles.overlay} onPress={onClose}>
+        <View style={homePickerStyles.container}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={homePickerStyles.content}>
+              <View style={homePickerStyles.header}>
+                <View style={homePickerStyles.headerIcon}>
+                  <Feather name={actionIcon} size={20} color={colors.primary[600]} />
+                </View>
+                <Text style={homePickerStyles.title}>Select a Home</Text>
+                <Pressable style={homePickerStyles.closeButton} onPress={onClose}>
+                  <Feather name="x" size={20} color={colors.neutral[500]} />
+                </Pressable>
+              </View>
+              <Text style={homePickerStyles.subtitle}>
+                Which home would you like to {actionType === "recurring" ? "set up recurring for" : "book"}?
+              </Text>
+              <View style={homePickerStyles.homesList}>
+                {homes.map((home, index) => (
+                  <Pressable
+                    key={home.id}
+                    style={({ pressed }) => [
+                      homePickerStyles.homeOption,
+                      pressed && homePickerStyles.homeOptionPressed,
+                    ]}
+                    onPress={() => onSelectHome(home)}
+                  >
+                    <View style={homePickerStyles.homeIconContainer}>
+                      <Feather name="home" size={18} color={colors.primary[600]} />
+                    </View>
+                    <View style={homePickerStyles.homeInfo}>
+                      <Text style={homePickerStyles.homeName}>
+                        Home {index + 1}{home.nickName ? `: ${home.nickName}` : ""}
+                      </Text>
+                      <Text style={homePickerStyles.homeAddress} numberOfLines={1}>
+                        {home.address ? `${home.address}, ${home.city}` : "No address"}
+                      </Text>
+                      <Text style={homePickerStyles.homeDetails}>
+                        {home.numBeds || 1} bed • {home.numBaths || 1} bath
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+};
+
+const homePickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  container: {
+    width: "100%",
+    maxWidth: 400,
+  },
+  content: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    ...shadows.lg,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
+  },
+  headerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  title: {
+    flex: 1,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[900],
+  },
+  closeButton: {
+    padding: spacing.xs,
+  },
+  subtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  homesList: {
+    padding: spacing.md,
+  },
+  homeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[50],
+    marginBottom: spacing.sm,
+  },
+  homeOptionPressed: {
+    backgroundColor: colors.primary[50],
+  },
+  homeIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary[100],
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  homeInfo: {
+    flex: 1,
+  },
+  homeName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.neutral[900],
+    marginBottom: 2,
+  },
+  homeAddress: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
+    marginBottom: 2,
+  },
+  homeDetails: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[500],
+  },
+});
 
 // Format time constraint for display: "10-3" → "10am - 3pm"
 const formatTimeConstraint = (timeToBeCompleted) => {
@@ -43,30 +203,37 @@ const StatusBadge = ({ status }) => {
   const statusConfig = {
     active: {
       label: "Active",
-      backgroundColor: colors.success[100],
+      backgroundColor: colors.success[50],
       textColor: colors.success[700],
+      borderColor: colors.success[200],
     },
     pending_invite: {
-      label: "Awaiting Response",
-      backgroundColor: colors.warning[100],
+      label: "Pending",
+      backgroundColor: colors.warning[50],
       textColor: colors.warning[700],
+      borderColor: colors.warning[200],
     },
     inactive: {
       label: "Inactive",
-      backgroundColor: colors.neutral[200],
-      textColor: colors.neutral[600],
+      backgroundColor: colors.neutral[100],
+      textColor: colors.neutral[500],
+      borderColor: colors.neutral[200],
     },
     cancelled: {
       label: "Cancelled",
-      backgroundColor: colors.error[100],
+      backgroundColor: colors.error[50],
       textColor: colors.error[700],
+      borderColor: colors.error[200],
     },
   };
 
   const config = statusConfig[status] || statusConfig.inactive;
 
   return (
-    <View style={[styles.statusBadge, { backgroundColor: config.backgroundColor }]}>
+    <View style={[
+      styles.statusBadge,
+      { backgroundColor: config.backgroundColor, borderColor: config.borderColor }
+    ]}>
       <Text style={[styles.statusBadgeText, { color: config.textColor }]}>
         {config.label}
       </Text>
@@ -74,46 +241,224 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// Appointment card component
-const AppointmentCard = ({ appointment }) => {
+// Appointment card component with expandable details
+const AppointmentCard = ({ appointment, homes }) => {
+  const [expanded, setExpanded] = useState(false);
+
   const date = new Date(appointment.date);
   const formattedDate = date.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
+  });
+  const formattedFullDate = date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
     year: "numeric",
   });
 
-  const getStatusIcon = () => {
+  const getStatusConfig = () => {
     switch (appointment.status) {
       case "completed":
-        return { icon: "check-circle", color: colors.success[600] };
+        return { icon: "check-circle", color: colors.success[600], bg: colors.success[50], label: "Completed" };
       case "cancelled":
-        return { icon: "x-circle", color: colors.error[600] };
+        return { icon: "x-circle", color: colors.error[600], bg: colors.error[50], label: "Cancelled" };
       case "pending":
+        return { icon: "clock", color: colors.warning[600], bg: colors.warning[50], label: "Pending" };
       case "assigned":
-        return { icon: "clock", color: colors.primary[600] };
+        return { icon: "user-check", color: colors.primary[600], bg: colors.primary[50], label: "Assigned" };
       default:
-        return { icon: "circle", color: colors.neutral[400] };
+        return { icon: "circle", color: colors.neutral[400], bg: colors.neutral[100], label: "Unknown" };
     }
   };
 
-  const statusIcon = getStatusIcon();
+  // Get home label (nickname or "Home 1", "Home 2", etc.)
+  const getHomeLabel = () => {
+    if (!appointment.home) return null;
+    const homeIndex = homes.findIndex(h => h.id === appointment.home.id);
+    if (appointment.home.nickName) {
+      return appointment.home.nickName;
+    }
+    return homeIndex >= 0 ? `Home ${homeIndex + 1}` : "Home";
+  };
+
+  const statusConfig = getStatusConfig();
+  const homeLabel = getHomeLabel();
+  const home = appointment.home;
 
   return (
-    <View style={styles.appointmentCard}>
-      <View style={styles.appointmentCardLeft}>
-        <Text style={styles.appointmentDate}>{formattedDate}</Text>
-        <Text style={styles.appointmentDetails}>
-          {formatTimeConstraint(appointment.timeToBeCompleted)}
-          {appointment.home?.numBeds && ` • ${appointment.home.numBeds}bd/${appointment.home?.numBaths || 1}ba`}
-        </Text>
+    <Pressable
+      style={({ pressed }) => [
+        styles.appointmentCard,
+        expanded && styles.appointmentCardExpanded,
+        pressed && !expanded && styles.appointmentCardPressed,
+      ]}
+      onPress={() => setExpanded(!expanded)}
+    >
+      {/* Header Row - Always Visible */}
+      <View style={styles.appointmentHeader}>
+        <View style={styles.appointmentCardLeft}>
+          <View style={styles.appointmentDateRow}>
+            <Text style={styles.appointmentDate}>{formattedDate}</Text>
+            {homeLabel && (
+              <View style={styles.appointmentHomeTag}>
+                <Feather name="home" size={10} color={colors.primary[600]} />
+                <Text style={styles.appointmentHomeTagText}>{homeLabel}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.appointmentDetails}>
+            {formatTimeConstraint(appointment.timeToBeCompleted)}
+            {home?.numBeds && ` • ${home.numBeds}bd/${home?.numBaths || 1}ba`}
+          </Text>
+        </View>
+        <View style={styles.appointmentCardRight}>
+          <Text style={styles.appointmentPrice}>${appointment.price || 0}</Text>
+          <Feather name={statusConfig.icon} size={18} color={statusConfig.color} />
+          <Feather
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={colors.neutral[400]}
+          />
+        </View>
       </View>
-      <View style={styles.appointmentCardRight}>
-        <Text style={styles.appointmentPrice}>${appointment.price || 0}</Text>
-        <Feather name={statusIcon.icon} size={18} color={statusIcon.color} />
-      </View>
-    </View>
+
+      {/* Expanded Details */}
+      {expanded && (
+        <View style={styles.appointmentExpanded}>
+          {/* Status Badge */}
+          <View style={styles.appointmentStatusRow}>
+            <View style={[styles.appointmentStatusBadge, { backgroundColor: statusConfig.bg }]}>
+              <Feather name={statusConfig.icon} size={12} color={statusConfig.color} />
+              <Text style={[styles.appointmentStatusText, { color: statusConfig.color }]}>
+                {statusConfig.label}
+              </Text>
+            </View>
+            <Text style={styles.appointmentFullDate}>{formattedFullDate}</Text>
+          </View>
+
+          {/* Details Grid */}
+          <View style={styles.appointmentDetailsGrid}>
+            {/* Address */}
+            {home?.address && (
+              <View style={styles.appointmentDetailItem}>
+                <View style={styles.appointmentDetailIcon}>
+                  <Feather name="map-pin" size={14} color={colors.neutral[500]} />
+                </View>
+                <View style={styles.appointmentDetailContent}>
+                  <Text style={styles.appointmentDetailLabel}>Address</Text>
+                  <Text style={styles.appointmentDetailValue}>{home.address}</Text>
+                  {home.city && (
+                    <Text style={styles.appointmentDetailSubvalue}>
+                      {[home.city, home.state, home.zipcode].filter(Boolean).join(", ")}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Time Window */}
+            <View style={styles.appointmentDetailItem}>
+              <View style={styles.appointmentDetailIcon}>
+                <Feather name="clock" size={14} color={colors.neutral[500]} />
+              </View>
+              <View style={styles.appointmentDetailContent}>
+                <Text style={styles.appointmentDetailLabel}>Time Window</Text>
+                <Text style={styles.appointmentDetailValue}>
+                  {formatTimeConstraint(appointment.timeToBeCompleted)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Property Size */}
+            {home && (
+              <View style={styles.appointmentDetailItem}>
+                <View style={styles.appointmentDetailIcon}>
+                  <Feather name="home" size={14} color={colors.neutral[500]} />
+                </View>
+                <View style={styles.appointmentDetailContent}>
+                  <Text style={styles.appointmentDetailLabel}>Property</Text>
+                  <Text style={styles.appointmentDetailValue}>
+                    {home.numBeds || 1} bed, {home.numBaths || 1} bath
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Cleaners */}
+            <View style={styles.appointmentDetailItem}>
+              <View style={styles.appointmentDetailIcon}>
+                <Feather name="users" size={14} color={colors.neutral[500]} />
+              </View>
+              <View style={styles.appointmentDetailContent}>
+                <Text style={styles.appointmentDetailLabel}>Cleaners</Text>
+                <Text style={styles.appointmentDetailValue}>
+                  {home?.cleanersNeeded || 1} cleaner{(home?.cleanersNeeded || 1) > 1 ? "s" : ""} needed
+                </Text>
+              </View>
+            </View>
+
+            {/* Price Breakdown */}
+            <View style={styles.appointmentDetailItem}>
+              <View style={styles.appointmentDetailIcon}>
+                <Feather name="dollar-sign" size={14} color={colors.neutral[500]} />
+              </View>
+              <View style={styles.appointmentDetailContent}>
+                <Text style={styles.appointmentDetailLabel}>Price</Text>
+                <Text style={[styles.appointmentDetailValue, styles.appointmentDetailPrice]}>
+                  ${appointment.price || 0}
+                </Text>
+              </View>
+            </View>
+
+            {/* Linens */}
+            {home && (
+              <View style={styles.appointmentDetailItem}>
+                <View style={styles.appointmentDetailIcon}>
+                  <Feather name="box" size={14} color={colors.neutral[500]} />
+                </View>
+                <View style={styles.appointmentDetailContent}>
+                  <Text style={styles.appointmentDetailLabel}>Linens</Text>
+                  <View style={styles.appointmentLinensRow}>
+                    <View style={[
+                      styles.appointmentLinenChip,
+                      home.sheetsProvided && styles.appointmentLinenChipActive,
+                    ]}>
+                      <Text style={[
+                        styles.appointmentLinenChipText,
+                        home.sheetsProvided && styles.appointmentLinenChipTextActive,
+                      ]}>
+                        {home.sheetsProvided ? "✓" : "✗"} Sheets
+                      </Text>
+                    </View>
+                    <View style={[
+                      styles.appointmentLinenChip,
+                      home.towelsProvided && styles.appointmentLinenChipActive,
+                    ]}>
+                      <Text style={[
+                        styles.appointmentLinenChipText,
+                        home.towelsProvided && styles.appointmentLinenChipTextActive,
+                      ]}>
+                        {home.towelsProvided ? "✓" : "✗"} Towels
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Special Notes */}
+          {home?.specialNotes && (
+            <View style={styles.appointmentNotes}>
+              <Text style={styles.appointmentNotesLabel}>Notes</Text>
+              <Text style={styles.appointmentNotesText}>{home.specialNotes}</Text>
+            </View>
+          )}
+        </View>
+      )}
+    </Pressable>
   );
 };
 
@@ -144,9 +489,11 @@ const ClientDetailPage = ({ state, dispatch }) => {
   const [savingNotes, setSavingNotes] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
+  const [showHomePicker, setShowHomePicker] = useState(false);
+  const [homePickerAction, setHomePickerAction] = useState(null); // "book" or "recurring"
   const [selectedHomeForBooking, setSelectedHomeForBooking] = useState(null);
-  const [platformPriceData, setPlatformPriceData] = useState(null);
-  const [editingPrice, setEditingPrice] = useState(false);
+  const [editingPriceHomeId, setEditingPriceHomeId] = useState(null);
   const [priceInput, setPriceInput] = useState("");
   const [savingPrice, setSavingPrice] = useState(false);
 
@@ -187,27 +534,6 @@ const ClientDetailPage = ({ state, dispatch }) => {
     fetchClientData();
   }, [fetchClientData]);
 
-  // Fetch platform price when client data loads
-  useEffect(() => {
-    const fetchPlatformPrice = async () => {
-      if (!clientData?.cleanerClient?.id || !state?.currentUser?.token) return;
-
-      try {
-        const data = await CleanerClientService.getPlatformPrice(
-          state.currentUser.token,
-          clientData.cleanerClient.id
-        );
-        if (!data.error) {
-          setPlatformPriceData(data);
-        }
-      } catch (error) {
-        console.error("Error fetching platform price:", error);
-      }
-    };
-
-    fetchPlatformPrice();
-  }, [clientData?.cleanerClient?.id, state?.currentUser?.token]);
-
   // Update price input when client data changes
   useEffect(() => {
     if (clientData?.cleanerClient?.defaultPrice) {
@@ -246,48 +572,49 @@ const ClientDetailPage = ({ state, dispatch }) => {
     }
   };
 
-  // Handle save price
-  const handleSavePrice = async () => {
+  // Handle save price for a specific home
+  const handleSavePrice = async (homeId) => {
     if (!priceInput || isNaN(parseFloat(priceInput))) {
       Alert.alert("Error", "Please enter a valid price");
       return;
     }
 
+    // Find the home to get its cleanerClientId
+    const targetHome = homes.find(h => h.id === homeId) || home;
+    const cleanerClientIdToUpdate = targetHome?.cleanerClientId || clientData.cleanerClient.id;
+
     setSavingPrice(true);
     try {
       const result = await CleanerClientService.updateDefaultPrice(
         state.currentUser.token,
-        clientData.cleanerClient.id,
+        cleanerClientIdToUpdate,
         parseFloat(priceInput)
       );
 
       if (result.success) {
-        setEditingPrice(false);
-        // Update local state
+        setEditingPriceHomeId(null);
+        // Update local state - update the specific home's price
         setClientData((prev) => ({
           ...prev,
-          cleanerClient: {
-            ...prev.cleanerClient,
-            defaultPrice: parseFloat(priceInput),
-          },
+          homes: prev.homes.map(h =>
+            h.id === homeId
+              ? { ...h, defaultPrice: parseFloat(priceInput) }
+              : h
+          ),
+          // Also update cleanerClient if it's the primary home
+          cleanerClient: targetHome?.cleanerClientId === prev.cleanerClient.id
+            ? { ...prev.cleanerClient, defaultPrice: parseFloat(priceInput) }
+            : prev.cleanerClient,
         }));
-        Alert.alert("Success", "Price updated");
+        Alert.alert("Success", "Price updated for this home");
       } else {
         Alert.alert("Error", result.error || "Failed to update price");
       }
-    } catch (error) {
+    } catch (_error) {
       Alert.alert("Error", "Failed to update price");
     } finally {
       setSavingPrice(false);
     }
-  };
-
-  // Handle align with platform price
-  const handleAlignWithPlatform = () => {
-    if (!platformPriceData?.platformPrice) return;
-
-    setPriceInput(platformPriceData.platformPrice.toString());
-    setEditingPrice(true);
   };
 
   // Handle edit modal save
@@ -311,7 +638,36 @@ const ClientDetailPage = ({ state, dispatch }) => {
     }
   };
 
-  // Build marked dates for calendar
+  // Handle Book or Recurring button click
+  const handleActionButtonClick = (actionType) => {
+    // If only one home, skip the picker and go directly to modal
+    if (homes.length === 1) {
+      setSelectedHomeForBooking(homes[0]);
+      if (actionType === "recurring") {
+        setShowRecurringModal(true);
+      } else {
+        setShowBookModal(true);
+      }
+    } else if (homes.length > 1) {
+      // Multiple homes - show picker
+      setHomePickerAction(actionType);
+      setShowHomePicker(true);
+    }
+  };
+
+  // Handle home selection from picker
+  const handleHomeSelected = (selectedHome) => {
+    setSelectedHomeForBooking(selectedHome);
+    setShowHomePicker(false);
+
+    if (homePickerAction === "recurring") {
+      setShowRecurringModal(true);
+    } else {
+      setShowBookModal(true);
+    }
+  };
+
+  // Build marked dates for calendar with clear visual styling
   const getMarkedDates = () => {
     const marked = {};
 
@@ -323,21 +679,70 @@ const ClientDetailPage = ({ state, dispatch }) => {
       ...(clientData.appointments.upcoming || []),
     ];
 
+    // Group appointments by date
+    const appointmentsByDate = {};
     allAppointments.forEach((apt) => {
       const dateStr = apt.date;
-      let dotColor = colors.neutral[400];
+      if (!appointmentsByDate[dateStr]) {
+        appointmentsByDate[dateStr] = [];
+      }
+      appointmentsByDate[dateStr].push(apt);
+    });
 
-      if (apt.status === "completed") {
-        dotColor = colors.success[600];
-      } else if (apt.status === "cancelled") {
+    // Create marked dates with visible styling
+    Object.entries(appointmentsByDate).forEach(([dateStr, apts]) => {
+      // Determine the primary status for background color
+      const hasUpcoming = apts.some(a => a.status === "pending" || a.status === "assigned");
+      const hasCompleted = apts.some(a => a.status === "completed");
+      const allCancelled = apts.every(a => a.status === "cancelled");
+
+      let customStyles = {};
+      let dotColor = colors.primary[600];
+
+      if (allCancelled) {
+        customStyles = {
+          container: {
+            backgroundColor: colors.error[100],
+            borderRadius: 8,
+          },
+          text: {
+            color: colors.error[700],
+            fontWeight: "600",
+          },
+        };
         dotColor = colors.error[600];
-      } else {
-        dotColor = colors.primary[600];
+      } else if (hasUpcoming) {
+        customStyles = {
+          container: {
+            backgroundColor: colors.warning[100],
+            borderRadius: 8,
+          },
+          text: {
+            color: colors.warning[700],
+            fontWeight: "600",
+          },
+        };
+        dotColor = colors.warning[600];
+      } else if (hasCompleted) {
+        customStyles = {
+          container: {
+            backgroundColor: colors.success[100],
+            borderRadius: 8,
+          },
+          text: {
+            color: colors.success[700],
+            fontWeight: "600",
+          },
+        };
+        dotColor = colors.success[600];
       }
 
       marked[dateStr] = {
+        customStyles,
         marked: true,
         dotColor,
+        // Show appointment count if more than 1
+        ...(apts.length > 1 && { appointmentCount: apts.length }),
       };
     });
 
@@ -384,6 +789,13 @@ const ClientDetailPage = ({ state, dispatch }) => {
   }
 
   const { cleanerClient, home, homes = [], client } = clientData;
+
+  // Merge client (User) data into cleanerClient so modals can access it as client.client
+  const cleanerClientWithUser = {
+    ...cleanerClient,
+    client: client, // Nest the User data for modal compatibility
+  };
+
   const isPending = cleanerClient.status === "pending_invite";
 
   // Get display name and email
@@ -396,11 +808,6 @@ const ClientDetailPage = ({ state, dispatch }) => {
   const displayEmail = isPending
     ? cleanerClient.invitedEmail
     : client?.email || cleanerClient.invitedEmail;
-
-  // Get address info (from home or invited data)
-  const addressData = isPending
-    ? cleanerClient.invitedAddress || {}
-    : home || {};
 
   const tabAppointments = getTabAppointments();
 
@@ -425,20 +832,35 @@ const ClientDetailPage = ({ state, dispatch }) => {
             {displayEmail}
           </Text>
         </View>
-        {/* Book for Client button - only show for active clients */}
-        {cleanerClient.status === "active" && (
+      </View>
+
+      {/* Action Bar - below header */}
+      {cleanerClient.status === "active" && homes.length > 0 && (
+        <View style={styles.actionBar}>
           <Pressable
             style={({ pressed }) => [
-              styles.bookButton,
-              pressed && styles.bookButtonPressed,
+              styles.actionBarButton,
+              styles.actionBarButtonSecondary,
+              pressed && styles.actionBarButtonSecondaryPressed,
             ]}
-            onPress={() => setShowBookModal(true)}
+            onPress={() => handleActionButtonClick("recurring")}
           >
-            <Feather name="calendar" size={16} color={colors.neutral[0]} />
-            <Text style={styles.bookButtonText}>Book</Text>
+            <Feather name="repeat" size={18} color={colors.primary[600]} />
+            <Text style={styles.actionBarButtonTextSecondary}>Set Up Recurring</Text>
           </Pressable>
-        )}
-      </View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionBarButton,
+              styles.actionBarButtonPrimary,
+              pressed && styles.actionBarButtonPrimaryPressed,
+            ]}
+            onPress={() => handleActionButtonClick("book")}
+          >
+            <Feather name="plus-circle" size={18} color={colors.neutral[0]} />
+            <Text style={styles.actionBarButtonTextPrimary}>Book Cleaning</Text>
+          </Pressable>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scrollView}
@@ -508,239 +930,363 @@ const ClientDetailPage = ({ state, dispatch }) => {
               <View
                 key={homeItem.id}
                 style={[
-                  styles.homeItemCard,
-                  index > 0 && styles.homeItemCardBorder,
+                  styles.homeCard,
+                  index > 0 && styles.homeCardBorder,
                 ]}
               >
-                {/* Home header with nickname/address and book button */}
-                <View style={styles.homeItemHeader}>
-                  <View style={styles.homeItemInfo}>
-                    {homeItem.nickName && (
-                      <Text style={styles.homeNickname}>{homeItem.nickName}</Text>
-                    )}
-                    <Text style={styles.addressLine}>
-                      {homeItem.address || "No address"}
-                    </Text>
-                    <Text style={styles.addressLineSmall}>
-                      {[homeItem.city, homeItem.state, homeItem.zipcode]
-                        .filter(Boolean)
-                        .join(", ")}
+                {/* Home Header */}
+                <View style={styles.homeCardHeader}>
+                  <View style={styles.homeCardLabel}>
+                    <Feather name="home" size={14} color={colors.primary[600]} />
+                    <Text style={styles.homeCardLabelText}>
+                      Home {index + 1}{homeItem.nickName ? `: ${homeItem.nickName}` : ""}
                     </Text>
                   </View>
-                  {cleanerClient.status === "active" && (
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.homeBookButton,
-                        pressed && styles.homeBookButtonPressed,
-                      ]}
-                      onPress={() => {
-                        setSelectedHomeForBooking(homeItem);
-                        setShowBookModal(true);
-                      }}
-                    >
-                      <Feather name="calendar" size={14} color={colors.neutral[0]} />
-                      <Text style={styles.homeBookButtonText}>Book</Text>
-                    </Pressable>
-                  )}
                 </View>
 
-                {/* Bed/Bath */}
-                <View style={styles.detailsRow}>
-                  <View style={styles.detailItem}>
-                    <Feather name="moon" size={14} color={colors.neutral[500]} />
-                    <Text style={styles.detailText}>
-                      {homeItem.numBeds || 1} beds
-                    </Text>
+                {/* Address */}
+                <View style={styles.homeSection}>
+                  <Text style={styles.homeSectionLabel}>Address</Text>
+                  <Text style={styles.homeAddressText}>
+                    {homeItem.address || "No address"}
+                  </Text>
+                  <Text style={styles.homeAddressSubtext}>
+                    {[homeItem.city, homeItem.state, homeItem.zipcode]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </Text>
+                </View>
+
+                {/* Property Details Grid */}
+                <View style={styles.homeSection}>
+                  <Text style={styles.homeSectionLabel}>Property Details</Text>
+                  <View style={styles.homeDetailsGrid}>
+                    <View style={styles.homeDetailBox}>
+                      <Feather name="moon" size={16} color={colors.primary[600]} />
+                      <Text style={styles.homeDetailValue}>{homeItem.numBeds || 1}</Text>
+                      <Text style={styles.homeDetailLabel}>Beds</Text>
+                    </View>
+                    <View style={styles.homeDetailBox}>
+                      <Feather name="droplet" size={16} color={colors.primary[600]} />
+                      <Text style={styles.homeDetailValue}>{homeItem.numBaths || 1}</Text>
+                      <Text style={styles.homeDetailLabel}>Baths</Text>
+                    </View>
+                    <View style={styles.homeDetailBox}>
+                      <Feather name="users" size={16} color={colors.primary[600]} />
+                      <Text style={styles.homeDetailValue}>{homeItem.cleanersNeeded || 1}</Text>
+                      <Text style={styles.homeDetailLabel}>Cleaners</Text>
+                    </View>
                   </View>
-                  <View style={styles.detailItem}>
-                    <Feather name="droplet" size={14} color={colors.neutral[500]} />
-                    <Text style={styles.detailText}>
-                      {homeItem.numBaths || 1} baths
-                    </Text>
+                </View>
+
+                {/* Linens Row */}
+                <View style={styles.homeSection}>
+                  <Text style={styles.homeSectionLabel}>Linens</Text>
+                  <View style={styles.homeLinensRow}>
+                    <View style={[
+                      styles.homeLinenChip,
+                      homeItem.sheetsProvided && styles.homeLinenChipActive,
+                    ]}>
+                      <Feather
+                        name={homeItem.sheetsProvided ? "check" : "x"}
+                        size={12}
+                        color={homeItem.sheetsProvided ? colors.success[600] : colors.neutral[400]}
+                      />
+                      <Text style={[
+                        styles.homeLinenText,
+                        homeItem.sheetsProvided && styles.homeLinenTextActive,
+                      ]}>Sheets</Text>
+                    </View>
+                    <View style={[
+                      styles.homeLinenChip,
+                      homeItem.towelsProvided && styles.homeLinenChipActive,
+                    ]}>
+                      <Feather
+                        name={homeItem.towelsProvided ? "check" : "x"}
+                        size={12}
+                        color={homeItem.towelsProvided ? colors.success[600] : colors.neutral[400]}
+                      />
+                      <Text style={[
+                        styles.homeLinenText,
+                        homeItem.towelsProvided && styles.homeLinenTextActive,
+                      ]}>Towels</Text>
+                    </View>
                   </View>
                 </View>
 
                 {/* Access Info */}
                 {(homeItem.keyPadCode || homeItem.keyLocation) && (
-                  <View style={styles.accessSection}>
-                    {homeItem.keyPadCode && (
-                      <View style={styles.detailItem}>
-                        <Feather name="lock" size={14} color={colors.neutral[500]} />
-                        <Text style={styles.detailText}>
-                          Keypad: {homeItem.keyPadCode}
-                        </Text>
-                      </View>
-                    )}
-                    {homeItem.keyLocation && (
-                      <View style={styles.detailItem}>
-                        <Feather name="map-pin" size={14} color={colors.neutral[500]} />
-                        <Text style={styles.detailText}>
-                          {homeItem.keyLocation}
-                        </Text>
-                      </View>
-                    )}
+                  <View style={styles.homeSection}>
+                    <Text style={styles.homeSectionLabel}>Access</Text>
+                    <View style={styles.homeAccessRow}>
+                      {homeItem.keyPadCode && (
+                        <View style={styles.homeAccessItem}>
+                          <Feather name="lock" size={14} color={colors.neutral[500]} />
+                          <Text style={styles.homeAccessText}>Code: {homeItem.keyPadCode}</Text>
+                        </View>
+                      )}
+                      {homeItem.keyLocation && (
+                        <View style={styles.homeAccessItem}>
+                          <Feather name="map-pin" size={14} color={colors.neutral[500]} />
+                          <Text style={styles.homeAccessText}>{homeItem.keyLocation}</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 )}
 
-                {/* Linens */}
-                <View style={styles.linensRow}>
-                  <View style={styles.linenItem}>
-                    <Feather
-                      name={homeItem.sheetsProvided ? "check-circle" : "circle"}
-                      size={14}
-                      color={homeItem.sheetsProvided ? colors.success[600] : colors.neutral[400]}
-                    />
-                    <Text style={styles.detailText}>Sheets</Text>
+                {/* Pricing for this home */}
+                <View style={styles.homePricingSection}>
+                  <View style={styles.homePricingHeader}>
+                    <Text style={styles.homeSectionLabel}>Pricing</Text>
                   </View>
-                  <View style={styles.linenItem}>
-                    <Feather
-                      name={homeItem.towelsProvided ? "check-circle" : "circle"}
-                      size={14}
-                      color={homeItem.towelsProvided ? colors.success[600] : colors.neutral[400]}
-                    />
-                    <Text style={styles.detailText}>Towels</Text>
-                  </View>
-                </View>
-
-                {/* Service Preferences */}
-                <View style={styles.preferencesRow}>
-                  <View style={styles.detailItem}>
-                    <Feather name="clock" size={14} color={colors.neutral[500]} />
-                    <Text style={styles.detailText}>
-                      {formatTimeConstraint(homeItem.timeToBeCompleted)}
-                    </Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Feather name="users" size={14} color={colors.neutral[500]} />
-                    <Text style={styles.detailText}>
-                      {homeItem.cleanersNeeded || 1} cleaner(s)
-                    </Text>
-                  </View>
+                  {editingPriceHomeId === homeItem.id ? (
+                    <View style={styles.homePriceEditContainer}>
+                      <View style={styles.homePriceInputRow}>
+                        <Text style={styles.homePriceDollar}>$</Text>
+                        <TextInput
+                          style={styles.homePriceInput}
+                          value={priceInput}
+                          onChangeText={setPriceInput}
+                          keyboardType="decimal-pad"
+                          autoFocus
+                        />
+                      </View>
+                      <View style={styles.homePriceActions}>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.homePriceSaveBtn,
+                            pressed && styles.homePriceSaveBtnPressed,
+                            savingPrice && styles.homePriceBtnDisabled,
+                          ]}
+                          onPress={() => handleSavePrice(homeItem.id)}
+                          disabled={savingPrice}
+                        >
+                          {savingPrice ? (
+                            <ActivityIndicator size="small" color={colors.neutral[0]} />
+                          ) : (
+                            <>
+                              <Feather name="check" size={14} color={colors.neutral[0]} />
+                              <Text style={styles.homePriceSaveBtnText}>Save</Text>
+                            </>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.homePriceCancelBtn,
+                            pressed && styles.homePriceCancelBtnPressed,
+                          ]}
+                          onPress={() => setEditingPriceHomeId(null)}
+                        >
+                          <Feather name="x" size={14} color={colors.neutral[600]} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.homePricingContent}>
+                      <View style={styles.homePriceDisplay}>
+                        <Text style={styles.homePriceLabel}>Default Price</Text>
+                        <Text style={styles.homePriceValue}>
+                          ${homeItem.defaultPrice || cleanerClient.defaultPrice || "0"}
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.homePriceEditBtn,
+                          pressed && styles.homePriceEditBtnPressed,
+                        ]}
+                        onPress={() => {
+                          setPriceInput((homeItem.defaultPrice || cleanerClient.defaultPrice || 0).toString());
+                          setEditingPriceHomeId(homeItem.id);
+                        }}
+                      >
+                        <Feather name="edit-2" size={14} color={colors.primary[600]} />
+                        <Text style={styles.homePriceEditBtnText}>Edit</Text>
+                      </Pressable>
+                    </View>
+                  )}
                 </View>
               </View>
             ))}
 
             {/* Show single home for active clients with no homes array (fallback) */}
             {!isPending && homes.length === 0 && home && (
-              <>
-                <Text style={styles.addressLine}>
-                  {home.address || "No address provided"}
-                </Text>
-                <Text style={styles.addressLine}>
-                  {[home.city, home.state, home.zipcode]
-                    .filter(Boolean)
-                    .join(", ")}
-                </Text>
-                <View style={styles.detailsRow}>
-                  <View style={styles.detailItem}>
-                    <Feather name="moon" size={14} color={colors.neutral[500]} />
-                    <Text style={styles.detailText}>{home.numBeds || 1} beds</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <Feather name="droplet" size={14} color={colors.neutral[500]} />
-                    <Text style={styles.detailText}>{home.numBaths || 1} baths</Text>
+              <View style={styles.homeCard}>
+                {/* Home Header */}
+                <View style={styles.homeCardHeader}>
+                  <View style={styles.homeCardLabel}>
+                    <Feather name="home" size={14} color={colors.primary[600]} />
+                    <Text style={styles.homeCardLabelText}>
+                      Home 1{home.nickName ? `: ${home.nickName}` : ""}
+                    </Text>
                   </View>
                 </View>
-              </>
+
+                {/* Address */}
+                <View style={styles.homeSection}>
+                  <Text style={styles.homeSectionLabel}>Address</Text>
+                  <Text style={styles.homeAddressText}>
+                    {home.address || "No address"}
+                  </Text>
+                  <Text style={styles.homeAddressSubtext}>
+                    {[home.city, home.state, home.zipcode]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </Text>
+                </View>
+
+                {/* Property Details Grid */}
+                <View style={styles.homeSection}>
+                  <Text style={styles.homeSectionLabel}>Property Details</Text>
+                  <View style={styles.homeDetailsGrid}>
+                    <View style={styles.homeDetailBox}>
+                      <Feather name="moon" size={16} color={colors.primary[600]} />
+                      <Text style={styles.homeDetailValue}>{home.numBeds || 1}</Text>
+                      <Text style={styles.homeDetailLabel}>Beds</Text>
+                    </View>
+                    <View style={styles.homeDetailBox}>
+                      <Feather name="droplet" size={16} color={colors.primary[600]} />
+                      <Text style={styles.homeDetailValue}>{home.numBaths || 1}</Text>
+                      <Text style={styles.homeDetailLabel}>Baths</Text>
+                    </View>
+                    <View style={styles.homeDetailBox}>
+                      <Feather name="users" size={16} color={colors.primary[600]} />
+                      <Text style={styles.homeDetailValue}>{home.cleanersNeeded || 1}</Text>
+                      <Text style={styles.homeDetailLabel}>Cleaners</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Linens Row */}
+                <View style={styles.homeSection}>
+                  <Text style={styles.homeSectionLabel}>Linens</Text>
+                  <View style={styles.homeLinensRow}>
+                    <View style={[
+                      styles.homeLinenChip,
+                      home.sheetsProvided && styles.homeLinenChipActive,
+                    ]}>
+                      <Feather
+                        name={home.sheetsProvided ? "check" : "x"}
+                        size={12}
+                        color={home.sheetsProvided ? colors.success[600] : colors.neutral[400]}
+                      />
+                      <Text style={[
+                        styles.homeLinenText,
+                        home.sheetsProvided && styles.homeLinenTextActive,
+                      ]}>Sheets</Text>
+                    </View>
+                    <View style={[
+                      styles.homeLinenChip,
+                      home.towelsProvided && styles.homeLinenChipActive,
+                    ]}>
+                      <Feather
+                        name={home.towelsProvided ? "check" : "x"}
+                        size={12}
+                        color={home.towelsProvided ? colors.success[600] : colors.neutral[400]}
+                      />
+                      <Text style={[
+                        styles.homeLinenText,
+                        home.towelsProvided && styles.homeLinenTextActive,
+                      ]}>Towels</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Access Info */}
+                {(home.keyPadCode || home.keyLocation) && (
+                  <View style={styles.homeSection}>
+                    <Text style={styles.homeSectionLabel}>Access</Text>
+                    <View style={styles.homeAccessRow}>
+                      {home.keyPadCode && (
+                        <View style={styles.homeAccessItem}>
+                          <Feather name="lock" size={14} color={colors.neutral[500]} />
+                          <Text style={styles.homeAccessText}>Code: {home.keyPadCode}</Text>
+                        </View>
+                      )}
+                      {home.keyLocation && (
+                        <View style={styles.homeAccessItem}>
+                          <Feather name="map-pin" size={14} color={colors.neutral[500]} />
+                          <Text style={styles.homeAccessText}>{home.keyLocation}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+
+                {/* Pricing */}
+                <View style={styles.homePricingSection}>
+                  <View style={styles.homePricingHeader}>
+                    <Text style={styles.homeSectionLabel}>Pricing</Text>
+                  </View>
+                  {editingPriceHomeId === home.id ? (
+                    <View style={styles.homePriceEditContainer}>
+                      <View style={styles.homePriceInputRow}>
+                        <Text style={styles.homePriceDollar}>$</Text>
+                        <TextInput
+                          style={styles.homePriceInput}
+                          value={priceInput}
+                          onChangeText={setPriceInput}
+                          keyboardType="decimal-pad"
+                          autoFocus
+                        />
+                      </View>
+                      <View style={styles.homePriceActions}>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.homePriceSaveBtn,
+                            pressed && styles.homePriceSaveBtnPressed,
+                            savingPrice && styles.homePriceBtnDisabled,
+                          ]}
+                          onPress={() => handleSavePrice(home.id)}
+                          disabled={savingPrice}
+                        >
+                          {savingPrice ? (
+                            <ActivityIndicator size="small" color={colors.neutral[0]} />
+                          ) : (
+                            <>
+                              <Feather name="check" size={14} color={colors.neutral[0]} />
+                              <Text style={styles.homePriceSaveBtnText}>Save</Text>
+                            </>
+                          )}
+                        </Pressable>
+                        <Pressable
+                          style={({ pressed }) => [
+                            styles.homePriceCancelBtn,
+                            pressed && styles.homePriceCancelBtnPressed,
+                          ]}
+                          onPress={() => setEditingPriceHomeId(null)}
+                        >
+                          <Feather name="x" size={14} color={colors.neutral[600]} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.homePricingContent}>
+                      <View style={styles.homePriceDisplay}>
+                        <Text style={styles.homePriceLabel}>Default Price</Text>
+                        <Text style={styles.homePriceValue}>
+                          ${cleanerClient.defaultPrice || "0"}
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.homePriceEditBtn,
+                          pressed && styles.homePriceEditBtnPressed,
+                        ]}
+                        onPress={() => {
+                          setPriceInput((cleanerClient.defaultPrice || 0).toString());
+                          setEditingPriceHomeId(home.id);
+                        }}
+                      >
+                        <Feather name="edit-2" size={14} color={colors.primary[600]} />
+                        <Text style={styles.homePriceEditBtnText}>Edit</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+              </View>
             )}
 
-            {/* Pricing Section - Enhanced */}
-            <View style={styles.pricingSection}>
-              <View style={styles.pricingHeader}>
-                <Text style={styles.pricingSectionTitle}>Pricing</Text>
-                {cleanerClient.defaultFrequency && (
-                  <Text style={styles.frequencyBadge}>
-                    {cleanerClient.defaultFrequency}
-                  </Text>
-                )}
-              </View>
-
-              {/* Default Price Row */}
-              <View style={styles.priceEditRow}>
-                <Text style={styles.priceLabel}>Default Price:</Text>
-                {editingPrice ? (
-                  <View style={styles.priceInputContainer}>
-                    <Text style={styles.dollarSign}>$</Text>
-                    <TextInput
-                      style={styles.priceInput}
-                      value={priceInput}
-                      onChangeText={setPriceInput}
-                      keyboardType="decimal-pad"
-                      autoFocus
-                    />
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.priceSaveButton,
-                        pressed && styles.priceSaveButtonPressed,
-                        savingPrice && styles.priceButtonDisabled,
-                      ]}
-                      onPress={handleSavePrice}
-                      disabled={savingPrice}
-                    >
-                      {savingPrice ? (
-                        <ActivityIndicator size="small" color={colors.neutral[0]} />
-                      ) : (
-                        <Feather name="check" size={16} color={colors.neutral[0]} />
-                      )}
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.priceCancelButton,
-                        pressed && styles.priceCancelButtonPressed,
-                      ]}
-                      onPress={() => {
-                        setEditingPrice(false);
-                        setPriceInput(cleanerClient.defaultPrice?.toString() || "");
-                      }}
-                    >
-                      <Feather name="x" size={16} color={colors.neutral[600]} />
-                    </Pressable>
-                  </View>
-                ) : (
-                  <View style={styles.priceDisplayRow}>
-                    <Text style={styles.priceValue}>
-                      ${cleanerClient.defaultPrice || "0"}
-                    </Text>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.priceEditButton,
-                        pressed && styles.priceEditButtonPressed,
-                      ]}
-                      onPress={() => setEditingPrice(true)}
-                    >
-                      <Feather name="edit-2" size={14} color={colors.primary[600]} />
-                    </Pressable>
-                  </View>
-                )}
-              </View>
-
-              {/* Platform Price Reference */}
-              {platformPriceData && (
-                <View style={styles.platformPriceSection}>
-                  <View style={styles.platformPriceRow}>
-                    <View style={styles.platformPriceInfo}>
-                      <Text style={styles.platformPriceLabel}>Platform rate:</Text>
-                      <Text style={styles.platformPriceValue}>
-                        ${platformPriceData.platformPrice}
-                      </Text>
-                      <Text style={styles.platformPriceBreakdown}>
-                        ({platformPriceData.numBeds} bed, {platformPriceData.numBaths} bath)
-                      </Text>
-                    </View>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.alignButton,
-                        pressed && styles.alignButtonPressed,
-                      ]}
-                      onPress={handleAlignWithPlatform}
-                    >
-                      <Feather name="trending-up" size={14} color={colors.neutral[0]} />
-                      <Text style={styles.alignButtonText}>Align with Platform</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-            </View>
           </View>
         </View>
 
@@ -830,7 +1376,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
               <EmptyAppointments tab={activeTab} />
             ) : (
               tabAppointments.map((apt) => (
-                <AppointmentCard key={apt.id} appointment={apt} />
+                <AppointmentCard key={apt.id} appointment={apt} homes={homes} />
               ))
             )}
           </View>
@@ -847,6 +1393,7 @@ const ClientDetailPage = ({ state, dispatch }) => {
           <View style={styles.calendarContainer}>
             <Calendar
               markedDates={getMarkedDates()}
+              markingType="custom"
               theme={{
                 backgroundColor: colors.neutral[0],
                 calendarBackground: colors.neutral[0],
@@ -854,18 +1401,19 @@ const ClientDetailPage = ({ state, dispatch }) => {
                 selectedDayBackgroundColor: colors.primary[600],
                 selectedDayTextColor: colors.neutral[0],
                 todayTextColor: colors.primary[600],
+                todayBackgroundColor: colors.primary[50],
                 dayTextColor: colors.text.primary,
                 textDisabledColor: colors.neutral[300],
                 dotColor: colors.primary[600],
                 selectedDotColor: colors.neutral[0],
                 arrowColor: colors.primary[600],
                 monthTextColor: colors.text.primary,
-                textDayFontWeight: "400",
-                textMonthFontWeight: typography.fontWeight.semibold,
-                textDayHeaderFontWeight: typography.fontWeight.medium,
-                textDayFontSize: 14,
-                textMonthFontSize: 16,
-                textDayHeaderFontSize: 12,
+                textDayFontWeight: "500",
+                textMonthFontWeight: typography.fontWeight.bold,
+                textDayHeaderFontWeight: typography.fontWeight.semibold,
+                textDayFontSize: 15,
+                textMonthFontSize: 18,
+                textDayHeaderFontSize: 13,
               }}
               onDayPress={(day) => {
                 // Find appointments for this day
@@ -879,10 +1427,18 @@ const ClientDetailPage = ({ state, dispatch }) => {
                 );
 
                 if (dayAppointments.length > 0) {
-                  const apt = dayAppointments[0];
+                  // Build message showing all appointments for the day
+                  const appointmentDetails = dayAppointments.map((apt) => {
+                    const homeIndex = homes.findIndex(h => h.id === apt.home?.id);
+                    const homeLabel = apt.home?.nickName || (homeIndex >= 0 ? `Home ${homeIndex + 1}` : "Home");
+                    return `• ${homeLabel}\n  Time: ${formatTimeConstraint(apt.timeToBeCompleted)}\n  Price: $${apt.price || 0}\n  Status: ${apt.status}`;
+                  }).join("\n\n");
+
                   Alert.alert(
-                    `Appointment on ${day.dateString}`,
-                    `Time: ${formatTimeConstraint(apt.timeToBeCompleted)}\nPrice: $${apt.price || 0}\nStatus: ${apt.status}`
+                    `Appointments on ${day.dateString}`,
+                    dayAppointments.length === 1
+                      ? appointmentDetails.replace("• ", "").replace(/\n  /g, "\n")
+                      : appointmentDetails
                   );
                 }
               }}
@@ -890,18 +1446,27 @@ const ClientDetailPage = ({ state, dispatch }) => {
           </View>
 
           {/* Legend */}
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.success[600] }]} />
-              <Text style={styles.legendText}>Completed</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary[600] }]} />
-              <Text style={styles.legendText}>Upcoming</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.error[600] }]} />
-              <Text style={styles.legendText}>Cancelled</Text>
+          <View style={styles.legendContainer}>
+            <Text style={styles.legendTitle}>Legend</Text>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, { backgroundColor: colors.success[100] }]}>
+                  <Text style={[styles.legendBoxText, { color: colors.success[700] }]}>12</Text>
+                </View>
+                <Text style={styles.legendText}>Completed</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, { backgroundColor: colors.warning[100] }]}>
+                  <Text style={[styles.legendBoxText, { color: colors.warning[700] }]}>12</Text>
+                </View>
+                <Text style={styles.legendText}>Upcoming</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendBox, { backgroundColor: colors.error[100] }]}>
+                  <Text style={[styles.legendBoxText, { color: colors.error[700] }]}>12</Text>
+                </View>
+                <Text style={styles.legendText}>Cancelled</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -928,10 +1493,39 @@ const ClientDetailPage = ({ state, dispatch }) => {
           setSelectedHomeForBooking(null);
           fetchClientData(); // Refresh to show pending booking
         }}
-        client={cleanerClient}
+        client={cleanerClientWithUser}
         token={state?.currentUser?.token}
         homes={homes}
         selectedHome={selectedHomeForBooking}
+      />
+
+      {/* Setup Recurring Modal */}
+      <SetupRecurringModal
+        visible={showRecurringModal}
+        onClose={() => {
+          setShowRecurringModal(false);
+          setSelectedHomeForBooking(null);
+        }}
+        onSuccess={() => {
+          setShowRecurringModal(false);
+          setSelectedHomeForBooking(null);
+          fetchClientData();
+        }}
+        client={cleanerClientWithUser}
+        token={state?.currentUser?.token}
+        selectedHome={selectedHomeForBooking}
+      />
+
+      {/* Home Picker Modal */}
+      <HomePickerModal
+        visible={showHomePicker}
+        onClose={() => {
+          setShowHomePicker(false);
+          setHomePickerAction(null);
+        }}
+        homes={homes}
+        onSelectHome={handleHomeSelected}
+        actionType={homePickerAction}
       />
     </View>
   );
@@ -940,13 +1534,13 @@ const ClientDetailPage = ({ state, dispatch }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.neutral[50],
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.neutral[50],
   },
   loadingText: {
     marginTop: spacing.md,
@@ -975,15 +1569,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: spacing.lg,
+    paddingTop: spacing.xl,
     backgroundColor: colors.neutral[0],
     borderBottomWidth: 1,
-    borderBottomColor: colors.neutral[200],
+    borderBottomColor: colors.neutral[100],
     gap: spacing.md,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.lg,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.neutral[100],
     alignItems: "center",
     justifyContent: "center",
@@ -995,17 +1590,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
   headerTitle: {
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize["2xl"],
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     flex: 1,
   },
   headerEmail: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    color: colors.text.tertiary,
   },
 
   // Book button
@@ -1027,15 +1622,64 @@ const styles = StyleSheet.create({
     color: colors.neutral[0],
   },
 
+  // Action Bar (below header)
+  actionBar: {
+    flexDirection: "row",
+    gap: spacing.md,
+    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.neutral[0],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  actionBarButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+  },
+  actionBarButtonPrimary: {
+    backgroundColor: colors.primary[600],
+    ...shadows.sm,
+  },
+  actionBarButtonPrimaryPressed: {
+    backgroundColor: colors.primary[700],
+  },
+  actionBarButtonSecondary: {
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[100],
+  },
+  actionBarButtonSecondaryPressed: {
+    backgroundColor: colors.primary[100],
+  },
+  actionBarButtonTextPrimary: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[0],
+  },
+  actionBarButtonTextSecondary: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+
   // Status Badge
   statusBadge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   statusBadgeText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 
   // Scroll
@@ -1044,21 +1688,25 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.lg,
     paddingBottom: spacing["3xl"],
   },
 
   // Cards
   card: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
-    ...shadows.md,
+    borderRadius: radius["2xl"],
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
+    ...shadows.sm,
+    overflow: "hidden",
   },
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     padding: spacing.lg,
+    backgroundColor: colors.neutral[0],
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[100],
   },
@@ -1068,8 +1716,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   cardTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
   cardBody: {
@@ -1080,18 +1728,20 @@ const styles = StyleSheet.create({
   editButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: 6,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[100],
   },
   editButtonPressed: {
     backgroundColor: colors.primary[100],
   },
   editButtonText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],
   },
 
@@ -1099,13 +1749,14 @@ const styles = StyleSheet.create({
   saveButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: 6,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.success[600],
-    minWidth: 70,
+    minWidth: 80,
     justifyContent: "center",
+    ...shadows.sm,
   },
   saveButtonPressed: {
     backgroundColor: colors.success[700],
@@ -1115,56 +1766,260 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.neutral[0],
   },
 
-  // Multi-home styles
-  homeItemCard: {
-    paddingBottom: spacing.md,
+  // Home Card Styles
+  homeCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
-  homeItemCardBorder: {
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[200],
-    paddingTop: spacing.md,
+  homeCardBorder: {
     marginTop: spacing.md,
   },
-  homeItemHeader: {
+  homeCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  homeCardLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  homeCardLabelText: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  homeSection: {
+    marginBottom: spacing.lg,
+  },
+  homeSectionLabel: {
+    fontSize: 11,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.tertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
     marginBottom: spacing.sm,
   },
-  homeItemInfo: {
-    flex: 1,
-    marginRight: spacing.md,
-  },
-  homeNickname: {
+  homeAddressText: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.primary[700],
-    marginBottom: spacing.xs,
+    color: colors.text.primary,
   },
-  homeBookButton: {
+  homeAddressSubtext: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
+  homeDetailsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  homeDetailBox: {
+    flex: 1,
+    minWidth: 70,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
+  },
+  homeDetailValue: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  homeDetailLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  homeLinensRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  homeLinenChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  homeLinenChipActive: {
+    backgroundColor: colors.success[50],
+    borderColor: colors.success[200],
+  },
+  homeLinenText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[500],
+    fontWeight: typography.fontWeight.medium,
+  },
+  homeLinenTextActive: {
+    color: colors.success[700],
+  },
+  homeTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.neutral[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
+  },
+  homeTimeText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  homeAccessRow: {
+    gap: spacing.sm,
+  },
+  homeAccessItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.neutral[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
+  },
+  homeAccessText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  homePricingSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  homePricingHeader: {
+    marginBottom: spacing.sm,
+  },
+  homePricingContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.success[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.success[100],
+  },
+  homePriceDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  homePriceLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    fontWeight: typography.fontWeight.medium,
+  },
+  homePriceValue: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[700],
+  },
+  homePriceEditBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.md,
+  },
+  homePriceEditBtnPressed: {
+    backgroundColor: colors.primary[100],
+  },
+  homePriceEditBtnText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[600],
+  },
+  homePriceEditContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  homePriceInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.primary[300],
+  },
+  homePriceDollar: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.secondary,
+  },
+  homePriceInput: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    minWidth: 80,
+  },
+  homePriceActions: {
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  homePriceSaveBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
+    backgroundColor: colors.success[600],
     borderRadius: radius.md,
-    backgroundColor: colors.primary[600],
   },
-  homeBookButtonPressed: {
-    backgroundColor: colors.primary[700],
+  homePriceSaveBtnPressed: {
+    backgroundColor: colors.success[700],
   },
-  homeBookButtonText: {
+  homePriceSaveBtnText: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
     color: colors.neutral[0],
   },
-  addressLineSmall: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+  homePriceCancelBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.neutral[200],
+    borderRadius: radius.md,
+  },
+  homePriceCancelBtnPressed: {
+    backgroundColor: colors.neutral[300],
+  },
+  homePriceBtnDisabled: {
+    opacity: 0.7,
   },
 
   // Address
@@ -1218,187 +2073,43 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
 
-  // Pricing Section - Enhanced
-  pricingSection: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[100],
-  },
-  pricingHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.sm,
-  },
-  pricingSectionTitle: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  frequencyBadge: {
-    fontSize: typography.fontSize.xs,
-    color: colors.primary[600],
-    backgroundColor: colors.primary[50],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  priceEditRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing.sm,
-  },
-  priceLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-  },
-  priceDisplayRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  priceValue: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.success[600],
-  },
-  priceEditButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary[50],
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  priceEditButtonPressed: {
-    backgroundColor: colors.primary[100],
-  },
-  priceInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  dollarSign: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
-  },
-  priceInput: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.success[600],
-    backgroundColor: colors.neutral[100],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
-    minWidth: 80,
-    textAlign: "right",
-  },
-  priceSaveButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    backgroundColor: colors.success[600],
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  priceSaveButtonPressed: {
-    backgroundColor: colors.success[700],
-  },
-  priceCancelButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[200],
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  priceCancelButtonPressed: {
-    backgroundColor: colors.neutral[300],
-  },
-  priceButtonDisabled: {
-    opacity: 0.7,
-  },
-  platformPriceSection: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.neutral[100],
-  },
-  platformPriceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  platformPriceInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    flexWrap: "wrap",
-  },
-  platformPriceLabel: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-  },
-  platformPriceValue: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-  },
-  platformPriceBreakdown: {
-    fontSize: typography.fontSize.xs,
-    color: colors.text.tertiary,
-  },
-  alignButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.primary[600],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.md,
-  },
-  alignButtonPressed: {
-    backgroundColor: colors.primary[700],
-  },
-  alignButtonText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.neutral[0],
-  },
-
   // Notes
   notesInput: {
     fontSize: typography.fontSize.base,
     color: colors.text.primary,
-    minHeight: 80,
-    lineHeight: 22,
+    minHeight: 100,
+    lineHeight: 24,
+    backgroundColor: colors.neutral[50],
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
 
   // Appointment Tabs
   appointmentTabs: {
     flexDirection: "row",
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     gap: spacing.sm,
+    backgroundColor: colors.neutral[50],
   },
   appointmentTab: {
     flex: 1,
     paddingVertical: spacing.sm,
     alignItems: "center",
-    borderRadius: radius.md,
-    backgroundColor: colors.neutral[100],
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[0],
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
   appointmentTabActive: {
     backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
   },
   appointmentTabText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.text.secondary,
   },
   appointmentTabTextActive: {
@@ -1408,25 +2119,58 @@ const styles = StyleSheet.create({
   // Appointments List
   appointmentsList: {
     padding: spacing.lg,
-    paddingTop: spacing.sm,
-    gap: spacing.sm,
+    paddingTop: spacing.md,
+    gap: spacing.md,
   },
   appointmentCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  appointmentCardExpanded: {
+    backgroundColor: colors.neutral[0],
+    borderWidth: 2,
+    borderColor: colors.primary[200],
+    ...shadows.md,
+  },
+  appointmentCardPressed: {
+    backgroundColor: colors.neutral[50],
+  },
+  appointmentHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     padding: spacing.md,
-    backgroundColor: colors.neutral[50],
-    borderRadius: radius.lg,
   },
   appointmentCardLeft: {
     flex: 1,
+  },
+  appointmentDateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: 2,
   },
   appointmentDate: {
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
-    marginBottom: 2,
+  },
+  appointmentHomeTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: colors.primary[50],
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: radius.sm,
+  },
+  appointmentHomeTagText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary[600],
   },
   appointmentDetails: {
     fontSize: typography.fontSize.xs,
@@ -1435,7 +2179,7 @@ const styles = StyleSheet.create({
   appointmentCardRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   appointmentPrice: {
     fontSize: typography.fontSize.base,
@@ -1443,41 +2187,178 @@ const styles = StyleSheet.create({
     color: colors.success[600],
   },
 
+  // Expanded Appointment Details
+  appointmentExpanded: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  appointmentStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.md,
+  },
+  appointmentStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.full,
+  },
+  appointmentStatusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  appointmentFullDate: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  appointmentDetailsGrid: {
+    gap: spacing.md,
+  },
+  appointmentDetailItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+  },
+  appointmentDetailIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutral[100],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  appointmentDetailContent: {
+    flex: 1,
+  },
+  appointmentDetailLabel: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    marginBottom: 2,
+  },
+  appointmentDetailValue: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  appointmentDetailSubvalue: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.secondary,
+    marginTop: 1,
+  },
+  appointmentDetailPrice: {
+    color: colors.success[600],
+    fontWeight: typography.fontWeight.bold,
+    fontSize: typography.fontSize.lg,
+  },
+  appointmentLinensRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  appointmentLinenChip: {
+    paddingVertical: 3,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.sm,
+  },
+  appointmentLinenChipActive: {
+    backgroundColor: colors.success[50],
+  },
+  appointmentLinenChipText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[500],
+  },
+  appointmentLinenChipTextActive: {
+    color: colors.success[700],
+  },
+  appointmentNotes: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.warning[50],
+    borderRadius: radius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[400],
+  },
+  appointmentNotesLabel: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.warning[700],
+    marginBottom: spacing.xs,
+  },
+  appointmentNotesText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.warning[800],
+    lineHeight: 20,
+  },
+
   // Empty Appointments
   emptyAppointments: {
     alignItems: "center",
-    padding: spacing.xl,
-    gap: spacing.sm,
+    padding: spacing["2xl"],
+    gap: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    margin: spacing.sm,
   },
   emptyAppointmentsText: {
     fontSize: typography.fontSize.sm,
     color: colors.neutral[400],
+    fontWeight: typography.fontWeight.medium,
   },
 
   // Calendar
   calendarContainer: {
     paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  legendContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    marginTop: spacing.sm,
+  },
+  legendTitle: {
+    fontSize: 11,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.tertiary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: spacing.md,
+    marginTop: spacing.lg,
   },
   legendRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: spacing.xl,
-    padding: spacing.lg,
-    paddingTop: spacing.sm,
+    justifyContent: "space-around",
+    gap: spacing.md,
   },
   legendItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  legendBox: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  legendBoxText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
   },
   legendText: {
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
   },
 });
 

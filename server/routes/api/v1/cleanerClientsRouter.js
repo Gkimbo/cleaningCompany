@@ -25,6 +25,8 @@ const Email = require("../../../services/sendNotifications/EmailClass");
 const PushNotification = require("../../../services/sendNotifications/PushNotificationClass");
 const EncryptionService = require("../../../services/EncryptionService");
 const NotificationService = require("../../../services/NotificationService");
+const CleanerClientSerializer = require("../../../serializers/CleanerClientSerializer");
+const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 
 const cleanerClientsRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -172,15 +174,29 @@ cleanerClientsRouter.get("/", verifyCleaner, async (req, res) => {
     );
 
     res.json({
-      clients: clients.map((c) => ({
+      clients: clients.map((c) => {
+        // Decrypt invitedAddress (may be JSON)
+        let decryptedInvitedAddress = null;
+        if (c.invitedAddress) {
+          const decrypted = EncryptionService.decrypt(c.invitedAddress);
+          if (decrypted) {
+            try {
+              decryptedInvitedAddress = JSON.parse(decrypted);
+            } catch (e) {
+              decryptedInvitedAddress = decrypted;
+            }
+          }
+        }
+
+        return {
         id: c.id,
         status: c.status,
-        invitedName: c.invitedName,
-        invitedEmail: c.invitedEmail,
-        invitedPhone: c.invitedPhone,
+        invitedName: c.invitedName ? EncryptionService.decrypt(c.invitedName) : null,
+        invitedEmail: c.invitedEmail ? EncryptionService.decrypt(c.invitedEmail) : null,
+        invitedPhone: c.invitedPhone ? EncryptionService.decrypt(c.invitedPhone) : null,
         invitedBeds: c.invitedBeds,
         invitedBaths: c.invitedBaths,
-        invitedAddress: c.invitedAddress,
+        invitedAddress: decryptedInvitedAddress,
         invitedAt: c.invitedAt,
         acceptedAt: c.acceptedAt,
         defaultFrequency: c.defaultFrequency,
@@ -206,7 +222,8 @@ cleanerClientsRouter.get("/", verifyCleaner, async (req, res) => {
               numBaths: c.home.numBaths,
             }
           : null,
-      })),
+        };
+      }),
     });
   } catch (err) {
     console.error("Error fetching clients:", err);
@@ -238,10 +255,13 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
     }
 
     if (cleanerClient.isAlreadyAccepted) {
+      const decryptedEmail = cleanerClient.invitedEmail
+        ? EncryptionService.decrypt(cleanerClient.invitedEmail)
+        : null;
       return res.status(400).json({
         valid: false,
         alreadyAccepted: true,
-        email: cleanerClient.email || cleanerClient.invitedEmail,
+        email: cleanerClient.email || decryptedEmail,
         error: "This invitation has already been accepted. Please log in.",
       });
     }
@@ -256,6 +276,19 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
     // Check if invitation was cancelled
     const isCancelled = cleanerClient.isCancelled || false;
 
+    // Decrypt invited fields for response
+    let decryptedInvitedAddress = null;
+    if (cleanerClient.invitedAddress) {
+      const decrypted = EncryptionService.decrypt(cleanerClient.invitedAddress);
+      if (decrypted) {
+        try {
+          decryptedInvitedAddress = JSON.parse(decrypted);
+        } catch (e) {
+          decryptedInvitedAddress = decrypted;
+        }
+      }
+    }
+
     res.json({
       valid: true,
       isCancelled,
@@ -266,10 +299,10 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
           : cleanerClient.cleaner
             ? `${EncryptionService.decrypt(cleanerClient.cleaner.firstName)} ${EncryptionService.decrypt(cleanerClient.cleaner.lastName)}`
             : "Your Cleaner",
-        name: cleanerClient.invitedName,
-        email: cleanerClient.invitedEmail,
-        phone: cleanerClient.invitedPhone,
-        address: cleanerClient.invitedAddress,
+        name: cleanerClient.invitedName ? EncryptionService.decrypt(cleanerClient.invitedName) : null,
+        email: cleanerClient.invitedEmail ? EncryptionService.decrypt(cleanerClient.invitedEmail) : null,
+        phone: cleanerClient.invitedPhone ? EncryptionService.decrypt(cleanerClient.invitedPhone) : null,
+        address: decryptedInvitedAddress,
         beds: cleanerClient.invitedBeds,
         baths: cleanerClient.invitedBaths,
       },
@@ -616,7 +649,7 @@ cleanerClientsRouter.get("/:id", verifyCleaner, async (req, res) => {
       return res.status(404).json({ error: "Client not found" });
     }
 
-    res.json({ cleanerClient });
+    res.json({ cleanerClient: CleanerClientSerializer.serializeOne(cleanerClient) });
   } catch (err) {
     console.error("Error fetching client:", err);
     res.status(500).json({ error: "Failed to fetch client" });
@@ -675,25 +708,28 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
       };
     }
 
-    // Helper to format home data
-    const formatHomeData = (home) => ({
-      id: home.id,
-      nickName: home.nickName,
-      address: EncryptionService.decrypt(home.address),
-      city: EncryptionService.decrypt(home.city),
-      state: EncryptionService.decrypt(home.state),
-      zipcode: EncryptionService.decrypt(home.zipcode),
-      numBeds: home.numBeds,
-      numBaths: home.numBaths,
-      keyPadCode: home.keyPadCode ? EncryptionService.decrypt(home.keyPadCode) : null,
-      keyLocation: home.keyLocation ? EncryptionService.decrypt(home.keyLocation) : null,
-      sheetsProvided: home.sheetsProvided,
-      towelsProvided: home.towelsProvided,
-      timeToBeCompleted: home.timeToBeCompleted,
-      cleanersNeeded: home.cleanersNeeded,
-      specialNotes: home.specialNotes,
-      contact: home.contact ? EncryptionService.decrypt(home.contact) : null,
-    });
+    // Helper to format home data - explicitly decrypt PII fields
+    const formatHomeData = (home) => {
+      const dv = home.dataValues || home;
+      return {
+        id: dv.id,
+        nickName: dv.nickName,
+        address: EncryptionService.decrypt(dv.address),
+        city: EncryptionService.decrypt(dv.city),
+        state: EncryptionService.decrypt(dv.state),
+        zipcode: EncryptionService.decrypt(dv.zipcode),
+        numBeds: dv.numBeds,
+        numBaths: dv.numBaths,
+        keyPadCode: EncryptionService.decrypt(dv.keyPadCode),
+        keyLocation: EncryptionService.decrypt(dv.keyLocation),
+        sheetsProvided: dv.sheetsProvided,
+        towelsProvided: dv.towelsProvided,
+        timeToBeCompleted: dv.timeToBeCompleted,
+        cleanersNeeded: dv.cleanersNeeded,
+        specialNotes: dv.specialNotes,
+        contact: EncryptionService.decrypt(dv.contact),
+      };
+    };
 
     // Decrypt home fields if present (primary home linked to CleanerClient)
     let homeData = null;
@@ -701,21 +737,45 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
       homeData = formatHomeData(cleanerClient.home);
     }
 
-    // Fetch ALL homes for this client (not just the one linked to CleanerClient)
+    // Fetch ALL homes for this client with their CleanerClient relationships
     let allHomes = [];
     if (cleanerClient.clientId) {
       const clientHomes = await UserHomes.findAll({
         where: { userId: cleanerClient.clientId },
         order: [["createdAt", "ASC"]],
       });
-      allHomes = clientHomes.map(formatHomeData);
+
+      // For each home, find the corresponding CleanerClient record for this cleaner
+      for (const home of clientHomes) {
+        const homeCleanerClient = await CleanerClient.findOne({
+          where: {
+            cleanerId: req.user.id,
+            homeId: home.id,
+            status: "active",
+          },
+        });
+
+        allHomes.push({
+          ...formatHomeData(home),
+          cleanerClientId: homeCleanerClient?.id || null,
+          defaultPrice: homeCleanerClient?.defaultPrice || cleanerClient.defaultPrice || null,
+        });
+      }
     }
 
-    // Fetch appointments if home exists
+    // Fetch appointments from ALL homes for this client
     let appointments = { history: [], today: [], upcoming: [] };
-    if (cleanerClient.homeId) {
+    if (allHomes.length > 0) {
+      const homeIds = allHomes.map(h => h.id);
       const allAppointments = await UserAppointments.findAll({
-        where: { homeId: cleanerClient.homeId },
+        where: { homeId: homeIds },
+        include: [
+          {
+            model: UserHomes,
+            as: "home",
+            attributes: ["id", "nickName", "numBeds", "numBaths"],
+          },
+        ],
         order: [["date", "DESC"]],
       });
 
@@ -727,12 +787,19 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
           price: apt.price,
           completed: apt.completed,
           paid: apt.paid,
+          status: apt.completed ? "completed" : (apt.cancelled ? "cancelled" : "pending"),
           paymentStatus: apt.paymentStatus,
           timeToBeCompleted: apt.timeToBeCompleted,
           bringSheets: apt.bringSheets,
           bringTowels: apt.bringTowels,
           hasBeenAssigned: apt.hasBeenAssigned,
           employeesAssigned: apt.employeesAssigned,
+          home: apt.home ? {
+            id: apt.home.id,
+            nickName: apt.home.nickName,
+            numBeds: apt.home.numBeds,
+            numBaths: apt.home.numBaths,
+          } : null,
         };
 
         if (apt.date < today) {
@@ -748,14 +815,27 @@ cleanerClientsRouter.get("/:id/full", verifyCleaner, async (req, res) => {
       appointments.upcoming.reverse();
     }
 
+    // Decrypt invited fields for the cleanerClient response
+    let decryptedInvitedAddress = null;
+    if (cleanerClient.invitedAddress) {
+      const decrypted = EncryptionService.decrypt(cleanerClient.invitedAddress);
+      if (decrypted) {
+        try {
+          decryptedInvitedAddress = JSON.parse(decrypted);
+        } catch (e) {
+          decryptedInvitedAddress = decrypted; // Keep as string if not JSON
+        }
+      }
+    }
+
     res.json({
       cleanerClient: {
         id: cleanerClient.id,
         status: cleanerClient.status,
-        invitedName: cleanerClient.invitedName,
-        invitedEmail: cleanerClient.invitedEmail,
-        invitedPhone: cleanerClient.invitedPhone,
-        invitedAddress: cleanerClient.invitedAddress,
+        invitedName: cleanerClient.invitedName ? EncryptionService.decrypt(cleanerClient.invitedName) : null,
+        invitedEmail: cleanerClient.invitedEmail ? EncryptionService.decrypt(cleanerClient.invitedEmail) : null,
+        invitedPhone: cleanerClient.invitedPhone ? EncryptionService.decrypt(cleanerClient.invitedPhone) : null,
+        invitedAddress: decryptedInvitedAddress,
         invitedBeds: cleanerClient.invitedBeds,
         invitedBaths: cleanerClient.invitedBaths,
         invitedNotes: cleanerClient.invitedNotes,
@@ -899,7 +979,7 @@ cleanerClientsRouter.patch("/:id", verifyCleaner, async (req, res) => {
     res.json({
       success: true,
       message: "Client updated successfully",
-      cleanerClient,
+      cleanerClient: CleanerClientSerializer.serializeOne(cleanerClient),
     });
   } catch (err) {
     console.error("Error updating client:", err);
@@ -1388,7 +1468,7 @@ cleanerClientsRouter.get("/:id/pending-bookings", verifyCleaner, async (req, res
       order: [["date", "ASC"]],
     });
 
-    res.json({ pendingBookings });
+    res.json({ pendingBookings: AppointmentSerializer.serializeArray(pendingBookings) });
   } catch (err) {
     console.error("Error fetching pending bookings:", err);
     res.status(500).json({ error: "Failed to fetch pending bookings" });

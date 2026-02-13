@@ -180,6 +180,13 @@ module.exports = (sequelize, DataTypes) => {
 			allowNull: true,
 			comment: "When last tenant present incident occurred",
 		},
+		// Marketplace visibility for homes declined by business owner
+		isMarketplaceEnabled: {
+			type: DataTypes.BOOLEAN,
+			allowNull: false,
+			defaultValue: false,
+			comment: "When true, this home is visible on marketplace for cleaners to pick up jobs",
+		},
 	});
 
 	// Helper function to encrypt PII fields

@@ -123,6 +123,35 @@ router.post("/support/create", async (req, res) => {
 			});
 		}
 
+		// Validate subject user if provided
+		if (subjectUserId) {
+			const { User } = require("../../../models");
+			const subjectUser = await User.findByPk(parseInt(subjectUserId));
+
+			if (!subjectUser) {
+				return res.status(400).json({
+					success: false,
+					error: "Subject user not found",
+				});
+			}
+
+			// Prevent creating ticket about yourself
+			if (parseInt(subjectUserId) === req.user.id) {
+				return res.status(400).json({
+					success: false,
+					error: "Cannot create a support ticket about yourself",
+				});
+			}
+
+			// Validate subjectType matches user's actual type if provided
+			if (subjectType && subjectUser.type !== subjectType) {
+				return res.status(400).json({
+					success: false,
+					error: `Subject type mismatch. User is type '${subjectUser.type || "client"}', not '${subjectType}'`,
+				});
+			}
+		}
+
 		const SupportTicketService = require("../../../services/SupportTicketService");
 
 		let ticket;
@@ -623,6 +652,14 @@ router.post("/:type/:id/payout", async (req, res) => {
 		const { type, id } = req.params;
 		const { amount, reason } = req.body;
 
+		// Validate case type
+		if (!["appeal", "adjustment", "payment", "support"].includes(type)) {
+			return res.status(400).json({
+				success: false,
+				error: "Invalid case type. Must be 'appeal', 'adjustment', 'payment', or 'support'.",
+			});
+		}
+
 		if (!amount || amount <= 0) {
 			return res.status(400).json({
 				success: false,
@@ -700,6 +737,14 @@ router.post("/:type/:id/resolve", async (req, res) => {
 	try {
 		const { type, id } = req.params;
 		const { decision, resolution, notes } = req.body;
+
+		// Validate case type
+		if (!["appeal", "adjustment", "payment", "support"].includes(type)) {
+			return res.status(400).json({
+				success: false,
+				error: "Invalid case type. Must be 'appeal', 'adjustment', 'payment', or 'support'.",
+			});
+		}
 
 		if (!decision || !["approve", "deny", "partial"].includes(decision)) {
 			return res.status(400).json({

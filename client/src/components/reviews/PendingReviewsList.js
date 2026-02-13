@@ -34,8 +34,10 @@ const PendingReviewsList = ({ state }) => {
   const [photos, setPhotos] = useState({ before: [], after: [] });
   const [photosLoading, setPhotosLoading] = useState(false);
 
-  const userRole = state?.currentUser?.role || "client";
-  const isHomeowner = userRole === "client" || userRole === "homeowner";
+  // Use state.account to determine user type (cleaner, client, owner, etc.)
+  const accountType = state?.account || "client";
+  const isCleaner = accountType === "cleaner" || accountType === "employee";
+  const isHomeowner = !isCleaner; // Homeowners, owners, HR all review cleaners
 
   const fetchPendingReviews = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -104,15 +106,20 @@ const PendingReviewsList = ({ state }) => {
       return {
         userId: cleaner?.id,
         name: cleaner?.firstName
-          ? `${cleaner.firstName} ${cleaner.lastName || ""}`
+          ? `${cleaner.firstName} ${cleaner.lastName || ""}`.trim()
           : cleaner?.username || "Cleaner",
         reviewType: "homeowner_to_cleaner",
       };
     } else {
-      // Cleaner reviewing homeowner (we need to get the home owner)
+      // Cleaner reviewing homeowner - use homeowner data from API
+      const homeowner = pendingReview.homeowner;
+      const homeownerName = homeowner?.firstName
+        ? `${homeowner.firstName} ${homeowner.lastName || ""}`.trim()
+        : homeowner?.username || pendingReview.home?.nickName || "Homeowner";
+
       return {
-        userId: pendingReview.home?.ownerId,
-        name: pendingReview.home?.nickName || "Homeowner",
+        userId: homeowner?.id || pendingReview.home?.ownerId,
+        name: homeownerName,
         reviewType: "cleaner_to_homeowner",
       };
     }
@@ -244,7 +251,9 @@ const PendingReviewsList = ({ state }) => {
                           <Text style={styles.pendingName}>{reviewee.name}</Text>
                           {pending.home && (
                             <Text style={styles.pendingLocation}>
-                              {pending.home.nickName || pending.home.city}
+                              {isCleaner
+                                ? `Job at ${pending.home.nickName || pending.home.city}`
+                                : pending.home.nickName || pending.home.city}
                             </Text>
                           )}
                         </View>
@@ -294,8 +303,9 @@ const PendingReviewsList = ({ state }) => {
             </View>
             <Text style={styles.emptyTitle}>All Caught Up!</Text>
             <Text style={styles.emptyText}>
-              You don't have any pending reviews. After your next completed
-              appointment, you'll be able to leave a review here.
+              {isCleaner
+                ? "You don't have any pending reviews. After your next completed job, you'll be able to leave a review for the homeowner here."
+                : "You don't have any pending reviews. After your next completed appointment, you'll be able to leave a review here."}
             </Text>
             <Pressable style={styles.homeButton} onPress={() => navigate("/")}>
               <Text style={styles.homeButtonText}>Back to Dashboard</Text>

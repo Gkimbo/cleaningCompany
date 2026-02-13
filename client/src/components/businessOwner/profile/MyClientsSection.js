@@ -73,15 +73,9 @@ const ClientCard = ({ client }) => {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Get address preview
-  const addressPreview = client.home?.address
-    ? client.home.address.split(",")[0]
-    : "No address";
-
-  // Home details
-  const homeDetails = client.home
-    ? `${client.home.numBeds || 0}bd • ${client.home.numBaths || 0}ba`
-    : null;
+  // Get homes array (new grouped structure) or fall back to single home
+  const homes = client.homes || (client.home ? [client.home] : []);
+  const homeCount = homes.length;
 
   // Payment status from next appointment
   const paymentStatus = nextAppointment?.paymentStatus || null;
@@ -118,16 +112,20 @@ const ClientCard = ({ client }) => {
           )}
         </View>
         <View style={styles.clientDetailsRow}>
-          <Icon name="map-marker" size={10} color={colors.neutral[400]} />
-          <Text style={styles.clientAddress} numberOfLines={1}>
-            {addressPreview}
-          </Text>
-          {homeDetails && (
-            <>
-              <View style={styles.detailDot} />
-              <Text style={styles.homeDetails}>{homeDetails}</Text>
-            </>
-          )}
+          <Icon name="home" size={10} color={colors.neutral[400]} />
+          <View style={styles.homesContainer}>
+            {homes.length > 0 ? (
+              homes.map((home, index) => (
+                <View key={home.id || index} style={styles.homeTag}>
+                  <Text style={styles.homeTagText}>
+                    Home {index + 1}{home.nickname ? `: ${home.nickname}` : ""}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noHomesText}>No homes</Text>
+            )}
+          </View>
         </View>
       </View>
 
@@ -173,7 +171,43 @@ const MyClientsSection = ({ state, refreshTrigger }) => {
 
     try {
       const result = await CleanerClientService.getClients(state.currentUser.token, "active");
-      setClients(result.clients || []);
+      const rawClients = result.clients || [];
+
+      // Group clients by clientId to deduplicate (same client with multiple homes)
+      const clientMap = new Map();
+      for (const record of rawClients) {
+        const clientId = record.client?.id;
+        if (!clientId) {
+          // If no client linked yet (pending invite), keep as separate entry
+          clientMap.set(`pending-${record.id}`, {
+            ...record,
+            homes: record.home ? [record.home] : [],
+          });
+          continue;
+        }
+
+        if (clientMap.has(clientId)) {
+          // Add this home to existing client entry
+          const existing = clientMap.get(clientId);
+          if (record.home) {
+            existing.homes.push(record.home);
+          }
+          // Keep the most recent nextAppointment
+          if (record.nextAppointment && (!existing.nextAppointment ||
+              new Date(record.nextAppointment.date) < new Date(existing.nextAppointment.date))) {
+            existing.nextAppointment = record.nextAppointment;
+          }
+        } else {
+          // First time seeing this client
+          clientMap.set(clientId, {
+            ...record,
+            homes: record.home ? [record.home] : [],
+            clientUser: record.client, // Keep client user info
+          });
+        }
+      }
+
+      setClients(Array.from(clientMap.values()));
     } catch (error) {
       console.error("Error fetching clients:", error);
     } finally {
@@ -424,21 +458,26 @@ const styles = StyleSheet.create({
   clientDetailsRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+  },
+  homesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 4,
+    flex: 1,
   },
-  clientAddress: {
-    fontSize: typography.fontSize.sm,
-    color: colors.neutral[500],
-    flexShrink: 1,
+  homeTag: {
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
   },
-  detailDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: colors.neutral[300],
-    marginHorizontal: 4,
+  homeTagText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.neutral[600],
+    fontWeight: typography.fontWeight.medium,
   },
-  homeDetails: {
+  noHomesText: {
     fontSize: typography.fontSize.sm,
     color: colors.neutral[400],
   },

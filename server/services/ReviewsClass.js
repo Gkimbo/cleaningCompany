@@ -2,6 +2,17 @@ const { UserReviews, User, UserAppointments, BusinessEmployee, UserHomes, Employ
 const { Op } = require("sequelize");
 
 class ReviewsClass {
+  /**
+   * Validate rating is in valid range (1-5)
+   */
+  static validateRating(rating, fieldName = "rating") {
+    if (rating === null || rating === undefined) return; // Optional ratings
+    const numRating = Number(rating);
+    if (isNaN(numRating) || numRating < 1 || numRating > 5) {
+      throw new Error(`${fieldName} must be between 1 and 5`);
+    }
+  }
+
   // Submit a new review
   static async submitReview(reviewData) {
     const {
@@ -32,7 +43,21 @@ class ReviewsClass {
       wouldWorkForAgain,
     } = reviewData;
 
-    // Check if review already exists for this user/appointment combination
+    // ===== VALIDATION: Prevent self-reviews =====
+    if (userId === reviewerId) {
+      throw new Error("You cannot review yourself");
+    }
+
+    // ===== VALIDATION: Check appointment exists and is valid =====
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+
+    if (!appointment) {
+      throw new Error("Appointment not found");
+    }
+
+    // ===== VALIDATION: Check for duplicate review early to fail fast =====
     const existingReview = await UserReviews.findOne({
       where: {
         reviewerId,
@@ -40,13 +65,82 @@ class ReviewsClass {
         userId,
       },
     });
-
     if (existingReview) {
       throw new Error("You have already reviewed this appointment");
     }
 
-    // Get reviewer's name to store with the review
+    // ===== VALIDATION: Appointment must be completed =====
+    if (!appointment.completed) {
+      throw new Error("Cannot review an appointment that is not completed");
+    }
+
+    // ===== VALIDATION: Appointment must not be cancelled =====
+    if (appointment.wasCancelled) {
+      throw new Error("Cannot review a cancelled appointment");
+    }
+
+    // ===== VALIDATION: Reviews must not be blocked =====
+    if (appointment.reviewsBlocked) {
+      throw new Error("Reviews are blocked for this appointment");
+    }
+
+    // ===== VALIDATION: Reviewer must be authorized for this appointment =====
     const reviewer = await User.findByPk(reviewerId);
+    if (!reviewer) {
+      throw new Error("Reviewer not found");
+    }
+
+    if (reviewType === "homeowner_to_cleaner") {
+      // Homeowner reviewing cleaner - verify homeowner owns this appointment's home
+      const homeOwnerId = appointment.home?.userId || appointment.userId;
+      if (reviewerId !== homeOwnerId) {
+        throw new Error("Only the homeowner can review the cleaner for this appointment");
+      }
+      // Verify the cleaner (userId) was actually assigned to this appointment
+      // Note: employeesAssigned stores IDs as strings, so convert for comparison
+      const assignedCleaners = appointment.employeesAssigned || [];
+      if (!assignedCleaners.includes(String(userId))) {
+        throw new Error("The specified cleaner was not assigned to this appointment");
+      }
+    } else if (reviewType === "cleaner_to_homeowner") {
+      // Cleaner reviewing homeowner - verify cleaner was assigned
+      // Note: employeesAssigned stores IDs as strings, so convert for comparison
+      const assignedCleaners = appointment.employeesAssigned || [];
+      if (!assignedCleaners.includes(String(reviewerId))) {
+        throw new Error("Only assigned cleaners can review the homeowner");
+      }
+      // Verify the userId is the actual homeowner
+      const homeOwnerId = appointment.home?.userId || appointment.userId;
+      if (userId !== homeOwnerId) {
+        throw new Error("Invalid homeowner specified for review");
+      }
+    } else {
+      throw new Error("Invalid review type");
+    }
+
+    // ===== VALIDATION: Overall rating is required =====
+    if (review === null || review === undefined) {
+      throw new Error("Overall rating is required");
+    }
+
+    // ===== VALIDATION: Rating must be in valid range (1-5) =====
+    this.validateRating(review, "Overall rating");
+    this.validateRating(cleaningQuality, "Cleaning quality");
+    this.validateRating(punctuality, "Punctuality");
+    this.validateRating(professionalism, "Professionalism");
+    this.validateRating(communication, "Communication");
+    this.validateRating(attentionToDetail, "Attention to detail");
+    this.validateRating(thoroughness, "Thoroughness");
+    this.validateRating(respectOfProperty, "Respect of property");
+    this.validateRating(followedInstructions, "Followed instructions");
+    this.validateRating(accuracyOfDescription, "Accuracy of description");
+    this.validateRating(homeReadiness, "Home readiness");
+    this.validateRating(easeOfAccess, "Ease of access");
+    this.validateRating(homeCondition, "Home condition");
+    this.validateRating(respectfulness, "Respectfulness");
+    this.validateRating(safetyConditions, "Safety conditions");
+
+    // Get reviewer's name to store with the review
     const reviewerName = reviewer
       ? `${reviewer.firstName || ''} ${reviewer.lastName || ''}`.trim() || reviewer.username
       : null;
@@ -374,12 +468,17 @@ class ReviewsClass {
     // Get appointments the user was part of that are completed
     let appointments;
 
+    // Base criteria: completed, not cancelled, and reviews not blocked
+    const baseWhere = {
+      completed: true,
+      wasCancelled: false,
+      reviewsBlocked: false,
+    };
+
     if (userRole === "cleaner") {
       // Get completed appointments where this cleaner was assigned
       appointments = await UserAppointments.findAll({
-        where: {
-          completed: true,
-        },
+        where: baseWhere,
       });
       // Filter to those where cleaner was assigned
       appointments = appointments.filter((apt) => {
@@ -397,8 +496,8 @@ class ReviewsClass {
 
       appointments = await UserAppointments.findAll({
         where: {
+          ...baseWhere,
           homeId: { [Op.in]: homeIds },
-          completed: true,
         },
       });
     }
@@ -703,8 +802,74 @@ class ReviewsClass {
     rating,
     comment,
   }) {
-    // Get reviewer's name to store with the review
+    // ===== VALIDATION: Prevent self-reviews =====
+    if (userId === reviewerId) {
+      throw new Error("You cannot review yourself");
+    }
+
+    // ===== VALIDATION: Rating is required =====
+    if (rating === null || rating === undefined) {
+      throw new Error("Rating is required");
+    }
+
+    // ===== VALIDATION: Rating must be in valid range (1-5) =====
+    this.validateRating(rating, "Rating");
+
+    // ===== VALIDATION: Check appointment exists and is valid =====
+    const appointment = await UserAppointments.findByPk(appointmentId, {
+      include: [{ model: UserHomes, as: "home" }],
+    });
+    if (!appointment) {
+      throw new Error("Appointment not found");
+    }
+
+    // ===== VALIDATION: Check for duplicate review early =====
+    const existingReview = await UserReviews.findOne({
+      where: { reviewerId, appointmentId, userId },
+    });
+    if (existingReview) {
+      throw new Error("You have already reviewed this appointment");
+    }
+
+    if (!appointment.completed) {
+      throw new Error("Cannot review an appointment that is not completed");
+    }
+    if (appointment.wasCancelled) {
+      throw new Error("Cannot review a cancelled appointment");
+    }
+    if (appointment.reviewsBlocked) {
+      throw new Error("Reviews are blocked for this appointment");
+    }
+
+    // ===== VALIDATION: Reviewer must be authorized =====
+    // Get reviewer and determine review direction
     const reviewer = await User.findByPk(reviewerId);
+    if (!reviewer) {
+      throw new Error("Reviewer not found");
+    }
+
+    const homeOwnerId = appointment.home?.userId || appointment.userId;
+    const assignedCleaners = appointment.employeesAssigned || [];
+
+    // Determine if this is homeowner→cleaner or cleaner→homeowner review
+    const reviewerIsHomeowner = reviewerId === homeOwnerId;
+    const reviewerIsCleaner = assignedCleaners.includes(String(reviewerId));
+
+    if (reviewerIsHomeowner) {
+      // Homeowner reviewing cleaner - verify the userId is an assigned cleaner
+      if (!assignedCleaners.includes(String(userId))) {
+        throw new Error("The specified user was not assigned to this appointment");
+      }
+    } else if (reviewerIsCleaner) {
+      // Cleaner reviewing homeowner - verify the userId is the homeowner
+      if (userId !== homeOwnerId) {
+        throw new Error("Invalid user specified for review");
+      }
+    } else {
+      throw new Error("You are not authorized to review this appointment");
+    }
+
+    // Get reviewer's name to store with the review
     const reviewerName = reviewer
       ? `${reviewer.firstName || ''} ${reviewer.lastName || ''}`.trim() || reviewer.username
       : null;

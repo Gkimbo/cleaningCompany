@@ -114,6 +114,11 @@ module.exports = (sequelize, DataTypes) => {
 		resolutionNotes: {
 			type: DataTypes.TEXT,
 		},
+		refundAmount: {
+			type: DataTypes.INTEGER,
+			allowNull: true,
+			comment: "Amount in cents that was refunded as part of appeal resolution",
+		},
 
 		// SLA tracking
 		slaDeadline: {

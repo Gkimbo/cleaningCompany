@@ -90,6 +90,30 @@ reviewsRouter.get("/pending", verifyToken, async (req, res) => {
           attributes: ["id", "username", "firstName", "lastName"],
         });
 
+        // Get homeowner info (for cleaners reviewing homeowners)
+        let homeowner = null;
+        if (home && home.userId) {
+          const homeownerUser = await User.findByPk(home.userId, {
+            attributes: ["id", "username", "firstName", "lastName"],
+          });
+          if (homeownerUser) {
+            homeowner = {
+              id: homeownerUser.id,
+              username: homeownerUser.username,
+              firstName: homeownerUser.firstName ? EncryptionService.decrypt(homeownerUser.firstName) : null,
+              lastName: homeownerUser.lastName ? EncryptionService.decrypt(homeownerUser.lastName) : null,
+            };
+          }
+        }
+
+        // Decrypt cleaner names for display
+        const decryptedCleaners = assignedCleaners.map(cleaner => ({
+          id: cleaner.id,
+          username: cleaner.username,
+          firstName: cleaner.firstName ? EncryptionService.decrypt(cleaner.firstName) : null,
+          lastName: cleaner.lastName ? EncryptionService.decrypt(cleaner.lastName) : null,
+        }));
+
         // Check if cleaner is already preferred for this home (for homeowner reviews)
         let isCleanerPreferred = false;
         if (home && assignedCleaners.length > 0 && userRole !== "cleaner") {
@@ -111,8 +135,10 @@ reviewsRouter.get("/pending", verifyToken, async (req, res) => {
             address: EncryptionService.decrypt(home.address),
             city: EncryptionService.decrypt(home.city),
             nickName: home.nickName,
+            ownerId: home.userId,
           } : null,
-          cleaners: assignedCleaners,
+          cleaners: decryptedCleaners,
+          homeowner, // Include homeowner info for cleaners
           completedAt: apt.updatedAt,
           isCleanerPreferred,
         };
@@ -269,9 +295,11 @@ reviewsRouter.post("/submit", verifyToken, async (req, res) => {
   }
 });
 
-// Legacy submit endpoint (backwards compatibility)
-reviewsRouter.post("/submit-legacy", async (req, res) => {
-  const { userId, reviewerId, appointmentId, rating, comment } = req.body;
+// Legacy submit endpoint (backwards compatibility) - NOW REQUIRES AUTHENTICATION
+reviewsRouter.post("/submit-legacy", verifyToken, async (req, res) => {
+  const { userId, appointmentId, rating, comment } = req.body;
+  // SECURITY: Always use authenticated user as reviewer, ignore any client-provided reviewerId
+  const reviewerId = req.userId;
   try {
     const newReview = await ReviewsClass.addReviewToDB({
       userId,

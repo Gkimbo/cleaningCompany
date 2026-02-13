@@ -16,32 +16,35 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
   const isActive = client.status === "active";
   const isInactive = client.status === "inactive";
 
-  const getStatusBadge = () => {
+  const getStatusConfig = () => {
     if (isPending) {
       return {
         label: "Pending",
-        bgColor: colors.warning[100],
+        bgColor: colors.warning[50],
         textColor: colors.warning[700],
+        borderColor: colors.warning[200],
         icon: "clock",
       };
     }
     if (isActive) {
       return {
         label: "Active",
-        bgColor: colors.success[100],
+        bgColor: colors.success[50],
         textColor: colors.success[700],
+        borderColor: colors.success[200],
         icon: "check-circle",
       };
     }
     return {
       label: "Inactive",
-      bgColor: colors.neutral[200],
-      textColor: colors.neutral[600],
+      bgColor: colors.neutral[100],
+      textColor: colors.neutral[500],
+      borderColor: colors.neutral[200],
       icon: "x-circle",
     };
   };
 
-  const status = getStatusBadge();
+  const status = getStatusConfig();
 
   const handlePriceEdit = (e) => {
     e.stopPropagation();
@@ -54,7 +57,6 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
     if (onPriceUpdate) {
       const success = await onPriceUpdate(client.id, newPrice);
       if (!success) {
-        // Revert if save failed
         setPriceInput(client.defaultPrice?.toString() || "");
       }
     }
@@ -70,7 +72,6 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
     const newPrice = parseFloat(priceInput);
     const oldPrice = client.defaultPrice;
 
-    // If active client and price changed, show confirmation
     if (isActive && newPrice !== oldPrice) {
       Alert.alert(
         "Change Price?",
@@ -84,7 +85,6 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
         ]
       );
     } else {
-      // Pending client or same price - no confirmation needed
       savePrice(newPrice);
     }
   };
@@ -109,213 +109,222 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
     ? client.client.email
     : client.invitedEmail;
 
+  // Get initials for avatar
+  const getInitials = () => {
+    if (!displayName) return "?";
+    const parts = displayName.split(" ");
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return displayName[0]?.toUpperCase() || "?";
+  };
+
+  const homeCount = client.homes?.length || (client.home ? 1 : 0);
+  const primaryHome = client.homes?.[0] || client.home;
+  const beds = primaryHome?.numBeds || client.invitedBeds;
+  const baths = primaryHome?.numBaths || client.invitedBaths;
+
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
         pressed && styles.cardPressed,
+        isPending && styles.cardPending,
       ]}
       onPress={() => onPress(client)}
     >
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
-          <View style={[
-            styles.avatar,
-            isActive && styles.avatarActive,
-            isPending && styles.avatarPending,
+      {/* Top Section: Avatar, Name, Status */}
+      <View style={styles.topSection}>
+        <View style={[
+          styles.avatar,
+          isActive && styles.avatarActive,
+          isPending && styles.avatarPending,
+        ]}>
+          <Text style={[
+            styles.avatarText,
+            isActive && styles.avatarTextActive,
+            isPending && styles.avatarTextPending,
           ]}>
-            <Feather
-              name={isActive ? "user" : "user-plus"}
-              size={20}
-              color={isActive ? colors.primary[600] : colors.warning[600]}
-            />
-          </View>
+            {getInitials()}
+          </Text>
         </View>
 
-        <View style={styles.headerInfo}>
-          <Text style={styles.name}>{displayName}</Text>
-          <Text style={styles.email}>{displayEmail}</Text>
+        <View style={styles.nameSection}>
+          <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+          <Text style={styles.email} numberOfLines={1}>{displayEmail}</Text>
         </View>
 
-        <View style={[styles.statusBadge, { backgroundColor: status.bgColor }]}>
-          <Feather name={status.icon} size={12} color={status.textColor} />
+        <View style={[
+          styles.statusBadge,
+          { backgroundColor: status.bgColor, borderColor: status.borderColor }
+        ]}>
+          <Feather name={status.icon} size={10} color={status.textColor} />
           <Text style={[styles.statusText, { color: status.textColor }]}>
             {status.label}
           </Text>
         </View>
       </View>
 
-      {/* Home info if available */}
-      {(client.home || client.invitedBeds) && (
-        <View style={styles.homeInfo}>
-          <Feather name="home" size={14} color={colors.neutral[400]} />
-          <Text style={styles.homeText}>
-            {client.home
-              ? `${client.home.address}, ${client.home.city}`
-              : client.invitedAddress?.address || "Address pending"}
-          </Text>
-          {(client.home?.numBeds || client.invitedBeds) && (
-            <View style={styles.bedBathBadge}>
-              <Text style={styles.bedBathText}>
-                {client.home?.numBeds || client.invitedBeds}bd / {client.home?.numBaths || client.invitedBaths}ba
-              </Text>
+      {/* Info Pills Row */}
+      <View style={styles.infoRow}>
+        {/* Home Address Pill - only show if single home */}
+        {homeCount <= 1 && (primaryHome || client.invitedAddress) && (
+          <View style={styles.infoPill}>
+            <Feather name="map-pin" size={12} color={colors.neutral[500]} />
+            <Text style={styles.infoPillText} numberOfLines={1}>
+              {primaryHome
+                ? `${primaryHome.address?.split(",")[0] || primaryHome.city}`
+                : client.invitedAddress?.address?.split(",")[0] || "Address pending"}
+            </Text>
+          </View>
+        )}
+
+        {/* Beds/Baths or Multi-home Badge */}
+        {homeCount > 1 ? (
+          <View style={[styles.infoPill, styles.infoPillHighlight]}>
+            <Feather name="home" size={12} color={colors.primary[600]} />
+            <Text style={[styles.infoPillText, styles.infoPillTextHighlight]}>
+              {homeCount} homes
+            </Text>
+          </View>
+        ) : beds ? (
+          <View style={styles.infoPill}>
+            <Feather name="layout" size={12} color={colors.neutral[500]} />
+            <Text style={styles.infoPillText}>{beds}bd / {baths}ba</Text>
+          </View>
+        ) : null}
+
+        {/* Price Pill - only show for single home clients */}
+        {homeCount <= 1 && (client.defaultPrice || onPriceUpdate) && !editingPrice && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.pricePill,
+              onPriceUpdate && styles.pricePillEditable,
+              pressed && onPriceUpdate && styles.pricePillPressed,
+            ]}
+            onPress={onPriceUpdate ? handlePriceEdit : undefined}
+            disabled={!onPriceUpdate}
+          >
+            <Text style={styles.pricePillText}>
+              ${client.defaultPrice ? parseFloat(client.defaultPrice).toFixed(0) : "—"}
+            </Text>
+            {onPriceUpdate && (
+              <Feather name="edit-2" size={10} color={colors.success[600]} />
+            )}
+          </Pressable>
+        )}
+      </View>
+
+      {/* Price Edit Mode - only for single home clients */}
+      {homeCount <= 1 && editingPrice && (
+        <View style={styles.priceEditSection}>
+          <View style={styles.priceEditRow}>
+            <View style={styles.priceEditContainer}>
+              <Text style={styles.dollarSign}>$</Text>
+              <TextInput
+                style={styles.priceEditInput}
+                value={priceInput}
+                onChangeText={setPriceInput}
+                keyboardType="decimal-pad"
+                autoFocus
+                selectTextOnFocus
+              />
             </View>
+            <Pressable style={styles.priceSaveBtn} onPress={handlePriceSave}>
+              <Feather name="check" size={16} color={colors.neutral[0]} />
+            </Pressable>
+            <Pressable style={styles.priceCancelBtn} onPress={handlePriceCancel}>
+              <Feather name="x" size={16} color={colors.neutral[600]} />
+            </Pressable>
+          </View>
+          {platformPrice && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.platformPriceBtn,
+                pressed && styles.platformPriceBtnPressed,
+              ]}
+              onPress={handleUsePlatformPrice}
+            >
+              <Feather name="zap" size={12} color={colors.primary[600]} />
+              <Text style={styles.platformPriceText}>
+                Use platform price: ${platformPrice}
+              </Text>
+            </Pressable>
           )}
         </View>
       )}
 
-      {/* Frequency, price, and cleaners info */}
-      {(client.defaultFrequency || client.home?.cleanersNeeded > 1) && (
-        <View style={styles.scheduleRow}>
-          {client.defaultFrequency && (
-            <View style={styles.scheduleItem}>
-              <Feather name="calendar" size={14} color={colors.neutral[400]} />
-              <Text style={styles.scheduleText}>
-                {client.defaultFrequency === "weekly"
-                  ? "Weekly"
-                  : client.defaultFrequency === "biweekly"
-                  ? "Every 2 weeks"
-                  : client.defaultFrequency === "monthly"
-                  ? "Monthly"
-                  : "On demand"}
-              </Text>
-            </View>
-          )}
-          {(client.defaultPrice || onPriceUpdate) && (
-            editingPrice ? (
-              <View style={styles.priceEditWrapper}>
-                <View style={styles.priceEditContainer}>
-                  <Text style={styles.dollarSign}>$</Text>
-                  <TextInput
-                    style={styles.priceEditInput}
-                    value={priceInput}
-                    onChangeText={setPriceInput}
-                    keyboardType="decimal-pad"
-                    autoFocus
-                  />
-                  <Pressable
-                    style={styles.priceSaveBtn}
-                    onPress={handlePriceSave}
-                  >
-                    <Feather name="check" size={14} color={colors.neutral[0]} />
-                  </Pressable>
-                  <Pressable
-                    style={styles.priceCancelBtn}
-                    onPress={handlePriceCancel}
-                  >
-                    <Feather name="x" size={14} color={colors.neutral[600]} />
-                  </Pressable>
-                </View>
-                {platformPrice && (
-                  <View style={styles.platformPriceRow}>
-                    <Text style={styles.platformPriceLabel}>
-                      Platform: ${platformPrice}
-                    </Text>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.usePlatformBtn,
-                        pressed && styles.usePlatformBtnPressed,
-                      ]}
-                      onPress={handleUsePlatformPrice}
-                    >
-                      <Text style={styles.usePlatformBtnText}>Use</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </View>
-            ) : (
+      {/* Active Client Actions */}
+      {isActive && (onBookCleaning || onSetupRecurring || onMessage) && (
+        <View style={styles.actionsSection}>
+          <View style={styles.actionsRow}>
+            {onMessage && client.clientId && (
               <Pressable
                 style={({ pressed }) => [
-                  styles.priceDisplayItem,
-                  onPriceUpdate && styles.priceEditable,
-                  pressed && onPriceUpdate && styles.priceEditablePressed,
+                  styles.actionBtnIcon,
+                  pressed && styles.actionBtnIconPressed,
                 ]}
-                onPress={onPriceUpdate ? handlePriceEdit : undefined}
-                disabled={!onPriceUpdate}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onMessage(client);
+                }}
               >
-                <Feather name="dollar-sign" size={14} color={colors.success[600]} />
-                <Text style={styles.priceText}>
-                  {client.defaultPrice ? parseFloat(client.defaultPrice).toFixed(0) : "Set price"}
-                </Text>
-                {onPriceUpdate && (
-                  <Feather name="edit-2" size={12} color={colors.neutral[400]} />
-                )}
+                <Feather name="message-circle" size={16} color={colors.neutral[600]} />
               </Pressable>
-            )
-          )}
-          {client.home?.cleanersNeeded > 1 && (
-            <View style={styles.scheduleItem}>
-              <Feather name="users" size={14} color={colors.neutral[400]} />
-              <Text style={styles.scheduleText}>
-                {client.home.cleanersNeeded} cleaners
-              </Text>
-            </View>
-          )}
+            )}
+            <View style={styles.actionsSpacer} />
+            {onSetupRecurring && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionBtnSecondary,
+                  pressed && styles.actionBtnSecondaryPressed,
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onSetupRecurring(client);
+                }}
+              >
+                <Feather name="repeat" size={14} color={colors.primary[600]} />
+                <Text style={styles.actionBtnSecondaryText}>Recurring</Text>
+              </Pressable>
+            )}
+            {onBookCleaning && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.actionBtnPrimary,
+                  pressed && styles.actionBtnPrimaryPressed,
+                ]}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onBookCleaning(client);
+                }}
+              >
+                <Feather name="plus-circle" size={14} color={colors.neutral[0]} />
+                <Text style={styles.actionBtnPrimaryText}>Book</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
       )}
 
-      {/* Active client actions */}
-      {isActive && (onBookCleaning || onSetupRecurring || onMessage) && (
-        <View style={styles.activeActions}>
-          {onMessage && client.clientId && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.messageButton,
-                pressed && styles.messageButtonPressed,
-              ]}
-              onPress={(e) => {
-                e.stopPropagation();
-                onMessage(client);
-              }}
-            >
-              <Feather name="message-circle" size={14} color={colors.neutral[600]} />
-            </Pressable>
-          )}
-          {onSetupRecurring && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.recurringButton,
-                pressed && styles.recurringButtonPressed,
-              ]}
-              onPress={(e) => {
-                e.stopPropagation();
-                onSetupRecurring(client);
-              }}
-            >
-              <Feather name="repeat" size={14} color={colors.primary[600]} />
-              <Text style={styles.recurringButtonText}>Recurring</Text>
-            </Pressable>
-          )}
-          {onBookCleaning && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.bookButton,
-                pressed && styles.bookButtonPressed,
-              ]}
-              onPress={(e) => {
-                e.stopPropagation();
-                onBookCleaning(client);
-              }}
-            >
-              <Feather name="calendar" size={14} color={colors.neutral[0]} />
-              <Text style={styles.bookButtonText}>Book</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-
-      {/* Pending invite actions */}
+      {/* Pending Invite Actions */}
       {isPending && (
-        <View style={styles.pendingActions}>
-          <Text style={styles.pendingText}>
-            Invited {new Date(client.invitedAt).toLocaleDateString()}
-          </Text>
-          <View style={styles.pendingButtonsRow}>
+        <View style={styles.pendingSection}>
+          <View style={styles.pendingInfo}>
+            <Feather name="send" size={12} color={colors.neutral[400]} />
+            <Text style={styles.pendingText}>
+              Sent {new Date(client.invitedAt).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+              })}
+            </Text>
+          </View>
+          <View style={styles.pendingActions}>
             {onDeleteInvitation && (
               <Pressable
                 style={({ pressed }) => [
-                  styles.deleteButton,
-                  pressed && styles.deleteButtonPressed,
+                  styles.pendingBtnDelete,
+                  pressed && styles.pendingBtnDeletePressed,
                 ]}
                 onPress={(e) => {
                   e.stopPropagation();
@@ -327,24 +336,24 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
             )}
             <Pressable
               style={({ pressed }) => [
-                styles.resendButton,
-                pressed && styles.resendButtonPressed,
+                styles.pendingBtnResend,
+                pressed && styles.pendingBtnResendPressed,
               ]}
               onPress={(e) => {
                 e.stopPropagation();
                 onResendInvite(client);
               }}
             >
-              <Feather name="send" size={14} color={colors.primary[600]} />
-              <Text style={styles.resendButtonText}>Resend</Text>
+              <Feather name="refresh-cw" size={14} color={colors.primary[600]} />
+              <Text style={styles.pendingBtnResendText}>Resend</Text>
             </Pressable>
           </View>
         </View>
       )}
 
-      {/* Chevron for navigation */}
-      <View style={styles.chevron}>
-        <Feather name="chevron-right" size={20} color={colors.neutral[400]} />
+      {/* Subtle Chevron */}
+      <View style={styles.chevronContainer}>
+        <Feather name="chevron-right" size={18} color={colors.neutral[300]} />
       </View>
     </Pressable>
   );
@@ -353,41 +362,56 @@ const ClientCard = ({ client, onPress, onResendInvite, onDeleteInvitation, onBoo
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.xl,
+    borderRadius: radius["2xl"],
     padding: spacing.lg,
     marginBottom: spacing.md,
-    ...shadows.md,
-    position: "relative",
+    borderWidth: 1,
+    borderColor: colors.neutral[100],
+    ...shadows.sm,
   },
   cardPressed: {
     backgroundColor: colors.neutral[50],
+    borderColor: colors.neutral[200],
+  },
+  cardPending: {
+    borderColor: colors.warning[100],
+    borderStyle: "dashed",
   },
 
-  // Header row
-  header: {
+  // Top Section
+  topSection: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  avatarContainer: {
-    marginRight: spacing.md,
+    gap: spacing.md,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.neutral[100],
     alignItems: "center",
     justifyContent: "center",
   },
   avatarActive: {
-    backgroundColor: colors.primary[50],
+    backgroundColor: colors.primary[100],
   },
   avatarPending: {
-    backgroundColor: colors.warning[50],
+    backgroundColor: colors.warning[100],
   },
-  headerInfo: {
+  avatarText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[500],
+  },
+  avatarTextActive: {
+    color: colors.primary[700],
+  },
+  avatarTextPending: {
+    color: colors.warning[700],
+  },
+  nameSection: {
     flex: 1,
+    minWidth: 0,
   },
   name: {
     fontSize: typography.fontSize.base,
@@ -396,218 +420,217 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   email: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
   },
-
-  // Status badge
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: 4,
     borderRadius: radius.full,
     gap: 4,
+    borderWidth: 1,
   },
   statusText: {
-    fontSize: typography.fontSize.xs,
+    fontSize: 10,
     fontWeight: typography.fontWeight.semibold,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 
-  // Home info
-  homeInfo: {
+  // Info Row
+  infoRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
-    gap: spacing.sm,
   },
-  homeText: {
-    flex: 1,
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-  },
-  bedBathBadge: {
-    backgroundColor: colors.neutral[100],
+  infoPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.md,
+    paddingVertical: 4,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.full,
   },
-  bedBathText: {
+  infoPillHighlight: {
+    backgroundColor: colors.primary[50],
+  },
+  infoPillText: {
     fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+    color: colors.neutral[600],
     fontWeight: typography.fontWeight.medium,
   },
-
-  // Schedule row
-  scheduleRow: {
+  infoPillTextHighlight: {
+    color: colors.primary[700],
+  },
+  pricePill: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.sm,
-    gap: spacing.lg,
-  },
-  scheduleItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  scheduleText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-  },
-
-  // Price editing
-  priceEditWrapper: {
-    flexDirection: "column",
-    gap: spacing.xs,
-  },
-  priceDisplayItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  priceEditable: {
-    backgroundColor: colors.success[50],
+    gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
-    borderRadius: radius.md,
+    backgroundColor: colors.success[50],
+    borderRadius: radius.full,
+    marginLeft: "auto",
+  },
+  pricePillEditable: {
     borderWidth: 1,
     borderColor: colors.success[200],
+    borderStyle: "dashed",
   },
-  priceEditablePressed: {
+  pricePillPressed: {
     backgroundColor: colors.success[100],
   },
-  priceText: {
+  pricePillText: {
     fontSize: typography.fontSize.sm,
     color: colors.success[700],
-    fontWeight: typography.fontWeight.semibold,
+    fontWeight: typography.fontWeight.bold,
   },
-  priceEditContainer: {
+
+  // Price Edit Section
+  priceEditSection: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  priceEditRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: spacing.sm,
+  },
+  priceEditContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
   },
   dollarSign: {
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
-    color: colors.text.secondary,
+    color: colors.neutral[400],
   },
   priceEditInput: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.success[700],
-    backgroundColor: colors.neutral[100],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-    minWidth: 60,
-    textAlign: "right",
+    flex: 1,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    paddingVertical: spacing.sm,
+    paddingLeft: spacing.xs,
   },
   priceSaveBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.sm,
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
     backgroundColor: colors.success[600],
     alignItems: "center",
     justifyContent: "center",
   },
   priceCancelBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.sm,
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
     backgroundColor: colors.neutral[200],
     alignItems: "center",
     justifyContent: "center",
   },
-  platformPriceRow: {
+  platformPriceBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: spacing.xs,
+    alignSelf: "flex-start",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.full,
   },
-  platformPriceLabel: {
-    fontSize: typography.fontSize.xs,
-    color: colors.primary[600],
-  },
-  usePlatformBtn: {
+  platformPriceBtnPressed: {
     backgroundColor: colors.primary[100],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
   },
-  usePlatformBtnPressed: {
-    backgroundColor: colors.primary[200],
-  },
-  usePlatformBtnText: {
+  platformPriceText: {
     fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
     color: colors.primary[700],
+    fontWeight: typography.fontWeight.medium,
   },
 
-  // Active client actions
-  activeActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
+  // Actions Section
+  actionsSection: {
     marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
-    gap: spacing.sm,
   },
-  messageButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: 36,
-    height: 36,
-    backgroundColor: colors.neutral[100],
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
-  },
-  messageButtonPressed: {
-    backgroundColor: colors.neutral[200],
-  },
-  recurringButton: {
+  actionsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: spacing.sm,
+  },
+  actionsSpacer: {
+    flex: 1,
+  },
+  actionBtnIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.lg,
+    backgroundColor: colors.neutral[100],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionBtnIconPressed: {
+    backgroundColor: colors.neutral[200],
+  },
+  actionBtnSecondary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.primary[50],
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.primary[200],
+    borderColor: colors.primary[100],
   },
-  recurringButtonPressed: {
+  actionBtnSecondaryPressed: {
     backgroundColor: colors.primary[100],
   },
-  recurringButtonText: {
+  actionBtnSecondaryText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],
   },
-  bookButton: {
+  actionBtnPrimary: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
+    gap: 6,
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     backgroundColor: colors.primary[600],
     borderRadius: radius.lg,
+    ...shadows.sm,
   },
-  bookButtonPressed: {
+  actionBtnPrimaryPressed: {
     backgroundColor: colors.primary[700],
   },
-  bookButtonText: {
+  actionBtnPrimaryText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.neutral[0],
   },
 
-  // Pending actions
-  pendingActions: {
+  // Pending Section
+  pendingSection: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -616,52 +639,58 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
   },
+  pendingInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
   pendingText: {
     fontSize: typography.fontSize.xs,
     color: colors.neutral[400],
   },
-  pendingButtonsRow: {
+  pendingActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
   },
-  deleteButton: {
+  pendingBtnDelete: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.lg,
+    backgroundColor: colors.error[50],
     alignItems: "center",
     justifyContent: "center",
-    width: 36,
-    height: 36,
-    backgroundColor: colors.error[50],
-    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.error[200],
+    borderColor: colors.error[100],
   },
-  deleteButtonPressed: {
+  pendingBtnDeletePressed: {
     backgroundColor: colors.error[100],
   },
-  resendButton: {
+  pendingBtnResend: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
+    gap: 6,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.primary[50],
     borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary[100],
   },
-  resendButtonPressed: {
+  pendingBtnResendPressed: {
     backgroundColor: colors.primary[100],
   },
-  resendButtonText: {
+  pendingBtnResendText: {
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],
   },
 
   // Chevron
-  chevron: {
+  chevronContainer: {
     position: "absolute",
-    right: spacing.lg,
-    top: "50%",
-    marginTop: -10,
+    right: spacing.md,
+    top: spacing.lg + 12,
   },
 });
 

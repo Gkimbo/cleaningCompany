@@ -22,6 +22,8 @@ const calculatePrice = require("../../../services/CalculatePrice");
 const IncentiveService = require("../../../services/IncentiveService");
 const EncryptionService = require("../../../services/EncryptionService");
 const { getPricingConfig } = require("../../../config/businessConfig");
+const RecurringScheduleSerializer = require("../../../serializers/RecurringScheduleSerializer");
+const AppointmentSerializer = require("../../../serializers/AppointmentSerializer");
 
 const recurringSchedulesRouter = express.Router();
 const secretKey = process.env.SESSION_SECRET;
@@ -615,9 +617,13 @@ recurringSchedulesRouter.get("/:id", verifyCleaner, async (req, res) => {
         isPaused: schedule.isPaused,
         pausedUntil: schedule.pausedUntil,
         pauseReason: schedule.pauseReason,
-        client: schedule.cleanerClient?.client,
-        home: schedule.home,
-        upcomingAppointments: schedule.appointments || [],
+        client: schedule.cleanerClient?.client
+          ? RecurringScheduleSerializer.serializeUser(schedule.cleanerClient.client)
+          : null,
+        home: schedule.home
+          ? RecurringScheduleSerializer.serializeHome(schedule.home)
+          : null,
+        upcomingAppointments: AppointmentSerializer.serializeArray(schedule.appointments || []),
       },
     });
   } catch (err) {
@@ -666,7 +672,7 @@ recurringSchedulesRouter.patch("/:id", verifyCleaner, async (req, res) => {
     res.json({
       success: true,
       message: "Schedule updated successfully",
-      schedule,
+      schedule: RecurringScheduleSerializer.serializeOne(schedule),
     });
   } catch (err) {
     console.error("Error updating schedule:", err);
@@ -765,7 +771,7 @@ recurringSchedulesRouter.post("/:id/pause", verifyCleaner, async (req, res) => {
     res.json({
       success: true,
       message: until ? `Schedule paused until ${until}` : "Schedule paused indefinitely",
-      schedule,
+      schedule: RecurringScheduleSerializer.serializeOne(schedule),
     });
   } catch (err) {
     console.error("Error pausing schedule:", err);
@@ -801,7 +807,7 @@ recurringSchedulesRouter.post("/:id/resume", verifyCleaner, async (req, res) => 
     res.json({
       success: true,
       message: `Schedule resumed. ${appointments.length} new appointments generated.`,
-      schedule,
+      schedule: RecurringScheduleSerializer.serializeOne(schedule),
       appointmentsCreated: appointments.length,
     });
   } catch (err) {

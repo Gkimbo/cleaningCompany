@@ -5442,6 +5442,136 @@ Kleanr Support Team`;
     }
   }
 
+  /**
+   * Email to user when appeal status changes (intermediate states)
+   * @param {Object} user - User object with email, firstName
+   * @param {Object} appeal - Appeal object with id, status, priority, category
+   * @param {string} newStatus - The new status (under_review, awaiting_documents, escalated)
+   * @param {string} [notes] - Optional notes about the status change
+   */
+  static async sendAppealStatusUpdate(user, appeal, newStatus, notes = null) {
+    try {
+      const transporter = createTransporter();
+
+      // Status-specific messaging
+      const statusConfig = {
+        under_review: {
+          icon: "🔍",
+          title: "Appeal Under Review",
+          subtitle: "Our team is reviewing your case",
+          headerColor: "linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%)",
+          description: "Your appeal has been assigned to a member of our team and is currently being reviewed.",
+          nextSteps: [
+            "Our team is carefully reviewing your submission and any supporting documents",
+            "We may contact you if we need additional information",
+            "You'll receive an update once a decision has been made",
+          ],
+        },
+        awaiting_documents: {
+          icon: "📎",
+          title: "Documents Requested",
+          subtitle: "Additional information needed",
+          headerColor: "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)",
+          description: "We need additional documentation to continue processing your appeal. Please upload the requested documents as soon as possible.",
+          nextSteps: [
+            "Review the notes below for specific documents needed",
+            "Upload documents through the Kleanr app",
+            "Your case will continue once we receive the requested information",
+          ],
+        },
+        escalated: {
+          icon: "⬆️",
+          title: "Appeal Escalated",
+          subtitle: "Your case requires senior review",
+          headerColor: "linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)",
+          description: "Your appeal has been escalated for senior management review. This typically happens for complex cases that require additional consideration.",
+          nextSteps: [
+            "A senior team member will review your case thoroughly",
+            "Escalated cases may take slightly longer but receive priority attention",
+            "You'll be notified once a decision has been made",
+          ],
+        },
+      };
+
+      const config = statusConfig[newStatus] || {
+        icon: "📋",
+        title: "Appeal Status Update",
+        subtitle: "Your appeal status has changed",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        description: `Your appeal status has been updated to: ${newStatus.replace(/_/g, " ")}.`,
+        nextSteps: [
+          "Our team is processing your appeal",
+          "You'll receive updates as your case progresses",
+        ],
+      };
+
+      const notesSection = notes ? `
+        <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px 20px; margin: 25px 0; border-radius: 0 8px 8px 0;">
+          <p style="color: #92400e; font-size: 14px; margin: 0; font-weight: 600;">📝 Notes from our team:</p>
+          <p style="color: #78350f; font-size: 14px; margin: 10px 0 0 0;">${notes}</p>
+        </div>` : "";
+
+      const htmlContent = createEmailTemplate({
+        title: config.title,
+        subtitle: config.subtitle,
+        headerColor: config.headerColor,
+        greeting: `Hi ${user.firstName}!`,
+        content: `<p>${config.description}</p>${notesSection}`,
+        infoBox: {
+          icon: config.icon,
+          title: "Appeal Details",
+          items: [
+            { label: "Appeal ID", value: `#${appeal.id}` },
+            { label: "Category", value: appeal.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()) },
+            { label: "New Status", value: `${config.icon} ${newStatus.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}` },
+            { label: "Priority", value: appeal.priority.charAt(0).toUpperCase() + appeal.priority.slice(1) },
+          ],
+        },
+        steps: {
+          title: "What happens next?",
+          items: config.nextSteps,
+        },
+        ctaText: "You can check your appeal status anytime in the Kleanr app.",
+        footerMessage: "Thank you for your patience",
+      });
+
+      const textContent = `Hi ${user.firstName}!
+
+${config.description}
+${notes ? `\n📝 NOTES FROM OUR TEAM:\n${notes}\n` : ""}
+APPEAL DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Appeal ID: #${appeal.id}
+Category: ${appeal.category.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+New Status: ${config.icon} ${newStatus.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}
+Priority: ${appeal.priority.charAt(0).toUpperCase() + appeal.priority.slice(1)}
+
+WHAT HAPPENS NEXT?
+${config.nextSteps.map((step, i) => `${i + 1}. ${step}`).join("\n")}
+
+You can check your appeal status anytime in the Kleanr app.
+
+Thank you for your patience!
+
+Best regards,
+Kleanr Support Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: user.email,
+        subject: `${config.icon} Appeal Update: ${newStatus.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())} - Reference #${appeal.id}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ Appeal status update email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending appeal status update email:", error);
+    }
+  }
+
   // =========================================================================
   // Auto-Complete Reminder Notifications
   // =========================================================================
@@ -5872,6 +6002,230 @@ The Kleanr Team`;
       return info.response;
     } catch (error) {
       console.error("❌ Error sending unassigned reminder email:", error);
+    }
+  }
+
+  /**
+   * Send email to business owner about new home request from existing client
+   */
+  static async sendNewHomeRequestEmail(email, clientName, homeAddress, calculatedPrice, numBeds, numBaths) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "New Home Request",
+        subtitle: "Your client added a new home",
+        headerColor: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)",
+        greeting: `Hi there! 👋`,
+        content: `<p>Your existing client <strong>${clientName}</strong> has added a new home and is asking if you can clean it too!</p>
+          <p>Review the details below and respond in the app to accept or decline.</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "New Home Details",
+          items: [
+            { label: "Client", value: clientName },
+            { label: "Address", value: homeAddress },
+            { label: "Size", value: `${numBeds} bed, ${numBaths} bath` },
+            { label: "Suggested Price", value: `$${calculatedPrice}` },
+          ],
+        },
+        steps: {
+          title: "📱 How to Respond",
+          items: [
+            "Open the Kleanr app",
+            "Go to your Notifications",
+            "Tap on the new home request",
+            "Accept to add this home to your client list, or decline",
+          ],
+        },
+        warningBox: {
+          icon: "⏰",
+          text: "This request will expire in 48 hours. Please respond soon!",
+          bgColor: "#fef3c7",
+          borderColor: "#f59e0b",
+          textColor: "#92400e",
+        },
+        ctaText: "Open the app now to respond to this request.",
+        footerMessage: "Grow your business with more clients!",
+      });
+
+      const textContent = `NEW HOME REQUEST FROM EXISTING CLIENT
+
+Hi there!
+
+Your existing client ${clientName} has added a new home and is asking if you can clean it too!
+
+NEW HOME DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Client: ${clientName}
+Address: ${homeAddress}
+Size: ${numBeds} bed, ${numBaths} bath
+Suggested Price: $${calculatedPrice}
+
+HOW TO RESPOND
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the Kleanr app
+2. Go to your Notifications
+3. Tap on the new home request
+4. Accept to add this home to your client list, or decline
+
+⏰ This request will expire in 48 hours. Please respond soon!
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `New Home Request from ${clientName}`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ New home request email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending new home request email:", error);
+    }
+  }
+
+  /**
+   * Send email to client when business owner accepts their new home
+   */
+  static async sendNewHomeAcceptedEmail(email, businessOwnerName, homeAddress, price) {
+    try {
+      const transporter = createTransporter();
+
+      const htmlContent = createEmailTemplate({
+        title: "New Home Accepted!",
+        subtitle: "Great news about your cleaning request",
+        headerColor: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+        greeting: `Great news! 🎉`,
+        content: `<p><strong>${businessOwnerName}</strong> has accepted your request to clean your new home!</p>
+          <p>You can now book cleanings for this home through your business owner.</p>`,
+        infoBox: {
+          icon: "✅",
+          title: "Accepted Home Details",
+          items: [
+            { label: "Cleaner", value: businessOwnerName },
+            { label: "Address", value: homeAddress },
+            { label: "Price per Cleaning", value: `$${price}` },
+          ],
+        },
+        ctaText: "Open the app to book your first cleaning at this home!",
+        footerMessage: "Welcome to your clean home!",
+      });
+
+      const textContent = `NEW HOME ACCEPTED!
+
+Great news! 🎉
+
+${businessOwnerName} has accepted your request to clean your new home!
+
+ACCEPTED HOME DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Cleaner: ${businessOwnerName}
+Address: ${homeAddress}
+Price per Cleaning: $${price}
+
+You can now book cleanings for this home through your business owner.
+
+Open the app to book your first cleaning!
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `${businessOwnerName} Accepted Your New Home Request`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ New home accepted email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending new home accepted email:", error);
+    }
+  }
+
+  /**
+   * Send email to client when business owner declines their new home
+   */
+  static async sendNewHomeDeclinedEmail(email, businessOwnerName, homeAddress, reason = null) {
+    try {
+      const transporter = createTransporter();
+      const reasonText = reason ? `<p><strong>Reason:</strong> ${reason}</p>` : "";
+      const reasonTextPlain = reason ? `\nReason: ${reason}` : "";
+
+      const htmlContent = createEmailTemplate({
+        title: "New Home Request Update",
+        subtitle: "About your cleaning request",
+        headerColor: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+        greeting: `Hi there,`,
+        content: `<p><strong>${businessOwnerName}</strong> is unable to clean your new home at this time.</p>
+          ${reasonText}
+          <p>But don't worry - you have options!</p>`,
+        infoBox: {
+          icon: "🏠",
+          title: "Home Details",
+          items: [
+            { label: "Address", value: homeAddress },
+            { label: "Status", value: "Declined" },
+          ],
+        },
+        steps: {
+          title: "📱 Your Options",
+          items: [
+            "Open the home to the marketplace - find other available cleaners",
+            "Request again in 30 days - your business owner may have more availability then",
+            "Keep the home private - book cleanings yourself when ready",
+          ],
+        },
+        ctaText: "Open the app to choose your next step.",
+        footerMessage: "We're here to help you find the right cleaner!",
+      });
+
+      const textContent = `NEW HOME REQUEST UPDATE
+
+Hi there,
+
+${businessOwnerName} is unable to clean your new home at this time.${reasonTextPlain}
+
+But don't worry - you have options!
+
+HOME DETAILS
+━━━━━━━━━━━━━━━━━━━━━━
+Address: ${homeAddress}
+Status: Declined
+
+YOUR OPTIONS
+━━━━━━━━━━━━━━━━━━━━━━
+1. Open the home to the marketplace - find other available cleaners
+2. Request again in 30 days - your business owner may have more availability then
+3. Keep the home private - book cleanings yourself when ready
+
+Open the app to choose your next step.
+
+Best regards,
+The Kleanr Team`;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: `Update on Your New Home Request`,
+        text: textContent,
+        html: htmlContent,
+      };
+
+      const info = await sendMailWithResolution(transporter, mailOptions);
+      console.log("✅ New home declined email sent:", info.response);
+      return info.response;
+    } catch (error) {
+      console.error("❌ Error sending new home declined email:", error);
     }
   }
 }

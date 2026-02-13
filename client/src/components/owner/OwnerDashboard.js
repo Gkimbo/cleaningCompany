@@ -1163,7 +1163,7 @@ const OwnerDashboard = ({ state }) => {
         )}
       </View>
 
-      {/* Tax Section */}
+      {/* Tax Section - Platform earnings for owner's taxes */}
       <TaxFormsSection state={state} />
 
       {/* Footer Spacer */}

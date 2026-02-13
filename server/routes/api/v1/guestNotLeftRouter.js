@@ -9,6 +9,7 @@ const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../../middleware/authenticatedToken");
 const GuestNotLeftService = require("../../../services/GuestNotLeftService");
+const { User } = require("../../../models");
 
 // ====================
 // CLEANER ENDPOINTS
@@ -30,7 +31,8 @@ router.post("/report", authenticateToken, async (req, res) => {
 		}
 
 		// Only cleaners can report
-		if (req.user.type !== "cleaner") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "cleaner") {
 			return res.status(403).json({
 				success: false,
 				error: "Only cleaners can report tenant present",
@@ -42,7 +44,7 @@ router.post("/report", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.reportTenantPresent(
 			appointmentId,
-			req.user.id,
+			req.userId,
 			gpsData,
 			notes,
 			io
@@ -67,7 +69,8 @@ router.post("/report", authenticateToken, async (req, res) => {
  */
 router.post("/:id/wait", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "cleaner") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "cleaner") {
 			return res.status(403).json({
 				success: false,
 				error: "Only cleaners can perform this action",
@@ -76,7 +79,7 @@ router.post("/:id/wait", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.cleanerWillWait(
 			parseInt(req.params.id),
-			req.user.id
+			req.userId
 		);
 
 		res.json({
@@ -98,7 +101,8 @@ router.post("/:id/wait", authenticateToken, async (req, res) => {
  */
 router.post("/:id/will-return", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "cleaner") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "cleaner") {
 			return res.status(403).json({
 				success: false,
 				error: "Only cleaners can perform this action",
@@ -110,7 +114,7 @@ router.post("/:id/will-return", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.cleanerWillReturn(
 			parseInt(req.params.id),
-			req.user.id,
+			req.userId,
 			returnTime
 		);
 
@@ -133,7 +137,8 @@ router.post("/:id/will-return", authenticateToken, async (req, res) => {
  */
 router.post("/:id/cancel", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "cleaner") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "cleaner") {
 			return res.status(403).json({
 				success: false,
 				error: "Only cleaners can perform this action",
@@ -144,7 +149,7 @@ router.post("/:id/cancel", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.cleanerCancelling(
 			parseInt(req.params.id),
-			req.user.id,
+			req.userId,
 			io
 		);
 
@@ -168,7 +173,8 @@ router.post("/:id/cancel", authenticateToken, async (req, res) => {
  */
 router.post("/:id/returned", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "cleaner") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "cleaner") {
 			return res.status(403).json({
 				success: false,
 				error: "Only cleaners can perform this action",
@@ -180,7 +186,7 @@ router.post("/:id/returned", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.cleanerReturned(
 			parseInt(req.params.id),
-			req.user.id,
+			req.userId,
 			gpsData
 		);
 
@@ -203,7 +209,8 @@ router.post("/:id/returned", authenticateToken, async (req, res) => {
  */
 router.post("/:id/proceed", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "cleaner") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "cleaner") {
 			return res.status(403).json({
 				success: false,
 				error: "Only cleaners can perform this action",
@@ -212,7 +219,7 @@ router.post("/:id/proceed", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.cleanerProceeding(
 			parseInt(req.params.id),
-			req.user.id
+			req.userId
 		);
 
 		res.json({
@@ -239,7 +246,8 @@ router.post("/:id/proceed", authenticateToken, async (req, res) => {
  */
 router.post("/:id/resolved", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "client") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "client") {
 			return res.status(403).json({
 				success: false,
 				error: "Only homeowners can perform this action",
@@ -251,7 +259,7 @@ router.post("/:id/resolved", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.homeownerResolved(
 			parseInt(req.params.id),
-			req.user.id,
+			req.userId,
 			note,
 			io
 		);
@@ -276,7 +284,8 @@ router.post("/:id/resolved", authenticateToken, async (req, res) => {
  */
 router.post("/:id/need-time", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "client") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "client") {
 			return res.status(403).json({
 				success: false,
 				error: "Only homeowners can perform this action",
@@ -296,7 +305,7 @@ router.post("/:id/need-time", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.homeownerNeedsTime(
 			parseInt(req.params.id),
-			req.user.id,
+			req.userId,
 			Math.min(parseInt(additionalMinutes), 60),
 			note,
 			io
@@ -322,7 +331,8 @@ router.post("/:id/need-time", authenticateToken, async (req, res) => {
  */
 router.post("/:id/cannot-resolve", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "client") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "client") {
 			return res.status(403).json({
 				success: false,
 				error: "Only homeowners can perform this action",
@@ -333,7 +343,7 @@ router.post("/:id/cannot-resolve", authenticateToken, async (req, res) => {
 
 		const result = await GuestNotLeftService.homeownerCannotResolve(
 			parseInt(req.params.id),
-			req.user.id,
+			req.userId,
 			io
 		);
 
@@ -392,14 +402,15 @@ router.get("/active/:appointmentId", authenticateToken, async (req, res) => {
  */
 router.get("/pending", authenticateToken, async (req, res) => {
 	try {
-		if (req.user.type !== "client") {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || user.type !== "client") {
 			return res.status(403).json({
 				success: false,
 				error: "Only homeowners can view pending reports",
 			});
 		}
 
-		const reports = await GuestNotLeftService.getPendingReportsForHomeowner(req.user.id);
+		const reports = await GuestNotLeftService.getPendingReportsForHomeowner(req.userId);
 
 		res.json({
 			success: true,
@@ -445,9 +456,10 @@ router.get("/:id", authenticateToken, async (req, res) => {
 			include: [{ model: UserHomes, as: "home" }],
 		});
 
-		const isReporter = report.reportedBy === req.user.id;
-		const isHomeowner = appointment && appointment.userId === req.user.id;
-		const isOwnerOrHR = ["owner", "hr"].includes(req.user.type);
+		const currentUser = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		const isReporter = report.reportedBy === req.userId;
+		const isHomeowner = appointment && appointment.userId === req.userId;
+		const isOwnerOrHR = currentUser && ["owner", "hr"].includes(currentUser.type);
 
 		if (!isReporter && !isHomeowner && !isOwnerOrHR) {
 			return res.status(403).json({
@@ -481,7 +493,8 @@ router.get("/:id", authenticateToken, async (req, res) => {
  */
 router.get("/stats/cleaner/:cleanerId", authenticateToken, async (req, res) => {
 	try {
-		if (!["owner", "hr"].includes(req.user.type)) {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || !["owner", "hr"].includes(user.type)) {
 			return res.status(403).json({
 				success: false,
 				error: "Only HR or Owner can view cleaner stats",
@@ -523,7 +536,8 @@ router.get("/stats/cleaner/:cleanerId", authenticateToken, async (req, res) => {
  */
 router.get("/stats/home/:homeId", authenticateToken, async (req, res) => {
 	try {
-		if (!["owner", "hr"].includes(req.user.type)) {
+		const user = await User.findByPk(req.userId, { attributes: ["id", "type"] });
+		if (!user || !["owner", "hr"].includes(user.type)) {
 			return res.status(403).json({
 				success: false,
 				error: "Only HR or Owner can view home stats",

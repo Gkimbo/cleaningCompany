@@ -50,18 +50,24 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
     ? `${activeHome.address}, ${activeHome.city}`
     : "No address set";
 
-  const defaultPrice = client?.defaultPrice
+  // Use the selected home's defaultPrice if available, otherwise fall back to client-level price
+  const defaultPrice = activeHome?.defaultPrice
+    ? parseFloat(activeHome.defaultPrice).toFixed(0)
+    : client?.defaultPrice
     ? parseFloat(client.defaultPrice).toFixed(0)
     : null;
 
-  // Fetch platform price when modal opens
+  // Determine the correct cleanerClientId - use selected home's cleanerClientId if available
+  const cleanerClientIdForPrice = activeHome?.cleanerClientId || client?.id;
+
+  // Fetch platform price when modal opens or when active home changes
   useEffect(() => {
     const fetchPlatformPrice = async () => {
-      if (!visible || !client?.id || !token) return;
+      if (!visible || !cleanerClientIdForPrice || !token) return;
 
       setLoadingPlatformPrice(true);
       try {
-        const data = await CleanerClientService.getPlatformPrice(token, client.id);
+        const data = await CleanerClientService.getPlatformPrice(token, cleanerClientIdForPrice);
         if (!data.error) {
           setPlatformPriceData(data);
         }
@@ -73,7 +79,7 @@ const BookForClientModal = ({ visible, onClose, onSuccess, client, token, homes 
     };
 
     fetchPlatformPrice();
-  }, [visible, client?.id, token]);
+  }, [visible, cleanerClientIdForPrice, token]);
 
   const handleUsePlatformPrice = () => {
     if (platformPriceData?.platformPrice) {

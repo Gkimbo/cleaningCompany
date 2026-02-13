@@ -150,12 +150,8 @@ async function processUnassignedReminders(io = null) {
 function startUnassignedReminderJob(io, intervalMs = 24 * 60 * 60 * 1000) {
   console.log(`[UnassignedReminderJob] Starting unassigned reminder job (interval: ${intervalMs}ms)`);
 
-  // Run immediately on start
-  processUnassignedReminders(io).catch((err) => {
-    console.error("[UnassignedReminderJob] Error on initial run:", err);
-  });
-
-  // Then run on interval
+  // Don't run immediately on start - only run on scheduled interval
+  // This prevents sending duplicate reminders on every server restart
   const interval = setInterval(() => {
     processUnassignedReminders(io).catch((err) => {
       console.error("[UnassignedReminderJob] Error on interval run:", err);

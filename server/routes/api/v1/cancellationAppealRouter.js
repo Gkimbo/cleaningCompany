@@ -435,7 +435,7 @@ router.post("/:id/documents", authenticateToken, async (req, res) => {
 		});
 
 		// Log audit event
-		CancellationAuditService.log({
+		await CancellationAuditService.log({
 			appointmentId: appeal.appointmentId,
 			appealId: appeal.id,
 			eventType: "appeal_documents_uploaded",

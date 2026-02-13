@@ -942,8 +942,8 @@ class NotificationService {
 
       const clientName = client.firstName || "there";
       const displayName = businessName || cleanerName;
-      const oldPriceDisplay = `$${(oldPrice / 100).toFixed(2)}`;
-      const newPriceDisplay = `$${(newPrice / 100).toFixed(2)}`;
+      const oldPriceDisplay = `$${parseFloat(oldPrice || 0).toFixed(0)}`;
+      const newPriceDisplay = `$${parseFloat(newPrice || 0).toFixed(0)}`;
 
       // 1. Create in-app notification
       const notification = await this.createNotification({
@@ -1093,6 +1093,160 @@ class NotificationService {
     }
 
     return null;
+  }
+
+  // =====================================
+  // New Home Request Notifications
+  // =====================================
+
+  /**
+   * Notify business owner that an existing client added a new home
+   * @param {Object} params
+   * @param {number} params.businessOwnerId - Business owner's user ID
+   * @param {number} params.clientId - Client's user ID
+   * @param {string} params.clientName - Client's name
+   * @param {number} params.homeId - New home's ID
+   * @param {string} params.homeAddress - Home address
+   * @param {number} params.calculatedPrice - Auto-calculated price
+   * @param {number} params.numBeds - Number of bedrooms
+   * @param {number} params.numBaths - Number of bathrooms
+   * @param {number} params.requestId - NewHomeRequest ID
+   * @param {boolean} params.isReRequest - Whether this is a re-request
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyNewHomeRequest({
+    businessOwnerId,
+    clientId,
+    clientName,
+    homeId,
+    homeAddress,
+    calculatedPrice,
+    numBeds,
+    numBaths,
+    requestId,
+    isReRequest = false,
+    io = null,
+  }) {
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 48);
+
+    const title = isReRequest ? "New Home Request (Again)" : "New Home Request";
+    const body = `${clientName} added a new home and is asking if you can clean it. ${numBeds} bed, ${numBaths} bath at $${calculatedPrice}.`;
+
+    return this.notifyUser({
+      userId: businessOwnerId,
+      type: "new_home_request",
+      title,
+      body,
+      data: {
+        requestId,
+        clientId,
+        clientName,
+        homeId,
+        homeAddress,
+        calculatedPrice,
+        numBeds,
+        numBaths,
+        isReRequest,
+      },
+      actionRequired: true,
+      expiresAt,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendNewHomeRequestEmail,
+        args: [clientName, homeAddress, calculatedPrice, numBeds, numBaths],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Notify client that business owner accepted their new home
+   * @param {Object} params
+   * @param {number} params.clientId - Client's user ID
+   * @param {number} params.businessOwnerId - Business owner's user ID
+   * @param {string} params.businessOwnerName - Business owner's name
+   * @param {number} params.homeId - Home's ID
+   * @param {string} params.homeAddress - Home address
+   * @param {number} params.price - Agreed price
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyNewHomeAccepted({
+    clientId,
+    businessOwnerId,
+    businessOwnerName,
+    homeId,
+    homeAddress,
+    price,
+    io = null,
+  }) {
+    return this.notifyUser({
+      userId: clientId,
+      type: "new_home_accepted",
+      title: "New Home Accepted!",
+      body: `${businessOwnerName} will clean your new home at ${homeAddress} for $${price} per cleaning.`,
+      data: {
+        businessOwnerId,
+        businessOwnerName,
+        homeId,
+        homeAddress,
+        price,
+      },
+      actionRequired: false,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendNewHomeAcceptedEmail,
+        args: [businessOwnerName, homeAddress, price],
+      },
+      io,
+    });
+  }
+
+  /**
+   * Notify client that business owner declined their new home
+   * @param {Object} params
+   * @param {number} params.clientId - Client's user ID
+   * @param {number} params.businessOwnerId - Business owner's user ID
+   * @param {string} params.businessOwnerName - Business owner's name
+   * @param {number} params.homeId - Home's ID
+   * @param {string} params.homeAddress - Home address
+   * @param {string} params.reason - Decline reason (optional)
+   * @param {Object} params.io - Socket.io instance (optional)
+   */
+  static async notifyNewHomeDeclined({
+    clientId,
+    businessOwnerId,
+    businessOwnerName,
+    homeId,
+    homeAddress,
+    reason = null,
+    io = null,
+  }) {
+    const reasonText = reason ? ` Reason: ${reason}` : "";
+
+    return this.notifyUser({
+      userId: clientId,
+      type: "new_home_declined",
+      title: "New Home Request Declined",
+      body: `${businessOwnerName} is unable to clean your home at ${homeAddress}.${reasonText} You can list it on the marketplace or request again later.`,
+      data: {
+        businessOwnerId,
+        businessOwnerName,
+        homeId,
+        homeAddress,
+        reason,
+      },
+      actionRequired: false,
+      sendPush: true,
+      sendEmail: true,
+      emailOptions: {
+        sendFunction: Email.sendNewHomeDeclinedEmail,
+        args: [businessOwnerName, homeAddress, reason],
+      },
+      io,
+    });
   }
 
   /**

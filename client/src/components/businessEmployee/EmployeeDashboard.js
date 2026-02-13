@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BusinessEmployeeService from "../../services/fetchRequests/BusinessEmployeeService";
+import TaxFormsSection from "../tax/TaxFormsSection";
 import {
   colors,
   spacing,
@@ -558,6 +559,11 @@ const EmployeeDashboard = ({ state }) => {
           </Text>
         </View>
       )}
+
+      {/* Tax Documents Section */}
+      <View style={styles.section}>
+        <TaxFormsSection state={state} />
+      </View>
 
       <View style={styles.bottomPadding} />
     </ScrollView>

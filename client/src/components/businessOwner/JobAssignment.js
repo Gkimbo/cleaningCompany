@@ -345,20 +345,20 @@ const AssignModal = ({
   const platformFeePercent = (pricing?.platform?.businessOwnerFeePercent || 0.10) * 100;
 
   // Calculate pay based on employee's pay type
-  const calculateEmployeePay = (employee, jobPrice) => {
+  const calculateEmployeePay = (employee, jobPrice, duration) => {
     if (!employee) return { amount: 0, payType: "flat_rate", rateDisplay: null, totalDisplay: null };
 
     const empPayType = employee.payType || "per_job";
+    const jobDuration = duration || 2; // Use passed duration or default to 2
 
     switch (empPayType) {
       case "hourly":
         const hourlyRate = employee.defaultHourlyRate || 0;
-        const estimatedHours = 2; // Default estimate
         return {
-          amount: hourlyRate * estimatedHours,
+          amount: hourlyRate * jobDuration,
           payType: "hourly",
           rateDisplay: `$${(hourlyRate / 100).toFixed(0)}/hr`,
-          totalDisplay: `$${((hourlyRate * estimatedHours) / 100).toFixed(2)}`,
+          totalDisplay: `$${((hourlyRate * jobDuration) / 100).toFixed(2)}`,
         };
       case "percentage":
         const percentage = parseFloat(employee.payRate) || 0;
@@ -468,7 +468,7 @@ const AssignModal = ({
       onSubmit(assignments, true); // true indicates multi-select
     } else {
       if (!selectedEmployee) return;
-      const payInfo = calculateEmployeePay(selectedEmployee, job?.totalPrice);
+      const payInfo = calculateEmployeePay(selectedEmployee, job?.totalPrice, job?.duration);
       onSubmit({
         appointmentId: job.id,
         employeeId: selectedEmployee.id,
@@ -525,7 +525,7 @@ const AssignModal = ({
   const rawAdjustedDuration = totalCleaners > 1 ? baseDuration / totalCleaners : baseDuration;
   const adjustedDuration = roundToHalfHour(rawAdjustedDuration);
 
-  const selectedPayInfo = calculateEmployeePay(selectedEmployee, jobPrice);
+  const selectedPayInfo = calculateEmployeePay(selectedEmployee, jobPrice, baseDuration);
 
   // Calculate total pay for multi-select (with adjusted hours for hourly employees)
   // Business owner (includeSelf) doesn't get paid
@@ -684,7 +684,7 @@ const AssignModal = ({
                     const useAdjustedHours = isMultiSelect && totalCleaners >= 2;
                     const payInfo = useAdjustedHours
                       ? calculateEmployeePayWithAdjustedHours(emp, jobPrice, adjustedDuration)
-                      : calculateEmployeePay(emp, jobPrice);
+                      : calculateEmployeePay(emp, jobPrice, baseDuration);
                     const isHourlyWithAdjustment = useAdjustedHours && emp.payType === "hourly";
                     return (
                       <Pressable
@@ -1196,13 +1196,16 @@ const JobAssignment = ({ state }) => {
               </Text>
             </View>
           ) : (
-            unassignedJobs.map((job) => (
-              <UnassignedJobCard
-                key={job.id}
-                job={job}
-                onAssign={handleAssign}
-              />
-            ))
+            // Sort unassigned jobs by date (soonest first)
+            [...unassignedJobs]
+              .sort((a, b) => new Date(a.date) - new Date(b.date))
+              .map((job) => (
+                <UnassignedJobCard
+                  key={job.id}
+                  job={job}
+                  onAssign={handleAssign}
+                />
+              ))
           )
         ) : assignments.length === 0 ? (
           <View style={styles.emptyState}>
@@ -1213,7 +1216,7 @@ const JobAssignment = ({ state }) => {
             </Text>
           </View>
         ) : (
-          // Deduplicate assignments by appointmentId (show one tile per job)
+          // Deduplicate assignments by appointmentId and sort by date (soonest first)
           Object.values(
             assignments.reduce((acc, assignment) => {
               const apptId = assignment.appointmentId;
@@ -1223,22 +1226,24 @@ const JobAssignment = ({ state }) => {
               }
               return acc;
             }, {})
-          ).map((assignment) => (
-            <AssignedJobCard
-              key={assignment.appointmentId}
-              assignment={assignment}
-              platformFeePercent={platformFeePercent}
-              onReassign={() => {
-                setSelectedJob(assignment.appointment);
-                setIsSelfAssign(false);
-                setShowAssignModal(true);
-              }}
-              onUnassign={() => handleUnassign(assignment)}
-              onViewDetails={() =>
-                navigate(`/business-owner/assignments/${assignment.id}`)
-              }
-            />
-          ))
+          )
+            .sort((a, b) => new Date(a.appointment?.date) - new Date(b.appointment?.date))
+            .map((assignment) => (
+              <AssignedJobCard
+                key={assignment.appointmentId}
+                assignment={assignment}
+                platformFeePercent={platformFeePercent}
+                onReassign={() => {
+                  setSelectedJob(assignment.appointment);
+                  setIsSelfAssign(false);
+                  setShowAssignModal(true);
+                }}
+                onUnassign={() => handleUnassign(assignment)}
+                onViewDetails={() =>
+                  navigate(`/business-owner/assignments/${assignment.id}`)
+                }
+              />
+            ))
         )}
       </ScrollView>
 
@@ -1325,56 +1330,75 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   jobCard: {
     backgroundColor: colors.background.primary,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.sm,
+    borderRadius: radius["2xl"],
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
   },
   jobCardHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
   jobDateBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.lg,
+    width: 56,
+    height: 56,
+    borderRadius: radius.xl,
     backgroundColor: colors.primary[50],
     justifyContent: "center",
     alignItems: "center",
   },
   jobDateDay: {
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.bold,
     color: colors.primary[700],
+    lineHeight: 24,
   },
   jobDateMonth: {
     fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.primary[600],
     textTransform: "uppercase",
+    marginTop: 2,
   },
   jobInfo: {
     flex: 1,
-    marginLeft: spacing.md,
+    marginLeft: spacing.lg,
   },
   jobClient: {
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
   },
   jobAddress: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-    marginTop: 2,
+    marginTop: 4,
   },
   jobTime: {
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
-    marginTop: 2,
+    marginTop: 4,
+  },
+  jobPrice: {
+    alignItems: "flex-end",
+    justifyContent: "center",
+    marginLeft: spacing.md,
+    paddingLeft: spacing.md,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.neutral[100],
+  },
+  jobPriceAmount: {
+    fontSize: typography.fontSize["2xl"],
+    fontWeight: typography.fontWeight.bold,
+    color: colors.success[600],
   },
   jobAssignee: {
     fontSize: typography.fontSize.sm,
@@ -1387,21 +1411,24 @@ const styles = StyleSheet.create({
   assigneeRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
-    gap: 4,
+    marginTop: 6,
+    gap: 6,
   },
   ownerBadgeSmall: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: colors.warning[100],
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.warning[200],
   },
   jobDuration: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.tertiary,
-    marginLeft: 2,
+    color: colors.text.secondary,
+    marginLeft: 4,
+    fontWeight: typography.fontWeight.medium,
   },
   jobCardSelfAssigned: {
     borderLeftWidth: 3,
@@ -1409,17 +1436,16 @@ const styles = StyleSheet.create({
   },
   jobCardMulti: {
     paddingTop: 0,
-    overflow: "hidden",
   },
   multiCleanerBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: colors.primary[50],
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginHorizontal: -spacing.lg,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginHorizontal: -spacing.xl,
+    marginBottom: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.primary[100],
   },
@@ -1499,6 +1525,8 @@ const styles = StyleSheet.create({
   },
   jobDateBadgeSelf: {
     backgroundColor: colors.warning[100],
+    borderWidth: 2,
+    borderColor: colors.warning[200],
   },
   jobDateDaySelf: {
     color: colors.warning[700],
@@ -1509,23 +1537,28 @@ const styles = StyleSheet.create({
   financialRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.sm,
-    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+    gap: spacing.md,
   },
   financialItem: {
     alignItems: "center",
+    paddingHorizontal: spacing.xs,
   },
   financialItemLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.text.tertiary,
     textTransform: "uppercase",
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
+    fontWeight: typography.fontWeight.medium,
   },
   financialItemValue: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    marginTop: 1,
+    marginTop: 4,
   },
   financialItemPay: {
     color: colors.warning[600],
@@ -1538,11 +1571,12 @@ const styles = StyleSheet.create({
   },
   financialDivider: {
     width: 1,
-    height: 24,
+    height: 32,
     backgroundColor: colors.neutral[200],
   },
   jobCardRight: {
     alignItems: "flex-end",
+    marginLeft: spacing.md,
   },
   reassignButtonOwner: {
     backgroundColor: colors.warning[50],
@@ -1552,22 +1586,22 @@ const styles = StyleSheet.create({
     color: colors.warning[700],
   },
   statusBadge: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.full,
   },
   statusText: {
     fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     textTransform: "capitalize",
   },
   jobCardActions: {
     flexDirection: "row",
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   assignButton: {
     flex: 1,
@@ -1575,7 +1609,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.primary[50],
     borderWidth: 1,
     borderColor: colors.primary[200],
@@ -1583,7 +1618,7 @@ const styles = StyleSheet.create({
   assignButtonText: {
     marginLeft: spacing.sm,
     color: colors.primary[700],
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.sm,
   },
   selfAssignButton: {
@@ -1592,7 +1627,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.secondary[50],
     borderWidth: 1,
     borderColor: colors.secondary[200],
@@ -1600,7 +1636,7 @@ const styles = StyleSheet.create({
   selfAssignButtonText: {
     marginLeft: spacing.sm,
     color: colors.secondary[700],
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     fontSize: typography.fontSize.sm,
   },
   reassignButton: {
@@ -1608,13 +1644,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
   },
   reassignButtonText: {
-    marginLeft: spacing.xs,
+    marginLeft: spacing.sm,
     color: colors.primary[700],
+    fontWeight: typography.fontWeight.medium,
     fontSize: typography.fontSize.sm,
   },
   unassignButton: {
@@ -1622,13 +1662,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.error[50],
+    borderWidth: 1,
+    borderColor: colors.error[200],
   },
   unassignButtonText: {
-    marginLeft: spacing.xs,
+    marginLeft: spacing.sm,
     color: colors.error[700],
+    fontWeight: typography.fontWeight.medium,
     fontSize: typography.fontSize.sm,
   },
   emptyState: {

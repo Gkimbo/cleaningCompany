@@ -45,7 +45,7 @@ const TIME_WINDOWS = [
   { value: "12-2", label: "12pm-2pm", icon: "sun" },
 ];
 
-const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => {
+const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token, selectedHome = null }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [frequency, setFrequency] = useState("weekly");
   const [dayOfWeek, setDayOfWeek] = useState(1);
@@ -71,17 +71,22 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
     ? `${client.client.firstName} ${client.client.lastName}`
     : client?.invitedName || "Client";
 
-  const defaultPrice = client?.defaultPrice
+  // Use the selected home's defaultPrice if available, otherwise fall back to client-level price
+  const defaultPrice = selectedHome?.defaultPrice
+    ? parseFloat(selectedHome.defaultPrice).toFixed(0)
+    : client?.defaultPrice
     ? parseFloat(client.defaultPrice).toFixed(0)
     : null;
 
   // Fetch existing schedules when modal opens
   const fetchExistingSchedules = useCallback(async () => {
-    if (!client?.id || !token) return;
+    // Use selectedHome's cleanerClientId if available, otherwise fall back to client.id
+    const cleanerClientId = selectedHome?.cleanerClientId || client?.id;
+    if (!cleanerClientId || !token) return;
 
     setLoadingSchedules(true);
     try {
-      const result = await CleanerClientService.getRecurringSchedules(token, client.id);
+      const result = await CleanerClientService.getRecurringSchedules(token, cleanerClientId);
       if (result.schedules) {
         setExistingSchedules(result.schedules.filter(s => s.isActive));
       }
@@ -90,13 +95,14 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
     } finally {
       setLoadingSchedules(false);
     }
-  }, [client?.id, token]);
+  }, [client?.id, selectedHome?.cleanerClientId, token]);
 
   useEffect(() => {
-    if (visible && client?.id) {
+    const cleanerClientId = selectedHome?.cleanerClientId || client?.id;
+    if (visible && cleanerClientId) {
       fetchExistingSchedules();
     }
-  }, [visible, client?.id, fetchExistingSchedules]);
+  }, [visible, client?.id, selectedHome?.cleanerClientId, fetchExistingSchedules]);
 
   // Handle cancel schedule
   const handleCancelSchedule = async (scheduleId, cancelAppointments = false) => {
@@ -299,8 +305,11 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
 
     setIsLoading(true);
     try {
+      // Use selectedHome's cleanerClientId if available, otherwise fall back to client.id
+      const cleanerClientId = selectedHome?.cleanerClientId || client.id;
+
       const scheduleData = {
-        cleanerClientId: client.id,
+        cleanerClientId,
         frequency,
         dayOfWeek,
         timeWindow,
@@ -366,9 +375,17 @@ const SetupRecurringModal = ({ visible, onClose, onSuccess, client, token }) => 
               <View style={styles.headerIcon}>
                 <Feather name="repeat" size={20} color={colors.primary[600]} />
               </View>
-              <View>
+              <View style={styles.headerInfo}>
                 <Text style={styles.headerTitle}>Recurring Schedule</Text>
                 <Text style={styles.headerSubtitle}>{clientName}</Text>
+                {selectedHome && (
+                  <View style={styles.homeTag}>
+                    <Feather name="home" size={10} color={colors.primary[600]} />
+                    <Text style={styles.homeTagText}>
+                      {selectedHome.nickName || selectedHome.address || "Selected Home"}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
             <Pressable style={styles.closeButton} onPress={handleClose}>
@@ -817,6 +834,25 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: typography.fontSize.sm,
     color: colors.neutral[500],
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  homeTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    backgroundColor: colors.primary[50],
+    borderRadius: radius.sm,
+    alignSelf: "flex-start",
+  },
+  homeTagText: {
+    fontSize: typography.fontSize.xs,
+    color: colors.primary[700],
+    fontWeight: "500",
   },
   closeButton: {
     padding: spacing.sm,

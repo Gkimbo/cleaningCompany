@@ -452,7 +452,7 @@ const ConversationList = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => navigate(-1)} style={styles.backButton}>
+        <Pressable onPress={() => navigate("/")} style={styles.backButton}>
           <Icon name="arrow-left" size={22} color={colors.text.primary} />
         </Pressable>
         <Text style={styles.headerTitle}>Messages</Text>

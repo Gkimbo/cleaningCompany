@@ -133,7 +133,10 @@ messageRouter.get("/conversation/:conversationId", authenticateToken, async (req
     }
 
     const messages = await Message.findAll({
-      where: { conversationId },
+      where: {
+        conversationId,
+        deletedAt: null, // Exclude soft-deleted messages
+      },
       include: [
         {
           model: User,
@@ -298,27 +301,28 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
     });
 
     const sender = await User.findByPk(senderId);
+    const senderName = sender?.username || "Someone";
 
     for (const p of otherParticipants) {
       // Emit to user's personal room for unread count update
       io.to(`user_${p.userId}`).emit("unread_update", { conversationId });
 
       // Send email notification only for the first message in the conversation
-      if (isFirstMessage && p.user.notifications && p.user.notifications.includes("email")) {
+      if (isFirstMessage && p.user?.notifications?.includes("email") && p.user.email) {
         await Email.sendNewMessageNotification(
           EncryptionService.decrypt(p.user.email),
           p.user.username,
-          sender.username,
+          senderName,
           content
         );
       }
 
       // Send push notification if user has phone notifications enabled
-      if (p.user.notifications && p.user.notifications.includes("phone") && p.user.expoPushToken) {
+      if (p.user?.notifications?.includes("phone") && p.user.expoPushToken) {
         await PushNotification.sendPushNewMessage(
           p.user.expoPushToken,
           p.user.username,
-          sender.username,
+          senderName,
           content
         );
       }
@@ -451,6 +455,14 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Broadcast content is required" });
     }
 
+    // Validate targetAudience - must be explicitly specified
+    const validAudiences = ["all", "cleaners", "homeowners"];
+    if (!targetAudience || !validAudiences.includes(targetAudience)) {
+      return res.status(400).json({
+        error: "Invalid targetAudience. Must be 'all', 'cleaners', or 'homeowners'",
+      });
+    }
+
     const io = req.app.get("io");
 
     // Create broadcast conversation
@@ -465,10 +477,13 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
     if (targetAudience === "cleaners") {
       targetUsers = await User.findAll({ where: { type: "cleaner" } });
     } else if (targetAudience === "homeowners") {
+      // Homeowners are users with type null or type 'client' (not cleaners, employees, owners, HR)
       targetUsers = await User.findAll({
         where: {
-          type: { [Op.or]: [null, { [Op.ne]: "cleaner" }] },
-          type: { [Op.ne]: "owner" },
+          [Op.or]: [
+            { type: null },
+            { type: "client" },
+          ],
         },
       });
     } else {
@@ -681,7 +696,14 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
           },
         ],
       });
-    } else {
+
+      // If conversation was deleted, create a new one
+      if (!conversation) {
+        existingParticipation.length = 0; // Reset to trigger creation below
+      }
+    }
+
+    if (existingParticipation.length === 0 || !conversation) {
       // Create new support conversation
       conversation = await Conversation.create({
         conversationType: "support",
@@ -939,11 +961,24 @@ messageRouter.post("/conversation/cleaner-client", authenticateToken, async (req
 /**
  * POST /api/v1/messages/add-participant
  * Add a participant to an existing conversation (e.g., when cleaner is assigned)
+ * Only conversation creator, owner, or HR can add participants
  */
 messageRouter.post("/add-participant", authenticateToken, async (req, res) => {
   try {
     const { conversationId, userIdToAdd } = req.body;
     const requesterId = req.userId;
+
+    // Get requester info
+    const requester = await User.findByPk(requesterId);
+    if (!requester) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    // Get conversation to check type and creator
+    const conversation = await Conversation.findByPk(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
 
     // Verify requester is a participant
     const requesterParticipant = await ConversationParticipant.findOne({
@@ -952,6 +987,44 @@ messageRouter.post("/add-participant", authenticateToken, async (req, res) => {
 
     if (!requesterParticipant) {
       return res.status(403).json({ error: "Not authorized" });
+    }
+
+    // Only allow adding participants to certain conversation types
+    const allowedTypes = ["appointment", "internal", "employee_group"];
+    if (!allowedTypes.includes(conversation.conversationType)) {
+      return res.status(403).json({ error: "Cannot add participants to this conversation type" });
+    }
+
+    // Only creator, owner, or HR can add participants
+    const isCreator = conversation.createdBy === requesterId;
+    const isOwnerOrHR = requester.type === "owner" || requester.type === "humanResources";
+
+    if (!isCreator && !isOwnerOrHR) {
+      return res.status(403).json({ error: "Only the conversation creator or admin can add participants" });
+    }
+
+    // Verify the user to add exists
+    const userToAdd = await User.findByPk(userIdToAdd);
+    if (!userToAdd) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // For appointment conversations, verify the user is associated with the appointment
+    if (conversation.conversationType === "appointment" && conversation.appointmentId) {
+      const appointment = await UserAppointments.findByPk(conversation.appointmentId);
+      if (appointment) {
+        const home = await UserHomes.findByPk(appointment.homeId);
+        const isHomeowner = home && home.userId === userIdToAdd;
+        const isAssignedCleaner = appointment.employeesAssigned &&
+          appointment.employeesAssigned.includes(String(userIdToAdd));
+
+        // Allow owner/HR to add anyone, but log for auditing
+        if (!isOwnerOrHR && !isHomeowner && !isAssignedCleaner) {
+          return res.status(403).json({
+            error: "Can only add users associated with this appointment",
+          });
+        }
+      }
     }
 
     // Add new participant
@@ -1577,7 +1650,7 @@ messageRouter.post("/:messageId/react", authenticateToken, async (req, res) => {
       ],
     });
 
-    if (!message) {
+    if (!message || message.deletedAt) {
       return res.status(404).json({ error: "Message not found" });
     }
 
@@ -1687,7 +1760,7 @@ messageRouter.delete("/:messageId/react/:emoji", authenticateToken, async (req, 
     // Get the message
     const message = await Message.findByPk(messageId);
 
-    if (!message) {
+    if (!message || message.deletedAt) {
       return res.status(404).json({ error: "Message not found" });
     }
 
@@ -1739,6 +1812,11 @@ messageRouter.delete("/:messageId", authenticateToken, async (req, res) => {
 
     if (!message) {
       return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Check if already deleted
+    if (message.deletedAt) {
+      return res.status(400).json({ error: "Message already deleted" });
     }
 
     // Only the sender can delete their own messages
@@ -1853,6 +1931,11 @@ messageRouter.patch("/conversation/:conversationId/title", authenticateToken, as
       return res.status(400).json({ error: "Title is required" });
     }
 
+    // Validate title length (VARCHAR(255) limit)
+    if (title.trim().length > 255) {
+      return res.status(400).json({ error: "Title must be 255 characters or less" });
+    }
+
     // Verify user is owner or HR
     const user = await User.findByPk(userId);
     if (!user || (user.type !== "owner" && user.type !== "humanResources")) {
@@ -1937,9 +2020,12 @@ messageRouter.post("/mark-messages-read", authenticateToken, async (req, res) =>
       return res.status(400).json({ error: "messageIds array is required" });
     }
 
-    // Get messages and verify they exist
+    // Get messages and verify they exist (exclude deleted messages)
     const messages = await Message.findAll({
-      where: { id: { [Op.in]: messageIds } },
+      where: {
+        id: { [Op.in]: messageIds },
+        deletedAt: null,
+      },
     });
 
     if (messages.length === 0) {
@@ -2014,7 +2100,7 @@ messageRouter.post(
         ],
       });
 
-      if (!message) {
+      if (!message || message.deletedAt) {
         return res.status(404).json({ error: "Message not found" });
       }
 
@@ -2838,7 +2924,7 @@ messageRouter.get("/coworkers", authenticateToken, async (req, res) => {
 
     const formattedCoworkers = coworkers.map((emp) => ({
       id: emp.id,
-      oderId: emp.userId,
+      userId: emp.userId,
       firstName: emp.firstName,
       lastName: emp.lastName,
       status: emp.status,

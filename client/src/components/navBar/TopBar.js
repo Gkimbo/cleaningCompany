@@ -352,8 +352,8 @@ const TopBar = ({ dispatch, state }) => {
                   >
                     <Feather name="users" size={20} color="white" />
                     <View style={styles.badge}>
-                      <Text style={styles.badgeText}>
-                        {pendingApplications > 9 ? "9+" : pendingApplications}
+                      <Text style={pendingApplications > 9 ? styles.badgeTextSmall : styles.badgeText}>
+                        {pendingApplications > 99 ? "99+" : pendingApplications}
                       </Text>
                     </View>
                   </Pressable>
@@ -369,9 +369,9 @@ const TopBar = ({ dispatch, state }) => {
                 >
                   <Feather name="user-check" size={20} color="white" />
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {pendingCleanerRequests > 9
-                        ? "9+"
+                    <Text style={pendingCleanerRequests > 9 ? styles.badgeTextSmall : styles.badgeText}>
+                      {pendingCleanerRequests > 99
+                        ? "99+"
                         : pendingCleanerRequests}
                     </Text>
                   </View>
@@ -388,8 +388,8 @@ const TopBar = ({ dispatch, state }) => {
                 <Feather name="bell" size={20} color="white" />
                 {(unreadNotifications + pendingReviews) > 0 && (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>
-                      {(unreadNotifications + pendingReviews) > 9 ? "9+" : (unreadNotifications + pendingReviews)}
+                    <Text style={(unreadNotifications + pendingReviews) > 9 ? styles.badgeTextSmall : styles.badgeText}>
+                      {(unreadNotifications + pendingReviews) > 99 ? "99+" : (unreadNotifications + pendingReviews)}
                     </Text>
                   </View>
                 )}
@@ -675,22 +675,32 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: "absolute",
-    top: -4,
-    right: -4,
+    top: -5,
+    right: -5,
     backgroundColor: colors.error[500],
-    borderRadius: 10,
+    borderRadius: 9,
     minWidth: 18,
-    height: 18,
+    minHeight: 18,
+    paddingHorizontal: 3,
+    paddingVertical: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 4,
     borderWidth: 2,
     borderColor: colors.neutral[800],
   },
   badgeText: {
     color: colors.neutral[0],
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "700",
+    lineHeight: 14,
+    textAlign: "center",
+  },
+  badgeTextSmall: {
+    color: colors.neutral[0],
+    fontSize: 8,
+    fontWeight: "700",
+    lineHeight: 10,
+    textAlign: "center",
   },
 
   // Auth buttons (Sign In / Sign Up / Become Cleaner)

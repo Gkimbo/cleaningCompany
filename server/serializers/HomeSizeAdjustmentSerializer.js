@@ -99,9 +99,9 @@ class HomeSizeAdjustmentSerializer {
 		return {
 			id: data.id,
 			adjustmentRequestId: data.adjustmentRequestId,
-			photoData: data.photoData,
-			room: data.room,
-			notes: data.notes,
+			photoUrl: data.photoUrl,
+			roomType: data.roomType,
+			roomNumber: data.roomNumber,
 			createdAt: data.createdAt
 		};
 	}
@@ -159,9 +159,9 @@ class HomeSizeAdjustmentSerializer {
 		if (request.photos) {
 			serialized.photos = request.photos.map(photo => ({
 				id: photo.id,
-				photoData: photo.photoData,
-				room: photo.room,
-				notes: photo.notes
+				photoUrl: photo.photoUrl,
+				roomType: photo.roomType,
+				roomNumber: photo.roomNumber
 			}));
 		}
 

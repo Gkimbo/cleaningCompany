@@ -72,6 +72,10 @@ module.exports = (sequelize, DataTypes) => {
             "price_change",
             // Business owner reminders
             "unassigned_reminder_bo",
+            // New home request notifications (client adds home, BO accepts/declines)
+            "new_home_request",
+            "new_home_accepted",
+            "new_home_declined",
           ],
         ],
       },

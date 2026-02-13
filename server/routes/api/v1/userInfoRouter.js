@@ -12,10 +12,12 @@ const {
   MultiCleanerJob,
   CleanerJoinRequest,
   CleanerJobCompletion,
+  NewHomeRequest,
 } = require("../../../models");
 
 const HomeClass = require("../../../services/HomeClass");
 const HomeSerializer = require("../../../serializers/homesSerializer");
+const NewHomeRequestService = require("../../../services/NewHomeRequestService");
 const {
   isInServiceArea,
   getCleanersNeeded,
@@ -324,6 +326,26 @@ userInfoRouter.post("/home", async (req, res) => {
     // Serialize the home to ensure consistent structure with fetched homes
     const serializedHome = HomeSerializer.serializeOne(newHome);
 
+    // Check if this client has existing business owner relationships
+    // If so, create new home requests for them
+    let newHomeRequests = [];
+    try {
+      const io = req.app.get("io");
+      newHomeRequests = await NewHomeRequestService.createRequestsForNewHome(
+        newHome.id,
+        userId,
+        io
+      );
+      if (newHomeRequests.length > 0) {
+        console.log(
+          `[userInfoRouter] Created ${newHomeRequests.length} new home request(s) for home ${newHome.id}`
+        );
+      }
+    } catch (requestError) {
+      // Don't fail the home creation if request creation fails
+      console.error("[userInfoRouter] Error creating new home requests:", requestError);
+    }
+
     return res.status(201).json({
       user,
       home: serializedHome,
@@ -331,6 +353,7 @@ userInfoRouter.post("/home", async (req, res) => {
       serviceAreaMessage: outsideServiceArea
         ? "This home is outside our current service area. It has been saved to your profile, but you won't be able to book appointments until we expand to this area."
         : null,
+      newHomeRequestsSent: newHomeRequests.length,
     });
   } catch (error) {
     console.log(error);
@@ -637,6 +660,26 @@ userInfoRouter.delete("/home", async (req, res) => {
     });
 
     await UserAppointments.destroy({
+      where: {
+        homeId: id,
+      },
+    });
+
+    // Cancel any pending NewHomeRequests for this home
+    const pendingRequests = await NewHomeRequest.findAll({
+      where: {
+        homeId: id,
+        status: "pending",
+      },
+    });
+
+    for (const request of pendingRequests) {
+      await request.cancel();
+      console.log(`[userInfoRouter] Cancelled pending NewHomeRequest ${request.id} for deleted home ${id}`);
+    }
+
+    // Also delete any non-pending requests (accepted, declined, expired)
+    await NewHomeRequest.destroy({
       where: {
         homeId: id,
       },

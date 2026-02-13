@@ -185,10 +185,20 @@ const EmployeeJobDetail = ({ state }) => {
     );
   };
 
-  const openMaps = (address) => {
+  const openMaps = async (address) => {
     const encodedAddress = encodeURIComponent(address);
     const url = `https://maps.google.com/?q=${encodedAddress}`;
-    Linking.openURL(url);
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        // Fallback to web URL
+        await Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`);
+      }
+    } catch (error) {
+      console.log("Could not open maps:", error);
+    }
   };
 
   const formatDate = (dateStr) => {

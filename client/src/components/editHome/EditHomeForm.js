@@ -9,11 +9,16 @@ import {
   Platform,
   Modal,
   StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Switch,
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
 import { AuthContext } from "../../services/AuthContext";
 import FetchData from "../../services/fetchRequests/fetchData";
 import Appointment from "../../services/fetchRequests/AppointmentClass";
+import NotificationsService from "../../services/fetchRequests/NotificationsService";
+import { Feather } from "@expo/vector-icons";
 import styles from "../onboarding/OnboardingStyles";
 import {
   colors,
@@ -67,6 +72,13 @@ const EditHomeForm = ({ state, dispatch }) => {
   const [showBedroomPicker, setShowBedroomPicker] = useState(false);
   const [showBathroomPicker, setShowBathroomPicker] = useState(false);
 
+  // New Home Request state
+  const [homeRequests, setHomeRequests] = useState([]);
+  const [isMarketplaceEnabled, setIsMarketplaceEnabled] = useState(false);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [requestAgainLoading, setRequestAgainLoading] = useState(false);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+
   const [homeData, setHomeData] = useState({
     id: "",
     nickName: "",
@@ -114,8 +126,29 @@ const EditHomeForm = ({ state, dispatch }) => {
         bedConfigurations: foundHome.bedConfigurations || [],
         bathroomConfigurations: foundHome.bathroomConfigurations || [],
       });
+      setIsMarketplaceEnabled(foundHome.isMarketplaceEnabled || false);
     }
   }, [id, state.homes]);
+
+  // Fetch new home request status
+  useEffect(() => {
+    const fetchRequestStatus = async () => {
+      if (!id || !user?.token) return;
+      setRequestsLoading(true);
+      try {
+        const result = await NotificationsService.getNewHomeRequestStatus(user.token, id);
+        if (result.success) {
+          setHomeRequests(result.requests || []);
+          setIsMarketplaceEnabled(result.isMarketplaceEnabled || false);
+        }
+      } catch (error) {
+        console.error("Error fetching home request status:", error);
+      } finally {
+        setRequestsLoading(false);
+      }
+    };
+    fetchRequestStatus();
+  }, [id, user?.token]);
 
   const updateField = (field, value) => {
     setHomeData((prev) => ({ ...prev, [field]: value }));
@@ -375,6 +408,53 @@ const EditHomeForm = ({ state, dispatch }) => {
       homeData.id
     );
     setDeleteModalVisible(true);
+  };
+
+  // Handle marketplace toggle
+  const handleMarketplaceToggle = async (enabled) => {
+    setMarketplaceLoading(true);
+    try {
+      const result = await NotificationsService.toggleHomeMarketplace(user.token, id, enabled);
+      if (result.success) {
+        setIsMarketplaceEnabled(enabled);
+        Alert.alert(
+          enabled ? "Marketplace Enabled" : "Marketplace Disabled",
+          enabled
+            ? "Your home is now visible to cleaners on the marketplace."
+            : "Your home has been removed from the marketplace."
+        );
+      } else {
+        Alert.alert("Error", result.error || "Failed to update marketplace setting.");
+      }
+    } catch (error) {
+      console.error("Error toggling marketplace:", error);
+      Alert.alert("Error", "Something went wrong. Please try again.");
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  };
+
+  // Handle request again for a declined request
+  const handleRequestAgain = async (requestId) => {
+    setRequestAgainLoading(true);
+    try {
+      const result = await NotificationsService.requestAgain(user.token, requestId);
+      if (result.success) {
+        // Refresh the requests list
+        const statusResult = await NotificationsService.getNewHomeRequestStatus(user.token, id);
+        if (statusResult.success) {
+          setHomeRequests(statusResult.requests || []);
+        }
+        Alert.alert("Request Sent", "Your request has been sent to the cleaner.");
+      } else {
+        Alert.alert("Error", result.error || "Failed to send request.");
+      }
+    } catch (error) {
+      console.error("Error requesting again:", error);
+      Alert.alert("Error", "Something went wrong. Please try again.");
+    } finally {
+      setRequestAgainLoading(false);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -1268,6 +1348,121 @@ const EditHomeForm = ({ state, dispatch }) => {
         />
       )}
 
+      {/* New Home Request Status Section */}
+      {homeRequests.length > 0 && (
+        <View style={localStyles.requestSection}>
+          <Text style={localStyles.requestSectionTitle}>Cleaner Requests</Text>
+          <Text style={localStyles.requestSectionSubtitle}>
+            Status of requests to your preferred cleaners
+          </Text>
+
+          {requestsLoading ? (
+            <ActivityIndicator size="small" color={colors.primary[500]} />
+          ) : (
+            homeRequests.map((request) => (
+              <View key={request.id} style={localStyles.requestCard}>
+                <View style={localStyles.requestHeader}>
+                  <Text style={localStyles.requestCleanerName}>
+                    {request.businessOwner?.name || "Unknown Cleaner"}
+                  </Text>
+                  <View
+                    style={[
+                      localStyles.requestStatusBadge,
+                      request.status === "accepted" && localStyles.statusAccepted,
+                      request.status === "declined" && localStyles.statusDeclined,
+                      request.status === "pending" && localStyles.statusPending,
+                      request.status === "expired" && localStyles.statusExpired,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        localStyles.requestStatusText,
+                        request.status === "accepted" && localStyles.statusTextAccepted,
+                        request.status === "declined" && localStyles.statusTextDeclined,
+                        request.status === "pending" && localStyles.statusTextPending,
+                        request.status === "expired" && localStyles.statusTextExpired,
+                      ]}
+                    >
+                      {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                    </Text>
+                  </View>
+                </View>
+
+                {request.calculatedPrice && (
+                  <Text style={localStyles.requestPrice}>
+                    Quoted Price: ${request.calculatedPrice}
+                  </Text>
+                )}
+
+                {request.declineReason && (
+                  <Text style={localStyles.requestDeclineReason}>
+                    Reason: {request.declineReason}
+                  </Text>
+                )}
+
+                {/* Request Again button for declined/expired requests */}
+                {(request.status === "declined" || request.status === "expired") && (
+                  <View style={localStyles.requestActions}>
+                    {request.canRequestAgain ? (
+                      <TouchableOpacity
+                        style={localStyles.requestAgainButton}
+                        onPress={() => handleRequestAgain(request.id)}
+                        disabled={requestAgainLoading}
+                      >
+                        {requestAgainLoading ? (
+                          <ActivityIndicator size="small" color={colors.primary[600]} />
+                        ) : (
+                          <>
+                            <Feather name="refresh-cw" size={14} color={colors.primary[600]} />
+                            <Text style={localStyles.requestAgainText}>Request Again</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={localStyles.requestCooldownText}>
+                        Can request again in {request.daysUntilCanRequestAgain} days
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+            ))
+          )}
+
+          {/* Marketplace Toggle - show if any requests were declined */}
+          {homeRequests.some((r) => r.status === "declined" || r.status === "expired") && (
+            <View style={localStyles.marketplaceSection}>
+              <View style={localStyles.marketplaceHeader}>
+                <View style={localStyles.marketplaceInfo}>
+                  <Feather name="shopping-bag" size={20} color={colors.primary[600]} />
+                  <View style={localStyles.marketplaceTextContainer}>
+                    <Text style={localStyles.marketplaceTitle}>
+                      Open to Marketplace
+                    </Text>
+                    <Text style={localStyles.marketplaceDescription}>
+                      Allow other cleaners to find and service this home
+                    </Text>
+                  </View>
+                </View>
+                {marketplaceLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary[500]} />
+                ) : (
+                  <Switch
+                    value={isMarketplaceEnabled}
+                    onValueChange={handleMarketplaceToggle}
+                    trackColor={{
+                      false: colors.neutral[300],
+                      true: colors.primary[400],
+                    }}
+                    thumbColor={isMarketplaceEnabled ? colors.primary[600] : colors.neutral[100]}
+                  />
+                )}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
       <TouchableOpacity
         style={{
           backgroundColor: colors.error[50],
@@ -1632,6 +1827,146 @@ const EditHomeForm = ({ state, dispatch }) => {
 };
 
 const localStyles = StyleSheet.create({
+  // New Home Request Styles
+  requestSection: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  requestSectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  requestSectionSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  requestCard: {
+    backgroundColor: colors.neutral[50],
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+  },
+  requestHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  requestCleanerName: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  requestStatusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: colors.neutral[200],
+  },
+  statusAccepted: {
+    backgroundColor: colors.success[100],
+  },
+  statusDeclined: {
+    backgroundColor: colors.error[100],
+  },
+  statusPending: {
+    backgroundColor: colors.warning[100],
+  },
+  statusExpired: {
+    backgroundColor: colors.neutral[200],
+  },
+  requestStatusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.neutral[600],
+  },
+  statusTextAccepted: {
+    color: colors.success[700],
+  },
+  statusTextDeclined: {
+    color: colors.error[700],
+  },
+  statusTextPending: {
+    color: colors.warning[700],
+  },
+  statusTextExpired: {
+    color: colors.neutral[600],
+  },
+  requestPrice: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  requestDeclineReason: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    fontStyle: "italic",
+    marginBottom: spacing.sm,
+  },
+  requestActions: {
+    marginTop: spacing.sm,
+  },
+  requestAgainButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary[50],
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    gap: spacing.xs,
+  },
+  requestAgainText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
+  },
+  requestCooldownText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  marketplaceSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[200],
+  },
+  marketplaceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  marketplaceInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: spacing.md,
+  },
+  marketplaceTextContainer: {
+    flex: 1,
+  },
+  marketplaceTitle: {
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  marketplaceDescription: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+  },
+  // Picker Styles
   pickerOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",

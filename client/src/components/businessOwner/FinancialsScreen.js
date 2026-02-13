@@ -20,6 +20,7 @@ import {
   shadows,
 } from "../../services/styles/theme";
 import ExportModal from "./ExportModal";
+import TaxFormsSection from "../tax/TaxFormsSection";
 import {
   generateCSV,
   generatePDF,
@@ -479,34 +480,7 @@ const FinancialsScreen = ({ state }) => {
 
         {/* Tax Documents Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tax Documents</Text>
-          <View style={styles.taxCard}>
-            <View style={styles.taxInfo}>
-              <Icon name="file-text-o" size={24} color={colors.primary[600]} />
-              <View style={styles.taxContent}>
-                <Text style={styles.taxTitle}>Year-End Tax Documents</Text>
-                <Text style={styles.taxDescription}>
-                  Download payroll summaries and employee earnings reports for tax filing.
-                </Text>
-              </View>
-            </View>
-            <View style={styles.taxActions}>
-              <Pressable
-                style={styles.taxButton}
-                onPress={() => handleExport("employee-earnings")}
-              >
-                <Icon name="download" size={14} color={colors.primary[600]} />
-                <Text style={styles.taxButtonText}>Employee Earnings</Text>
-              </Pressable>
-              <Pressable
-                style={styles.taxButton}
-                onPress={() => handleExport("payroll-summary")}
-              >
-                <Icon name="download" size={14} color={colors.primary[600]} />
-                <Text style={styles.taxButtonText}>Payroll Summary</Text>
-              </Pressable>
-            </View>
-          </View>
+          <TaxFormsSection state={state} />
         </View>
 
         {/* Info Card */}
@@ -818,51 +792,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-  },
-  taxCard: {
-    backgroundColor: colors.background.primary,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    ...shadows.sm,
-  },
-  taxInfo: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: spacing.md,
-  },
-  taxContent: {
-    flex: 1,
-    marginLeft: spacing.md,
-  },
-  taxTitle: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-  },
-  taxDescription: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-    lineHeight: 20,
-  },
-  taxActions: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  taxButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary[50],
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    gap: spacing.xs,
-  },
-  taxButtonText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.primary[600],
-    fontWeight: typography.fontWeight.medium,
   },
   infoCard: {
     flexDirection: "row",

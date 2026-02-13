@@ -13,7 +13,6 @@ import {
   Image,
   Alert,
 } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { colors, spacing, radius, shadows, typography } from "../../services/styles/theme";
@@ -43,8 +42,6 @@ const HomeSizeConfirmationModal = ({
   const [photos, setPhotos] = useState([]); // Array of { roomType, roomNumber, photoData }
   const cameraRef = useRef(null);
 
-  const bedOptions = ["1", "2", "3", "4", "5", "6", "7", "8+"];
-  const bathOptions = ["1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5+"];
 
   // Reset state when modal closes
   useEffect(() => {
@@ -350,32 +347,28 @@ const HomeSizeConfirmationModal = ({
 
                   <View style={styles.formGroup}>
                     <Text style={styles.formLabel}>Actual Bedrooms</Text>
-                    <View style={styles.pickerContainer}>
-                      <Picker
-                        selectedValue={reportedBeds}
-                        onValueChange={setReportedBeds}
-                        style={styles.picker}
-                      >
-                        {bedOptions.map((option) => (
-                          <Picker.Item key={option} label={option} value={option} />
-                        ))}
-                      </Picker>
-                    </View>
+                    <TextInput
+                      style={styles.numberInput}
+                      value={reportedBeds}
+                      onChangeText={setReportedBeds}
+                      placeholder="Enter number of bedrooms"
+                      placeholderTextColor={colors.text.tertiary}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
                   </View>
 
                   <View style={styles.formGroup}>
                     <Text style={styles.formLabel}>Actual Bathrooms</Text>
-                    <View style={styles.pickerContainer}>
-                      <Picker
-                        selectedValue={reportedBaths}
-                        onValueChange={setReportedBaths}
-                        style={styles.picker}
-                      >
-                        {bathOptions.map((option) => (
-                          <Picker.Item key={option} label={option} value={option} />
-                        ))}
-                      </Picker>
-                    </View>
+                    <TextInput
+                      style={styles.numberInput}
+                      value={reportedBaths}
+                      onChangeText={setReportedBaths}
+                      placeholder="Enter number of bathrooms"
+                      placeholderTextColor={colors.text.tertiary}
+                      keyboardType="decimal-pad"
+                      maxLength={3}
+                    />
                   </View>
 
                   {error ? (
@@ -761,14 +754,15 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginBottom: spacing.sm,
   },
-  pickerContainer: {
+  numberInput: {
     backgroundColor: colors.neutral[100],
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border.light,
-    overflow: "hidden",
-  },
-  picker: {
+    padding: spacing.md,
+    fontSize: typography.fontSize.lg,
+    color: colors.text.primary,
+    textAlign: "center",
     height: 50,
   },
   textInput: {

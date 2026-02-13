@@ -92,10 +92,28 @@ homeSizeAdjustmentRouter.post("/", authenticateToken, async (req, res) => {
     }
 
     // Validate each photo has required data
+    const MAX_PHOTO_SIZE = 10 * 1024 * 1024; // 10MB max per photo
     for (const photo of photos) {
       if (!photo.photoData || !photo.roomType || !photo.roomNumber) {
         return res.status(400).json({
           error: "Each photo must have photoData, roomType, and roomNumber"
+        });
+      }
+
+      // Validate photo format (must be base64 image)
+      if (!photo.photoData.startsWith('data:image/')) {
+        return res.status(400).json({
+          error: "Photos must be in image format (JPEG, PNG, etc.)",
+          details: `Invalid format for ${photo.roomType} ${photo.roomNumber}`
+        });
+      }
+
+      // Validate photo size
+      const photoSizeBytes = Buffer.byteLength(photo.photoData, 'utf8');
+      if (photoSizeBytes > MAX_PHOTO_SIZE) {
+        return res.status(400).json({
+          error: `Photo too large. Maximum size is 10MB.`,
+          details: `${photo.roomType} ${photo.roomNumber} is ${(photoSizeBytes / 1024 / 1024).toFixed(2)}MB`
         });
       }
     }

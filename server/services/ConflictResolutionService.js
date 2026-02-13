@@ -66,7 +66,7 @@ class ConflictResolutionService {
 			if (status) {
 				appealWhere.status = status;
 			} else {
-				appealWhere.status = ["submitted", "under_review", "awaiting_documents", "escalated"];
+				appealWhere.status = { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] };
 			}
 			if (priority) appealWhere.priority = priority;
 			if (assignedTo) appealWhere.assignedTo = assignedTo;
@@ -148,7 +148,7 @@ class ConflictResolutionService {
 			if (status) {
 				paymentWhere.status = status;
 			} else {
-				paymentWhere.status = ["submitted", "under_review"];
+				paymentWhere.status = { [Op.in]: ["submitted", "under_review"] };
 			}
 			if (priority) paymentWhere.priority = priority;
 			if (assignedTo) paymentWhere.assignedTo = assignedTo;
@@ -227,7 +227,7 @@ class ConflictResolutionService {
 			if (status) {
 				supportWhere.status = status;
 			} else {
-				supportWhere.status = ["submitted", "under_review", "pending_info"];
+				supportWhere.status = { [Op.in]: ["submitted", "under_review", "pending_info"] };
 			}
 			if (priority) supportWhere.priority = priority;
 			if (assignedTo) supportWhere.assignedTo = assignedTo;
@@ -303,9 +303,12 @@ class ConflictResolutionService {
 					approved: ["approved", "owner_approved"],
 					denied: ["denied", "owner_denied"],
 				};
-				adjustmentWhere.status = statusMap[status] || status;
+				// Use Op.in if status maps to an array, otherwise use direct value
+				adjustmentWhere.status = statusMap[status]
+					? { [Op.in]: statusMap[status] }
+					: status;
 			} else {
-				adjustmentWhere.status = ["pending_homeowner", "pending_owner"];
+				adjustmentWhere.status = { [Op.in]: ["pending_homeowner", "pending_owner"] };
 			}
 
 			const adjustments = await HomeSizeAdjustmentRequest.findAll({
@@ -1129,21 +1132,50 @@ class ConflictResolutionService {
 	 */
 	static async processRefund(options) {
 		const { caseId, caseType, amount, reason, reviewerId, req } = options;
-		const { UserAppointments, User } = require("../models");
+		const { UserAppointments, User, sequelize } = require("../models");
 
 		const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
+		// Initialize variables for error handling context
+		let appointmentId = null;
+		let caseData = null;
+
 		// Get case and appointment
-		const caseData = await this.getConflictCase(caseId, caseType);
+		caseData = await this.getConflictCase(caseId, caseType);
 		if (!caseData.appointment?.paymentIntentId) {
 			throw new Error("No payment intent found for this appointment");
 		}
 
-		const appointmentId = caseData.appointment.id;
+		appointmentId = caseData.appointment.id;
 		const paymentIntentId = caseData.appointment.paymentIntentId;
 
+		// Use transaction with row-level lock to prevent race conditions
+		const transaction = await sequelize.transaction();
+
 		try {
-			// Create Stripe refund
+			// Lock the appointment row and get fresh data
+			const appointment = await UserAppointments.findByPk(appointmentId, {
+				lock: transaction.LOCK.UPDATE,
+				transaction,
+			});
+
+			if (!appointment) {
+				await transaction.rollback();
+				throw new Error("Appointment not found");
+			}
+
+			// Validate refund amount against current state (with lock held)
+			const originalAmount = (appointment.price || 0) * 100;
+			const alreadyRefunded = appointment.refundAmount || 0;
+			const maxRefundable = Math.max(0, originalAmount - alreadyRefunded);
+
+			if (amount > maxRefundable) {
+				await transaction.rollback();
+				throw new Error(`Refund amount exceeds maximum refundable. Max: ${maxRefundable / 100}`);
+			}
+
+			// Create Stripe refund with idempotency key to prevent duplicates
+			const idempotencyKey = `refund-${caseType}-${caseId}-${appointmentId}-${amount}-${reviewerId}`;
 			const refund = await stripe.refunds.create({
 				payment_intent: paymentIntentId,
 				amount: amount,
@@ -1154,16 +1186,21 @@ class ConflictResolutionService {
 					reason,
 					reviewerId: reviewerId?.toString(),
 				},
+			}, {
+				idempotencyKey,
 			});
 
-			// Update appointment
-			await UserAppointments.update(
+			// Update appointment within the same transaction
+			await appointment.update(
 				{
-					refundAmount: (caseData.appointment.refundAmount || 0) + amount,
+					refundAmount: alreadyRefunded + amount,
 					lastRefundAt: new Date(),
 				},
-				{ where: { id: appointmentId } }
+				{ transaction }
 			);
+
+			// Commit transaction
+			await transaction.commit();
 
 			// Log audit event
 			await CancellationAuditService.log({
@@ -1204,6 +1241,11 @@ class ConflictResolutionService {
 			};
 
 		} catch (error) {
+			// Rollback transaction if still active
+			if (transaction && !transaction.finished) {
+				await transaction.rollback();
+			}
+
 			// Log failed attempt
 			await CancellationAuditService.log({
 				appointmentId,
@@ -1217,7 +1259,7 @@ class ConflictResolutionService {
 					error: error.message,
 					caseType,
 					caseId,
-					caseNumber: caseData.caseNumber,
+					caseNumber: caseData?.caseNumber,
 				},
 				req,
 			});
@@ -1237,7 +1279,14 @@ class ConflictResolutionService {
 
 		// Get case data
 		const caseData = await this.getConflictCase(caseId, caseType);
-		const cleanerStripeAccountId = caseData.cleaner?.stripeAccountId;
+
+		// Validate cleaner exists and has Stripe account
+		if (!caseData.cleaner) {
+			throw new Error("No cleaner found for this case");
+		}
+
+		const cleanerId = caseData.cleaner.id;
+		const cleanerStripeAccountId = caseData.cleaner.stripeAccountId;
 
 		if (!cleanerStripeAccountId) {
 			throw new Error("Cleaner does not have a Stripe account connected");
@@ -1246,7 +1295,8 @@ class ConflictResolutionService {
 		const appointmentId = caseData.appointment?.id;
 
 		try {
-			// Create Stripe transfer to cleaner's connected account
+			// Create Stripe transfer with idempotency key to prevent duplicates
+			const idempotencyKey = `payout-${caseType}-${caseId}-${cleanerId}-${amount}-${reviewerId}`;
 			const transfer = await stripe.transfers.create({
 				amount: amount,
 				currency: "usd",
@@ -1257,7 +1307,10 @@ class ConflictResolutionService {
 					reason,
 					reviewerId: reviewerId?.toString(),
 					appointmentId: appointmentId?.toString(),
+					cleanerId: cleanerId?.toString(),
 				},
+			}, {
+				idempotencyKey,
 			});
 
 			// Log audit event
@@ -1268,13 +1321,13 @@ class ConflictResolutionService {
 				actorId: reviewerId,
 				actorType: "hr",
 				eventData: {
-					cleanerId: caseData.cleaner.id,
+					cleanerId,
 					amount,
 					reason,
 					stripeTransferId: transfer.id,
 					caseType,
 					caseId,
-					caseNumber: caseData.caseNumber,
+					caseNumber: caseData?.caseNumber,
 				},
 				req,
 			});
@@ -1285,7 +1338,7 @@ class ConflictResolutionService {
 				caseId,
 				caseType,
 				{
-					cleanerId: caseData.cleaner.id,
+					cleanerId,
 					amount,
 					reason,
 					stripeTransferId: transfer.id,

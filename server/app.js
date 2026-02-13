@@ -14,6 +14,7 @@ require("dotenv").config();
 require("./passport-config");
 
 const rootRouter = require("./routes/rootRouter");
+const { ConversationParticipant } = require("./models");
 const { startPeriodicSync } = require("./services/calendarSyncService");
 const { startBillingScheduler } = require("./services/billingService");
 const { startCompletionApprovalMonitor } = require("./services/cron/CompletionApprovalMonitor");
@@ -23,6 +24,7 @@ const { startTenantPresentTimeoutJob } = require("./services/cron/TenantPresentT
 const { startExpirationJob: startHomeSizeExpirationJob } = require("./services/cron/HomeSizeAdjustmentExpirationJob");
 const { startBiWeeklyPayoutJob } = require("./services/cron/BiWeeklyPayoutJob");
 const { startUnassignedReminderJob } = require("./services/cron/UnassignedReminderJob");
+const { startExpiredRequestsJob } = require("./services/cron/ExpiredRequestsJob");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -91,10 +93,22 @@ io.on("connection", (socket) => {
 	// Join user to their personal room for direct notifications
 	socket.join(`user_${socket.userId}`);
 
-	// Join a conversation room
-	socket.on("join_conversation", (conversationId) => {
-		socket.join(`conversation_${conversationId}`);
-		console.log(`User ${socket.userId} joined conversation ${conversationId}`);
+	// Join a conversation room (with participant verification)
+	socket.on("join_conversation", async (conversationId) => {
+		try {
+			// Verify user is a participant in this conversation
+			const participant = await ConversationParticipant.findOne({
+				where: { conversationId, userId: socket.userId },
+			});
+			if (participant) {
+				socket.join(`conversation_${conversationId}`);
+				console.log(`User ${socket.userId} joined conversation ${conversationId}`);
+			} else {
+				console.log(`User ${socket.userId} denied access to conversation ${conversationId}`);
+			}
+		} catch (error) {
+			console.error(`Error joining conversation ${conversationId}:`, error.message);
+		}
 	});
 
 	// Leave a conversation room
@@ -204,5 +218,6 @@ server.listen(port, () => {
 		startHomeSizeExpirationJob(io, 15 * 60 * 1000); // Home size adjustment expiration (every 15 min)
 		startBiWeeklyPayoutJob(io); // Bi-weekly employee payouts (every other Friday at 6 AM UTC)
 		startUnassignedReminderJob(io, 24 * 60 * 60 * 1000); // Daily unassigned appointment reminders to business owners
+		startExpiredRequestsJob(io); // New home request expiration (every hour)
 	}
 });

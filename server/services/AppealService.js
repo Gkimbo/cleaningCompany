@@ -6,6 +6,7 @@
  */
 
 const moment = require("moment");
+const { Op } = require("sequelize");
 const CancellationAuditService = require("./CancellationAuditService");
 const JobLedgerService = require("./JobLedgerService");
 
@@ -53,7 +54,7 @@ class AppealService {
 			const existingAppeal = await CancellationAppeal.findOne({
 				where: {
 					appointmentId,
-					status: ["submitted", "under_review", "awaiting_documents", "escalated"],
+					status: { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] },
 				},
 				transaction,
 			});
@@ -101,8 +102,8 @@ class AppealService {
 
 			await transaction.commit();
 
-			// Log audit event (async, don't wait)
-			CancellationAuditService.logAppealSubmitted(
+			// Log audit event
+			await CancellationAuditService.logAppealSubmitted(
 				appointmentId,
 				appeal.id,
 				appealerId,
@@ -152,7 +153,7 @@ class AppealService {
 		});
 
 		// Log audit event
-		CancellationAuditService.logAppealAssigned(
+		await CancellationAuditService.logAppealAssigned(
 			appeal.appointmentId,
 			appealId,
 			assigneeId,
@@ -183,7 +184,7 @@ class AppealService {
 			const count = await CancellationAppeal.count({
 				where: {
 					assignedTo: hr.id,
-					status: ["under_review", "awaiting_documents"],
+					status: { [Op.in]: ["under_review", "awaiting_documents"] },
 				},
 				transaction,
 			});
@@ -242,7 +243,7 @@ class AppealService {
 		await appeal.update(updateData);
 
 		// Log audit event
-		CancellationAuditService.logAppealStatusChanged(
+		await CancellationAuditService.logAppealStatusChanged(
 			appeal.appointmentId,
 			appealId,
 			reviewerId,
@@ -313,7 +314,7 @@ class AppealService {
 			await transaction.commit();
 
 			// Log audit event
-			CancellationAuditService.logAppealResolved(
+			await CancellationAuditService.logAppealResolved(
 				appeal.appointmentId,
 				appealId,
 				reviewerId,
@@ -428,9 +429,9 @@ class AppealService {
 		// Count appeals by status
 		const [total, approved, denied, pending] = await Promise.all([
 			CancellationAppeal.count({ where: { appealerId: userId }, transaction }),
-			CancellationAppeal.count({ where: { appealerId: userId, status: ["approved", "partially_approved"] }, transaction }),
+			CancellationAppeal.count({ where: { appealerId: userId, status: { [Op.in]: ["approved", "partially_approved"] } }, transaction }),
 			CancellationAppeal.count({ where: { appealerId: userId, status: "denied" }, transaction }),
-			CancellationAppeal.count({ where: { appealerId: userId, status: ["submitted", "under_review", "awaiting_documents", "escalated"] }, transaction }),
+			CancellationAppeal.count({ where: { appealerId: userId, status: { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] } }, transaction }),
 		]);
 
 		const approvalRate = total > 0 ? Math.round((approved / total) * 100) : null;
@@ -562,7 +563,7 @@ class AppealService {
 		if (status) {
 			where.status = status;
 		} else {
-			where.status = ["submitted", "under_review", "awaiting_documents", "escalated"];
+			where.status = { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] };
 		}
 		if (priority) where.priority = priority;
 		if (assignedTo) where.assignedTo = assignedTo;
@@ -593,7 +594,7 @@ class AppealService {
 
 		return CancellationAppeal.findAll({
 			where: {
-				status: ["submitted", "under_review", "awaiting_documents"],
+				status: { [Op.in]: ["submitted", "under_review", "awaiting_documents"] },
 				slaDeadline: { [Op.lt]: new Date() },
 			},
 			include: [
@@ -614,11 +615,11 @@ class AppealService {
 		const [total, pending, pastSLA, byStatus, byPriority] = await Promise.all([
 			CancellationAppeal.count(),
 			CancellationAppeal.count({
-				where: { status: ["submitted", "under_review", "awaiting_documents", "escalated"] },
+				where: { status: { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] } },
 			}),
 			CancellationAppeal.count({
 				where: {
-					status: ["submitted", "under_review", "awaiting_documents"],
+					status: { [Op.in]: ["submitted", "under_review", "awaiting_documents"] },
 					slaDeadline: { [Op.lt]: new Date() },
 				},
 			}),
@@ -634,7 +635,7 @@ class AppealService {
 					"priority",
 					[require("../models").sequelize.fn("COUNT", require("../models").sequelize.col("id")), "count"],
 				],
-				where: { status: ["submitted", "under_review", "awaiting_documents", "escalated"] },
+				where: { status: { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] } },
 				group: ["priority"],
 			}),
 		]);

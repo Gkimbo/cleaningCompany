@@ -1616,25 +1616,51 @@ async function createDemoAccounts() {
 			console.error(`  - Error creating home:`, error.message);
 		}
 
-		// Link business client to business owner
+		// Link business client to business owner (with home)
 		console.log("Linking business client to demo business owner...");
 		try {
-			const existingClient = await CleanerClient.findOne({
+			// Check for existing relationship with this specific home
+			const existingClientWithHome = await CleanerClient.findOne({
 				where: {
 					cleanerId: createdAccounts.businessOwner.id,
 					clientId: createdAccounts.businessClient.id,
+					homeId: clientHome?.id,
 				},
 			});
 
-			if (!existingClient) {
-				await CleanerClient.create({
-					cleanerId: createdAccounts.businessOwner.id,
-					clientId: createdAccounts.businessClient.id,
-					status: "active",
-					preferredDays: JSON.stringify(["Tuesday", "Friday"]),
-					notes: "VIP client - prefers morning appointments, eco-friendly products only",
+			if (!existingClientWithHome && clientHome) {
+				// Check if there's an old record without a homeId that we should update
+				const existingClientWithoutHome = await CleanerClient.findOne({
+					where: {
+						cleanerId: createdAccounts.businessOwner.id,
+						clientId: createdAccounts.businessClient.id,
+						homeId: null,
+					},
 				});
-				console.log("  - Linked as client of Demo Business Owner");
+
+				if (existingClientWithoutHome) {
+					// Update the existing record to include the homeId
+					await existingClientWithoutHome.update({ homeId: clientHome.id });
+					console.log("  - Updated existing client link to include home");
+				} else {
+					// Create new record with homeId
+					await CleanerClient.create({
+						cleanerId: createdAccounts.businessOwner.id,
+						clientId: createdAccounts.businessClient.id,
+						homeId: clientHome.id, // Link to the specific home
+						status: "active",
+						inviteToken: "demo-business-client-" + Date.now(),
+						invitedEmail: "demo_business_client@example.com",
+						invitedName: "Demo Business Client",
+						invitedAt: new Date(),
+						acceptedAt: new Date(),
+						preferredDays: JSON.stringify(["Tuesday", "Friday"]),
+						notes: "VIP client - prefers morning appointments, eco-friendly products only",
+					});
+					console.log("  - Linked as client of Demo Business Owner (with home)");
+				}
+			} else {
+				console.log("  - Already linked to Demo Business Owner with this home");
 			}
 		} catch (error) {
 			console.error("  - Error linking client:", error.message);

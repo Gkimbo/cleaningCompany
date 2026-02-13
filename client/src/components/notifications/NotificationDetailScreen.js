@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useContext } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useNavigate, useParams } from "react-router-native";
@@ -20,6 +22,9 @@ const NotificationDetailScreen = () => {
 
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [showDeclineInput, setShowDeclineInput] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
 
   useEffect(() => {
     const fetchNotification = async () => {
@@ -69,6 +74,12 @@ const NotificationDetailScreen = () => {
         return { name: "dollar-sign", color: colors.success[500], bg: colors.success[50] };
       case "review_received":
         return { name: "star", color: colors.warning[500], bg: colors.warning[50] };
+      case "new_home_request":
+        return { name: "home", color: colors.primary[500], bg: colors.primary[50] };
+      case "new_home_accepted":
+        return { name: "check-circle", color: colors.success[500], bg: colors.success[50] };
+      case "new_home_declined":
+        return { name: "x-circle", color: colors.warning[500], bg: colors.warning[50] };
       default:
         return { name: "bell", color: colors.primary[500], bg: colors.primary[50] };
     }
@@ -111,6 +122,12 @@ const NotificationDetailScreen = () => {
         return "Payment Received";
       case "review_received":
         return "New Review";
+      case "new_home_request":
+        return "New Home Request";
+      case "new_home_accepted":
+        return "Home Request Accepted";
+      case "new_home_declined":
+        return "Home Request Declined";
       default:
         return "Notification";
     }
@@ -133,9 +150,9 @@ const NotificationDetailScreen = () => {
         break;
       case "client_booked":
       case "client_booked_appointment":
-        // Navigate to assign employees for this appointment
+        // Navigate to Job Assignment for this appointment
         if (notification.data?.appointmentId) {
-          navigate(`/assign-cleaner/${notification.data.appointmentId}`);
+          navigate(`/business-owner/assign?jobId=${notification.data.appointmentId}`);
         } else {
           navigate("/business-owner/assign");
         }
@@ -148,6 +165,74 @@ const NotificationDetailScreen = () => {
       default:
         navigate("/");
         break;
+    }
+  };
+
+  const handleAcceptNewHome = async () => {
+    if (!notification?.data?.requestId) return;
+
+    Alert.alert(
+      "Accept Home Request",
+      `Accept this home and add it to your client list?\n\nCalculated Price: $${notification.data.calculatedPrice || "N/A"}`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Accept",
+          onPress: async () => {
+            setProcessing(true);
+            try {
+              const result = await NotificationsService.acceptNewHomeRequest(
+                state.currentUser.token,
+                notification.data.requestId
+              );
+              if (result.success) {
+                Alert.alert("Success", "Home added to your client list!", [
+                  { text: "OK", onPress: () => navigate("/notifications") },
+                ]);
+              } else {
+                Alert.alert("Error", result.error || "Failed to accept request");
+              }
+            } catch (error) {
+              console.error("Error accepting new home request:", error);
+              Alert.alert("Error", "Something went wrong. Please try again.");
+            } finally {
+              setProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeclineNewHome = async () => {
+    if (!notification?.data?.requestId) return;
+
+    if (!showDeclineInput) {
+      setShowDeclineInput(true);
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      const result = await NotificationsService.declineNewHomeRequest(
+        state.currentUser.token,
+        notification.data.requestId,
+        declineReason.trim() || null
+      );
+      if (result.success) {
+        Alert.alert("Declined", "The client has been notified.", [
+          { text: "OK", onPress: () => navigate("/notifications") },
+        ]);
+      } else {
+        Alert.alert("Error", result.error || "Failed to decline request");
+      }
+    } catch (error) {
+      console.error("Error declining new home request:", error);
+      Alert.alert("Error", "Something went wrong. Please try again.");
+    } finally {
+      setProcessing(false);
+      setShowDeclineInput(false);
+      setDeclineReason("");
     }
   };
 
@@ -295,6 +380,90 @@ const NotificationDetailScreen = () => {
                 </View>
               </View>
             )}
+          </View>
+        )}
+
+        {/* New Home Request Accept/Decline Buttons */}
+        {notification.type === "new_home_request" && notification.data?.requestId && (
+          <View style={styles.newHomeActionCard}>
+            <Text style={styles.newHomeActionTitle}>Respond to Request</Text>
+            <Text style={styles.newHomeActionDescription}>
+              Would you like to add this home to your client list?
+            </Text>
+
+            {notification.data.calculatedPrice && (
+              <View style={styles.priceDisplay}>
+                <Text style={styles.priceLabel}>Calculated Price</Text>
+                <Text style={styles.priceValue}>${notification.data.calculatedPrice}</Text>
+              </View>
+            )}
+
+            {showDeclineInput && (
+              <View style={styles.declineInputContainer}>
+                <Text style={styles.declineInputLabel}>Reason for declining (optional)</Text>
+                <TextInput
+                  style={styles.declineInput}
+                  placeholder="e.g., At full capacity, area too far..."
+                  value={declineReason}
+                  onChangeText={setDeclineReason}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+            )}
+
+            <View style={styles.newHomeButtonRow}>
+              {!showDeclineInput ? (
+                <>
+                  <Pressable
+                    style={[styles.declineButton, processing && styles.buttonDisabled]}
+                    onPress={handleDeclineNewHome}
+                    disabled={processing}
+                  >
+                    <Feather name="x" size={18} color={colors.error[600]} />
+                    <Text style={styles.declineButtonText}>Decline</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.acceptButton, processing && styles.buttonDisabled]}
+                    onPress={handleAcceptNewHome}
+                    disabled={processing}
+                  >
+                    {processing ? (
+                      <ActivityIndicator size="small" color={colors.neutral[0]} />
+                    ) : (
+                      <>
+                        <Feather name="check" size={18} color={colors.neutral[0]} />
+                        <Text style={styles.acceptButtonText}>Accept</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Pressable
+                    style={styles.cancelDeclineButton}
+                    onPress={() => {
+                      setShowDeclineInput(false);
+                      setDeclineReason("");
+                    }}
+                    disabled={processing}
+                  >
+                    <Text style={styles.cancelDeclineButtonText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.confirmDeclineButton, processing && styles.buttonDisabled]}
+                    onPress={handleDeclineNewHome}
+                    disabled={processing}
+                  >
+                    {processing ? (
+                      <ActivityIndicator size="small" color={colors.neutral[0]} />
+                    ) : (
+                      <Text style={styles.confirmDeclineButtonText}>Confirm Decline</Text>
+                    )}
+                  </Pressable>
+                </>
+              )}
+            </View>
           </View>
         )}
 
@@ -501,6 +670,127 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: spacing.xl,
+  },
+  newHomeActionCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  newHomeActionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: "600",
+    color: colors.neutral[900],
+    marginBottom: spacing.xs,
+  },
+  newHomeActionDescription: {
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[600],
+    marginBottom: spacing.md,
+  },
+  priceDisplay: {
+    backgroundColor: colors.success[50],
+    padding: spacing.md,
+    borderRadius: radius.md,
+    marginBottom: spacing.lg,
+    alignItems: "center",
+  },
+  priceLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success[700],
+    marginBottom: spacing.xs,
+  },
+  priceValue: {
+    fontSize: typography.fontSize.xxl,
+    fontWeight: "700",
+    color: colors.success[600],
+  },
+  declineInputContainer: {
+    marginBottom: spacing.md,
+  },
+  declineInputLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.neutral[600],
+    marginBottom: spacing.xs,
+  },
+  declineInput: {
+    backgroundColor: colors.neutral[100],
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: typography.fontSize.base,
+    color: colors.neutral[800],
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  newHomeButtonRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  acceptButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.success[500],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    gap: spacing.sm,
+  },
+  acceptButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.neutral[0],
+  },
+  declineButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.error[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.error[200],
+    gap: spacing.sm,
+  },
+  declineButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.error[600],
+  },
+  cancelDeclineButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.neutral[100],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+  },
+  cancelDeclineButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.neutral[600],
+  },
+  confirmDeclineButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.error[500],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+  },
+  confirmDeclineButtonText: {
+    fontSize: typography.fontSize.base,
+    fontWeight: "600",
+    color: colors.neutral[0],
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
 
