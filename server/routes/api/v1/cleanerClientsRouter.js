@@ -301,6 +301,12 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
           : cleanerClient.cleaner
             ? `${EncryptionService.decrypt(cleanerClient.cleaner.firstName)} ${EncryptionService.decrypt(cleanerClient.cleaner.lastName)}`
             : "Your Cleaner",
+        // Include business info for display
+        cleaner: isCancelled ? null : cleanerClient.cleaner ? {
+          businessName: cleanerClient.cleaner.businessName,
+          businessLogo: cleanerClient.cleaner.businessLogo,
+          isBusinessOwner: cleanerClient.cleaner.isBusinessOwner,
+        } : null,
         name: cleanerClient.invitedName ? EncryptionService.decrypt(cleanerClient.invitedName) : null,
         email: cleanerClient.invitedEmail ? EncryptionService.decrypt(cleanerClient.invitedEmail) : null,
         phone: cleanerClient.invitedPhone ? EncryptionService.decrypt(cleanerClient.invitedPhone) : null,

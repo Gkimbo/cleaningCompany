@@ -11,10 +11,14 @@ class CleanerClientSerializer {
 		const data = user.dataValues || user;
 		return {
 			id: data.id,
+			username: data.username,
 			firstName: this.decryptField(data.firstName),
 			lastName: this.decryptField(data.lastName),
 			email: this.decryptField(data.email),
-			phone: this.decryptField(data.phone)
+			phone: this.decryptField(data.phone),
+			isBusinessOwner: data.isBusinessOwner,
+			businessName: data.businessName,
+			businessLogo: data.businessLogo,
 		};
 	}
 

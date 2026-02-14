@@ -4,6 +4,7 @@ const {
   UserHomes,
   User,
   PricingConfig,
+  Notification,
 } = require("../models");
 const { Op } = require("sequelize");
 const NotificationService = require("./NotificationService");
@@ -283,6 +284,30 @@ class NewHomeRequestService {
         io,
       });
 
+      // Clear the action-required flag on the original notification
+      await Notification.update(
+        { actionRequired: false, isRead: true },
+        {
+          where: {
+            userId: businessOwnerId,
+            type: "new_home_request",
+            "data.requestId": requestId,
+          },
+        }
+      );
+
+      // Emit socket event to update badge count in real-time
+      if (io) {
+        const [unreadCount, actionRequiredCount] = await Promise.all([
+          Notification.getUnreadCount(businessOwnerId),
+          Notification.getActionRequiredCount(businessOwnerId),
+        ]);
+        io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+          unreadCount,
+          actionRequiredCount,
+        });
+      }
+
       return { request, cleanerClient: existingCleanerClient };
     }
 
@@ -329,6 +354,30 @@ class NewHomeRequestService {
       price: request.calculatedPrice,
       io,
     });
+
+    // Clear the action-required flag on the original notification
+    await Notification.update(
+      { actionRequired: false, isRead: true },
+      {
+        where: {
+          userId: businessOwnerId,
+          type: "new_home_request",
+          "data.requestId": requestId,
+        },
+      }
+    );
+
+    // Emit socket event to update badge count in real-time
+    if (io) {
+      const [unreadCount, actionRequiredCount] = await Promise.all([
+        Notification.getUnreadCount(businessOwnerId),
+        Notification.getActionRequiredCount(businessOwnerId),
+      ]);
+      io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+        unreadCount,
+        actionRequiredCount,
+      });
+    }
 
     return { request, cleanerClient };
   }
@@ -388,6 +437,30 @@ class NewHomeRequestService {
       reason,
       io,
     });
+
+    // Clear the action-required flag on the original notification
+    await Notification.update(
+      { actionRequired: false, isRead: true },
+      {
+        where: {
+          userId: businessOwnerId,
+          type: "new_home_request",
+          "data.requestId": requestId,
+        },
+      }
+    );
+
+    // Emit socket event to update badge count in real-time
+    if (io) {
+      const [unreadCount, actionRequiredCount] = await Promise.all([
+        Notification.getUnreadCount(businessOwnerId),
+        Notification.getActionRequiredCount(businessOwnerId),
+      ]);
+      io.to(`user_${businessOwnerId}`).emit("notification_count_update", {
+        unreadCount,
+        actionRequiredCount,
+      });
+    }
 
     return request;
   }

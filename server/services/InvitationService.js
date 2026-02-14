@@ -56,7 +56,7 @@ class InvitationService {
         {
           model: User,
           as: "cleaner",
-          attributes: ["id", "firstName", "lastName", "email"],
+          attributes: ["id", "firstName", "lastName", "email", "businessName", "businessLogo", "isBusinessOwner"],
         },
       ],
     });

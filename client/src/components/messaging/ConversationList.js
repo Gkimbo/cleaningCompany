@@ -207,15 +207,16 @@ const ConversationList = () => {
       return "Support";
     }
     if (conversation.conversationType === "internal") {
-      // Check if it's a group or 1-on-1
-      if (conversation.title) {
-        return conversation.title;
-      }
-      // Get other participant names for 1-on-1
+      // Get other participant names
       const otherParticipants = conversation.participants?.filter(
         (p) => p.userId !== parseInt(state.currentUser?.userId)
       );
+      // For 1-on-1 conversations, show just the other person's name
       if (otherParticipants?.length === 1) {
+        // If title exists and doesn't look like "PersonA & PersonB" format, use it
+        if (conversation.title && !conversation.title.includes(" & ")) {
+          return conversation.title;
+        }
         const user = otherParticipants[0].user;
         // Use decrypted firstName/lastName if available
         if (user?.firstName) {
@@ -223,7 +224,11 @@ const ConversationList = () => {
         }
         return user?.username || "Team Member";
       }
+      // For group chats, use title or generate from names
       if (otherParticipants?.length > 1) {
+        if (conversation.title) {
+          return conversation.title;
+        }
         // Show first names for group chats
         const names = otherParticipants
           .slice(0, 2)
@@ -237,10 +242,30 @@ const ConversationList = () => {
     // Business owner <-> Employee conversations
     if (conversation.conversationType === "business_employee" ||
         conversation.conversationType === "employee_group") {
-      if (conversation.title) {
-        return conversation.title;
-      }
       // Get other participant names
+      const otherParticipants = conversation.participants?.filter(
+        (p) => p.userId !== parseInt(state.currentUser?.userId)
+      );
+      // For 1-on-1 conversations, show just the other person's name
+      if (otherParticipants?.length === 1) {
+        const user = otherParticipants[0].user;
+        if (user?.firstName) {
+          return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+        }
+        return user?.username || "Employee";
+      }
+      // For group conversations, use title or generate from names
+      if (otherParticipants?.length > 1) {
+        if (conversation.title) {
+          return conversation.title;
+        }
+        const firstUser = otherParticipants[0].user;
+        const name = firstUser?.firstName || firstUser?.username || "Employee";
+        return `${name} +${otherParticipants.length - 1}`;
+      }
+    }
+    // Cleaner <-> Client conversations
+    if (conversation.conversationType === "cleaner-client") {
       const otherParticipants = conversation.participants?.filter(
         (p) => p.userId !== parseInt(state.currentUser?.userId)
       );
@@ -249,12 +274,20 @@ const ConversationList = () => {
         if (user?.firstName) {
           return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
         }
-        return user?.username || "Employee";
+        return user?.username || "User";
       }
-      if (otherParticipants?.length > 1) {
-        const firstUser = otherParticipants[0].user;
-        const name = firstUser?.firstName || firstUser?.username || "Employee";
-        return `${name} +${otherParticipants.length - 1}`;
+    }
+    // Employee peer-to-peer conversations
+    if (conversation.conversationType === "employee_peer") {
+      const otherParticipants = conversation.participants?.filter(
+        (p) => p.userId !== parseInt(state.currentUser?.userId)
+      );
+      if (otherParticipants?.length === 1) {
+        const user = otherParticipants[0].user;
+        if (user?.firstName) {
+          return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+        }
+        return user?.username || "Coworker";
       }
     }
     if (conversation.appointment) {
@@ -264,13 +297,16 @@ const ConversationList = () => {
         day: "numeric",
       })}`;
     }
-    // Get other participant names
+    // Get other participant names (fallback for other conversation types)
     const otherParticipants = conversation.participants?.filter(
       (p) => p.userId !== parseInt(state.currentUser?.userId)
     );
     if (otherParticipants?.length > 0) {
       const firstUser = otherParticipants[0].user;
-      const name = firstUser?.username || "User";
+      // Use firstName/lastName if available, fallback to username
+      const name = firstUser?.firstName
+        ? (firstUser.lastName ? `${firstUser.firstName} ${firstUser.lastName}` : firstUser.firstName)
+        : (firstUser?.username || "User");
       if (otherParticipants.length > 1) {
         return `${name} +${otherParticipants.length - 1}`;
       }

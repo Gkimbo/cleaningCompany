@@ -186,9 +186,11 @@ cleanerApprovalRouter.get("/appointment/:appointmentId", async (req, res) => {
 cleanerApprovalRouter.post("/:requestId/approve", async (req, res) => {
   try {
     const { requestId } = req.params;
+    const io = req.app.get("io");
     const result = await CleanerApprovalService.approveRequest(
       parseInt(requestId),
-      req.userId
+      req.userId,
+      io
     );
     return res.json(result);
   } catch (error) {
@@ -205,10 +207,12 @@ cleanerApprovalRouter.post("/:requestId/decline", async (req, res) => {
   try {
     const { requestId } = req.params;
     const { reason } = req.body;
+    const io = req.app.get("io");
     const result = await CleanerApprovalService.declineRequest(
       parseInt(requestId),
       req.userId,
-      reason
+      reason,
+      io
     );
     return res.json(result);
   } catch (error) {

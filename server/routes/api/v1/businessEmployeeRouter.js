@@ -602,7 +602,7 @@ router.get("/my-profile", async (req, res) => {
         {
           model: User,
           as: "businessOwner",
-          attributes: ["id", "firstName", "lastName", "businessName"],
+          attributes: ["id", "firstName", "lastName", "businessName", "businessLogo", "isBusinessOwner"],
         },
       ],
     });
