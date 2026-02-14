@@ -43,6 +43,10 @@ jest.mock("../../models", () => ({
   CleanerJoinRequest: {
     findAll: jest.fn().mockResolvedValue([]),
   },
+  NewHomeRequest: {
+    findAll: jest.fn().mockResolvedValue([]),
+    destroy: jest.fn().mockResolvedValue(0),
+  },
   Op: {
     between: Symbol("between"),
     in: Symbol("in"),
@@ -329,6 +333,7 @@ describe("User Info Router", () => {
     it("should delete home successfully", async () => {
       const response = await request(app)
         .delete("/api/v1/user-info/home")
+        .set("Authorization", `Bearer ${userToken}`)
         .send({ id: 1 });
 
       expect(response.status).toBe(201);
@@ -366,6 +371,7 @@ describe("User Info Router", () => {
 
       const response = await request(app)
         .delete("/api/v1/user-info/home")
+        .set("Authorization", `Bearer ${userToken}`)
         .send({ id: 1 });
 
       expect(response.status).toBe(201);
@@ -376,6 +382,7 @@ describe("User Info Router", () => {
 
       const response = await request(app)
         .delete("/api/v1/user-info/home")
+        .set("Authorization", `Bearer ${userToken}`)
         .send({ id: 1 });
 
       expect(response.status).toBe(401);

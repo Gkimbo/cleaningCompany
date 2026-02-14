@@ -333,9 +333,9 @@ describe("HomeSizeAdjustment Router", () => {
             reportedNumBaths: "1",
             cleanerNote: "Home is larger",
             photos: [
-              { roomType: "bedroom", roomNumber: 1, photoData: "base64data1" },
-              { roomType: "bedroom", roomNumber: 2, photoData: "base64data2" },
-              { roomType: "bathroom", roomNumber: 1, photoData: "base64data3" },
+              { roomType: "bedroom", roomNumber: 1, photoData: "data:image/jpeg;base64,/9j/base64data1" },
+              { roomType: "bedroom", roomNumber: 2, photoData: "data:image/jpeg;base64,/9j/base64data2" },
+              { roomType: "bathroom", roomNumber: 1, photoData: "data:image/jpeg;base64,/9j/base64data3" },
             ],
           });
 
@@ -360,13 +360,13 @@ describe("HomeSizeAdjustment Router", () => {
             reportedNumBeds: "4",
             reportedNumBaths: "3",
             photos: [
-              { roomType: "bedroom", roomNumber: 1, photoData: "data" },
-              { roomType: "bedroom", roomNumber: 2, photoData: "data" },
-              { roomType: "bedroom", roomNumber: 3, photoData: "data" },
-              { roomType: "bedroom", roomNumber: 4, photoData: "data" },
-              { roomType: "bathroom", roomNumber: 1, photoData: "data" },
-              { roomType: "bathroom", roomNumber: 2, photoData: "data" },
-              { roomType: "bathroom", roomNumber: 3, photoData: "data" },
+              { roomType: "bedroom", roomNumber: 1, photoData: "data:image/jpeg;base64,data1" },
+              { roomType: "bedroom", roomNumber: 2, photoData: "data:image/jpeg;base64,data2" },
+              { roomType: "bedroom", roomNumber: 3, photoData: "data:image/jpeg;base64,data3" },
+              { roomType: "bedroom", roomNumber: 4, photoData: "data:image/jpeg;base64,data4" },
+              { roomType: "bathroom", roomNumber: 1, photoData: "data:image/jpeg;base64,data5" },
+              { roomType: "bathroom", roomNumber: 2, photoData: "data:image/jpeg;base64,data6" },
+              { roomType: "bathroom", roomNumber: 3, photoData: "data:image/jpeg;base64,data7" },
             ],
           });
 
@@ -390,13 +390,13 @@ describe("HomeSizeAdjustment Router", () => {
             reportedNumBeds: "4",
             reportedNumBaths: "3",
             photos: [
-              { roomType: "bedroom", roomNumber: 1, photoData: "data" },
-              { roomType: "bedroom", roomNumber: 2, photoData: "data" },
-              { roomType: "bedroom", roomNumber: 3, photoData: "data" },
-              { roomType: "bedroom", roomNumber: 4, photoData: "data" },
-              { roomType: "bathroom", roomNumber: 1, photoData: "data" },
-              { roomType: "bathroom", roomNumber: 2, photoData: "data" },
-              { roomType: "bathroom", roomNumber: 3, photoData: "data" },
+              { roomType: "bedroom", roomNumber: 1, photoData: "data:image/jpeg;base64,data1" },
+              { roomType: "bedroom", roomNumber: 2, photoData: "data:image/jpeg;base64,data2" },
+              { roomType: "bedroom", roomNumber: 3, photoData: "data:image/jpeg;base64,data3" },
+              { roomType: "bedroom", roomNumber: 4, photoData: "data:image/jpeg;base64,data4" },
+              { roomType: "bathroom", roomNumber: 1, photoData: "data:image/jpeg;base64,data5" },
+              { roomType: "bathroom", roomNumber: 2, photoData: "data:image/jpeg;base64,data6" },
+              { roomType: "bathroom", roomNumber: 3, photoData: "data:image/jpeg;base64,data7" },
             ],
           });
 

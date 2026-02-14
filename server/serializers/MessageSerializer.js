@@ -6,7 +6,12 @@ class MessageSerializer {
 
 	static decryptUserField(value) {
 		if (!value) return null;
-		return EncryptionService.decrypt(value);
+		const decrypted = EncryptionService.decrypt(value);
+		// Debug: log if decryption returned same value (likely failed)
+		if (decrypted === value && value.includes(':')) {
+			console.warn('[MessageSerializer] Decryption may have failed for value');
+		}
+		return decrypted;
 	}
 
 	static serializeUser(user) {
@@ -14,6 +19,7 @@ class MessageSerializer {
 		const data = user.dataValues || user;
 		return {
 			id: data.id,
+			username: data.username,
 			firstName: this.decryptUserField(data.firstName),
 			lastName: this.decryptUserField(data.lastName),
 			email: this.decryptUserField(data.email),

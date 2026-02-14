@@ -28,6 +28,7 @@ jest.mock("../../models", () => ({
   Message: {
     findAll: jest.fn(),
     findByPk: jest.fn(),
+    findOne: jest.fn(),
     create: jest.fn(),
     count: jest.fn(),
     destroy: jest.fn(),
@@ -61,6 +62,9 @@ jest.mock("../../models", () => ({
     create: jest.fn(),
     destroy: jest.fn(),
   },
+  SuspiciousActivityReport: {
+    create: jest.fn(),
+  },
 }));
 
 // Mock Email service
@@ -86,6 +90,12 @@ jest.mock("../../services/sendNotifications/PushNotificationClass", () => ({
   sendPushNewMessage: jest.fn().mockResolvedValue(true),
 }));
 const PushNotification = require("../../services/sendNotifications/PushNotificationClass");
+
+// Mock SuspiciousContentDetector
+jest.mock("../../services/SuspiciousContentDetector", () => ({
+  analyze: jest.fn().mockReturnValue({ isSuspicious: false }),
+  detect: jest.fn().mockReturnValue({ isSuspicious: false, patterns: [] }),
+}));
 
 describe("Message Routes", () => {
   let app;
@@ -656,6 +666,17 @@ describe("Message Routes", () => {
     it("should add a participant to a conversation", async () => {
       const token = jwt.sign({ userId: 1 }, secretKey);
 
+      User.findByPk.mockResolvedValue({
+        id: 1,
+        isBusinessOwner: true,
+      });
+
+      Conversation.findByPk.mockResolvedValue({
+        id: 1,
+        conversationType: "appointment",
+        createdBy: 1,
+      });
+
       ConversationParticipant.findOne.mockResolvedValue({
         id: 1,
         conversationId: 1,
@@ -969,9 +990,6 @@ describe("Message Routes", () => {
         userId: 1,
       });
 
-      // First message in conversation
-      Message.count.mockResolvedValue(0);
-
       Message.create.mockResolvedValue({
         id: 1,
         conversationId: 1,
@@ -979,6 +997,9 @@ describe("Message Routes", () => {
         content: "First message",
         messageType: "text",
       });
+
+      // First message check - return the same message ID to indicate this IS the first
+      Message.findOne.mockResolvedValue({ id: 1 });
 
       Message.findByPk.mockResolvedValue({
         id: 1,
@@ -1029,9 +1050,6 @@ describe("Message Routes", () => {
         userId: 1,
       });
 
-      // Not the first message - already 5 messages exist
-      Message.count.mockResolvedValue(5);
-
       Message.create.mockResolvedValue({
         id: 6,
         conversationId: 1,
@@ -1039,6 +1057,9 @@ describe("Message Routes", () => {
         content: "Another message",
         messageType: "text",
       });
+
+      // First message has ID 1, new message has ID 6, so NOT the first
+      Message.findOne.mockResolvedValue({ id: 1 });
 
       Message.findByPk.mockResolvedValue({
         id: 6,

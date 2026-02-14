@@ -18,6 +18,7 @@ const {
   UserReviews,
   Message,
   Conversation,
+  ConversationParticipant,
   sequelize,
 } = require("../../../models");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -555,13 +556,29 @@ ownerDashboardRouter.get(
         // Continue with defaults if messages table has issues
       }
 
-      // Count support conversations as "unread" proxy
-      const supportConversations = await Conversation.count({
-        where: { conversationType: "support" },
-      }).catch(() => 0);
+      // Calculate actual unread message count for the owner
+      let unreadCount = 0;
+      try {
+        const participations = await ConversationParticipant.findAll({
+          where: { userId: req.user.id },
+        });
+
+        for (const p of participations) {
+          const count = await Message.count({
+            where: {
+              conversationId: p.conversationId,
+              createdAt: { [Op.gt]: p.lastReadAt || new Date(0) },
+              senderId: { [Op.ne]: req.user.id },
+            },
+          });
+          unreadCount += count;
+        }
+      } catch (unreadError) {
+        console.error("[Owner Dashboard] Unread count error:", unreadError.message);
+      }
 
       res.json({
-        unreadCount: supportConversations,
+        unreadCount,
         totalMessages,
         messagesThisWeek,
         recentConversations: conversations.map((c) => ({

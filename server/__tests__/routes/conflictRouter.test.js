@@ -111,6 +111,89 @@ describe("Conflict Router", () => {
 			);
 		});
 
+		it("should include resolved cases when includeResolved=true", async () => {
+			const mockQueue = {
+				cases: [
+					{ id: 1, caseType: "appeal", status: "submitted" },
+					{ id: 2, caseType: "appeal", status: "approved" },
+					{ id: 3, caseType: "adjustment", status: "denied" },
+				],
+				total: 3,
+				limit: 50,
+				offset: 0,
+			};
+			mockGetConflictQueue.mockResolvedValue(mockQueue);
+
+			const response = await request(app)
+				.get("/api/v1/conflicts/queue?includeResolved=true")
+				.expect(200);
+
+			expect(response.body.success).toBe(true);
+			expect(response.body.cases).toHaveLength(3);
+			expect(mockGetConflictQueue).toHaveBeenCalledWith(
+				expect.objectContaining({ includeResolved: true })
+			);
+		});
+
+		it("should exclude resolved cases by default (includeResolved=false)", async () => {
+			const mockQueue = {
+				cases: [
+					{ id: 1, caseType: "appeal", status: "submitted" },
+				],
+				total: 1,
+				limit: 50,
+				offset: 0,
+			};
+			mockGetConflictQueue.mockResolvedValue(mockQueue);
+
+			const response = await request(app)
+				.get("/api/v1/conflicts/queue")
+				.expect(200);
+
+			expect(response.body.success).toBe(true);
+			expect(response.body.cases).toHaveLength(1);
+			expect(mockGetConflictQueue).toHaveBeenCalledWith(
+				expect.objectContaining({ includeResolved: false })
+			);
+		});
+
+		it("should handle includeResolved=false explicitly", async () => {
+			mockGetConflictQueue.mockResolvedValue({ cases: [], total: 0 });
+
+			await request(app)
+				.get("/api/v1/conflicts/queue?includeResolved=false")
+				.expect(200);
+
+			expect(mockGetConflictQueue).toHaveBeenCalledWith(
+				expect.objectContaining({ includeResolved: false })
+			);
+		});
+
+		it("should return archived cases with proper status indicators", async () => {
+			const mockQueue = {
+				cases: [
+					{ id: 1, caseType: "appeal", status: "approved", resolvedAt: new Date() },
+					{ id: 2, caseType: "appeal", status: "denied", resolvedAt: new Date() },
+					{ id: 3, caseType: "adjustment", status: "partial", resolvedAt: new Date() },
+				],
+				total: 3,
+				limit: 50,
+				offset: 0,
+			};
+			mockGetConflictQueue.mockResolvedValue(mockQueue);
+
+			const response = await request(app)
+				.get("/api/v1/conflicts/queue?includeResolved=true")
+				.expect(200);
+
+			expect(response.body.success).toBe(true);
+			// Verify all resolved statuses are included
+			const statuses = response.body.cases.map(c => c.status);
+			expect(statuses).toContain("approved");
+			expect(statuses).toContain("denied");
+			expect(statuses).toContain("partial");
+		});
+
 		it("should handle errors gracefully", async () => {
 			mockGetConflictQueue.mockRejectedValue(new Error("Database error"));
 

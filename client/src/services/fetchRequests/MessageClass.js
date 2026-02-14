@@ -587,6 +587,32 @@ class MessageService {
   }
 
   /**
+   * Cleanup an empty support conversation (delete if no messages were sent)
+   * Safe to call - only deletes if the conversation is empty
+   */
+  static async cleanupEmptySupportConversation(conversationId, token) {
+    try {
+      const response = await fetch(
+        `${baseURL}/api/v1/messages/conversation/support/${conversationId}/cleanup`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to cleanup conversation");
+      }
+      return await response.json();
+    } catch (error) {
+      console.error("Error cleaning up support conversation:", error);
+      return { error: error.message };
+    }
+  }
+
+  /**
    * Report a message as suspicious activity
    * @param {number} messageId - The ID of the message to report
    * @param {string} token - Auth token

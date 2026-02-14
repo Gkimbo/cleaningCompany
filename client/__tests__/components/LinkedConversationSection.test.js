@@ -14,6 +14,12 @@ jest.mock("@react-navigation/native", () => ({
   }),
 }));
 
+// Mock react-router-native
+jest.mock("react-router-native", () => ({
+  useNavigate: () => jest.fn(),
+  useParams: () => ({}),
+}));
+
 jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
 
 jest.mock("../../src/services/AuthContext", () => {

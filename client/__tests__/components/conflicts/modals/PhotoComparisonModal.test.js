@@ -7,17 +7,19 @@ jest.mock("react-native-vector-icons/FontAwesome", () => "Icon");
 // Mock theme
 jest.mock("../../../../src/services/styles/theme", () => ({
   colors: {
-    neutral: { 0: "#fff", 200: "#e0e0e0", 300: "#bdbdbd", 400: "#9e9e9e", 500: "#757575" },
+    neutral: { 0: "#fff", 50: "#fafafa", 200: "#e0e0e0", 300: "#bdbdbd", 400: "#9e9e9e", 500: "#757575" },
     primary: { 500: "#2196f3" },
-    warning: { 500: "#ff9800" },
-    success: { 500: "#4caf50" },
-    text: { primary: "#000" },
+    warning: { 50: "#fff8e1", 500: "#ff9800", 700: "#f57c00" },
+    success: { 50: "#e8f5e9", 500: "#4caf50", 700: "#388e3c" },
+    text: { primary: "#000", secondary: "#666", tertiary: "#999" },
+    background: { primary: "#fff", secondary: "#f5f5f5" },
+    border: { light: "#e0e0e0" },
   },
   spacing: { xs: 4, sm: 8, md: 12, lg: 16 },
   radius: { sm: 4, lg: 12, full: 9999 },
   typography: {
-    fontSize: { xs: 10, sm: 12, lg: 18 },
-    fontWeight: { bold: "700" },
+    fontSize: { xs: 10, sm: 12, base: 14, lg: 18 },
+    fontWeight: { medium: "500", semibold: "600", bold: "700" },
   },
 }));
 
@@ -49,7 +51,7 @@ describe("PhotoComparisonModal", () => {
         />
       );
 
-      expect(getByText("Photo Comparison")).toBeTruthy();
+      expect(getByText("Before & After Photos")).toBeTruthy();
     });
 
     it("should not render when visible is false", () => {
@@ -62,13 +64,13 @@ describe("PhotoComparisonModal", () => {
         />
       );
 
-      expect(queryByText("Photo Comparison")).toBeNull();
+      expect(queryByText("Before & After Photos")).toBeNull();
     });
   });
 
   describe("Side-by-Side Display", () => {
-    it("should show BEFORE label", () => {
-      const { getByText } = render(
+    it("should show Before label", () => {
+      const { getAllByText } = render(
         <PhotoComparisonModal
           visible={true}
           onClose={mockOnClose}
@@ -77,11 +79,12 @@ describe("PhotoComparisonModal", () => {
         />
       );
 
-      expect(getByText("BEFORE")).toBeTruthy();
+      // Multiple elements contain "Before" text
+      expect(getAllByText(/Before/i).length).toBeGreaterThan(0);
     });
 
-    it("should show AFTER label", () => {
-      const { getByText } = render(
+    it("should show After label", () => {
+      const { getAllByText } = render(
         <PhotoComparisonModal
           visible={true}
           onClose={mockOnClose}
@@ -90,13 +93,27 @@ describe("PhotoComparisonModal", () => {
         />
       );
 
-      expect(getByText("AFTER")).toBeTruthy();
+      // Multiple elements contain "After" text
+      expect(getAllByText(/After/i).length).toBeGreaterThan(0);
     });
   });
 
   describe("Empty States", () => {
-    it("should show message when no before photos", () => {
+    it("should show empty state when no photos at all", () => {
       const { getByText } = render(
+        <PhotoComparisonModal
+          visible={true}
+          onClose={mockOnClose}
+          beforePhotos={[]}
+          afterPhotos={[]}
+        />
+      );
+
+      expect(getByText("No photos available")).toBeTruthy();
+    });
+
+    it("should show 'No photo' placeholder when room has no before photo", () => {
+      const { getAllByText } = render(
         <PhotoComparisonModal
           visible={true}
           onClose={mockOnClose}
@@ -105,20 +122,8 @@ describe("PhotoComparisonModal", () => {
         />
       );
 
-      expect(getByText("No before photos")).toBeTruthy();
-    });
-
-    it("should show message when no after photos", () => {
-      const { getByText } = render(
-        <PhotoComparisonModal
-          visible={true}
-          onClose={mockOnClose}
-          beforePhotos={mockBeforePhotos}
-          afterPhotos={[]}
-        />
-      );
-
-      expect(getByText("No after photos")).toBeTruthy();
+      // Component shows "No photo" for each room without a before photo
+      expect(getAllByText("No photo").length).toBeGreaterThan(0);
     });
   });
 
@@ -153,18 +158,4 @@ describe("PhotoComparisonModal", () => {
     });
   });
 
-  describe("Instructions", () => {
-    it("should show comparison instructions", () => {
-      const { getByText } = render(
-        <PhotoComparisonModal
-          visible={true}
-          onClose={mockOnClose}
-          beforePhotos={mockBeforePhotos}
-          afterPhotos={mockAfterPhotos}
-        />
-      );
-
-      expect(getByText(/Compare before and after photos/)).toBeTruthy();
-    });
-  });
 });

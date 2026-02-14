@@ -474,25 +474,25 @@ describe("MultiCleanerService", () => {
   describe("estimateJobDuration", () => {
     describe("single cleaner calculations", () => {
       it("should calculate base duration correctly", async () => {
-        // Formula: 30 base + beds*30 + baths*20
+        // Formula: 60 base + beds*15 + baths*30, rounded to nearest 30
         const home = { numBeds: 3, numBaths: 2 };
         const duration = await MultiCleanerService.estimateJobDuration(home, 1);
-        // 30 + 3*30 + 2*20 = 30 + 90 + 40 = 160
-        expect(duration).toBe(160);
+        // 60 + 3*15 + 2*30 = 60 + 45 + 60 = 165 → rounded to 180
+        expect(duration).toBe(180);
       });
 
       it("should calculate for small home", async () => {
         const home = { numBeds: 1, numBaths: 1 };
         const duration = await MultiCleanerService.estimateJobDuration(home, 1);
-        // 30 + 1*30 + 1*20 = 80
-        expect(duration).toBe(80);
+        // 60 + 1*15 + 1*30 = 105 → rounded to 120
+        expect(duration).toBe(120);
       });
 
       it("should calculate for large home", async () => {
         const home = { numBeds: 5, numBaths: 4 };
         const duration = await MultiCleanerService.estimateJobDuration(home, 1);
-        // 30 + 5*30 + 4*20 = 30 + 150 + 80 = 260
-        expect(duration).toBe(260);
+        // 60 + 5*15 + 4*30 = 60 + 75 + 120 = 255 → rounded to 270
+        expect(duration).toBe(270);
       });
     });
 
@@ -533,20 +533,20 @@ describe("MultiCleanerService", () => {
     describe("default values", () => {
       it("should use defaults for missing values", async () => {
         const duration = await MultiCleanerService.estimateJobDuration({}, 1);
-        // 30 base + 1*30 default beds + 1*20 default baths = 80
-        expect(duration).toBe(80);
+        // 60 base + 1*15 default beds + 1*30 default baths = 105 → rounded to 120
+        expect(duration).toBe(120);
       });
 
       it("should use default for missing numBeds", async () => {
         const duration = await MultiCleanerService.estimateJobDuration({ numBaths: 2 }, 1);
-        // 30 base + 1*30 (default bed) + 2*20 (baths) = 30 + 30 + 40 = 100
-        expect(duration).toBe(100);
+        // 60 base + 1*15 (default bed) + 2*30 (baths) = 60 + 15 + 60 = 135 → rounded to 150
+        expect(duration).toBe(150);
       });
 
       it("should use default for missing numBaths", async () => {
         const duration = await MultiCleanerService.estimateJobDuration({ numBeds: 3 }, 1);
-        // 30 + 3*30 + 1*20 = 140
-        expect(duration).toBe(140);
+        // 60 + 3*15 + 1*30 = 60 + 45 + 30 = 135 → rounded to 150
+        expect(duration).toBe(150);
       });
     });
 

@@ -16,6 +16,15 @@ jest.mock("@react-navigation/native", () => ({
   }),
 }));
 
+// Mock react-router-native
+jest.mock("react-router-native", () => ({
+  useNavigate: () => jest.fn(),
+  useParams: () => ({
+    caseId: "1",
+    caseType: "appeal",
+  }),
+}));
+
 // Mock AuthContext
 jest.mock("../../../src/services/AuthContext", () => {
   const React = require("react");
@@ -161,7 +170,7 @@ describe("ConflictCaseView", () => {
       renderWithContext();
 
       await waitFor(() => {
-        expect(mockGetCase).toHaveBeenCalledWith("test_token", "appeal", 1);
+        expect(mockGetCase).toHaveBeenCalledWith("test_token", "appeal", "1");
       });
     });
 

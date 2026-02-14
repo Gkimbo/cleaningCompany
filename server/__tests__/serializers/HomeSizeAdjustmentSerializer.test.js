@@ -299,8 +299,8 @@ describe("HomeSizeAdjustmentSerializer", () => {
           cleanerNote: "The home has 4 bedrooms",
         },
         photos: [
-          { id: 1, photoData: "base64data1", room: "bedroom", notes: "Bedroom 4" },
-          { id: 2, photoData: "base64data2", room: "bathroom", notes: "Bathroom 3" },
+          { id: 1, photoUrl: "https://example.com/photo1.jpg", roomType: "bedroom", roomNumber: 4 },
+          { id: 2, photoUrl: "https://example.com/photo2.jpg", roomType: "bathroom", roomNumber: 3 },
         ],
         cleaner: {
           dataValues: {
@@ -314,7 +314,8 @@ describe("HomeSizeAdjustmentSerializer", () => {
       const result = HomeSizeAdjustmentSerializer.serializeForHomeowner(request);
 
       expect(result.photos).toHaveLength(2);
-      expect(result.photos[0].photoData).toBe("base64data1");
+      expect(result.photos[0].photoUrl).toBe("https://example.com/photo1.jpg");
+      expect(result.photos[0].roomType).toBe("bedroom");
       expect(result.cleanerNote).toBe("The home has 4 bedrooms");
       expect(result.cleaner.firstName).toBe("Cleaner");
     });

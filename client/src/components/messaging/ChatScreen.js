@@ -50,6 +50,8 @@ const ChatScreen = () => {
   const [showEditTitle, setShowEditTitle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [showCreateTicketModal, setShowCreateTicketModal] = useState(false);
+  const initiallyEmptyRef = useRef(false); // Track if conversation was empty when opened
+  const hasSentMessageRef = useRef(false); // Track if user sent a message
 
   const fetchMessages = useCallback(async () => {
     if (!state.currentUser?.token || !conversationId) return;
@@ -61,6 +63,10 @@ const ChatScreen = () => {
       );
       if (response.messages) {
         setMessages(response.messages);
+        // Track if conversation was empty when first opened
+        if (loading && response.messages.length === 0) {
+          initiallyEmptyRef.current = true;
+        }
       }
       if (response.conversation) {
         setConversation(response.conversation);
@@ -104,6 +110,31 @@ const ChatScreen = () => {
       }
     };
   }, [conversationId, joinConversation, leaveConversation]);
+
+  // Cleanup empty support conversations on unmount
+  useEffect(() => {
+    const token = state.currentUser?.token;
+    const convId = conversationId;
+
+    return () => {
+      // Only cleanup if:
+      // 1. It's a support conversation
+      // 2. It was empty when we opened it
+      // 3. User didn't send any messages
+      if (
+        conversation?.conversationType === "support" &&
+        initiallyEmptyRef.current &&
+        !hasSentMessageRef.current &&
+        token &&
+        convId
+      ) {
+        // Fire and forget - don't await in cleanup
+        MessageService.cleanupEmptySupportConversation(convId, token).catch(() => {
+          // Silently ignore errors during cleanup
+        });
+      }
+    };
+  }, [conversationId, conversation?.conversationType, state.currentUser?.token]);
 
   // Listen for new messages
   useEffect(() => {
@@ -219,6 +250,9 @@ const ChatScreen = () => {
       if (response.error) {
         console.error("Failed to send message:", response.error);
         setMessageText(content);
+      } else {
+        // Mark that user has sent a message (don't cleanup on exit)
+        hasSentMessageRef.current = true;
       }
     } catch (error) {
       console.error("Error sending message:", error);
@@ -278,6 +312,23 @@ const ChatScreen = () => {
     return isOwnerOrHR && isSupport;
   };
 
+  // Handle back navigation with cleanup
+  const handleBack = async () => {
+    // Cleanup empty support conversation before navigating
+    if (
+      conversation?.conversationType === "support" &&
+      initiallyEmptyRef.current &&
+      !hasSentMessageRef.current &&
+      state.currentUser?.token
+    ) {
+      await MessageService.cleanupEmptySupportConversation(
+        conversationId,
+        state.currentUser.token
+      ).catch(() => {});
+    }
+    navigate("/messages");
+  };
+
   // Get the subject user (non-HR/owner participant) for ticket creation
   const getSubjectUser = () => {
     if (!conversation?.participants) return null;
@@ -296,6 +347,10 @@ const ChatScreen = () => {
 
   const getDisplayName = (user) => {
     if (!user) return "Unknown";
+    // Use firstName/lastName if available (decrypted from backend)
+    if (user.firstName) {
+      return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+    }
     return user.username || "Unknown";
   };
 
@@ -430,7 +485,7 @@ const ChatScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <Pressable
-          onPress={() => navigate("/messages")}
+          onPress={handleBack}
           style={styles.backButton}
         >
           <Icon name="arrow-left" size={22} color={colors.text.primary} />

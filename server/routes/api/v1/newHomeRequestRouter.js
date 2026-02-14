@@ -51,7 +51,6 @@ router.get("/pending", async (req, res) => {
         ? {
             id: request.client.id,
             name: `${request.client.firstName} ${request.client.lastName}`.trim(),
-            profileImage: request.client.profileImage,
           }
         : null,
     }));

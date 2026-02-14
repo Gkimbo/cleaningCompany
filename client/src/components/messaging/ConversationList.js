@@ -217,10 +217,21 @@ const ConversationList = () => {
       );
       if (otherParticipants?.length === 1) {
         const user = otherParticipants[0].user;
+        // Use decrypted firstName/lastName if available
+        if (user?.firstName) {
+          return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+        }
         return user?.username || "Team Member";
       }
       if (otherParticipants?.length > 1) {
-        return "Team Chat";
+        // Show first names for group chats
+        const names = otherParticipants
+          .slice(0, 2)
+          .map((p) => p.user?.firstName || p.user?.username || "User");
+        if (otherParticipants.length > 2) {
+          return `${names.join(", ")} +${otherParticipants.length - 2}`;
+        }
+        return names.join(", ");
       }
     }
     // Business owner <-> Employee conversations
@@ -287,7 +298,7 @@ const ConversationList = () => {
   const getInitials = (title) => {
     return title
       .split(" ")
-      .filter((word) => word.length > 0)
+      .filter((word) => word.length > 0 && /[a-zA-Z0-9]/.test(word[0]))
       .map((word) => word[0])
       .join("")
       .substring(0, 2)
@@ -365,6 +376,21 @@ const ConversationList = () => {
     const hasUnread = conv.unreadCount > 0;
     const isBroadcast = conv.conversation?.conversationType === "broadcast";
     const isGroup = (conv.conversation?.participants?.length || 0) > 2;
+    const isBusinessEmployee = conv.conversation?.conversationType === "business_employee";
+
+    // For 1-on-1 business_employee chats, show just the employee's first initial
+    const getAvatarInitial = () => {
+      if (isBusinessEmployee && !isGroup) {
+        const otherParticipant = conv.conversation?.participants?.find(
+          (p) => p.userId !== parseInt(state.currentUser?.userId)
+        );
+        const firstName = otherParticipant?.user?.firstName;
+        if (firstName && firstName.length > 0) {
+          return firstName[0].toUpperCase();
+        }
+      }
+      return getInitials(title);
+    };
 
     return (
       <Pressable
@@ -387,7 +413,7 @@ const ConversationList = () => {
           ) : isGroup ? (
             <Icon name="users" size={18} color={colors.text.secondary} />
           ) : (
-            <Text style={styles.avatarText}>{getInitials(title)}</Text>
+            <Text style={styles.avatarText}>{getAvatarInitial()}</Text>
           )}
         </View>
 
@@ -690,8 +716,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning[100],
   },
   avatarText: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
     color: colors.text.secondary,
   },
   // Content

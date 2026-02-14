@@ -206,6 +206,42 @@ const CaseOverviewSection = ({ caseData, caseType }) => {
           </View>
         </View>
       )}
+
+      {/* Reviewer Notes */}
+      {caseData.resolutionNotes && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Reviewer Notes</Text>
+          <View style={styles.notesCard}>
+            <View style={styles.notesHeader}>
+              <View style={styles.notesIconContainer}>
+                <Icon name="comment" size={14} color={colors.neutral[0]} />
+              </View>
+              <View style={styles.notesHeaderText}>
+                <Text style={styles.notesLabel}>Internal Note</Text>
+                {caseData.reviewedAt && (
+                  <View style={styles.notesTimestampContainer}>
+                    <Icon name="clock-o" size={10} color={colors.text.tertiary} />
+                    <Text style={styles.notesTimestamp}>
+                      {new Date(caseData.reviewedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}{" "}
+                      at{" "}
+                      {new Date(caseData.reviewedAt).toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+            <Text style={styles.notesText}>{caseData.resolutionNotes}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -426,6 +462,58 @@ const styles = StyleSheet.create({
   appointmentText: {
     fontSize: typography.fontSize.sm,
     color: colors.text.primary,
+  },
+  notesCard: {
+    backgroundColor: colors.neutral[0],
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+    gap: spacing.sm,
+  },
+  notesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  notesIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary[500],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notesHeaderText: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  notesLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  notesTimestampContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.md,
+  },
+  notesTimestamp: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.medium,
+  },
+  notesText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    lineHeight: 20,
+    paddingLeft: 36,
   },
 });
 

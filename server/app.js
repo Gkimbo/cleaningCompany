@@ -25,6 +25,7 @@ const { startExpirationJob: startHomeSizeExpirationJob } = require("./services/c
 const { startBiWeeklyPayoutJob } = require("./services/cron/BiWeeklyPayoutJob");
 const { startUnassignedReminderJob } = require("./services/cron/UnassignedReminderJob");
 const { startExpiredRequestsJob } = require("./services/cron/ExpiredRequestsJob");
+const { startRecurringScheduleGenerationJob } = require("./services/cron/RecurringScheduleGenerationJob");
 
 // Allow multiple origins for web, iOS simulator, and Android emulator
 const allowedOrigins = [
@@ -219,5 +220,6 @@ server.listen(port, () => {
 		startBiWeeklyPayoutJob(io); // Bi-weekly employee payouts (every other Friday at 6 AM UTC)
 		startUnassignedReminderJob(io, 24 * 60 * 60 * 1000); // Daily unassigned appointment reminders to business owners
 		startExpiredRequestsJob(io); // New home request expiration (every hour)
+		startRecurringScheduleGenerationJob(); // Weekly recurring schedule appointment generation
 	}
 });
