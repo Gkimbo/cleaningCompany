@@ -40,6 +40,7 @@ class ConflictResolutionService {
 	 * Get unified conflict queue combining appeals and adjustment disputes
 	 */
 	static async getConflictQueue(options = {}) {
+		const { Op } = require("sequelize");
 		const {
 			CancellationAppeal,
 			HomeSizeAdjustmentRequest,
@@ -56,6 +57,7 @@ class ConflictResolutionService {
 			limit = 50,
 			offset = 0,
 			includeDemoData = false,
+			includeResolved = false,
 		} = options;
 
 		const results = [];
@@ -65,6 +67,9 @@ class ConflictResolutionService {
 			const appealWhere = {};
 			if (status) {
 				appealWhere.status = status;
+			} else if (includeResolved) {
+				// Include all statuses when showing archive
+				appealWhere.status = { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated", "approved", "partially_approved", "denied"] };
 			} else {
 				appealWhere.status = { [Op.in]: ["submitted", "under_review", "awaiting_documents", "escalated"] };
 			}
@@ -147,6 +152,8 @@ class ConflictResolutionService {
 			const paymentWhere = {};
 			if (status) {
 				paymentWhere.status = status;
+			} else if (includeResolved) {
+				paymentWhere.status = { [Op.in]: ["submitted", "under_review", "resolved", "denied", "closed"] };
 			} else {
 				paymentWhere.status = { [Op.in]: ["submitted", "under_review"] };
 			}
@@ -226,6 +233,8 @@ class ConflictResolutionService {
 			const supportWhere = {};
 			if (status) {
 				supportWhere.status = status;
+			} else if (includeResolved) {
+				supportWhere.status = { [Op.in]: ["submitted", "under_review", "pending_info", "resolved", "closed"] };
 			} else {
 				supportWhere.status = { [Op.in]: ["submitted", "under_review", "pending_info"] };
 			}
@@ -307,6 +316,8 @@ class ConflictResolutionService {
 				adjustmentWhere.status = statusMap[status]
 					? { [Op.in]: statusMap[status] }
 					: status;
+			} else if (includeResolved) {
+				adjustmentWhere.status = { [Op.in]: ["pending_homeowner", "pending_owner", "approved", "owner_approved", "denied", "owner_denied", "expired"] };
 			} else {
 				adjustmentWhere.status = { [Op.in]: ["pending_homeowner", "pending_owner"] };
 			}
@@ -590,13 +601,13 @@ class ConflictResolutionService {
 					model: UserAppointments,
 					as: "appointment",
 					include: [
-						{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeAccountId"] },
-						{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeCustomerId"] },
+						{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "stripeAccountId"] },
+						{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone", "stripeCustomerId"] },
 						{ model: UserHomes, as: "home", attributes: ["id", "address", "numBeds", "numBaths"] },
 					],
 				},
-				{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage"] },
-				{ model: User, as: "homeowner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeCustomerId"] },
+				{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone"] },
+				{ model: User, as: "homeowner", attributes: ["id", "firstName", "lastName", "email", "phone", "stripeCustomerId"] },
 				{ model: User, as: "owner", attributes: ["id", "firstName", "lastName", "email"] },
 				{ model: HomeSizeAdjustmentPhoto, as: "photos" },
 			],
@@ -668,7 +679,6 @@ class ConflictResolutionService {
 				name: adjustment.homeowner ? `${adjustment.homeowner.firstName} ${adjustment.homeowner.lastName}` : null,
 				email: adjustment.homeowner?.email,
 				phone: adjustment.homeowner?.phone,
-				profileImage: adjustment.homeowner?.profileImage,
 				stripeCustomerId: adjustment.homeowner?.stripeCustomerId,
 			},
 			cleaner: {
@@ -676,7 +686,6 @@ class ConflictResolutionService {
 				name: adjustment.cleaner ? `${adjustment.cleaner.firstName} ${adjustment.cleaner.lastName}` : null,
 				email: adjustment.cleaner?.email,
 				phone: adjustment.cleaner?.phone,
-				profileImage: adjustment.cleaner?.profileImage,
 			},
 			assignedTo: adjustment.owner ? {
 				id: adjustment.owner.id,
@@ -722,12 +731,12 @@ class ConflictResolutionService {
 					model: UserAppointments,
 					as: "appointment",
 					include: [
-						{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeAccountId"] },
-						{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage"] },
+						{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "stripeAccountId"] },
+						{ model: User, as: "user", attributes: ["id", "firstName", "lastName", "email", "phone"] },
 						{ model: UserHomes, as: "home", attributes: ["id", "address", "numBeds", "numBaths"] },
 					],
 				},
-				{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "stripeAccountId"] },
+				{ model: User, as: "cleaner", attributes: ["id", "firstName", "lastName", "email", "phone", "stripeAccountId"] },
 				{ model: User, as: "assignee", attributes: ["id", "firstName", "lastName", "email"] },
 				{ model: User, as: "reviewer", attributes: ["id", "firstName", "lastName"] },
 				{ model: Payout, as: "payout" },
@@ -794,14 +803,12 @@ class ConflictResolutionService {
 				name: `${appointment.user.firstName} ${appointment.user.lastName}`,
 				email: appointment.user.email,
 				phone: appointment.user.phone,
-				profileImage: appointment.user.profileImage,
 			} : null,
 			cleaner: dispute.cleaner ? {
 				id: dispute.cleaner.id,
 				name: `${dispute.cleaner.firstName} ${dispute.cleaner.lastName}`,
 				email: dispute.cleaner.email,
 				phone: dispute.cleaner.phone,
-				profileImage: dispute.cleaner.profileImage,
 				stripeAccountId: dispute.cleaner.stripeAccountId,
 			} : null,
 			assignedTo: dispute.assignee ? {
@@ -846,7 +853,7 @@ class ConflictResolutionService {
 		const ticket = await SupportTicket.findByPk(ticketId, {
 			include: [
 				{ model: User, as: "reporter", attributes: ["id", "firstName", "lastName", "email", "type"] },
-				{ model: User, as: "subject", attributes: ["id", "firstName", "lastName", "email", "phone", "profileImage", "type"] },
+				{ model: User, as: "subject", attributes: ["id", "firstName", "lastName", "email", "phone", "type"] },
 				{ model: User, as: "assignee", attributes: ["id", "firstName", "lastName", "email"] },
 				{ model: User, as: "reviewer", attributes: ["id", "firstName", "lastName"] },
 				{ model: Conversation, as: "conversation", attributes: ["id", "title", "conversationType"] },
@@ -865,7 +872,7 @@ class ConflictResolutionService {
 			const messages = await Message.findAll({
 				where: { conversationId: ticket.conversationId },
 				include: [
-					{ model: User, as: "sender", attributes: ["id", "firstName", "lastName", "type", "profileImage"] },
+					{ model: User, as: "sender", attributes: ["id", "firstName", "lastName", "type"] },
 				],
 				order: [["createdAt", "ASC"]],
 				limit: 50, // Limit for performance
@@ -878,9 +885,8 @@ class ConflictResolutionService {
 				createdAt: m.createdAt?.toISOString() || null,
 				sender: m.sender ? {
 					id: m.sender.id,
-					name: `${m.sender.firstName} ${m.sender.lastName}`,
+					name: formatUserName(m.sender),
 					type: m.sender.type,
-					profileImage: m.sender.profileImage,
 				} : null,
 			}));
 		}
@@ -915,45 +921,42 @@ class ConflictResolutionService {
 			// Reporter (HR/owner who created the ticket)
 			reporter: ticket.reporter ? {
 				id: ticket.reporter.id,
-				name: `${ticket.reporter.firstName} ${ticket.reporter.lastName}`,
-				email: ticket.reporter.email,
+				name: formatUserName(ticket.reporter),
+				email: ticket.reporter.email ? EncryptionService.decrypt(ticket.reporter.email) : null,
 				type: ticket.reporter.type,
 			} : null,
 
 			// Subject (user the ticket is about)
 			subject: ticket.subject ? {
 				id: ticket.subject.id,
-				name: `${ticket.subject.firstName} ${ticket.subject.lastName}`,
-				email: ticket.subject.email,
-				phone: ticket.subject.phone,
+				name: formatUserName(ticket.subject),
+				email: ticket.subject.email ? EncryptionService.decrypt(ticket.subject.email) : null,
+				phone: ticket.subject.phone ? EncryptionService.decrypt(ticket.subject.phone) : null,
 				type: ticket.subject.type,
-				profileImage: ticket.subject.profileImage,
 			} : null,
 
 			// For compatibility with existing UI
 			homeowner: ticket.subject?.type === "homeowner" ? {
 				id: ticket.subject.id,
-				name: `${ticket.subject.firstName} ${ticket.subject.lastName}`,
-				email: ticket.subject.email,
-				phone: ticket.subject.phone,
-				profileImage: ticket.subject.profileImage,
+				name: formatUserName(ticket.subject),
+				email: ticket.subject.email ? EncryptionService.decrypt(ticket.subject.email) : null,
+				phone: ticket.subject.phone ? EncryptionService.decrypt(ticket.subject.phone) : null,
 			} : null,
 			cleaner: ticket.subject?.type === "cleaner" ? {
 				id: ticket.subject.id,
-				name: `${ticket.subject.firstName} ${ticket.subject.lastName}`,
-				email: ticket.subject.email,
-				phone: ticket.subject.phone,
-				profileImage: ticket.subject.profileImage,
+				name: formatUserName(ticket.subject),
+				email: ticket.subject.email ? EncryptionService.decrypt(ticket.subject.email) : null,
+				phone: ticket.subject.phone ? EncryptionService.decrypt(ticket.subject.phone) : null,
 			} : null,
 
 			assignedTo: ticket.assignee ? {
 				id: ticket.assignee.id,
-				name: `${ticket.assignee.firstName} ${ticket.assignee.lastName}`,
-				email: ticket.assignee.email,
+				name: formatUserName(ticket.assignee),
+				email: ticket.assignee.email ? EncryptionService.decrypt(ticket.assignee.email) : null,
 			} : null,
 			reviewedBy: ticket.reviewer ? {
 				id: ticket.reviewer.id,
-				name: `${ticket.reviewer.firstName} ${ticket.reviewer.lastName}`,
+				name: formatUserName(ticket.reviewer),
 			} : null,
 
 			// Linked conversation
@@ -1049,7 +1052,7 @@ class ConflictResolutionService {
 					where: { deletedAt: null },
 					required: false,
 					include: [
-						{ model: User, as: "sender", attributes: ["id", "firstName", "lastName", "type", "profileImage"] },
+						{ model: User, as: "sender", attributes: ["id", "firstName", "lastName", "type"] },
 					],
 					order: [["createdAt", "ASC"]],
 				},
@@ -1075,7 +1078,6 @@ class ConflictResolutionService {
 					id: m.sender.id,
 					name: `${m.sender.firstName} ${m.sender.lastName}`,
 					type: m.sender.type,
-					profileImage: m.sender.profileImage,
 				} : null,
 				hasSuspiciousContent: m.hasSuspiciousContent,
 			})) || [],
@@ -1090,15 +1092,23 @@ class ConflictResolutionService {
 		const { CancellationAuditLog, User } = require("../models");
 		const { Op } = require("sequelize");
 
+		// Support tickets don't have audit trails in CancellationAuditLog
+		if (caseType === "support") {
+			return [];
+		}
+
 		const where = {};
 
 		if (caseType === "appeal") {
 			where[Op.or] = [
 				{ appealId: caseId },
-				{ appointmentId },
+				...(appointmentId ? [{ appointmentId }] : []),
 			];
-		} else {
+		} else if (appointmentId) {
 			where.appointmentId = appointmentId;
+		} else {
+			// No valid query criteria, return empty
+			return [];
 		}
 
 		const logs = await CancellationAuditLog.findAll({

@@ -7,7 +7,7 @@ import {
   ActivityIndicator,
   Pressable,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { AuthContext } from "../../../services/AuthContext";
 import ConflictService from "../../../services/fetchRequests/ConflictService";
@@ -20,7 +20,7 @@ import {
 
 const LinkedConversationSection = ({ ticketId, conversationId }) => {
   const { user } = useContext(AuthContext);
-  const navigation = useNavigation();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -50,7 +50,7 @@ const LinkedConversationSection = ({ ticketId, conversationId }) => {
 
   const handleViewFullConversation = () => {
     if (conversationId) {
-      navigation.navigate("ChatScreen", { conversationId });
+      navigate(`/messages/${conversationId}`);
     }
   };
 

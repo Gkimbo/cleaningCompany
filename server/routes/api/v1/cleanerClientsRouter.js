@@ -6,6 +6,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const { Op } = require("sequelize");
 const models = require("../../../models");
 const {
   User,
@@ -16,6 +17,7 @@ const {
   UserCleanerAppointments,
   UserBills,
   Payout,
+  EmployeeJobAssignment,
 } = models;
 const InvitationService = require("../../../services/InvitationService");
 const calculatePrice = require("../../../services/CalculatePrice");
@@ -299,6 +301,12 @@ cleanerClientsRouter.get("/invitations/:token", async (req, res) => {
           : cleanerClient.cleaner
             ? `${EncryptionService.decrypt(cleanerClient.cleaner.firstName)} ${EncryptionService.decrypt(cleanerClient.cleaner.lastName)}`
             : "Your Cleaner",
+        // Include business info for display
+        cleaner: isCancelled ? null : cleanerClient.cleaner ? {
+          businessName: cleanerClient.cleaner.businessName,
+          businessLogo: cleanerClient.cleaner.businessLogo,
+          isBusinessOwner: cleanerClient.cleaner.isBusinessOwner,
+        } : null,
         name: cleanerClient.invitedName ? EncryptionService.decrypt(cleanerClient.invitedName) : null,
         email: cleanerClient.invitedEmail ? EncryptionService.decrypt(cleanerClient.invitedEmail) : null,
         phone: cleanerClient.invitedPhone ? EncryptionService.decrypt(cleanerClient.invitedPhone) : null,
@@ -1019,6 +1027,92 @@ cleanerClientsRouter.delete("/:id", verifyCleaner, async (req, res) => {
         message: "Invitation cancelled",
       });
     } else {
+      // Find all recurring schedules for this client
+      const schedules = await RecurringSchedule.findAll({
+        where: { cleanerClientId: id },
+        attributes: ["id"],
+      });
+
+      // Delete future appointments for all schedules
+      // Note: Paid appointments are skipped and require manual cancellation
+      let totalCancelledAppointments = 0;
+      let totalSkippedPaid = 0;
+      const today = new Date().toISOString().split("T")[0];
+
+      for (const schedule of schedules) {
+        // Find future uncompleted unpaid appointments for this schedule
+        const appointmentsToDelete = await UserAppointments.findAll({
+          where: {
+            recurringScheduleId: schedule.id,
+            date: { [Op.gt]: today },
+            completed: false,
+            wasCancelled: { [Op.ne]: true },
+            paid: { [Op.ne]: true },
+          },
+          attributes: ["id", "userId", "price"],
+        });
+
+        // Count paid appointments that couldn't be deleted
+        const paidAppointments = await UserAppointments.findAll({
+          where: {
+            recurringScheduleId: schedule.id,
+            date: { [Op.gt]: today },
+            completed: false,
+            wasCancelled: { [Op.ne]: true },
+            paid: true,
+          },
+          attributes: ["id"],
+        });
+        totalSkippedPaid += paidAppointments.length;
+
+        if (appointmentsToDelete.length > 0) {
+          const appointmentIds = appointmentsToDelete.map(a => a.id);
+
+          // Group by userId for UserBills adjustments
+          const userBillAdjustments = {};
+          for (const appt of appointmentsToDelete) {
+            const price = parseFloat(appt.price) || 0;
+            if (!userBillAdjustments[appt.userId]) {
+              userBillAdjustments[appt.userId] = 0;
+            }
+            userBillAdjustments[appt.userId] += price;
+          }
+
+          // Delete related records
+          await UserCleanerAppointments.destroy({
+            where: { appointmentId: { [Op.in]: appointmentIds } },
+          });
+
+          await EmployeeJobAssignment.destroy({
+            where: { appointmentId: { [Op.in]: appointmentIds } },
+          });
+
+          await Payout.destroy({
+            where: { appointmentId: { [Op.in]: appointmentIds } },
+          });
+
+          // Adjust UserBills
+          for (const [userId, totalToSubtract] of Object.entries(userBillAdjustments)) {
+            const userBill = await UserBills.findOne({ where: { userId } });
+            if (userBill && totalToSubtract > 0) {
+              const newAppointmentDue = Math.max(0, parseFloat(userBill.appointmentDue || 0) - totalToSubtract);
+              const newTotalDue = Math.max(0, parseFloat(userBill.totalDue || 0) - totalToSubtract);
+              await userBill.update({
+                appointmentDue: newAppointmentDue,
+                totalDue: newTotalDue,
+              });
+            }
+          }
+
+          // Delete appointments
+          await UserAppointments.destroy({
+            where: { id: { [Op.in]: appointmentIds } },
+          });
+
+          totalCancelledAppointments += appointmentIds.length;
+        }
+      }
+
       // Deactivate active client relationship
       await cleanerClient.update({ status: "inactive" });
 
@@ -1030,7 +1124,11 @@ cleanerClientsRouter.delete("/:id", verifyCleaner, async (req, res) => {
 
       res.json({
         success: true,
-        message: "Client relationship deactivated",
+        message: totalSkippedPaid > 0
+          ? `Client relationship deactivated. ${totalSkippedPaid} paid appointment(s) were not deleted and require manual cancellation.`
+          : "Client relationship deactivated",
+        cancelledAppointments: totalCancelledAppointments,
+        skippedPaidAppointments: totalSkippedPaid,
       });
     }
   } catch (err) {

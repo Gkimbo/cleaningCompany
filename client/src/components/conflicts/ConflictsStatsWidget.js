@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigate } from "react-router-native";
 import Icon from "react-native-vector-icons/FontAwesome";
 import { AuthContext } from "../../services/AuthContext";
 import ConflictService from "../../services/fetchRequests/ConflictService";
@@ -20,7 +20,7 @@ import {
 
 const ConflictsStatsWidget = ({ onNavigateToConflicts }) => {
   const { user } = useContext(AuthContext);
-  const navigation = useNavigation();
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -45,7 +45,7 @@ const ConflictsStatsWidget = ({ onNavigateToConflicts }) => {
     if (onNavigateToConflicts) {
       onNavigateToConflicts();
     } else {
-      navigation.navigate("ConflictResolutionCenter");
+      navigate("/conflicts");
     }
   };
 

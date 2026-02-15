@@ -356,6 +356,162 @@ describe("Payment Routes", () => {
       expect(res.body).toHaveProperty("appointments");
     });
   });
+
+  describe("Payment History Serialization", () => {
+    it("should return plain objects without Sequelize metadata for payment history", async () => {
+      // When using raw: true, Sequelize returns plain objects without any Sequelize metadata
+      // This mock simulates what raw: true actually returns
+      const mockRawResults = [
+        {
+          id: 1,
+          date: "2025-01-15",
+          price: "150",
+          paid: true,
+          paymentStatus: "succeeded",
+          amountPaid: 15000,
+          paymentIntentId: "pi_test_123",
+          createdAt: new Date("2025-01-15T10:00:00Z"),
+        },
+      ];
+      UserAppointments.findAll.mockResolvedValue(mockRawResults);
+
+      const res = await request(app).get("/api/v1/payments/history/1");
+
+      expect(res.status).toBe(200);
+      expect(res.body.payments).toHaveLength(1);
+      // Should have the actual data
+      expect(res.body.payments[0].id).toBe(1);
+      expect(res.body.payments[0].date).toBe("2025-01-15");
+      expect(res.body.payments[0].paid).toBe(true);
+      expect(res.body.payments[0].paymentStatus).toBe("succeeded");
+      expect(res.body.payments[0].amountPaid).toBe(15000);
+      expect(res.body.payments[0].paymentIntentId).toBe("pi_test_123");
+      // With raw: true, these Sequelize internals are never included
+      expect(res.body.payments[0]._previousDataValues).toBeUndefined();
+      expect(res.body.payments[0]._changed).toBeUndefined();
+      expect(res.body.payments[0].dataValues).toBeUndefined();
+      expect(res.body.payments[0].save).toBeUndefined();
+    });
+
+    it("should verify findAll is called with raw: true option", async () => {
+      const mockResults = [
+        {
+          id: 1,
+          date: "2025-01-15",
+          price: "150",
+          paid: true,
+          paymentStatus: "succeeded",
+          amountPaid: 15000,
+          paymentIntentId: "pi_test_123",
+          createdAt: new Date(),
+        },
+      ];
+      UserAppointments.findAll.mockResolvedValue(mockResults);
+
+      await request(app).get("/api/v1/payments/history/1");
+
+      // Verify raw: true was passed in the query options
+      expect(UserAppointments.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          raw: true,
+        })
+      );
+    });
+
+    it("should handle multiple payment records with proper serialization", async () => {
+      const mockAppointments = [
+        {
+          id: 1,
+          date: "2025-01-15",
+          price: "150",
+          paid: true,
+          paymentStatus: "succeeded",
+          amountPaid: 15000,
+          paymentIntentId: "pi_test_1",
+          createdAt: new Date("2025-01-15T10:00:00Z"),
+        },
+        {
+          id: 2,
+          date: "2025-01-20",
+          price: "200",
+          paid: true,
+          paymentStatus: "succeeded",
+          amountPaid: 20000,
+          paymentIntentId: "pi_test_2",
+          createdAt: new Date("2025-01-20T10:00:00Z"),
+        },
+        {
+          id: 3,
+          date: "2025-01-25",
+          price: "175",
+          paid: false,
+          paymentStatus: "pending",
+          amountPaid: 0,
+          paymentIntentId: null,
+          createdAt: new Date("2025-01-25T10:00:00Z"),
+        },
+      ];
+      UserAppointments.findAll.mockResolvedValue(mockAppointments);
+
+      const res = await request(app).get("/api/v1/payments/history/1");
+
+      expect(res.status).toBe(200);
+      expect(res.body.payments).toHaveLength(3);
+      expect(res.body.payments[0].id).toBe(1);
+      expect(res.body.payments[1].id).toBe(2);
+      expect(res.body.payments[2].id).toBe(3);
+      expect(res.body.payments[2].paid).toBe(false);
+    });
+
+    it("should return only specified attributes from raw query", async () => {
+      // When using raw: true, only the attributes specified in the query should be returned
+      const mockAppointments = [
+        {
+          id: 1,
+          date: "2025-01-15",
+          price: "150",
+          paid: true,
+          paymentStatus: "succeeded",
+          amountPaid: 15000,
+          paymentIntentId: "pi_test_123",
+          createdAt: new Date("2025-01-15T10:00:00Z"),
+        },
+      ];
+      UserAppointments.findAll.mockResolvedValue(mockAppointments);
+
+      const res = await request(app).get("/api/v1/payments/history/1");
+
+      expect(res.status).toBe(200);
+      const payment = res.body.payments[0];
+      // These should be present (specified in query attributes)
+      expect(payment).toHaveProperty("id");
+      expect(payment).toHaveProperty("date");
+      expect(payment).toHaveProperty("price");
+      expect(payment).toHaveProperty("paid");
+      expect(payment).toHaveProperty("paymentStatus");
+      expect(payment).toHaveProperty("amountPaid");
+      expect(payment).toHaveProperty("paymentIntentId");
+      expect(payment).toHaveProperty("createdAt");
+    });
+
+    it("should handle empty payment history", async () => {
+      UserAppointments.findAll.mockResolvedValue([]);
+
+      const res = await request(app).get("/api/v1/payments/history/999");
+
+      expect(res.status).toBe(200);
+      expect(res.body.payments).toEqual([]);
+    });
+
+    it("should handle database error gracefully", async () => {
+      UserAppointments.findAll.mockRejectedValue(new Error("Database connection failed"));
+
+      const res = await request(app).get("/api/v1/payments/history/1");
+
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty("error");
+    });
+  });
 });
 
 afterAll(async () => {

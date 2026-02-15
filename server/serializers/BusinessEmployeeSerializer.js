@@ -127,6 +127,7 @@ class BusinessEmployeeSerializer {
       email: this.decryptField(data.email),
       phone: this.decryptField(data.phone),
       businessName: data.businessName,
+      businessLogo: data.businessLogo,
       expoPushToken: data.expoPushToken,
     };
   }
@@ -178,6 +179,7 @@ class BusinessEmployeeSerializer {
       lastName: this.decryptField(data.lastName),
       email: this.decryptField(data.email),
       businessName: businessOwner?.businessName || "Business",
+      businessLogo: businessOwner?.businessLogo || null,
       businessOwnerName: businessOwner
         ? `${businessOwner.firstName} ${businessOwner.lastName}`
         : null,
@@ -215,6 +217,7 @@ class BusinessEmployeeSerializer {
         ? {
             name: `${businessOwner.firstName} ${businessOwner.lastName}`,
             businessName: businessOwner.businessName,
+            businessLogo: businessOwner.businessLogo,
           }
         : null,
     };

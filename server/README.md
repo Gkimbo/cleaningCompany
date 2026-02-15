@@ -6,7 +6,7 @@
 ![Express](https://img.shields.io/badge/Express-4.x-000000?style=for-the-badge&logo=express&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Stripe](https://img.shields.io/badge/Stripe-Connect-635BFF?style=for-the-badge&logo=stripe&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-5128_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5113_Passing-brightgreen?style=for-the-badge)
 
 **RESTful API server for the Kleanr cleaning service platform**
 
@@ -32,7 +32,8 @@ Kleanr is a comprehensive cleaning service marketplace platform that connects ho
 - Preferred cleaner tier system (Bronze/Silver/Gold/Platinum) with bonuses
 - Stripe Connect for instant cleaner payouts
 - iCal calendar synchronization with vacation rental platforms
-- Comprehensive tax document generation (1099-NEC with IRS filing tracking)
+- **New Home Request System** - automated business owner notifications when clients add homes
+- Stripe-integrated tax reporting (1099 forms via Stripe Dashboard)
 - Guest-not-left tracking with GPS verification
 - HR dispute management and content moderation
 - Before/after job photo documentation with offline capture
@@ -179,6 +180,7 @@ Business owners are cleaners who can manage their own clients directly:
 
 - **Upgrade Path**: Existing cleaners can upgrade to business owner status
 - **Invite Clients**: Send invitations to new clients by email with home details
+- **New Home Requests**: Receive notifications when existing clients add new homes with 48-hour response window
 - **Client Setup Flow**: Guided onboarding for invited clients
 - **Invitation Management**: Resend invitations, track pending responses
 - **Recurring Schedules**: Configure weekly/biweekly/monthly cleanings during invite
@@ -321,7 +323,7 @@ Handle situations when guests haven't left by checkout time:
 
 ### HR Staff Features
 
-- **Conflict Resolution Center**: Unified queue for all disputes and appeals
+- **Conflict Resolution Center**: Unified queue for disputes, appeals, and support tickets
 - **Cancellation Appeals Review**: Review appeals within 48-hour SLA
 - **Photo Comparison Tools**: Side-by-side evidence examination
 - **Financial Breakdown**: View detailed charges, refunds, payouts per case
@@ -442,18 +444,18 @@ Handle situations when guests haven't left by checkout time:
 - **Referrer Rewards**: Bonus for successful referrals
 - **Referee Rewards**: Welcome bonus for new users
 
-### Tax & Compliance
+### Tax & Compliance (Stripe-Based)
 
-- **W-9 Collection**: Secure tax information submission
-- **Tax Info Fields**: Legal name, business name, entity type, TIN
-- **1099-NEC Generation**: Automatic generation for contractors
-- **1099-K Calculations**: Expected amounts for high-volume contractors
-- **Encrypted Storage**: TIN encrypted with AES-256
-- **Platform Tax Reports**: Annual income summaries, quarterly estimates
+- **Stripe Tax Reporting**: Cleaners collect SSN/EIN during Stripe Connect onboarding
+- **1099 via Stripe**: Cleaners access 1099 forms through Stripe Express Dashboard
+- **Earnings Summaries**: Local tracking of annual earnings with 1099 threshold ($600)
+- **Dashboard Links**: Generate Stripe dashboard login links for tax form access
+- **Tax Status Check**: Verify cleaner's Stripe account is tax-ready
+- **Platform Tax Reports**: Annual income summaries, quarterly estimates for business owners
 - **Monthly Earnings Breakdown**: Detailed income by month
-- **Schedule C Support**: Data for contractor tax filing
+- **Schedule C Support**: Data for business owner tax filing
+- **1099-K Expectation**: Track platform's own 1099-K threshold
 - **Tax Deadlines**: Track important tax filing dates
-- **Tax Document History**: Access previous years' documents
 
 ### Calendar Integration
 
@@ -721,18 +723,30 @@ Handle situations when guests haven't left by checkout time:
 | `GET` | `/api/v1/referrals/code/:code` | Validate referral code | No |
 | `POST` | `/api/v1/referrals/apply` | Apply referral code | Yes |
 
-### Tax Documents
+### Stripe Tax (Cleaner Tax Forms)
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| `GET` | `/api/v1/tax/info` | Get W-9 info | Yes |
-| `POST` | `/api/v1/tax/info` | Submit W-9 | Yes |
+| `GET` | `/api/v1/tax/earnings/:year` | Get annual earnings summary | Yes |
+| `GET` | `/api/v1/tax/dashboard-link` | Get Stripe Dashboard link for tax forms | Yes |
+| `GET` | `/api/v1/tax/status` | Check tax readiness status | Yes |
 | `GET` | `/api/v1/tax/contractor/tax-summary/:year` | Cleaner tax summary | Yes |
-| `GET` | `/api/v1/tax/contractor/1099-nec/:year` | Get 1099-NEC | Yes |
-| `GET` | `/api/v1/tax/contractor/monthly-breakdown/:year` | Monthly earnings | Yes |
-| `GET` | `/api/v1/tax/platform/comprehensive-report/:year` | Full platform report | Owner |
-| `GET` | `/api/v1/tax/platform/1099-k-summary/:year` | Platform 1099-K summary | Owner |
-| `GET` | `/api/v1/tax/deadlines/:year` | Tax filing deadlines | Yes |
+| `GET` | `/api/v1/tax/platform/income-summary/:year` | Platform annual income | Owner |
+| `GET` | `/api/v1/tax/platform/quarterly-tax/:year/:quarter` | Quarterly estimates | Owner |
+| `GET` | `/api/v1/tax/platform/schedule-c/:year` | Schedule C form data | Owner |
+| `GET` | `/api/v1/tax/platform/1099-k-expectation/:year` | 1099-K threshold check | Owner |
+| `GET` | `/api/v1/tax/platform/deadlines/:year` | Tax deadlines | Owner |
+
+### New Home Requests
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `GET` | `/api/v1/new-home-requests` | Get pending requests for business owner | Business Owner |
+| `GET` | `/api/v1/new-home-requests/:id` | Get request details | Business Owner |
+| `POST` | `/api/v1/new-home-requests/:id/accept` | Accept request (creates CleanerClient) | Business Owner |
+| `POST` | `/api/v1/new-home-requests/:id/decline` | Decline request | Business Owner |
+| `POST` | `/api/v1/new-home-requests/:id/re-request` | Re-request after 30 days | Homeowner |
+| `PATCH` | `/api/v1/homes/:id/marketplace` | Toggle marketplace visibility | Homeowner |
 
 ### Reviews
 
@@ -954,7 +968,7 @@ Handle situations when guests haven't left by checkout time:
 
 ## Database
 
-### Models (66 Total)
+### Models (65 Total)
 
 #### Core Models
 
@@ -1041,9 +1055,13 @@ Handle situations when guests haven't left by checkout time:
 
 | Model | Description |
 |-------|-------------|
-| `TaxInfo` | W-9 information with encrypted TIN |
-| `TaxDocument` | 1099-NEC documents with IRS filing tracking |
 | `TermsAndConditions` | Terms versions with PDF/text support |
+
+#### New Home Request Models
+
+| Model | Description |
+|-------|-------------|
+| `NewHomeRequest` | Requests from clients adding homes to existing business owner relationships |
 
 #### Program Models
 
@@ -1234,18 +1252,24 @@ const price = await CalculatePrice.calculate({
 });
 ```
 
-### TaxDocumentService
+### NewHomeRequestService
 
-Generates tax documents for contractors:
+Handles new home request workflow:
 
 ```javascript
-const TaxDocumentService = require('./services/TaxDocumentService');
+const NewHomeRequestService = require('./services/NewHomeRequestService');
 
-// Generate 1099-NEC
-const form = await TaxDocumentService.generate1099NECData(userId, 2024);
+// Create request when client adds home
+await NewHomeRequestService.createRequestsForHome(homeId, clientId);
 
-// Get tax filing deadlines
-const deadlines = TaxDocumentService.getTaxDeadlines(2024);
+// Accept request (creates CleanerClient relationship)
+await NewHomeRequestService.acceptRequest(requestId, businessOwnerId);
+
+// Decline request
+await NewHomeRequestService.declineRequest(requestId, businessOwnerId);
+
+// Get pending requests for business owner
+const requests = await NewHomeRequestService.getPendingRequests(businessOwnerId);
 ```
 
 ### SuspiciousContentDetector
@@ -1612,6 +1636,7 @@ const optimized = await TransitTimeService.optimizeJobOrder(jobIds);
 | `0 6 * * 5` | Bi-Weekly Payout | Processes employee batch payouts (every other Friday) |
 | `*/5 * * * *` | Auto-Complete Monitor | Sends reminders and auto-completes jobs past scheduled time |
 | `*/15 * * * *` | Completion Approval | Auto-approves homeowner/cleaner completion after timeout |
+| `0 */4 * * *` | Expired Requests | Expires unanswered new home requests after 48 hours |
 
 ### Cron Job Details
 
@@ -1679,7 +1704,7 @@ socket.on('mark_read', { conversationId, userId });
 ## Testing
 
 ```bash
-# Run all tests (5038 tests across 178 test suites)
+# Run all tests (5113 tests across 202 test suites)
 npm test
 
 # Run specific test file
@@ -1705,7 +1730,9 @@ npm test -- --watch
 | Pricing | 67 | Dynamic pricing, configuration |
 | Incentives | 54 | Qualification, discounts |
 | Referrals | 48 | Codes, rewards, tracking |
-| Tax Documents | 89 | W-9, 1099-NEC, platform taxes |
+| Tax Documents | 89 | Earnings, dashboard link, platform taxes |
+| New Home Requests | 45 | Accept/decline, re-request, expiration |
+| Support Tickets | 67 | Create, link conversation, categories |
 | Reviews | 67 | Create, read, summaries, bidirectional |
 | Messaging | 234 | Conversations, reactions, suspicious content |
 | HR Dashboard | 78 | Disputes, reports |
@@ -1735,7 +1762,7 @@ npm test -- --watch
 | Transit Time | 28 | Distance calculation, scheduling optimization |
 | Business Client | 35 | Business client portal, corporate bookings |
 | Bi-Weekly Payouts | 34 | Employee batch payout processing |
-| **Total** | **5128** | 202 test suites |
+| **Total** | **5113** | 202 test suites |
 
 ---
 

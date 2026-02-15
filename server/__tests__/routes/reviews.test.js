@@ -373,33 +373,34 @@ describe("Reviews Router", () => {
   });
 
   describe("POST /reviews/submit-legacy", () => {
-    it("should create legacy review", async () => {
+    it("should create legacy review with authentication", async () => {
+      const token = generateToken(1);
       const legacyData = {
         userId: 2,
-        reviewerId: 1,
         appointmentId: 100,
         rating: 4,
         comment: "Good job",
       };
 
-      ReviewsClass.addReviewToDB.mockResolvedValue({ id: 1, ...legacyData });
+      ReviewsClass.addReviewToDB.mockResolvedValue({ id: 1, ...legacyData, reviewerId: 1 });
 
       const res = await request(app)
         .post("/api/v1/reviews/submit-legacy")
+        .set("Authorization", `Bearer ${token}`)
         .send(legacyData);
 
       expect(res.status).toBe(200);
       expect(res.body.newReview).toBeTruthy();
     });
 
-    it("should not require authentication", async () => {
+    it("should require authentication", async () => {
       ReviewsClass.addReviewToDB.mockResolvedValue({ id: 1 });
 
       const res = await request(app)
         .post("/api/v1/reviews/submit-legacy")
-        .send({ userId: 2, reviewerId: 1, appointmentId: 100, rating: 4 });
+        .send({ userId: 2, appointmentId: 100, rating: 4 });
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(401);
     });
   });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ActivityIndicator,
+  Image,
   Linking,
   Pressable,
   RefreshControl,
@@ -365,13 +366,22 @@ const EmployeeDashboard = ({ state }) => {
     >
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>
-            {getGreeting()}, {profile?.firstName || "there"}!
-          </Text>
-          <Text style={styles.businessName}>
-            {profile?.businessOwner?.businessName || "Your Business"}
-          </Text>
+        <View style={styles.headerLeft}>
+          {profile?.businessLogo ? (
+            <Image source={{ uri: profile.businessLogo }} style={styles.businessLogoImage} />
+          ) : (
+            <View style={styles.businessLogoPlaceholder}>
+              <Icon name="building" size={20} color={colors.primary[600]} />
+            </View>
+          )}
+          <View>
+            <Text style={styles.greeting}>
+              {getGreeting()}, {profile?.firstName || "there"}!
+            </Text>
+            <Text style={styles.businessName}>
+              {profile?.businessOwner?.businessName || profile?.businessName || "Your Business"}
+            </Text>
+          </View>
         </View>
         <View style={styles.profileButton}>
           <View style={styles.profileAvatar}>
@@ -618,6 +628,26 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.lg,
     backgroundColor: colors.primary[600],
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  businessLogoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.3)",
+  },
+  businessLogoPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   greeting: {
     fontSize: typography.fontSize.lg,

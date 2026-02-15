@@ -53,6 +53,7 @@ class ConflictService {
     if (filters.search) params.append("search", filters.search);
     if (filters.limit) params.append("limit", filters.limit);
     if (filters.offset) params.append("offset", filters.offset);
+    if (filters.includeResolved) params.append("includeResolved", "true");
 
     const queryString = params.toString();
     const url = `${baseURL}/api/v1/conflicts/queue${queryString ? `?${queryString}` : ""}`;

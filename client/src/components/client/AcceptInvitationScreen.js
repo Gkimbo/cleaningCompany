@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Image,
 } from "react-native";
 import { TextInput, Checkbox } from "react-native-paper";
 import { useNavigate, useParams } from "react-router-native";
@@ -329,13 +330,20 @@ const AcceptInvitationScreen = ({ inviteToken: propToken }) => {
         {invitation && (
           <View style={styles.invitationCard}>
             <View style={styles.inviterSection}>
-              <View style={styles.inviterAvatar}>
-                <Feather name="user" size={24} color={colors.primary[600]} />
-              </View>
+              {invitation.cleaner?.businessLogo ? (
+                <Image
+                  source={{ uri: invitation.cleaner.businessLogo }}
+                  style={styles.inviterLogo}
+                />
+              ) : (
+                <View style={styles.inviterAvatar}>
+                  <Feather name="user" size={24} color={colors.primary[600]} />
+                </View>
+              )}
               <View style={styles.inviterInfo}>
                 <Text style={styles.inviterLabel}>Invited by</Text>
                 <Text style={styles.inviterName}>
-                  {invitation.cleaner?.businessName || invitation.cleaner?.name || "Your Cleaning Service"}
+                  {invitation.cleaner?.businessName || invitation.cleanerName || "Your Cleaning Service"}
                 </Text>
               </View>
             </View>
@@ -755,6 +763,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[100],
     alignItems: "center",
     justifyContent: "center",
+  },
+  inviterLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   inviterInfo: {
     marginLeft: spacing.md,

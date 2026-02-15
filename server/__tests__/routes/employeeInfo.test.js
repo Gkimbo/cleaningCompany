@@ -500,4 +500,267 @@ describe("Employee Info Router", () => {
       expect(response.status).toBe(401);
     });
   });
+
+  describe("Serialization Tests", () => {
+    describe("GET /home/:id serialization", () => {
+      it("should return serialized home data without Sequelize metadata", async () => {
+        const mockHome = {
+          id: 1,
+          nickName: "Beach House",
+          address: "encrypted_address",
+          city: "encrypted_city",
+          state: "encrypted_state",
+          zipcode: "encrypted_zip",
+          numBeds: 3,
+          numBaths: 2,
+          sheetsProvided: true,
+          towelsProvided: false,
+          dataValues: {
+            id: 1,
+            nickName: "Beach House",
+            address: "encrypted_address",
+            city: "encrypted_city",
+            state: "encrypted_state",
+            zipcode: "encrypted_zip",
+            numBeds: 3,
+            numBaths: 2,
+            sheetsProvided: true,
+            towelsProvided: false,
+          },
+          // Sequelize methods that should NOT appear in response
+          save: jest.fn(),
+          update: jest.fn(),
+          destroy: jest.fn(),
+          _previousDataValues: {},
+          _changed: new Set(),
+          _options: {},
+          isNewRecord: false,
+        };
+        UserHomes.findOne.mockResolvedValue(mockHome);
+
+        const response = await request(app).get("/api/v1/employee/home/1");
+
+        expect(response.status).toBe(200);
+        expect(response.body.home).toBeDefined();
+        // Should have serialized properties
+        expect(response.body.home.id).toBe(1);
+        expect(response.body.home.nickName).toBe("Beach House");
+        expect(response.body.home.numBeds).toBe(3);
+        expect(response.body.home.numBaths).toBe(2);
+        // Should NOT have Sequelize internal properties
+        expect(response.body.home.save).toBeUndefined();
+        expect(response.body.home.update).toBeUndefined();
+        expect(response.body.home.destroy).toBeUndefined();
+        expect(response.body.home._previousDataValues).toBeUndefined();
+        expect(response.body.home._changed).toBeUndefined();
+        expect(response.body.home._options).toBeUndefined();
+        expect(response.body.home.isNewRecord).toBeUndefined();
+        expect(response.body.home.dataValues).toBeUndefined();
+      });
+
+      it("should handle home without dataValues (plain object)", async () => {
+        const plainHome = {
+          id: 2,
+          nickName: "City Apartment",
+          numBeds: 2,
+          numBaths: 1,
+        };
+        UserHomes.findOne.mockResolvedValue(plainHome);
+
+        const response = await request(app).get("/api/v1/employee/home/2");
+
+        expect(response.status).toBe(200);
+        expect(response.body.home.id).toBe(2);
+        expect(response.body.home.nickName).toBe("City Apartment");
+      });
+    });
+
+    describe("GET /employeeSchedule serialization", () => {
+      it("should return serialized employee data for all cleaners", async () => {
+        const mockEmployees = [
+          {
+            id: 2,
+            username: "cleaner1",
+            type: "cleaner",
+            email: "cleaner1@test.com",
+            daysWorking: ["Monday", "Tuesday"],
+            dataValues: {
+              id: 2,
+              username: "cleaner1",
+              type: "cleaner",
+              email: "cleaner1@test.com",
+              daysWorking: ["Monday", "Tuesday"],
+            },
+            // Sequelize metadata
+            save: jest.fn(),
+            _previousDataValues: {},
+          },
+          {
+            id: 3,
+            username: "cleaner2",
+            type: "cleaner",
+            email: "cleaner2@test.com",
+            daysWorking: ["Wednesday"],
+            dataValues: {
+              id: 3,
+              username: "cleaner2",
+              type: "cleaner",
+              email: "cleaner2@test.com",
+              daysWorking: ["Wednesday"],
+            },
+            save: jest.fn(),
+          },
+        ];
+        User.findAll.mockResolvedValue(mockEmployees);
+
+        const response = await request(app).get("/api/v1/employee/employeeSchedule");
+
+        expect(response.status).toBe(200);
+        expect(response.body.employees).toHaveLength(2);
+        // Check first employee is serialized
+        expect(response.body.employees[0].id).toBe(2);
+        expect(response.body.employees[0].username).toBe("cleaner1");
+        expect(response.body.employees[0].save).toBeUndefined();
+        expect(response.body.employees[0]._previousDataValues).toBeUndefined();
+        // Check second employee is serialized
+        expect(response.body.employees[1].id).toBe(3);
+        expect(response.body.employees[1].save).toBeUndefined();
+      });
+
+      it("should handle employees without dataValues (plain objects)", async () => {
+        const plainEmployees = [
+          { id: 4, username: "plain_cleaner", type: "cleaner" },
+        ];
+        User.findAll.mockResolvedValue(plainEmployees);
+
+        const response = await request(app).get("/api/v1/employee/employeeSchedule");
+
+        expect(response.status).toBe(200);
+        expect(response.body.employees[0].id).toBe(4);
+        expect(response.body.employees[0].username).toBe("plain_cleaner");
+      });
+    });
+
+    describe("GET /cleaner/:id serialization", () => {
+      it("should return serialized cleaner profile with serialized reviews", async () => {
+        User.findByPk.mockResolvedValue({
+          id: 2,
+          username: "testcleaner",
+          type: "cleaner",
+          daysWorking: ["Monday"],
+          reviews: [
+            {
+              id: 1,
+              review: 5,
+              reviewComment: "Excellent!",
+              dataValues: {
+                id: 1,
+                review: 5,
+                reviewComment: "Excellent!",
+              },
+            },
+          ],
+          cleanerAppointments: [],
+          createdAt: new Date("2024-01-01"),
+        });
+        UserAppointments.count.mockResolvedValue(10);
+
+        const response = await request(app).get("/api/v1/employee/cleaner/2");
+
+        expect(response.status).toBe(200);
+        expect(response.body.cleaner.id).toBe(2);
+        expect(response.body.cleaner.reviews).toHaveLength(1);
+        expect(response.body.cleaner.reviews[0].id).toBe(1);
+        expect(response.body.cleaner.reviews[0].review).toBe(5);
+        // Reviews should be serialized (no dataValues property)
+        expect(response.body.cleaner.reviews[0].dataValues).toBeUndefined();
+      });
+
+      it("should serialize reviews that are plain objects", async () => {
+        User.findByPk.mockResolvedValue({
+          id: 3,
+          username: "anothercleaner",
+          type: "cleaner",
+          daysWorking: [],
+          reviews: [
+            { id: 10, review: 4, reviewComment: "Good job" },
+            { id: 11, review: 5, reviewComment: "Perfect!" },
+          ],
+          cleanerAppointments: [],
+          createdAt: new Date("2024-06-01"),
+        });
+        UserAppointments.count.mockResolvedValue(5);
+
+        const response = await request(app).get("/api/v1/employee/cleaner/3");
+
+        expect(response.status).toBe(200);
+        expect(response.body.cleaner.reviews).toHaveLength(2);
+        expect(response.body.cleaner.reviews[0].review).toBe(4);
+        expect(response.body.cleaner.reviews[1].review).toBe(5);
+      });
+    });
+
+    describe("POST /shifts serialization", () => {
+      it("should return serialized user after updating shifts", async () => {
+        const mockUser = {
+          id: 2,
+          username: "cleaner1",
+          type: "cleaner",
+          email: "cleaner@test.com",
+          daysWorking: [],
+          dataValues: {
+            id: 2,
+            username: "cleaner1",
+            type: "cleaner",
+            email: "cleaner@test.com",
+            daysWorking: ["Monday", "Wednesday"],
+          },
+          update: jest.fn(),
+          save: jest.fn(),
+          _previousDataValues: {},
+          _changed: new Set(),
+        };
+        User.findOne.mockResolvedValue(mockUser);
+
+        const response = await request(app)
+          .post("/api/v1/employee/shifts")
+          .send({
+            user: { token: cleanerToken },
+            days: ["Monday", "Wednesday"],
+          });
+
+        expect(response.status).toBe(201);
+        expect(response.body.user).toBeDefined();
+        expect(response.body.user.id).toBe(2);
+        expect(response.body.user.username).toBe("cleaner1");
+        // Should NOT have Sequelize internal properties
+        expect(response.body.user.save).toBeUndefined();
+        expect(response.body.user.update).toBeUndefined();
+        expect(response.body.user._previousDataValues).toBeUndefined();
+        expect(response.body.user._changed).toBeUndefined();
+        expect(response.body.user.dataValues).toBeUndefined();
+      });
+
+      it("should handle user without dataValues (plain object from mock)", async () => {
+        const plainUser = {
+          id: 5,
+          username: "plaincleaner",
+          type: "cleaner",
+          update: jest.fn(),
+        };
+        User.findOne.mockResolvedValue(plainUser);
+
+        const response = await request(app)
+          .post("/api/v1/employee/shifts")
+          .send({
+            user: { token: cleanerToken },
+            days: ["Friday"],
+          });
+
+        expect(response.status).toBe(201);
+        expect(response.body.user.id).toBe(5);
+        expect(response.body.user.username).toBe("plaincleaner");
+      });
+    });
+  });
 });

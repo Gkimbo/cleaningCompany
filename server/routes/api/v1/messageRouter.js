@@ -19,6 +19,23 @@ const SuspiciousContentDetector = require("../../../services/SuspiciousContentDe
 const EncryptionService = require("../../../services/EncryptionService");
 const MessageSerializer = require("../../../serializers/MessageSerializer");
 
+// Helper to validate numeric ID parameters
+const isValidId = (id) => {
+  const num = parseInt(id, 10);
+  return !isNaN(num) && num > 0 && String(num) === String(id);
+};
+
+// Safe decrypt helper - returns null if decryption fails
+const safeDecrypt = (value) => {
+  if (!value) return null;
+  try {
+    return EncryptionService.decrypt(value);
+  } catch (error) {
+    console.error("[Messages] Decryption failed:", error.message);
+    return null;
+  }
+};
+
 // Helper to decrypt user PII fields from included models
 // Only return safe, non-sensitive fields to the frontend
 const decryptUserFields = (user) => {
@@ -28,14 +45,14 @@ const decryptUserFields = (user) => {
     id: data.id,
     username: data.username,
     type: data.type,
-    firstName: data.firstName ? EncryptionService.decrypt(data.firstName) : null,
-    lastName: data.lastName ? EncryptionService.decrypt(data.lastName) : null,
-    email: data.email ? EncryptionService.decrypt(data.email) : null,
-    phone: data.phone ? EncryptionService.decrypt(data.phone) : null,
+    firstName: safeDecrypt(data.firstName),
+    lastName: safeDecrypt(data.lastName),
+    email: safeDecrypt(data.email),
+    phone: safeDecrypt(data.phone),
     profilePhotoUrl: data.profilePhotoUrl,
     expoPushToken: data.expoPushToken,
     isBusinessOwner: data.isBusinessOwner,
-    businessName: data.businessName ? EncryptionService.decrypt(data.businessName) : null,
+    businessName: safeDecrypt(data.businessName),
   };
 };
 
@@ -90,7 +107,7 @@ messageRouter.get("/conversations", authenticateToken, async (req, res) => {
       order: [[{ model: Conversation, as: "conversation" }, "updatedAt", "DESC"]],
     });
 
-    // Calculate unread count for each conversation
+    // Calculate unread count for each conversation and decrypt user data
     const conversationsWithUnread = await Promise.all(
       participations.map(async (p) => {
         const unreadCount = await Message.count({
@@ -100,8 +117,26 @@ messageRouter.get("/conversations", authenticateToken, async (req, res) => {
             senderId: { [Op.ne]: userId },
           },
         });
+
+        const pData = p.toJSON();
+
+        // Decrypt participant user data
+        if (pData.conversation?.participants) {
+          pData.conversation.participants = pData.conversation.participants.map((part) => ({
+            ...part,
+            user: part.user ? decryptUserFields(part.user) : null,
+          }));
+        }
+
+        // Decrypt last message sender
+        if (pData.conversation?.messages?.[0]?.sender) {
+          pData.conversation.messages[0].sender = decryptUserFields(
+            pData.conversation.messages[0].sender
+          );
+        }
+
         return {
-          ...p.toJSON(),
+          ...pData,
           unreadCount,
         };
       })
@@ -122,6 +157,11 @@ messageRouter.get("/conversation/:conversationId", authenticateToken, async (req
   try {
     const { conversationId } = req.params;
     const userId = req.userId;
+
+    // Validate conversationId is a valid numeric ID
+    if (!isValidId(conversationId)) {
+      return res.status(400).json({ error: "Invalid conversation ID" });
+    }
 
     // Verify user is a participant
     const participant = await ConversationParticipant.findOne({
@@ -193,9 +233,11 @@ messageRouter.get("/conversation/:conversationId", authenticateToken, async (req
       ],
     });
 
+    const serializedConversation = MessageSerializer.serializeConversation(conversation);
+
     return res.json({
       messages: MessageSerializer.serializeArray(messages),
-      conversation: MessageSerializer.serializeConversation(conversation),
+      conversation: serializedConversation,
     });
   } catch (error) {
     console.error("Error fetching messages:", error);
@@ -212,6 +254,11 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
     const { conversationId, content } = req.body;
     const senderId = req.userId;
     const io = req.app.get("io");
+
+    // Validate conversationId
+    if (!isValidId(conversationId)) {
+      return res.status(400).json({ error: "Invalid conversation ID" });
+    }
 
     if (!content || !content.trim()) {
       return res.status(400).json({ error: "Message content is required" });
@@ -250,12 +297,6 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       suspiciousContentTypes = detection.types;
     }
 
-    // Check if this is the first message in the conversation (for email notification)
-    const existingMessageCount = await Message.count({
-      where: { conversationId },
-    });
-    const isFirstMessage = existingMessageCount === 0;
-
     // Create the message
     const message = await Message.create({
       conversationId,
@@ -265,6 +306,14 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
       hasSuspiciousContent,
       suspiciousContentTypes,
     });
+
+    // Check if this is the first message AFTER creation (prevents race condition)
+    const firstMessage = await Message.findOne({
+      where: { conversationId },
+      order: [["id", "ASC"]],
+      attributes: ["id"],
+    });
+    const isFirstMessage = firstMessage && firstMessage.id === message.id;
 
     // Get message with sender info
     const messageWithSender = await Message.findByPk(message.id, {
@@ -309,12 +358,15 @@ messageRouter.post("/send", authenticateToken, async (req, res) => {
 
       // Send email notification only for the first message in the conversation
       if (isFirstMessage && p.user?.notifications?.includes("email") && p.user.email) {
-        await Email.sendNewMessageNotification(
-          EncryptionService.decrypt(p.user.email),
-          p.user.username,
-          senderName,
-          content
-        );
+        const decryptedEmail = safeDecrypt(p.user.email);
+        if (decryptedEmail) {
+          await Email.sendNewMessageNotification(
+            decryptedEmail,
+            p.user.username,
+            senderName,
+            content
+          );
+        }
       }
 
       // Send push notification if user has phone notifications enabled
@@ -343,6 +395,11 @@ messageRouter.post("/conversation/appointment", authenticateToken, async (req, r
   try {
     const { appointmentId } = req.body;
     const userId = req.userId;
+
+    // Validate appointmentId
+    if (!isValidId(appointmentId)) {
+      return res.status(400).json({ error: "Invalid appointment ID" });
+    }
 
     // Get appointment details
     const appointment = await UserAppointments.findByPk(appointmentId);
@@ -535,12 +592,15 @@ messageRouter.post("/broadcast", authenticateToken, async (req, res) => {
 
       // Send email notification if user has it enabled
       if (targetUser.notifications && targetUser.notifications.includes("email")) {
-        await Email.sendBroadcastNotification(
-          EncryptionService.decrypt(targetUser.email),
-          targetUser.username,
-          title || "Company Announcement",
-          content
-        );
+        const decryptedEmail = safeDecrypt(targetUser.email);
+        if (decryptedEmail) {
+          await Email.sendBroadcastNotification(
+            decryptedEmail,
+            targetUser.username,
+            title || "Company Announcement",
+            content
+          );
+        }
       }
 
       // Send push notification if user has phone notifications enabled
@@ -600,6 +660,10 @@ messageRouter.patch("/mark-read/:conversationId", authenticateToken, async (req,
   try {
     const { conversationId } = req.params;
     const userId = req.userId;
+
+    if (!isValidId(conversationId)) {
+      return res.status(400).json({ error: "Invalid conversation ID" });
+    }
 
     const participant = await ConversationParticipant.findOne({
       where: { conversationId, userId },
@@ -758,6 +822,69 @@ messageRouter.post("/conversation/support", authenticateToken, async (req, res) 
 });
 
 /**
+ * DELETE /api/v1/messages/conversation/support/:conversationId/cleanup
+ * Cleanup an empty support conversation (delete if no messages were sent)
+ * Users can only cleanup support conversations they're a participant of
+ */
+messageRouter.delete("/conversation/support/:conversationId/cleanup", authenticateToken, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.userId;
+
+    if (!isValidId(conversationId)) {
+      return res.status(400).json({ error: "Invalid conversation ID" });
+    }
+
+    // Find the conversation
+    const conversation = await Conversation.findByPk(conversationId, {
+      include: [
+        {
+          model: ConversationParticipant,
+          as: "participants",
+        },
+        {
+          model: Message,
+          as: "messages",
+        },
+      ],
+    });
+
+    if (!conversation) {
+      // Conversation doesn't exist, consider it already cleaned up
+      return res.json({ success: true, deleted: false, reason: "not_found" });
+    }
+
+    // Only allow cleanup of support conversations
+    if (conversation.conversationType !== "support") {
+      return res.status(400).json({ error: "Can only cleanup support conversations" });
+    }
+
+    // Verify user is a participant
+    const isParticipant = conversation.participants.some(p => p.userId === userId);
+    if (!isParticipant) {
+      return res.status(403).json({ error: "You are not a participant of this conversation" });
+    }
+
+    // Only delete if there are no messages
+    if (conversation.messages && conversation.messages.length > 0) {
+      return res.json({ success: true, deleted: false, reason: "has_messages" });
+    }
+
+    // Delete participants first, then conversation
+    await ConversationParticipant.destroy({
+      where: { conversationId: conversation.id },
+    });
+
+    await conversation.destroy();
+
+    return res.json({ success: true, deleted: true });
+  } catch (error) {
+    console.error("Error cleaning up support conversation:", error);
+    return res.status(500).json({ error: "Failed to cleanup conversation" });
+  }
+});
+
+/**
  * POST /api/v1/messages/conversation/cleaner-client
  * Create or get a direct conversation between a cleaner (business owner) and their client
  * Either party can initiate this - the cleaner or the client
@@ -766,6 +893,14 @@ messageRouter.post("/conversation/cleaner-client", authenticateToken, async (req
   try {
     const userId = req.userId;
     const { clientUserId, cleanerUserId } = req.body;
+
+    // Validate IDs if provided
+    if (clientUserId && !isValidId(clientUserId)) {
+      return res.status(400).json({ error: "Invalid client user ID" });
+    }
+    if (cleanerUserId && !isValidId(cleanerUserId)) {
+      return res.status(400).json({ error: "Invalid cleaner user ID" });
+    }
 
     // Get current user
     const user = await User.findByPk(userId);
@@ -806,8 +941,8 @@ messageRouter.post("/conversation/cleaner-client", authenticateToken, async (req
 
       cleanerUser = user;
       clientUser = await User.findByPk(clientId);
-    } else if (user.type === "homeowner" || !user.type) {
-      // Client is initiating - they need to specify which cleaner (or we find their preferred)
+    } else if (user.type === "homeowner" || user.type === "client" || user.type === null || user.type === undefined) {
+      // Client/homeowner is initiating - they need to specify which cleaner (or we find their preferred)
       clientId = userId;
       clientUser = user;
 
@@ -915,10 +1050,11 @@ messageRouter.post("/conversation/cleaner-client", authenticateToken, async (req
       // Create new cleaner-client conversation
       const cleanerName = `${cleanerUser.firstName || ""} ${cleanerUser.lastName || ""}`.trim() || cleanerUser.username;
       const clientName = `${clientUser.firstName || ""} ${clientUser.lastName || ""}`.trim() || clientUser.username;
+      const conversationTitle = `${cleanerName} & ${clientName}`.substring(0, 255);
 
       conversation = await Conversation.create({
         conversationType: "cleaner-client",
-        title: `${cleanerName} & ${clientName}`,
+        title: conversationTitle,
         createdBy: userId,
       });
 
@@ -967,6 +1103,14 @@ messageRouter.post("/add-participant", authenticateToken, async (req, res) => {
   try {
     const { conversationId, userIdToAdd } = req.body;
     const requesterId = req.userId;
+
+    // Validate IDs
+    if (!isValidId(conversationId)) {
+      return res.status(400).json({ error: "Invalid conversation ID" });
+    }
+    if (!isValidId(userIdToAdd)) {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
 
     // Get requester info
     const requester = await User.findByPk(requesterId);
@@ -1157,6 +1301,11 @@ messageRouter.post("/conversation/hr-direct", authenticateToken, async (req, res
   try {
     const userId = req.userId;
     const { targetUserId } = req.body;
+
+    // Validate targetUserId if provided
+    if (targetUserId && !isValidId(targetUserId)) {
+      return res.status(400).json({ error: "Invalid target user ID" });
+    }
 
     const user = await User.findByPk(userId);
     if (!user) {
@@ -1352,6 +1501,9 @@ messageRouter.post("/conversation/custom-group", authenticateToken, async (req, 
         groupTitle += ` +${members.length - 3} more`;
       }
     }
+
+    // Truncate title to fit VARCHAR(255) limit
+    groupTitle = groupTitle.substring(0, 255);
 
     // Create the conversation
     const conversation = await Conversation.create({
@@ -1634,8 +1786,12 @@ messageRouter.post("/:messageId/react", authenticateToken, async (req, res) => {
     const userId = req.userId;
     const io = req.app.get("io");
 
-    if (!emoji) {
-      return res.status(400).json({ error: "Emoji is required" });
+    if (!isValidId(messageId)) {
+      return res.status(400).json({ error: "Invalid message ID" });
+    }
+
+    if (!emoji || typeof emoji !== "string" || emoji.length === 0 || emoji.length > 10) {
+      return res.status(400).json({ error: "Invalid emoji (must be 1-10 characters)" });
     }
 
     // Get the message with sender info
@@ -1713,8 +1869,14 @@ messageRouter.post("/:messageId/react", authenticateToken, async (req, res) => {
         attributes: ["id", "username", "firstName", "lastName"],
       });
 
+      // Handle case where reactor user is not found (deleted user)
+      if (!reactor) {
+        console.warn(`[Messages] Reactor user ${userId} not found when sending reaction notification`);
+        return res.json({ success: true, action, reaction });
+      }
+
       const reactorName = reactor.firstName && reactor.lastName
-        ? `${EncryptionService.decrypt(reactor.firstName)} ${EncryptionService.decrypt(reactor.lastName)}`
+        ? `${safeDecrypt(reactor.firstName)} ${safeDecrypt(reactor.lastName)}`
         : reactor.username;
 
       // Send push notification if sender has phone notifications enabled
@@ -1736,7 +1898,7 @@ messageRouter.post("/:messageId/react", authenticateToken, async (req, res) => {
         reactorId: userId,
         reactorName,
         emoji,
-        messagePreview: message.content.substring(0, 50),
+        messagePreview: (message.content || "").substring(0, 50),
       });
     }
 
@@ -1756,6 +1918,15 @@ messageRouter.delete("/:messageId/react/:emoji", authenticateToken, async (req, 
     const { messageId, emoji } = req.params;
     const userId = req.userId;
     const io = req.app.get("io");
+
+    if (!isValidId(messageId)) {
+      return res.status(400).json({ error: "Invalid message ID" });
+    }
+
+    // Validate emoji from URL params
+    if (!emoji || emoji.length === 0 || emoji.length > 10) {
+      return res.status(400).json({ error: "Invalid emoji" });
+    }
 
     // Get the message
     const message = await Message.findByPk(messageId);
@@ -1799,57 +1970,20 @@ messageRouter.delete("/:messageId/react/:emoji", authenticateToken, async (req, 
 });
 
 /**
- * DELETE /api/v1/messages/:messageId
- * Soft delete a message (only the sender can delete their own messages)
- */
-messageRouter.delete("/:messageId", authenticateToken, async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const userId = req.userId;
-    const io = req.app.get("io");
-
-    const message = await Message.findByPk(messageId);
-
-    if (!message) {
-      return res.status(404).json({ error: "Message not found" });
-    }
-
-    // Check if already deleted
-    if (message.deletedAt) {
-      return res.status(400).json({ error: "Message already deleted" });
-    }
-
-    // Only the sender can delete their own messages
-    if (message.senderId !== userId) {
-      return res.status(403).json({ error: "You can only delete your own messages" });
-    }
-
-    // Soft delete - set deletedAt timestamp
-    await message.update({ deletedAt: new Date() });
-
-    // Emit message deleted event
-    io.to(`conversation_${message.conversationId}`).emit("message_deleted", {
-      messageId: parseInt(messageId),
-      conversationId: message.conversationId,
-    });
-
-    return res.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting message:", error);
-    return res.status(500).json({ error: "Failed to delete message" });
-  }
-});
-
-/**
  * DELETE /api/v1/messages/conversation/:conversationId
  * Delete an entire conversation (owner only)
  * This permanently removes the conversation and all its messages
+ * NOTE: This route MUST be defined before DELETE /:messageId to avoid path collision
  */
 messageRouter.delete("/conversation/:conversationId", authenticateToken, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const userId = req.userId;
     const io = req.app.get("io");
+
+    if (!isValidId(conversationId)) {
+      return res.status(400).json({ error: "Invalid conversation ID" });
+    }
 
     // Verify user is owner
     const user = await User.findByPk(userId);
@@ -1917,6 +2051,52 @@ messageRouter.delete("/conversation/:conversationId", authenticateToken, async (
 });
 
 /**
+ * DELETE /api/v1/messages/:messageId
+ * Soft delete a message (only the sender can delete their own messages)
+ */
+messageRouter.delete("/:messageId", authenticateToken, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.userId;
+    const io = req.app.get("io");
+
+    if (!isValidId(messageId)) {
+      return res.status(400).json({ error: "Invalid message ID" });
+    }
+
+    const message = await Message.findByPk(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Check if already deleted
+    if (message.deletedAt) {
+      return res.status(400).json({ error: "Message already deleted" });
+    }
+
+    // Only the sender can delete their own messages
+    if (message.senderId !== userId) {
+      return res.status(403).json({ error: "You can only delete your own messages" });
+    }
+
+    // Soft delete - set deletedAt timestamp
+    await message.update({ deletedAt: new Date() });
+
+    // Emit message deleted event
+    io.to(`conversation_${message.conversationId}`).emit("message_deleted", {
+      messageId: parseInt(messageId),
+      conversationId: message.conversationId,
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting message:", error);
+    return res.status(500).json({ error: "Failed to delete message" });
+  }
+});
+
+/**
  * PATCH /api/v1/messages/conversation/:conversationId/title
  * Update conversation title (owner/HR only, internal conversations only)
  */
@@ -1926,6 +2106,10 @@ messageRouter.patch("/conversation/:conversationId/title", authenticateToken, as
     const { title } = req.body;
     const userId = req.userId;
     const io = req.app.get("io");
+
+    if (!isValidId(conversationId)) {
+      return res.status(400).json({ error: "Invalid conversation ID" });
+    }
 
     if (!title || !title.trim()) {
       return res.status(400).json({ error: "Title is required" });
@@ -1969,7 +2153,7 @@ messageRouter.patch("/conversation/:conversationId/title", authenticateToken, as
 
     // Create system message recording the change
     const userName = user.firstName && user.lastName
-      ? `${EncryptionService.decrypt(user.firstName)} ${EncryptionService.decrypt(user.lastName)}`
+      ? `${safeDecrypt(user.firstName)} ${safeDecrypt(user.lastName)}`
       : user.username;
 
     const systemMessage = await Message.create({
@@ -2020,10 +2204,26 @@ messageRouter.post("/mark-messages-read", authenticateToken, async (req, res) =>
       return res.status(400).json({ error: "messageIds array is required" });
     }
 
+    // Limit array size to prevent DOS
+    const MAX_MESSAGE_IDS = 100;
+    if (messageIds.length > MAX_MESSAGE_IDS) {
+      return res.status(400).json({ error: `Cannot mark more than ${MAX_MESSAGE_IDS} messages at once` });
+    }
+
+    // Validate each messageId is a valid positive integer
+    const validMessageIds = messageIds.filter((id) => {
+      const num = parseInt(id, 10);
+      return !isNaN(num) && num > 0;
+    }).map((id) => parseInt(id, 10));
+
+    if (validMessageIds.length === 0) {
+      return res.status(400).json({ error: "No valid message IDs provided" });
+    }
+
     // Get messages and verify they exist (exclude deleted messages)
     const messages = await Message.findAll({
       where: {
-        id: { [Op.in]: messageIds },
+        id: { [Op.in]: validMessageIds },
         deletedAt: null,
       },
     });
@@ -2192,9 +2392,12 @@ messageRouter.post(
       // Send notification emails
       for (const staff of staffToNotify) {
         try {
+          const staffEmail = safeDecrypt(staff.email);
+          if (!staffEmail) continue; // Skip if email decryption fails
+
           await Email.sendSuspiciousActivityReport({
-            to: EncryptionService.decrypt(staff.email),
-            staffName: staff.firstName ? EncryptionService.decrypt(staff.firstName) : "Team",
+            to: staffEmail,
+            staffName: safeDecrypt(staff.firstName) || "Team",
             reporterName,
             reportedUserName,
             reportedUserType: message.sender?.type || "unknown",
@@ -2317,6 +2520,11 @@ messageRouter.post("/employee-conversation", authenticateToken, async (req, res)
     const userId = req.userId;
     const user = await User.findByPk(userId);
 
+    // Validate employeeId if provided
+    if (employeeId && !isValidId(employeeId)) {
+      return res.status(400).json({ error: "Invalid employee ID" });
+    }
+
     // Check if user is a business owner or an employee
     let businessOwnerId, employeeUserId, employee;
 
@@ -2391,13 +2599,14 @@ messageRouter.post("/employee-conversation", authenticateToken, async (req, res)
     const employeeUser = await User.findByPk(employeeUserId);
 
     const ownerName = businessOwner.firstName && businessOwner.lastName
-      ? `${EncryptionService.decrypt(businessOwner.firstName)}`
+      ? `${safeDecrypt(businessOwner.firstName)}`
       : businessOwner.username;
     const empName = employee.firstName;
+    const conversationTitle = `${ownerName} & ${empName}`.substring(0, 255);
 
     const conversation = await Conversation.create({
       conversationType: "business_employee",
-      title: `${ownerName} & ${empName}`,
+      title: conversationTitle,
       relatedEntityId: employee.id, // Link to BusinessEmployee record
       createdBy: businessOwnerId,
     });
@@ -2467,7 +2676,7 @@ messageRouter.post("/employee-group-conversation", authenticateToken, async (req
 
     // Get owner name for default title
     const ownerName = user.firstName
-      ? EncryptionService.decrypt(user.firstName)
+      ? safeDecrypt(user.firstName)
       : user.username;
 
     // Create employee names for default title
@@ -2564,12 +2773,13 @@ messageRouter.post("/employee-broadcast", authenticateToken, async (req, res) =>
 
     if (!broadcastConversation) {
       const ownerName = user.firstName
-        ? EncryptionService.decrypt(user.firstName)
+        ? safeDecrypt(user.firstName)
         : user.username;
+      const broadcastTitle = `${ownerName}'s Team Announcements`.substring(0, 255);
 
       broadcastConversation = await Conversation.create({
         conversationType: "employee_broadcast",
-        title: `${ownerName}'s Team Announcements`,
+        title: broadcastTitle,
         relatedEntityId: userId,
       });
 
@@ -2609,7 +2819,7 @@ messageRouter.post("/employee-broadcast", authenticateToken, async (req, res) =>
 
     // Notify all employees
     const senderName = user.firstName && user.lastName
-      ? `${EncryptionService.decrypt(user.firstName)} ${EncryptionService.decrypt(user.lastName)}`
+      ? `${safeDecrypt(user.firstName)} ${safeDecrypt(user.lastName)}`
       : user.username;
 
     for (const emp of employees) {
@@ -2665,6 +2875,11 @@ messageRouter.post("/job-conversation", authenticateToken, async (req, res) => {
 
     if (!assignmentId) {
       return res.status(400).json({ error: "Assignment ID is required" });
+    }
+
+    // Validate assignmentId
+    if (!isValidId(assignmentId)) {
+      return res.status(400).json({ error: "Invalid assignment ID" });
     }
 
     const { EmployeeJobAssignment } = require("../../../models");
@@ -2862,20 +3077,26 @@ messageRouter.get("/my-business-conversations", authenticateToken, async (req, r
         const aLastMessage = a.messages?.[0]?.createdAt || a.createdAt;
         const bLastMessage = b.messages?.[0]?.createdAt || b.createdAt;
         return new Date(bLastMessage) - new Date(aLastMessage);
-      });
+      })
+      .map((conv) => {
+        // Convert to plain object to allow modification
+        const plainConv = conv.toJSON();
 
-    // Decrypt participant names
-    for (const conv of conversations) {
-      if (conv.participants) {
-        conv.participants = conv.participants.map((p) => ({
-          ...p.toJSON(),
-          user: p.user ? decryptUserFields(p.user) : null,
-        }));
-      }
-      if (conv.messages?.[0]?.sender) {
-        conv.messages[0].sender = decryptUserFields(conv.messages[0].sender);
-      }
-    }
+        // Decrypt participant names
+        if (plainConv.participants) {
+          plainConv.participants = plainConv.participants.map((p) => ({
+            ...p,
+            user: p.user ? decryptUserFields(p.user) : null,
+          }));
+        }
+
+        // Decrypt sender in last message
+        if (plainConv.messages?.[0]?.sender) {
+          plainConv.messages[0].sender = decryptUserFields(plainConv.messages[0].sender);
+        }
+
+        return plainConv;
+      });
 
     return res.json({ conversations });
   } catch (error) {
@@ -3154,7 +3375,7 @@ messageRouter.get("/my-coworker-conversations", authenticateToken, async (req, r
             ...part.toJSON(),
             user: decryptUserFields(part.user),
             displayName: isBusinessOwner
-              ? (part.user?.firstName ? EncryptionService.decrypt(part.user.firstName) : "Business Owner")
+              ? (part.user?.firstName ? safeDecrypt(part.user.firstName) : "Business Owner")
               : (part.businessEmployee?.firstName || "Employee"),
           };
         });

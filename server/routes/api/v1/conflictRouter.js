@@ -28,6 +28,7 @@ router.get("/queue", async (req, res) => {
 			search,
 			limit,
 			offset,
+			includeResolved,
 		} = req.query;
 
 		const result = await ConflictResolutionService.getConflictQueue({
@@ -39,6 +40,7 @@ router.get("/queue", async (req, res) => {
 			limit: limit ? parseInt(limit) : 50,
 			offset: offset ? parseInt(offset) : 0,
 			includeDemoData: req.user?.isDemoAccount === true,
+			includeResolved: includeResolved === "true",
 		});
 
 		res.json({
@@ -144,11 +146,20 @@ router.post("/support/create", async (req, res) => {
 			}
 
 			// Validate subjectType matches user's actual type if provided
-			if (subjectType && subjectUser.type !== subjectType) {
-				return res.status(400).json({
-					success: false,
-					error: `Subject type mismatch. User is type '${subjectUser.type || "client"}', not '${subjectType}'`,
-				});
+			// Note: "homeowner" type includes users with type null, "client", or "homeowner"
+			const isHomeownerType = (type) => type === null || type === undefined || type === "client" || type === "homeowner";
+			const userActualType = subjectUser.type;
+
+			if (subjectType) {
+				const typesMatch = (subjectType === "homeowner" && isHomeownerType(userActualType)) ||
+					(subjectType !== "homeowner" && userActualType === subjectType);
+
+				if (!typesMatch) {
+					return res.status(400).json({
+						success: false,
+						error: `Subject type mismatch. User is type '${userActualType || "client"}', not '${subjectType}'`,
+					});
+				}
 			}
 		}
 

@@ -282,9 +282,8 @@ describe("BusinessOwnerDeclinedModal", () => {
         fireEvent.press(getByText("Find Another Cleaner"));
       });
 
-      await waitFor(() => {
-        expect(findByText("Complete Home Details")).toBeTruthy();
-      });
+      const detailsText = await findByText("Complete Home Details");
+      expect(detailsText).toBeTruthy();
     });
   });
 
@@ -301,7 +300,7 @@ describe("BusinessOwnerDeclinedModal", () => {
       };
       global.fetch.mockResolvedValueOnce(mockResponse);
 
-      const { getByText, findByText } = renderWithProviders(
+      const { getByText, queryByText } = renderWithProviders(
         <BusinessOwnerDeclinedModal
           visible={true}
           notification={mockNotification}
@@ -315,7 +314,7 @@ describe("BusinessOwnerDeclinedModal", () => {
       });
 
       await waitFor(() => {
-        expect(findByText("Marketplace Price")).toBeTruthy();
+        expect(queryByText("$200.00")).toBeTruthy();
       });
     });
 

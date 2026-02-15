@@ -184,6 +184,7 @@ paymentRouter.get("/history/:userId", async (req, res) => {
         "createdAt"
       ],
       order: [["createdAt", "DESC"]],
+      raw: true,
     });
 
     return res.json({ payments: appointments });

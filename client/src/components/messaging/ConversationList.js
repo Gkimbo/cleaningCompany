@@ -207,29 +207,65 @@ const ConversationList = () => {
       return "Support";
     }
     if (conversation.conversationType === "internal") {
-      // Check if it's a group or 1-on-1
-      if (conversation.title) {
-        return conversation.title;
-      }
-      // Get other participant names for 1-on-1
+      // Get other participant names
       const otherParticipants = conversation.participants?.filter(
         (p) => p.userId !== parseInt(state.currentUser?.userId)
       );
+      // For 1-on-1 conversations, show just the other person's name
       if (otherParticipants?.length === 1) {
+        // If title exists and doesn't look like "PersonA & PersonB" format, use it
+        if (conversation.title && !conversation.title.includes(" & ")) {
+          return conversation.title;
+        }
         const user = otherParticipants[0].user;
+        // Use decrypted firstName/lastName if available
+        if (user?.firstName) {
+          return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+        }
         return user?.username || "Team Member";
       }
+      // For group chats, use title or generate from names
       if (otherParticipants?.length > 1) {
-        return "Team Chat";
+        if (conversation.title) {
+          return conversation.title;
+        }
+        // Show first names for group chats
+        const names = otherParticipants
+          .slice(0, 2)
+          .map((p) => p.user?.firstName || p.user?.username || "User");
+        if (otherParticipants.length > 2) {
+          return `${names.join(", ")} +${otherParticipants.length - 2}`;
+        }
+        return names.join(", ");
       }
     }
     // Business owner <-> Employee conversations
     if (conversation.conversationType === "business_employee" ||
         conversation.conversationType === "employee_group") {
-      if (conversation.title) {
-        return conversation.title;
-      }
       // Get other participant names
+      const otherParticipants = conversation.participants?.filter(
+        (p) => p.userId !== parseInt(state.currentUser?.userId)
+      );
+      // For 1-on-1 conversations, show just the other person's name
+      if (otherParticipants?.length === 1) {
+        const user = otherParticipants[0].user;
+        if (user?.firstName) {
+          return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+        }
+        return user?.username || "Employee";
+      }
+      // For group conversations, use title or generate from names
+      if (otherParticipants?.length > 1) {
+        if (conversation.title) {
+          return conversation.title;
+        }
+        const firstUser = otherParticipants[0].user;
+        const name = firstUser?.firstName || firstUser?.username || "Employee";
+        return `${name} +${otherParticipants.length - 1}`;
+      }
+    }
+    // Cleaner <-> Client conversations
+    if (conversation.conversationType === "cleaner-client") {
       const otherParticipants = conversation.participants?.filter(
         (p) => p.userId !== parseInt(state.currentUser?.userId)
       );
@@ -238,12 +274,20 @@ const ConversationList = () => {
         if (user?.firstName) {
           return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
         }
-        return user?.username || "Employee";
+        return user?.username || "User";
       }
-      if (otherParticipants?.length > 1) {
-        const firstUser = otherParticipants[0].user;
-        const name = firstUser?.firstName || firstUser?.username || "Employee";
-        return `${name} +${otherParticipants.length - 1}`;
+    }
+    // Employee peer-to-peer conversations
+    if (conversation.conversationType === "employee_peer") {
+      const otherParticipants = conversation.participants?.filter(
+        (p) => p.userId !== parseInt(state.currentUser?.userId)
+      );
+      if (otherParticipants?.length === 1) {
+        const user = otherParticipants[0].user;
+        if (user?.firstName) {
+          return user.lastName ? `${user.firstName} ${user.lastName}` : user.firstName;
+        }
+        return user?.username || "Coworker";
       }
     }
     if (conversation.appointment) {
@@ -253,13 +297,16 @@ const ConversationList = () => {
         day: "numeric",
       })}`;
     }
-    // Get other participant names
+    // Get other participant names (fallback for other conversation types)
     const otherParticipants = conversation.participants?.filter(
       (p) => p.userId !== parseInt(state.currentUser?.userId)
     );
     if (otherParticipants?.length > 0) {
       const firstUser = otherParticipants[0].user;
-      const name = firstUser?.username || "User";
+      // Use firstName/lastName if available, fallback to username
+      const name = firstUser?.firstName
+        ? (firstUser.lastName ? `${firstUser.firstName} ${firstUser.lastName}` : firstUser.firstName)
+        : (firstUser?.username || "User");
       if (otherParticipants.length > 1) {
         return `${name} +${otherParticipants.length - 1}`;
       }
@@ -287,7 +334,7 @@ const ConversationList = () => {
   const getInitials = (title) => {
     return title
       .split(" ")
-      .filter((word) => word.length > 0)
+      .filter((word) => word.length > 0 && /[a-zA-Z0-9]/.test(word[0]))
       .map((word) => word[0])
       .join("")
       .substring(0, 2)
@@ -365,6 +412,21 @@ const ConversationList = () => {
     const hasUnread = conv.unreadCount > 0;
     const isBroadcast = conv.conversation?.conversationType === "broadcast";
     const isGroup = (conv.conversation?.participants?.length || 0) > 2;
+    const isBusinessEmployee = conv.conversation?.conversationType === "business_employee";
+
+    // For 1-on-1 business_employee chats, show just the employee's first initial
+    const getAvatarInitial = () => {
+      if (isBusinessEmployee && !isGroup) {
+        const otherParticipant = conv.conversation?.participants?.find(
+          (p) => p.userId !== parseInt(state.currentUser?.userId)
+        );
+        const firstName = otherParticipant?.user?.firstName;
+        if (firstName && firstName.length > 0) {
+          return firstName[0].toUpperCase();
+        }
+      }
+      return getInitials(title);
+    };
 
     return (
       <Pressable
@@ -387,7 +449,7 @@ const ConversationList = () => {
           ) : isGroup ? (
             <Icon name="users" size={18} color={colors.text.secondary} />
           ) : (
-            <Text style={styles.avatarText}>{getInitials(title)}</Text>
+            <Text style={styles.avatarText}>{getAvatarInitial()}</Text>
           )}
         </View>
 
@@ -690,8 +752,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning[100],
   },
   avatarText: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
     color: colors.text.secondary,
   },
   // Content

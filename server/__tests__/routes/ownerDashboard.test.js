@@ -51,6 +51,9 @@ jest.mock("../../models", () => ({
     findAll: jest.fn(),
     count: jest.fn(),
   },
+  ConversationParticipant: {
+    findAll: jest.fn(),
+  },
   sequelize: {
     fn: jest.fn((name, ...args) => ({ fn: name, args })),
     col: jest.fn((name) => ({ col: name })),
@@ -83,6 +86,7 @@ const {
   UserReviews,
   Message,
   Conversation,
+  ConversationParticipant,
 } = require("../../models");
 const { updateAllHomesServiceAreaStatus } = require("../../config/businessConfig");
 
@@ -237,6 +241,7 @@ describe("Owner Dashboard Router", () => {
       Conversation.findAll.mockResolvedValue([]);
       Conversation.count.mockResolvedValue(5);
       Message.count.mockResolvedValue(100);
+      ConversationParticipant.findAll.mockResolvedValue([]);
     });
 
     it("should return messages summary", async () => {
@@ -249,15 +254,125 @@ describe("Owner Dashboard Router", () => {
       expect(response.body.recentConversations).toBeDefined();
     });
 
-    it("should include unread count from support conversations", async () => {
-      Conversation.count.mockResolvedValue(3);
+    it("should calculate unread count based on lastReadAt timestamp", async () => {
+      // Mock owner's participation in support conversations
+      const mockParticipations = [
+        {
+          conversationId: 1,
+          lastReadAt: new Date("2025-01-01T10:00:00Z"),
+          conversation: { conversationType: "support" },
+        },
+        {
+          conversationId: 2,
+          lastReadAt: new Date("2025-01-01T12:00:00Z"),
+          conversation: { conversationType: "support" },
+        },
+      ];
+      ConversationParticipant.findAll.mockResolvedValue(mockParticipations);
+
+      // Mock message counts - order: totalMessages, messagesThisWeek, then per-conversation
+      Message.count
+        .mockResolvedValueOnce(100) // total messages
+        .mockResolvedValueOnce(50)  // messages this week
+        .mockResolvedValueOnce(3)   // unread in conversation 1
+        .mockResolvedValueOnce(2);  // unread in conversation 2
 
       const response = await request(app)
         .get("/api/v1/owner/messages-summary")
         .set("Authorization", `Bearer ${ownerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.unreadCount).toBe(3);
+      // Total unread should be 3 + 2 = 5
+      expect(response.body.unreadCount).toBe(5);
+    });
+
+    it("should return 0 unread when all messages are read", async () => {
+      ConversationParticipant.findAll.mockResolvedValue([
+        {
+          conversationId: 1,
+          lastReadAt: new Date(),
+          conversation: { conversationType: "support" },
+        },
+      ]);
+
+      Message.count
+        .mockResolvedValueOnce(100) // total messages
+        .mockResolvedValueOnce(50)  // messages this week
+        .mockResolvedValueOnce(0);  // no unread messages
+
+      const response = await request(app)
+        .get("/api/v1/owner/messages-summary")
+        .set("Authorization", `Bearer ${ownerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.unreadCount).toBe(0);
+    });
+
+    it("should count all messages as unread when lastReadAt is null", async () => {
+      // When lastReadAt is null, all messages after epoch should be counted
+      ConversationParticipant.findAll.mockResolvedValue([
+        {
+          conversationId: 1,
+          lastReadAt: null,
+          conversation: { conversationType: "support" },
+        },
+      ]);
+
+      Message.count
+        .mockResolvedValueOnce(100) // total messages
+        .mockResolvedValueOnce(50)  // messages this week
+        .mockResolvedValueOnce(10); // all messages in conversation are unread
+
+      const response = await request(app)
+        .get("/api/v1/owner/messages-summary")
+        .set("Authorization", `Bearer ${ownerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.unreadCount).toBe(10);
+    });
+
+    it("should handle errors in unread calculation gracefully", async () => {
+      ConversationParticipant.findAll.mockRejectedValue(new Error("DB error"));
+
+      const response = await request(app)
+        .get("/api/v1/owner/messages-summary")
+        .set("Authorization", `Bearer ${ownerToken}`);
+
+      expect(response.status).toBe(200);
+      // Should default to 0 on error
+      expect(response.body.unreadCount).toBe(0);
+    });
+
+    it("should only count support conversation unread messages", async () => {
+      // Only support conversations should be counted
+      ConversationParticipant.findAll.mockResolvedValue([
+        {
+          conversationId: 1,
+          lastReadAt: new Date("2025-01-01T10:00:00Z"),
+          conversation: { conversationType: "support" },
+        },
+      ]);
+
+      Message.count
+        .mockResolvedValueOnce(100) // total messages
+        .mockResolvedValueOnce(50)  // messages this week
+        .mockResolvedValueOnce(4);  // unread in support conversation
+
+      const response = await request(app)
+        .get("/api/v1/owner/messages-summary")
+        .set("Authorization", `Bearer ${ownerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.unreadCount).toBe(4);
+
+      // Verify ConversationParticipant was queried with support filter
+      expect(ConversationParticipant.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 1,
+          }),
+        })
+      );
     });
   });
 

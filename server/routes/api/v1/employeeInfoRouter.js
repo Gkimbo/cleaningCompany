@@ -1,6 +1,8 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const UserSerializer = require("../../../serializers/userSerializer");
+const HomeSerializer = require("../../../serializers/homesSerializer");
+const ReviewSerializer = require("../../../serializers/ReviewSerializer");
 const UserInfo = require("../../../services/UserInfoClass");
 const {
   User,
@@ -163,7 +165,7 @@ employeeInfoRouter.get("/home/:id", async (req, res) => {
       },
     });
 
-    return res.status(200).json({ home });
+    return res.status(200).json({ home: HomeSerializer.serializeOne(home) });
   } catch (error) {
     console.log(error);
     return res.status(401).json({ error: "Invalid or expired token" });
@@ -177,7 +179,7 @@ employeeInfoRouter.get("/employeeSchedule", async (req, res) => {
         type: "cleaner",
       },
     });
-    return res.status(200).json({ employees });
+    return res.status(200).json({ employees: employees.map(e => UserSerializer.serializeOne(e.dataValues || e)) });
   } catch (error) {
     console.log(error);
     return res.status(401).json({ error: "Invalid or expired token" });
@@ -222,7 +224,7 @@ employeeInfoRouter.get("/cleaner/:id", async (req, res) => {
       username: cleaner.username,
       type: cleaner.type,
       daysWorking: cleaner.daysWorking || [],
-      reviews: cleaner.reviews || [],
+      reviews: ReviewSerializer.serializeArray(cleaner.reviews || []),
       completedJobs: completedAppointments,
       totalReviews: cleaner.reviews?.length || 0,
       memberSince: cleaner.createdAt,
@@ -247,7 +249,7 @@ employeeInfoRouter.post("/shifts", async (req, res) => {
     await user.update({
       daysWorking: daysArray,
     });
-    return res.status(201).json({ user });
+    return res.status(201).json({ user: UserSerializer.serializeOne(user.dataValues || user) });
   } catch (error) {
     console.log(error);
     return res.status(401).json({ error: "Invalid or expired token" });

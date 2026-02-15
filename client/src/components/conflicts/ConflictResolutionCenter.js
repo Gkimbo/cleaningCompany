@@ -39,6 +39,7 @@ const ConflictResolutionCenter = () => {
     caseType: null,
     status: null,
     priority: null,
+    includeResolved: false,
   });
 
   // Check if a string looks like a case number
@@ -356,6 +357,14 @@ const ConflictResolutionCenter = () => {
           <Icon name="flag" size={12} color={filters.priority === "urgent" ? colors.neutral[0] : colors.error[500]} style={{ marginRight: 4 }} />
           <Text style={[styles.filterChipText, filters.priority === "urgent" && styles.filterChipTextActive]}>Urgent</Text>
         </TouchableOpacity>
+        <View style={styles.filterDivider} />
+        <TouchableOpacity
+          style={[styles.filterChip, filters.includeResolved && styles.filterChipArchive]}
+          onPress={() => setFilters(f => ({ ...f, includeResolved: !f.includeResolved }))}
+        >
+          <Icon name="archive" size={12} color={filters.includeResolved ? colors.neutral[0] : colors.text.secondary} style={{ marginRight: 4 }} />
+          <Text style={[styles.filterChipText, filters.includeResolved && styles.filterChipTextActive]}>Archive</Text>
+        </TouchableOpacity>
       </ScrollView>
         </>
       )}
@@ -382,82 +391,116 @@ const ConflictResolutionCenter = () => {
     return iconMap[caseType] || "question";
   };
 
+  const isResolvedStatus = (status) => {
+    return ["approved", "partially_approved", "denied", "resolved", "closed", "owner_approved", "owner_denied", "expired"].includes(status);
+  };
+
   const renderCaseCard = ({ item }) => {
     const caseColors = getCaseTypeColors(item.caseType);
     const caseIcon = getCaseTypeIcon(item.caseType);
+    const isOverdue = item.isPastSLA;
+    const isResolved = isResolvedStatus(item.status);
 
     return (
       <TouchableOpacity
-        style={styles.caseCard}
+        style={[styles.caseCard, isOverdue && styles.caseCardOverdue, isResolved && styles.caseCardResolved]}
         onPress={() => handleCasePress(item)}
         activeOpacity={0.7}
       >
-        <View style={styles.caseHeader}>
-          <View style={styles.caseTypeContainer}>
-            <View style={[styles.caseTypeBadge, { backgroundColor: caseColors.bg }]}>
-              <Icon name={caseIcon} size={12} color={caseColors.text} />
-              <Text style={[styles.caseTypeText, { color: caseColors.text }]}>
-                {item.caseNumber}
+        {/* Left accent bar */}
+        <View style={[styles.caseAccent, { backgroundColor: isResolved ? colors.neutral[300] : caseColors.text }]} />
+
+        <View style={styles.caseContent}>
+          {/* Top row: case type icon, number, priority, status */}
+          <View style={styles.caseHeader}>
+            <View style={styles.caseHeaderLeft}>
+              <View style={[styles.caseIconCircle, { backgroundColor: caseColors.bg }]}>
+                <Icon name={caseIcon} size={14} color={caseColors.text} />
+              </View>
+              <View style={styles.caseNumberContainer}>
+                <Text style={styles.caseNumber}>{item.caseNumber}</Text>
+                <Text style={styles.caseType}>{item.caseType}</Text>
+              </View>
+              {item.priority === "urgent" && (
+                <View style={styles.urgentBadge}>
+                  <Icon name="bolt" size={10} color={colors.neutral[0]} />
+                  <Text style={styles.urgentText}>URGENT</Text>
+                </View>
+              )}
+              {item.priority === "high" && (
+                <View style={styles.highPriorityBadge}>
+                  <Icon name="flag" size={10} color={colors.warning[700]} />
+                </View>
+              )}
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + "15" }]}>
+              <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
+              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                {item.status.replace(/_/g, " ")}
               </Text>
             </View>
-          <View style={[styles.priorityIndicator, { backgroundColor: getPriorityColor(item.priority) }]} />
-        </View>
+          </View>
 
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + "20" }]}>
-          <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-            {item.status.replace(/_/g, " ")}
+          {/* Description */}
+          <Text style={styles.caseDescription} numberOfLines={2}>
+            {item.description}
           </Text>
+
+          {/* Parties */}
+          <View style={styles.partiesRow}>
+            {item.homeowner && (
+              <View style={styles.partyChip}>
+                <View style={styles.partyIconCircle}>
+                  <Icon name="user" size={10} color={colors.primary[600]} />
+                </View>
+                <Text style={styles.partyName} numberOfLines={1}>{item.homeowner.name}</Text>
+              </View>
+            )}
+            {item.cleaner && (
+              <View style={styles.partyChip}>
+                <View style={[styles.partyIconCircle, { backgroundColor: colors.secondary[100] }]}>
+                  <Icon name="star" size={10} color={colors.secondary[600]} />
+                </View>
+                <Text style={styles.partyName} numberOfLines={1}>{item.cleaner.name}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Footer: SLA, financial, arrow */}
+          <View style={styles.caseFooter}>
+            <View style={[styles.slaContainer, isOverdue && styles.slaContainerOverdue]}>
+              <Icon
+                name={isOverdue ? "exclamation-circle" : "clock-o"}
+                size={12}
+                color={isOverdue ? colors.error[600] : colors.text.tertiary}
+              />
+              <Text style={[styles.slaText, isOverdue && styles.slaTextOverdue]}>
+                {formatTimeRemaining(item.timeUntilSLA)}
+              </Text>
+            </View>
+
+            <View style={styles.footerRight}>
+              {item.financialImpact && (
+                <View style={styles.financialBadge}>
+                  <Icon name="dollar" size={11} color={colors.success[600]} />
+                  <Text style={styles.financialText}>
+                    {item.financialImpact.priceDifference
+                      ? `${(item.financialImpact.priceDifference / 100).toFixed(0)}`
+                      : item.financialImpact.penaltyAmount
+                        ? `${(item.financialImpact.penaltyAmount / 100).toFixed(0)}`
+                        : ""
+                    }
+                  </Text>
+                </View>
+              )}
+              <View style={styles.viewButton}>
+                <Text style={styles.viewButtonText}>View</Text>
+                <Icon name="chevron-right" size={12} color={colors.primary[600]} />
+              </View>
+            </View>
+          </View>
         </View>
-      </View>
-
-      <Text style={styles.caseDescription} numberOfLines={2}>
-        {item.description}
-      </Text>
-
-      <View style={styles.partiesRow}>
-        {item.homeowner && (
-          <View style={styles.partyChip}>
-            <Icon name="user" size={10} color={colors.text.tertiary} />
-            <Text style={styles.partyName} numberOfLines={1}>{item.homeowner.name}</Text>
-          </View>
-        )}
-        {item.cleaner && (
-          <View style={styles.partyChip}>
-            <Icon name="star" size={10} color={colors.text.tertiary} />
-            <Text style={styles.partyName} numberOfLines={1}>{item.cleaner.name}</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.caseFooter}>
-        <View style={styles.slaContainer}>
-          <Icon
-            name="clock-o"
-            size={12}
-            color={item.isPastSLA ? colors.error[500] : colors.text.tertiary}
-          />
-          <Text style={[styles.slaText, item.isPastSLA && styles.slaTextOverdue]}>
-            {formatTimeRemaining(item.timeUntilSLA)}
-          </Text>
-        </View>
-
-        {item.financialImpact && (
-          <View style={styles.financialBadge}>
-            <Icon name="usd" size={10} color={colors.success[600]} />
-            <Text style={styles.financialText}>
-              {item.financialImpact.priceDifference
-                ? `$${(item.financialImpact.priceDifference / 100).toFixed(0)}`
-                : item.financialImpact.penaltyAmount
-                  ? `$${(item.financialImpact.penaltyAmount / 100).toFixed(0)}`
-                  : ""
-              }
-            </Text>
-          </View>
-        )}
-
-        <Icon name="chevron-right" size={14} color={colors.text.tertiary} />
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
     );
   };
 
@@ -726,6 +769,9 @@ const styles = StyleSheet.create({
   filterChipUrgent: {
     backgroundColor: colors.error[500],
   },
+  filterChipArchive: {
+    backgroundColor: colors.neutral[600],
+  },
   filterChipText: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
@@ -745,73 +791,133 @@ const styles = StyleSheet.create({
   },
   caseCard: {
     backgroundColor: colors.neutral[0],
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: radius.xl,
     marginBottom: spacing.sm,
-    ...shadows.sm,
+    flexDirection: "row",
+    overflow: "hidden",
+    ...shadows.md,
+  },
+  caseCardOverdue: {
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  caseCardResolved: {
+    opacity: 0.75,
+    backgroundColor: colors.neutral[50],
+  },
+  caseAccent: {
+    width: 4,
+  },
+  caseContent: {
+    flex: 1,
+    padding: spacing.md,
+    paddingLeft: spacing.md,
+    gap: spacing.sm,
   },
   caseHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
+    alignItems: "flex-start",
   },
-  caseTypeContainer: {
+  caseHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
+    flex: 1,
   },
-  caseTypeBadge: {
+  caseIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  caseNumberContainer: {
+    flex: 1,
+  },
+  caseNumber: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    letterSpacing: 0.3,
+  },
+  caseType: {
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+    textTransform: "capitalize",
+    marginTop: 1,
+  },
+  urgentBadge: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 3,
+    backgroundColor: colors.error[500],
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: 3,
     borderRadius: radius.md,
-    gap: spacing.xs,
   },
-  caseTypeText: {
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
+  urgentText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[0],
+    letterSpacing: 0.5,
   },
-  priorityIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  highPriorityBadge: {
+    backgroundColor: colors.warning[100],
+    padding: spacing.xs,
+    borderRadius: radius.md,
   },
   statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
     fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.semibold,
     textTransform: "capitalize",
   },
   caseDescription: {
     fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
     lineHeight: 20,
-    marginBottom: spacing.sm,
   },
   partiesRow: {
     flexDirection: "row",
     gap: spacing.sm,
-    marginBottom: spacing.sm,
+    flexWrap: "wrap",
   },
   partyChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
-    backgroundColor: colors.neutral[100],
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    maxWidth: "45%",
+    backgroundColor: colors.neutral[50],
+    paddingRight: spacing.sm,
+    paddingVertical: 4,
+    paddingLeft: 4,
+    borderRadius: radius.full,
+    maxWidth: "48%",
+  },
+  partyIconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.primary[100],
+    alignItems: "center",
+    justifyContent: "center",
   },
   partyName: {
     fontSize: typography.fontSize.xs,
-    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
   },
   caseFooter: {
     flexDirection: "row",
@@ -820,19 +926,33 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
+    marginTop: spacing.xs,
   },
   slaContainer: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
+    backgroundColor: colors.neutral[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.md,
+  },
+  slaContainerOverdue: {
+    backgroundColor: colors.error[50],
   },
   slaText: {
     fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
     color: colors.text.tertiary,
   },
   slaTextOverdue: {
-    color: colors.error[500],
+    color: colors.error[600],
     fontWeight: typography.fontWeight.semibold,
+  },
+  footerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   financialBadge: {
     flexDirection: "row",
@@ -840,13 +960,27 @@ const styles = StyleSheet.create({
     gap: 2,
     backgroundColor: colors.success[50],
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
+    paddingVertical: 4,
+    borderRadius: radius.md,
   },
   financialText: {
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     color: colors.success[600],
-    fontWeight: typography.fontWeight.medium,
+    fontWeight: typography.fontWeight.bold,
+  },
+  viewButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.md,
+  },
+  viewButtonText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary[600],
   },
   emptyContainer: {
     flex: 1,

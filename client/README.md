@@ -5,7 +5,7 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.76-61DAFB?style=for-the-badge&logo=react&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-SDK_52-000020?style=for-the-badge&logo=expo&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
-![Tests](https://img.shields.io/badge/Tests-5128_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-5611_Passing-brightgreen?style=for-the-badge)
 
 **Cross-platform mobile application for the Kleanr cleaning service platform**
 
@@ -27,8 +27,9 @@ The Kleanr mobile app is a React Native application built with Expo that provide
 - iCal calendar sync for vacation rentals
 - Photo documentation with offline capture
 - Push notifications via Expo
-- Conflict Resolution Center for HR staff
+- Conflict Resolution Center for HR staff with support tickets
 - Cancellation Appeals system with 72-hour window
+- New Home Request system for business owner notifications
 - Preview as Role for platform owners
 - Employee timesheet management and hours tracking
 - Transit time calculation between jobs
@@ -106,7 +107,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Digital cleaning checklists (73 tasks)
 - Earnings dashboard with charts
 - Stripe Connect payouts
-- W-9 submission & 1099-NEC access
+- Tax documents via Stripe Dashboard
 - Preferred cleaner tier status
 - Guest-not-left reporting
 - Home size adjustment filing
@@ -124,6 +125,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 - Payroll tracking (hourly/flat rate)
 - **Timesheet management** with hours tracking
 - **My Clients page** with full client management
+- **New Home Requests** - accept/decline when clients add homes
 - **Business Client portal** for corporate clients
 - Client invitation via email with home details
 - Book appointments for clients directly
@@ -156,7 +158,7 @@ export const API_BASE = "http://localhost:3000/api/v1";
 <td width="50%" valign="top">
 
 #### HR Staff
-- **Conflict Resolution Center** - unified queue for all disputes
+- **Conflict Resolution Center** - unified queue for disputes and support tickets
 - **Cancellation Appeals** - review and decide within 48-hour SLA
 - Photo comparison tools for evidence review
 - Financial breakdown with refund/payout calculations
@@ -204,8 +206,9 @@ export const API_BASE = "http://localhost:3000/api/v1";
 | **Multi-Cleaner Jobs** | Large home support with job offers, room assignments, and split pricing |
 | **Last-Minute Booking** | Urgent booking support with 48-hour threshold and fee display |
 | **Guest-Not-Left** | GPS-verified reporting when guests haven't left by checkout |
-| **Conflict Resolution** | Unified case management for disputes with photo comparison, evidence gallery, message threads, and audit trail |
+| **Conflict Resolution** | Unified case management for disputes and support tickets with photo comparison, evidence gallery, message threads, and audit trail |
 | **Cancellation Appeals** | Submit appeals within 72 hours, HR review within 48-hour SLA, penalty waiver and refund options |
+| **New Home Requests** | Business owners notified when clients add new homes. 48-hour response window with accept/decline. Automatic pricing calculation. Re-request after 30 days if declined. |
 | **Preview as Role** | Platform owners can preview app as Cleaner, Homeowner, Business Owner, or Employee using demo accounts |
 | **Internal Analytics** | Platform metrics dashboard: flow abandonment funnels, job duration stats, offline usage monitoring, dispute/pay override frequency |
 | **Transit Time** | Automatic calculation of travel time between jobs for scheduling optimization. Displays estimated arrival times and prevents overbooking. |
@@ -346,7 +349,8 @@ client/
 │       │   ├── DemoAccountService.js
 │       │   ├── AnalyticsService.js
 │       │   ├── TimesheetService.js
-│       │   └── TransitTimeService.js
+│       │   ├── TransitTimeService.js
+│       │   └── NewHomeRequestService.js
 │       │
 │       ├── offline/              # Offline sync system
 │       │   ├── OfflineManager.js
@@ -522,14 +526,17 @@ await PreferredCleanerService.updateAvailabilityConfig(token, config);
 ```javascript
 import TaxService from './services/fetchRequests/TaxService';
 
-// Cleaner: Get tax summary
-const summary = await TaxService.getCleanerTaxSummary(token, 2024);
+// Cleaner: Get earnings summary
+const earnings = await TaxService.getEarnings(token, 2024);
 
-// Cleaner: Get 1099-NEC data
-const form = await TaxService.get1099NECData(token, 2024);
+// Cleaner: Get Stripe dashboard link (for 1099 forms)
+const link = await TaxService.getDashboardLink(token);
 
-// Owner: Get platform tax report
-const report = await TaxService.getPlatformTaxReport(token, 2024);
+// Cleaner: Check tax status
+const status = await TaxService.getTaxStatus(token);
+
+// Owner: Get platform income summary
+const summary = await TaxService.getPlatformIncomeSummary(token, 2024);
 ```
 
 ### CleanerClientService
@@ -828,7 +835,7 @@ npm test -- CleaningChecklist.test.js
 |------------|-------|----------|
 | CalendarSyncManager | 73 | Calendar sync UI, API calls |
 | CleaningChecklist | 42 | Checklist interactions |
-| TaxService | 24 | All tax API methods |
+| TaxService | 24 | Earnings, dashboard link, tax status |
 | ReviewComponents | 54 | Review forms & display |
 | EarningsComponents | 12 | Earnings calculations |
 | AuthContext | 18 | Authentication flow |
@@ -851,7 +858,9 @@ npm test -- CleaningChecklist.test.js
 | Employee Timesheets | 24 | Timesheet submission, approval, hours tracking |
 | Transit Time | 18 | Distance calculation, scheduling optimization |
 | Bi-Weekly Payouts | 24 | Pending earnings display, payout date calculation |
-| **Total** | **5128** | 175 test suites |
+| New Home Requests | 32 | Accept/decline, re-request, marketplace toggle |
+| Support Tickets | 28 | Create from conversation, category selection |
+| **Total** | **5611** | 198 test suites |
 
 ---
 
